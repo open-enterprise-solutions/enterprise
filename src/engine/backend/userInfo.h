@@ -13,6 +13,7 @@
 #include "backend/backend.h"
 #include "backend/backend_core.h"
 #include "backend/roleHelper.h"   // ibRoleCompositionMode — how a role combines (the role layer owns it)
+#include "core/fdatetime.h"       // m_passwordChangedAt — when the hash last changed
 
 #include <vector>
 
@@ -20,6 +21,7 @@
 #include <wx/buffer.h>
 
 class ibGuid;
+class ibDatabaseConnectionHolder;
 class ibReaderMemory;
 class ibWriterMemory;
 
@@ -47,6 +49,10 @@ struct BACKEND_API ibUserInfo {
 	wxString m_strUserName;
 	wxString m_strUserFullName;
 	wxString m_strUserPassword;
+	// When the password last changed. A rehash of the same password does not
+	// move it. Empty on a row written before the stamp. A session that
+	// authenticated earlier than this is no longer this login.
+	ibDateTime m_passwordChangedAt;
 
 	//Role info
 	std::vector<ibUserRole> m_roleArray;
@@ -71,7 +77,12 @@ struct BACKEND_API ibUserInfo {
 	// or invalid input; Save does an upsert keyed by m_strUserGuid.
 	static ibUserInfo Read(const ibGuid& userGuid);
 	static ibUserInfo Read(const wxString& userName);
-	static bool       Save(const ibUserInfo& info);
+	// The row, on `holder`. False when the read itself failed (`info` is left empty).
+	// True and !info.IsOk() when that account is not there.
+	static bool       Read(ibDatabaseConnectionHolder& holder, const ibGuid& userGuid, ibUserInfo& info);
+	// `passwordChanged` false keeps the stored moment the password changed.
+	// A rehash replaces the hash and is not a password change.
+	static bool       Save(const ibUserInfo& info, bool passwordChanged = true);
 	// Remove the sys_user row keyed by guid. True on success (or no-op miss).
 	static bool       Delete(const ibGuid& userGuid);
 

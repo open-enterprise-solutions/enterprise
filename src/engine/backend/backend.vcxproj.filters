@@ -860,6 +860,9 @@
     <ClInclude Include="session\sessionException.h">
       <Filter>session</Filter>
     </ClInclude>
+    <ClInclude Include="session\sessionLifetime.h">
+      <Filter>session</Filter>
+    </ClInclude>
     <ClInclude Include="session\sessionRegistry.h">
       <Filter>session</Filter>
     </ClInclude>
@@ -2264,6 +2267,9 @@
       <Filter>session</Filter>
     </ClCompile>
     <ClCompile Include="session\sessionException.cpp">
+      <Filter>session</Filter>
+    </ClCompile>
+    <ClCompile Include="session\sessionLifetime.cpp">
       <Filter>session</Filter>
     </ClCompile>
     <ClCompile Include="session\sessionRegistry.cpp">

@@ -1,9 +1,11 @@
 #include "userInfo.h"
 
 #include "appData.h"   // user_table macro
+#include "databaseLayer/connectionHolder.h"
 #include "databaseLayer/databaseQueryBuilder.h"   // L2 door — the whole sys_user DAO rides this (no raw ibDatabaseLayer / result set)
 #include "databaseLayer/databaseErrorCodes.h"
 #include "core/fileSystem/fs.h"
+#include "session/sessionRegistry.h"
 
 namespace {
 
@@ -32,6 +34,14 @@ void ReadPasswordChunk(const wxMemoryBuffer& buffer, ibUserInfo& info)
 	info.m_strUserName     = std::move(n);
 	info.m_strUserFullName = std::move(f);
 	info.m_strUserPassword = std::move(p);
+	// A fifth field, absent from rows written before the stamp. Those end
+	// here and keep an empty date, which a session treats as "unchanged".
+	if (!reader.eof()) {
+		const wxString stamp = reader.r_stringZ();
+		long long ms = 0;
+		if (stamp.ToLongLong(&ms) && ms != 0)
+			info.m_passwordChangedAt = ibDateTime(ms);
+	}
 }
 
 void ReadRoleChunk(const wxMemoryBuffer& buffer, ibUserInfo& info)
@@ -82,6 +92,8 @@ wxMemoryBuffer WritePasswordChunk(const ibUserInfo& info)
 	writer.w_stringZ(info.m_strUserName);
 	writer.w_stringZ(info.m_strUserFullName);
 	writer.w_stringZ(info.m_strUserPassword);
+	writer.w_stringZ(wxString::Format(wxT("%lld"),
+		static_cast<long long>(info.m_passwordChangedAt.GetValue())));
 	return writer.buffer();
 }
 
@@ -162,6 +174,26 @@ ibUserInfo ibUserInfo::Read(const ibGuid& userGuid)
 	return info;
 }
 
+bool ibUserInfo::Read(ibDatabaseConnectionHolder& holder, const ibGuid& userGuid, ibUserInfo& info)
+{
+	info = ibUserInfo();
+	if (!userGuid.isValid())
+		return false;
+
+	try {
+		ibDatabaseQueryBuilder q(&holder);
+		ibQueryResult result = q.ExecuteIR(SysUserRowQuery(
+			ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("guid")), ibConst(ibValue(userGuid.str())))));
+		if (result.Next())
+			FillFromRow(result, info);
+		return true;
+	}
+	catch (...) {
+		info = ibUserInfo();
+		return false;
+	}
+}
+
 ibUserInfo ibUserInfo::Read(const wxString& userName)
 {
 	ibUserInfo info;
@@ -211,13 +243,29 @@ std::vector<ibUserInfo::Brief> ibUserInfo::ListAll()
 	return list;
 }
 
-bool ibUserInfo::Save(const ibUserInfo& info)
+bool ibUserInfo::Save(const ibUserInfo& info, bool passwordChanged)
 {
+	// The hash is the password. A save that keeps it, and a save that only
+	// rehashes it, keep the moment it changed. A save that replaces the
+	// password marks now, and every session that authenticated earlier
+	// stops being that login.
+	ibUserInfo row = info;
+	const ibGuid guid(info.m_strUserGuid);
+	const ibUserInfo stored = guid.isValid() ? Read(guid) : ibUserInfo();
+	if (!passwordChanged) {
+		if (stored.IsOk())
+			row.m_passwordChangedAt = stored.m_passwordChangedAt;
+	}
+	else if (stored.IsOk() && stored.m_strUserPassword == info.m_strUserPassword)
+		row.m_passwordChangedAt = stored.m_passwordChangedAt;
+	else
+		row.m_passwordChangedAt = ibDateTime::Now();
+
 	// The default-ctor builder resolves to CurrentHolder = the db_query channel's thread holder —
 	// the dedicated channel for infra-level writes that must stay out of any user session's TX
 	// (the pool never resolves a session holder here; session work passes its holder explicitly).
 	ibWriterMemory writer;
-	writer.w_chunk(eBlockPswd, WritePasswordChunk(info));
+	writer.w_chunk(eBlockPswd, WritePasswordChunk(row));
 	writer.w_chunk(eBlockRole, WriteRoleChunk    (info));
 	writer.w_chunk(eBlockLang, WriteLanguageChunk(info));
 
@@ -242,13 +290,23 @@ bool ibUserInfo::Delete(const ibGuid& userGuid)
 {
 	if (!userGuid.isValid())
 		return false;
+	const wxString userName = Read(userGuid).m_strUserName;
 	try {
 		ibDatabaseQueryBuilder q;
 		q.Execute(ibDelete(user_table,
 			ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("guid")), ibConst(ibValue(userGuid.str())))));
-		return true;   // deleting an absent user (0 rows) is success; a real failure THROWS
 	}
 	catch (...) { return false; }
+
+	// The account is gone. Its sessions are closed by the same signal an
+	// administrator's kick writes; the owning process picks it up on its
+	// next tick. A web request that arrives first is refused on its own
+	// (the user row is no longer there).
+	if (!userName.empty()) {
+		if (ibSessionRegistry* registry = ibApplicationInstance::GetSessionRegistry())
+			registry->KickUser(userName);
+	}
+	return true;   // deleting an absent user (0 rows) is success; a real failure THROWS
 }
 
 void ibUserInfo::Serialize(ibWriterMemory& writer) const

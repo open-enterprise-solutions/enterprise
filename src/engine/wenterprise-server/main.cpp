@@ -246,11 +246,12 @@ std::string SessionIdFromReq(const httplib::Request& req)
 bool RequireSessionId(const httplib::Request& req, httplib::Response& res, std::string& id)
 {
 	id = SessionIdFromReq(req);
-	if (!id.empty())
-		return true;
-	res.status = 401;
-	res.set_content("no session\n", "text/plain");
-	return false;
+	if (id.empty() || !wfrontendAdmitSession(id)) {
+		res.status = 401;
+		res.set_content("no session\n", "text/plain");
+		return false;
+	}
+	return true;
 }
 
 // ⭐ THE /admin GATE. These endpoints kick sessions, evict a whole process and force-release other
@@ -560,6 +561,11 @@ int main(int argc, char** argv)
 				"application/json; charset=utf-8");
 			return;
 		}
+		if (!wfrontendAdmitSession(id)) {
+			res.status = 401;
+			res.set_content("session lost\n", "text/plain");
+			return;
+		}
 		res.set_content(wfrontendSessionInfoJSON(id),
 			"application/json; charset=utf-8");
 	});
@@ -706,7 +712,11 @@ int main(int argc, char** argv)
 	// connection errors.
 	svr.Get(prefix + "/stream", [](const httplib::Request& req, httplib::Response& res) {
 		const std::string sid = SessionIdFromReq(req);
-		if (sid.empty()) { res.status = 401; res.set_content("no session\n","text/plain"); return; }
+		if (sid.empty() || !wfrontendAdmitSession(sid)) {
+			res.status = 401;
+			res.set_content("no session\n", "text/plain");
+			return;
+		}
 
 		// Proxy-buffering hints — nginx sees X-Accel-Buffering, Apache
 		// mod_proxy respects Cache-Control: no-cache plus the flushed
@@ -725,6 +735,8 @@ int main(int argc, char** argv)
 			"text/event-stream; charset=utf-8",
 			[sid, lastSeen](size_t /*offset*/, httplib::DataSink& sink) -> bool {
 				if (!sink.is_writable())
+					return false;
+				if (!wfrontendAdmitSession(sid))
 					return false;
 
 				// Block up to 25s for the session's seq to advance past
@@ -799,7 +811,7 @@ int main(int argc, char** argv)
 	// module manager and touches appData state.
 	svr.Get(prefix + R"(/form/(\d+))", [](const httplib::Request& req, httplib::Response& res) {
 		const std::string id = SessionIdFromReq(req);
-		if (id.empty()) {
+		if (id.empty() || !wfrontendAdmitSession(id)) {
 			res.status = 401;
 			res.set_content("no session\n", "text/plain");
 			return;

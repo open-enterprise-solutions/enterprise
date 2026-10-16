@@ -68,6 +68,8 @@ ibWebSession::ibWebSession(wxString id, wxString user)
 	: m_id(std::move(id))
 	, m_user(std::move(user))
 	, m_lastActiveMs(NowMs())
+	, m_born(ibDateTime::Now())
+	, m_lastActiveAt(m_born)
 {
 }
 
@@ -195,6 +197,10 @@ bool ibWebSession::Login(const wxString& user, const wxString& password)
 		m_session.Reset();
 		return false;
 	}
+	{
+		std::lock_guard<std::mutex> lock(m_mutex);
+		m_authenticatedAt = ibDateTime::Now();
+	}
 	return true;
 }
 
@@ -272,8 +278,25 @@ std::int64_t ibWebSession::LastActiveMs() const
 	return m_lastActiveMs;
 }
 
-void ibWebSession::Touch()
+ibDateTime ibWebSession::AuthenticatedAt() const
 {
 	std::lock_guard<std::mutex> lock(m_mutex);
-	m_lastActiveMs = NowMs();
+	return m_authenticatedAt;
+}
+
+ibDateTime ibWebSession::LastActiveAt() const
+{
+	std::lock_guard<std::mutex> lock(m_mutex);
+	return m_lastActiveAt;
+}
+
+void ibWebSession::Touch()
+{
+	{
+		std::lock_guard<std::mutex> lock(m_mutex);
+		m_lastActiveMs = NowMs();
+		m_lastActiveAt = ibDateTime::Now();
+	}
+	if (std::shared_ptr<ibSession> session = m_session.Share())
+		session->NoteActivity();
 }

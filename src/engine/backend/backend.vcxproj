@@ -43,6 +43,7 @@
     <ClInclude Include="session\session.h" />
     <ClInclude Include="session\sessionHolder.h" />
     <ClInclude Include="session\sessionPolicy.h" />
+    <ClInclude Include="session\sessionLifetime.h" />
     <ClInclude Include="session\sessionRegistry.h" />
     <ClInclude Include="session\sessionSnapshot.h" />
     <ClInclude Include="session\workerPool.h" />
@@ -440,6 +441,7 @@
     <ClCompile Include="session\sessionException.cpp" />
     <ClCompile Include="session\sessionParameters.cpp" />
     <ClCompile Include="session\sessionHolder.cpp" />
+    <ClCompile Include="session\sessionLifetime.cpp" />
     <ClCompile Include="session\sessionRegistry.cpp" />
     <ClCompile Include="session\sessionSnapshot.cpp" />
     <ClCompile Include="session\workerPoolHeadless.cpp" />

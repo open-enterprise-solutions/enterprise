@@ -312,6 +312,10 @@ public:
 	// Both return true on successful UPDATE, false on DB error. Safe to
 	// call from any thread.
 	bool Kick(const wxString& sessionGuid);
+	// Every session signed in as this user. A deleted account has no sessions
+	// left; the signal is the same one Kick writes, so each owning process
+	// closes its own.
+	void KickUser(const wxString& userName);
 	bool Reload(const wxString& sessionGuid);
 
 	// ---- Cluster snapshot ----
@@ -551,6 +555,10 @@ private:
 	// Periodic jobs, driven from ThreadBody: refresh/heartbeat every 1 s,
 	// stale sweep every 3 s (kRefreshInterval / kSweepInterval).
 	void JobSweepStale();
+	// Absolute life, idle, a password change, and a deleted account. Own
+	// rows, every client kind. The stale sweep skips own rows on purpose
+	// (the heartbeat keeps them fresh); this one does not.
+	void JobEndLivedSessions();
 	void JobRefreshSnapshot();
 
 	// Refresh lastActive on every own row. Companion to JobSweepStale's

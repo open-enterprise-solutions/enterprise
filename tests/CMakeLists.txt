@@ -188,6 +188,7 @@ add_executable(oes_tests
     test_metadataMove.cpp
     test_sectionInterfaceItems.cpp
     test_socketLock.cpp
+    test_sessionLifetime.cpp
     test_lockRace.cpp
     test_clientListener.cpp
 )

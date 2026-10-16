@@ -582,6 +582,16 @@ struct ibRegisterBindingLocal {
 
 } // namespace
 
+namespace {
+
+long long UnixNowMs()
+{
+	return std::chrono::duration_cast<std::chrono::milliseconds>(
+		std::chrono::system_clock::now().time_since_epoch()).count();
+}
+
+} // namespace
+
 // The copy Current() keeps, read the way its own fast path reads it: good only at the epoch it was taken, and
 // then as alive as Current()'s answer would be.
 ibSession* ibSession::CurrentCached() noexcept
@@ -597,6 +607,14 @@ ibSession::ibSession(wxString id, ibSessionKind kind)
 	, m_kind(kind)
 	, m_workDate(ibDateTime::Now())
 {
+	const long long now = UnixNowMs();
+	m_bornMs.store(now, std::memory_order_relaxed);
+	m_lastActiveMs.store(now, std::memory_order_relaxed);
+}
+
+void ibSession::NoteActivity() noexcept
+{
+	m_lastActiveMs.store(UnixNowMs(), std::memory_order_relaxed);
 }
 
 ibApplicationInstance* ibSession::GetApplicationInstance() const
@@ -1486,6 +1504,14 @@ void ibSession::Transition(ibSessionState next, const wxString& reason)
 
 void ibSession::TransitionAuth(ibAuthState next, const wxString& reason)
 {
+	if (next == ibAuthState::Authenticated) {
+		long long expected = 0;
+		m_authenticatedAtMs.compare_exchange_strong(expected, UnixNowMs(),
+			std::memory_order_release, std::memory_order_relaxed);
+	}
+	else if (next == ibAuthState::Anonymous || next == ibAuthState::AuthFailed) {
+		m_authenticatedAtMs.store(0, std::memory_order_release);
+	}
 	{
 		std::lock_guard<std::mutex> lk(m_mtx);
 		if (!reason.IsEmpty()) m_reason = reason;

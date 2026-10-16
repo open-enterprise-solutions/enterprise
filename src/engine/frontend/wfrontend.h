@@ -146,6 +146,9 @@ WFRONTEND_API std::string wfrontendCreateSessionWithId(const std::string& id);
 WFRONTEND_API bool        wfrontendLogin(const std::string& sessionId,
 	const std::string& user, const std::string& password);
 WFRONTEND_API bool        wfrontendSessionExists(const std::string& sessionId);
+// The tab is still here. False when the id is unknown. How long the login
+// may live is the registry's sweep.
+WFRONTEND_API bool        wfrontendAdmitSession(const std::string& sessionId);
 WFRONTEND_API void        wfrontendDestroySession(const std::string& sessionId);
 WFRONTEND_API std::size_t wfrontendSessionCount();
 

@@ -1,10 +1,13 @@
 #include "sessionRegistry.h"
+#include "sessionLifetime.h"
 #include "sessionPolicy.h"
 #include "designerExclusivePolicy.h"
 #include "serviceExclusivePolicy.h"
 
 #include "backend/appData.h"
 #include "backend/appHost.h"   // SetThreadOwner — the registry thread's journal lines name its base
+#include "backend/userInfo.h"
+#include "core/guid.h"
 #include "sessionSnapshot.h"
 #include "backend/backend_exception.h"
 #include "backend/databaseLayer/connectionPool.h"
@@ -1216,13 +1219,16 @@ void ibSessionRegistry::ProcessAttach(ibRegistryRequest& req)
 	if (m_ownsSysSession && m_writeConn) {
 		const wxString guidStr = s.GetId();
 		if (s.Inserted()) {
-			// Was anonymous, now authenticated — update userName only.
+			// Was anonymous, now authenticated — the name. When the login began
+			// lives on the session (UTC), not in a second column.
 			UpdateSessionUser(m_writeHolder, guidStr, info.m_strUserName, info.m_strUserGuid);
 		} else {
 			// Creds-first path — Connect(req) with non-empty user skipped
 			// the anon-phase INSERT. Write the row now.
-			if (InsertSessionRow(m_writeHolder, s, info.m_strUserName))
+			if (InsertSessionRow(m_writeHolder, s, info.m_strUserName)) {
 				s.SetInserted(true);
+				UpdateSessionUser(m_writeHolder, guidStr, info.m_strUserName, info.m_strUserGuid);
+			}
 		}
 	}
 
@@ -1676,6 +1682,80 @@ void ibSessionRegistry::JobSweepStale()
 	catch (...) { /* swallowed: the next sweep retries */ }
 }
 
+void ibSessionRegistry::JobEndLivedSessions()
+{
+	if (m_own.empty())
+		return;
+
+	const long long nowMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+		std::chrono::system_clock::now().time_since_epoch()).count();
+	const ibSessionLifetime policy = ibSessionLifetimePolicy();
+
+	struct Ending {
+		std::shared_ptr<ibSession> m_session;
+		wxString m_reason;
+	};
+	std::vector<Ending> ending;
+	std::map<wxString, ibDateTime> changedAt;
+	std::map<wxString, bool> readable;
+
+	for (const auto& kv : m_own) {
+		std::shared_ptr<ibSession> session = kv.second.Share();
+		if (!session || session->IsForceExit())
+			continue;
+		const ibSessionState state = session->State();
+		if (state == ibSessionState::Stopping || state == ibSessionState::Gone
+			|| state == ibSessionState::Rejected)
+			continue;
+		const ibSessionKind kind = session->GetKind();
+		if (!IsRuntimeSessionKind(kind) && !IsDesignerSessionKind(kind))
+			continue;
+
+		const ibSessionEnd end = ibJudgeSessionLifetime(nowMs, session->BornMs(),
+			session->AuthenticatedAtMs(), session->LastActiveMs(), policy);
+		wxString reason;
+		if (end == ibSessionEnd::Absolute)
+			reason = _("Your session has reached its time limit.");
+		else if (end == ibSessionEnd::Idle)
+			reason = _("Your session has been idle too long.");
+
+		if (reason.IsEmpty() && session->Auth() == ibAuthState::Authenticated
+			&& m_ownsSysSession && m_writeConn) {
+			const wxString guid = session->GetUserInfo().m_strUserGuid;
+			if (!guid.empty()) {
+				if (readable.find(guid) == readable.end()) {
+					ibUserInfo user;
+					const bool ran = ibUserInfo::Read(m_writeHolder, ibGuid(guid), user);
+					// A failed read is not a deleted account. The next sweep asks again.
+					readable[guid] = !ran || user.IsOk();
+					if (ran)
+						changedAt[guid] = user.m_passwordChangedAt;
+				}
+				if (!readable[guid])
+					reason = _("This account is no longer there.");
+				else if (changedAt.count(guid) != 0
+					&& !ibSessionPasswordStillCurrent(session->AuthenticatedAtMs(), changedAt[guid]))
+					reason = _("Your password has changed. Sign in again.");
+			}
+		}
+		if (!reason.IsEmpty())
+			ending.push_back(Ending{ std::move(session), std::move(reason) });
+	}
+
+	for (Ending& item : ending) {
+		SESSION_LOG("[session lifetime] closing " << item.m_session->GetId().ToStdString()
+			<< " - " << item.m_reason.ToStdString());
+		item.m_session->SetReason(item.m_reason);
+		const ibSessionScope closing(item.m_session.get());
+		if (!item.m_session->Close(true)) {
+			ibRegistryRequest rm;
+			rm.kind = ibRegistryRequestKind::Remove;
+			rm.session = item.m_session;
+			Submit(std::move(rm), ibPriority::Urgent);
+		}
+	}
+}
+
 void ibSessionRegistry::JobHeartbeatOwn()
 {
 	if (!m_ownsSysSession || !m_writeConn) return;
@@ -1835,6 +1915,21 @@ static bool WriteSessionSignal(const wxString& sessionGuid,
 bool ibSessionRegistry::Kick(const wxString& sessionGuid)
 {
 	return WriteSessionSignal(sessionGuid, wxT("kick"));
+}
+
+void ibSessionRegistry::KickUser(const wxString& userName)
+{
+	if (userName.empty())
+		return;
+	try {
+		ibDatabaseQueryBuilder q;
+		ibQueryResult rs = q.ExecuteIR(ibQueryIR(ibProject(
+			ibFilter(ibScan(session_table),
+				ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("userName")), ibConst(ibValue(userName)))),
+			{ { ibCol(wxT("session")), wxEmptyString } })));
+		while (rs.Next())
+			Kick(rs.GetResultString(wxT("session")));
+	} catch (...) { /* no table, or the signal column is not there yet */ }
 }
 
 bool ibSessionRegistry::Reload(const wxString& sessionGuid)
@@ -2254,7 +2349,8 @@ void ibSessionRegistry::ThreadBody() noexcept
 
 			if (now >= nextSweep) {
 				JobSweepStale();
-					JobCheckSignal();
+				JobEndLivedSessions();
+				JobCheckSignal();
 				nextSweep = now + kSweepInterval;
 			}
 

@@ -12,6 +12,7 @@
 #include <thread>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include <wx/bitmap.h>
@@ -124,6 +125,19 @@ public:
 		auto it = m_sessions.find(id);
 		if (it != m_sessions.end() && it->second)
 			it->second->Touch();
+	}
+
+	// The tab is still here. How long the login may live is decided on the
+	// registry's sweep, from UTC, for every client. This request only
+	// notes that the tab asked.
+	bool Admit(const std::string& id)
+	{
+		std::lock_guard<std::mutex> lock(m_mutex);
+		auto it = m_sessions.find(id);
+		if (it == m_sessions.end() || !it->second)
+			return false;
+		it->second->Touch();
+		return true;
 	}
 
 	// Allocate an unauthenticated session under the id the JS client
@@ -293,21 +307,13 @@ private:
 	void SweepLoop()
 	{
 		using namespace std::chrono;
-		// Tuning: 30-minute idle cutoff matches a reasonable "user
-		// stepped away" window. Sweep every 15s — coarse enough that
-		// the reaper + metadata watch stay cheap, fine enough that
-		// deployed-config changes propagate within a Designer→try-it
-		// roundtrip.
-		// A closed tab does not wait for this: the JS client fires a
-		// beforeunload beacon to /logout, and the cutoff is only the
-		// backstop for a beacon the browser dropped. It was 2 minutes
-		// for a while, and that evicted a user who was simply READING a
-		// form (or whose background tab had its poll paused): the next
-		// action found no session and every unsaved edit was gone. A
-		// generous backstop costs a stale session for half an hour, a
-		// short one costs somebody's work.
-		constexpr std::int64_t kIdleMs   = 30 * 60 * 1000;
-		constexpr auto         kInterval = seconds(15);
+		// Sweep every 15s — coarse enough that the reaper + metadata
+		// watch stay cheap, fine enough that deployed-config changes
+		// propagate within a Designer→try-it roundtrip.
+		// A closed tab does not wait for the registry's idle cutoff: the
+		// JS client fires a beforeunload beacon to /logout. How long a
+		// login may live is the registry's sweep, not this thread.
+		constexpr auto kInterval = seconds(15);
 
 		// Capture the metadata guid observed at server start. Compared
 		// to the live sys_config.file_guid on every tick — any diff
@@ -356,25 +362,6 @@ private:
 			if (server == nullptr)
 				return;
 			ibApplicationInstanceScope serving(server->GetApplicationInstance());
-
-			// 1) Idle eviction.
-			const std::int64_t nowMs = duration_cast<milliseconds>(
-				system_clock::now().time_since_epoch()).count();
-			std::vector<std::string> victims;
-			{
-				std::lock_guard<std::mutex> lock(m_mutex);
-				for (auto& kv : m_sessions) {
-					if (kv.second &&
-						nowMs - kv.second->LastActiveMs() > kIdleMs) {
-						victims.push_back(kv.first);
-					}
-				}
-			}
-			for (const std::string& id : victims) {
-				std::cerr << "[sweep] evicting idle session " << id
-					<< std::endl;
-				Destroy(id);
-			}
 
 			// 2) Metadata-change watch. Polling fallback for the FB
 			//    event-based notifier (isc_que_events) that will ship
@@ -1101,6 +1088,11 @@ WFRONTEND_API bool wfrontendLogin(const std::string& sessionId,
 WFRONTEND_API bool wfrontendSessionExists(const std::string& sessionId)
 {
 	return Sessions().Exists(sessionId);
+}
+
+WFRONTEND_API bool wfrontendAdmitSession(const std::string& sessionId)
+{
+	return Sessions().Admit(sessionId);
 }
 
 WFRONTEND_API void wfrontendDestroySession(const std::string& sessionId)

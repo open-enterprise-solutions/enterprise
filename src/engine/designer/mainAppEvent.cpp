@@ -5,6 +5,7 @@
 
 #include "mainApp.h"
 
+#include "backend/session/session.h"
 #include "frontend/mainFrame/mainFrame.h"
 #include "frontend/mainFrame/mainFrameChild.h"
 
@@ -61,6 +62,11 @@ void ibAppDesigner::OnSetFocus(wxFocusEvent& event)
 
 int ibAppDesigner::FilterEvent(wxEvent& event)
 {
+	const wxEventType type = event.GetEventType();
+	if (type == wxEVT_KEY_DOWN || type == wxEVT_LEFT_DOWN || type == wxEVT_RIGHT_DOWN) {
+		if (ibSession* session = ibSession::Current())
+			session->NoteActivity();
+	}
 	if (event.GetEventType() == wxEVT_KEY_DOWN) {
 		OnKeyEvent(
 			static_cast<wxKeyEvent&>(event)
