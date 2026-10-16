@@ -18,6 +18,7 @@
 #include "backend/query/queryColumn.h"
 #include "backend/query/columnLayout.h"                            // ibColumnCodec + ibFieldSuffix + ReadSingleTargetReference
 #include "backend/backend_core.h"                                  // emptyEnum — the "no member" ordinal
+#include "backend/metaCollection/partial/reference/reference.h"    // a single-target reference column stores the reference key
 
 #include <atomic>                                                  // the synthetic-id counter below
 #include "core/clsid.h"                                         // IsReference — a reference target by its clsid KIND
@@ -280,12 +281,19 @@ void ibBackendColumnRawDB::BindValue(ibQueryStatement& stmt, const ibMetaData* /
 	case ibBackendColumnRawDB::RawType::Number:  stmt.SetParamNumber(pos++, v.GetNumber());  break;
 	case ibBackendColumnRawDB::RawType::Date:    stmt.SetParamDate  (pos++, v.GetDate());    break;
 	case ibBackendColumnRawDB::RawType::Boolean: stmt.SetParamBool  (pos++, v.GetBoolean()); break;
-	// Reference / Blob: UNREACHABLE today. Nothing constructs a RawType::Reference column, and the
-	// only RawType::Blob producer (the register's rowData scaffold) was dropped 2026-08-02. Beyond
-	// that, ibValue has no binary tag, so a "real" blob bind has nowhere to take the bytes from —
-	// giving these a proper path means giving ibValue a binary kind FIRST. String is the honest
-	// degenerate binding until then.
-	case ibBackendColumnRawDB::RawType::Reference: stmt.SetParamString(pos++, v.GetString()); break;
+	// A single-target reference (a tabular section's owner) stores the same sixteen-byte key a
+	// guid column stores. The type lives on the column, so the row carries only the identity.
+	case ibBackendColumnRawDB::RawType::Reference: {
+		ibValueReferenceDataObject* ref = nullptr;
+		if (v.ConvertToValue(ref) && ref != nullptr && ref->GetReferenceData() != nullptr)
+			stmt.SetParamBlob(pos++, ref->GetReferenceData(), sizeof(ibReference));
+		else {
+			const ibReference key{ GuidOf(v) };
+			stmt.SetParamBlob(pos++, &key, sizeof(ibReference));
+		}
+		break;
+	}
+	// Blob: nothing constructs one. ibValue has no binary tag, so a string is the stand-in.
 	case ibBackendColumnRawDB::RawType::Blob:      stmt.SetParamString(pos++, v.GetString()); break;
 	}
 }
