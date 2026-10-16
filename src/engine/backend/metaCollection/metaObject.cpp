@@ -4,6 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "metaObject.h"
+#include "backend/moduleManager/metadataCollection.h"
 #include "backend/appData.h"
 #include "backend/metadataConfiguration.h"   // ibMetaDataConfigurationBase::GetRestructureInfo (the static ledger accessor)
 
@@ -313,6 +314,51 @@ wxString ibValueMetaObject::GetFileName() const
 //*                              Support methods                             *
 //****************************************************************************
 
+namespace {
+
+// Past any real property index. FillMembers stores this in the property tag; GetPropVal reads it back.
+enum {
+	kReflectAttributes = 1000001,
+	kReflectTabularSections,
+	kReflectDimensions,
+	kReflectResources
+};
+
+bool Hosts(const ibValueMetaObject* object, ibClassID kind)
+{
+	return object->ResolveChild(kind) != 0;
+}
+
+ibValue* ReflectionOf(ibValueMetaObject* object, ibClassID kind)
+{
+	ibValueMetadataCollection* list = new ibValueMetadataCollection();
+	for (unsigned int i = 0; i < object->GetChildCount(); ++i) {
+		ibValueMetaObject* child = object->GetChild(i);
+		if (child == nullptr || child->IsDeleted())
+			continue;
+		const ibClassID childKind = child->GetClassType();
+		const bool section = kind == g_metaTableCLSID
+			&& (childKind == g_metaTableCLSID || childKind == g_metaTableRefCLSID);
+		if (childKind == kind || section)
+			list->SetAt(child->GetName(), child);
+	}
+	return list;
+}
+
+// FindProp answers the member's position. The number FillMembers stored — a property
+// index, or one of the list sentinels above — comes back through the tag.
+long PropertyTag(const ibValueMetaObject* object, const long lPropNum)
+{
+	if (ibValue::ibMemberTable* table = object->GetPMethods()) {
+		const long stored = table->GetPropData(lPropNum);
+		if (stored != wxNOT_FOUND)
+			return stored;
+	}
+	return lPropNum;
+}
+
+}
+
 void ibValueMetaObject::FillMembers(ibMemberTable& helper) const
 {
 	for (unsigned idx = 0; idx < ibPropertyObject::GetPropertyCount(); idx++) {
@@ -320,18 +366,47 @@ void ibValueMetaObject::FillMembers(ibMemberTable& helper) const
 		if (property == nullptr) continue;
 		helper.AppendProp(property->GetName(), true, false, idx);
 	}
+
+	// The lists a script walks. Present even when empty, on a kind that can hold them:
+	// a document with no attributes still has Attributes, and Find on it answers Undefined.
+	if (Hosts(this, g_metaAttributeCLSID))
+		helper.AppendProp(wxT("Attributes"), true, false, kReflectAttributes);
+	if (Hosts(this, g_metaTableCLSID) || Hosts(this, g_metaTableRefCLSID))
+		helper.AppendProp(wxT("TabularSections"), true, false, kReflectTabularSections);
+	if (Hosts(this, g_metaDimensionCLSID))
+		helper.AppendProp(wxT("Dimensions"), true, false, kReflectDimensions);
+	if (Hosts(this, g_metaResourceCLSID))
+		helper.AppendProp(wxT("Resources"), true, false, kReflectResources);
 }
 
 bool ibValueMetaObject::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
-	ibProperty* property = GetPropertyByIndex(lPropNum);
+	ibProperty* property = GetPropertyByIndex(PropertyTag(this, lPropNum));
 	if (property != nullptr) return property->SetDataValue(varPropVal);
 	return false;
 }
 
 bool ibValueMetaObject::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 {
-	const ibProperty* property = GetPropertyByIndex(lPropNum);
+	const long tag = PropertyTag(this, lPropNum);
+	if (tag == kReflectAttributes) {
+		pvarPropVal = ReflectionOf(this, g_metaAttributeCLSID);
+		return true;
+	}
+	if (tag == kReflectTabularSections) {
+		pvarPropVal = ReflectionOf(this, g_metaTableCLSID);
+		return true;
+	}
+	if (tag == kReflectDimensions) {
+		pvarPropVal = ReflectionOf(this, g_metaDimensionCLSID);
+		return true;
+	}
+	if (tag == kReflectResources) {
+		pvarPropVal = ReflectionOf(this, g_metaResourceCLSID);
+		return true;
+	}
+
+	const ibProperty* property = GetPropertyByIndex(tag);
 	if (property != nullptr) return property->GetDataValue(pvarPropVal);
 	return false;
 }

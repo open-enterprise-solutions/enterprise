@@ -14,6 +14,8 @@
 #include <iterator>
 #include "backend/metadataConfiguration.h"
 #include "backend/metaCollection/metaObject.h"   // ibValueMetaObject + g_meta*CLSID
+#include "backend/moduleManager/moduleManager.h"
+#include "backend/system/value/valueMap.h"
 
 TEST(MetadataTree, FreshConfigHasNoBusinessObjects) {
     ibMetaDataConfigurationFile cfg;
@@ -168,4 +170,124 @@ TEST(MetadataTree, CreatingEveryHostedKindTwiceKeepsBothAndNamesThemApart) {
 			<< "two " << candidate.name
 			<< " objects were created with the same name";
 	}
+}
+
+namespace {
+
+ibValue Found(ibValue& collection, const wxString& name)
+{
+	const long method = collection.FindMethod(wxT("Find"));
+	EXPECT_GE(method, 0);
+	ibValue key(name);
+	ibValue* params[] = { &key };
+	ibValue result;
+	EXPECT_TRUE(collection.CallAsFunc(method, result, params, 1));
+	return result;
+}
+
+} // namespace
+
+TEST(MetadataReflection, FindReturnsTheObjectOrUndefined) {
+	ibMetaDataConfigurationFile cfg;
+	ibValueMetaObject* root = cfg.GetCommonMetaObject();
+	ibValueMetaObject* invoice = cfg.CreateMetaObject(g_metaDocumentCLSID, root, false);
+	ibValueMetaObject* order = cfg.CreateMetaObject(g_metaDocumentCLSID, root, false);
+	ASSERT_NE(invoice, nullptr);
+	ASSERT_NE(order, nullptr);
+	invoice->SetName(wxT("Invoice"));
+	order->SetName(wxT("Order"));
+
+	ibValueModuleManager::ibValueMetadataUnit metadata(&cfg);
+	const long documents = metadata.FindProp(wxT("Documents"));
+	ASSERT_GE(documents, 0);
+	ibValue collection;
+	ASSERT_TRUE(metadata.GetPropVal(documents, collection));
+
+	ibValue found = Found(collection, wxT("Invoice"));
+	ibValueMetaObject* asDocument = nullptr;
+	ASSERT_TRUE(found.ConvertToValue(asDocument));
+	EXPECT_EQ(asDocument->GetName(), wxT("Invoice"));
+	EXPECT_TRUE(Found(collection, wxT("NoSuchDocument")).IsEmpty());
+
+	ibValue byName;
+	ASSERT_TRUE(collection.GetAt(ibValue(wxT("Order")), byName));
+	EXPECT_FALSE(byName.IsEmpty());
+}
+
+TEST(MetadataReflection, ADocumentListsItsAttributesAndASectionListsItsOwn) {
+	ibMetaDataConfigurationFile cfg;
+	ibValueMetaObject* root = cfg.GetCommonMetaObject();
+	ibValueMetaObject* invoice = cfg.CreateMetaObject(g_metaDocumentCLSID, root, false);
+	ASSERT_NE(invoice, nullptr);
+	invoice->SetName(wxT("Invoice"));
+
+	ibValueMetaObject* amount = cfg.CreateMetaObject(g_metaAttributeCLSID, invoice, false);
+	ASSERT_NE(amount, nullptr);
+	amount->SetName(wxT("Amount"));
+
+	EXPECT_GE(invoice->FindProp(wxT("Attributes")), 0);
+	EXPECT_GE(invoice->FindProp(wxT("TabularSections")), 0);
+	EXPECT_LT(invoice->FindProp(wxT("Dimensions")), 0);
+	EXPECT_LT(invoice->FindProp(wxT("Resources")), 0);
+
+	ibValue attributes;
+	ASSERT_TRUE(invoice->GetPropVal(invoice->FindProp(wxT("Attributes")), attributes));
+	ibValue amountValue = Found(attributes, wxT("Amount"));
+	ibValueMetaObject* asAttribute = nullptr;
+	ASSERT_TRUE(amountValue.ConvertToValue(asAttribute));
+	EXPECT_EQ(asAttribute->GetName(), wxT("Amount"));
+	EXPECT_GE(asAttribute->FindProp(wxT("Synonym")), 0);
+	EXPECT_GE(asAttribute->FindProp(wxT("Type")), 0);
+	ibValue typeValue;
+	ASSERT_TRUE(asAttribute->GetPropVal(asAttribute->FindProp(wxT("Type")), typeValue));
+	EXPECT_FALSE(typeValue.IsEmpty());
+	EXPECT_TRUE(Found(attributes, wxT("NoSuchAttribute")).IsEmpty());
+
+	ibValueMetaObject* lines = cfg.CreateMetaObject(g_metaTableCLSID, invoice, false);
+	if (lines == nullptr)
+		lines = cfg.CreateMetaObject(g_metaTableRefCLSID, invoice, false);
+	ASSERT_NE(lines, nullptr);
+	lines->SetName(wxT("Lines"));
+	ibValueMetaObject* goods = cfg.CreateMetaObject(g_metaAttributeCLSID, lines, false);
+	ASSERT_NE(goods, nullptr);
+	goods->SetName(wxT("Goods"));
+
+	ibValue sections;
+	ASSERT_TRUE(invoice->GetPropVal(invoice->FindProp(wxT("TabularSections")), sections));
+	ibValue linesValue = Found(sections, wxT("Lines"));
+	ibValueMetaObject* asSection = nullptr;
+	ASSERT_TRUE(linesValue.ConvertToValue(asSection));
+	EXPECT_GE(asSection->FindProp(wxT("Attributes")), 0);
+	ibValue sectionAttributes;
+	ASSERT_TRUE(asSection->GetPropVal(asSection->FindProp(wxT("Attributes")), sectionAttributes));
+	ibValue goodsValue = Found(sectionAttributes, wxT("Goods"));
+	EXPECT_FALSE(goodsValue.IsEmpty());
+}
+
+TEST(MetadataReflection, ARegisterListsDimensionsAndResources) {
+	ibMetaDataConfigurationFile cfg;
+	ibValueMetaObject* root = cfg.GetCommonMetaObject();
+	ibValueMetaObject* prices = cfg.CreateMetaObject(g_metaInformationRegisterCLSID, root, false);
+	ASSERT_NE(prices, nullptr);
+	ibValueMetaObject* item = cfg.CreateMetaObject(g_metaDimensionCLSID, prices, false);
+	ASSERT_NE(item, nullptr);
+	item->SetName(wxT("Item"));
+	ibValueMetaObject* price = cfg.CreateMetaObject(g_metaResourceCLSID, prices, false);
+	ASSERT_NE(price, nullptr);
+	price->SetName(wxT("Price"));
+
+	ibValue dimensions;
+	ASSERT_TRUE(prices->GetPropVal(prices->FindProp(wxT("Dimensions")), dimensions));
+	EXPECT_FALSE(Found(dimensions, wxT("Item")).IsEmpty());
+	EXPECT_TRUE(Found(dimensions, wxT("Price")).IsEmpty());
+
+	ibValue resources;
+	ASSERT_TRUE(prices->GetPropVal(prices->FindProp(wxT("Resources")), resources));
+	EXPECT_FALSE(Found(resources, wxT("Price")).IsEmpty());
+}
+
+TEST(MetadataReflection, APlainStructureDoesNotGainFind) {
+	ibValueStructure plain;
+	EXPECT_LT(plain.FindMethod(wxT("Find")), 0);
+	EXPECT_GE(plain.FindMethod(wxT("Get")), 0);
 }

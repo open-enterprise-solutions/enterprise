@@ -7,6 +7,7 @@
 #include "backend/metaData.h"
 
 #include "backend/system/value/valueMap.h"
+#include "metadataCollection.h"
 
 
 ibValueModuleManager::ibValueMetadataUnit::ibValueMetadataUnit(ibMetaData* metaData) :
@@ -76,7 +77,9 @@ bool ibValueModuleManager::ibValueMetadataUnit::SetPropVal(const long lPropNum, 
 bool ibValueModuleManager::ibValueMetadataUnit::GetPropVal(const long lPropNum, ibValue& pvarPropVal)//attribute value
 {
 	// A name repeated while the configuration is edited is put, not inserted (globalContextManager.cpp).
-	ibValueStructure* valStruct = new ibValueStructure();
+	// Find answers Undefined for a name that is not there. A structure raises, and that is what
+	// Metadata.Documents.Find was hitting.
+	ibValueMetadataCollection* valStruct = new ibValueMetadataCollection();
 	switch (lPropNum)
 	{
 	case enCommonModules: {
