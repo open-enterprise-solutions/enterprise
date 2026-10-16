@@ -19,6 +19,7 @@ protected:
 		enLoad,
 		enUnload,
 		enGetMetadata,
+		enTotal,
 	};
 
 	enum {
