@@ -4,17 +4,6 @@
 
 namespace {
 
-// What the schema shows — the settings in force, Running, Endpoint; an empty node when refused (the person told why).
-ibProtocolNode Shown()
-{
-	ibProtocolNode params, shown;
-	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
-	params.SetValue(ibProtocolName::Schema, static_cast<long long>(ibProtocolSchema::McpServer));
-	if (frame == nullptr || !frame->Call(ibProtocolMethod::Schema, params, shown))
-		return ibProtocolNode();
-	return shown;
-}
-
 // The schema's command, the settings its Args.
 ibProtocolNode CommandOf(ibProtocolSchemaCommand command, const ibMcpSettings& settings)
 {
@@ -29,6 +18,21 @@ ibProtocolNode CommandOf(ibProtocolSchemaCommand command, const ibMcpSettings& s
 	return params;
 }
 
+}
+
+const ibProtocolNode& ibMcpServer::Shown() const
+{
+	if (m_shown.has_value())
+		return *m_shown;
+
+	static const ibProtocolNode refused;
+	ibProtocolNode params, shown;
+	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
+	params.SetValue(ibProtocolName::Schema, static_cast<long long>(ibProtocolSchema::McpServer));
+	if (frame == nullptr || !frame->Call(ibProtocolMethod::Schema, params, shown))
+		return refused;
+	m_shown = shown;
+	return *m_shown;
 }
 
 ibMcpSettings ibMcpServer::GetSettings() const
@@ -50,8 +54,10 @@ bool ibMcpServer::SaveSettings(ibSession* WXUNUSED(session)) const
 		return false;
 
 	ibProtocolNode answer;
-	return frame->Call(ibProtocolMethod::Schema,
+	const bool saved = frame->Call(ibProtocolMethod::Schema,
 		CommandOf(ibProtocolSchemaCommand::Save, m_settings.value_or(GetSettings())), answer);
+	m_shown.reset();
+	return saved;
 }
 
 bool ibMcpServer::Start(ibSession* WXUNUSED(session), wxString& refusal)
@@ -63,8 +69,11 @@ bool ibMcpServer::Start(ibSession* WXUNUSED(session), wxString& refusal)
 	// IN THE NAME OF THE SESSION THAT ASKS — the server's for this client. Its refusal handed back, said by the caller.
 	ibProtocolNode answer;
 	ibProtocolRefusal refused = ibProtocolRefusal::None;
-	return frame->Call(ibProtocolMethod::Schema,
+	const bool started = frame->Call(ibProtocolMethod::Schema,
 		CommandOf(ibProtocolSchemaCommand::Start, m_settings.value_or(GetSettings())), answer, refused, refusal);
+	// What the server holds now — a token it may have minted, the endpoint — is asked for by the next read, once.
+	m_shown.reset();
+	return started;
 }
 
 void ibMcpServer::Stop()
@@ -77,6 +86,7 @@ void ibMcpServer::Stop()
 	params.SetValue(ibProtocolName::Schema, static_cast<long long>(ibProtocolSchema::McpServer));
 	params.SetValue(ibProtocolName::Command, static_cast<long long>(ibProtocolSchemaCommand::Stop));
 	frame->Call(ibProtocolMethod::Schema, params, answer);
+	m_shown.reset();
 }
 
 bool ibMcpServer::IsRunning() const

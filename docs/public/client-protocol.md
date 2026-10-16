@@ -168,6 +168,10 @@ A schema is a dialog of the desktop held as data: the client shows it however it
 
 A schema the client's application does not have, or the person has no right to, is refused.
 
+What a schema shows is read once for what the person does: a dialog opened by a schema's menu item is drawn from that
+item's answer, and the client asks again only after one of the schema's commands changed what it shows (assistant
+access: Options is one exchange; Start now is the command and one read of the token and endpoint it settled on).
+
 ## Questions to the person
 
 | Kind | Asks | `respond` with |

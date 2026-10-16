@@ -303,8 +303,10 @@ void ibFrontendMainFrameDesigner::ShowSchema(ibProtocolSchema schema, const ibPr
 	// ASSISTANT ACCESS. Unlike the pages above, this one is not the frame's own
 	// state kept in an options file — it belongs to the PERSON in this base, so
 	// it is read from and written back to the server that owns it.
+	// The menu item's answer is this schema's (McpServer): Allowed, the settings, Running, the Endpoint — the page reads
+	// them from it, and asks the server nothing more to open.
 	ibPanelMcpSettings* mcpSettings = dialog.GetMcpSettingsPanel();
-	ibMcpServer* mcpServer = ibApplicationInstance::GetMcpServer();
+	ibMcpServer* mcpServer = ibApplicationInstance::GetMcpServer(&shown);
 	if (mcpServer != nullptr) {
 		mcpSettings->SetSettings(mcpServer->GetSettings());
 		mcpSettings->SetEndpoint(mcpServer->GetEndpoint());
