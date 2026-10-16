@@ -21,7 +21,11 @@
 #include <gtest/gtest.h>
 
 #include "backend/compiler/byteCode.h"
+#include "backend/compiler/codeDef.h"
+#include "backend/compiler/compileCode.h"
+#include "backend/compiler/compileContext.h"
 #include "backend/compiler/value.h"
+#include "backend/backend_exception.h"
 #include "core/fileSystem/fs.h"
 #include "core/guid.h"
 
@@ -115,6 +119,10 @@ TEST(ByteCodeAOT, HeaderFields) {
 	src.m_lStartModule    = 42;
 	src.m_lVarCount       = 17;
 	src.m_bExpressionOnly = true;
+	// The start has to land inside the tape (or just past it). Forty-two
+	// empty steps make 42 a real entry rather than an index off the end.
+	for (int i = 0; i < 42; ++i)
+		src.m_listCode.push_back(MakeUnit(OPER_NOP, 1));
 
 	ibByteCode dst;
 	ASSERT_TRUE(RoundTrip(src, dst));
@@ -137,9 +145,13 @@ TEST(ByteCodeAOT, ListCodeRoundTrip) {
 	ibByteCode src;
 	src.m_id      = MakeGuid(3);
 	src.m_version = MakeGuid(4);
-	src.m_listCode.push_back(MakeUnit(/*OPER_LET*/ 13, 1, wxT("modA")));
-	src.m_listCode.push_back(MakeUnit(/*OPER_ADD*/  1, 2, wxT("modB")));
-	src.m_listCode.push_back(MakeUnit(/*OPER_RET*/  8, 3, wxEmptyString));
+	// The four operands are wire values (array 7/9/11/13, index 8/10/12/14),
+	// not a real frame. OPER_NOP does not read them, so the round-trip can
+	// keep those numbers. A real opcode would refuse them: 13 is OPER_IF,
+	// and its jump of 10 is past a three-instruction tape.
+	src.m_listCode.push_back(MakeUnit(OPER_NOP, 1, wxT("modA")));
+	src.m_listCode.push_back(MakeUnit(OPER_NOP, 2, wxT("modB")));
+	src.m_listCode.push_back(MakeUnit(OPER_NOP, 3, wxEmptyString));
 	src.m_listCode[2].m_strDocPath  = wxT("/Catalog/Object");
 	src.m_listCode[2].m_strFileName = wxT("external.epf");
 
@@ -353,6 +365,10 @@ TEST(ByteCodeAOT, ListFuncWithLocalsAndParams) {
 	ibByteCode src;
 	src.m_id      = MakeGuid(12);
 	src.m_version = MakeGuid(13);
+	// The function's entry is instruction 100, and its parent ref is var 0.
+	for (int i = 0; i < 101; ++i)
+		src.m_listCode.push_back(MakeUnit(OPER_NOP, 1));
+	src.m_listVar.push_back(MakeVar(wxT("Owner"), ibVarKind::Context, 0));
 
 	ibByteCode::ibByteFunction fn;
 	fn.m_lCodeLine       = 100;
@@ -557,7 +573,7 @@ TEST(ByteCodeAOT, LargeButRealisticBytecode) {
 	// 5000 instructions, 200 vars, 50 functions — roughly the upper
 	// bound of a "big" common module.
 	for (int i = 0; i < 5000; ++i)
-		src.m_listCode.push_back(MakeUnit((short)(i % 60), (unsigned)i + 1));
+		src.m_listCode.push_back(MakeUnit(OPER_NOP, (unsigned)i + 1));
 	for (int i = 0; i < 200; ++i)
 		src.m_listVar.push_back(
 			MakeVar(wxString::Format(wxT("v%d"), i),
@@ -607,4 +623,174 @@ TEST(ByteCodeAOT, AChildSeesEverythingButPrivateLocals) {
 	EXPECT_FALSE(MakeVar(wxT("StockManagement"), ibVarKind::External,    3).IsLocal());
 	EXPECT_FALSE(MakeVar(wxT("Manager"),         ibVarKind::Context,     4).IsLocal());
 	EXPECT_FALSE(MakeVar(wxT("Catalogs"),        ibVarKind::ContextProp, 5).IsLocal());
+}
+
+// ===========================================================================
+// A framed blob whose operands do not fit the frame is not a module.
+// The cache must refuse it before anything executes it.
+// ===========================================================================
+
+ibByteCode LetModule()
+{
+	ibByteCode bc;
+	bc.m_id = MakeGuid(80);
+	bc.m_version = MakeGuid(81);
+	bc.m_lVarCount = 2;
+	ibByteUnit let;
+	let.m_numOper = OPER_LET;
+	let.m_param1.m_numArray = 0;
+	let.m_param1.m_numIndex = 0;
+	let.m_param2.m_numArray = 0;
+	let.m_param2.m_numIndex = 1;
+	bc.m_listCode.push_back(let);
+	return bc;
+}
+
+TEST(ByteCodeAOT, ALocalIndexPastTheFrameIsRefused) {
+	ibByteCode src = LetModule();
+	ibByteCode ok;
+	ASSERT_TRUE(RoundTrip(src, ok));
+	EXPECT_TRUE(ok.m_bCompile);
+
+	src.m_listCode[0].m_param2.m_numIndex = 5;
+	ibByteCode dst;
+	EXPECT_FALSE(RoundTrip(src, dst));
+	EXPECT_FALSE(dst.m_bCompile);
+}
+
+TEST(ByteCodeAOT, AConstantIndexPastThePoolIsRefused) {
+	ibByteCode src = LetModule();
+	src.m_listCode[0].m_param2.m_numArray = DEF_VAR_CONST;
+	src.m_listCode[0].m_param2.m_numIndex = 0;
+	src.m_listConst.push_back(ibValue(true));
+	ibByteCode ok;
+	ASSERT_TRUE(RoundTrip(src, ok));
+
+	src.m_listCode[0].m_param2.m_numIndex = 3;
+	ibByteCode dst;
+	EXPECT_FALSE(RoundTrip(src, dst));
+}
+
+TEST(ByteCodeAOT, ANegativeStartAndANegativeFrameAreRefused) {
+	ibByteCode src = LetModule();
+	src.m_lStartModule = -1;
+	ibByteCode dst;
+	EXPECT_FALSE(RoundTrip(src, dst));
+
+	src = LetModule();
+	src.m_lStartModule = 4;
+	EXPECT_FALSE(RoundTrip(src, dst));
+
+	src = LetModule();
+	src.m_lVarCount = -1;
+	EXPECT_FALSE(RoundTrip(src, dst));
+}
+
+TEST(ByteCodeAOT, AFunctionTargetAndFrameThatDoNotFitAreRefused) {
+	ibByteCode src = LetModule();
+	ibByteCode::ibByteFunction fn;
+	fn.m_lCodeLine = 40;
+	fn.m_lVarCount = 1;
+	fn.m_strRealName = wxT("Missing");
+	src.m_listFunc.push_back(fn);
+	ibByteCode dst;
+	EXPECT_FALSE(RoundTrip(src, dst));
+
+	src = LetModule();
+	fn.m_lCodeLine = -1;
+	fn.m_lVarCount = -3;
+	src.m_listFunc.clear();
+	src.m_listFunc.push_back(fn);
+	EXPECT_FALSE(RoundTrip(src, dst));
+
+	// A context method has no tape of its own. Line -1 and a frame of
+	// zero are the shape the metadata round-trip already stores.
+	src = LetModule();
+	fn.m_lCodeLine = -1;
+	fn.m_lVarCount = 0;
+	fn.m_kind = ibFnKind::ContextMethod;
+	src.m_listFunc.clear();
+	src.m_listFunc.push_back(fn);
+	EXPECT_TRUE(RoundTrip(src, dst));
+}
+
+TEST(ByteCodeAOT, AFunctionBodyIsCheckedAgainstItsOwnFrame) {
+	ibByteCode src;
+	src.m_id = MakeGuid(82);
+	src.m_version = MakeGuid(83);
+	src.m_lVarCount = 0;
+
+	ibByteUnit entry;
+	entry.m_numOper = OPER_FUNC;
+	ibByteUnit let;
+	let.m_numOper = OPER_LET;
+	let.m_param1.m_numArray = 0;
+	let.m_param1.m_numIndex = 0;
+	let.m_param2.m_numArray = 0;
+	let.m_param2.m_numIndex = 0;
+	ibByteUnit end;
+	end.m_numOper = OPER_ENDFUNC;
+	src.m_listCode.push_back(entry);
+	src.m_listCode.push_back(let);
+	src.m_listCode.push_back(end);
+
+	ibByteCode::ibByteFunction fn;
+	fn.m_lCodeLine = 0;
+	fn.m_lVarCount = 1;
+	fn.m_strRealName = wxT("Body");
+	src.m_listFunc.push_back(fn);
+
+	ibByteCode ok;
+	ASSERT_TRUE(RoundTrip(src, ok));
+
+	// The same slot, asked of the module frame (the instruction is no
+	// longer inside the function), does not exist.
+	src.m_listCode[0].m_numOper = OPER_NOP;
+	ibByteCode dst;
+	EXPECT_FALSE(RoundTrip(src, dst));
+}
+
+TEST(ByteCodeAOT, AnUnknownOpcodeIsRefused) {
+	ibByteCode src = LetModule();
+	src.m_listCode[0].m_numOper = -1;
+	ibByteCode dst;
+	EXPECT_FALSE(RoundTrip(src, dst));
+
+	src = LetModule();
+	src.m_listCode[0].m_numOper = 30000;
+	EXPECT_FALSE(RoundTrip(src, dst));
+}
+
+// The reader used to refuse a hand-built tape and the fixture was rewritten
+// to NOP so the round-trip would pass. A module the compiler actually emits,
+// including a lambda and a pipeline, has to pass the same check.
+TEST(ByteCodeAOT, ACompiledModuleWithALambdaPasses) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	bool compiled = false;
+	try {
+		compiled = cc.Compile(
+			wxT("Function Pick(arr)\n")
+			wxT("  Return arr.Where(Function(x) Return x > 1 EndFunction).Count();\n")
+			wxT("EndFunction\n")
+			wxT("Procedure Note(a, b = 2)\n")
+			wxT("EndProcedure\n"));
+	} catch (const ibBackendException& err) {
+		FAIL() << err.GetErrorDescription().ToStdString();
+	}
+	ASSERT_TRUE(compiled);
+
+	ibByteCode dst;
+	ASSERT_TRUE(RoundTrip(cc.m_cByteCode, dst));
+	EXPECT_TRUE(dst.m_bCompile);
+	EXPECT_FALSE(dst.m_listCode.empty());
+	EXPECT_FALSE(dst.m_listFunc.empty());
+}
+
+TEST(ByteCodeAOT, DependencyListsOfDifferentLengthsAreRefused) {
+	ibByteCode src = LetModule();
+	src.m_dependencyIds.push_back(MakeGuid(90));
+	src.m_dependencyIds.push_back(MakeGuid(91));
+	src.m_dependencyVersions.push_back(MakeGuid(92));
+	ibByteCode dst;
+	EXPECT_FALSE(RoundTrip(src, dst));
 }

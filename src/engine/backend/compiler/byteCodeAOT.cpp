@@ -35,7 +35,11 @@
 
 #include "backend/compiler/byteCode.h"
 #include "backend/compiler/byteCodeFormat.h"   // kAOTFormatVersion — also the cache key
+#include "backend/compiler/codeDef.h"          // OPER_* — which operand is a slot, a jump, a constant
+#include "backend/compiler/compileContext.h"   // DEF_VAR_CONST / DEF_VAR_SKIP — the operand tags
 #include "core/fileSystem/fs.h"
+
+#include <algorithm>
 
 namespace {
 
@@ -256,6 +260,15 @@ constexpr uint32_t kAOTMagic         = 0x31434250u; // 'PBC1' little-endian
 // entries in the worst case, not millions; a hard cap at 16M is well
 // past anything realistic.
 constexpr uint32_t kAOTSanityMax = 16u * 1024u * 1024u;
+
+// A frame wider than this is not a procedure a compiler emits. It is a count
+// that would allocate until the process dies. A million slots is already past
+// any module this runtime has compiled.
+constexpr long kMaxFrameSlots = 1000000;
+
+// Parent-module depth stamped on an operand. Real chains are a handful of
+// rungs; past this the number is not a frame this process could have built.
+constexpr long long kMaxModuleDepth = 256;
 
 bool WriteGuid(ibWriterMemory& w, const ibGuid& g) {
 	const auto& b = g.bytes();
@@ -511,6 +524,293 @@ bool ReadFunction(const ibReaderMemory& r, ibByteCode::ibByteFunction& f) {
 	return true;
 }
 
+// The base opcode, or -1 when the number is not one this interpreter runs.
+// A typed tier is `base + n * (OPER_END + 1)` for n in 1..4; the operands
+// stay the base opcode's operands.
+int BaseOpcode(int oper)
+{
+	if (oper < 0)
+		return -1;
+	const int span = OPER_END + 1;
+	if (oper < span)
+		return oper;
+	const int tier = oper / span;
+	if (tier < 1 || tier > 4)
+		return -1;
+	return oper % span;
+}
+
+// A value operand. A current-frame tag must name a slot the frame has; a
+// constant tag must name a pool entry. An outer-frame tag is a depth, and
+// the chain that depth walks is built at run time — only an absurd depth
+// is refused here.
+bool ValueSlotOk(const ibParamRunUnit& p, long frame, long nConst)
+{
+	const long long tag = p.m_numArray;
+	const long long idx = p.m_numIndex;
+	if (tag == DEF_VAR_CONST)
+		return idx >= 0 && idx < nConst;
+	if (tag == DEF_VAR_SKIP || tag == DEF_VAR_DEFAULT || tag == DEF_VAR_NORET)
+		return true;
+	if (tag <= 0)
+		return idx >= 0 && idx < frame;
+	return tag > 0 && tag <= kMaxModuleDepth;
+}
+
+bool ConstIndexOk(long long idx, long nConst)
+{
+	return idx >= 0 && idx < nConst;
+}
+
+// The interpreter sets the line to `target - 1` and then steps. A negative
+// target steps into an index the tape does not have. A target past the end
+// simply leaves the loop.
+bool JumpOk(long long target, long nCode)
+{
+	return target >= 0 && target <= nCode;
+}
+
+bool InstructionFits(const ibByteUnit& u, long frame, long ip, long nCode, long nConst, long nFunc)
+{
+	const int op = BaseOpcode(u.m_numOper);
+	// A number this interpreter does not run is not a module. Passing it
+	// used to publish the blob and then miss the cache on every start.
+	if (op < 0)
+		return false;
+
+	const ibParamRunUnit& p1 = u.m_param1;
+	const ibParamRunUnit& p2 = u.m_param2;
+	const ibParamRunUnit& p3 = u.m_param3;
+	const ibParamRunUnit& p4 = u.m_param4;
+
+	switch (op) {
+	case OPER_ADD: case OPER_SUB: case OPER_DIV: case OPER_MULT: case OPER_MOD:
+	case OPER_AND: case OPER_OR:
+	case OPER_EQ: case OPER_NE: case OPER_GT: case OPER_LS: case OPER_GE: case OPER_LE:
+	case OPER_GET_ARRAY: case OPER_SET_ARRAY:
+	case OPER_LINQ_SEEN: case OPER_LINQ_BUCKET: case OPER_LINQ_BUCKET_GET:
+		return ValueSlotOk(p1, frame, nConst) && ValueSlotOk(p2, frame, nConst) && ValueSlotOk(p3, frame, nConst);
+
+	case OPER_NOT: case OPER_INVERT: case OPER_LET:
+		return ValueSlotOk(p1, frame, nConst) && ValueSlotOk(p2, frame, nConst);
+
+	case OPER_CONST:
+		return ValueSlotOk(p1, frame, nConst) && ConstIndexOk(p2.m_numIndex, nConst);
+
+	case OPER_CONSTN:
+		return ValueSlotOk(p1, frame, nConst);
+
+	case OPER_IF:
+		return ValueSlotOk(p1, frame, nConst) && JumpOk(p2.m_numIndex, nCode);
+
+	case OPER_FOR:
+		return ValueSlotOk(p1, frame, nConst) && ValueSlotOk(p2, frame, nConst) && JumpOk(p3.m_numIndex, nCode);
+
+	case OPER_FOREACH:
+		return ValueSlotOk(p1, frame, nConst) && ValueSlotOk(p2, frame, nConst)
+			&& ValueSlotOk(p3, frame, nConst) && JumpOk(p4.m_numIndex, nCode);
+
+	case OPER_NEXT: case OPER_NEXT_ITER:
+		return ValueSlotOk(p1, frame, nConst) && JumpOk(p2.m_numIndex, nCode);
+
+	case OPER_RET:
+		if (p1.m_numIndex == DEF_VAR_NORET)
+			return true;
+		return ValueSlotOk(p1, frame, nConst);
+
+	case OPER_RAISE_T:
+		return ValueSlotOk(p1, frame, nConst);
+
+	case OPER_GOTO: case OPER_ENDTRY: case OPER_TRY:
+		return JumpOk(p1.m_numIndex, nCode);
+
+	case OPER_SET: case OPER_SETREF:
+		return ValueSlotOk(p1, frame, nConst);
+
+	case OPER_SETCONST:
+		return p1.m_numIndex < 0 || ConstIndexOk(p1.m_numIndex, nConst);
+
+	case OPER_SET_A: case OPER_SET_SCOPE:
+		return ValueSlotOk(p1, frame, nConst) && ConstIndexOk(p2.m_numIndex, nConst) && ValueSlotOk(p3, frame, nConst);
+
+	case OPER_GET_A: case OPER_GET_SCOPE: case OPER_CALL_METHOD:
+		return ValueSlotOk(p1, frame, nConst) && ValueSlotOk(p2, frame, nConst) && ConstIndexOk(p3.m_numIndex, nConst);
+
+	case OPER_GET_EXTERN: case OPER_GET_CONTEXT:
+		return ValueSlotOk(p1, frame, nConst) && ValueSlotOk(p2, frame, nConst);
+
+	case OPER_SET_EXTERN: case OPER_SET_CONTEXT:
+		return ValueSlotOk(p1, frame, nConst) && ValueSlotOk(p3, frame, nConst);
+
+	case OPER_SET_TYPE: case OPER_FUNC_PARAM: case OPER_FUNC_LOCAL:
+		return ValueSlotOk(p1, frame, nConst);
+
+	case OPER_NEW:
+		return ValueSlotOk(p1, frame, nConst)
+			&& p2.m_numArray >= 0 && p2.m_numArray <= kMaxFrameSlots;
+
+	case OPER_LFUNC:
+		// The end address must land on an instruction (the matching ENDLFUNC),
+		// and the third operand is the function's own entry in m_listFunc.
+		return ValueSlotOk(p1, frame, nConst)
+			&& p2.m_numIndex > ip && p2.m_numIndex < nCode
+			&& p3.m_numIndex >= 0 && p3.m_numIndex < nFunc;
+
+	case OPER_CALL: case OPER_CALL_CLOSURE:
+		if (!ValueSlotOk(p1, frame, nConst))
+			return false;
+		if (p2.m_numArray < 0 || p2.m_numArray > kMaxModuleDepth)
+			return false;
+		if (p2.m_numArray == 0 && !JumpOk(p2.m_numIndex, nCode))
+			return false;
+		if (p3.m_numArray < 0 || p3.m_numIndex < 0)
+			return false;
+		if (p3.m_numIndex > kMaxFrameSlots || p3.m_numArray > kMaxFrameSlots)
+			return false;
+		// The frame has to cover every argument the call then writes into it.
+		return p3.m_numIndex >= p3.m_numArray;
+
+	case OPER_CALL_LAMBDA: case OPER_CALL_LINQ:
+		if (!ValueSlotOk(p1, frame, nConst))
+			return false;
+		if (op == OPER_CALL_LAMBDA && !ValueSlotOk(p4, frame, nConst))
+			return false;
+		if (op == OPER_CALL_LINQ && !ValueSlotOk(p2, frame, nConst))
+			return false;
+		if (op == OPER_CALL_LINQ)
+			return p3.m_numArray >= 0 && p3.m_numArray <= kMaxFrameSlots;
+		return p2.m_numIndex >= 0 && p2.m_numIndex <= kMaxFrameSlots;
+
+	case OPER_LINQ_NARROW:
+		if (!ValueSlotOk(p1, frame, nConst) || !ValueSlotOk(p3, frame, nConst) || !ValueSlotOk(p4, frame, nConst))
+			return false;
+		if (p2.m_numIndex == 0)
+			return true;
+		return JumpOk(p2.m_numIndex, nCode) && JumpOk(p2.m_numArray, nCode) && p2.m_numIndex <= p2.m_numArray;
+
+	case OPER_LINQ_KEEP:
+		if (!ValueSlotOk(p1, frame, nConst))
+			return false;
+		if (p2.m_numArray != DEF_VAR_SKIP && !ValueSlotOk(p2, frame, nConst))
+			return false;
+		if (p3.m_numArray != DEF_VAR_SKIP && !ValueSlotOk(p3, frame, nConst))
+			return false;
+		return p4.m_numIndex >= 0;
+
+	case OPER_LINQ_RESULT:
+		return ValueSlotOk(p1, frame, nConst) && ValueSlotOk(p2, frame, nConst);
+
+	case OPER_LINQ_ROW:
+		return ValueSlotOk(p1, frame, nConst) && ValueSlotOk(p2, frame, nConst) && ConstIndexOk(p3.m_numIndex, nConst);
+
+	case OPER_LINQ_FIELD:
+		return ValueSlotOk(p1, frame, nConst) && ValueSlotOk(p2, frame, nConst) && p3.m_numIndex >= 0;
+
+	// Markers. They name no slot. A typed tier of one of them is not a
+	// marker (BaseOpcode already folded those back to the base).
+	case OPER_NOP:
+	case OPER_RAISE:
+	case OPER_FUNC:
+	case OPER_ENDFUNC:
+	case OPER_ENDLFUNC:
+	case OPER_END:
+	case OPER_CTX_BEGIN:
+	case OPER_CTX_END:
+		return true;
+
+	default:
+		// A known number with no layout here is still unknown to this check.
+		// Refuse it. A new opcode has to say which of its operands are slots.
+		return false;
+	}
+}
+
+// A blob can be a well-framed byte string and still name a slot the frame
+// does not have. The interpreter used that index as a native subscript.
+// Refuse it here, before the cache publishes the bytecode as compiled.
+bool OperandsFitTheFrames(const ibByteCode& bc)
+{
+	const long nCode = (long)bc.m_listCode.size();
+	const long nConst = (long)bc.m_listConst.size();
+	const long nVar = (long)bc.m_listVar.size();
+	const long nFunc = (long)bc.m_listFunc.size();
+
+	if (bc.m_lStartModule < 0 || bc.m_lStartModule > nCode)
+		return false;
+	if (bc.m_lVarCount < 0 || bc.m_lVarCount > kMaxFrameSlots)
+		return false;
+	if (bc.m_dependencyIds.size() != bc.m_dependencyVersions.size())
+		return false;
+
+	for (const auto& v : bc.m_listVar) {
+		if (v.m_parentRef < -1 || v.m_parentRef >= nVar)
+			return false;
+	}
+
+	// Which frame an instruction runs in. Module body uses the module's
+	// count; a function body uses that function's count. An inner lambda
+	// is painted after the function that contains it, so it keeps its own.
+	std::vector<long> frameAt((size_t)nCode, bc.m_lVarCount);
+	std::vector<size_t> order((size_t)nFunc);
+	for (size_t i = 0; i < order.size(); ++i)
+		order[i] = i;
+	std::sort(order.begin(), order.end(), [&](size_t a, size_t b) {
+		return bc.m_listFunc[a].m_lCodeLine < bc.m_listFunc[b].m_lCodeLine;
+	});
+
+	for (size_t fi : order) {
+		const ibByteCode::ibByteFunction& fn = bc.m_listFunc[fi];
+		if (fn.m_lVarCount < 0 || fn.m_lVarCount > kMaxFrameSlots)
+			return false;
+		if ((long)fn.m_listParam.size() > fn.m_lVarCount)
+			return false;
+		for (const auto& loc : fn.m_listLocals) {
+			if (loc.m_slotIndex < 0 || loc.m_slotIndex >= fn.m_lVarCount)
+				return false;
+		}
+		for (const auto& p : fn.m_listParam) {
+			if (p.m_defaultValue.m_numArray == DEF_VAR_CONST
+				&& !ConstIndexOk(p.m_defaultValue.m_numIndex, nConst))
+				return false;
+		}
+		if (fn.m_parentRef < -1 || fn.m_parentRef >= nVar)
+			return false;
+		if (fn.m_lCodeLine < -1 || (fn.m_lCodeLine >= 0 && fn.m_lCodeLine >= nCode))
+			return false;
+		if (fn.m_lCodeLine < 0)
+			continue;
+
+		const int entry = BaseOpcode(bc.m_listCode[(size_t)fn.m_lCodeLine].m_numOper);
+		if (entry != OPER_FUNC && entry != OPER_LFUNC)
+			continue;
+		const int open = entry;
+		const int close = (entry == OPER_LFUNC) ? OPER_ENDLFUNC : OPER_ENDFUNC;
+		int depth = 0;
+		bool closed = false;
+		for (long ip = fn.m_lCodeLine; ip < nCode; ++ip) {
+			const int at = BaseOpcode(bc.m_listCode[(size_t)ip].m_numOper);
+			if (at == open)
+				++depth;
+			frameAt[(size_t)ip] = fn.m_lVarCount;
+			if (at == close) {
+				--depth;
+				if (depth <= 0) {
+					closed = true;
+					break;
+				}
+			}
+		}
+		if (!closed)
+			return false;
+	}
+
+	for (long ip = 0; ip < nCode; ++ip) {
+		if (!InstructionFits(bc.m_listCode[(size_t)ip], frameAt[(size_t)ip], ip, nCode, nConst, nFunc))
+			return false;
+	}
+	return true;
+}
+
 } // anonymous
 
 bool ibByteCode::SerializeAOT(ibWriterMemory& w) const
@@ -641,6 +941,14 @@ bool ibByteCode::DeserializeAOT(const ibReaderMemory& r)
 	m_dependencyVersions.resize(depVerCount);
 	for (uint32_t i = 0; i < depVerCount; ++i)
 		ReadGuid(r, m_dependencyVersions[i]);
+
+	// The bytes were all there. They are still not a module until every
+	// index they use is one the frame, the constant pool, or the tape has.
+	// A cache row that fails this is a miss: the caller compiles the source.
+	if (!OperandsFitTheFrames(*this)) {
+		Reset();
+		return false;
+	}
 
 	m_bCompile = true;
 	return true;
