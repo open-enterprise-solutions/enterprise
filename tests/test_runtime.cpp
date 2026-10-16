@@ -21,6 +21,12 @@
 #include "backend/compiler/procUnitState.h"   // m_errorPlace — which opcode raised
 #include "backend/session/session.h"
 #include "backend/appData.h"                // the built-in dispatcher reads appData on entry
+#include "backend/system/value/valueMap.h"  // ibValueStructure, g_valueStructureCLSID
+#include "frmserver/visualView/ctrl/form.h"          // a real form, DataSource bound on it
+#include "frmserver/visualView/ctrl/formAttribute.h" // the attribute cell the bind points at
+#include "backend/backend_mainFrame.h"               // a frame so the form can be born
+#include "backend/metaCollection/metaModuleObject.h" // a form module, so the bind has somewhere to live
+#include "backend/metadataConfiguration.h"           // the module's file name is asked of its metadata
 #include "backend/system/value/valueDynamicList.h"
 
 #include <wx/init.h>
@@ -3210,6 +3216,100 @@ TEST(RuntimeTest, AnArrayWalkedAndRewalkedIsLetGoOfOnce) {
 
 	// The frame goes here, with both arrays in it. That is the moment the nightly
 	// caught: passing under a sanitiser is the whole assertion.
+}
+
+// A form's DataSource is the main attribute's cell. The cell holds a reference
+// to the object. A script that writes DataSource.B must change that object,
+// and a read-only slot must not answer as if the read had succeeded.
+// GetBoundValue is the form's own read; the test reaches it through a form.
+// A form is born against the session's frame. This one only has to name a key.
+struct KeyFrame : ibBackendDocFrame {
+	explicit KeyFrame(ibSessionHolder&& holder) : ibBackendDocFrame(std::move(holder)) {}
+	void SetTitle(const wxString&) override {}
+	void SetStatusText(const wxString&, int) override {}
+	void RefreshFrame() override {}
+	void RaiseFrame() override {}
+	ibUniqueKey CreateFormUniqueKey(const ibBackendControlFrame*,
+		const ibSourceDataObject*, const ibUniqueKey& formGuid) override
+	{
+		if (formGuid.isValid())
+			return formGuid;
+		ibUniqueKey made = wxNewUniqueGuid;
+		return made;
+	}
+};
+
+struct FramedSession : ibSession {
+	using ibSession::ibSession;
+	ibBackendDocFrame* GetFrame() const override { return m_frame; }
+	void Attach(ibBackendDocFrame* frame) { m_frame = frame; }
+	ibBackendDocFrame* m_frame = nullptr;
+};
+
+struct ReadableForm : ibValueForm {
+	// A form with no module meta cannot keep a bind: EnsureCompileModule
+	// has nothing to compile against and BindExportVariable does nothing.
+	ibValueMetaObjectModule m_module{ wxT("Form") };
+	const ibValueMetaObjectModuleBase* GetMetaForCompile() const override { return &m_module; }
+	bool ReadBound(const wxString& name, ibValue& out) { return GetBoundValue(name, out); }
+};
+
+TEST_F(BuiltInRuntime, AFormScriptWritesThroughDataSource) {
+	auto session = std::make_shared<FramedSession>(wxT("form-write"), ibSessionKind::Enterprise);
+	ibSessionHolder holder(session);
+	KeyFrame frame(std::move(holder));
+	session->Attach(&frame);
+	ibSessionScope scope(session.get());
+
+	// The call holds ThisForm and releases it when the frame goes. A form on
+	// the stack would be deleted by that release. The configuration outlives
+	// that release: the compile module asks it for a file name.
+	ibMetaDataConfigurationFile cfg;
+	ReadableForm* form = new ReadableForm();
+	form->m_module.SetMetaData(&cfg);
+	// Binding ThisForm is what a live form does first. That creates the
+	// compile module, and only then can the main attribute point DataSource
+	// at its cell.
+	form->BindContextVariable(wxT("ThisForm"), form);
+
+	ibValuePtr<ibValueStructure> object(new ibValueStructure());
+	object->Insert(ibValue(wxT("A")), ibValue(3));
+	object->Insert(ibValue(wxT("B")), ibValue(0));
+
+	ibValue held;
+	held = static_cast<ibValue*>(static_cast<ibValueStructure*>(object));
+	ibFormAttributeValue* attr = form->AddAttribute(wxT("Src"), g_valueStructureCLSID, ibValue());
+	ASSERT_NE(attr, nullptr);
+	form->SetMainAttribute(attr);
+	attr->SetHeldValue(held);
+
+	ibValue stale(wxT("stale"));
+	stale.m_bReadOnly = true;
+	EXPECT_FALSE(form->ReadBound(wxT("DataSource"), stale));
+	EXPECT_EQ(stale.GetString(), wxT("stale"));
+
+	const short savedStyle = ibCompileCode::GetCodeStyle();
+	ibCompileCode::SetCodeStyle(CODE_VES);
+	struct StyleRestore {
+		short saved;
+		~StyleRestore() { ibCompileCode::SetCodeStyle(saved); }
+	} styleRestore{ savedStyle };
+
+	ibCompileCode cc(wxT("caller"), wxT("memory"), false);
+	cc.AddContextVariable(wxT("ThisForm"), form);
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("Procedure Write()\n")
+		wxT("  ThisForm.DataSource.B = ThisForm.DataSource.A;\n")
+		wxT("EndProcedure\n")));
+
+	ibProcUnit pu;
+	wxString err;
+	ASSERT_TRUE(RunBound(cc, pu, err)) << err.ToStdString();
+	ASSERT_TRUE(pu.CallAsProc(wxT("Write")));
+
+	ibValue got;
+	ASSERT_TRUE(object->GetPropVal(object->FindProp(wxT("B")), got));
+	EXPECT_EQ(got.GetInteger(), 3);
 }
 
 // A list form's DataSource is a dynamic list. It already knows its source

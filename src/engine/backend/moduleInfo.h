@@ -324,6 +324,11 @@ protected:
 	// RegisterRecords without a ProcUnit. Returns nullptr if not a bound name.
 	ibValue* GetBoundValue(const wxString& name) const;
 
+	// The same binding, copied into `out`. A cell that already holds a reference
+	// hands that reference over, so a mutable one stays mutable. A read-only
+	// `out` is a failed read: true must not leave the previous value standing.
+	bool GetBoundValue(const wxString& name, ibValue& out) const;
+
 	// Lazy-create m_compileModule from the descriptor's meta-object (shared by
 	// all Bind* entry points). Propagates the parent's compile scope chain.
 	// Returns nullptr when GetMetaForCompile() has nothing to compile against.

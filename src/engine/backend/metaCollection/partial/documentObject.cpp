@@ -181,10 +181,8 @@ bool ibValueRecordDataObjectDocument::GetPropVal(const long lPropNum, ibValue& p
 			m_procUnit->GetPropVal(GetPropName(lPropNum), pvarPropVal))
 			return true;
 		// Bound handle (RegisterRecords) — live bind value directly (Designer/runtime).
-		if (ibValue* bound = GetBoundValue(GetPropName(lPropNum))) {
-			pvarPropVal = bound;
+		if (GetBoundValue(GetPropName(lPropNum), pvarPropVal))
 			return true;
-		}
 	}
 	else if (lPropAlias == eProperty || lPropAlias == eTable) {
 		const long lPropData = m_members.GetPropData(lPropNum);
