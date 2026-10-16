@@ -140,6 +140,8 @@ From protocol 3. A **state event** says where the person is: `Focus` (1), `Input
   something there runs on them. These go at once.
 - Any other state event is held by the client: the latest per control and event (`Move` and `Resize` per column), in
   the order last done.
+- A table subscribes to `Input` on a cell only as it does to `Row` — when a selection handler is hung on it. Without
+  one, a cell's `Input` is held and rides with the `Change` that commits the edit.
 - Every call but `login` and `logout` carries what is held as `Pending`, a list of `{Control, Event, Args, Form | Tab}`,
   and the client clears it. The server applies `Pending` in order before the call itself.
 

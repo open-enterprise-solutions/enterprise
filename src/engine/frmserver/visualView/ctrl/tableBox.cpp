@@ -1120,7 +1120,9 @@ bool ibValueModelTableBox::OnClientEvent(ibProtocolEvent event, const ibDataNode
 bool ibValueModelTableBox::IsSubscribed(ibProtocolEvent event) const
 {
 	switch (event) {
-	case ibProtocolEvent::Input: return true;
+	// A cell's Input moves the current line as Row does, and only the selection handler runs on it: the client knows
+	// which cells take an editor (the frame's editable cells), so held, it rides with the Change it comes before.
+	case ibProtocolEvent::Input:
 	case ibProtocolEvent::Row:   return HasHandler(m_eventSelection);
 	default:                     return ibValueWindowComposite::IsSubscribed(event);
 	}
