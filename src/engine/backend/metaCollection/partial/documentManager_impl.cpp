@@ -8,6 +8,7 @@
 #include "backend/session/session.h"
 #include "backend/metaCollection/attribute/metaAttributeObject.h"
 #include "backend/query/dataQueryBuilder.h"   // L3 door — FindByNumber via Where / WhereCompare
+#include "core/fdatetime.h"
 
 ibValue ibValueManagerDataObjectDocument::FindByNumber(const ibValue& vNumber, const ibValue& vPeriod)
 {
@@ -27,8 +28,26 @@ ibValue ibValueManagerDataObjectDocument::FindByNumber(const ibValue& vNumber, c
 	try {
 		ibDataQueryBuilder q;
 		q.From(m_metaObject->GetQueryable()).Where(attributeNumber->GetQueryColumn(), attributeNumber->AdjustValue(vNumber));
-		if (!vPeriod.IsEmpty())
-			q.WhereCompare(attributeDate->GetQueryColumn(), ibQueryFilterOp::LessEqual, attributeDate->AdjustValue(vPeriod));
+		if (!vPeriod.IsEmpty()) {
+			// A periodic number repeats across periods, so the date has to fall inside the period
+			// that was asked for. date <= period would return last year's No. 1 for a date in this year.
+			const ibNumberPeriodicity periodicity = m_metaObject->GetNumberPeriodicity();
+			if (periodicity == ibNumberPeriodicity::ibNumberPeriodicity_Nonperiodical || vPeriod.GetType() != ibValueTypes::TYPE_DATE) {
+				q.WhereCompare(attributeDate->GetQueryColumn(), ibQueryFilterOp::LessEqual, attributeDate->AdjustValue(vPeriod));
+			}
+			else {
+				const ibDateTime when = vPeriod.GetDate();
+				const ibTotalsPeriod unit =
+					periodicity == ibNumberPeriodicity::ibNumberPeriodicity_Year    ? ibTotalsPeriod::Year
+					: periodicity == ibNumberPeriodicity::ibNumberPeriodicity_Quarter ? ibTotalsPeriod::Quarter
+					: periodicity == ibNumberPeriodicity::ibNumberPeriodicity_Month   ? ibTotalsPeriod::Month
+					:                                                 ibTotalsPeriod::Day;
+				const ibValue from(when.BeginOfPeriod(unit));
+				const ibValue to(when.BeginOfNextPeriod(unit));
+				q.WhereCompare(attributeDate->GetQueryColumn(), ibQueryFilterOp::GreaterEqual, attributeDate->AdjustValue(from));
+				q.WhereCompare(attributeDate->GetQueryColumn(), ibQueryFilterOp::Less, attributeDate->AdjustValue(to));
+			}
+		}
 
 		ibReadPageRequest page;
 		page.m_count = 1;

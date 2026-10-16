@@ -1198,6 +1198,8 @@ public:
 	// a document is looked up by number and ordered by date, and both are indexed for that reason.
 	ibValueMetaObjectAttributePredefined* GetDocumentNumber() const { return m_propertyAttributeNumber->GetMetaObject(); }
 	ibValueMetaObjectAttributePredefined* GetDocumentDate() const { return m_propertyAttributeDate->GetMetaObject(); }
+	// A document says which period its numbers restart in. Anything else that records a fact has one series.
+	virtual ibNumberPeriodicity GetNumberPeriodicity() const { return ibNumberPeriodicity::ibNumberPeriodicity_Nonperiodical; }
 	bool IsDocumentDate(const ibMetaID& id) const { return id == (*m_propertyAttributeDate)->GetMetaID(); }
 
 	// ⚠ IT REACHES THE QUERY AND NOTHING ELSE. Deliberately absent from
@@ -2386,6 +2388,17 @@ protected:
 class BACKEND_API ibValueRecordDataObjectRef : public ibValueRecordDataObject {
 	public:
 protected:
+
+	// Which series the next number comes from, and — when the series is a period — the date
+	// column and the half-open range the bootstrap scan must stay inside. The default is the
+	// one series a catalog uses, and a document that is not periodic.
+	struct ibNumberSeriesKey {
+		int      m_interval = ibNumberSeriesNonperiodical;
+		wxString m_dateField;
+		long long m_from = 0;
+		long long m_to = 0;
+	};
+	virtual ibNumberSeriesKey NumberSeriesKey() const { return {}; }
 
 	// Code generator. Allocates the next per-(meta_guid, prefix) sequence
 	// number from sys_sequence and formats it per the attribute's type.

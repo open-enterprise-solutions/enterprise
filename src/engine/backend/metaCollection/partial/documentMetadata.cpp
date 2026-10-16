@@ -135,6 +135,7 @@ ibFormPtr<ibBackendValueForm> ibValueMetaObjectDocument::GetSelectForm(const ibF
 
 bool ibValueMetaObjectDocument::WriteData(ibDataNode& node) const
 {
+	node.SetProperty(m_propertyNumberPeriodicity->GetName(), m_propertyNumberPeriodicity->GetNodeValue());
 	node.SetProperty(m_propertyAttributePosted->GetName(), m_propertyAttributePosted->GetNodeValue());
 
 	node.SetProperty(m_propertyObjectModule->GetName(), m_propertyObjectModule->GetNodeValue());
@@ -149,6 +150,9 @@ bool ibValueMetaObjectDocument::WriteData(ibDataNode& node) const
 
 bool ibValueMetaObjectDocument::ReadData(const ibDataNode& node)
 {
+	// The number, the same way every other enumeration is stored. Absent: the default stands.
+	m_propertyNumberPeriodicity->SetNodeValue(node.GetProperty(m_propertyNumberPeriodicity->GetName()));
+
 	m_propertyAttributePosted->SetNodeValue(node.GetProperty(m_propertyAttributePosted->GetName()));
 
 	m_propertyObjectModule->SetNodeValue(node.GetProperty(m_propertyObjectModule->GetName()));

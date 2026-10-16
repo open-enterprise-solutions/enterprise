@@ -3332,19 +3332,20 @@ bool ibValueRecordDataObjectRecorderRef::WriteObject(ibDocumentWriteMode writeMo
 			SetPosted(writeMode == ibDocumentWriteMode::ibDocumentWriteMode_Posting);
 	}
 
+	// One dating, before the number. The series and the stored date are the same period, for a
+	// periodic document and for one that is not. The date is the recorder's own (its metaobject
+	// declares it beside the number), so no leaf is asked.
+	if (newObject) {
+		ibValueMetaObjectAttributePredefined* const date = GetMetaObject()->GetDocumentDate();
+		if (GetValueByMetaID(*date).IsEmpty())
+			SetValueByMetaID(*date, ibValueSystemFunction::CurrentDate());
+	}
+
 	if (!IsSetUniqueIdentifier()) {
 		ibValue prefix = wxEmptyString, standartProcessing = true;
 		ExecAsEvent(wxT("SetNewNumber"), prefix, standartProcessing);
 		if (standartProcessing.GetBoolean())
 			GenerateUniqueIdentifier(prefix.GetString());
-	}
-
-	// A new recorder written without a date is dated by the write. The date is the recorder's own
-	// (its metaobject declares it beside the number), so no leaf is asked.
-	if (newObject) {
-		ibValueMetaObjectAttributePredefined* const date = GetMetaObject()->GetDocumentDate();
-		if (GetValueByMetaID(*date).IsEmpty())
-			SetValueByMetaID(*date, ibValueSystemFunction::CurrentDate());
 	}
 
 	if (!SaveData())
