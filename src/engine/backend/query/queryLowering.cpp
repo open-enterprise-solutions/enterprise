@@ -28,6 +28,7 @@
 #include "backend/backend_exception.h"    // ibBackendCoreException
 #include "core/fiber/fiber.h"             // StackLow — a nested query is native recursion with no count
 #include "backend/system/value/valueType.h"   // ibValueTypeDescription::AdjustValue — a field's empty value, for a NULL key
+#include "core/clsid.h"                       // value_to_clsid — a nested section's column is a value table
 
 // ⚠ NAMED, NOT INHERITED. std::find / std::remove_if arrived in this file with the grouping and
 // prune passes; MSVC hands <algorithm> over transitively and GCC/Clang do not, so the Windows build
@@ -2264,6 +2265,9 @@ ibQueryPredicatePtr BuildWherePredicate(const std::vector<ibSourceBinding>& sour
 std::vector<const ibBackendQueryColumn*> ResolveWhereTarget(const std::vector<ibSourceBinding>& sources,
                                                             const ibQueryAstExpr& e, bool allowDotWalk)
 {
+	if (e.m_kind == ibQueryAstExprKind::Nested)
+		ThrowQueryException(e.m_line, e.m_col, wxString::Format(
+			_("a nested tabular section is a result column, not a condition: %s"), ibRenderQueryExpr(e)));
 	if (e.m_kind != ibQueryAstExprKind::Column || e.m_path.empty())
 		ThrowQueryException(e.m_line, e.m_col, _("expected a column (or a reference dot-walk path) here"));
 	std::vector<const ibBackendQueryColumn*> cols = ResolvePath(sources, e);
@@ -4015,6 +4019,55 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 				oc.m_type = TypeOfExpr(sources, e, params);   // a fold answers too — see TypeOfFold
 				oc.m_alias = alias;
 				oc.m_byAlias = true;
+			}
+			else if (e.m_kind == ibQueryAstExprKind::Nested) {
+				// `Alias.Section.(Field, ...)` — one object's rows of that tabular section, as a value
+				// table. The parent row is read whole (a single source), so its Ref is on the row; the
+				// section is queried when the column is read. A join or a nested query does not keep
+				// that row whole, and a fold has no one object to hang the rows on.
+				if (e.m_path.size() != 2 || e.m_sectionFields.empty())
+					ThrowQueryException(e.m_line, e.m_col,
+						_("a nested tabular section is written Alias.Section.(Field, ...)"));
+				if (aggregate || explicitProjection)
+					ThrowQueryException(e.m_line, e.m_col,
+						_("a nested tabular section is read from the one table this query reads, and it cannot be grouped"));
+				const ibBackendQueryable* parent = SourceForAlias(sources, e.m_path[0]);
+				const ibQuerySource* written = nullptr;
+				if (ibQuerySourceName(ast.m_from).IsSameAs(e.m_path[0], false))
+					written = &ast.m_from;
+				for (const ibQueryAstJoin& join : ast.m_joins)
+					if (ibQuerySourceName(join.m_source).IsSameAs(e.m_path[0], false))
+						written = &join.m_source;
+				if (parent == nullptr || written == nullptr || written->m_subquery || written->m_name.size() < 2)
+					ThrowQueryException(e.m_line, e.m_col,
+						wxString::Format(_("'%s' does not name a table of this query"), e.m_path[0]));
+				const ibBackendQueryColumn* refCol = parent->ResolveColumnByName(wxT("Ref"));
+				if (refCol == nullptr)
+					ThrowQueryException(e.m_line, e.m_col,
+						wxString::Format(_("'%s' has no Ref, so a tabular section cannot be tied to its row"), e.m_path[0]));
+
+				ibQuerySource probe;
+				probe.m_name = written->m_name;
+				probe.m_name.push_back(e.m_path[1]);
+				probe.m_line = e.m_line;
+				probe.m_col  = e.m_col;
+				const ibBackendQueryable* section = ResolveSource(probe, params);
+				wxString sectionName = probe.m_name[0];
+				for (size_t part = 1; part < probe.m_name.size(); ++part)
+					sectionName += wxT(".") + probe.m_name[part];
+				for (const wxString& field : e.m_sectionFields)
+					if (section == nullptr || section->ResolveColumnByName(field) == nullptr)
+						ThrowQueryException(e.m_line, e.m_col,
+							wxString::Format(_("unknown attribute '%s' on tabular section '%s'"), field, sectionName));
+
+				oc.m_nestedSource = sectionName;
+				oc.m_nestedFields = e.m_sectionFields;
+				oc.m_ownerField   = refCol->GetName();
+				oc.m_ownerCol     = refCol;
+				oc.m_type         = ibTypeDescription(value_to_clsid("VL_TABL"));
+				giveIdentity(oc);
+				outSchema.push_back(oc);
+				continue;
 			}
 			else if (e.m_kind == ibQueryAstExprKind::Column) {
 				const std::vector<const ibBackendQueryColumn*> pathCols = ResolvePath(sources, e);

@@ -96,6 +96,15 @@ public:
 		// and the shown columns of a run ask this rather than the column.
 		bool                        m_available = true;
 
+		// ⭐ A NESTED TABULAR SECTION — `Alias.Section.(Field, ...)`. Empty m_nestedSource means an
+		// ordinary column. Otherwise this output is not an SQL cell: the row's owner reference
+		// (m_ownerCol, named m_ownerField on the section) selects that object's rows from
+		// m_nestedSource, and the value handed back is a value table of m_nestedFields.
+		wxString                    m_nestedSource;
+		std::vector<wxString>       m_nestedFields;
+		wxString                    m_ownerField;
+		const ibBackendQueryColumn* m_ownerCol = nullptr;
+
 		// ⭐ WHAT IT HOLDS, ASKED HERE — not worked out by each reader: m_type where the query states one (a
 		// fold's is the fold's — TypeOfFold), else the column it is read from; empty = unknown. A report, a
 		// field picker and a temp table's snapshot all ask it. Read off m_col alone, a resource is typed as

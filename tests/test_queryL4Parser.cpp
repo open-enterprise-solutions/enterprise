@@ -1630,3 +1630,53 @@ TEST(QueryL4Parser, RoleSaysWhatAFieldIsInABalance)
 	// A period's number is a whole number from 1, below the band a source orders its own periods in.
 	EXPECT_THROW(Parse(wxT("SELECT T.Day ROLE PERIOD 0 AS Day FROM Catalog.X AS T")), ibBackendException);
 }
+
+// `Alias.Section.(Field, ...)` is a nested tabular section in the select list, not a broken dotted name.
+TEST(QueryL4Parser, NestedTabularSection_ParsesAndRoundTrips)
+{
+	auto sel = Parse(wxT("SELECT T.Ref, T.Details.(NumberLine, Note) AS Lines FROM Catalog.Journal AS T"));
+	ASSERT_EQ(sel->m_projections.size(), 2u);
+	EXPECT_EQ(sel->m_projections[0].m_expr->m_kind, ibQueryAstExprKind::Column);
+	const ibQueryAstExpr& nested = *sel->m_projections[1].m_expr;
+	EXPECT_EQ(nested.m_kind, ibQueryAstExprKind::Nested);
+	ASSERT_EQ(nested.m_path.size(), 2u);
+	EXPECT_EQ(nested.m_path[0], wxT("T"));
+	EXPECT_EQ(nested.m_path[1], wxT("Details"));
+	ASSERT_EQ(nested.m_sectionFields.size(), 2u);
+	EXPECT_EQ(nested.m_sectionFields[0], wxT("NumberLine"));
+	EXPECT_EQ(nested.m_sectionFields[1], wxT("Note"));
+	EXPECT_EQ(sel->m_projections[1].m_alias, wxT("Lines"));
+
+	const wxString written = ibRenderQuery(*sel);
+	auto back = Parse(written);
+	ASSERT_EQ(back->m_projections.size(), 2u) << written.ToStdString();
+	EXPECT_EQ(back->m_projections[1].m_expr->m_kind, ibQueryAstExprKind::Nested);
+	EXPECT_EQ(back->m_projections[1].m_expr->m_sectionFields, nested.m_sectionFields) << written.ToStdString();
+	EXPECT_EQ(back->m_projections[1].m_alias, wxT("Lines"));
+}
+
+// A keyword is still a name after a dot. The `.(` form is the only place a parenthesis follows one.
+TEST(QueryL4Parser, NestedTabularSection_DoesNotStealAKeywordName)
+{
+	auto sel = Parse(wxT("SELECT T.Order FROM Document.Order AS T"));
+	ASSERT_EQ(sel->m_projections.size(), 1u);
+	EXPECT_EQ(sel->m_projections[0].m_expr->m_kind, ibQueryAstExprKind::Column);
+	ASSERT_EQ(sel->m_projections[0].m_expr->m_path.size(), 2u);
+	EXPECT_EQ(sel->m_projections[0].m_expr->m_path[1], wxT("Order"));
+	ASSERT_EQ(sel->m_from.m_name.size(), 2u);
+	EXPECT_EQ(sel->m_from.m_name[1], wxT("Order"));
+}
+
+TEST(QueryL4Parser, NestedTabularSection_NamesTheShapeItRefuses)
+{
+	try {
+		Parse(wxT("SELECT Section.(Field) FROM Catalog.Journal"));
+		FAIL() << "a section with no source alias is not the nested form";
+	}
+	catch (const ibBackendException& err) {
+		EXPECT_NE(err.GetErrorDescription().Find(wxT("Alias.Section")), wxNOT_FOUND)
+			<< err.GetErrorDescription().ToStdString();
+	}
+	EXPECT_THROW(Parse(wxT("SELECT T.Details.( FROM Catalog.Journal AS T")), ibBackendException);
+	EXPECT_THROW(Parse(wxT("SELECT T.Details.(NumberLine FROM Catalog.Journal AS T")), ibBackendException);
+}

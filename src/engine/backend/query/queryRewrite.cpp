@@ -1202,7 +1202,9 @@ wxString ibQueryProposedName(const ibQuerySelect& select, const ibQueryProjectio
 {
 	if (!projection.m_alias.IsEmpty())
 		return projection.m_alias;
-	if (!projection.m_expr || projection.m_expr->m_kind != ibQueryAstExprKind::Column)
+	if (!projection.m_expr
+	    || (projection.m_expr->m_kind != ibQueryAstExprKind::Column
+	        && projection.m_expr->m_kind != ibQueryAstExprKind::Nested))
 		return wxEmptyString;
 
 	const std::vector<wxString>& path = projection.m_expr->m_path;

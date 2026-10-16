@@ -77,6 +77,11 @@ enum class ibQueryAstExprKind
 	Between,   // lhs [NOT] BETWEEN low AND high
 	Logical,   // lhs (AND|OR) rhs   (m_isOr)
 	Not,       // NOT lhs
+	// ⭐ `Alias.Section.(Field, ...)` — a SELECT-list nested tabular section. One result row per
+	// object, and this column is a value table of that object's rows of the section. m_path is the
+	// alias and the section name; m_sectionFields are the columns of the nested table. Not a column
+	// of the parent: the section is its own source (`Kind.Parent.Section`), filtered by the row's Ref.
+	Nested,
 };
 
 // Comparison operator of a Compare node.
@@ -92,7 +97,8 @@ struct ibQueryAstExpr
 {
 	ibQueryAstExprKind m_kind = ibQueryAstExprKind::Literal;
 
-	std::vector<wxString> m_path;        // Column: dotted segments
+	std::vector<wxString> m_path;        // Column: dotted segments. Nested: alias, section name
+	std::vector<wxString> m_sectionFields; // Nested: the field names inside .( )
 	ibValue               m_literal;     // Literal
 	wxString              m_paramName;   // Param
 

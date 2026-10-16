@@ -22,6 +22,8 @@
 #include "backend/query/queryableFactory.h"      // ibQueryableSourceDescriptor — a virtual table that consumes its condition
 #include "backend/query/tempTableQueryable.h"    // ibTempTableQueryable — its columns, from a table in memory
 #include "backend/metadataConfiguration.h"       // ibMetaDataConfigurationFile — the open configuration it registers in
+#include "backend/system/value/valueQuery.h"     // ibValueQuerySelect — a nested section is read as a column of the row
+#include "core/types.h"                          // g_valueStringCLSID — the section's columns are strings
 
 namespace {
 
@@ -1487,4 +1489,142 @@ TEST(QueryComposerPackage, AnUnnamedSelectionAmongSeveralIsRefused)
 		wxT("LINK Plan JOIN Plan ON Plan.Item = Plan.Item"));
 
 	EXPECT_THROW(composer.RenderText(), ibBackendException);
+}
+
+namespace {
+
+// A value table of string columns, rows in the order given. Held by the ibValue the queryable keeps.
+ibValue RowsOf(std::initializer_list<const wxChar*> names, const std::vector<std::vector<wxString>>& rows)
+{
+	ibValueModelTable* table = new ibValueModelTable();
+	const ibValue held(table);
+	auto* columns = table->GetColumnCollection();
+	for (const wxChar* name : names)
+		columns->AddColumn(name, ibTypeDescription(g_valueStringCLSID), name);
+	for (const std::vector<wxString>& cells : rows) {
+		const long at = table->AppendRow();
+		ibValueModel::ibComposerNode* node = table->GetViewData<ibValueModel::ibComposerNode>(table->GetItem(at));
+		for (size_t i = 0; i < cells.size() && node != nullptr; ++i)
+			node->SetValue(static_cast<ibMetaID>(columns->GetColumnInfo(static_cast<unsigned>(i))->GetColumnID()),
+			               ibValue(cells[i]));
+	}
+	return held;
+}
+
+// A configuration source whose rows are that table. `Catalog` / `Journal.Details` is how a tabular
+// section is already registered: the parent's kind, and `<Parent>.<Section>` as the name.
+class NamedRows : public ibQueryableSourceDescriptor
+{
+public:
+	NamedRows(const wxString& ns, const wxString& name, ibValue table)
+		: m_ns(ns), m_name(name), m_rows(std::move(table)) {}
+	wxString GetNamespace() const override { return m_ns; }
+	wxString GetName() const override { return m_name; }
+	const ibBackendQueryable* CreateQueryable(ibValue**, long) override { return &m_rows; }
+private:
+	wxString m_ns;
+	wxString m_name;
+	ibTempTableQueryable m_rows;
+};
+
+std::vector<wxString> ColumnOf(const ibValue& tableValue, const wxString& column)
+{
+	std::vector<wxString> out;
+	const ibValuePtr<ibValueModelTable> table(tableValue);
+	if (table == nullptr)
+		return out;
+	const std::shared_ptr<ibValueIteratorState> walk = table->CreateIterator();
+	ibValue row;
+	while (walk != nullptr && walk->MoveNext(row)) {
+		ibValue cell;
+		const long prop = row.FindProp(column);
+		if (prop >= 0)
+			row.GetPropVal(prop, cell);
+		out.push_back(cell.GetString());
+	}
+	return out;
+}
+
+} // namespace
+
+// Each parent row carries ITS rows of the section, not the section's whole table.
+TEST(QueryNestedSection, EachObjectCarriesItsOwnRows)
+{
+	OpenConfiguration cfg;
+	NamedRows journal(wxT("Catalog"), wxT("Journal"), RowsOf(
+		{ wxT("Ref"), wxT("Description") },
+		{ { wxT("A"), wxT("one") }, { wxT("B"), wxT("two") }, { wxT("C"), wxT("three") } }));
+	NamedRows details(wxT("Catalog"), wxT("Journal.Details"), RowsOf(
+		{ wxT("Ref"), wxT("NumberLine") },
+		{ { wxT("A"), wxT("1") }, { wxT("A"), wxT("2") }, { wxT("B"), wxT("9") } }));
+	cfg.RegisterSource(&journal);
+	cfg.RegisterSource(&details);
+	const ibSourceMetaDataScope scope(&cfg);
+
+	const ibQuerySelectPtr select = Parse(
+		wxT("SELECT T.Ref, T.Details.(NumberLine) FROM Catalog.Journal AS T"));
+	std::vector<ibQueryLowering::OutputColumn> schema;
+	ibDataQueryResult result = ibQueryLowering::Execute(*select, {}, schema);
+	ASSERT_EQ(schema.size(), 2u);
+	EXPECT_EQ(schema[1].m_name, wxT("Details"));
+
+	ibValueQuerySelect cursor(std::make_unique<ibDataQueryResult>(std::move(result)),
+	                          std::move(schema), nullptr, nullptr);
+	const long next = cursor.FindMethod(wxT("Next"));
+	const long refProp = cursor.FindProp(wxT("Ref"));
+	const long linesProp = cursor.FindProp(wxT("Details"));
+	ASSERT_GE(next, 0);
+	ASSERT_GE(refProp, 0);
+	ASSERT_GE(linesProp, 0);
+
+	auto take = [&](const wxString& ref, const std::vector<wxString>& lines) {
+		ibValue advanced;
+		ASSERT_TRUE(cursor.CallAsFunc(next, advanced, nullptr, 0));
+		ASSERT_TRUE(advanced.GetBoolean());
+		ibValue refValue, tableValue;
+		ASSERT_TRUE(cursor.GetPropVal(refProp, refValue));
+		ASSERT_TRUE(cursor.GetPropVal(linesProp, tableValue));
+		EXPECT_EQ(refValue.GetString(), ref);
+		EXPECT_EQ(ColumnOf(tableValue, wxT("NumberLine")), lines);
+	};
+	take(wxT("A"), { wxT("1"), wxT("2") });
+	take(wxT("B"), { wxT("9") });
+	take(wxT("C"), {});
+
+	ibValue done;
+	ASSERT_TRUE(cursor.CallAsFunc(next, done, nullptr, 0));
+	EXPECT_FALSE(done.GetBoolean());
+}
+
+// A section the configuration does not have is refused by name, and the form is not a filter.
+TEST(QueryNestedSection, AnUnknownSectionIsNamedAndItIsNotAFilter)
+{
+	OpenConfiguration cfg;
+	NamedRows journal(wxT("Catalog"), wxT("Journal"), RowsOf(
+		{ wxT("Ref") }, { { wxT("A") } }));
+	cfg.RegisterSource(&journal);
+	const ibSourceMetaDataScope scope(&cfg);
+
+	const ibQuerySelectPtr missing = Parse(
+		wxT("SELECT T.Missing.(NumberLine) FROM Catalog.Journal AS T"));
+	std::vector<ibQueryLowering::OutputColumn> schema;
+	try {
+		ibQueryLowering::Execute(*missing, {}, schema);
+		FAIL() << "a section that is not a source must be refused";
+	}
+	catch (const ibBackendException& err) {
+		EXPECT_NE(err.GetErrorDescription().Find(wxT("Missing")), wxNOT_FOUND)
+			<< err.GetErrorDescription().ToStdString();
+	}
+
+	const ibQuerySelectPtr filter = Parse(
+		wxT("SELECT T.Ref FROM Catalog.Journal AS T WHERE T.Details.(NumberLine) = \"1\""));
+	try {
+		ibQueryLowering::Execute(*filter, {}, schema);
+		FAIL() << "a nested section is a result column, not a condition";
+	}
+	catch (const ibBackendException& err) {
+		EXPECT_NE(err.GetErrorDescription().Find(wxT("Details")), wxNOT_FOUND)
+			<< err.GetErrorDescription().ToStdString();
+	}
 }

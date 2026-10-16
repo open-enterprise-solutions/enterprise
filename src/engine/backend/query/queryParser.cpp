@@ -1039,14 +1039,19 @@ void ibQueryParser::ParseTotals(ibQuerySelect& sel)
 	} while (more);
 }
 
-std::vector<wxString> ibQueryParser::ParseDottedName(bool firstMayBeKeyword)
+std::vector<wxString> ibQueryParser::ParseDottedName(bool firstMayBeKeyword, bool stopBeforeNested)
 {
 	std::vector<wxString> parts;
 	if (Cur().m_kind != ibQueryTokenKind::Ident
 	    && !(firstMayBeKeyword && Cur().m_kind == ibQueryTokenKind::Keyword))
 		ThrowQueryException(Cur(), _("expected a name"));
 	parts.push_back(Next().m_text);
-	while (AcceptPunct(wxT('.'))) {
+	while (Cur().IsPunct(wxT('.'))) {
+		// `Alias.Section.(Field)` is a nested tabular section, not another name. Leave the `.(` for
+		// the caller that asked to see it; everywhere else a dot still demands a name.
+		if (stopBeforeNested && PeekIsPunct(1, wxT('(')))
+			break;
+		++m_pos;
 		// ⚠ AFTER A DOT, A KEYWORD IS A NAME. The position decides: nothing but a name can follow a
 		// `.`, so there is no ambiguity to resolve and no reason to refuse one.
 		//
@@ -1060,6 +1065,34 @@ std::vector<wxString> ibQueryParser::ParseDottedName(bool firstMayBeKeyword)
 		parts.push_back(Next().m_text);
 	}
 	return parts;
+}
+
+ibQueryAstExprPtr ibQueryParser::ParseColumnPath(bool firstMayBeKeyword)
+{
+	const ibQueryToken& tk = Cur();
+	auto e = ibQueryAstExpr::Make(ibQueryAstExprKind::Column);
+	e->m_line = tk.m_line;
+	e->m_col = tk.m_col;
+	e->m_path = ParseDottedName(firstMayBeKeyword, /*stopBeforeNested*/true);
+	if (!(Cur().IsPunct(wxT('.')) && PeekIsPunct(1, wxT('('))))
+		return e;
+
+	// `Alias.Section.(Field, Field)` — the section's rows, as a column of this object. A single
+	// name followed by `.(` is not that shape (a section is named on a source).
+	if (e->m_path.size() < 2)
+		ThrowQueryException(Cur(), _("a nested tabular section is written Alias.Section.(Field, ...)"));
+	++m_pos;   // '.'
+	++m_pos;   // '('
+	if (Cur().IsPunct(wxT(')')))
+		ThrowQueryException(Cur(), _("expected a field name inside the nested tabular section"));
+	do {
+		if (Cur().m_kind != ibQueryTokenKind::Ident && Cur().m_kind != ibQueryTokenKind::Keyword)
+			ThrowQueryException(Cur(), _("expected a field name inside the nested tabular section"));
+		e->m_sectionFields.push_back(Next().m_text);
+	} while (AcceptPunct(wxT(',')));
+	ExpectPunct(wxT(')'), wxT("')' after the fields of a nested tabular section"));
+	e->m_kind = ibQueryAstExprKind::Nested;
+	return e;
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -1472,13 +1505,9 @@ ibQueryAstExprPtr ibQueryParser::ParsePrimary()
 			return ParseScalarCall(fn);
 	}
 
-	// column path
-	if (tk.m_kind == ibQueryTokenKind::Ident) {
-		auto e = ibQueryAstExpr::Make(ibQueryAstExprKind::Column);
-		e->m_line = tk.m_line; e->m_col = tk.m_col;
-		e->m_path = ParseDottedName();
-		return e;
-	}
+	// column path, or Alias.Section.(Field, ...)
+	if (tk.m_kind == ibQueryTokenKind::Ident)
+		return ParseColumnPath(/*firstMayBeKeyword*/false);
 
 	// number / string / date constant
 	if (tk.m_kind == ibQueryTokenKind::Number ||
@@ -1512,12 +1541,8 @@ ibQueryAstExprPtr ibQueryParser::ParsePrimary()
 	// or `Count` — those are ordinary words, and OUR grammar is not a fact about the user's data. An
 	// enumeration's own `Order` column made the list that selected it die on "expected a column,
 	// literal, or parameter", and the form came back empty with no visible reason.
-	if (tk.m_kind == ibQueryTokenKind::Keyword) {
-		auto e = ibQueryAstExpr::Make(ibQueryAstExprKind::Column);
-		e->m_line = tk.m_line; e->m_col = tk.m_col;
-		e->m_path = ParseDottedName(/*firstMayBeKeyword*/true);
-		return e;
-	}
+	if (tk.m_kind == ibQueryTokenKind::Keyword)
+		return ParseColumnPath(/*firstMayBeKeyword*/true);
 
 	ThrowQueryException(tk, _("expected a column, literal, or parameter"));
 	return nullptr;   // unreachable — Fail always throws

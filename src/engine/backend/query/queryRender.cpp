@@ -160,6 +160,9 @@ wxString RenderExpr(const ibQueryAstExpr& expr)
 			return RenderExpr(*expr.m_arg) + wxT(".") + Join(expr.m_path, wxT("."));
 		return Join(expr.m_path, wxT("."));
 
+	case ibQueryAstExprKind::Nested:
+		return Join(expr.m_path, wxT(".")) + wxT(".(") + Join(expr.m_sectionFields, wxT(", ")) + wxT(")");
+
 	case ibQueryAstExprKind::Literal:
 		return RenderLiteral(expr.m_literal);
 
@@ -750,7 +753,9 @@ wxString ibQueryOutputName(const ibQueryProjection& projection)
 {
 	if (!projection.m_alias.IsEmpty())
 		return projection.m_alias;
-	if (projection.m_expr && projection.m_expr->m_kind == ibQueryAstExprKind::Column
+	if (projection.m_expr
+	    && (projection.m_expr->m_kind == ibQueryAstExprKind::Column
+	        || projection.m_expr->m_kind == ibQueryAstExprKind::Nested)
 	    && !projection.m_expr->m_path.empty())
 		return projection.m_expr->m_path.back();
 	return wxEmptyString;

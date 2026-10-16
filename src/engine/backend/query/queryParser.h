@@ -116,7 +116,10 @@ private:
 	ibQueryTotalField          ParseTotalField();   // one field + how it is read (unfold / PERIODS)
 	// `firstMayBeKeyword` — the caller has ALREADY consumed a dot, so this path is a CONTINUATION and
 	// its first segment obeys the after-a-dot rule like every later one (CAST(x AS T).Order).
-	std::vector<wxString>      ParseDottedName(bool firstMayBeKeyword = false);
+	// `stopBeforeNested` — leave `.(` unconsumed, so a select-list nested section can read it.
+	std::vector<wxString>      ParseDottedName(bool firstMayBeKeyword = false, bool stopBeforeNested = false);
+	// A column path, or `Alias.Section.(Field, ...)` when the path is followed by `.(`.
+	ibQueryAstExprPtr             ParseColumnPath(bool firstMayBeKeyword);
 
 	ibQueryAstExprPtr             ParsePredicate();   // OR level
 	ibQueryAstExprPtr             ParseAnd();

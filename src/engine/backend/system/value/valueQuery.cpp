@@ -392,8 +392,41 @@ ibValueQuerySelect::ibValueQuerySelect(ibSelector&& tree,
 
 ibValueQuerySelect::~ibValueQuerySelect() = default;
 
+// The rows of one object's tabular section, as a value table. The parent query already holds
+// the owner reference; this asks the section (`Kind.Parent.Section`) for the rows that carry it.
+ibValue NestedSectionTable(const ibQueryLowering::OutputColumn& oc, const ibValue& owner,
+                           const std::shared_ptr<ibQueryReadState>& snapshot,
+                           const std::shared_ptr<ibQueryTempTableStore>& temps)
+{
+	wxString fields;
+	for (size_t i = 0; i < oc.m_nestedFields.size(); ++i) {
+		if (i) fields += wxT(", ");
+		fields += oc.m_nestedFields[i];
+	}
+	const wxString text = wxT("SELECT ") + fields + wxT(" FROM ") + oc.m_nestedSource
+		+ wxT(" WHERE ") + oc.m_ownerField + wxT(" = &Owner");
+	const ibQuerySelectPtr select = ibQueryParser().ParsePackage(text).SingleSelect();
+	if (!select)
+		return ibValue();
+	std::map<wxString, ibValue> params;
+	params.insert({ wxT("Owner"), owner });
+	std::vector<ibQueryLowering::OutputColumn> schema;
+	ibDataQueryResult rows = ibQueryLowering::Execute(*select, params, schema);
+	ibValueQuerySelect nested(std::make_unique<ibDataQueryResult>(std::move(rows)),
+	                          std::move(schema), snapshot, temps);
+	return nested.ToTable();
+}
+
 ibValue ibValueQuerySelect::ReadColumn(const ibQueryLowering::OutputColumn& oc) const
 {
+	if (!oc.m_nestedSource.IsEmpty()) {
+		ibValue owner;
+		if (m_flat != nullptr)
+			owner = m_flat->GetValue(oc.m_ownerCol);
+		else if (m_tree != nullptr)
+			owner = m_tree->GetValue(oc.m_ownerCol);
+		return NestedSectionTable(oc, owner, m_snapshot, m_temps);
+	}
 	// A reference / enum / composite dot-walk leaf reassembles from its prefixed field spread.
 	if (m_flat != nullptr) {
 		if (!oc.m_objectPrefix.empty() && oc.m_col != nullptr)
