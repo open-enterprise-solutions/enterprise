@@ -1,0 +1,52 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "ru",
+  "entries": [
+    {
+      "id": "cls.DocumentJournal",
+      "name_local": "DocumentJournals",
+      "name_en": "DocumentJournals",
+      "kind": "collection",
+      "category_keys": ["value_types"],
+      "signature": "DocumentJournals.<Name>",
+      "description": "Именованный список видов документов. Documents возвращает имена, записанные в журнале. Select возвращает ссылку на каждую записанную строку этих документов. Запрос читает те же строки как DocumentJournal.<Name>, с колонками Ref, Date и Number.",
+      "parameters": "None.",
+      "return_descr": "Менеджер журнала.",
+      "example": "rows = DocumentJournals.Sales.Select();",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": ["mth.DocumentJournal.Select", "mth.DocumentJournal.Documents"],
+      "reviewed": false
+    },
+    {
+      "id": "mth.DocumentJournal.Documents",
+      "name_local": "Documents",
+      "name_en": "Documents",
+      "kind": "method",
+      "category_keys": ["value_types"],
+      "signature": "Documents()",
+      "description": "Имена документов, записанные в журнале, по одному на строку. Document.Name и Name — одно имя.",
+      "parameters": "None.",
+      "return_descr": "Массив имен документов.",
+      "example": "names = DocumentJournals.Sales.Documents();",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": ["cls.DocumentJournal"],
+      "reviewed": false
+    },
+    {
+      "id": "mth.DocumentJournal.Select",
+      "name_local": "Select",
+      "name_en": "Select",
+      "kind": "method",
+      "category_keys": ["value_types"],
+      "signature": "Select()",
+      "description": "Ссылка на каждую записанную строку документов этого журнала. Вид, которого в конфигурации нет, пропускается. Без открытой базы массив пуст.",
+      "parameters": "None.",
+      "return_descr": "Массив ссылок на документы.",
+      "example": "refs = DocumentJournals.Sales.Select();",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": ["cls.DocumentJournal", "mth.DocumentJournal.Documents"],
+      "reviewed": false
+    }
+  ]
+}

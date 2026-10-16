@@ -145,6 +145,9 @@ constexpr ibClassID g_metaRecalculationCLSID = metadata_to_clsid("MD_RCLC");   /
 // SEQUENCES — up to which point the documents of a key have been posted in order (sequence-arc.md)
 constexpr ibClassID g_metaSequenceCLSID = metadata_to_clsid("MD_SEQN");
 
+// DOCUMENT JOURNALS — a named list of document types. Select and the query source are not in this slice.
+constexpr ibClassID g_metaDocumentJournalCLSID = metadata_to_clsid("MD_DJRN");
+
 // EXTERNAL
 constexpr ibClassID g_metaExternalDataProcessorCLSID = metadata_to_clsid("MD_EDPR");
 constexpr ibClassID g_metaExternalReportCLSID = metadata_to_clsid("MD_ERPT");

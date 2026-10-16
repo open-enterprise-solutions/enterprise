@@ -1,0 +1,52 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "uk",
+  "entries": [
+    {
+      "id": "cls.DocumentJournal",
+      "name_local": "DocumentJournals",
+      "name_en": "DocumentJournals",
+      "kind": "collection",
+      "category_keys": ["value_types"],
+      "signature": "DocumentJournals.<Name>",
+      "description": "Іменований список видів документів. Documents повертає імена, записані в журналі. Select повертає посилання на кожен записаний рядок цих документів. Запит читає ті самі рядки як DocumentJournal.<Name>, з колонками Ref, Date і Number.",
+      "parameters": "None.",
+      "return_descr": "Менеджер журналу.",
+      "example": "rows = DocumentJournals.Sales.Select();",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": ["mth.DocumentJournal.Select", "mth.DocumentJournal.Documents"],
+      "reviewed": false
+    },
+    {
+      "id": "mth.DocumentJournal.Documents",
+      "name_local": "Documents",
+      "name_en": "Documents",
+      "kind": "method",
+      "category_keys": ["value_types"],
+      "signature": "Documents()",
+      "description": "Імена документів, записані в журналі, по одному на рядок. Document.Name і Name — одне ім'я.",
+      "parameters": "None.",
+      "return_descr": "Масив імен документів.",
+      "example": "names = DocumentJournals.Sales.Documents();",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": ["cls.DocumentJournal"],
+      "reviewed": false
+    },
+    {
+      "id": "mth.DocumentJournal.Select",
+      "name_local": "Select",
+      "name_en": "Select",
+      "kind": "method",
+      "category_keys": ["value_types"],
+      "signature": "Select()",
+      "description": "Посилання на кожен записаний рядок документів цього журналу. Вид, якого в конфігурації немає, пропускається. Без відкритої бази масив порожній.",
+      "parameters": "None.",
+      "return_descr": "Масив посилань на документи.",
+      "example": "refs = DocumentJournals.Sales.Select();",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": ["cls.DocumentJournal", "mth.DocumentJournal.Documents"],
+      "reviewed": false
+    }
+  ]
+}

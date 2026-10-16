@@ -1,0 +1,52 @@
+{
+  "format": "OES-HELP-1.0",
+  "schema_version": 1,
+  "locale": "en",
+  "entries": [
+    {
+      "id": "cls.DocumentJournal",
+      "name_local": "DocumentJournals",
+      "name_en": "DocumentJournals",
+      "kind": "collection",
+      "category_keys": ["value_types"],
+      "signature": "DocumentJournals.<Name>",
+      "description": "A named list of document types. Documents returns the names written on the journal. Select returns a reference for each written row of those documents. A query reads the same rows as DocumentJournal.<Name>, with columns Ref, Date and Number.",
+      "parameters": "None.",
+      "return_descr": "The journal's manager.",
+      "example": "rows = DocumentJournals.Sales.Select();",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": ["mth.DocumentJournal.Select", "mth.DocumentJournal.Documents"],
+      "reviewed": false
+    },
+    {
+      "id": "mth.DocumentJournal.Documents",
+      "name_local": "Documents",
+      "name_en": "Documents",
+      "kind": "method",
+      "category_keys": ["value_types"],
+      "signature": "Documents()",
+      "description": "The document names written on the journal, one array entry per line. Document.Name and Name are the same name.",
+      "parameters": "None.",
+      "return_descr": "Array of document names.",
+      "example": "names = DocumentJournals.Sales.Documents();",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": ["cls.DocumentJournal"],
+      "reviewed": false
+    },
+    {
+      "id": "mth.DocumentJournal.Select",
+      "name_local": "Select",
+      "name_en": "Select",
+      "kind": "method",
+      "category_keys": ["value_types"],
+      "signature": "Select()",
+      "description": "A reference for each written row of the documents this journal lists. A document the configuration does not have is skipped. With no database open, the array is empty.",
+      "parameters": "None.",
+      "return_descr": "Array of document references.",
+      "example": "refs = DocumentJournals.Sales.Select();",
+      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "see_also": ["cls.DocumentJournal", "mth.DocumentJournal.Documents"],
+      "reviewed": false
+    }
+  ]
+}
