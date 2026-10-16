@@ -14,6 +14,9 @@
 #include <iterator>
 #include "backend/metadataConfiguration.h"
 #include "backend/metaCollection/metaObject.h"   // ibValueMetaObject + g_meta*CLSID
+#include "backend/metaCollection/partial/enumeration.h"
+#include "backend/metaCollection/partial/enumerationManager.h"
+#include "backend/metaCollection/partial/reference/reference.h"
 
 TEST(MetadataTree, FreshConfigHasNoBusinessObjects) {
     ibMetaDataConfigurationFile cfg;
@@ -168,4 +171,51 @@ TEST(MetadataTree, CreatingEveryHostedKindTwiceKeepsBothAndNamesThemApart) {
 			<< "two " << candidate.name
 			<< " objects were created with the same name";
 	}
+}
+
+// Enumerations.X.EmptyRef() was "Aggregate object field not found". Catalog,
+// document and chart managers already return the empty reference of their
+// type. An enumeration value is a reference too, so the manager answers the
+// same way, and a declared value stays a property beside that method.
+TEST(EnumerationManager, EmptyRefReturnsTheEmptyReference) {
+	ibMetaDataConfigurationFile cfg;
+	ibValueMetaObjectConfiguration* root = cfg.GetCommonMetaObject();
+	ASSERT_NE(root, nullptr);
+
+	auto* enumeration = dynamic_cast<ibValueMetaObjectEnumeration*>(
+		cfg.CreateMetaObject(g_metaEnumerationCLSID, root, false));
+	ASSERT_NE(enumeration, nullptr);
+	enumeration->SetName(wxT("Modifiers"));
+
+	ibValueMetaObject* retail = cfg.CreateMetaObject(g_metaEnumCLSID, enumeration, false);
+	ASSERT_NE(retail, nullptr);
+	retail->SetName(wxT("Retail"));
+
+	// The factory is protected. The manager itself is what a script holds.
+	ibValueManagerDataObjectEnumeration manager(enumeration);
+
+	EXPECT_EQ(manager.FindProp(wxT("EmptyRef")), wxNOT_FOUND);
+	const long method = manager.FindMethod(wxT("EmptyRef"));
+	ASSERT_NE(method, wxNOT_FOUND);
+	EXPECT_NE(manager.FindMethod(wxT("GetForm")), wxNOT_FOUND);
+	EXPECT_EQ(manager.FindMethod(wxT("NoSuchMethod")), wxNOT_FOUND);
+
+	ibValue result;
+	ASSERT_TRUE(manager.CallAsFunc(method, result, nullptr, 0));
+	ibValueReferenceDataObject* empty = nullptr;
+	ASSERT_TRUE(result.ConvertToValue(empty));
+	ASSERT_NE(empty, nullptr);
+	EXPECT_TRUE(empty->IsEmpty());
+	EXPECT_EQ(empty->GetMetaObject(), enumeration);
+
+	const long retailProp = manager.FindProp(wxT("Retail"));
+	ASSERT_NE(retailProp, wxNOT_FOUND);
+	ibValue named;
+	ASSERT_TRUE(manager.GetPropVal(retailProp, named));
+	ibValueReferenceDataObject* namedRef = nullptr;
+	ASSERT_TRUE(named.ConvertToValue(namedRef));
+	ASSERT_NE(namedRef, nullptr);
+	EXPECT_FALSE(namedRef->IsEmpty());
+	EXPECT_EQ(namedRef->GetGuid(), retail->GetGuid());
+	EXPECT_NE(namedRef->GetGuid(), empty->GetGuid());
 }
