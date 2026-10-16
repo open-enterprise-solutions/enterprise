@@ -1226,6 +1226,9 @@ void ibFrontendMainFrame::Settle(const ibProtocolNode& answer)
 {
 	// The client's part of a call, beside its exchange (the communicator's line): the window drawn from the answer.
 	const wxLongLong began = wxGetUTCTimeMillis();
+	// The pictures it names asked for at once, before a part of the window asks for its own: the designer's start was two
+	// picture exchanges, the templates' and the tree's.
+	ibProtocolPictureReceiveAll(answer);
 	Draw(answer);
 	ibJournalInfo(wxT("call"), wxT("  drawn in %lld ms"), (wxGetUTCTimeMillis() - began).GetValue());
 	Ask();

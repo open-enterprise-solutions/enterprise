@@ -97,7 +97,9 @@ carries the picture itself:
 
 - the platform's own pictures are compiled into the client — it never asks for them;
 - any other it asks for with `picture`, the ids of a whole list in one call, and keeps for the session — an id there
-  is none of too, so it is not asked again;
+  is none of too, so it is not asked again. Before it draws an answer, the client asks for every picture the answer
+  names at once (its `Picture`, `Icon` and `…Picture` fields): the designer's start is one `picture` call, not one for
+  the templates and another for the tree;
 - only a picture with no id (one held as a file's bytes) comes as itself, a PNG in base64.
 
 A field's `State` carries `Text`, as shown, and `Value`, the value with its type: `{"t": <type id>, "type": <name>,
