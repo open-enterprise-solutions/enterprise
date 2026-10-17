@@ -96,11 +96,24 @@ bool ibValueMetaObject::Send(const wxString& name, const ibDataValue& value) con
 	params.SetValue(ibProtocolName::Schema, static_cast<long long>(ibProtocolSchema::Properties));
 	params.SetValue(ibProtocolName::Command, static_cast<long long>(ibProtocolSchemaCommand::Save));
 	ibWriteProtocolNode(args, params.Child(ibProtocolName::Args));
-	return frame->Call(ibProtocolMethod::Schema, params, answer);
+	if (!frame->Call(ibProtocolMethod::Schema, params, answer))
+		return false;
+	// …answered with the rows after it (a server that sends none is read as before).
+	const ibProtocolNode rows = answer.FindChild(ibProtocolName::Properties);
+	m_rowsHeld = rows.IsNode();
+	if (m_rowsHeld)
+		m_heldRows = rows;
+	return true;
 }
 
 bool ibValueMetaObject::Receive()
 {
+	// The rows the last edit was answered with — those, once.
+	if (m_rowsHeld) {
+		m_rowsHeld = false;
+		return ibPropertyObject::Receive(m_heldRows);
+	}
+
 	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
 	if (frame == nullptr)
 		return false;

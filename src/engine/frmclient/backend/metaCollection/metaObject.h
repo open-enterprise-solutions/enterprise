@@ -3,6 +3,7 @@
 
 #include "frmclient/backend/metaData.h"   // the link — the tab the object was opened from
 #include "frmclient/backend/propertyManager/propertyObject.h"   // a metaobject IS a property object, as the engine's
+#include "protocol/protocolNode.h"   // the rows an edit was answered with, held
 
 #include "core/clsid.h"
 
@@ -59,6 +60,12 @@ private:
 
 	const ibMetaID m_metaId;
 	ibMetaData m_metaData;
+
+	// THE ROWS AN EDIT WAS ANSWERED WITH (Send) — the object's Properties after it, taken in by the next Receive instead of
+	// a read of its own. Held, not taken in at once: an edit is sent from inside the grid's change, and taking rows in
+	// remakes the properties the grid is still editing.
+	mutable ibProtocolNode m_heldRows;
+	mutable bool m_rowsHeld = false;
 };
 
 #endif

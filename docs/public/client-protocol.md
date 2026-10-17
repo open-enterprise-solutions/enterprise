@@ -168,6 +168,9 @@ A schema is a dialog of the desktop held as data: the client shows it however it
 
 A schema the client's application does not have, or the person has no right to, is refused.
 
+The inspector's Save (`Schema` 10, `Command` 4) is answered with the object's `Properties` as they are after it, beside
+the frame: an edit is one exchange. A server that sends none there is asked with `schema` again, as before.
+
 ## Questions to the person
 
 | Kind | Asks | `respond` with |
