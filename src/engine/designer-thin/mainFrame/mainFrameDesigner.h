@@ -90,6 +90,10 @@ public:
 	// started with it when they switched it on (the desktop's).
 	virtual bool Show(bool show = true) override;
 
+	// The debugger's store, read in the login (Read) — not a call of its own at the start.
+	virtual std::vector<int> ReadsAtLogin() const override;
+	virtual void TakeLogin(const ibProtocolNode& answer) override;
+
 	// The configuration's tree and the messages — the desktop's, where the debugger shows a stop and what was said.
 	ibConfigurationTree* GetMetaWindow() const { return m_metaWindow; }
 	ibOutputWindow* GetOutputWindow() const { return m_outputWindow; }
@@ -166,6 +170,9 @@ private:
 	// THE DEBUGGER — the engine's client, the designer's own (designer-thin/backend/debugger): its sockets go straight to
 	// the runtimes; its breakpoints are kept by the server. Made when the frame logged in, gone with the frame.
 	std::unique_ptr<ibDebuggerClient> m_debugClient;
+	// Its store as the login answered it, and whether it did: a server that does not know Read answers none.
+	ibProtocolNode m_debuggerStore;
+	bool m_debuggerStoreRead = false;
 
 	wxAuiToolBar* m_debugToolbar = nullptr;
 

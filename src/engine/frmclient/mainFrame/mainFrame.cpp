@@ -724,7 +724,7 @@ bool ibFrontendMainFrame::Show(bool show)
 	ibProtocolNode answer;
 	ibProtocolRefusal refusal = ibProtocolRefusal::None;
 	wxString error;
-	bool loggedIn = m_communicator->Login(m_user, m_password, m_mode, answer, refusal, error);
+	bool loggedIn = m_communicator->Login(m_user, m_password, m_mode, answer, refusal, error, ReadsAtLogin());
 
 	// A REFUSED NAME OR PASSWORD ASKS THE PERSON — the desktop's login window, with the names the server offers, asked
 	// again until the login goes through or the person cancels it. A list the server could not read offers none: the
@@ -748,7 +748,7 @@ bool ibFrontendMainFrame::Show(bool show)
 		}
 		m_user = dlg.GetLogin();
 		m_password = dlg.GetPassword();
-		loggedIn = m_communicator->Login(m_user, m_password, m_mode, answer, refusal, error);
+		loggedIn = m_communicator->Login(m_user, m_password, m_mode, answer, refusal, error, ReadsAtLogin());
 	}
 	m_password.clear();
 	if (!loggedIn) {
@@ -766,6 +766,7 @@ bool ibFrontendMainFrame::Show(bool show)
 		CallAfter([this]() { Post(ibProtocolMethod::Frame, ibProtocolNode()); });
 	});
 
+	TakeLogin(answer);
 	SetClientSize(FromDIP(wxSize(800, 600)));
 	Center();
 	Settle(answer);
