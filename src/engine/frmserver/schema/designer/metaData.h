@@ -41,6 +41,18 @@ public:
 	// The object `name` names by its id — refused, null, when nothing of the configuration has it.
 	static ibValueMetaObject* FindObject(ibMetaData* metaData, const ibDataNode& args, const wxString& name,
 		ibProtocolRefusal& refusal, wxString& error);
+
+	// WHAT THE TREE READS NEXT, beside the frame: Create {Show} — the new object's id (Created) and its Properties;
+	// Create {Open} — its editor opened by the same work, and whether one was (Opened); Remove {Select} — the
+	// Properties of the object the tree selects after it (Selected). A server without these answers none of them, and
+	// the client reads and opens as before.
+	virtual void Answer(const ibSession& session, s32 command, const ibDataNode& args, ibDataNode& result) const override;
+
+private:
+
+	// The last Create's object and whether its editor opened — this client's (a doc manager's schemas are its frame's).
+	mutable s32 m_created = 0;
+	mutable bool m_opened = false;
 };
 
 #endif

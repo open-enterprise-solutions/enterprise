@@ -708,6 +708,16 @@ wxString ibClientHost::Call(const wxString& text, const void* connection, const 
 	return answer;
 }
 
+void ibClientHost::AnswerAfter(Client& client, ibSession& session, ibDataNode& result)
+{
+	// Only once the command's work is done — a question still waiting answers with the frame alone — and once.
+	if (!client.answerAfter || client.unsettled.valid())
+		return;
+	const std::function<void(ibSession&, ibDataNode&)> answer = std::move(client.answerAfter);
+	client.answerAfter = nullptr;
+	session.Submit([&answer, &session, &result]() { answer(session, result); }).get();
+}
+
 bool ibClientHost::Call(ibProtocolMethod method, const ibDataNode& params, ibDataNode& result, ibProtocolRefusal& refusal,
 	wxString& error, const void* connection, const wxString& address)
 {
@@ -904,19 +914,21 @@ bool ibClientHost::Call(ibProtocolMethod method, const ibDataNode& params, ibDat
 						else
 							work = schema->Command(*session, command, args, refusal, error);
 					}).get();
+					client->answerAfter = nullptr;
 					if (work)
 						done = Run(*client, [work](ibClientFrame*) { work(); }, since, result, refusal, error);
 					// …and what the schema shows after it, beside the frame, where the client would read it next: the
-					// work done — not waiting for the person (Settle let it go) — and the schema asking for it.
-					if (done && !client->unsettled.valid() && schema->AnswersWithBuild(command)) {
-						session->Submit([schema, &session, &args, &result]() {
+					// work done — or, waiting for the person, in the answer to the respond that lets it finish.
+					if (done) {
+						client->answerAfter = [schema, command, args](ibSession& session, ibDataNode& answer) {
 							try {
-								schema->Build(*session, args, result);
+								schema->Answer(session, command, args, answer);
 							}
 							catch (const ibCoreException&) {
 								// …not read: the client reads it itself, as without it
 							}
-						}).get();
+						};
+						AnswerAfter(*client, *session, result);
 					}
 				}
 			}
@@ -983,6 +995,8 @@ bool ibClientHost::Call(ibProtocolMethod method, const ibDataNode& params, ibDat
 					refuse(ibProtocolRefusal::NotFound, wxT("no such request is waiting"));
 				else
 					done = Run(*client, nullptr, since, result, refusal, error);
+				if (done && session != nullptr)
+					AnswerAfter(*client, *session, result);
 			}
 			else if (method == ibProtocolMethod::Fetch) {
 				ibClientFrame* const frame = client->instance->GetFrame();

@@ -55,6 +55,14 @@ public:
 	// the work is done: a command still waiting for the person's answer is answered with the frame alone.
 	virtual bool AnswersWithBuild(s32 WXUNUSED(command)) const { return false; }
 
+	// …or anything else the client would read next, written beside the frame once the command's work is done — also
+	// when it was done only after the person answered a question it asked (the answer to that respond carries it).
+	// Called on the session's worker; what cannot be read is left out, and the client reads it itself.
+	virtual void Answer(const ibSession& session, s32 command, const ibDataNode& args, ibDataNode& result) const {
+		if (AnswersWithBuild(command))
+			Build(session, args, result);
+	}
+
 protected:
 
 	// WHAT WENT WRONG, in the base's own words — the chain the desktop's ShowBackendErrorChain (designer/mainFrame) put

@@ -8,6 +8,7 @@
 #include "core/fileSystem/fs.h"   // ibWriterMemory / ibReaderMemory — a copy's payload
 #include "core/serialize/dataBuilder.h"
 
+#include "frmserver/client/propertyInspector.h"   // the rows of what the tree shows next (Answer)
 #include "frmserver/docView/docView.h"   // docManager — the client's, where its editors open
 #include "frmserver/client/clientChildFrame.h"
 #include "frmserver/client/clientFrame.h"   // the tab an external file's tree is in
@@ -103,9 +104,19 @@ std::function<void()> ibSchemaMetaData::Command(const ibSession& session, s32 co
 		ibClassID clsid = 0;
 		if (!FindPlace(metaData, args, parent, clsid, refusal, error))
 			return nullptr;
-		// Made, and no more: its editor is the click's to open once its row is selected (the client's CreateItem, the
-		// desktop's ibConfigurationTree::CreateItem — NewItem, then OpenObjectForm).
-		return [metaData, clsid, parent]() { metaData->CreateMetaObject(clsid, parent); };
+		// Made — and, asked (Open), its editor opened by the same work, as the desktop's click did (NewItem, then
+		// OpenObjectForm); otherwise that is the client's to open once its row is selected (CreateItem).
+		const bool open = args.GetValue<bool>(wxT("Open"));
+		m_created = 0;
+		m_opened = false;
+		return [this, metaData, clsid, parent, open]() {
+			ibValueMetaObject* const created = metaData->CreateMetaObject(clsid, parent);
+			if (created == nullptr)
+				return;
+			m_created = static_cast<s32>(created->GetMetaID());
+			if (open)
+				m_opened = docManager->OpenForm(created) != nullptr;
+		};
 	}
 	case ibProtocolMetaDataCommand::Remove: {
 		ibValueMetaObject* const object = FindObject(metaData, args, wxT("Id"), refusal, error);
@@ -316,4 +327,37 @@ ibValueMetaObject* ibSchemaMetaData::FindObject(ibMetaData* metaData, const ibDa
 		return nullptr;
 	}
 	return object;
+}
+
+void ibSchemaMetaData::Answer(const ibSession& session, s32 command, const ibDataNode& args, ibDataNode& result) const
+{
+	const ibProtocolMetaDataCommand kind = static_cast<ibProtocolMetaDataCommand>(command);
+	s32 shown = 0;
+	if (kind == ibProtocolMetaDataCommand::Create && m_created != 0) {
+		result.SetValue(wxT("Created"), static_cast<s32>(m_created));
+		if (args.GetValue<bool>(wxT("Open")))
+			result.SetValue(wxT("Opened"), m_opened);
+		if (args.GetValue<bool>(wxT("Show")))
+			shown = m_created;
+	}
+	else if (kind == ibProtocolMetaDataCommand::Remove) {
+		shown = args.GetValue<s32>(wxT("Select"));
+		if (shown != 0)
+			result.SetValue(wxT("Selected"), static_cast<s32>(shown));
+	}
+	if (shown == 0)
+		return;
+
+	// …its rows, as the inspector's read (ibSchemaProperties::Build) writes them.
+	ibProtocolRefusal refusal = ibProtocolRefusal::None;
+	wxString error;
+	ibMetaData* const metaData = FindMetaData(session, args, refusal, error);
+	ibDataNode named;
+	named.SetValue(wxT("Id"), static_cast<s32>(shown));
+	ibValueMetaObject* const object = metaData != nullptr ? FindObject(metaData, named, wxT("Id"), refusal, error) : nullptr;
+	if (object == nullptr)
+		return;
+	ibPropertyInspector inspector;
+	inspector.SelectObject(object, args.GetValue<s32>(wxT("Tab")));
+	inspector.OnDraw(result.Child(wxT("Properties")));
 }
