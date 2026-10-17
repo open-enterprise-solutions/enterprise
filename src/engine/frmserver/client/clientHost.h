@@ -125,6 +125,9 @@ private:
 		// 0 — a connection is attached, or this client never had one (an HTTP call, `connectionless`). Stored before
 		// `connection` is cleared, so a call never observes a null connection together with a zero deadline.
 		std::atomic<std::int64_t>         resumeDeadlineMs{ 0 };
+		// Set while a call of this client runs and its frame is not drawn yet: a change made then is in the frame
+		// the call is answered with, so the client is not told of it (NotifyChanged) and asks no frame of its own.
+		std::atomic<bool>                 answering{ false };
 	};
 
 	std::shared_ptr<Client> FindClient(const wxString& id) const;

@@ -222,6 +222,7 @@ notification — no id, no answer:
 
 A connection that stays open (a WebSocket, a file base in the client's process) is told; an HTTP request is not — it
 asks.
+A change made while a call of the client runs, before its frame is drawn, is not told: the call's answer carries it.
 
 ## Files
 

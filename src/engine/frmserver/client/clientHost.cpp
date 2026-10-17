@@ -564,6 +564,8 @@ void ibClientHost::NotifyChanged(const ibClientInstance* instance)
 		for (const auto& [clientId, client] : m_clients) {
 			if (client->instance.get() != instance)
 				continue;
+			if (client->answering.load(std::memory_order_acquire))
+				break;
 			const auto found = m_notifiers.find(client->connection.load(std::memory_order_acquire));
 			if (found != m_notifiers.end()) {
 				id = clientId;
@@ -1230,6 +1232,14 @@ bool ibClientHost::Run(Client& client, std::function<void(ibClientFrame*)> work,
 	// spends its time, said beside the call's own line (a debug build's journal).
 	const std::int64_t began = NowMs();
 
+	// UNTIL THE FRAME IS DRAWN, A CHANGE IS NOT TOLD (NotifyChanged): the answer carries it. Told, it came back as
+	// a `frame` call of its own, answered with nothing new (a message's OK: respond, then frame).
+	client.answering.store(true, std::memory_order_release);
+	struct Answered {
+		Client& client;
+		~Answered() { client.answering.store(false, std::memory_order_release); }
+	} answered{ client };
+
 	if (work) {
 		// ⭐ WHILE THE PERSON IS ASKED SOMETHING, a call still runs — inside the work that waits, which runs this
 		// session's tasks: the desktop's modal loop, which runs the events of the windows over it (a choice form a
@@ -1248,7 +1258,9 @@ bool ibClientHost::Run(Client& client, std::function<void(ibClientFrame*)> work,
 	ibDataNode drawn, events;
 	bool drew = false;
 	try {
-		session->Submit([instance, &drawn, &events, &drew]() {
+		session->Submit([instance, &client, &drawn, &events, &drew]() {
+			// A change from here on may miss the frame being drawn: it is told again.
+			client.answering.store(false, std::memory_order_release);
 			ibClientFrame* const frame = instance->GetFrame();
 			if (frame == nullptr)
 				return;
