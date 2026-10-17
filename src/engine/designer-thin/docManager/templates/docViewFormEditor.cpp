@@ -1,4 +1,6 @@
 ﻿#include "docViewFormEditor.h"
+
+#include "frmclient/backend/metaCollection/metaObject.h"   // the form's object keeps the rows the frame brought
 #include "frmclient/mainFrame/mainFrame.h"
 #include "frmclient/win/picture.h"   // ibProtocolPicture — a class's picture, as the answer brought it
 
@@ -49,10 +51,14 @@ bool ibFormEditView::OnCreate(ibFrontendDocument* docBase, long flags)
 	m_visualNotebook = new ibVisualEditorNotebook(doc, m_viewFrame, wxID_ANY, flags);
 	m_visualNotebook->GetCodeEditor()->Bind(wxEVT_KILL_FOCUS, &ibFormEditView::OnKillFocus, this);
 
-	// ⭐ ONE EXCHANGE OPENS THE TAB — the form, its controls' rows, the classes and the module's text in one answer.
-	ibProtocolNode answer;
-	if (!doc->Fetch(ibProtocolNode(), answer))
-		return false;
+	// ⭐ THE FRAME THAT OPENS THE TAB CARRIES IT (State Opening) — the form, its controls' rows, the classes and the module's
+	// text, as one fetch answers them; a server that put none there is asked, as before.
+	ibProtocolNode answer = doc->GetOpeningState().FindChild(ibProtocolName::Opening);
+	if (!answer.IsNode() || !answer.Has(ibProtocolName::Form)) {
+		answer = ibProtocolNode();
+		if (!doc->Fetch(ibProtocolNode(), answer))
+			return false;
+	}
 
 	// The palette — the classes a control may be made of, as the answer has them; the desktop's asked its registry
 	// (a system control's class is not offered: Visible false).
@@ -77,6 +83,13 @@ bool ibFormEditView::OnCreate(ibFrontendDocument* docBase, long flags)
 
 	if (!m_visualNotebook->LoadForm(answer))
 		return false;
+
+	// …and the form's object's rows beside it: what its Code page shows in the inspector, not read when the page is shown.
+	if (answer.Has(ibProtocolName::Properties)) {
+		if (const ibValueMetaObject* const object =
+			dynamic_cast<const ibValueMetaObject*>(m_visualNotebook->GetCodeEditor()->GetShownProperty()))
+			object->KeepRows(answer.FindChild(ibProtocolName::Properties));
+	}
 
 	m_visualNotebook->RefreshEditor();
 	return ibFrontendView::OnCreate(docBase, flags);

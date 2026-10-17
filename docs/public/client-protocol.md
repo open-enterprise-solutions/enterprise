@@ -131,6 +131,11 @@ drawn empty.
 | `Request` | a question to the person, while one is pending |
 | `View` | the active tab drawn: a form — its `Key` and its controls as the designer saved them, each with a `State` of what it shows now; or the start page |
 
+A designer's form editor tab is opened by the frame that opens it: its view's `State` carries `Opening` once —
+what the tab's `fetch` with `Request {Kind: Text}` answers (the form, the classes, the module's text) and the form
+object's `Properties`. The client makes the editor from it without a `fetch`; a frame without `Opening` (an older
+server, a tab opened before) is read with `fetch`, as before.
+
 ## Events held until the next call
 
 From protocol 3. A **state event** says where the person is: `Focus` (1), `Input` (4), `Move` (11), `Row` (12),

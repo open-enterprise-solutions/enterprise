@@ -334,6 +334,9 @@ private:
 	static ibFrontendMainFrame* s_instance;
 
 	std::unique_ptr<ibCommunicator> m_communicator;
+	// While the tabs are drawn: the frame's View and the tab it is of (DrawTabs hands it to a tab it opens).
+	ibProtocolNode m_openingView;
+	long long m_openingTab = 0;
 	const ibProtocolMode            m_mode;
 	wxString                        m_user;       // the login's — the one the login window was told, when refused
 	wxString                        m_password;   // until the login — cleared by it

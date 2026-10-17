@@ -961,7 +961,14 @@ void ibFrontendMainFrame::Draw(const ibProtocolNode& answer)
 	if (whole || patch.Has(ibProtocolName::Templates))
 		DrawTemplates(frame.FindChild(ibProtocolName::Templates));
 	if (whole || patch.Has(ibProtocolName::Tabs))
+	{
+		// The view the frame carries, for the tab it makes active — a tab opened by it may read what it needs there.
+		m_openingView = frame.FindChild(ibProtocolName::View);
+		m_openingTab = frame.GetInt(ibProtocolName::ActiveTab);
 		DrawTabs(frame.FindChild(ibProtocolName::Tabs));
+		m_openingView = ibProtocolNode();
+		m_openingTab = 0;
+	}
 	DrawFrame(frame, patch);
 	DrawView(frame.GetInt(ibProtocolName::ActiveTab), frame.FindChild(ibProtocolName::View), patch);
 
@@ -1157,8 +1164,12 @@ void ibFrontendMainFrame::DrawTabs(const ibProtocolNode& tabs)
 		else
 			m_docManager->AddDocument(opened);
 
-		// Not made — its view was not.
-		if (!opened->OnCreate(wxEmptyString, ibDOC_NEW)) {
+		// Not made — its view was not. Made with the State the frame drew it in, when it is the tab the frame shows.
+		if (id == m_openingTab && m_openingView.IsNode())
+			opened->SetOpeningState(m_openingView.FindChild(ibProtocolName::State));
+		const bool made = opened->OnCreate(wxEmptyString, ibDOC_NEW);
+		opened->SetOpeningState(ibProtocolNode());
+		if (!made) {
 			m_documents.erase(id);
 			opened->DeleteAllViews();
 			continue;
