@@ -230,7 +230,15 @@ bool ibFrontendMainFrame::ShowSpreadsheetDocument(const wxString& strTitle, std:
 			if (!ibMetaDocument::OnCreate(path, flags))
 				return false;
 
-			return GetGridCtrl()->LoadDocument(m_spreadSheetDocument);
+			if (!GetGridCtrl()->LoadDocument(m_spreadSheetDocument))
+				return false;
+
+			// #484: a printed form's own scale (set for paper) read as hard-to-read screen text at
+			// the grid's 1.0 default. A Show() preview is read, not authored at actual size the way a
+			// template is in the Designer's editor, so it alone starts doubled; the toolbar's zoom
+			// choice (docViewSpreadsheet) still reaches every other step from there.
+			GetGridCtrl()->SetGridZoom(4);   // 1.0 -> 2.0, in SetGridZoom's own 0.25 steps
+			return true;
 		}
 	};
 

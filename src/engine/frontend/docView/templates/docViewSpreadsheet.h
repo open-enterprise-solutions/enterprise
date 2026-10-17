@@ -37,9 +37,17 @@ private:
 
 	void OnMenuEvent(wxCommandEvent& event);
 
+	// The toolbar's own zoom percentage choice, and the grid's own zoom (Ctrl+wheel) keep each other
+	// in sync — #484: a preview had no visible way to change scale, so the grid's existing zoom
+	// (SetGridZoom, already wired to Ctrl+wheel) gets a toolbar face.
+	void OnZoomChoice(wxCommandEvent& event);
+	void OnGridZoomChanged(ibGridEvent& event);
+	void SyncZoomChoice();
+
 protected:
 
 	ibGridEditor* m_gridEditor;
+	class wxChoice* m_zoomChoice = nullptr;
 
 	wxDECLARE_EVENT_TABLE();
 	wxDECLARE_DYNAMIC_CLASS(ibSpreadsheetEditView);

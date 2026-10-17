@@ -1,6 +1,8 @@
 #include "docViewSpreadsheet.h"
 #include "frontend/docView/docManager.h"   // full ibDocTemplate type
 #include "frontend/mainFrame/mainFrame.h"
+#include <wx/choice.h>
+#include <cmath>
 
 enum
 {
@@ -30,7 +32,16 @@ enum
 	wxID_UNGROUP_ROW,
 	wxID_GROUP_COL,
 	wxID_UNGROUP_COL,
+
+	wxID_SHEET_ZOOM,
 };
+
+// The grid's own zoom (gridext.cpp SetGridZoom) steps by 0.25 and clamps to [0.5, 2.25] — the
+// choice offers exactly those steps so every entry is reachable and nothing it shows gets clamped
+// away underneath it.
+static const wxString s_zoomChoices[] = { wxT("50%"), wxT("75%"), wxT("100%"), wxT("125%"), wxT("150%"), wxT("175%"), wxT("200%"), wxT("225%") };
+static const float s_zoomValues[] = { 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f, 2.25f };
+static const size_t s_zoomChoiceCount = sizeof(s_zoomValues) / sizeof(s_zoomValues[0]);
 
 // ----------------------------------------------------------------------------
 // ibSpreadsheetEditView implementation
@@ -68,6 +79,8 @@ EVT_MENU(wxID_GROUP_ROW, ibSpreadsheetEditView::OnMenuEvent)
 EVT_MENU(wxID_UNGROUP_ROW, ibSpreadsheetEditView::OnMenuEvent)
 EVT_MENU(wxID_GROUP_COL, ibSpreadsheetEditView::OnMenuEvent)
 EVT_MENU(wxID_UNGROUP_COL, ibSpreadsheetEditView::OnMenuEvent)
+EVT_CHOICE(wxID_SHEET_ZOOM, ibSpreadsheetEditView::OnZoomChoice)
+EVT_GRID_ZOOM(ibSpreadsheetEditView::OnGridZoomChanged)
 wxEND_EVENT_TABLE()
 
 bool ibSpreadsheetEditView::OnCreate(ibDocument* docBase, long flags)
@@ -208,6 +221,59 @@ void ibSpreadsheetEditView::OnCreateToolbar(wxAuiToolBar* toolbar)
 	toolbar->AddSeparator();
 	toolbar->AddTool(wxID_DOCK_TABLE, _("Freeze row/col table"), wxArtProvider::GetBitmapBundle(wxART_BORDER, wxART_DOC_TEMPLATE), _("Freeze row/col table"));
 	toolbar->EnableTool(wxID_DOCK_TABLE, m_gridEditor->IsEditable());
+	toolbar->AddSeparator();
+
+	wxChoice* zoomChoice = new wxChoice(toolbar, wxID_SHEET_ZOOM);
+	for (const wxString& label : s_zoomChoices)
+		zoomChoice->Append(label);
+	m_zoomChoice = zoomChoice;
+	SyncZoomChoice();
+	toolbar->AddControl(zoomChoice, _("Zoom"));
+}
+
+// The nearest step the grid's own 0.25 granularity actually has — SetGridZoom moves by whole
+// points of 0.25, so a choice of "150%" is reached by stepping from wherever the grid is now, not
+// by writing 1.5f over it (there is no such setter; the Ctrl+wheel gesture and this choice share
+// the one door, SetGridZoom, so they can never disagree about what zoom means).
+void ibSpreadsheetEditView::OnZoomChoice(wxCommandEvent& event)
+{
+	const int selection = event.GetSelection();
+	if (selection < 0 || static_cast<size_t>(selection) >= s_zoomChoiceCount)
+		return;
+
+	const float target = s_zoomValues[selection];
+	const int points = static_cast<int>(std::lround((target - m_gridEditor->GetGridZoom()) / 0.25f));
+	if (points != 0)
+		m_gridEditor->SetGridZoom(points);
+
+	SyncZoomChoice();
+}
+
+// The grid zooms on its own too (Ctrl+wheel, gridext.cpp) - keep the toolbar's choice honest
+// whichever door was used.
+void ibSpreadsheetEditView::OnGridZoomChanged(ibGridEvent& event)
+{
+	SyncZoomChoice();
+	event.Skip();
+}
+
+void ibSpreadsheetEditView::SyncZoomChoice()
+{
+	if (m_zoomChoice == nullptr || m_gridEditor == nullptr)
+		return;
+
+	const float current = m_gridEditor->GetGridZoom();
+	size_t nearest = 0;
+	float nearestDelta = std::fabs(s_zoomValues[0] - current);
+	for (size_t i = 1; i < s_zoomChoiceCount; ++i) {
+		const float delta = std::fabs(s_zoomValues[i] - current);
+		if (delta < nearestDelta) {
+			nearest = i;
+			nearestDelta = delta;
+		}
+	}
+
+	m_zoomChoice->SetSelection(static_cast<int>(nearest));
 }
 
 bool ibSpreadsheetEditView::OnClose(bool deleteWindow)
