@@ -50,6 +50,11 @@ public:
 	virtual std::function<void()> Command(const ibSession& session, s32 command,
 		const ibDataNode& args, ibProtocolRefusal& refusal, wxString& error) const;
 
+	// …AND WHAT IT SHOWS AFTER IT, in the same answer — the command's Build of the same arguments beside the frame, when
+	// the client would ask for it next anyway (the inspector reads an object's rows again after each edit). Only once
+	// the work is done: a command still waiting for the person's answer is answered with the frame alone.
+	virtual bool AnswersWithBuild(s32 WXUNUSED(command)) const { return false; }
+
 protected:
 
 	// WHAT WENT WRONG, in the base's own words — the chain the desktop's ShowBackendErrorChain (designer/mainFrame) put

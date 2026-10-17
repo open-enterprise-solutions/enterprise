@@ -47,8 +47,27 @@ void ibFormDesignView::OnDraw(ibDataNode& frame)
 		else if (metaFormObject != nullptr)
 			caption = metaFormObject->GetSynonym();
 	}
-	if (ibDataNode* const state = frame.FindChild(ibProtocolName::State))
-		state->SetValue(ibProtocolName::Caption, caption);
+	ibDataNode* const state = frame.FindChild(ibProtocolName::State);
+	if (state == nullptr)
+		return;
+	state->SetValue(ibProtocolName::Caption, caption);
+
+	// ⭐ WHAT THE TAB IS OPENED WITH RIDES THE FRAME THAT OPENS IT — once (Opening): the form, the classes and the module's
+	// text, as its Text fetch answers them, and the form's object's rows, which its Code page shows in the inspector. The
+	// client makes the editor without asking.
+	if (m_openingDrawn)
+		return;
+	m_openingDrawn = true;
+	ibDataNode& opening = state->Child(ibProtocolName::Opening);
+	ibDataNode request;
+	request.SetValue(ibProtocolName::Kind, static_cast<s32>(ibProtocolModuleRequest::Text));
+	if (!Fetch(request, opening))
+		return;
+	if (ibValueMetaObjectFormBase* const metaFormObject = const_cast<ibValueMetaObjectFormBase*>(m_valueForm->GetFormMetaObject())) {
+		ibPropertyInspector inspector;
+		inspector.SelectObject(metaFormObject, 0);
+		inspector.OnDraw(opening.Child(ibProtocolName::Properties));
+	}
 }
 
 bool ibFormDesignView::Fetch(const ibDataNode& request, ibDataNode& response)

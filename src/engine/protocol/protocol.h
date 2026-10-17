@@ -260,6 +260,9 @@ namespace ibProtocolName {
 	// State, what the server reads it as now; and what the person did with one, back by its id.
 	inline constexpr const char* ControlId        = "ControlId";
 	inline constexpr const char* State            = "State";
+	inline constexpr const char* Opening          = "Opening";   // a form editor's State, once, in the frame that opens
+	                                                               // its tab: what its Text fetch answers, and its object's
+	                                                               // Properties
 	inline constexpr const char* Subscribed       = "Subscribed";   // a State's: the state events the server is subscribed
 	                                                                // to on it — sent at once, by number
 	inline constexpr const char* Control          = "Control";

@@ -66,6 +66,11 @@ public:
 	bool Fetch(const ibProtocolNode& request, ibProtocolNode& answer) const;
 	void Post(ibProtocolEvent event, const ibProtocolNode& args = ibProtocolNode()) const;
 
+	// The State of the view in the frame that opened the tab — set while its views are made (OnCreate), empty after:
+	// what a view reads as it is made may ride there.
+	void SetOpeningState(const ibProtocolNode& state) { m_openingState = state; }
+	const ibProtocolNode& GetOpeningState() const { return m_openingState; }
+
 protected:
 
 	virtual bool DoSaveDocument(const wxString& file) override;
@@ -73,6 +78,7 @@ protected:
 private:
 
 	const long long m_tabId;
+	ibProtocolNode m_openingState;
 };
 
 #endif

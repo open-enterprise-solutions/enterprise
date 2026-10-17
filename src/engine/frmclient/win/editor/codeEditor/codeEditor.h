@@ -634,6 +634,13 @@ private:
 	// What the inspector shows as it is activated — the property shown as it was made, held (ActivateEditor).
 	std::shared_ptr<ibPropertyObject> m_property;
 
+public:
+
+	// What it shows in the inspector as it is activated (the row of the tree it was opened from).
+	ibPropertyObject* GetShownProperty() const { return m_property.get(); }
+
+private:
+
 	ibAutoComplete    m_ac;
 	ibCallTip         m_ct;
 

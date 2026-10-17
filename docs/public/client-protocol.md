@@ -131,6 +131,11 @@ drawn empty.
 | `Request` | a question to the person, while one is pending |
 | `View` | the active tab drawn: a form — its `Key` and its controls as the designer saved them, each with a `State` of what it shows now; or the start page |
 
+A designer's form editor tab is opened by the frame that opens it: its view's `State` carries `Opening` once —
+what the tab's `fetch` with `Request {Kind: Text}` answers (the form, the classes, the module's text) and the form
+object's `Properties`. The client makes the editor from it without a `fetch`; a frame without `Opening` (an older
+server, a tab opened before) is read with `fetch`, as before.
+
 ## Events held until the next call
 
 From protocol 3. A **state event** says where the person is: `Focus` (1), `Input` (4), `Move` (11), `Row` (12),
@@ -167,6 +172,14 @@ A schema is a dialog of the desktop held as data: the client shows it however it
 | 8 Users | the designer | `Users` (`Guid`, `Name`, `FullName`), and what a record is chosen from: `Roles` (`Guid`, `Name`, `Title`, `Mode`), `Languages` (`Guid`, `Title`, `Code`); with `Args {Guid}` — that one's `User` (`Guid`, `Name`, `FullName`, `Password` — whether one is stored, `Language`, `Roles`) | 4 Save `{Guid, Name, FullName, Language, Roles[, Password]}` — the password hashed by the server, absent: kept; 8 Remove `{Guid}` | data administration |
 
 A schema the client's application does not have, or the person has no right to, is refused.
+
+The inspector's Save (`Schema` 10, `Command` 4) is answered with the object's `Properties` as they are after it, beside
+the frame: an edit is one exchange. A server that sends none there is asked with `schema` again, as before.
+
+A schema read (`schema` without `Command`) changes nothing, so a client may keep what it read and show it again
+without asking, until it makes a call that may change something — any but a schema read, `picture`, `frame` and
+`users`, and any call carrying `Pending` — or is told `changed`. The thin designer keeps the inspector's
+`Properties` this way: walking back to an object it showed, or clicking it again, is not a call.
 
 ## Questions to the person
 
