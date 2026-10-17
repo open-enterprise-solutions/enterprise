@@ -27,6 +27,11 @@ public:
 	// {Id: SyntaxControl}).
 	virtual bool OnClientEvent(ibProtocolEvent event, const ibDataNode& args) override;
 
+private:
+
+	// Whether the text rode a frame already (OnDraw) — once, in the frame that opens the tab.
+	bool m_textDrawn = false;
+
 	wxDECLARE_DYNAMIC_CLASS(ibModuleTextView);
 };
 

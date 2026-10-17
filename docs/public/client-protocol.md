@@ -110,6 +110,10 @@ model set one — `TextColour`, `BackgroundColour` (a colour's text, `r,g,b`, as
 `Strikethrough`, `Underlined`, `Face`, `Size`, `Align` (`Left`, `Center`, `Right`). In the designer (`login` `Mode` 2)
 a table reads no rows — its `fetch` is refused, and a designer's client does not ask.
 
+A designer's module tab (its `View` `State`: `Syntax`, `Module`, `Modified`, `ReadOnly`) carries the module's `Text`
+in the frame that opens the tab, once; the client draws it without a `fetch`. A server that puts no `Text` there is
+asked with `fetch`, as before. A form's tab reads its module's text as it did.
+
 A table's column dragged in its header is `Move {Column, Holder, Position}`: `Holder` the group it now stands in, 0 the
 table. The client moves the column in its own copy of the form at once; the server's form follows.
 

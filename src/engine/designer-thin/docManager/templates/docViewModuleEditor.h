@@ -27,6 +27,10 @@ public:
 
 	ibCodeEditor* GetCodeEditor() const { return m_codeEditor; }
 
+	// THE TEXT NOT LOADED YET — the frame that opened the tab may carry it (State Text); drawn, it is loaded from there,
+	// or fetched where the server put none. True when this call loaded it.
+	bool LoadPendingText(const ibProtocolNode& state);
+
 private:
 
 	void OnCopy(wxCommandEvent& WXUNUSED(event)) { m_codeEditor->Copy(); }
@@ -42,6 +46,7 @@ private:
 protected:
 
 	ibCodeEditor* m_codeEditor;
+	bool m_textPending = false;
 
 	wxDECLARE_EVENT_TABLE();
 };
