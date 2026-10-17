@@ -243,8 +243,28 @@ jobs:
           arch: x64
 
       # The runner image has no ccache; Chocolatey does, and puts it on the PATH the launcher above names.
+      #
+      # ⭐ RETRIED, THEN CHECKED — not trusted. `choco install` can exit 0 while the package feed itself
+      # answered a transient 504 (seen 2026-10-16 on #473-#475): the install step stayed green, ccache
+      # never reached the PATH, and the launcher the env block names above pointed CMake at a compiler
+      # that does not exist, which is the error CMakeTestCXXCompiler actually raised. A few attempts
+      # absorb a flaky feed; if ccache is still missing after them, this step fails HERE, with the
+      # straightforward reason, instead of as a confusing "CreateProcess failed" three steps later.
       - name: Install ccache
-        run: choco install ccache --no-progress -y
+        shell: pwsh
+        run: |
+          $installed = $false
+          for ($i = 1; $i -le 3; $i++) {
+            choco install ccache --no-progress -y
+            if (Get-Command ccache -ErrorAction SilentlyContinue) { $installed = $true; break }
+            Write-Host "ccache not on PATH after attempt $i/3 - retrying..."
+            Start-Sleep -Seconds 15
+          }
+          if (-not $installed) {
+            Write-Error "ccache did not install after 3 attempts (Chocolatey feed likely unavailable) - failing here instead of at Configure."
+            exit 1
+          }
+          ccache --version
 
       - name: Compiler cache
         uses: actions/cache/restore@v4
