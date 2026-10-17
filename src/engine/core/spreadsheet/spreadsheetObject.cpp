@@ -578,18 +578,24 @@ ibString ibSpreadsheetObject::ComputeStringValueFromParameters(const ibString& s
 						// one thread clobbers it if GetParameter re-enters. Constructing
 						// one is cheap; the static was not a win.
 						ibAnyValuePtr<ibAnyValue> cVal;
-						if (GetParameter(token, cVal) && cVal)
-							strTemplateValue.replace(start_pos, end_pos - start_pos + 1,
-								ibLocalization::GetTranslateGetRawLocText(strLangCode, cVal->GetString()));
-						else
-							strTemplateValue.replace(start_pos, end_pos - start_pos + 1, wxT(""));
+						const wxString replacement = (GetParameter(token, cVal) && cVal)
+							? ibLocalization::GetTranslateGetRawLocText(strLangCode, cVal->GetString())
+							: wxString();
+						strTemplateValue.replace(start_pos, end_pos - start_pos + 1, replacement);
+
+						// Resume right after what was ACTUALLY written, not at an index computed
+						// against the pre-replace length (#485): a value shorter than its own
+						// [HoleName] shifts everything after it left, and scanning on from the old
+						// end_pos landed in the middle of — or past — the real next hole whenever
+						// the first substitution shrank the text (an equal-or-longer value happened
+						// to still land close enough, which is why it looked hole-order-dependent).
+						start_pos += replacement.length();
 					}
 					else {
 						strTemplateValue.replace(start_pos, end_pos - start_pos, wxT(""));
+						// Nothing was inserted, so the text that followed the removed character is
+						// now sitting at start_pos itself.
 					}
-
-					// Move start_pos to the character after the closing bracket for the next iteration
-					start_pos = end_pos + 1;
 				}
 				else {
 					// No matching end bracket found, stop
