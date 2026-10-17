@@ -142,6 +142,7 @@ From protocol 3. A **state event** says where the person is: `Focus` (1), `Input
   the order last done.
 - A tab's text handed back — a module's `Change {Text}`, as the focus leaves the editor or before Save, a syntax
   check, a close — is held too, the latest per tab: what reads the text on the server is a call, and carries it.
+- A form designer's form handed back (`Change {Form}`) is held the same way, apart from the text of the same tab.
 - Every call but `login` and `logout` carries what is held as `Pending`, a list of `{Control, Event, Args, Form | Tab}`,
   and the client clears it. The server applies `Pending` in order before the call itself.
 
