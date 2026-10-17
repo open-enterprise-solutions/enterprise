@@ -708,6 +708,11 @@ void ibFrontendMainFrame::UpdateHotKeys()
 	m_keyBinder.UpdateMenuBar(bar);
 }
 
+bool ibFrontendMainFrame::IsLoggedIn() const
+{
+	return m_communicator != nullptr && m_communicator->IsLoggedIn();
+}
+
 bool ibFrontendMainFrame::Show(bool show)
 {
 	if (!show)
