@@ -708,6 +708,11 @@ void ibFrontendMainFrame::UpdateHotKeys()
 	m_keyBinder.UpdateMenuBar(bar);
 }
 
+unsigned long long ibFrontendMainFrame::GetGeneration() const
+{
+	return m_communicator->Generation();
+}
+
 bool ibFrontendMainFrame::Show(bool show)
 {
 	if (!show)
@@ -812,8 +817,10 @@ bool ibFrontendMainFrame::Call(ibProtocolMethod method, const ibProtocolNode& pa
 	ibProtocolRefusal refusal = ibProtocolRefusal::None;
 	wxString error;
 	const bool called = m_communicator->Call(method, params, answer, refusal, error);
-	if (called)
+	if (called) {
+		m_settledAnswer = answer;
 		Settle(answer);
+	}
 	else
 		Refused(refusal, error);
 	--m_calling;
@@ -827,8 +834,10 @@ bool ibFrontendMainFrame::Call(ibProtocolMethod method, const ibProtocolNode& pa
 {
 	++m_calling;
 	const bool called = m_communicator->Call(method, params, answer, refusal, error);
-	if (called)
+	if (called) {
+		m_settledAnswer = answer;
 		Settle(answer);
+	}
 	else if (refusal == ibProtocolRefusal::NoSession)
 		Refused(refusal, error);
 	--m_calling;
@@ -1334,6 +1343,7 @@ bool ibFrontendMainFrame::Respond(const ibProtocolNode& response)
 		Refused(refusal, error);
 		return false;
 	}
+	m_settledAnswer = next;
 	Draw(next);
 
 	// …a window up answering along the way is asked again: the question pending now is its own.
