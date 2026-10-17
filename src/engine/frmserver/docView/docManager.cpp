@@ -281,7 +281,7 @@ ibDocManager::ibDocManager(long WXUNUSED(flags), bool initialize)
 	AddDocTemplate(g_metaTemplateCLSID,
 		_("Spreadsheet document"), ibSheetFormatMask(), ibSheetFormatExtensions(),
 		_("Spreadsheet Doc"), _("Spreadsheet View"),
-		CLASSINFO(ibSpreadsheetFileDocument), CLASSINFO(ibSpreadsheetEditView),
+		CLASSINFO(ibSheetFileDocument), CLASSINFO(ibSheetView),
 		ibTEMPLATE_VISIBLE);
 
 	AddDocTemplate(g_metaSectionCLSID,
