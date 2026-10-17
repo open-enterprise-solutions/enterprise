@@ -101,8 +101,9 @@ bool ibValueMetaObject::Send(const wxString& name, const ibDataValue& value) con
 
 bool ibValueMetaObject::Receive()
 {
+	// The session gone — the window closing, its tree shown again as the tabs go: there is nobody to ask.
 	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
-	if (frame == nullptr)
+	if (frame == nullptr || !frame->IsLoggedIn())
 		return false;
 
 	ibProtocolNode params, answer;

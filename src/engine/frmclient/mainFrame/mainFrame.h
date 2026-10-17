@@ -68,6 +68,9 @@ public:
 	// The client goes with the window: logged out, and its session torn down by the server.
 	virtual bool Destroy() override;
 
+	// A session there to call — none once logged out (the window closing).
+	bool IsLoggedIn() const;
+
 	// The process's main window.
 	static ibFrontendMainFrame* GetFrame() { return s_instance; }
 
