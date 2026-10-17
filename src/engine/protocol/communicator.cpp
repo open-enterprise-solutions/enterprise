@@ -181,12 +181,13 @@ void ibCommunicator::Listen(std::function<void()> changed)
 
 	// Of this client, as logged in now — a connection may carry more than one, and each is told of its own.
 	const wxString client = GetClient();
-	m_connection->Listen([client, changed = std::move(changed)](const std::string& text) {
+	m_connection->Listen([client, generation = m_generationOwner, changed = std::move(changed)](const std::string& text) {
 		ibProtocolNode node;
 		if (!ibProtocolNode::Read(text, node) || node.GetString(ibProtocolName::RpcMethod) != ibProtocolName::Changed)
 			return;
 		if (node.FindChild(ibProtocolName::RpcParams).GetString(ibProtocolName::Client) != client)
 			return;
+		generation->fetch_add(1, std::memory_order_acq_rel);   // what was read before it may have changed
 		changed();
 	});
 }
@@ -267,7 +268,16 @@ bool ibCommunicator::CallLocked(ibProtocolMethod method, const ibProtocolNode& p
 		}
 		for (const ibProtocolNode& event : pending)
 			(*named.Json())[ibProtocolName::Pending].push_back(*event.Json());
+		if (!pending.empty())
+			m_generation.fetch_add(1, std::memory_order_acq_rel);
 	}
+	// …and a call that may change something moves the count before it goes (Generation): a read answered after it is
+	// read at the new count.
+	const bool reads = method == ibProtocolMethod::Picture || method == ibProtocolMethod::Frame
+		|| method == ibProtocolMethod::Users
+		|| (method == ibProtocolMethod::Schema && !params.Has(ibProtocolName::Command));
+	if (!reads)
+		m_generation.fetch_add(1, std::memory_order_acq_rel);
 	const long long id = ++m_lastId;
 	ibProtocolNode request;
 	request.SetValue(ibProtocolName::RpcVersion, "2.0")

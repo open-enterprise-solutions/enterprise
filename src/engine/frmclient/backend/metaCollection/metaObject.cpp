@@ -1,5 +1,7 @@
 #include "metaObject.h"
 
+#include <map>
+
 #include "core/serialize/dataBuilder.h"
 #include "frmclient/backend/serialize/dataProtocol.h"   // ibReadProtocolNode, ibWriteProtocolNode — the rows, the edit
 #include "frmclient/mainFrame/mainFrame.h"              // the door to the server
@@ -96,7 +98,50 @@ bool ibValueMetaObject::Send(const wxString& name, const ibDataValue& value) con
 	params.SetValue(ibProtocolName::Schema, static_cast<long long>(ibProtocolSchema::Properties));
 	params.SetValue(ibProtocolName::Command, static_cast<long long>(ibProtocolSchemaCommand::Save));
 	ibWriteProtocolNode(args, params.Child(ibProtocolName::Args));
-	return frame->Call(ibProtocolMethod::Schema, params, answer);
+	if (!frame->Call(ibProtocolMethod::Schema, params, answer))
+		return false;
+	// …answered with the rows after it (a server that sends none is read as before).
+	KeepRows(answer.FindChild(ibProtocolName::Properties));
+	return true;
+}
+
+namespace {
+
+	// The rows kept, and the count they are true at: any other count drops them all.
+	struct ibKeptRows {
+		unsigned long long generation = 0;
+		std::map<std::pair<long long, ibMetaID>, ibProtocolNode> rows;
+	};
+
+	ibKeptRows& KeptRows()
+	{
+		static ibKeptRows kept;
+		return kept;
+	}
+
+	// The rows of the object kept at this count, or none.
+	const ibProtocolNode* FindKeptRows(long long tabId, ibMetaID metaId, unsigned long long generation)
+	{
+		ibKeptRows& kept = KeptRows();
+		if (kept.generation != generation)
+			return nullptr;
+		const auto found = kept.rows.find({ tabId, metaId });
+		return found != kept.rows.end() ? &found->second : nullptr;
+	}
+}
+
+void ibValueMetaObject::KeepRows(long long tabId, ibMetaID metaId, const ibProtocolNode& rows)
+{
+	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
+	if (frame == nullptr || !rows.IsNode())
+		return;
+	ibKeptRows& kept = KeptRows();
+	const unsigned long long generation = frame->GetGeneration();
+	if (kept.generation != generation) {
+		kept.rows.clear();
+		kept.generation = generation;
+	}
+	kept.rows[{ tabId, metaId }] = rows;
 }
 
 bool ibValueMetaObject::Receive()
@@ -105,13 +150,22 @@ bool ibValueMetaObject::Receive()
 	if (frame == nullptr)
 		return false;
 
+	// The rows last read or answered — those, while nothing has been done since (Generation).
+	if (const ibProtocolNode* const kept = FindKeptRows(m_metaData.GetTabId(), m_metaId, frame->GetGeneration())) {
+		const ibProtocolNode rows = *kept;   // taking them in may keep others
+		return ibPropertyObject::Receive(rows);
+	}
+
 	ibProtocolNode params, answer;
 	params.SetValue(ibProtocolName::Schema, static_cast<long long>(ibProtocolSchema::Properties));
 	ibProtocolNode args = params.Child(ibProtocolName::Args);
 	args.SetValue(ibProtocolName::Id, static_cast<long long>(m_metaId));
 	args.SetValue(ibProtocolName::Tab, m_metaData.GetTabId());
-	return frame->Call(ibProtocolMethod::Schema, params, answer) &&
-		ibPropertyObject::Receive(answer.FindChild(ibProtocolName::Properties));
+	if (!frame->Call(ibProtocolMethod::Schema, params, answer))
+		return false;
+	const ibProtocolNode rows = answer.FindChild(ibProtocolName::Properties);
+	KeepRows(rows);
+	return ibPropertyObject::Receive(rows);
 }
 
 bool ibValueMetaObject::OnPropertyChanging(ibProperty* property, const wxVariant& WXUNUSED(newValue))

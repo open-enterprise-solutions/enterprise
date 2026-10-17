@@ -3,6 +3,7 @@
 
 #include "frmclient/backend/metaData.h"   // the link — the tab the object was opened from
 #include "frmclient/backend/propertyManager/propertyObject.h"   // a metaobject IS a property object, as the engine's
+#include "protocol/protocolNode.h"   // the rows an edit was answered with, held
 
 #include "core/clsid.h"
 
@@ -59,6 +60,15 @@ private:
 
 	const ibMetaID m_metaId;
 	ibMetaData m_metaData;
+
+public:
+
+	// ⭐ ROWS ARE KEPT WHILE NOTHING HAS BEEN DONE (ibCommunicator::Generation) — read, or sent beside another answer
+	// (an edit's Save): an object shown again — clicked again, walked back to — takes them in again instead of asking. By the tab and the object's id: a row of the tree makes its object anew each time it is selected. Taken
+	// in by the next Receive, not at once: an edit is sent from inside the grid's change, and taking rows in remakes the
+	// properties the grid is still editing.
+	static void KeepRows(long long tabId, ibMetaID metaId, const ibProtocolNode& rows);
+	void KeepRows(const ibProtocolNode& rows) const { KeepRows(m_metaData.GetTabId(), m_metaId, rows); }
 };
 
 #endif

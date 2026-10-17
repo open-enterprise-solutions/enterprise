@@ -906,6 +906,18 @@ bool ibClientHost::Call(ibProtocolMethod method, const ibDataNode& params, ibDat
 					}).get();
 					if (work)
 						done = Run(*client, [work](ibClientFrame*) { work(); }, since, result, refusal, error);
+					// …and what the schema shows after it, beside the frame, where the client would read it next: the
+					// work done — not waiting for the person (Settle let it go) — and the schema asking for it.
+					if (done && !client->unsettled.valid() && schema->AnswersWithBuild(command)) {
+						session->Submit([schema, &session, &args, &result]() {
+							try {
+								schema->Build(*session, args, result);
+							}
+							catch (const ibCoreException&) {
+								// …not read: the client reads it itself, as without it
+							}
+						}).get();
+					}
 				}
 			}
 			else if (method == ibProtocolMethod::Execute) {

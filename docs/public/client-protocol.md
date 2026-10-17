@@ -168,6 +168,14 @@ A schema is a dialog of the desktop held as data: the client shows it however it
 
 A schema the client's application does not have, or the person has no right to, is refused.
 
+The inspector's Save (`Schema` 10, `Command` 4) is answered with the object's `Properties` as they are after it, beside
+the frame: an edit is one exchange. A server that sends none there is asked with `schema` again, as before.
+
+A schema read (`schema` without `Command`) changes nothing, so a client may keep what it read and show it again
+without asking, until it makes a call that may change something — any but a schema read, `picture`, `frame` and
+`users`, and any call carrying `Pending` — or is told `changed`. The thin designer keeps the inspector's
+`Properties` this way: walking back to an object it showed, or clicking it again, is not a call.
+
 ## Questions to the person
 
 | Kind | Asks | `respond` with |
