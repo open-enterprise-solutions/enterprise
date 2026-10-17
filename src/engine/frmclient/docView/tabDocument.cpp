@@ -167,3 +167,17 @@ void ibTabDocument::Post(ibProtocolEvent event, const ibProtocolNode& args) cons
 		.SetValue(ibProtocolName::Args, args);
 	frame->Post(ibProtocolMethod::Event, params);
 }
+
+void ibTabDocument::Hold(ibProtocolEvent event, const ibProtocolNode& args) const
+{
+	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
+	if (frame == nullptr)
+		return;
+
+	ibProtocolNode params;
+	params.SetValue(ibProtocolName::Tab, m_tabId)
+		.SetValue(ibProtocolName::Event, static_cast<int>(event))
+		.SetValue(ibProtocolName::Args, args);
+	if (!frame->Hold(params))
+		frame->Post(ibProtocolMethod::Event, params);
+}

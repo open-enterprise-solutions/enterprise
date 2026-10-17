@@ -52,6 +52,11 @@ bool IsSameState(const ibProtocolNode& one, const ibProtocolNode& other)
 		|| one.GetInt(ibProtocolName::Tab) != other.GetInt(ibProtocolName::Tab))
 		return false;
 	const ibProtocolEvent event = static_cast<ibProtocolEvent>(one.GetInt(ibProtocolName::Event));
+	// …a tab's Change hands back one of its parts — a form designer's tab its form and its module's text, each held
+	// apart: the one does not stand in for the other.
+	if (event == ibProtocolEvent::Change)
+		return one.FindChild(ibProtocolName::Args).Has(ibProtocolName::Form)
+			== other.FindChild(ibProtocolName::Args).Has(ibProtocolName::Form);
 	if (event != ibProtocolEvent::Move && event != ibProtocolEvent::Resize)
 		return true;
 	return one.FindChild(ibProtocolName::Args).GetInt(ibProtocolName::Column)

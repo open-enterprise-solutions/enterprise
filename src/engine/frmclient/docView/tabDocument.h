@@ -65,6 +65,10 @@ public:
 	// posted as the person's acts are.
 	bool Fetch(const ibProtocolNode& request, ibProtocolNode& answer) const;
 	void Post(ibProtocolEvent event, const ibProtocolNode& args = ibProtocolNode()) const;
+	// …or left for the next call to carry (Pending), the latest of its kind in place of the one before: what the view
+	// hands back without the person asking for anything yet (a module's text as the focus leaves it). Posted where the
+	// server takes none held.
+	void Hold(ibProtocolEvent event, const ibProtocolNode& args = ibProtocolNode()) const;
 
 protected:
 
