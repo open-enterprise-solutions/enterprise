@@ -201,9 +201,68 @@ void ibValueModelTableBox::Create(wxWindow* parent, const ibProtocolNode& /*node
 	m_panel->SetMinSize(m_panel->FromDIP(wxSize(150, 75)));
 
 	// The rows — read once the table has its size and its columns (the data view's bootstrap, on the next idle), on
-	// its thread; what an answer leaves to the UI comes back here, if this is still here.
+	// its thread; what an answer leaves to the UI comes back here, if this is still here. State's Rows (the first page)
+	// is served here once when the reset asks from the top — no wire call.
 	std::weak_ptr<bool> alive = m_alive;
-	ibViewTableModel* const model = new ibViewTableModel(MakeFetcher(), [this, alive](const ibViewTableModel::ibAnswer& answer) {
+	ibViewFetcher wire = MakeFetcher();
+	ibViewFetcher fetcher = [this, wire](const ibProtocolNode& request, ibProtocolNode& answer) -> bool {
+		// The page State's Rows was read as: from the top, or (Anchor) around the row the server stands on, with its Count
+		// and as many rows ahead (Before; fewer — none more above). Taken for a read it holds all of: that Anchor, no
+		// larger a Count, no more rows ahead than it has — or the top reached.
+		const long long held = m_firstDraw.GetInt(ibProtocolName::Count);
+		const long long ahead = m_firstDraw.GetInt(ibProtocolName::Before);
+		const long long wanted = request.GetInt(ibProtocolName::Before);
+		const bool reset = m_hasFirstDraw
+			&& request.GetInt(ibProtocolName::Direction) == 0
+			&& request.GetInt(ibProtocolName::Parent) == 0;
+		if (reset
+			&& request.GetInt(ibProtocolName::Anchor) == m_firstDraw.GetInt(ibProtocolName::Anchor)
+			&& (held == 0 || request.GetInt(ibProtocolName::Count) <= held)
+			&& (wanted == 0 || (m_firstDraw.Has(ibProtocolName::Before) && (ahead >= wanted || ahead < held)))) {
+			answer = std::move(m_firstDraw);
+			m_hasFirstDraw = false;
+			m_firstDraw = ibProtocolNode();
+			return true;
+		}
+		// …AND ONE THAT IS THE WHOLE LEVEL — the top reached (fewer rows ahead than its Count) and End — answers a read
+		// anew around any row of it: the read after a cell's Change names the client's own cursor (its top row), not the
+		// row the server stands on. The page is cut out of it as the server would have read it.
+		const long long anchor = request.GetInt(ibProtocolName::Anchor);
+		if (reset && anchor != 0 && held > 0 && m_firstDraw.GetBool(ibProtocolName::End)
+			&& m_firstDraw.Has(ibProtocolName::Before) && ahead < held) {
+			const std::vector<ibProtocolNode> rows = m_firstDraw.Children();
+			std::size_t at = 0;
+			while (at < rows.size() && rows[at].GetId() != anchor)
+				++at;
+			if (at < rows.size()) {
+				const long long count = request.GetInt(ibProtocolName::Count);
+				const std::size_t from = at - std::min<std::size_t>(at, static_cast<std::size_t>(std::max(0LL, wanted)));
+				const std::size_t to = count > 0 ? std::min(rows.size(), at + static_cast<std::size_t>(count)) : rows.size();
+				ibProtocolNode page;
+				for (const auto& entry : m_firstDraw.Entries()) {
+					if (entry.first != ibProtocolName::NodeChildren && entry.first != ibProtocolName::Before
+						&& entry.first != ibProtocolName::End && entry.first != ibProtocolName::Anchor
+						&& entry.first != ibProtocolName::Count)
+						page.SetValue(entry.first.c_str(), entry.second);
+				}
+				for (std::size_t idx = from; idx < to; ++idx) {
+					ibProtocolNode row = page.AddChild();
+					for (const auto& entry : rows[idx].Entries())
+						row.SetValue(entry.first.c_str(), entry.second);
+				}
+				if (request.Has(ibProtocolName::Before))
+					page.SetValue(ibProtocolName::Before, static_cast<long long>(at - from));
+				if (to == rows.size())
+					page.SetValue(ibProtocolName::End, true);
+				answer = std::move(page);
+				m_hasFirstDraw = false;
+				m_firstDraw = ibProtocolNode();
+				return true;
+			}
+		}
+		return wire(request, answer);
+	};
+	ibViewTableModel* const model = new ibViewTableModel(std::move(fetcher), [this, alive](const ibViewTableModel::ibAnswer& answer) {
 		wxTheApp->CallAfter([this, alive, answer]() {
 			if (alive.lock())
 				OnAnswered(answer);
@@ -297,7 +356,15 @@ void ibValueModelTableBox::UpdateState(const ibProtocolNode& state, const ibProt
 		m_dataView->SetViewMode(static_cast<ibDataViewViewMode>(state.GetInt(ibProtocolName::ViewMode,
 			static_cast<int>(ibProtocolViewMode::Hierarchical))));
 
-	// The rows read anew when the server has — the first time, the data view reads them by itself.
+	// The first page may already ride in this State's frame (Rows). Else the data view fetches, as before.
+	if (whole || changed->Has(ibProtocolName::Rows)) {
+		if (state.Has(ibProtocolName::Rows)) {
+			m_firstDraw = state.FindChild(ibProtocolName::Rows).Clone();
+			m_hasFirstDraw = true;
+		}
+	}
+
+	// The rows read anew when the server has — the first time, the data view reads them by itself (or from Rows above).
 	if (whole || changed->Has(ibProtocolName::Version)) {
 		const long long version = state.GetInt(ibProtocolName::Version);
 		if (m_version != -1 && version != m_version)

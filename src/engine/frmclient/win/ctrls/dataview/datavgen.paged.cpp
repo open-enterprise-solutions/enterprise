@@ -839,7 +839,16 @@ static void ReadPagedFetchReset(ibDataViewModel* model, ibPagedFetch& req)
 			? req.m_restoreAnchor
 			: req.m_savedFocus);
 
-	req.m_n = model->GetFirstFetch(req.m_parent, req.m_cursor, req.m_batch, req.m_items);
+	// THE ROWS ABOVE come in the same read — see ibPagedFetch::m_backfill. The page
+	// starts AT the row the user was on, so on its own it would put that row at the
+	// very top of the viewport and a later backward portion would slide it down:
+	// two frames, and the second one reads as the list jumping. Read with it and put
+	// in FRONT, the control gets one portion and paints once — and a model across a
+	// wire answers both in one exchange (GetAroundFetch).
+	unsigned int above = 0;
+	req.m_n = model->GetAroundFetch(req.m_parent, req.m_cursor, req.m_batch, req.m_backfill, req.m_items, above);
+	req.m_n += above;
+	req.m_backfilled = above;
 
 	// Empty-fetch fallback: a cursor-mode fetch (selection / anchor / focus) can
 	// return 0 rows when the cursor points at a row that no longer matches the
@@ -851,25 +860,6 @@ static void ReadPagedFetchReset(ibDataViewModel* model, ibPagedFetch& req)
 		req.m_items.Clear();
 		req.m_cursor = ibDataViewItem();
 		req.m_n = model->GetFirstFetch(req.m_parent, req.m_cursor, req.m_batch, req.m_items);
-	}
-
-	// THE ROWS ABOVE, in the same pass — see ibPagedFetch::m_backfill. The page
-	// starts AT the row the user was on, so on its own it would put that row at the
-	// very top of the viewport and a later backward portion would slide it down:
-	// two frames, and the second one reads as the list jumping. Read them here and
-	// glue them in FRONT, and the control gets one portion and paints once.
-	if (req.m_backfill > 0 && req.m_n > 0) {
-		ibDataViewItemArray before;
-		const unsigned int got = model->GetPrevFetch(req.m_parent, req.m_items[0],
-		                                             req.m_backfill, before);
-		if (got > 0) {
-			ibDataViewItemArray glued;
-			for (unsigned int i = 0; i < got; ++i)      glued.Add(before[i]);
-			for (unsigned int i = 0; i < req.m_n; ++i)  glued.Add(req.m_items[i]);
-			req.m_items      = glued;
-			req.m_n          = req.m_n + got;
-			req.m_backfilled = got;
-		}
 	}
 
 	// Every tree level the auto-expand walk will need, fetched HERE. The walk used

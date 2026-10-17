@@ -86,6 +86,9 @@ public:
 		ibDataViewItemArray& out) const override;
 	virtual unsigned int GetPrevFetch(const ibDataViewItem& parent, const ibDataViewItem& anchor, int count,
 		ibDataViewItemArray& out) const override;
+	// One fetch answering both sides of the anchor (Before); from a server below 4, the two.
+	virtual unsigned int GetAroundFetch(const ibDataViewItem& parent, const ibDataViewItem& anchor, int count, int before,
+		ibDataViewItemArray& out, unsigned int& above) const override;
 
 	virtual bool IsPagedModel() const override { return true; }
 	virtual bool HasKeyedRows() const override { return true; }
@@ -98,9 +101,10 @@ private:
 	// model's GetViewData).
 	static const ibViewTableRow* RowOf(const ibDataViewItem& item);
 
-	// A portion read — Direction 0 reset, 1 forward, -1 backward; the rows in `out`, how many read.
+	// A portion read — Direction 0 reset, 1 forward, -1 backward; the rows in `out`, how many read. A reset may ask
+	// for `before` rows ahead of it too: `above` is how many came first, -1 when the answer did not say (below 4).
 	unsigned int Fetch(int direction, const ibDataViewItem& parent, const ibDataViewItem& anchor, int count,
-		ibDataViewItemArray& out) const;
+		ibDataViewItemArray& out, int before = 0, int* above = nullptr) const;
 
 	const ibViewFetcher m_fetcher;
 	const ibAnswered    m_answered;

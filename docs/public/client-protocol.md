@@ -110,6 +110,21 @@ model set one — `TextColour`, `BackgroundColour` (a colour's text, `r,g,b`, as
 `Strikethrough`, `Underlined`, `Face`, `Size`, `Align` (`Left`, `Center`, `Right`). In the designer (`login` `Mode` 2)
 a table reads no rows — its `fetch` is refused, and a designer's client does not ask.
 
+From protocol 4 a fetch from the start (`Direction` 0) may name `Before`, the rows wanted ahead of the row it starts
+at; the answer gives those rows first and says in `Before` how many came. A server before protocol 4 gives none, and
+the client fetches them backwards (`Direction` -1) on its own.
+
+From protocol 5 a table's `State` may carry `Rows` with a new `Version` — the first page, the same shape as `fetch`
+(rows as children, `End`, `Before`, `Pictures`) — so the client need not fetch to draw the tab; a server that does
+not put `Rows` in the state is answered with `fetch`, as before.
+
+A later `Version` (a cell's `Change`, a row added, a refresh) may carry `Rows` too, read around the server's current row:
+`Anchor` that row, `Count` the rows from it, `Before` how many came ahead of it (fewer than `Count`: the top was
+reached). A page read from the top says `Before` 0 and no `Anchor`. The client answers its own read anew from it when
+the read names the same `Anchor` and asks no more, or — when the page is the whole level, the top reached and `End` —
+around any row of it, cut out as the server would read it. Any other read is a `fetch`, as before. The fields are those
+of a `fetch` answer, so a client that does not look at them takes the page only for a read that matches it.
+
 A table's column dragged in its header is `Move {Column, Holder, Position}`: `Holder` the group it now stands in, 0 the
 table. The client moves the column in its own copy of the form at once; the server's form follows.
 
