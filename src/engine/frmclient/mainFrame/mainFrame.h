@@ -68,6 +68,9 @@ public:
 	// The client goes with the window: logged out, and its session torn down by the server.
 	virtual bool Destroy() override;
 
+	// What has been done since (ibCommunicator::Generation): a read answered at this count is still true.
+	unsigned long long GetGeneration() const;
+
 	// The process's main window.
 	static ibFrontendMainFrame* GetFrame() { return s_instance; }
 
