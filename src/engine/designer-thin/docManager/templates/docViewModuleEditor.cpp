@@ -64,9 +64,10 @@ bool ibModuleEditView::LoadPendingText(const ibProtocolNode& state)
 
 void ibModuleEditView::OnActivateView(bool activate, ibFrontendView* activeView, ibFrontendView* deactiveView)
 {
-	// …a tab shown before its view was drawn reads it as before.
-	if (activate)
-		LoadPendingText(ibProtocolNode());
+	// …a tab shown before its view was drawn reads it as before — once the frame that made the tab has been drawn: the
+	// tab is shown first, inside the same frame, and its State may carry the text.
+	if (activate && m_textPending)
+		CallAfter([this]() { LoadPendingText(ibProtocolNode()); });
 	if (activate) m_codeEditor->ActivateEditor();
 }
 
