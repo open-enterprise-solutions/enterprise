@@ -708,6 +708,41 @@ wxString ibClientHost::Call(const wxString& text, const void* connection, const 
 	return answer;
 }
 
+void ibClientHost::ReadAtLogin(Client& client, const ibDataNode& params, ibDataNode& result)
+{
+	const ibDataValue* const reads = params.FindField(wxString::FromUTF8(ibProtocolName::Read));
+	ibClientFrame* const frame = client.instance->GetFrame();
+	const std::shared_ptr<ibSession> session = client.instance->ShareSession();
+	if (reads == nullptr || reads->Kind() != ibDataKind::Array || frame == nullptr || session == nullptr)
+		return;
+	ibDataNode& answered = result.Child(wxString::FromUTF8(ibProtocolName::Read));
+	for (const ibDataValue& read : reads->AsArray()) {
+		if (read.Kind() != ibDataKind::Child || read.AsChild() == nullptr)
+			continue;
+		const s32 kind = read.AsChild()->GetValue<s32>(wxString::FromUTF8(ibProtocolName::Schema));
+		const ibClientSchema* const schema = frame->GetDocumentManager()->FindSchema(static_cast<ibProtocolSchema>(kind));
+		if (schema == nullptr)
+			continue;
+		// A schema the person has no right to, or one that could not be read, is left out: the client asks for it.
+		ibDataNode built;
+		bool read_ = false;
+		session->Submit([schema, &session, &built, &read_]() {
+			if (!schema->AccessRight(*session))
+				return;
+			try {
+				schema->Build(*session, ibDataNode(), built);
+				read_ = true;
+			}
+			catch (const ibCoreException&) {
+			}
+		}).get();
+		if (!read_)
+			continue;
+		built.SetValue(wxString::FromUTF8(ibProtocolName::Schema), kind);
+		answered.Children().push_back(std::move(built));
+	}
+}
+
 bool ibClientHost::Call(ibProtocolMethod method, const ibDataNode& params, ibDataNode& result, ibProtocolRefusal& refusal,
 	wxString& error, const void* connection, const wxString& address)
 {
