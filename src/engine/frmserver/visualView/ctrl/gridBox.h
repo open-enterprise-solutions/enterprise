@@ -204,8 +204,8 @@ private:
 	//
 	// The document and its view live as long as the box — held side by side so nothing is cast to find them; the
 	// view is what the form's active control hands on (GetControlView: Save as, the formats it offers).
-	class ibSpreadsheetGridBoxDocument* m_gridDocument = nullptr;
-	class ibSpreadsheetGridBoxView*     m_gridView = nullptr;
+	class ibSheetGridBoxDocument* m_gridDocument = nullptr;
+	class ibSheetGridBoxView*     m_gridView = nullptr;
 
 	// …and its VERSION — moved each time the sheet on show is replaced (the model installed, a compose
 	// delivered). The model keeps no such number, so the box counts what it shows.
@@ -284,7 +284,7 @@ private:
 	std::vector<wxString> AppendDetailByMenu(std::vector<ibMenuItem>& menu, s32 firstId, int row, int col) const;
 };
 
-// A SHEET AS A CLIENT DRAWS IT — the box's, and a spreadsheet document's in a tab of its own (ibSpreadsheetEditView):
+// A SHEET AS A CLIENT DRAWS IT — the box's, and a spreadsheet document's in a tab of its own (ibSheetView):
 // the whole of it under Sheet, in the form a template is stored in (ibSpreadsheetDescriptionMemory::WriteNode), each
 // cell's text as the sheet shows it — parameters and templates filled in; ReadOnly when the document takes no edits.
 bool ibFetchSpreadsheet(const ibSpreadsheetObject& document, ibDataNode& response);
