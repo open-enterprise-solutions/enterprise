@@ -779,6 +779,11 @@ bool ibClientHost::Call(ibProtocolMethod method, const ibDataNode& params, ibDat
 					client->dedupe = true;
 				OfferResume(result, id, client->protocol, result.GetValue<wxString>(ibProtocolName::Token));
 			}
+			// WHAT THE CLIENT READS RIGHT AFTER ITS START, read in it (Read) — each schema it names, built as `schema`
+			// would build it, beside the frame: the designer's debugger store was a call of its own at every start, for
+			// an empty answer where the configuration has no debugger. Only once the start is done, not waiting.
+			if (done && !client->unsettled.valid())
+				ReadAtLogin(*client, params, result);
 		}
 		}
 	}

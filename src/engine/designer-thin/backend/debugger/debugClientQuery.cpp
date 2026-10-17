@@ -45,7 +45,7 @@ namespace {
 
 ///////////////////////////////////////////////////////////////////////////////////////
 
-ibDebuggerClient::ibDebuggerClient() :
+ibDebuggerClient::ibDebuggerClient(const ibProtocolNode* store) :
 	m_activeSocket(nullptr),
 	m_adapter(new ibDebuggerClientAdapter),
 	m_enterLoop(false), m_connectionSuccess(false), m_numberOfConnectionAttempts(numberOfConnectionAttempts)
@@ -53,7 +53,7 @@ ibDebuggerClient::ibDebuggerClient() :
 	ibDebuggerClient::CreateBreakpointDatabase();
 	ms_debugClient = this;
 
-	LoadModuleCollection();
+	LoadModuleCollection(store);
 }
 
 // The table is the server's, made by its own client with the configuration (CreateBreakpointDatabase there).
@@ -74,10 +74,14 @@ bool ibDebuggerClient::CreateBreakpointDatabase()
 // THE CONFIGURATION THE DEBUGGER IS OF, as the engine's was given it: its guid (the runtime's verify) and every module,
 // read with its lines — what the desktop's tree did for each module at load (OnBeforeRunMetaObject), and its modules
 // again at an apply (OnSaveMetaObject).
-void ibDebuggerClient::LoadModuleCollection()
+void ibDebuggerClient::LoadModuleCollection(const ibProtocolNode* store)
 {
+	// Read in the login already when the server could (login's Read) — empty when the configuration has no debugger,
+	// which costs nothing more then: a start was a call of its own for an empty answer.
 	ibProtocolNode answer;
-	if (!AskStore(ibProtocolNode(), answer))
+	if (store != nullptr)
+		answer = *store;
+	else if (!AskStore(ibProtocolNode(), answer))
 		return;
 	m_configGuid = ibGuid(answer.GetString(ibProtocolName::Guid));
 	// InitializeModule over the one answer: each row brings its module's breakpoints, where InitializeModule would ask
