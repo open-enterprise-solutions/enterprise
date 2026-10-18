@@ -723,6 +723,15 @@ void ibConfigurationTree::FillData(ibDataNode& root)
 	root.SetValue(wxT("Modified"), m_metaData->IsModified());
 	root.SetValue(wxT("Edited"), m_metaData->IsEdited());
 	root.SetValue(wxT("ConfigSave"), m_metaData->IsConfigSave());
+	// …and the kinds Open opens an editor of (ibDocManager::OpenForm): a catalog's or a document's row opens nothing,
+	// and the client does not ask for it.
+	ibDataNode& editors = root.Child(wxT("Editors"));
+	for (const ibClassID& clsid : m_frame->GetDocumentManager()->GetMetaTemplateClasses()) {
+		if (clsid == 0)
+			continue;   // a template of no metaobject's (a text, a spreadsheet)
+		ibDataNode& editor = editors.AddChild(0, static_cast<ibMetaID>(editors.Children().size() + 1));
+		editor.SetValue(wxT("Type"), ClsidText(clsid));
+	}
 	AppendMenu(root, commonMetadata);
 
 	const std::vector<const ibMetaTreeGroupDef*> rows = OrderedGroups();

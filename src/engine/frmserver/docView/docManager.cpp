@@ -443,6 +443,20 @@ ibMetaDocTemplate* ibDocManager::FindMetaTemplate(const ibClassID& clsid) const
 	return nullptr;
 }
 
+std::vector<ibClassID> ibDocManager::GetMetaTemplateClasses() const
+{
+	std::vector<ibClassID> classes;
+	for (wxList::compatibility_iterator node = m_templates.GetFirst();
+	     node != nullptr; node = node->GetNext())
+	{
+		auto* mt = dynamic_cast<ibMetaDocTemplate*>(
+			static_cast<ibDocTemplate*>(node->GetData()));
+		if (mt != nullptr)
+			classes.push_back(mt->GetClassID());
+	}
+	return classes;
+}
+
 ibDocTemplate* ibDocManager::FindTemplateByDocClassInfo(const wxClassInfo* classInfo) const
 {
 	for (wxList::compatibility_iterator node = m_templates.GetFirst();

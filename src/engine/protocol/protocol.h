@@ -78,6 +78,8 @@ namespace ibProtocolName {
 	inline constexpr const char* ConfigSave = "ConfigSave";
 	inline constexpr const char* Syntax     = "Syntax";
 	inline constexpr const char* Synonym   = "Synonym";    // …a row's: its object's synonym, when it has one
+	// …the root row's: the kinds whose objects open an editor (MetaData Open) — children Type; none: ask Open for any
+	inline constexpr const char* Editors   = "Editors";
 	inline constexpr const char* FormType  = "FormType";   // …a form's row: its kind (the owner's form type)
 	inline constexpr const char* Comment   = "Comment";    // …an external file's root row: its comment
 	inline constexpr const char* DefaultFormObject = "DefaultFormObject";   // …the default form's id (none: wxNOT_FOUND)
@@ -552,7 +554,7 @@ enum class ibProtocolSchema : int {
 	MetaData     = 9,   // the designer's configuration tree — shows nothing: its rows ride the frame (MetaData, each
 	                    // row NodeId — its object's id, or below 0 a group row's place among its siblings; Title,
 	                    // Picture, Group — what New makes under it, Type, Synonym, Position, Guid — its object's; a
-	                    // language's Code, a role's Mode). Its commands are its own (ibProtocolMetaDataCommand), each
+	                    // language's Code, a role's Mode; the root's Editors — the kinds Open opens an editor of). Its commands are its own (ibProtocolMetaDataCommand), each
 	                    // with Tab in that tab's tree — an external file's (ViewKind DataProcessor, Report)
 	Properties   = 10,  // the designer's inspector: `Args: {Id, Tab}` — the metaobject of that id in the tab's tree (Tab:
 	                    // an external file's; none: the configuration's), its Properties (NodeId, Tab; categories Name,

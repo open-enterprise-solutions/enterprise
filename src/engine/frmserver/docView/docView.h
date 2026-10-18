@@ -534,6 +534,8 @@ public:
     ibMetaDocument* OpenForm(ibValueMetaObject* metaObject, long flags = ibDOC_NEW);
 
     ibMetaDocTemplate* FindMetaTemplate(const ibClassID& clsid) const;
+    // The classes a metaobject's editor is registered for — what OpenForm opens; any other's opens nothing.
+    std::vector<ibClassID> GetMetaTemplateClasses() const;
     ibDocTemplate*     FindTemplateByDocClassInfo(const wxClassInfo* classInfo) const;
 
     // Helper: ibDocument* GetCurrentDocument() is the wx-style base accessor;
