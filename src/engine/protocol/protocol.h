@@ -885,7 +885,7 @@ namespace ibProtocol {
 		// ibNode::Id — its object's id, or below 0 a group row's place among its siblings; Title, Picture, Group — what New
 		// makes under it, Type, Synonym, Position, Guid — its object's; a language's Code, a role's Mode; Menu. Its
 		// commands are its own (ibCommand), each with Tab in that tab's tree — an external file's (ibView::ibKind
-		// DataProcessor, Report).
+		// DataProcessor, Report) or a configuration browsed read-only (Configuration).
 		namespace ibMetaData {
 
 			inline constexpr const char* Title      = "Title";
@@ -1115,6 +1115,7 @@ namespace ibProtocol {
 			Role             = 12,   // ibCheckTree: a role's — every object that has rights, with its Roles
 			Assistant        = 13,   // ibAssistant
 			Composer         = 14,   // ibComposer
+			Configuration    = 15,   // a configuration file (or the database's copy) browsed read-only: MetaData
 		};
 
 		// Text, ReadOnly; what was typed handed back as event {Tab, Event: Change, Args: {Text}}.

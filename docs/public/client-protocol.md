@@ -98,6 +98,10 @@ composed again when the person says so (Compose). When a composed sheet's `Versi
 also carry `Sheet` (and `ReadOnly`) — the same as `fetch` would give — so the client need not fetch; a server that
 does not put `Sheet` in the state is answered with `fetch`, as before.
 
+In the designer a configuration file opened with File → Open (`.oap`) is a tab of `Kind` 15. Its `View` holds
+`MetaData` — the configuration's tree, as an external data processor's does (Kind 5) — browsed read-only. Schema
+`MetaData` commands for that tab carry its `Tab`.
+
 In the designer a report's composer is a tab of `Kind` 14. Its `View` holds `State` (`ReadOnly`), `Composition` —
 the composer's description in its node form — and `Fields`, `References`, `Error` — what its query offers, as the
 ComposerSettings question has them. The client edits the description itself and sends it back whole: event

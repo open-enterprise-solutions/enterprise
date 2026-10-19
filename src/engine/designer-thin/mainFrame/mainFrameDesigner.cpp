@@ -126,6 +126,7 @@ void ibFrontendMainFrameDesigner::Debugger_OnStateChanged()
 }
 #pragma endregion
 
+#include "designer-thin/docManager/templates/docViewMetaFile.h"
 #include "designer-thin/docManager/templates/docViewDataProcessorFile.h"
 #include "designer-thin/docManager/templates/docViewDataReportFile.h"
 #include "designer-thin/docManager/templates/docViewModuleEditor.h"
@@ -139,6 +140,8 @@ void ibFrontendMainFrameDesigner::Debugger_OnStateChanged()
 
 ibTabDocument* ibFrontendMainFrameDesigner::CreateDocument(ibProtocol::ibView::ibKind kind, long long tabId)
 {
+	if (kind == ibProtocol::ibView::ibKind::Configuration)
+		return new ibMetadataFileDocument(tabId);
 	if (kind == ibProtocol::ibView::ibKind::DataProcessor)
 		return new ibDataProcessorFileDocument(tabId);
 	if (kind == ibProtocol::ibView::ibKind::Report)
