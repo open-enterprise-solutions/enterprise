@@ -451,6 +451,7 @@
     <ClInclude Include="propertyManager\property\private\prop.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropNumber.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropString.h" />
+    <ClInclude Include="propertyManager\property\advprop\advpropColour.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropFont.h" />
     <ClInclude Include="win\dlgs\translateConstructor\translateConstructor.h" />
     <ClInclude Include="win\dlgs\queryConstructor\queryConstructor.h" />
