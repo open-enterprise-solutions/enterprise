@@ -5,9 +5,7 @@
 #include "blockSyntaxLINQ.h"
 
 #include "core/compiler/translateCode.h"   // GetKeyWord - the words are the lexer's
-#include "core/compiler/codeDef.h"         // KEY_FROM ... KEY_RESTRICT
-
-#include "backend/compiler/compileCode.h"      // GetCodeStyle - a function is spelled by the module's syntax
+#include "core/compiler/codeDef.h"         // KEY_FROM ... KEY_RESTRICT, CODE_CES
 
 #include "core/stringUtils.h"
 
@@ -129,7 +127,7 @@ ibGroupWords GroupWordsOf(const ibLinqBlock& block)
 	// A total over one of several kept fields takes it with a function - spelled in the module's syntax,
 	// the one place a block has to know which it is.
 	const wxString row = group + wxT("Row");
-	const bool braces = ibCompileCode::GetCodeStyle() == CODE_CES;
+	const bool braces = block.GetCodeStyle() == CODE_CES;
 	for (const ibLinqBlockTotal& total : block.m_totals) {
 		wxString argument;
 		if (total.m_function != ibLinqTotal::Count && words.m_inputs.size() > 1) {
@@ -494,7 +492,7 @@ wxString ibLinqBlock::Write(const wxString& indent, wxString& refusal, bool draf
 
 bool ibLinqBlock::Parse(const wxString& text, ibLinqBlock& block, wxString& refusal, size_t* consumed)
 {
-	block = ibLinqBlock();
+	block = ibLinqBlock(block.GetCodeStyle());   // emptied, read in the syntax it was made for
 	refusal.clear();
 
 	// THE LEXER READS IT, in the mode the editor reads a text being written: strings, comments and
@@ -507,7 +505,7 @@ bool ibLinqBlock::Parse(const wxString& text, ibLinqBlock& block, wxString& refu
 	// 991d4d53, Linux and macOS alike - so the end is read here (tokenEnd). A `;` is added so the last
 	// clause has a token after it too.
 	const wxString source = text + wxT("\n;");
-	ibTranslateCode lexer(ibCompileCode::GetCodeStyle());
+	ibTranslateCode lexer(block.GetCodeStyle());
 	lexer.SetLexemMode(ibLexemMode::Editing);
 	lexer.Load(source);
 	try {

@@ -77,3 +77,22 @@ MEMBER ibFrontendMainFrameDesigner.OnUpdateMcpAssistant()   # the server's Acces
 # The bottom bar's lamp: the frame carries where the base's assistant access listens (Endpoint), and the frame's patch
 # says when it changed — the desktop's timer asked the server once a second, here a call a second.
 MEMBER ibDocBottomStatusBar.OnAssistantPoll()      # drawn with the frame's answer (DrawFrame, Endpoint)
+
+# A module is printed by the text editor's printout: the desktop's two are one code (codeEditorPrintOut.cpp is
+# textEditorPrintOut.cpp renamed), and the text one keeps the fix for an empty text (one blank page).
+FILE  frontend/win/editor/codeEditor/codeEditorPrintOut.*                      # ibTextEditorPrintout prints a module
+CLASS ibCodeEditorPrintout (frontend/win/editor/codeEditor/codeEditorPrintOut.h)  # ibTextEditorPrintout prints a module
+
+# A dynamic list's source is a list cell: the sources to choose from are the server's (the row's GetValueList), so the
+# client's ibPGListProperty holds it — advpropList.cpp registers ibPropertyDynamicSource.
+FILE  frontend/propertyManager/property/advprop/advpropDynamicSource.*                       # ibPGListProperty (advpropList.cpp)
+CLASS ibPGDynamicSourceProperty (frontend/propertyManager/property/advprop/advpropDynamicSource.h)  # ibPGListProperty (advpropList.cpp)
+
+# A choice, a combo box and a list box as form controls — never registered on either side, so no form could hold one;
+# the server's copies removed.
+FILE  frontend/visualView/ctrl/choice.cpp                         # will not be (Max, 2026-10-19)
+FILE  frontend/visualView/ctrl/combobox.cpp                       # will not be (Max, 2026-10-19)
+FILE  frontend/visualView/ctrl/listbox.cpp                        # will not be (Max, 2026-10-19)
+CLASS ibValueChoice (frontend/visualView/ctrl/widgets.h)          # will not be (Max, 2026-10-19)
+CLASS ibValueComboBox (frontend/visualView/ctrl/widgets.h)        # will not be (Max, 2026-10-19)
+CLASS ibValueListBox (frontend/visualView/ctrl/widgets.h)         # will not be (Max, 2026-10-19)

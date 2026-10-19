@@ -316,12 +316,6 @@
     <ClCompile Include="visualView\ctrl\checkbox_res.cpp">
       <Filter>visualView\ctrl</Filter>
     </ClCompile>
-    <ClCompile Include="visualView\ctrl\choice.cpp">
-      <Filter>visualView\ctrl</Filter>
-    </ClCompile>
-    <ClCompile Include="visualView\ctrl\combobox.cpp">
-      <Filter>visualView\ctrl</Filter>
-    </ClCompile>
     <ClCompile Include="visualView\ctrl\control.cpp">
       <Filter>visualView\ctrl</Filter>
     </ClCompile>
@@ -413,9 +407,6 @@
       <Filter>visualView\ctrl</Filter>
     </ClCompile>
     <ClCompile Include="visualView\ctrl\itemsizer.cpp">
-      <Filter>visualView\ctrl</Filter>
-    </ClCompile>
-    <ClCompile Include="visualView\ctrl\listbox.cpp">
       <Filter>visualView\ctrl</Filter>
     </ClCompile>
     <ClCompile Include="visualView\ctrl\notebook.cpp">

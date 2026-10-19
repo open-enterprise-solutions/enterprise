@@ -1130,6 +1130,7 @@ void ibCodeEditor::OnMouseMove(wxMouseEvent& event)
 #include "frmclient/win/dlgs/queryConstructor/queryConstructor.h"   // the constructor, opened on the literal
 #include "frmclient/win/dlgs/translateConstructor/translateConstructor.h"   // …and its sibling for a translated text
 #include "frmclient/win/dlgs/formatConstructor/formatConstructor.h"         // …and for a format string
+#include "frmclient/win/dlgs/linqConstructor/linqConstructor.h"             // …and a LINQ block, at the caret
 #include "frmclient/artProvider/artProvider.h"                      // wxART_QUERY_CONSTRUCTOR — the icon, registered not embedded
 
 void ibCodeEditor::OnContextMenu(wxContextMenuEvent& event)
@@ -1213,8 +1214,35 @@ void ibCodeEditor::OnContextMenu(wxContextMenuEvent& event)
 		else                 InsertStringLiteral(caret, after.Render());
 	}, miFormat->GetId());
 
-	// ⚠ THE DESKTOP'S LINQ CONSTRUCTOR IS NOT HERE: it reads what the caret's place can see by IntelliSense over the
-	// module (ibDialogLinqConstructor) — the compiler's, the server's; it comes with a request of its own.
+	// ⭐ AND THE LINQ CONSTRUCTOR — which stands on no literal, because a LINQ block is not a string: it
+	// is code, at a place, reading what that place can see. It is asked of IntelliSense at the caret
+	// (the text, the CHARACTER position the compiler measures in, and the module). Standing in a query
+	// it opens that query and replaces it; anywhere else it writes a new block at the caret.
+	//
+	// ⚠ THE MODULE IS THE SERVER'S: the client's constructor is given the syntax it is written in (the tab's), and
+	// asks the compiler nothing yet (linqConstructor.h).
+	const int caretChars = GetRealPosition();
+	wxMenuItem* miLinq = menu.Append(wxID_ANY, _("LINQ query constructor"));
+	miLinq->SetBitmap(wxArtProvider::GetBitmap(wxART_LINQ_CONSTRUCTOR, wxART_FRONTEND, FromDIP(wxSize(16, 16))));
+	menu.Bind(wxEVT_MENU, [this, caret, caretChars](wxCommandEvent&) {
+		const wxString text = GetText();
+		ibDialogLinqConstructor dialog(this, text, (unsigned int)caretChars, GetCodeStyle(), !IsEditable());
+		if (dialog.ShowModal() != wxID_OK || !IsEditable())
+			return;
+		wxString refusal;
+		const wxString block = dialog.GetBlock(refusal);
+		if (block.IsEmpty())
+			return;
+		unsigned int from = 0, to = 0;
+		if (dialog.GetReplacedSpan(from, to)) {
+			// Characters to wxSTC positions: the document counts BYTES of UTF-8.
+			SetTargetStart((int)text.Left(from).ToUTF8().length());
+			SetTargetEnd((int)text.Left(to).ToUTF8().length());
+			ReplaceTarget(block);
+		}
+		else
+			InsertText(caret, block);
+	}, miLinq->GetId());
 
 	AppendDebugMenu(menu, menuLine);
 

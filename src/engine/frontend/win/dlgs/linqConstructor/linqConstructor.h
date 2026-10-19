@@ -22,7 +22,7 @@
 // argument of no known type) is still a source — its fields are written in by hand, on the author's
 // responsibility, and the compiler's verdict under the block says what it made of them.
 //
-// ⭐ AND THE BLOCK IS THE LANGUAGE'S. The parts are an ibLinqBlock (backend/compiler/blockSyntaxLINQ.h),
+// ⭐ AND THE BLOCK IS THE LANGUAGE'S. The parts are an ibLinqBlock (core/compiler/blockSyntaxLINQ.h),
 // written with the lexer's own words and checked against the table the completion offers clauses
 // from; a query the caret stands in is OPENED — found by the compiler (ibOutlineScriptQueries), read
 // back by ibLinqBlock::Parse — and replaced on OK.
@@ -30,7 +30,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "frontend/frontend.h"
-#include "backend/compiler/blockSyntaxLINQ.h"
+#include "core/compiler/blockSyntaxLINQ.h"
 
 #include <wx/dialog.h>
 #include <wx/treectrl.h>

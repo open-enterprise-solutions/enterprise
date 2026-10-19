@@ -373,36 +373,6 @@ private:
 	friend class ibValueForm;
 };
 
-class ibValueComboBox : public ibValueWindow {
-	public:
-
-	ibValueComboBox();
-
-	//load & save object in control
-	virtual bool ReadData(const ibDataNode& node);
-	virtual bool WriteData(ibDataNode& node) const;
-};
-
-class ibValueChoice : public ibValueWindow {
-	public:
-
-	ibValueChoice();
-
-	//load & save object in control
-	virtual bool ReadData(const ibDataNode& node);
-	virtual bool WriteData(ibDataNode& node) const;
-};
-
-class ibValueListBox : public ibValueWindow {
-	public:
-
-	ibValueListBox();
-
-	//load & save object in control
-	virtual bool ReadData(const ibDataNode& node);
-	virtual bool WriteData(ibDataNode& node) const;
-};
-
 constexpr ibClassID g_controlCheckboxCLSID = control_to_clsid("CT_CHKB");
 
 class ibValueCheckbox : public ibValueWindow,

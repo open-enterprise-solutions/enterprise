@@ -20,9 +20,14 @@
 // ibLinqClausesAfter; a block whose order the completion would not have offered is a defect in the
 // writer, and it is refused rather than written.
 //
+// ⭐ IN THE CORE, BESIDE THE LEXER IT READS BY: the desktop's constructor and the thin client's build the same
+// block, and the syntax the module is written in is given to the block as it is to the lexer (ibTranslateCode).
+//
 ////////////////////////////////////////////////////////////////////////////
 
-#include "backend/backend_core.h"
+#include <wx/string.h>
+
+#include "core/core.h"   // CORE_API
 
 #include <vector>
 
@@ -33,11 +38,11 @@
 // `Distinct`; anywhere else the clauses: another `From` (a product), `Join`, `Where`, `Group`,
 // `OrderBy`, `Skip`, `Take`, `Select`. Modifiers are answered only where the grammar demands them, never
 // offered standalone.
-BACKEND_API std::vector<int> ibLinqClausesAfter(int lastKeyword);
+CORE_API std::vector<int> ibLinqClausesAfter(int lastKeyword);
 
 // One source of the block: `From alias In expression`, or `Join alias In expression On left Equals
 // right`. A second source that is not a join is a product — `From` again, as the language spells it.
-struct BACKEND_API ibLinqBlockSource {
+struct CORE_API ibLinqBlockSource {
 	wxString m_alias;
 	wxString m_expression;
 	bool     m_join = false;
@@ -47,7 +52,7 @@ struct BACKEND_API ibLinqBlockSource {
 
 // One column of the answer: `name = expression` inside `Select { … }`. Also one key of a group — its
 // name is the key's column and, with several keys, its field in the key.
-struct BACKEND_API ibLinqBlockField {
+struct CORE_API ibLinqBlockField {
 	wxString m_name;
 	wxString m_expression;
 };
@@ -58,24 +63,27 @@ enum class ibLinqTotal { Sum, Count, Min, Max, Average };
 
 // One total of a grouped answer: `name = <group>.Values.Sum(…)` - the column it makes, what it does,
 // and the field of a ROW it reads, written as the rows are read before grouping (`o.Amount`).
-struct BACKEND_API ibLinqBlockTotal {
+struct CORE_API ibLinqBlockTotal {
 	wxString    m_name;
 	ibLinqTotal m_function = ibLinqTotal::Sum;
 	wxString    m_expression;
 };
 
 // The method a total calls, in the language's spelling - `Sum`, `Count`, …
-BACKEND_API wxString ibLinqTotalName(ibLinqTotal total);
+CORE_API wxString ibLinqTotalName(ibLinqTotal total);
 
 // One key of the order, with its own way: the language writes the direction after the key it belongs
 // to (linq.md 0.5), so all the keys share one `OrderBy` - `OrderBy a, b Descending, c`.
-struct BACKEND_API ibLinqBlockOrder {
+struct CORE_API ibLinqBlockOrder {
 	wxString m_expression;
 	bool     m_descending = false;
 };
 
-class BACKEND_API ibLinqBlock {
+class CORE_API ibLinqBlock {
 public:
+
+	// The syntax the module is written in (CODE_VES / CODE_CES) — the lexer's, as ibTranslateCode is given it.
+	explicit ibLinqBlock(short codeStyle) : m_codeStyle(codeStyle) {}
 
 	std::vector<ibLinqBlockSource> m_sources;
 	std::vector<wxString>          m_conditions;       // one `Where` each, on the rows
@@ -104,6 +112,8 @@ public:
 
 	bool IsGrouped() const { return !m_groupKeys.empty(); }
 
+	short GetCodeStyle() const { return m_codeStyle; }
+
 	// The block, one clause a line, continuation lines opened with `indent`. Empty with `refusal` set
 	// when there is nothing to write (no source) or a part is missing its words (an alias, a source,
 	// a join key); a refusal says which. A single column with no name is written bare - `Select o.Name`.
@@ -124,12 +134,15 @@ public:
 	// The query ends at a `;`, at the brace closing `Select { … }` (and a `Distinct` after it), or with
 	// the line of a bare `Select` - so `text` may run past it, and `consumed` says how much of it the
 	// query is. That is what a caller replaces: the compiler's bracket ends where the compiler STOPPED,
-	// which in a query left half-written (`On g. Equals c.`) is mid-way through it.
+	// which in a query left half-written (`On g. Equals c.`) is mid-way through it. The text is read in the
+	// block's syntax.
 	static bool Parse(const wxString& text, ibLinqBlock& block, wxString& refusal, size_t* consumed = nullptr);
 
 private:
 
 	wxString Write(const wxString& indent, wxString& refusal, bool draft) const;
+
+	short m_codeStyle;
 };
 
 #endif

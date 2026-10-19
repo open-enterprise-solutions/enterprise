@@ -20,6 +20,10 @@ public:
 	// debugger's search for it, and the web server's manifest (`useManifest`), are not ported: the second answers 0.
 	long RunApplication(const wxString& strAppName, bool searchDebug = true, bool useManifest = false) const;
 
+	// The file base's folder this client opened (the engine's: a Firebird base's — the VCS working copy root); empty: a
+	// base on a server, or on a DBMS.
+	const wxString& GetFile() const { return m_strFile; }
+
 private:
 
 	// THE BASE THIS CLIENT OPENED — the engine's appData's fields: what the application read from its command line or

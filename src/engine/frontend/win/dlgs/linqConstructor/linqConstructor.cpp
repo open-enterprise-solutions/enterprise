@@ -6,6 +6,7 @@
 
 #include "backend/backend_exception.h"          // ibEvalModeScope - every probe runs as a completion
 #include "backend/compiler/scriptComplete.h"    // the three IntelliSense doors, and the compiler's outline
+#include "backend/compiler/compileCode.h"       // GetCodeStyle - the syntax the block is written in
 #include "core/compiler/translateCode.h"     // GetKeyWord - the words are the lexer's
 #include "core/compiler/codeDef.h"           // KEY_FROM ... KEY_RESTRICT
 #include "backend/compiler/typeCtor.h"          // ibCtorAbstractType::GetClassIcon - a metatype's own picture
@@ -95,7 +96,7 @@ ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxStrin
 	// ⭐ A QUERY THE CARET STANDS IN IS OPENED, NOT WRITTEN ANEW. Where it is and where it ends is the
 	// compiler's to say - it bracketed the text while reading it; the parts are read back out of that
 	// text by the block's own reader, and OK replaces that stretch.
-	ibLinqBlock opened;
+	ibLinqBlock opened(ibCompileCode::GetCodeStyle());
 	wxString openRefusal;
 	{
 		const ibBackendException::ibEvalModeScope answering(eval_complete);
@@ -1157,7 +1158,7 @@ void ibDialogLinqConstructor::Open(const ibLinqBlock& block)
 
 ibLinqBlock ibDialogLinqConstructor::Collect() const
 {
-	ibLinqBlock block;
+	ibLinqBlock block(ibCompileCode::GetCodeStyle());
 	const auto text = [](const ibDataViewListCtrl* list, int row, unsigned int col) {
 		return wxString(list->GetTextValue(row, col)).Trim(true).Trim(false);
 	};

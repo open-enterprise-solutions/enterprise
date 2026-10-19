@@ -192,6 +192,7 @@
     <ClCompile Include="backend\debugger\debugClientAsync.cpp" />
     <ClCompile Include="backend\debugger\debugClientBridge.cpp" />
     <ClCompile Include="backend\debugger\debugClientQuery.cpp" />
+    <ClCompile Include="backend\vcs\gitService.cpp" />
     <ClCompile Include="mainFrame\debugger\debugClientImpl.cpp" />
     <ClCompile Include="win\editor\codeEditor\codeEditorDesigner.cpp" />
     <ClCompile Include="win\editor\commonAttributeEditor\commonAttributeEditor.cpp" />
@@ -219,6 +220,9 @@
     <ClCompile Include="docManager\templates\docViewComposer.cpp" />
     <ClCompile Include="docManager\templates\docViewInterface.cpp" />
     <ClCompile Include="docManager\templates\docViewRole.cpp" />
+    <ClCompile Include="docManager\templates\docViewConfigCompare.cpp" />
+    <ClCompile Include="docManager\templates\docViewMetaFile.cpp" />
+    <ClCompile Include="mainFrame\configCompare\configCompareModel.cpp" />
     <ClCompile Include="mainFrame\local\localWindow.cpp" />
     <ClCompile Include="mainFrame\mainFrameDesigner.cpp" />
     <ClCompile Include="mainFrame\mainFrameDesignerEvent.cpp" />
@@ -234,6 +238,7 @@
     <ClCompile Include="mainFrame\metaTree\treeDataReportEvent.cpp" />
     <ClCompile Include="mainFrame\metaTree\treeDataReport_impl.cpp" />
     <ClCompile Include="mainFrame\stack\stackWindow.cpp" />
+    <ClCompile Include="mainFrame\vcs\gitPanel.cpp" />
     <ClCompile Include="mainFrame\watch\watchctrl.cpp" />
     <ClCompile Include="mainFrame\watch\watchdroptarget.cpp" />
     <ClCompile Include="mainFrame\watch\watchWindow.cpp" />
@@ -248,12 +253,15 @@
     <ClCompile Include="win\dlg\homePageEditor.cpp" />
     <ClCompile Include="win\dlg\predefinedEditor.cpp" />
     <ClCompile Include="win\dlg\textEditor.cpp" />
+    <ClCompile Include="win\ctrl\menuBar.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="mainApp.h" />
     <ClInclude Include="backend\debugger\debugClient.h" />
     <ClInclude Include="backend\debugger\debugClientBridge.h" />
     <ClInclude Include="backend\debugger\debugDefs.h" />
+    <ClInclude Include="backend\metaCollection\metaDiff.h" />
+    <ClInclude Include="backend\vcs\gitService.h" />
     <ClInclude Include="mainFrame\debugger\debugClientImpl.h" />
     <ClInclude Include="win\editor\codeEditor\codeEditorDesigner.h" />
     <ClInclude Include="win\editor\commonAttributeEditor\commonAttributeEditor.h" />
@@ -277,6 +285,9 @@
     <ClInclude Include="docManager\templates\docViewComposer.h" />
     <ClInclude Include="docManager\templates\docViewInterface.h" />
     <ClInclude Include="docManager\templates\docViewRole.h" />
+    <ClInclude Include="docManager\templates\docViewConfigCompare.h" />
+    <ClInclude Include="docManager\templates\docViewMetaFile.h" />
+    <ClInclude Include="mainFrame\configCompare\configCompareModel.h" />
     <ClInclude Include="mainFrame\local\localWindow.h" />
     <ClInclude Include="mainFrame\mainFrameDesigner.h" />
     <ClInclude Include="mainFrame\metaTree\clipboardLock.h" />
@@ -284,6 +295,7 @@
     <ClInclude Include="mainFrame\metaTree\treeDataProcessor.h" />
     <ClInclude Include="mainFrame\metaTree\treeDataReport.h" />
     <ClInclude Include="mainFrame\stack\stackWindow.h" />
+    <ClInclude Include="mainFrame\vcs\gitPanel.h" />
     <ClInclude Include="mainFrame\watch\watchctrl.h" />
     <ClInclude Include="mainFrame\watch\watchdroptarget.h" />
     <ClInclude Include="mainFrame\watch\watchWindow.h" />
@@ -298,6 +310,7 @@
     <ClInclude Include="win\dlg\homePageEditor.h" />
     <ClInclude Include="win\dlg\predefinedEditor.h" />
     <ClInclude Include="win\dlg\textEditor.h" />
+    <ClInclude Include="win\ctrl\menuBar.h" />
     <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>

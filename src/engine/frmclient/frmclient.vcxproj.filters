@@ -220,6 +220,12 @@
     <ClCompile Include="win\dlgs\jobSchedule\jobScheduleSettings.cpp">
       <Filter>win\dlgs\jobSchedule</Filter>
     </ClCompile>
+    <ClCompile Include="win\dlgs\choiceLink\choiceLink.cpp">
+      <Filter>win\dlgs\choiceLink</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\choiceParameters\choiceParameters.cpp">
+      <Filter>win\dlgs\choiceParameters</Filter>
+    </ClCompile>
     <ClCompile Include="win\dlgs\settings\savedSettings.cpp">
       <Filter>win\dlgs\settings</Filter>
     </ClCompile>
@@ -527,6 +533,12 @@
     <ClInclude Include="win\dlgs\jobSchedule\jobScheduleSettings.h">
       <Filter>win\dlgs\jobSchedule</Filter>
     </ClInclude>
+    <ClInclude Include="win\dlgs\choiceLink\choiceLink.h">
+      <Filter>win\dlgs\choiceLink</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\choiceParameters\choiceParameters.h">
+      <Filter>win\dlgs\choiceParameters</Filter>
+    </ClInclude>
     <ClInclude Include="win\dlgs\settings\savedSettings.h">
       <Filter>win\dlgs\settings</Filter>
     </ClInclude>
@@ -736,6 +748,9 @@
     <Filter Include="win\dlgs\formatConstructor">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f503a}</UniqueIdentifier>
     </Filter>
+    <Filter Include="win\dlgs\linqConstructor">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f505b}</UniqueIdentifier>
+    </Filter>
     <Filter Include="win\dlgs\settings">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f503b}</UniqueIdentifier>
     </Filter>
@@ -775,6 +790,12 @@
     <Filter Include="win\dlgs\jobSchedule">
       <UniqueIdentifier>{6a1f8b3d-2c4e-4f70-9bac-1d2e3f405166}</UniqueIdentifier>
     </Filter>
+    <Filter Include="win\dlgs\choiceLink">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f505c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win\dlgs\choiceParameters">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f505d}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="backend\appData.h">
@@ -804,6 +825,9 @@
     <ClInclude Include="backend\backend_picture.h">
       <Filter>backend</Filter>
     </ClInclude>
+    <ClCompile Include="backend\backend_picture.cpp">
+      <Filter>backend</Filter>
+    </ClCompile>
     <ClCompile Include="backend\backend_type.cpp">
       <Filter>backend</Filter>
     </ClCompile>
@@ -924,6 +948,9 @@
     <ClInclude Include="backend\propertyManager\property\propertyNumber.h">
       <Filter>backend\propertyManager\property</Filter>
     </ClInclude>
+    <ClInclude Include="backend\propertyManager\property\propertyChoiceLink.h">
+      <Filter>backend\propertyManager\property</Filter>
+    </ClInclude>
     <ClCompile Include="backend\propertyManager\property\propertySize.cpp">
       <Filter>backend\propertyManager\property</Filter>
     </ClCompile>
@@ -946,6 +973,36 @@
       <Filter>backend\propertyManager\property\variant</Filter>
     </ClCompile>
     <ClInclude Include="backend\propertyManager\property\variant\variantType.h">
+      <Filter>backend\propertyManager\property\variant</Filter>
+    </ClInclude>
+    <ClInclude Include="backend\propertyManager\property\variant\variantCalcSchedule.h">
+      <Filter>backend\propertyManager\property\variant</Filter>
+    </ClInclude>
+    <ClInclude Include="backend\propertyManager\property\variant\variantChoiceLink.h">
+      <Filter>backend\propertyManager\property\variant</Filter>
+    </ClInclude>
+    <ClInclude Include="backend\propertyManager\property\variant\variantCommandSource.h">
+      <Filter>backend\propertyManager\property\variant</Filter>
+    </ClInclude>
+    <ClInclude Include="backend\propertyManager\property\variant\variantGen.h">
+      <Filter>backend\propertyManager\property\variant</Filter>
+    </ClInclude>
+    <ClInclude Include="backend\propertyManager\property\variant\variantMetaDesc.h">
+      <Filter>backend\propertyManager\property\variant</Filter>
+    </ClInclude>
+    <ClInclude Include="backend\propertyManager\property\variant\variantNumber.h">
+      <Filter>backend\propertyManager\property\variant</Filter>
+    </ClInclude>
+    <ClInclude Include="backend\propertyManager\property\variant\variantPicture.h">
+      <Filter>backend\propertyManager\property\variant</Filter>
+    </ClInclude>
+    <ClInclude Include="backend\propertyManager\property\variant\variantPoint.h">
+      <Filter>backend\propertyManager\property\variant</Filter>
+    </ClInclude>
+    <ClInclude Include="backend\propertyManager\property\variant\variantRecord.h">
+      <Filter>backend\propertyManager\property\variant</Filter>
+    </ClInclude>
+    <ClInclude Include="backend\propertyManager\property\variant\variantSource.h">
       <Filter>backend\propertyManager\property\variant</Filter>
     </ClInclude>
     <ClInclude Include="backend\propertyManager\property\variant\variantSize.h">
@@ -1092,6 +1149,81 @@
     <ClCompile Include="propertyManager\property\advprop\advpropModule.cpp">
       <Filter>propertyManager\property\advprop</Filter>
     </ClCompile>
+    <ClCompile Include="propertyManager\property\advprop\advpropCalcSchedule.cpp">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClCompile>
+    <ClInclude Include="propertyManager\property\advprop\advpropCalcSchedule.h">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClInclude>
+    <ClCompile Include="propertyManager\property\advprop\advpropChartBinding.cpp">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClCompile>
+    <ClInclude Include="propertyManager\property\advprop\advpropChartBinding.h">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClInclude>
+    <ClCompile Include="propertyManager\property\advprop\advpropChoiceLink.cpp">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClCompile>
+    <ClInclude Include="propertyManager\property\advprop\advpropChoiceLink.h">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClInclude>
+    <ClCompile Include="propertyManager\property\advprop\advpropCommandSource.cpp">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClCompile>
+    <ClInclude Include="propertyManager\property\advprop\advpropCommandSource.h">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClInclude>
+    <ClCompile Include="propertyManager\property\advprop\advpropDate.cpp">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClCompile>
+    <ClCompile Include="propertyManager\property\advprop\advpropForm.cpp">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClCompile>
+    <ClCompile Include="propertyManager\property\advprop\advpropGeneration.cpp">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClCompile>
+    <ClInclude Include="propertyManager\property\advprop\advpropGeneration.h">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClInclude>
+    <ClCompile Include="propertyManager\property\advprop\advpropOwner.cpp">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClCompile>
+    <ClInclude Include="propertyManager\property\advprop\advpropOwner.h">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClInclude>
+    <ClCompile Include="propertyManager\property\advprop\advpropPicture.cpp">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClCompile>
+    <ClInclude Include="propertyManager\property\advprop\advpropPicture.h">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClInclude>
+    <ClCompile Include="propertyManager\property\advprop\advpropPoint.cpp">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClCompile>
+    <ClInclude Include="propertyManager\property\advprop\advpropPoint.h">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClInclude>
+    <ClCompile Include="propertyManager\property\advprop\advpropRecord.cpp">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClCompile>
+    <ClInclude Include="propertyManager\property\advprop\advpropRecord.h">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClInclude>
+    <ClCompile Include="propertyManager\property\advprop\advpropSchedule.cpp">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClCompile>
+    <ClInclude Include="propertyManager\property\advprop\advpropSchedule.h">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClInclude>
+    <ClCompile Include="propertyManager\property\advprop\advpropSource.cpp">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClCompile>
+    <ClInclude Include="propertyManager\property\advprop\advpropSource.h">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClInclude>
+    <ClCompile Include="propertyManager\property\advprop\advpropSpreadsheet.cpp">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClCompile>
     <ClCompile Include="propertyManager\propertyEditor.cpp">
       <Filter>propertyManager</Filter>
     </ClCompile>
@@ -1161,8 +1293,17 @@
     <ClInclude Include="win\dlgs\colHeight.h">
       <Filter>win\dlgs</Filter>
     </ClInclude>
+    <ClCompile Include="win\dlgs\connectionDB.cpp">
+      <Filter>win\dlgs</Filter>
+    </ClCompile>
+    <ClInclude Include="win\dlgs\connectionDB.h">
+      <Filter>win\dlgs</Filter>
+    </ClInclude>
     <ClInclude Include="win\dlgs\formatConstructor\formatConstructor.h">
       <Filter>win\dlgs\formatConstructor</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\linqConstructor\linqConstructor.h">
+      <Filter>win\dlgs\linqConstructor</Filter>
     </ClInclude>
     <ClCompile Include="win\dlgs\rowHeight.cpp">
       <Filter>win\dlgs</Filter>
@@ -1248,6 +1389,9 @@
     <ClCompile Include="win\dlgs\formatConstructor\formatConstructor.cpp">
       <Filter>win\dlgs\formatConstructor</Filter>
     </ClCompile>
+    <ClCompile Include="win\dlgs\linqConstructor\linqConstructor.cpp">
+      <Filter>win\dlgs\linqConstructor</Filter>
+    </ClCompile>
     <ClInclude Include="win\dlgs\translateConstructor\translateConstructor.h">
       <Filter>win\dlgs\translateConstructor</Filter>
     </ClInclude>
@@ -1258,6 +1402,9 @@
       <Filter>win\dlgs\queryConstructor</Filter>
     </ClInclude>
     <ClInclude Include="win\dlgs\queryConstructor\queryExpressionDialog.h">
+      <Filter>win\dlgs\queryConstructor</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\queryConstructor\queryGridModel.h">
       <Filter>win\dlgs\queryConstructor</Filter>
     </ClInclude>
     <ClInclude Include="win\dlgs\typeSelector.h">
