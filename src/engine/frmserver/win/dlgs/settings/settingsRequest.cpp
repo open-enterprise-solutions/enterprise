@@ -4,8 +4,7 @@
 #include "backend/backend_mainFrame.h"
 #include "backend/backend_picture.h"       // ibBackendPicture::SendPicture — a field's picture, by its id
 #include "backend/backend_composition.h"   // ibValidateSettings — a setting the schema refuses
-#include "backend/metaData.h"
-#include "core/description/typeDescription.h"              // the cell's value read and made, its type's quick choice
+#include "backend/metaData.h"              // the cell's value read and made, its type's quick choice
 #include "core/serialize/dataBuilder.h"
 #include "backend/session/session.h"
 #include "backend/srcDataObject.h"                                    // ibSourceDataObject::ibSourceExplorer — a target's fields
@@ -131,8 +130,8 @@ void WriteTargetFields(ibDataNode& expanded, ibDataNode& references, const std::
 class ibListSettingsChoice : public ibControlFrame, public ibTypeControlFactory {
 public:
 
-	ibListSettingsChoice(const ibMetaData* metaData, const ibTypeDescription& typeDesc, const ibValue& value, s32 choice)
-		: m_metaData(metaData), m_typeDesc(typeDesc), m_value(value), m_choice(choice) {
+	ibListSettingsChoice(const ibMetaData* metaData, const ibClassID& clsid, const ibValue& value, s32 choice)
+		: m_metaData(metaData), m_typeDesc(clsid), m_value(value), m_choice(choice) {
 	}
 
 	// ibControlFrame
@@ -203,23 +202,10 @@ void ChooseValue(const ibDataNode& act, const ibMetaData* metaData, ibListSettin
 		choosing->ControlDecrRef();
 		choosing = nullptr;
 	}
-	if (metaData == nullptr)
-		return;
-
-	// Type — the class id the cell stands on; Declared — the full type description when the client knows it
-	// (ibTypeDescriptionMemory as a Child property).
-	ibTypeDescription typeDesc;
-	if (const ibDataValue* const declared = act.FindField(ibProtocol::ibRequest::ibListSettings::Declared)) {
-		ibTypeDescriptionMemory::ReadNode(*declared, typeDesc);
-	}
 	unsigned long long parsed = 0;
-	act.GetValue<wxString>(ibProtocol::ibRequest::ibListSettings::Type).ToULongLong(&parsed);
-	const ibClassID clsid = static_cast<ibClassID>(parsed);
-	if (typeDesc.GetClsidList().empty()) {
-		if (clsid == 0)
-			return;
-		typeDesc = ibTypeDescription(clsid);
-	}
+	if (metaData == nullptr || !act.GetValue<wxString>(ibProtocol::ibRequest::ibListSettings::Type).ToULongLong(&parsed) || parsed == 0)
+		return;
+	const ibClassID clsid = parsed;
 
 	// The value in the cell — the server's own node, given back; none, or one the configuration cannot read: the empty
 	// one of the type.
@@ -231,10 +217,10 @@ void ChooseValue(const ibDataNode& act, const ibMetaData* metaData, ibListSettin
 		catch (const ibCoreException&) {
 		}
 	}
-	if (clsid != 0 && value.GetClassType() != clsid && metaData->IsRegisterCtor(clsid))
+	if (value.GetClassType() != clsid && metaData->IsRegisterCtor(clsid))
 		value = metaData->CreateObject(clsid);
 
-	choosing = new ibListSettingsChoice(metaData, typeDesc, value, act.GetValue<s32>(ibProtocol::ibRequest::ibListSettings::Choice));
+	choosing = new ibListSettingsChoice(metaData, clsid, value, act.GetValue<s32>(ibProtocol::ibRequest::ibListSettings::Choice));
 	choosing->ControlIncrRef();
 	ibTypeControlFactory::ChooseValue(choosing);
 }

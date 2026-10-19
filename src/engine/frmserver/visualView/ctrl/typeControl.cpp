@@ -14,8 +14,8 @@
 #include "backend/system/value/valueType.h"          // ibValueTypeDescription / g_valueTypeDescriptionCLSID
 #include "backend/choiceLinkResolver.h"               // what narrows this choice — type and conditions
 #include "backend/metaCollection/attribute/metaAttributeObject.h"   // the bound attribute holds both
-#include "frmserver/win/dlgs/selectPredefined.h"   // ibShowPredefinedSelector — designer EmptyRef / predefined / enum
-#include "backend/appData.h"                      // DesignerMode — the two roads part here
+#include "frmserver/win/dlgs/selectPredefined.h"   // ibShowPredefinedSelector — the designer's declared values
+#include "backend/appData.h"                        // DesignerMode — the two roads part here
 
 bool ibTypeControlFactory::ChooseValue(ibControlFrame* ownerValue, const ibValueMetaObject* choiceForm)
 {
@@ -31,8 +31,9 @@ bool ibTypeControlFactory::ChooseValue(ibControlFrame* ownerValue, const ibValue
 	// (a filter's left side is always a field). Settled, the cell stands on it, and the value of that type is
 	// chosen right after, in the same press.
 	if (current.GetType() == ibValueTypes::TYPE_EMPTY) {
-		// THE DESIGNER'S OWN ROAD — EmptyRef / predefined / enum through PredefinedSelector, before settling a
-		// single type locally (desktop ibShowPredefinedSelector).
+		// THE DESIGNER'S OWN WINDOW asks both — the type and a declared value of it — so an empty cell reaches a value
+		// in one click, as the desktop's. Whether anything referenceable is admitted is the window's question: it
+		// answers `false` for a declaration with none, and the road below carries on unchanged.
 		if (appData->DesignerMode()
 			&& ibShowPredefinedSelector(ownerValue, factory->GetTypeDesc(), factory->GetMetaData()))
 			return true;
@@ -56,7 +57,8 @@ bool ibTypeControlFactory::ChooseValue(ibControlFrame* ownerValue, const ibValue
 
 	const ibMetaData* metaData = factory->GetMetaData();
 
-	// IN THE DESIGNER EVERY REFERENCE WALKS PredefinedSelector — an enumeration included (Max, 2026-08-28).
+	// IN THE DESIGNER EVERY REFERENCE ASKS ITS DECLARED VALUES — a catalog, a document and an enumeration, one window,
+	// one habit (Max, 2026-08-28). A cell that declares nothing is standing on the type it already holds.
 	if (appData->DesignerMode()) {
 		const ibTypeDescription& declared = factory->GetTypeDesc();
 		if (ibShowPredefinedSelector(ownerValue,

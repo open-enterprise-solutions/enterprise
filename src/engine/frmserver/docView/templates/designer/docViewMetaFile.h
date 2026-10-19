@@ -18,10 +18,10 @@
 
 #include <memory>
 
-class FRMSERVER_API ibConfigurationBrowserView : public ibMetaView {
+class FRMSERVER_API ibMetadataTreeView : public ibMetaView {
 public:
 
-	ibConfigurationBrowserView() : ibMetaView() {}
+	ibMetadataTreeView() : ibMetaView() {}
 
 	virtual bool OnCreate(ibDocument* doc, long flags) override;
 	virtual void OnDraw(ibDataNode& frame) override;
@@ -35,7 +35,7 @@ private:
 
 	std::unique_ptr<ibConfigurationTree> m_metaTree;
 
-	wxDECLARE_DYNAMIC_CLASS(ibConfigurationBrowserView);
+	wxDECLARE_DYNAMIC_CLASS(ibMetadataTreeView);
 };
 
 // A file's configuration, or the database's copy held for browsing — both are ConfigurationFile-shaped.
@@ -50,11 +50,13 @@ public:
 	virtual ibPictureDescription GetIcon() const override;
 
 	virtual bool OnCreate(const wxString& path, long flags) override;
-	virtual bool OnCloseDocument() override;
 
 	ibConfigurationTree* GetMetaTree() const;
 
 protected:
+
+	// Its view without a template — the database's copy is opened by its command (Browse), not by File → Open.
+	virtual ibView* DoCreateView() override;
 
 	std::shared_ptr<ibMetaDataConfigurationBase> m_metaData;
 
@@ -68,6 +70,9 @@ public:
 	ibMetadataFileDocument() : ibMetadataBrowserDocument() {}
 
 	virtual bool OnCreate(const wxString& path, long flags) override;
+	// The file's configuration is its own, and goes with it (the desktop's); the database's copy is not the browser's to
+	// close.
+	virtual bool OnCloseDocument() override;
 
 protected:
 

@@ -951,10 +951,7 @@ protected:
 	_T3* FindObjectByFilter(
 		const _T1& id,
 		const std::initializer_list<ibClassID> filter) const {
-		const auto commonObject = GetCommonMetaObject();
-		if (commonObject != nullptr)
-			return commonObject->FindObjectByFilter<_T3>(id, filter, false);
-		return nullptr;
+		return FindObjectByFilter<_T1, _T2, _T3>(id, filter, false);
 	}
 
 	template<typename _T1, typename _T2 = ibValueMetaObject, typename _T3 = ibValueMetaObject>
@@ -963,8 +960,19 @@ protected:
 		const std::initializer_list<ibClassID> filter,
 		const bool use_child_filter) const {
 		const auto commonObject = GetCommonMetaObject();
-		if (commonObject != nullptr)
-			return commonObject->FindObjectByFilter<_T3>(id, filter, use_child_filter);
+		if (commonObject != nullptr) {
+			if (_T3* const found = commonObject->FindObjectByFilter<_T3>(id, filter, use_child_filter))
+				return found;
+		}
+		// ⭐ …AND NOT FOUND HERE, IN THE OWNER'S COMMON OBJECT, its root only: an external processor or report declares no
+		// catalog and no document, and what its fields' types name is its configuration's (GetTypeCtor answers there
+		// already) — asked of its own tree only, a reference attribute of its form opened empty (2026-10-19).
+		ibMetaData* owner = nullptr;
+		if (GetOwner(owner) && owner != nullptr && owner != this) {
+			const auto ownerObject = owner->GetCommonMetaObject();
+			if (ownerObject != nullptr)
+				return ownerObject->FindObjectByFilter<_T3>(id, filter, false);
+		}
 		return nullptr;
 	}
 

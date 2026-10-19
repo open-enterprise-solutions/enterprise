@@ -48,6 +48,17 @@ ibClassID ClsidOf(const wxString& text)
 	return text.ToULongLong(&clsid) ? static_cast<ibClassID>(clsid) : 0;
 }
 
+// A row's hops, as the server wrote them (Path — items {Id, Type}).
+std::vector<ibSourceHop> PathOf(const ibProtocolNode& row)
+{
+	std::vector<ibSourceHop> path;
+	for (const ibProtocolNode& hop : row.GetList(ibProtocol::ibView::ibFormDesigner::Path)) {
+		const ibClassID type = ClsidOf(hop.GetString(ibProtocol::ibView::ibFormDesigner::Type));
+		path.push_back({ static_cast<ibSourceId>(hop.GetInt(ibProtocol::ibView::ibFormDesigner::Id)), type != 0 ? type : g_valueUndefinedCLSID });
+	}
+	return path;
+}
+
 // The rows' shape — each root row's id, name, and what it is drawn as: a draw that says the same leaves the tree alone.
 // …and the form's attributes as it holds them: a row opened was asked of them then, so the same rows over attributes
 // changed say another composition — a column given a reference type showed none to open (2026-10-15).
@@ -271,11 +282,7 @@ void ibAttributeTree::AppendRows(const wxTreeItemId& parent, const ibProtocolNod
 {
 	const int image = m_tcAttributes->GetImageList() != nullptr && m_tcAttributes->GetImageList()->GetImageCount() > 0 ? 0 : -1;
 	for (const ibProtocolNode& row : rows.Children()) {
-		std::vector<ibSourceHop> path;
-		for (const ibProtocolNode& hop : row.GetList(ibProtocol::ibView::ibFormDesigner::Path)) {
-			const ibClassID type = ClsidOf(hop.GetString(ibProtocol::ibView::ibFormDesigner::Type));
-			path.push_back({ static_cast<ibSourceId>(hop.GetInt(ibProtocol::ibView::ibFormDesigner::Id)), type != 0 ? type : g_valueUndefinedCLSID });
-		}
+		const std::vector<ibSourceHop> path = PathOf(row);
 		std::vector<ibMetaID> refTypes;
 		for (const ibProtocolNode& target : row.GetList(ibProtocol::ibView::ibFormDesigner::Targets))
 			refTypes.push_back(static_cast<ibMetaID>(target.AsInt()));
@@ -469,14 +476,14 @@ void ibAttributeTree::OnActivated(wxTreeEvent& event)
 void ibAttributeTree::OnItemExpanding(wxTreeEvent& event)
 {
 	// Lazy composition build — a node ships with a single dummy [+]; its real children are the server's answer, asked
-	// HERE, once (Composition): the row as it was written is what it is asked with, and the form as it stands. A node
+	// HERE, each time it opens (Composition): the row as it was written is what it is asked with, and the form as it
+	// stands — what the metadata has now, an attribute added to the object since shown, one taken away gone. A node
 	// already filled inline (a table section) is marked loaded and no-ops here.
 	ibAttributeTreeItemData* data = (ibAttributeTreeItemData*)m_tcAttributes->GetItemData(event.GetItem());
 	if (data == nullptr || data->IsLoaded())
 		return;
-	data->SetLoaded();
 
-	m_tcAttributes->DeleteChildren(event.GetItem());   // drop the dummy [+]
+	m_tcAttributes->DeleteChildren(event.GetItem());   // drop the dummy [+], or what the last opening was answered
 	ibProtocolNode rows;
 	if (FetchComposition(data, rows))
 		AppendRows(event.GetItem(), rows);
@@ -501,17 +508,6 @@ bool ibAttributeTree::FetchComposition(const ibAttributeTreeItemData* data, ibPr
 }
 
 namespace {
-
-// A row's hops, as the server wrote them (Path — items {Id, Type}).
-std::vector<ibSourceHop> PathOf(const ibProtocolNode& row)
-{
-	std::vector<ibSourceHop> path;
-	for (const ibProtocolNode& hop : row.GetList(ibProtocol::ibView::ibFormDesigner::Path)) {
-		const ibClassID type = ClsidOf(hop.GetString(ibProtocol::ibView::ibFormDesigner::Type));
-		path.push_back({ static_cast<ibSourceId>(hop.GetInt(ibProtocol::ibView::ibFormDesigner::Id)), type != 0 ? type : g_valueUndefinedCLSID });
-	}
-	return path;
-}
 
 // The same place — by the hops' ids: a reference hop's pinned type is the binding's to keep, not the place's.
 bool SamePlace(const std::vector<ibSourceHop>& path, const std::vector<ibSourceHop>& other, size_t count)
@@ -551,14 +547,14 @@ bool FindRow(const ibProtocolNode& rows, const std::vector<ibSourceHop>& path, i
 
 } // namespace
 
-bool ibAttributeTree::PickSource(wxWindow* parent, ibProtocol::ibSchema::ibProperties::ibSourceKind kind,
+bool ibAttributeTree::PickSource(wxWindow* parent, ibProtocol::ibSchema::ibProperties::ibSourceDataType filter,
 	const ibSourceDescription& table, ibSourceDescription& binding)
 {
-	using ibSourceKind = ibProtocol::ibSchema::ibProperties::ibSourceKind;
+	using ibSourceDataType = ibProtocol::ibSchema::ibProperties::ibSourceDataType;
 
 	// WHERE THE TREE STARTS — the form's attributes as the editor last drew them; a column's, the columns of its table.
 	ibProtocolNode rows = m_formHandler->m_trees.FindChild(ibProtocol::ibView::ibFormDesigner::AttributeTree);
-	if (kind == ibSourceKind::Column) {
+	if (filter == ibSourceDataType::TableColumn) {
 		ibProtocolNode bound;
 		if (!table.IsOk() || !FindRow(rows, table.GetPath(), bound) || bound.Children().empty()) {
 			wxMessageBox(_("The table box of this column is not bound to a table."), _("Choice source"),
@@ -581,7 +577,7 @@ bool ibAttributeTree::PickSource(wxWindow* parent, ibProtocol::ibSchema::ibPrope
 	std::function<void(const wxTreeItemId&, const ibProtocolNode&)> append = [&](const wxTreeItemId& under, const ibProtocolNode& list) {
 		for (const ibProtocolNode& row : list.Children()) {
 			const bool tableSection = row.GetBool(ibProtocol::ibView::ibFormDesigner::TableSection);
-			if (kind == ibSourceKind::Table ? !(tableSection || HoldsTable(row)) : tableSection)
+			if (filter == ibSourceDataType::Table ? !(tableSection || HoldsTable(row)) : tableSection)
 				continue;
 			std::vector<ibMetaID> refTypes;
 			for (const ibProtocolNode& target : row.GetList(ibProtocol::ibView::ibFormDesigner::Targets))
@@ -589,13 +585,13 @@ bool ibAttributeTree::PickSource(wxWindow* parent, ibProtocol::ibSchema::ibPrope
 			ibAttributeTreeItemData* const itemData = new ibAttributeTreeItemData(nullptr, PathOf(row), refTypes,
 				tableSection, 0, row.GetBool(ibProtocol::ibView::ibFormDesigner::UnderList));
 			const wxTreeItemId item = tc->AppendItem(under, row.GetString(ibProtocol::ibView::ibFormDesigner::Name), image, image, itemData);
-			if (kind == ibSourceKind::Table && !tableSection)
+			if (filter == ibSourceDataType::Table && !tableSection)
 				tc->SetItemTextColour(item, wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));   // only holds one
 			if (!row.Children().empty()) {
 				append(item, row);
 				itemData->SetLoaded();
 			}
-			else if (kind != ibSourceKind::Table && row.GetBool(ibProtocol::ibView::ibFormDesigner::HasComposition)) {
+			else if (filter != ibSourceDataType::Table && row.GetBool(ibProtocol::ibView::ibFormDesigner::HasComposition)) {
 				tc->AppendItem(item, wxEmptyString);
 			}
 		}
@@ -621,7 +617,7 @@ bool ibAttributeTree::PickSource(wxWindow* parent, ibProtocol::ibSchema::ibPrope
 		ibAttributeTreeItemData* const data = item.IsOk() ? static_cast<ibAttributeTreeItemData*>(tc->GetItemData(item)) : nullptr;
 		if (data == nullptr || data->GetPath().empty())
 			return nullptr;
-		return kind == ibSourceKind::Table && !data->IsTableSection() ? nullptr : data;
+		return filter == ibSourceDataType::Table && !data->IsTableSection() ? nullptr : data;
 	};
 	tc->Bind(wxEVT_TREE_ITEM_ACTIVATED, [&](wxTreeEvent& event) {
 		if (chosen() != nullptr)
@@ -634,7 +630,7 @@ bool ibAttributeTree::PickSource(wxWindow* parent, ibProtocol::ibSchema::ibPrope
 	{
 		const std::vector<ibSourceHop>& path = binding.GetPath();
 		wxTreeItemId under = root, found;
-		for (size_t count = kind == ibSourceKind::Column ? table.GetPath().size() + 1 : 1; count <= path.size(); count++) {
+		for (size_t count = filter == ibSourceDataType::TableColumn ? table.GetPath().size() + 1 : 1; count <= path.size(); count++) {
 			wxTreeItemId match;
 			wxTreeItemIdValue cookie;
 			for (wxTreeItemId child = tc->GetFirstChild(under, cookie); child.IsOk(); child = tc->GetNextChild(under, cookie)) {

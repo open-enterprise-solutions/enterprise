@@ -2350,6 +2350,11 @@ bool ibValueRecordDataObjectExt::InitializeObject()
 		Run();
 
 	InvalidateNames();
+	// ⭐ …AND ITS FIELDS DESCRIBED ANEW. The metaobject's reload is what re-initialises this object (OnReloadMetaObject),
+	// and a field's TYPE changed is one of what it reloads for: the description is stamped by the metadata version,
+	// which a type moves no more than a field's number, so the form's attribute picker kept the type it was first asked
+	// with — on both designers, since the stamp (2026-10-19). Cleared, it is built again when next read.
+	m_sourceExplorer.Clear();
 
 	//is Ok
 	return true;
@@ -2480,6 +2485,7 @@ bool ibValueRecordDataObjectRef::InitializeObject(const ibGuid& copyGuid)
 	}
 
 	InvalidateNames();
+	m_sourceExplorer.Clear();   // …and its fields described anew, as the external object's (InitializeObject above)
 
 	//is Ok
 	return succes;
@@ -3618,6 +3624,7 @@ bool ibValueRecordManagerObject::InitializeObject(const ibValueRecordManagerObje
 	}
 
 	InvalidateNames();
+	m_sourceExplorer.Clear();   // …and its fields described anew, as the external object's (InitializeObject above)
 
 	//is Ok
 	return true;

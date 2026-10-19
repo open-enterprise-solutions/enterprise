@@ -42,7 +42,7 @@ ibDocManagerDesigner::ibDocManagerDesigner()
 	// file (the session's temporary storage), kept open, their trees drawn for the client and saved back to a file.
 	AddDocTemplate(g_metaExternalDataProcessorCLSID, _("External data processor"), ibFileMask(ibFileKind::Tool), ibFileExtension(ibFileKind::Tool), _("Data processor Doc"), _("Data processor View"), CLASSINFO(ibDataProcessorEditDocument), CLASSINFO(ibDataProcessorTreeView), ibTEMPLATE_VISIBLE);
 	AddDocTemplate(g_metaExternalReportCLSID, _("External report"), ibFileMask(ibFileKind::Report), ibFileExtension(ibFileKind::Report), _("Report Doc"), _("Report View"), CLASSINFO(ibReportEditDocument), CLASSINFO(ibReportTreeView), ibTEMPLATE_VISIBLE);
-	AddDocTemplate(g_metaCommonMetadataCLSID, _("Configuration"), ibFileMask(ibFileKind::Application), ibFileExtension(ibFileKind::Application), _("Configuration Doc"), _("Configuration View"), CLASSINFO(ibMetadataFileDocument), CLASSINFO(ibConfigurationBrowserView), ibTEMPLATE_VISIBLE | ibTEMPLATE_ONLY_OPEN);
+	AddDocTemplate(g_metaCommonMetadataCLSID, _("Configuration"), ibFileMask(ibFileKind::Application), ibFileExtension(ibFileKind::Application), _("Configuration Doc"), _("Configuration View"), CLASSINFO(ibMetadataFileDocument), CLASSINFO(ibMetadataTreeView), ibTEMPLATE_VISIBLE | ibTEMPLATE_ONLY_OPEN);
 
 	// A module's text — a common module, an object's and a manager's, as the desktop's designer registered them.
 	AddDocTemplate(g_metaCommonModuleCLSID, CLASSINFO(ibModuleTextDocument), CLASSINFO(ibModuleTextView));

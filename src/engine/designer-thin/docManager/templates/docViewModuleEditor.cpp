@@ -215,7 +215,13 @@ void ibModuleEditDocument::DrawView(const ibProtocolNode& view, const ibProtocol
 	// The syntax the module is written in, and whether it takes typing — the desktop's editor asked the process and
 	// the document (ibCompileCode::GetCodeStyle, ibDOC_READONLY).
 	codeEditor->SetCodeStyle(static_cast<short>(state.GetInt(ibProtocol::ibView::ibModule::Syntax)));
-	codeEditor->SetReadOnly(state.GetBool(ibProtocol::ibView::ibModule::ReadOnly));
+	const bool readOnly = state.GetBool(ibProtocol::ibView::ibModule::ReadOnly);
+	const bool readOnlyChanged = readOnly == codeEditor->IsEditable();
+	codeEditor->SetReadOnly(readOnly);
+	// …the menu and the toolbar asked anew when that changed: built as the tab was activated, before the server said —
+	// the desktop's were built of a document opened read-only already.
+	if (readOnlyChanged)
+		Activate();
 
 	// Its breakpoints, drawn once the address they are kept by is known.
 	if (docPathChanged)

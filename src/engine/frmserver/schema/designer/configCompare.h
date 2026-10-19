@@ -20,7 +20,8 @@ public:
 	virtual void Build(const ibSession& session, const ibDataNode& args, ibDataNode& result) const override;
 
 	// Merge {Mode, File?, File2?, Pull, Ops} — each Op Add/Delete/Replace with LeftId/RightId and parent ids. Push
-	// (Pull false) writes the right side back into File or File2. Answer Applied — how many ops ran.
+	// (Pull false) writes the right side back into File or File2. How it went — what was applied, what was not — is
+	// said to the person by the work, as it runs.
 	virtual std::function<void()> Command(const ibSession& session, s32 command,
 		const ibDataNode& args, ibProtocol::ibRefusal& refusal, wxString& error) const override;
 };

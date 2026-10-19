@@ -151,10 +151,11 @@ client that reads none opens the link's window without the question of which typ
 parameters' window. A description's `path` is read whether it arrives as a field (as written) or as a property (an
 object read from JSON).
 A control's `ibPropertySource` row (its Data source) carries what its source window may offer as optional fields:
-`SourceKind` — an `ibSourceKind`: `Table` 0, `Column` 1 (of the table its table box is bound to), `Field` 2 — and, for a column, `Parent` —
-the path of that table, as a binding is written. The tree itself is the form's attribute tree the client already holds
-(and expands with the form editor's Composition). The chosen path goes back through the row's `Set`; a cancelled
-window, or the binding already set, sends nothing. A client that reads no `SourceKind` treats the row as a field.
+`SourceDataType` — an `ibSourceDataType`, the server's: `Table` 0, `TableColumn` 1 (of the table its table box is
+bound to), `Attribute` 2 — and, for a column, `Parent` — the path of that table, as a binding is written. The tree
+itself is the form's attribute tree the client already holds (and expands with the form editor's Composition). The
+chosen path goes back through the row's `Set`; a cancelled window, or the binding already set, sends nothing. A client
+that reads no `SourceDataType` treats the row as an attribute.
 
 A picture is named by its id everywhere — in the view, a tab's `Icon`, a schema, a request, a list of choices: a
 backend picture's number, as a decimal (a class's own: its class id), or a configuration picture's guid. No answer
@@ -260,8 +261,8 @@ A schema is a dialog of the desktop held as data: the client shows it however it
 | 5 Registration journal | both | nothing | 1 Open — opens its tab (`Kind` 4) | active users |
 | 6 Debugging | the runtime | `Debugging` — the session's process listens for the designer; `Allowed` — it may be switched now (not on an application server, not while a start waits for the designer) | 2 Start, 3 Stop | — |
 | 7 Assistant access | the designer | the person's MCP server: `Enabled`, `Address`, `Port`, `Token`, `Running`, `Endpoint`, `Allowed` | 2 Start `{Enabled, Address, Port, Token}`, 3 Stop, 4 Save `{…}` | — |
-| 18 ConfigCompare | the designer | `Records` — Walk of two configurations (`Mode` File/Database/TwoFiles, `File`, `File2`) | 13 Merge `{Mode, File?, File2?, Pull, Ops}` — Add/Delete/Replace via CopyMetaObject | — |
 | 8 Users | the designer | `Users` (`Guid`, `Name`, `FullName`), and what a record is chosen from: `Roles` (`Guid`, `Name`, `Title`, `Mode`), `Languages` (`Guid`, `Title`, `Code`); with `Args {Guid}` — that one's `User` (`Guid`, `Name`, `FullName`, `Password` — whether one is stored, `Language`, `Roles`) | 4 Save `{Guid, Name, FullName, Language, Roles[, Password]}` — the password hashed by the server, absent: kept; 8 Remove `{Guid}` | data administration |
+| 18 ConfigCompare | the designer | with `Args {Mode, File, File2}` (`Mode` 1 the configuration and a file, 2 and the base's, 3 two files): `Records` — the walk of the two; a side that cannot be read is refused | 13 Merge `{Mode, File, File2, Pull, Ops}` — Add/Delete/Replace; what was applied and what was not, said to the person by the server | administration |
 
 A schema the client's application does not have, or the person has no right to, is refused.
 
@@ -306,7 +307,7 @@ while the number stays: clicking an object again, or walking back to it, before 
 | 16 Schedule | a form's schedule: `Schedule`, in its stored form | `Schedule` — the one edited, and the form is modified; none — cancelled |
 | 17 ApplyChange | the restructure's ledger: `Picture` and items `Level`, `Text` | `Done` — applied; none — cancelled, rolled back |
 | 18 FormType | a form just made: `Caption`, `Name`, `Synonym`, `Comment` and items `Id`, `Caption`, `Name` — the kinds its owner offers | `Id`, `Name`, `Synonym`, `Comment` — the kind chosen; none — cancelled, form taken away |
-| 19 PredefinedSelector | the designer's declared-value picker: `Caption`, `Types` (each `Title`, `MetaId`, nested `Name`/`Guid` — empty Guid is EmptyRef), `Primitives` (`Id`, `Caption`, `Type`) | `Type` — a primitive settled; or `MetaId`, `Guid`, `Written` (and `Name`) — a declared value; none — cancelled |
+| 19 PredefinedSelector | the designer's declared values of a reference, its type asked before it as a Choice: `Types` — a branch per admitted reference (`Title`), its values as children (`Name`, `Id`), each with what is declared under it | `Id` — the value chosen; none — closed |
 
 A SavedSettings window stays open through its acts: each act is a `respond`, done by the server, which asks again with
 the shelf as it now stands and `Done` — how the act went — until the window answers with no `Act`. A FormEditor window
@@ -317,9 +318,9 @@ with `Expanded`, the fields of those targets (one per name, its type the union o
 `Presentation` the synonym), and their `References`. The setting answered is read against the configuration and
 checked: one refused is asked again as it was given, with `Error`; one taken becomes the table's user setting, and its
 rows are read again. `Act` 2 Choose — a condition's value of a type of the server's (`Type`, `Value` held, `Choice` —
-the client's number for it, `Declared` — the cell's full type description when known): the server opens its quick
-choice, its choice form — a tab like any other — or, in the designer, PredefinedSelector. The value chosen comes back
-in the window's question, asked again or said anew, as `Chosen` (`Choice`, `Value` with its `Presentation`).
+the client's number for it): the server opens its quick choice, or its choice form — a tab like any other; in the
+designer, its declared values (PredefinedSelector). The value chosen comes back in the window's question, asked again
+or said anew, as `Chosen` (`Choice`, `Value` with its `Presentation`).
 
 A ComposerSettings window acts the same way. The setting taken becomes the report's user setting; the report is not
 composed again — its gridbox says `ComposeState` 2 until the person composes it.

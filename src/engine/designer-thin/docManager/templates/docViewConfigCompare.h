@@ -114,12 +114,9 @@ private:
 	void OnDirectionChanged(wxCommandEvent& event);
 	void OnItemCollapsing(ibDataViewEvent& event);
 
-	// Parent MetaIDs for an Add — walk the record tree for the nearest
-	// non-group object on the target side (same shape as the desktop's
-	// FindTargetParent, without live pointers).
-	void ParentIdsFor(const ibMetaDiffRecord& rec, int& parentLeftId, int& parentRightId) const;
-
 	bool HasOnlyInAncestor(int recordIndex) const;
+	ibMetaID FindTargetParent(
+		const ibMetaDiffRecord& rec, bool pull) const;
 
 	void ExpandAllRecursive(const ibDataViewItem& parent);
 	void CollapseAllRecursive(const ibDataViewItem& parent);

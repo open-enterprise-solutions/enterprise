@@ -124,6 +124,9 @@ void ibMetaTreeBase::Draw(const ibProtocolNode& root)
 		rootItem = wxTreeItemId();
 	}
 
+	// A configuration's tree shows its root, in the frame or in a tab; an external file's hides it (the ctor's).
+	const bool configuration = !m_metaTreeCtrl->HasFlag(wxTR_HIDE_ROOT);
+
 	bool drawnAnew = false;
 	if (shown) {
 		drawnAnew = !rootItem.IsOk();
@@ -131,7 +134,7 @@ void ibMetaTreeBase::Draw(const ibProtocolNode& root)
 		if (drawnAnew) {
 			// THE FIRST DRAWING OPENS — the desktop's fill did on its way out: the configuration's the root and Common, an
 			// external file's (its root hidden) everything.
-			if (m_tab == 0) {
+			if (configuration) {
 				m_expanded.insert(path);
 				m_expanded.insert(path + wxT("/-1"));
 			}
@@ -141,14 +144,14 @@ void ibMetaTreeBase::Draw(const ibProtocolNode& root)
 			const int image = GetImage(m_root.GetString(ibProtocol::ibSchema::ibMetaData::Picture));
 			rootItem = m_metaTreeCtrl->AddRoot(m_root.GetString(ibProtocol::ibSchema::ibMetaData::Title), image, image, new ibTreeRow(m_root, path));
 			// …the configuration's in bold (the desktop's); an external file's is hidden.
-			if (m_tab == 0)
+			if (configuration)
 				m_metaTreeCtrl->SetItemBold(rootItem);
 		}
 		DrawRow(rootItem, m_root);
 
 		// …the selection where it was, while its row is there; drawn anew, the root selected — an external file's first
 		// group (its Attributes), as the desktop's fill did.
-		const wxTreeItemId item = drawnAnew ? (m_tab == 0 ? rootItem : FindItem(rootItem, path + wxT("/-1")))
+		const wxTreeItemId item = drawnAnew ? (configuration ? rootItem : FindItem(rootItem, path + wxT("/-1")))
 			: selectedPath.IsEmpty() ? wxTreeItemId() : FindItem(rootItem, selectedPath);
 		if (item.IsOk() && item != m_metaTreeCtrl->GetSelection())
 			m_metaTreeCtrl->SelectItem(item);
@@ -180,13 +183,18 @@ void ibMetaTreeBase::DrawRow(const wxTreeItemId& item, const ibProtocolNode& row
 	ibTreeRow* const data = static_cast<ibTreeRow*>(m_metaTreeCtrl->GetItemData(item));
 	data->m_row = row;
 
-	const wxString title = row.GetString(ibProtocol::ibSchema::ibMetaData::Title);
-	if (m_metaTreeCtrl->GetItemText(item) != title)
-		m_metaTreeCtrl->SetItemText(item, title);
-	const int image = GetImage(row.GetString(ibProtocol::ibSchema::ibMetaData::Picture));
-	if (m_metaTreeCtrl->GetItemImage(item) != image) {
-		m_metaTreeCtrl->SetItemImage(item, image, wxTreeItemIcon_Normal);
-		m_metaTreeCtrl->SetItemImage(item, image, wxTreeItemIcon_Selected);
+	// A HIDDEN ROOT (an external file's) is not shown: no title or picture to draw — wx keeps none for it, and asking
+	// asserts — and never opened or closed: its rows are the tree.
+	const bool hiddenRoot = m_metaTreeCtrl->HasFlag(wxTR_HIDE_ROOT) && item == m_metaTreeCtrl->GetRootItem();
+	if (!hiddenRoot) {
+		const wxString title = row.GetString(ibProtocol::ibSchema::ibMetaData::Title);
+		if (m_metaTreeCtrl->GetItemText(item) != title)
+			m_metaTreeCtrl->SetItemText(item, title);
+		const int image = GetImage(row.GetString(ibProtocol::ibSchema::ibMetaData::Picture));
+		if (m_metaTreeCtrl->GetItemImage(item) != image) {
+			m_metaTreeCtrl->SetItemImage(item, image, wxTreeItemIcon_Normal);
+			m_metaTreeCtrl->SetItemImage(item, image, wxTreeItemIcon_Selected);
+		}
 	}
 
 	// ITS CHILDREN, MATCHED BY THEIR IDS in the rows' order — a row shown is drawn over, one not shown put in, an item no
@@ -219,8 +227,7 @@ void ibMetaTreeBase::DrawRow(const wxTreeItemId& item, const ibProtocolNode& row
 	while (next < items.size())
 		m_metaTreeCtrl->Delete(items[next++]);
 
-	// A hidden root (an external file's) is never opened or closed: its rows are the tree.
-	if (m_metaTreeCtrl->HasFlag(wxTR_HIDE_ROOT) && item == m_metaTreeCtrl->GetRootItem())
+	if (hiddenRoot)
 		return;
 
 	// OPEN AS THE PERSON LEFT IT — and while searching, everything: a match three levels down is not an answer until it
@@ -654,6 +661,9 @@ void ibMetaTreeBase::CopyItem()
 // …and back: the clipboard's bytes uploaded, read by the server where the selection says — the class and the object.
 void ibMetaTreeBase::PasteItem()
 {
+	if (m_readOnly)
+		return;
+
 	wxString type;
 	long long parent = 0;
 	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
@@ -699,7 +709,8 @@ void ibMetaTreeBase::UpdateToolbar()
 	const wxTreeItemId root = m_metaTreeCtrl->GetRootItem();
 	const ibTreeRow* const row = GetRow(item);
 	// Common — the configuration root's first row, -1 by its place (an external file's is its Attributes).
-	const bool common = m_tab == 0 && row != nullptr && row->m_row.GetId() == -1 && m_metaTreeCtrl->GetItemParent(item) == root;
+	const bool common = !m_metaTreeCtrl->HasFlag(wxTR_HIDE_ROOT) && row != nullptr && row->m_row.GetId() == -1
+		&& m_metaTreeCtrl->GetItemParent(item) == root;
 	const bool object = GetObject(item) != 0 && item != root;
 
 	m_metaTreeToolbar->EnableTool(ID_METATREE_NEW, !m_readOnly && row != nullptr && item != root && !common);
@@ -794,23 +805,28 @@ void ibMetaTreeBase::ShowContextMenu(const wxTreeItemId& item, const wxPoint& po
 			wxMenuItem* menuItem = nullptr;
 			menuItem = menu.Append(ID_METATREE_NEW, _("New"));
 			menuItem->SetBitmap(wxArtProvider::GetBitmapBundle(wxART_ADD, wxART_FRONTEND, wxSize(16, 16)));
+			menuItem->Enable(!m_readOnly);
 			menuItem = menu.Append(ID_METATREE_EDIT, _("Edit"));
 			menuItem->SetBitmap(wxArtProvider::GetBitmapBundle(wxART_EDIT, wxART_FRONTEND, wxSize(16, 16)));
 			menuItem = menu.Append(ID_METATREE_DELETE, _("Remove"));
 			menuItem->SetBitmap(wxArtProvider::GetBitmapBundle(wxART_DELETE, wxART_FRONTEND, wxSize(16, 16)));
+			menuItem->Enable(!m_readOnly);
 		}
 
-		// ⭐ THE TWO TEXTS AND PROPERTIES ALWAYS APPLY — every object has them, the configuration root included.
+		// ⭐ THE TWO TEXTS AND PROPERTIES ALWAYS APPLY — every object has them, the configuration root included. The texts
+		// are editors, shut in a read-only configuration as New and Remove are (the desktop's AppendTextsMenu).
 		ibAppendSeparator(&menu);
-		menu.Append(ID_METATREE_HELP, _("Help information..."));
-		menu.Append(ID_METATREE_NOTES, _("Technical information..."));
+		menu.Append(ID_METATREE_HELP, _("Help information..."))->Enable(!m_readOnly);
+		menu.Append(ID_METATREE_NOTES, _("Technical information..."))->Enable(!m_readOnly);
 		menu.AppendSeparator();
 		wxMenuItem* propertyItem = menu.Append(ID_METATREE_PROPERTY, _("Properties"));
 		propertyItem->SetBitmap(wxArtProvider::GetBitmapBundle(wxART_PROPERTY, wxART_SERVICE));
 	}
-	else if (!(m_tab == 0 && row->m_row.GetId() == -1 && m_metaTreeCtrl->GetItemParent(item) == m_metaTreeCtrl->GetRootItem())) {
+	else if (m_metaTreeCtrl->HasFlag(wxTR_HIDE_ROOT) || row->m_row.GetId() != -1
+		|| m_metaTreeCtrl->GetItemParent(item) != m_metaTreeCtrl->GetRootItem()) {
 		wxMenuItem* menuItem = menu.Append(ID_METATREE_NEW, _("New"));
 		menuItem->SetBitmap(wxArtProvider::GetBitmapBundle(wxART_ADD, wxART_FRONTEND, wxSize(16, 16)));
+		menuItem->Enable(!m_readOnly);
 	}
 
 	if (menu.GetMenuItemCount() > 0)

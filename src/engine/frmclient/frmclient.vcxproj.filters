@@ -181,9 +181,6 @@
     <ClCompile Include="win\dlgs\applyChange.cpp">
       <Filter>win\dlgs</Filter>
     </ClCompile>
-    <ClCompile Include="win\dlgs\selectPredefined.cpp">
-      <Filter>win\dlgs</Filter>
-    </ClCompile>
     <ClCompile Include="win\dlgs\userItem.cpp">
       <Filter>win\dlgs</Filter>
     </ClCompile>
@@ -486,9 +483,6 @@
       <Filter>win\dlgs</Filter>
     </ClInclude>
     <ClInclude Include="win\dlgs\applyChange.h">
-      <Filter>win\dlgs</Filter>
-    </ClInclude>
-    <ClInclude Include="win\dlgs\selectPredefined.h">
       <Filter>win\dlgs</Filter>
     </ClInclude>
     <ClInclude Include="win\dlgs\userItem.h">
@@ -1302,10 +1296,16 @@
     <ClCompile Include="win\dlgs\selectData.cpp">
       <Filter>win\dlgs</Filter>
     </ClCompile>
+    <ClCompile Include="win\dlgs\selectPredefined.cpp">
+      <Filter>win\dlgs</Filter>
+    </ClCompile>
     <ClCompile Include="win\dlgs\typeSelector.cpp">
       <Filter>win\dlgs</Filter>
     </ClCompile>
     <ClInclude Include="win\dlgs\selectData.h">
+      <Filter>win\dlgs</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\selectPredefined.h">
       <Filter>win\dlgs</Filter>
     </ClInclude>
     <ClCompile Include="win\dlgs\settings\filterTreeModel.cpp">

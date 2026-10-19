@@ -81,9 +81,9 @@ void ibFrontendMainFrameDesigner::ShowRequest(const ibProtocolNode& request, ibP
 		break;
 	}
 	case ibProtocol::ibRequest::ibKind::PredefinedSelector:
-		// THE DESKTOP'S ibShowPredefinedSelector — EmptyRef / predefined / enum while a configuration is written.
-		// Cancelled — answered with nothing.
-		ibShowPredefinedSelector(request, response);
+		// THE DESKTOP'S ibShowPredefinedSelector, its tree of declared values — the type asked before it. Closed —
+		// answered with no Id.
+		ibShowPredefinedSelector(this, request, response);
 		break;
 	default:
 		ibFrontendMainFrame::ShowRequest(request, response);
@@ -147,7 +147,7 @@ void ibFrontendMainFrameDesigner::Debugger_OnStateChanged()
 ibTabDocument* ibFrontendMainFrameDesigner::CreateDocument(ibProtocol::ibView::ibKind kind, long long tabId)
 {
 	if (kind == ibProtocol::ibView::ibKind::Configuration)
-		return new ibMetadataFileDocument(tabId);
+		return new ibMetadataBrowserDocument(tabId);   // a file's or the database's copy — the server's to tell apart
 	if (kind == ibProtocol::ibView::ibKind::DataProcessor)
 		return new ibDataProcessorFileDocument(tabId);
 	if (kind == ibProtocol::ibView::ibKind::Report)

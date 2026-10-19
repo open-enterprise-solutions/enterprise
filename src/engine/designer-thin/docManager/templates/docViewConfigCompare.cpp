@@ -1,6 +1,5 @@
 #include "docViewConfigCompare.h"
 
-#include "core/diagnostics/journal.h"
 #include "designer-thin/backend/metaCollection/metaDiff.h"
 #include "frmclient/mainFrame/mainFrame.h"
 #include "frmclient/win/ctrls/dataview/dataview.h"
@@ -9,7 +8,6 @@
 #include <wx/aui/auibar.h>
 #include <wx/button.h>
 #include <wx/choice.h>
-#include <wx/filename.h>
 #include <wx/msgdlg.h>
 #include <wx/sizer.h>
 #include <wx/stattext.h>
@@ -358,7 +356,6 @@ void ibConfigCompareView::OnApplyMerge(wxCommandEvent& WXUNUSED(event))
 	const auto& records = model->GetRecords();
 	ibProtocolNode ops;
 	int skippedReorder = 0;
-	int opCount = 0;
 
 	for (size_t i = 0; i < records.size(); ++i) {
 		if (!model->IsSelected(static_cast<int>(i))) continue;
@@ -391,16 +388,11 @@ void ibConfigCompareView::OnApplyMerge(wxCommandEvent& WXUNUSED(event))
 		}
 		if (!haveOp) continue;
 
-		int parentLeftId = 0, parentRightId = 0;
-		ParentIdsFor(rec, parentLeftId, parentRightId);
-
 		ibProtocolNode row = ops.AddChild();
 		row.SetValue(ibProtocol::ibSchema::ibConfigCompare::Op, static_cast<int>(opKind));
 		row.SetValue(ibProtocol::ibSchema::ibConfigCompare::LeftId, static_cast<int>(rec.m_leftId));
 		row.SetValue(ibProtocol::ibSchema::ibConfigCompare::RightId, static_cast<int>(rec.m_rightId));
-		row.SetValue(ibProtocol::ibSchema::ibConfigCompare::ParentLeftId, parentLeftId);
-		row.SetValue(ibProtocol::ibSchema::ibConfigCompare::ParentRightId, parentRightId);
-		++opCount;
+		row.SetValue(ibProtocol::ibSchema::ibConfigCompare::ParentId, static_cast<int>(FindTargetParent(rec, pull)));
 	}
 
 	ibProtocolNode args;
@@ -419,37 +411,33 @@ void ibConfigCompareView::OnApplyMerge(wxCommandEvent& WXUNUSED(event))
 		static_cast<long long>(ibProtocol::ibSchema::ibCommand::Merge));
 	params.SetValue(ibProtocol::ibSchema::Args, args);
 
+	// WHAT WAS APPLIED THE SERVER SAYS ITSELF, as it applies it (the merge's own message). What is left here is the
+	// client's: the other side's file taken down where it came from, and the changes this tab does not send.
 	const bool ok = frame->Call(ibProtocol::ibMethod::Schema, params, answer);
 	bool savedRight = true;
-	if (ok && !pull && m_compareDoc->CanPush()) {
+	wxString msg;
+	if (!ok) {
+		msg = _("Merge failed.") + wxT("\n\n") + _("The server refused the merge.");
+	}
+	else if (!pull && m_compareDoc->CanPush()) {
 		const wxString outId = (m_compareDoc->GetMode()
 			== ibProtocol::ibSchema::ibConfigCompare::ibMode::TwoFiles)
 			? m_compareDoc->GetFile2Id()
 			: m_compareDoc->GetFileId();
 		savedRight = frame->DownloadFile(outId, m_compareDoc->GetLocalRightPath());
+		msg = savedRight ? _("The other-side file has been saved.") : _("Warning: failed to save the other-side file.");
 	}
-
-	wxString msg = ok
-		? wxString::Format(_("Merge applied to %d item(s)."), opCount)
-		: _("Merge failed.");
 	if (skippedReorder > 0) {
-		msg += wxT("\n");
+		if (!msg.IsEmpty())
+			msg += wxT("\n");
 		msg += wxString::Format(
 			_("%d reorder-only change(s) skipped (not supported in V1)."),
 			skippedReorder);
 	}
-	msg += wxT("\n\n");
-	if (!ok)
-		msg += _("The server refused the merge.");
-	else if (pull)
-		msg += _("Use Configuration > Save configuration to persist the changes.");
-	else if (savedRight)
-		msg += _("The other-side file has been saved.");
-	else
-		msg += _("Warning: failed to save the other-side file.");
 
-	wxMessageBox(msg, _("Merge"),
-		wxOK | ((ok && savedRight) ? wxICON_INFORMATION : wxICON_WARNING), m_viewFrame);
+	if (!msg.IsEmpty())
+		wxMessageBox(msg, _("Merge"),
+			wxOK | ((ok && savedRight) ? wxICON_INFORMATION : wxICON_WARNING), m_viewFrame);
 
 	if (ok && m_compareDoc->GetAppliedCallback())
 		m_compareDoc->GetAppliedCallback()();
@@ -467,26 +455,6 @@ void ibConfigCompareView::RefreshApplyButtonState()
 	m_buttonApply->Enable(m_compareDoc->GetModel()->HasSelection());
 }
 
-void ibConfigCompareView::ParentIdsFor(const ibMetaDiffRecord& rec,
-	int& parentLeftId, int& parentRightId) const
-{
-	parentLeftId = 0;
-	parentRightId = 0;
-	if (m_compareDoc == nullptr || m_compareDoc->GetModel() == nullptr)
-		return;
-	const auto& records = m_compareDoc->GetModel()->GetRecords();
-	int p = rec.m_parentIndex;
-	while (p >= 0) {
-		const ibMetaDiffRecord& parentRec = records[p];
-		if (!parentRec.IsGroup() && !parentRec.IsProperty()) {
-			parentLeftId = static_cast<int>(parentRec.m_leftId);
-			parentRightId = static_cast<int>(parentRec.m_rightId);
-			return;
-		}
-		p = parentRec.m_parentIndex;
-	}
-}
-
 bool ibConfigCompareView::HasOnlyInAncestor(int recordIndex) const
 {
 	if (m_compareDoc == nullptr || m_compareDoc->GetModel() == nullptr)
@@ -502,6 +470,28 @@ bool ibConfigCompareView::HasOnlyInAncestor(int recordIndex) const
 		p = rec.m_parentIndex;
 	}
 	return false;
+}
+
+// The desktop's, by number: the nearest object above the row that the target side has (pull — the left), its id there;
+// 0 — none.
+ibMetaID ibConfigCompareView::FindTargetParent(
+	const ibMetaDiffRecord& rec, bool pull) const
+{
+	if (m_compareDoc == nullptr || m_compareDoc->GetModel() == nullptr)
+		return 0;
+	const auto& records = m_compareDoc->GetModel()->GetRecords();
+	int p = rec.m_parentIndex;
+	while (p >= 0) {
+		const ibMetaDiffRecord& parentRec = records[p];
+		if (!parentRec.IsGroup() && !parentRec.IsProperty()) {
+			const ibMetaID candidate = pull
+				? parentRec.m_leftId
+				: parentRec.m_rightId;
+			if (candidate != 0) return candidate;
+		}
+		p = parentRec.m_parentIndex;
+	}
+	return 0;
 }
 
 void ibConfigCompareView::OnUpdate(ibFrontendView* /*sender*/, wxObject* /*hint*/)

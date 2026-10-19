@@ -211,18 +211,15 @@ bool ibPropertySource::GetProtocolValue(ibDataNode& row)
 		return false;
 
 	// What the desktop's source window filtered its tree by (the owner's GetFilterSourceDataType): a table, a column of
-	// the table its table box is bound to, or a field; and for a column the box's own path. The tree itself is the form's
+	// the table its table box is bound to, or an attribute; and for a column the box's own path. The tree itself is the form's
 	// attribute tree the client already holds.
 	const ibBackendTypeSourceFactory* const factory =
 		dynamic_cast<const ibBackendTypeSourceFactory*>(GetPropertyObject());
 	if (factory == nullptr)
 		return true;
-	using ibSourceKind = ibProtocol::ibSchema::ibProperties::ibSourceKind;
 	const ibSourceDataType filter = factory->GetFilterSourceDataType();
-	const ibSourceKind kind = filter == ibSourceDataType::ibSourceDataType_table ? ibSourceKind::Table :
-		filter == ibSourceDataType::ibSourceDataType_tableColumn ? ibSourceKind::Column : ibSourceKind::Field;
-	row.SetValue(ibProtocol::ibSchema::ibProperties::SourceKind, static_cast<s32>(kind));
-	if (kind != ibSourceKind::Column)
+	row.SetValue(ibProtocol::ibSchema::ibProperties::SourceDataType, static_cast<s32>(filter));
+	if (filter != ibSourceDataType::ibSourceDataType_tableColumn)
 		return true;
 	const ibBackendTypeSourceFactory* const parent =
 		dynamic_cast<const ibBackendTypeSourceFactory*>(factory->GetSourceObject());

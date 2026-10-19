@@ -31,11 +31,12 @@ ibVisualEditorNotebook::ibVisualEditor::ibVisualEditor(ibModuleEditDocument* doc
 	CreateWideGui();
 
 	// THE SOURCE WINDOW — the attribute tree of the form whose control the cell is of (the one the inspector shows).
-	static const bool picker = (ibSetSourcePicker([](wxWindow* parent, const ibPropertyObject* owner, ibSourceKind kind,
+	static const bool picker = (ibSetSourcePicker([](wxWindow* parent, const ibPropertyObject* owner,
+		ibProtocol::ibSchema::ibProperties::ibSourceDataType filter,
 		const ibSourceDescription& table, ibSourceDescription& binding) {
 		for (ibVisualEditor* const editor : OpenEditors()) {
 			if (owner != nullptr && editor->GetCurrentElement() == owner)
-				return editor->GetAttributeTree()->PickSource(parent, kind, table, binding);
+				return editor->GetAttributeTree()->PickSource(parent, filter, table, binding);
 		}
 		return false;
 	}), true);

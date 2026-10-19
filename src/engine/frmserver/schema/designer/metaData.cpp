@@ -9,6 +9,7 @@
 #include "core/serialize/dataBuilder.h"
 
 #include "frmserver/docView/docView.h"   // docManager — the client's, where its editors open
+#include "frmserver/docView/templates/designer/docViewMetaFile.h"   // the base's configuration browsed — Browse
 #include "frmserver/client/clientChildFrame.h"
 #include "frmserver/client/clientFrame.h"   // the tab an external file's tree is in; the rows the tree shows next
 #include "frmserver/win/dlgs/applyChange.h"   // the restructure's ledger, put to the person — Apply
@@ -202,10 +203,44 @@ std::function<void()> ibSchemaMetaData::Command(const ibSession& session, s32 co
 		}
 		return [configuration]() { configuration->SaveDatabase(); };
 	}
-	// THE CONFIGURATION'S OWN — the desktop's Configuration menu (designer/mainFrame, OnRollbackConfiguration,
-	// OnUpdateConfiguration, OnConfiguration), each the engine's verb. Each that replaces the configuration is the work's:
-	// its Closed takes this client's editors over it down (the tree's, on its own session only). And what the desktop
-	// said in a message box when it was done the server asks the person — only it knows how it went.
+	// THE CONFIGURATION'S OWN — the desktop's Configuration menu (designer/mainFrame, OnOpenConfiguration,
+	// OnRollbackConfiguration, OnUpdateConfiguration, OnConfiguration), each the engine's verb. Each that replaces the
+	// configuration is the work's: its Closed takes this client's editors over it down (the tree's, on its own session
+	// only). And what the desktop said in a message box when it was done the server asks the person — only it knows how
+	// it went.
+	case ibProtocol::ibSchema::ibMetaData::ibCommand::Browse: {
+		ibMetaDataConfigurationBase* const configuration = FindConfiguration(session, metaData, refusal, error);
+		if (configuration == nullptr)
+			return nullptr;
+		ibMetaDataConfigurationBase* const database = configuration->GetConfiguration();
+		if (database == nullptr || database->GetCommonMetaObject() == nullptr) {
+			refusal = ibProtocol::ibRefusal::NotFound;
+			error = wxT("the base has no configuration of its own");
+			return nullptr;
+		}
+		// The desktop's OnOpenConfiguration: the browser over the database's copy raised when it is open — found by that
+		// copy's root, its metaobject — else one opened. Read-only as the desktop's view was, and here the copy itself
+		// says so: every door that would change it refuses (ibMetaData::IsEditable). Nothing changes it in place — Apply
+		// puts a new one.
+		return [database]() {
+			ibValueMetaObject* const root = database->GetCommonMetaObject();
+			for (ibDocument* const doc : docManager->GetDocumentsVector()) {
+				ibMetadataBrowserDocument* const browser = wxDynamicCast(doc, ibMetadataBrowserDocument);
+				if (browser != nullptr && browser->GetMetaObject() == root) {
+					browser->Activate();
+					return;
+				}
+			}
+			database->SetReadOnly(true);
+			ibMetadataBrowserDocument* const document = new ibMetadataBrowserDocument(
+				std::static_pointer_cast<ibMetaDataConfigurationBase>(database->shared_from_this()));
+			docManager->AddDocument(document);
+			document->SetTitle(root->GetModuleName());
+			document->SetMetaObject(root);
+			if (!document->OnCreate(root->GetModuleName(), ibDOC_NEW))
+				document->DeleteAllViews();
+		};
+	}
 	case ibProtocol::ibSchema::ibMetaData::ibCommand::Rollback: {
 		ibMetaDataConfigurationBase* const configuration = FindConfiguration(session, metaData, refusal, error);
 		if (configuration == nullptr)

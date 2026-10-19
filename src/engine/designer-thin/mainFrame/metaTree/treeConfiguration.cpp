@@ -67,11 +67,13 @@ void ibMetaTreeBase::CreateToolBar(wxWindow* parent)
 	m_metaTreeToolbar->SetArtProvider(new wxAuiLunaToolBarArt());
 }
 
-ibMetaTreeBase::ibMetaTreeBase(wxWindow* parent, long long tab, bool search)
+ibMetaTreeBase::ibMetaTreeBase(wxWindow* parent, long long tab, ibProtocol::ibView::ibKind kind)
 	: wxPanel(parent, wxID_ANY), m_tab(tab), m_metaView(new ibMetaTreeView(this))
 {
+	const bool configuration = kind == ibProtocol::ibView::ibKind::Configuration;
+
 	// …an external file's toolbar and rows framed in a box, under its header (the desktop's).
-	wxStaticBoxSizer* const treeBox = tab != 0 ? new wxStaticBoxSizer(new wxStaticBox(this, wxID_ANY, wxT("")), wxVERTICAL) : nullptr;
+	wxStaticBoxSizer* const treeBox = !configuration ? new wxStaticBoxSizer(new wxStaticBox(this, wxID_ANY, wxT("")), wxVERTICAL) : nullptr;
 	wxWindow* const treeParent = treeBox != nullptr ? static_cast<wxWindow*>(treeBox->GetStaticBox()) : this;
 
 	CreateToolBar(treeParent);
@@ -84,7 +86,7 @@ ibMetaTreeBase::ibMetaTreeBase(wxWindow* parent, long long tab, bool search)
 	//Create main tree
 	// …an external file's root hidden: its groups are the tree (the desktop's).
 	m_metaTreeCtrl = new wxTreeCtrl(treeParent, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-		wxTR_HAS_BUTTONS | wxTR_SINGLE | wxTR_NO_LINES | wxTR_TWIST_BUTTONS | (tab != 0 ? wxTR_HIDE_ROOT : 0));
+		wxTR_HAS_BUTTONS | wxTR_SINGLE | wxTR_NO_LINES | wxTR_TWIST_BUTTONS | (!configuration ? wxTR_HIDE_ROOT : 0));
 	m_metaTreeCtrl->SetBackgroundColour(wxColour(250, 247, 240));  // #FAF7F0 cream tree (matches editor)
 	m_metaTreeCtrl->SetDoubleBuffered(true);
 
@@ -129,7 +131,7 @@ ibMetaTreeBase::ibMetaTreeBase(wxWindow* parent, long long tab, bool search)
 	wxBoxSizer* panelSizer = new wxBoxSizer(wxVERTICAL);
 
 	// …the search, the configuration's alone (an external file's tree has none — the desktop's).
-	if (search) {
+	if (configuration) {
 		m_searchTree = new wxSearchCtrl(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxTE_PROCESS_ENTER);
 		m_searchTree->Bind(wxEVT_SEARCH, &ibMetaTreeBase::OnStartSearch, this);
 		m_searchTree->Bind(wxEVT_COMMAND_TEXT_UPDATED, &ibMetaTreeBase::OnCancelSearch, this);

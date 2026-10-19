@@ -5,6 +5,9 @@
 #include "backend/metadataConfiguration.h"
 #include "backend/session/session.h"
 #include "backend/temp/tempStorage.h"
+#include "backend/backend_mainFrame.h"   // ibBackendDocFrame — the person told how the merge went
+#include "core/diagnostics/journal.h"    // the merge's refusals
+#include "core/exception.h"              // ibCoreException — a walk that cannot be made is refused
 #include "core/fileSystem/fs.h"
 #include "core/serialize/dataBuilder.h"
 
@@ -165,44 +168,53 @@ void WriteRecords(const std::vector<ibMetaDiffRecord>& records, ibDataNode& resu
 	}
 }
 
-void ApplyAdd(ibMetaData* targetMeta, ibMetaData* sourceMeta,
+// The three merge primitives, the desktop's (designer/docManager/templates/docViewConfigCompare.cpp): each answers
+// whether it went through, so the merge says what it did.
+bool ApplyAdd(ibMetaData* targetMeta, ibMetaData* sourceMeta,
 	ibValueMetaObject* source, ibValueMetaObject* targetParent)
 {
 	if (source == nullptr || targetParent == nullptr || targetMeta == nullptr || sourceMeta == nullptr)
-		return;
+		return false;
 	ibWriterMemory writer;
 	if (!sourceMeta->CopyMetaObject(source, writer))
-		return;
+		return false;
 	ibReaderMemory reader(writer.pointer(), writer.size());
-	if (ibValueMetaObject* newObj = targetMeta->PasteMetaObject(source->GetClassType(), targetParent, reader))
-		newObj->SetCommonGuid(source->GetGuid());
+	ibValueMetaObject* const newObj = targetMeta->PasteMetaObject(source->GetClassType(), targetParent, reader);
+	if (newObj == nullptr)
+		return false;
+	newObj->SetCommonGuid(source->GetGuid());
+	return true;
 }
 
-void ApplyDelete(ibMetaData* targetMeta, ibValueMetaObject* target)
+bool ApplyDelete(ibMetaData* targetMeta, ibValueMetaObject* target)
 {
 	if (target == nullptr || targetMeta == nullptr)
-		return;
-	targetMeta->RemoveMetaObject(target, target->GetParent());
+		return false;
+	return targetMeta->RemoveMetaObject(target, target->GetParent());
 }
 
-void ApplyReplace(ibMetaData* targetMeta, ibMetaData* sourceMeta,
+// The paste only when the remove went through, as the desktop's.
+bool ApplyReplace(ibMetaData* targetMeta, ibMetaData* sourceMeta,
 	ibValueMetaObject* source, ibValueMetaObject* target)
 {
 	if (source == nullptr || target == nullptr || targetMeta == nullptr || sourceMeta == nullptr)
-		return;
+		return false;
 	ibValueMetaObject* parent = target->GetParent();
 	if (parent == nullptr)
-		return;
+		return false;
 	ibWriterMemory writer;
 	if (!sourceMeta->CopyMetaObject(source, writer))
-		return;
+		return false;
 	ibReaderMemory reader(writer.pointer(), writer.size());
 	const ibGuid sourceGuid = source->GetGuid();
 	const ibClassID sourceClsid = source->GetClassType();
 	if (!targetMeta->RemoveMetaObject(target, parent))
-		return;
-	if (ibValueMetaObject* newObj = targetMeta->PasteMetaObject(sourceClsid, parent, reader))
-		newObj->SetCommonGuid(sourceGuid);
+		return false;
+	ibValueMetaObject* const newObj = targetMeta->PasteMetaObject(sourceClsid, parent, reader);
+	if (newObj == nullptr)
+		return false;
+	newObj->SetCommonGuid(sourceGuid);
+	return true;
 }
 
 ibValueMetaObject* FindById(ibMetaData* meta, s32 id)
@@ -220,11 +232,12 @@ bool ibSchemaConfigCompare::AccessRight(const ibSession& session) const
 
 void ibSchemaConfigCompare::Build(const ibSession& session, const ibDataNode& args, ibDataNode& result) const
 {
+	// A side that cannot be read is the person's refusal, not an empty walk — "no differences" would be a lie.
 	ibProtocol::ibRefusal refusal = ibProtocol::ibRefusal::None;
 	wxString error;
 	ibCompareSides sides;
 	if (!ResolveSides(session, args, sides, refusal, error))
-		return;
+		ibCoreException::Error(wxT("%s"), error);
 	const std::vector<ibMetaDiffRecord> records = ibMetaDiffWalker::Walk(
 		sides.left != nullptr ? sides.left->GetCommonMetaObject() : nullptr,
 		sides.right != nullptr ? sides.right->GetCommonMetaObject() : nullptr);
@@ -254,29 +267,24 @@ std::function<void()> ibSchemaConfigCompare::Command(const ibSession& session, s
 		return nullptr;
 	}
 
-	const ibDataNode* const opsNode = args.FindChild(ibProtocol::ibSchema::ibConfigCompare::Ops);
-	if (opsNode == nullptr || opsNode->Children().empty()) {
-		refusal = ibProtocol::ibRefusal::BadParameter;
-		error = wxT("Merge needs Ops");
-		return nullptr;
-	}
-
 	struct ibOpSpec {
 		ibOp op = ibOp::Add;
 		s32 leftId = 0;
 		s32 rightId = 0;
-		s32 parentLeftId = 0;
-		s32 parentRightId = 0;
+		s32 parentId = 0;
 	};
+	// No ops — the rows chosen were all of a kind the tab does not send (a reorder): nothing applied, and said so, as the
+	// desktop's "applied to 0".
 	std::vector<ibOpSpec> specs;
-	for (const ibDataNode& node : opsNode->Children()) {
-		ibOpSpec spec;
-		spec.op = static_cast<ibOp>(node.GetValue<s32>(ibProtocol::ibSchema::ibConfigCompare::Op));
-		spec.leftId = node.GetValue<s32>(ibProtocol::ibSchema::ibConfigCompare::LeftId);
-		spec.rightId = node.GetValue<s32>(ibProtocol::ibSchema::ibConfigCompare::RightId);
-		spec.parentLeftId = node.GetValue<s32>(ibProtocol::ibSchema::ibConfigCompare::ParentLeftId);
-		spec.parentRightId = node.GetValue<s32>(ibProtocol::ibSchema::ibConfigCompare::ParentRightId);
-		specs.push_back(spec);
+	if (const ibDataNode* const opsNode = args.FindChild(ibProtocol::ibSchema::ibConfigCompare::Ops)) {
+		for (const ibDataNode& node : opsNode->Children()) {
+			ibOpSpec spec;
+			spec.op = static_cast<ibOp>(node.GetValue<s32>(ibProtocol::ibSchema::ibConfigCompare::Op));
+			spec.leftId = node.GetValue<s32>(ibProtocol::ibSchema::ibConfigCompare::LeftId);
+			spec.rightId = node.GetValue<s32>(ibProtocol::ibSchema::ibConfigCompare::RightId);
+			spec.parentId = node.GetValue<s32>(ibProtocol::ibSchema::ibConfigCompare::ParentId);
+			specs.push_back(spec);
+		}
 	}
 
 	// Capture holders by value so file configs stay alive through the work lambda.
@@ -288,55 +296,71 @@ std::function<void()> ibSchemaConfigCompare::Command(const ibSession& session, s
 	const wxString file2Id = args.GetValue<wxString>(ibProtocol::ibSchema::ibConfigCompare::File2);
 
 	return [pull, mode, specs, left, right, leftFile, rightFile, fileId, file2Id]() {
+		ibMetaData* const targetMeta = pull ? left : right;
+		ibMetaData* const sourceMeta = pull ? right : left;
 		int applied = 0;
+		wxString failures;
 		for (const ibOpSpec& spec : specs) {
-			ibMetaData* targetMeta = pull ? left : right;
-			ibMetaData* sourceMeta = pull ? right : left;
+			ibValueMetaObject* const source = FindById(sourceMeta, pull ? spec.rightId : spec.leftId);
+			ibValueMetaObject* const target = FindById(targetMeta, pull ? spec.leftId : spec.rightId);
+			const wxString name = source != nullptr ? source->GetName() : target != nullptr ? target->GetName() : wxString();
+			// One op's failure does not stop the rest — the desktop's per-row try; each one said, in the journal as there,
+			// and to the person below.
 			try {
+				bool done = false;
 				switch (spec.op) {
 				case ibOp::Add: {
-					ibValueMetaObject* source = FindById(sourceMeta, pull ? spec.rightId : spec.leftId);
-					ibValueMetaObject* parent = FindById(targetMeta,
-						pull ? spec.parentLeftId : spec.parentRightId);
+					ibValueMetaObject* parent = FindById(targetMeta, spec.parentId);
 					if (parent == nullptr && targetMeta != nullptr)
 						parent = targetMeta->GetCommonMetaObject();
-					ApplyAdd(targetMeta, sourceMeta, source, parent);
-					++applied;
+					done = ApplyAdd(targetMeta, sourceMeta, source, parent);
 					break;
 				}
-				case ibOp::Delete: {
-					ibValueMetaObject* target = FindById(targetMeta, pull ? spec.leftId : spec.rightId);
-					ApplyDelete(targetMeta, target);
-					++applied;
+				case ibOp::Delete:
+					done = ApplyDelete(targetMeta, target);
+					break;
+				case ibOp::Replace:
+					done = ApplyReplace(targetMeta, sourceMeta, source, target);
 					break;
 				}
-				case ibOp::Replace: {
-					ibValueMetaObject* source = FindById(sourceMeta, pull ? spec.rightId : spec.leftId);
-					ibValueMetaObject* target = FindById(targetMeta, pull ? spec.leftId : spec.rightId);
-					ApplyReplace(targetMeta, sourceMeta, source, target);
+				if (done)
 					++applied;
-					break;
-				}
-				}
+				else
+					failures += wxT("\n") + name;
+			}
+			catch (const ibCoreException& err) {
+				ibJournalInfo(wxT("designer"), wxT("[merge] %s: %s"), name, err.GetErrorDescription());
+				failures += wxT("\n") + name + wxT(": ") + err.GetErrorDescription();
 			}
 			catch (...) {
-				// One op's failure must not abort the rest — matches the desktop's per-row try.
+				ibJournalInfo(wxT("designer"), wxT("[merge] unknown error on %s"), name);
+				failures += wxT("\n") + name;
 			}
 		}
 
-		// Push: persist the right-side file config back into its temp file for the client to download.
+		// Push: the right side written back into its file of the session's, which the client takes down.
+		bool savedRight = true;
 		if (!pull) {
 			ibProtocol::ibRefusal refuse = ibProtocol::ibRefusal::None;
 			wxString err;
 			wxMemoryBuffer bytes;
 			ibMetaDataConfigurationBase* rightBase = dynamic_cast<ibMetaDataConfigurationBase*>(right);
-			if (rightBase != nullptr && rightBase->SaveConfigToBuffer(bytes)) {
-				const wxString outId = (mode == ibMode::TwoFiles) ? file2Id : fileId;
-				WriteTempFile(outId, bytes, refuse, err);
-			}
+			savedRight = rightBase != nullptr && rightBase->SaveConfigToBuffer(bytes)
+				&& WriteTempFile(mode == ibMode::TwoFiles ? file2Id : fileId, bytes, refuse, err);
 		}
 
-		(void)applied;
+		// HOW IT WENT, said by the one who did it: what was applied, what was not and why.
+		wxString message = wxString::Format(_("Merge applied to %d item(s)."), applied);
+		if (!failures.IsEmpty())
+			message += wxT("\n\n") + _("Not applied:") + failures;
+		if (!savedRight)
+			message += wxT("\n\n") + _("Warning: failed to save the other-side file.");
+		else if (pull)
+			message += wxT("\n\n") + _("Use Configuration > Save configuration to persist the changes.");
+		if (ibBackendDocFrame* const frame = ibSession::CurrentFrame())
+			frame->ShowModalMessage(message, _("Merge"),
+				wxOK | wxCENTRE | (failures.IsEmpty() && savedRight ? wxICON_INFORMATION : wxICON_WARNING));
+
 		(void)leftFile;
 		(void)rightFile;
 	};

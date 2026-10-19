@@ -5,7 +5,7 @@
 
 #include "frmclient/backend/backend_core.h"
 #include "core/description/sourceDescription.h"
-#include "protocol/protocol.h"   // ibProtocol::ibSchema::ibProperties — SourceKind, ibSourceKind
+#include "protocol/protocol.h"   // ibProtocol::ibSchema::ibProperties — SourceDataType, ibSourceDataType
 
 #include <functional>
 
@@ -13,10 +13,11 @@ class FRMCLIENT_API ibPropertyObject;
 
 // THE SOURCE WINDOW, OPENED BY WHOEVER HOLDS THE FORM — the tree to bind to is the form's attribute tree, and the
 // thin designer's form editor holds it (and asks the server for what lies under a reference). It sets the picker once;
-// the cell calls it with the control the binding is of, what it may be bound to (the row's SourceKind), the path of the table a column's box is bound to, and the binding — changed
-// in place on OK. False: cancelled, or no form holds the control.
-using ibSourceKind = ibProtocol::ibSchema::ibProperties::ibSourceKind;
-typedef std::function<bool(wxWindow* parent, const ibPropertyObject* owner, ibSourceKind kind,
+// the cell calls it with the control the binding is of, what it may be bound to (the row's SourceDataType), the path of
+// the table a column's box is bound to, and the binding — changed in place on OK. False: cancelled, or no form holds the
+// control.
+typedef std::function<bool(wxWindow* parent, const ibPropertyObject* owner,
+	ibProtocol::ibSchema::ibProperties::ibSourceDataType filter,
 	const ibSourceDescription& table, ibSourceDescription& binding)> ibSourcePicker;
 FRMCLIENT_API void ibSetSourcePicker(const ibSourcePicker& picker);
 
@@ -27,7 +28,7 @@ FRMCLIENT_API void ibSetSourcePicker(const ibSourcePicker& picker);
 // THE DESKTOP'S SOURCE CELL (frontend/propertyManager/property/advprop/advpropSource.h) — a control's binding to a value
 // of its form's data: the path as text, the "…" opening the tree of the form's attributes and their columns.
 //
-// The tree is the form's attribute tree (ibSourcePicker), filtered as the row says (SourceKind, Parent); the Type row
+// The tree is the form's attribute tree (ibSourcePicker), filtered as the row says (SourceDataType, Parent); the Type row
 // the desktop unfolds beneath — the type the source's leaf has — is the server's and is not shown. The cell reads as
 // the server wrote it and an empty text unbinds.
 class ibPGDataSourceProperty : public wxPGProperty {
@@ -35,10 +36,12 @@ public:
 
 	ibPGDataSourceProperty(const ibPropertyObject* property = nullptr, const wxString& label = wxPG_LABEL,
 		const wxString& name = wxPG_LABEL,
-		const wxVariant& value = wxNullVariant, ibSourceKind kind = ibSourceKind::Field, const ibSourceDescription& table = ibSourceDescription());
+		const wxVariant& value = wxNullVariant,
+		ibProtocol::ibSchema::ibProperties::ibSourceDataType filter = ibProtocol::ibSchema::ibProperties::ibSourceDataType::Attribute,
+		const ibSourceDescription& table = ibSourceDescription());
 
 	const ibPropertyObject* GetOwner() const { return m_owner; }
-	ibSourceKind GetKind() const { return m_kind; }
+	ibProtocol::ibSchema::ibProperties::ibSourceDataType GetFilterSourceDataType() const { return m_filterSourceDataType; }
 	const ibSourceDescription& GetTable() const { return m_table; }
 
 	virtual wxString ValueToString(wxVariant& value,
@@ -52,7 +55,9 @@ public:
 
 private:
 	const ibPropertyObject* m_owner = nullptr;   // the control the binding is of
-	ibSourceKind m_kind = ibSourceKind::Field;   // what it may be bound to (the row's SourceKind; none: a field)
+	// what it may be bound to (the row's SourceDataType; none: an attribute)
+	ibProtocol::ibSchema::ibProperties::ibSourceDataType m_filterSourceDataType =
+		ibProtocol::ibSchema::ibProperties::ibSourceDataType::Attribute;
 	ibSourceDescription m_table;                 // a column's: the path of the table its box is bound to
 	WX_PG_DECLARE_PROPERTY_CLASS(ibPGDataSourceProperty)
 };

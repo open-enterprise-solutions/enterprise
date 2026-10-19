@@ -283,18 +283,16 @@ bool ibFormEditDocument::Save()
 
 void ibFormEditDocument::DrawView(const ibProtocolNode& view, const ibProtocolNode& patch)
 {
-	ibModuleEditDocument::DrawView(view, patch);
-
-	if (patch.IsNode() && !patch.Has(ibProtocol::ibView::State))
-		return;
-
+	// The designer's first — the module's drawing asks the menu and the toolbar anew when the read-only changed, and they
+	// are built of both editors.
 	ibVisualEditorNotebook* const visualNotebook = GetVisualNotebook();
-	if (visualNotebook == nullptr)
-		return;
+	if (visualNotebook != nullptr && (!patch.IsNode() || patch.Has(ibProtocol::ibView::State))) {
+		const ibProtocolNode state = view.FindChild(ibProtocol::ibView::State);
+		visualNotebook->GetVisualEditor()->SetReadOnly(state.GetBool(ibProtocol::ibView::ibModule::ReadOnly));
+		visualNotebook->GetVisualEditor()->GetVisualEditor()->SetCaption(state.GetString(ibProtocol::ibView::ibFormDesigner::Caption));
+	}
 
-	const ibProtocolNode state = view.FindChild(ibProtocol::ibView::State);
-	visualNotebook->GetVisualEditor()->SetReadOnly(state.GetBool(ibProtocol::ibView::ibModule::ReadOnly));
-	visualNotebook->GetVisualEditor()->GetVisualEditor()->SetCaption(state.GetString(ibProtocol::ibView::ibFormDesigner::Caption));
+	ibModuleEditDocument::DrawView(view, patch);
 }
 
 wxCommandProcessor* ibFormEditDocument::OnCreateCommandProcessor()

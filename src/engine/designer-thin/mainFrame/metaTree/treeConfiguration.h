@@ -33,12 +33,13 @@ public:
 	// too.
 	virtual void Draw(const ibProtocolNode& root);
 
-	// The tree's tab — 0: the configuration's (the frame's MetaData), else an external file's.
+	// The tree's tab — 0: the configuration's (the frame's MetaData), else its tab's: an external file's, or a configuration
+	// browsed.
 	long long GetTab() const { return m_tab; }
 
 	// THE DESKTOP'S SetReadOnly — New / Delete / Up / Down / Sort shut; Edit and Open still work for browsing.
 	void SetReadOnly(bool readOnly = true) { m_readOnly = readOnly; }
-	bool IsReadOnly() const { return m_readOnly; }
+	bool IsEditable() const { return !m_readOnly; }
 
 	// Its tab became the active one, or the tree the focus — the object it holds is sent to the inspector once the event
 	// is done, received anew only where another was shown (the desktop's ibMetaTreeView::OnActivateView).
@@ -51,7 +52,9 @@ public:
 
 protected:
 
-	ibMetaTreeBase(wxWindow* parent, long long tab, bool search);
+	// `kind` — what it draws: a Configuration's tree (its root shown, searched — in the frame or in a tab), or an external
+	// file's (DataProcessor, Report: its root hidden, its rows framed — the desktop's tree control of those).
+	ibMetaTreeBase(wxWindow* parent, long long tab, ibProtocol::ibView::ibKind kind);
 
 	// THE MODAL EDITOR over an object, the desktop's — its row's menu opens it (the engine's ProcessCommand, by the item's
 	// Name). A tree that has none answers by doing nothing: an external file's.
@@ -187,11 +190,10 @@ private:
 // MetaData, the search above them.
 class ibConfigurationTree : public ibMetaTreeBase {
 public:
-	explicit ibConfigurationTree(wxWindow* parent) : ibMetaTreeBase(parent, 0, true) {}
-	// A configuration browsed in a tab (File → Open / Open database configuration) — same rows,
-	// schema MetaData with that Tab; readOnly shuts New/Edit/Delete like the desktop's SetReadOnly.
-	ibConfigurationTree(wxWindow* parent, long long tab, bool readOnly = false)
-		: ibMetaTreeBase(parent, tab, true) { SetReadOnly(readOnly); }
+	explicit ibConfigurationTree(wxWindow* parent) : ibMetaTreeBase(parent, 0, ibProtocol::ibView::ibKind::Configuration) {}
+	// A configuration browsed in a tab (File → Open / Open database configuration) — the same rows, schema MetaData with
+	// that Tab.
+	ibConfigurationTree(wxWindow* parent, long long tab) : ibMetaTreeBase(parent, tab, ibProtocol::ibView::ibKind::Configuration) {}
 
 	// The predefined values editor over the object (ibDialogPredefinedEditor), its items read from the server as it opens.
 	virtual void EditPredefinedValues(class ibValueMetaObjectRecordDataHierarchyMutableRef* metaObject) override;

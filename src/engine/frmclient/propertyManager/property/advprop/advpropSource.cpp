@@ -34,18 +34,19 @@ public:
 		ibPropertyRegistry::Register(wxT("ibPropertySource"), [](ibBackendProperty* property) -> wxPGProperty* {
 			ibSourceDescription sourceDesc;
 			ibSourceDescriptionMemory::ReadNode(property->GetNodeValue(), sourceDesc);
-			// …and what it may be bound to, as the row says (an older server's says nothing: a field).
-			ibSourceKind kind = ibSourceKind::Field;
+			// …and what it may be bound to, as the row says (an older server's says nothing: an attribute).
+			using ibSourceDataType = ibProtocol::ibSchema::ibProperties::ibSourceDataType;
+			ibSourceDataType filter = ibSourceDataType::Attribute;
 			ibSourceDescription table;
 			ibDataNode row;
 			if (property->GetProtocolValue(row)) {
-				if (row.FindField(ibProtocol::ibSchema::ibProperties::SourceKind) != nullptr)
-					kind = static_cast<ibSourceKind>(row.GetValue<s32>(ibProtocol::ibSchema::ibProperties::SourceKind));
+				if (row.FindField(ibProtocol::ibSchema::ibProperties::SourceDataType) != nullptr)
+					filter = static_cast<ibSourceDataType>(row.GetValue<s32>(ibProtocol::ibSchema::ibProperties::SourceDataType));
 				if (const ibDataValue* const parent = row.FindProperty(ibProtocol::ibSchema::ibProperties::Parent))
 					ibSourceDescriptionMemory::ReadNode(*parent, table);
 			}
 			return new ibPGDataSourceProperty(property->GetPropertyObject(), property->GetLabel(), property->GetName(),
-				wxVariant(new ibVariantDataSource(sourceDesc, property->GetValue().GetString())), kind, table);
+				wxVariant(new ibVariantDataSource(sourceDesc, property->GetValue().GetString())), filter, table);
 		},
 		[](const wxVariant& value) {
 			ibDataValue node;
@@ -58,8 +59,9 @@ public:
 
 // (The desktop's builds the Type row here, over the owner's source factory — see the header.)
 ibPGDataSourceProperty::ibPGDataSourceProperty(const ibPropertyObject* property, const wxString& label,
-	const wxString& strName, const wxVariant& value, ibSourceKind kind, const ibSourceDescription& table) :
-	wxPGProperty(label, strName), m_owner(property), m_kind(kind), m_table(table)
+	const wxString& strName, const wxVariant& value, ibProtocol::ibSchema::ibProperties::ibSourceDataType filter,
+	const ibSourceDescription& table) :
+	wxPGProperty(label, strName), m_owner(property), m_filterSourceDataType(filter), m_table(table)
 {
 	m_flags |= wxPGPropertyFlags_ActiveButton; // Property button always enabled.
 
@@ -101,7 +103,7 @@ wxPGEditorDialogAdapter* ibPGDataSourceProperty::GetEditorDialog() const
 				return false;
 			}
 			ibSourceDescription binding = current->GetSourceDesc();
-			if (!SourcePicker()(pg, cell->GetOwner(), cell->GetKind(), cell->GetTable(), binding))
+			if (!SourcePicker()(pg, cell->GetOwner(), cell->GetFilterSourceDataType(), cell->GetTable(), binding))
 				return false;
 			// …a binding the same as it was changes nothing.
 			if (binding.GetPath() == current->GetSourceDesc().GetPath())

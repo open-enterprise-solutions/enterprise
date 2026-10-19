@@ -141,11 +141,14 @@ void ibFrontendMainFrameDesigner::OnAttachForDebugging(wxCommandEvent& WXUNUSED(
 
 void ibFrontendMainFrameDesigner::OnOpenConfiguration(wxCommandEvent& WXUNUSED(event))
 {
-	// ⚠ NOT HERE YET: the desktop's raised the browser already open on the database's configuration, else opened one —
-	// its tree read-only in a tab (ibMetadataBrowserDocument, designer-thin/docManager/templates/docViewMetaFile.h). The
-	// database's configuration is the server's: it would raise that tab (a Kind for it), its rows in the tab's view.
-	wxMessageBox(_("Opening the database configuration is not in the thin client yet."),
-		wxTheApp->GetAppDisplayName(), wxOK | wxICON_INFORMATION, this);
+	// The desktop's raised the browser already open on the database's configuration, else opened one — its tree read-only
+	// in a tab (ibMetadataBrowserDocument). The database's configuration is the server's: its command does both, and the
+	// tab comes with the frame (ibView::ibKind::Configuration).
+	ibProtocolNode params, answer;
+	params.SetValue(ibProtocol::ibSchema::Schema, static_cast<long long>(ibProtocol::ibSchema::ibKind::MetaData));
+	params.SetValue(ibProtocol::ibSchema::Command,
+		static_cast<long long>(ibProtocol::ibSchema::ibMetaData::ibCommand::Browse));
+	Call(ibProtocol::ibMethod::Schema, params, answer);
 }
 
 void ibFrontendMainFrameDesigner::OnRollbackConfiguration(wxCommandEvent& WXUNUSED(event))

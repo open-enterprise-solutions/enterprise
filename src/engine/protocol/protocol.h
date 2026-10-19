@@ -452,7 +452,7 @@ namespace ibProtocol {
 			Schedule         = 16,   // ibSchedule
 			ApplyChange      = 17,   // ibApplyChange
 			FormType         = 18,   // ibFormType
-			PredefinedSelector = 19,   // ibPredefinedSelector
+			PredefinedSelector = 19, // ibPredefinedSelector
 		};
 
 		// Text, Caption, Style (wx's button flags) → Button (wx's code: 2 Yes, 8 No, 4 OK, 16 Cancel).
@@ -616,16 +616,14 @@ namespace ibProtocol {
 			inline constexpr const char* Chosen       = "Chosen";         // a value chosen on the server's choice form: Value,
 			                                                              // Choice
 			inline constexpr const char* Value        = "Value";
-			inline constexpr const char* Declared     = "Declared";      // Act Choose: the cell's full type description
-			                                                              // (ibTypeDescriptionMemory), when the client knows it
 
 			// What the window asked on the way.
 			enum class ibAct : int {
 				Expand = 1,   // a reference field opened: the fields of its Targets — asked again with Expanded, their fields
 				              // (children as Fields') and their References
 				Choose = 2,   // a value of a type of the server's chosen (Type — its class id as text, Value — the one held,
-				              // Choice — the number the client asks it under, Declared — the cell's full type when known):
-				              // its quick choice, its choice form, or in the designer PredefinedSelector; what is chosen
+				              // Choice — the number the client asks it under): its quick choice, or its choice form — a tab
+				              // like any other, in the designer its declared values (ibPredefinedSelector); what is chosen
 				              // comes back in the window's question as Chosen (Choice, and Value with its Presentation
 				              // beside {t, v}), whenever it is
 			};
@@ -711,24 +709,16 @@ namespace ibProtocol {
 
 		}
 
-		// The designer's declared-value picker (desktop ibShowPredefinedSelector): while a configuration is written
-		// there is no data, so a reference cell offers what the configuration DECLARES — EmptyRef, a predefined
-		// element, an enumeration member. Types — one branch per admitted reference (Title, MetaId) with nested
-		// children Name, Guid (empty Guid is EmptyRef; nested children are folders). Primitives — Id, Caption, Type
-		// (class id as text) offered beside the technical declared-value entry → Type (a primitive settled) or
-		// MetaId, Guid, Written (the declaration); none — cancelled.
+		// The desktop's ibShowPredefinedSelector, its second question — which DECLARED value, while a configuration is
+		// written and there is no data: Types — a branch per admitted reference (Title), its values as children (Name,
+		// Id), each holding what is declared under it (a predefined folder's items) → Id — the value chosen; none —
+		// closed. The first question, which type, is the type list every road asks (ibChoice).
 		namespace ibPredefinedSelector {
 
-			inline constexpr const char* Caption    = "Caption";
-			inline constexpr const char* Types      = "Types";       // children: Title, MetaId, and value children
-			inline constexpr const char* Title      = "Title";
-			inline constexpr const char* MetaId     = "MetaId";
-			inline constexpr const char* Name       = "Name";
-			inline constexpr const char* Guid       = "Guid";        // empty — EmptyRef of that type
-			inline constexpr const char* Primitives = "Primitives";  // children: Id, Caption, Type
-			inline constexpr const char* Id         = "Id";
-			inline constexpr const char* Type       = "Type";        // response: primitive class id as text
-			inline constexpr const char* Written    = "Written";     // response: CatalogRef.Goods.EmptyRef etc.
+			inline constexpr const char* Types = "Types";
+			inline constexpr const char* Title = "Title";
+			inline constexpr const char* Name  = "Name";   // EmptyRef, an enumeration member, a predefined element
+			inline constexpr const char* Id    = "Id";     // the server's number for the value
 
 		}
 
@@ -766,7 +756,7 @@ namespace ibProtocol {
 			                     // down where the person chooses; Clear — asked first. Each said to the person by the server
 			Assistant    = 17,   // the designer's assistant window (Administration) — shows nothing; command Open opens its
 			                     // tab (ibView::ibKind::Assistant). Allowed while the base's assistant access is running
-			ConfigCompare = 18,  // ibConfigCompare — Walk of two configurations; Merge applies selected ops
+			ConfigCompare = 18,  // ibConfigCompare — the walk of two configurations; command Merge applies the ops chosen
 		};
 
 		// A schema's own commands — `schema {Schema, Command, Args}`. All functions and Sections take the one: Open
@@ -794,8 +784,9 @@ namespace ibProtocol {
 		// THE DESIGNER'S CONFIGURATION COMPARE — Build {Mode, File?, File2?} walks two trees (ibMetaDiffWalker) →
 		// Records (Status, Parent, Depth, Group, Name, Picture, Property, Left, Right, LeftId, RightId). Mode: File —
 		// active vs uploaded File; Database — active vs its baseline; TwoFiles — File vs File2. Command Merge {Mode,
-		// File?, File2?, Pull, Ops: [{Op, LeftId, RightId, ParentLeftId, ParentRightId}]} — CopyMetaObject / Remove /
-		// Paste on the server; Push (Pull false) writes the right side back into File or File2.
+		// File?, File2?, Pull, Ops: [{Op, LeftId, RightId, ParentId}]} — CopyMetaObject / Remove / Paste on the server;
+		// ParentId — what an Add goes under on the side written (the desktop's FindTargetParent; none: the root). Push
+		// (Pull false) writes the right side back into File or File2.
 		namespace ibConfigCompare {
 
 			inline constexpr const char* Mode          = "Mode";
@@ -816,9 +807,7 @@ namespace ibProtocol {
 			inline constexpr const char* Pull          = "Pull";
 			inline constexpr const char* Ops           = "Ops";
 			inline constexpr const char* Op            = "Op";
-			inline constexpr const char* ParentLeftId  = "ParentLeftId";
-			inline constexpr const char* ParentRightId = "ParentRightId";
-			inline constexpr const char* Applied       = "Applied";
+			inline constexpr const char* ParentId      = "ParentId";
 
 			enum class ibMode : int {
 				File     = 1,   // active configuration vs uploaded File
@@ -1019,6 +1008,8 @@ namespace ibProtocol {
 				Apply    = 10,   // written and the base restructured, its ledger asked first (ibRequest::ibApplyChange)
 				Load     = 11,   // {File} — read from that uploaded file
 				Unload   = 12,   // {File} — written into that one (uploaded empty)
+				Browse   = 13,   // the base's configuration in a tab, read-only (ibView::ibKind::Configuration): raised when
+				                 // open, else opened
 			};
 
 		}
@@ -1065,16 +1056,17 @@ namespace ibProtocol {
 			// the command rows Name, Picture, CommandPath, Kind (ibInterfaceCommandType).
 			inline constexpr const char* CommandTree  = "CommandTree";
 			inline constexpr const char* CommandPath  = "CommandPath";    // the hops of a command — children Id
-			// …a control's Source: what it may be bound to (SourceKind, an ibSourceKind), and for a column the path of
-			// the table its box is bound to (Parent — as a binding is written).
-			inline constexpr const char* SourceKind   = "SourceKind";
+			// …a control's Source: what it may be bound to (SourceDataType, an ibSourceDataType), and for a column the
+			// path of the table its box is bound to (Parent — as a binding is written).
+			inline constexpr const char* SourceDataType = "SourceDataType";
 			inline constexpr const char* Parent       = "Parent";
 
-			// What a control's Source may be bound to (the server's GetFilterSourceDataType); none said: a field.
-			enum class ibSourceKind : int {
-				Table  = 0,   // a table of the form's data
-				Column = 1,   // a column of the table its table box is bound to
-				Field  = 2,   // a field
+			// What a control's Source may be bound to (the server's ibSourceDataType, as its GetFilterSourceDataType
+			// answers); none said: an attribute.
+			enum class ibSourceDataType : int {
+				Table       = 0,   // a table of the form's data
+				TableColumn = 1,   // a column of the table its table box is bound to
+				Attribute   = 2,   // an attribute
 			};
 
 		}

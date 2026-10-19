@@ -12,7 +12,7 @@
 
 #include "core/description/commandDescription.h"  // ibCommandDescription — a command row's path
 #include "core/description/sourceDescription.h"   // ibSourceHop — an attribute row's path
-#include "protocol/protocol.h"                     // ibProtocol::ibSchema::ibProperties::ibSourceKind
+#include "protocol/protocol.h"                     // ibProtocol::ibSchema::ibProperties::ibSourceDataType
 
 #include <wx/aui/auibook.h>
 #include <wx/splitter.h>
@@ -344,7 +344,7 @@ public:
 
 	class ibVisualEditorAttributeTreeItemData;   // a row's data — below
 
-		class ibVisualEditorAttributeTree : public wxPanel {
+	class ibVisualEditorAttributeTree : public wxPanel {
 	public:
 
 		ibVisualEditorAttributeTree(ibVisualEditor* owner, wxWindow* parent, int id = wxID_ANY);
@@ -359,9 +359,9 @@ public:
 		ibFormAttributeValue* FindEntry(const ibPropertyObject* owner) const;
 
 		// ⭐ THE SOURCE WINDOW — the desktop's (frontend advpropSource.cpp): these rows, filtered by what a control may be
-		// bound to (`kind`; a column — of `table`), a reference opened as the tree opens it
+		// bound to (`filter`; a column — of `table`), a reference opened as the tree opens it
 		// (Composition), the binding's own row selected; OK — `binding` the row's path. False: cancelled, or nothing.
-		bool PickSource(wxWindow* parent, ibProtocol::ibSchema::ibProperties::ibSourceKind kind,
+		bool PickSource(wxWindow* parent, ibProtocol::ibSchema::ibProperties::ibSourceDataType filter,
 			const ibSourceDescription& table, ibSourceDescription& binding);
 
 	protected:
@@ -369,7 +369,7 @@ public:
 		void OnSelChanged(wxTreeEvent& event);
 		void OnContextMenu(wxContextMenuEvent& event);        // right-click anywhere (incl. empty)
 		void OnActivated(wxTreeEvent& event);                 // double-click → activate properties
-		void OnItemExpanding(wxTreeEvent& event);             // lazy: the node's composition asked on first expand
+		void OnItemExpanding(wxTreeEvent& event);             // the node's composition asked each time it opens
 		void OnBeginDrag(wxTreeEvent& event);                 // drag a node onto the form → a bound control
 		void OnAdd(wxCommandEvent& event);
 		void OnAddColumn(wxCommandEvent& event);              // add a column to a value-table attribute
@@ -432,7 +432,8 @@ public:
 		// A ROOT node carries the attribute HOLDER — the selectable; a COMPOSITION node (a field / table section /
 		// reference target, asked on expand) passes entry == nullptr and carries the binding PATH (head = attribute id)
 		// + view flags, as the server wrote them — what it is asked with again. A non-empty refTypes list means "expand me
-		// through a reference-as-source"; m_loaded guards the one-time ask.
+		// through a reference-as-source"; m_loaded — its rows are there and not asked: written inline, or asked once by the
+		// source window, which lives for one choice.
 		ibVisualEditorAttributeTreeItemData(ibFormAttributeValue* entry, const std::vector<ibSourceHop>& path,
 			const std::vector<ibMetaID>& refTypes = {}, bool tableSection = false, ibClassID dropControl = 0,
 			bool underList = false)

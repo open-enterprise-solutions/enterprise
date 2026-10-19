@@ -8,7 +8,7 @@
 #include <wx/sizer.h>
 
 ibDataReportTree::ibDataReportTree(wxWindow* parent, long long tab)
-	: ibMetaTreeBase(parent, tab, false)
+	: ibMetaTreeBase(parent, tab, ibProtocol::ibView::ibKind::Report)
 {
 	wxBoxSizer* bSizerHeader = new wxBoxSizer(wxHORIZONTAL);
 

@@ -118,6 +118,9 @@
     <ClCompile Include="docView\templates\designer\docViewDataProcessorEdit.cpp">
       <Filter>docView\templates\designer</Filter>
     </ClCompile>
+    <ClCompile Include="docView\templates\designer\docViewMetaFile.cpp">
+      <Filter>docView\templates\designer</Filter>
+    </ClCompile>
     <ClCompile Include="docView\templates\designer\docViewDataReportEdit.cpp">
       <Filter>docView\templates\designer</Filter>
     </ClCompile>
@@ -211,6 +214,9 @@
     <ClCompile Include="schema\designer\objectText.cpp">
       <Filter>schema\designer</Filter>
     </ClCompile>
+    <ClCompile Include="schema\designer\configCompare.cpp">
+      <Filter>schema\designer</Filter>
+    </ClCompile>
     <ClCompile Include="schema\designer\database.cpp">
       <Filter>schema\designer</Filter>
     </ClCompile>
@@ -256,9 +262,6 @@
     <ClCompile Include="win\dlgs\applyChange.cpp">
       <Filter>win\dlgs</Filter>
     </ClCompile>
-    <ClCompile Include="win\dlgs\selectPredefined.cpp">
-      <Filter>win\dlgs</Filter>
-    </ClCompile>
     <ClCompile Include="win\dlgs\formEditor.cpp">
       <Filter>win\dlgs</Filter>
     </ClCompile>
@@ -266,6 +269,9 @@
       <Filter>win\dlgs</Filter>
     </ClCompile>
     <ClCompile Include="win\dlgs\generation.cpp">
+      <Filter>win\dlgs</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\selectPredefined.cpp">
       <Filter>win\dlgs</Filter>
     </ClCompile>
     <ClCompile Include="win\dlgs\settings\savedSettings.cpp">
@@ -586,6 +592,9 @@
     <ClInclude Include="docView\templates\designer\docViewDataProcessorEdit.h">
       <Filter>docView\templates\designer</Filter>
     </ClInclude>
+    <ClInclude Include="docView\templates\designer\docViewMetaFile.h">
+      <Filter>docView\templates\designer</Filter>
+    </ClInclude>
     <ClInclude Include="docView\templates\designer\docViewDataReportEdit.h">
       <Filter>docView\templates\designer</Filter>
     </ClInclude>
@@ -667,6 +676,9 @@
     <ClInclude Include="schema\designer\objectText.h">
       <Filter>schema\designer</Filter>
     </ClInclude>
+    <ClInclude Include="schema\designer\configCompare.h">
+      <Filter>schema\designer</Filter>
+    </ClInclude>
     <ClInclude Include="schema\designer\database.h">
       <Filter>schema\designer</Filter>
     </ClInclude>
@@ -715,9 +727,6 @@
     <ClInclude Include="win\dlgs\applyChange.h">
       <Filter>win\dlgs</Filter>
     </ClInclude>
-    <ClInclude Include="win\dlgs\selectPredefined.h">
-      <Filter>win\dlgs</Filter>
-    </ClInclude>
     <ClInclude Include="win\dlgs\formEditor.h">
       <Filter>win\dlgs</Filter>
     </ClInclude>
@@ -725,6 +734,9 @@
       <Filter>win\dlgs</Filter>
     </ClInclude>
     <ClInclude Include="win\dlgs\generation.h">
+      <Filter>win\dlgs</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\selectPredefined.h">
       <Filter>win\dlgs</Filter>
     </ClInclude>
     <ClInclude Include="win\dlgs\settings\savedSettings.h">
