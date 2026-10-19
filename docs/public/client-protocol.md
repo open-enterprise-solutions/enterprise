@@ -147,7 +147,7 @@ client that reads none opens the link's window without the question of which typ
 parameters' window. A description's `path` is read whether it arrives as a field (as written) or as a property (an
 object read from JSON).
 A control's `ibPropertySource` row (its Data source) carries what its source window may offer as optional fields:
-`SourceKind` — 0 a table, 1 a column of the table its table box is bound to, 2 a field — and, for a column, `Parent` —
+`SourceKind` — an `ibSourceKind`: `Table` 0, `Column` 1 (of the table its table box is bound to), `Field` 2 — and, for a column, `Parent` —
 the path of that table, as a binding is written. The tree itself is the form's attribute tree the client already holds
 (and expands with the form editor's Composition). The chosen path goes back through the row's `Set`; a cancelled
 window, or the binding already set, sends nothing. A client that reads no `SourceKind` treats the row as a field.

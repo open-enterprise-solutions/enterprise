@@ -551,13 +551,14 @@ bool FindRow(const ibProtocolNode& rows, const std::vector<ibSourceHop>& path, i
 
 } // namespace
 
-bool ibAttributeTree::PickSource(wxWindow* parent, int kind, const ibSourceDescription& table, ibSourceDescription& binding)
+bool ibAttributeTree::PickSource(wxWindow* parent, ibProtocol::ibSchema::ibProperties::ibSourceKind kind,
+	const ibSourceDescription& table, ibSourceDescription& binding)
 {
-	enum { kindTable = 0, kindColumn = 1, kindField = 2 };
+	using ibSourceKind = ibProtocol::ibSchema::ibProperties::ibSourceKind;
 
 	// WHERE THE TREE STARTS — the form's attributes as the editor last drew them; a column's, the columns of its table.
 	ibProtocolNode rows = m_formHandler->m_trees.FindChild(ibProtocol::ibView::ibFormDesigner::AttributeTree);
-	if (kind == kindColumn) {
+	if (kind == ibSourceKind::Column) {
 		ibProtocolNode bound;
 		if (!table.IsOk() || !FindRow(rows, table.GetPath(), bound) || bound.Children().empty()) {
 			wxMessageBox(_("The table box of this column is not bound to a table."), _("Choice source"),
@@ -580,7 +581,7 @@ bool ibAttributeTree::PickSource(wxWindow* parent, int kind, const ibSourceDescr
 	std::function<void(const wxTreeItemId&, const ibProtocolNode&)> append = [&](const wxTreeItemId& under, const ibProtocolNode& list) {
 		for (const ibProtocolNode& row : list.Children()) {
 			const bool tableSection = row.GetBool(ibProtocol::ibView::ibFormDesigner::TableSection);
-			if (kind == kindTable ? !(tableSection || HoldsTable(row)) : tableSection)
+			if (kind == ibSourceKind::Table ? !(tableSection || HoldsTable(row)) : tableSection)
 				continue;
 			std::vector<ibMetaID> refTypes;
 			for (const ibProtocolNode& target : row.GetList(ibProtocol::ibView::ibFormDesigner::Targets))
@@ -588,13 +589,13 @@ bool ibAttributeTree::PickSource(wxWindow* parent, int kind, const ibSourceDescr
 			ibAttributeTreeItemData* const itemData = new ibAttributeTreeItemData(nullptr, PathOf(row), refTypes,
 				tableSection, 0, row.GetBool(ibProtocol::ibView::ibFormDesigner::UnderList));
 			const wxTreeItemId item = tc->AppendItem(under, row.GetString(ibProtocol::ibView::ibFormDesigner::Name), image, image, itemData);
-			if (kind == kindTable && !tableSection)
+			if (kind == ibSourceKind::Table && !tableSection)
 				tc->SetItemTextColour(item, wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));   // only holds one
 			if (!row.Children().empty()) {
 				append(item, row);
 				itemData->SetLoaded();
 			}
-			else if (kind != kindTable && row.GetBool(ibProtocol::ibView::ibFormDesigner::HasComposition)) {
+			else if (kind != ibSourceKind::Table && row.GetBool(ibProtocol::ibView::ibFormDesigner::HasComposition)) {
 				tc->AppendItem(item, wxEmptyString);
 			}
 		}
@@ -620,7 +621,7 @@ bool ibAttributeTree::PickSource(wxWindow* parent, int kind, const ibSourceDescr
 		ibAttributeTreeItemData* const data = item.IsOk() ? static_cast<ibAttributeTreeItemData*>(tc->GetItemData(item)) : nullptr;
 		if (data == nullptr || data->GetPath().empty())
 			return nullptr;
-		return kind == kindTable && !data->IsTableSection() ? nullptr : data;
+		return kind == ibSourceKind::Table && !data->IsTableSection() ? nullptr : data;
 	};
 	tc->Bind(wxEVT_TREE_ITEM_ACTIVATED, [&](wxTreeEvent& event) {
 		if (chosen() != nullptr)
@@ -633,7 +634,7 @@ bool ibAttributeTree::PickSource(wxWindow* parent, int kind, const ibSourceDescr
 	{
 		const std::vector<ibSourceHop>& path = binding.GetPath();
 		wxTreeItemId under = root, found;
-		for (size_t count = kind == kindColumn ? table.GetPath().size() + 1 : 1; count <= path.size(); count++) {
+		for (size_t count = kind == ibSourceKind::Column ? table.GetPath().size() + 1 : 1; count <= path.size(); count++) {
 			wxTreeItemId match;
 			wxTreeItemIdValue cookie;
 			for (wxTreeItemId child = tc->GetFirstChild(under, cookie); child.IsOk(); child = tc->GetNextChild(under, cookie)) {

@@ -1,7 +1,6 @@
 ﻿#include "advpropSource.h"
 
 #include "frmclient/backend/propertyManager/property/variant/variantSource.h"   // ibVariantDataSource
-#include "protocol/protocol.h"                                                   // ibProtocol::ibSchema::ibProperties
 #include "core/description/sourceDescription.h"                                  // ibSourceDescriptionMemory — Parent
 
 #include "frmclient/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
@@ -36,12 +35,12 @@ public:
 			ibSourceDescription sourceDesc;
 			ibSourceDescriptionMemory::ReadNode(property->GetNodeValue(), sourceDesc);
 			// …and what it may be bound to, as the row says (an older server's says nothing: a field).
-			int kind = 2;
+			ibSourceKind kind = ibSourceKind::Field;
 			ibSourceDescription table;
 			ibDataNode row;
 			if (property->GetProtocolValue(row)) {
 				if (row.FindField(ibProtocol::ibSchema::ibProperties::SourceKind) != nullptr)
-					kind = row.GetValue<s32>(ibProtocol::ibSchema::ibProperties::SourceKind);
+					kind = static_cast<ibSourceKind>(row.GetValue<s32>(ibProtocol::ibSchema::ibProperties::SourceKind));
 				if (const ibDataValue* const parent = row.FindProperty(ibProtocol::ibSchema::ibProperties::Parent))
 					ibSourceDescriptionMemory::ReadNode(*parent, table);
 			}
@@ -59,7 +58,7 @@ public:
 
 // (The desktop's builds the Type row here, over the owner's source factory — see the header.)
 ibPGDataSourceProperty::ibPGDataSourceProperty(const ibPropertyObject* property, const wxString& label,
-	const wxString& strName, const wxVariant& value, int kind, const ibSourceDescription& table) :
+	const wxString& strName, const wxVariant& value, ibSourceKind kind, const ibSourceDescription& table) :
 	wxPGProperty(label, strName), m_owner(property), m_kind(kind), m_table(table)
 {
 	m_flags |= wxPGPropertyFlags_ActiveButton; // Property button always enabled.

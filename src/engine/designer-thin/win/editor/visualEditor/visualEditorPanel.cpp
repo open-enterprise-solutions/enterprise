@@ -31,7 +31,7 @@ ibVisualEditorNotebook::ibVisualEditor::ibVisualEditor(ibModuleEditDocument* doc
 	CreateWideGui();
 
 	// THE SOURCE WINDOW — the attribute tree of the form whose control the cell is of (the one the inspector shows).
-	static const bool picker = (ibSetSourcePicker([](wxWindow* parent, const ibPropertyObject* owner, int kind,
+	static const bool picker = (ibSetSourcePicker([](wxWindow* parent, const ibPropertyObject* owner, ibSourceKind kind,
 		const ibSourceDescription& table, ibSourceDescription& binding) {
 		for (ibVisualEditor* const editor : OpenEditors()) {
 			if (owner != nullptr && editor->GetCurrentElement() == owner)

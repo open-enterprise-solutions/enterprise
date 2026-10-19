@@ -217,9 +217,12 @@ bool ibPropertySource::GetProtocolValue(ibDataNode& row)
 		dynamic_cast<const ibBackendTypeSourceFactory*>(GetPropertyObject());
 	if (factory == nullptr)
 		return true;
-	const ibSourceDataType kind = factory->GetFilterSourceDataType();
+	using ibSourceKind = ibProtocol::ibSchema::ibProperties::ibSourceKind;
+	const ibSourceDataType filter = factory->GetFilterSourceDataType();
+	const ibSourceKind kind = filter == ibSourceDataType::ibSourceDataType_table ? ibSourceKind::Table :
+		filter == ibSourceDataType::ibSourceDataType_tableColumn ? ibSourceKind::Column : ibSourceKind::Field;
 	row.SetValue(ibProtocol::ibSchema::ibProperties::SourceKind, static_cast<s32>(kind));
-	if (kind != ibSourceDataType::ibSourceDataType_tableColumn)
+	if (kind != ibSourceKind::Column)
 		return true;
 	const ibBackendTypeSourceFactory* const parent =
 		dynamic_cast<const ibBackendTypeSourceFactory*>(factory->GetSourceObject());

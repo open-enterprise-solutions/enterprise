@@ -9,6 +9,7 @@
 
 #include "core/description/commandDescription.h"  // ibCommandDescription — a command row's path
 #include "core/description/sourceDescription.h"   // ibSourceHop — an attribute row's path
+#include "protocol/protocol.h"                     // ibProtocol::ibSchema::ibProperties::ibSourceKind
 
 #include <wx/aui/auibook.h>
 #include <wx/splitter.h>
@@ -454,9 +455,10 @@ public:
 		ibFormAttributeValue* FindEntry(const ibPropertyObject* owner) const;
 
 		// ⭐ THE SOURCE WINDOW — the desktop's (frontend advpropSource.cpp): these rows, filtered by what a control may be
-		// bound to (`kind`: 0 a table, 1 a column of `table`, 2 a field), a reference opened as the tree opens it
+		// bound to (`kind`; a column — of `table`), a reference opened as the tree opens it
 		// (Composition), the binding's own row selected; OK — `binding` the row's path. False: cancelled, or nothing.
-		bool PickSource(wxWindow* parent, int kind, const ibSourceDescription& table, ibSourceDescription& binding);
+		bool PickSource(wxWindow* parent, ibProtocol::ibSchema::ibProperties::ibSourceKind kind,
+			const ibSourceDescription& table, ibSourceDescription& binding);
 
 	protected:
 
