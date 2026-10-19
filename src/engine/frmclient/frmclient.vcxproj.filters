@@ -1395,6 +1395,9 @@
     <ClCompile Include="win\dlgs\linqConstructor\linqConstructor.cpp">
       <Filter>win\dlgs\linqConstructor</Filter>
     </ClCompile>
+    <ClCompile Include="win\dlgs\queryConstructor\queryConstructorEdit.cpp">
+      <Filter>win\dlgs\queryConstructor</Filter>
+    </ClCompile>
     <ClInclude Include="win\dlgs\translateConstructor\translateConstructor.h">
       <Filter>win\dlgs\translateConstructor</Filter>
     </ClInclude>

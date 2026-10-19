@@ -2,8 +2,8 @@
 #define _FRMCLIENT_QUERY_CONSTRUCTOR_H__
 
 // THE QUERY CONSTRUCTOR — the desktop's ibDialogQueryConstructor (frontend/win/dlgs/queryConstructor/queryConstructor.h):
-// the designer's, over the sources and fields the configuration has. Its doors are here with the desktop's signatures,
-// and they answer Cancel.
+// the designer's, over the sources and fields the configuration has. Its doors are here with the desktop's signatures;
+// those that need the configuration answer Cancel.
 //
 // ⚠ NOT HERE YET: the window and its pickers (queryConstructor*.cpp, query*Dialog, query*Model) are not ported — the
 // sources and fields it shows are the server's configuration, the query it reads and writes the server's parser. A door
@@ -14,6 +14,8 @@
 #include <wx/msgdlg.h>
 
 #include <vector>
+
+#include "frmclient/frmclient.h"   // FRMCLIENT_API
 
 class wxWindow;
 class ibMetaData;
@@ -44,15 +46,18 @@ inline bool ibShowQueryConstructor(wxWindow* parent, wxString& WXUNUSED(queryTex
 	return false;
 }
 
-// WHICH GROUPINGS AN AREA COVERS — the desktop's picker over the groupings named. It answers Cancel, said to the
-// person: `inOut` stays.
-inline bool ibPickGroupingScope(wxWindow* parent, const std::vector<wxString>& WXUNUSED(groupings),
-	const std::vector<wxString>& WXUNUSED(separators), wxString& WXUNUSED(inOut))
-{
-	wxMessageBox(_("The picker of the groupings is not in this client yet: the area is written by hand."),
-		_("Query constructor"), wxOK | wxICON_INFORMATION, parent);
-	return false;
-}
+// ⭐⭐ PICK THE GROUPINGS A FIGURE IS COMPUTED OVER — the ticked tree, shared by the two windows that
+// ask this question: the query constructor's Totals tab and the composer's resources.
+//
+// One control, one gesture, one place to change them: `groupings` is what to show (a separator's
+// levels come as "Separator.Level"), `separators` marks which of those lines are separators — shown
+// as nodes and not tickable, since a branch does not narrow the rows and cannot be an area. `inOut`
+// carries the current answer in and the new one out, comma-separated. False = cancelled.
+// (queryConstructorEdit.cpp — the desktop's code as it is: it asks nothing of the configuration.)
+FRMCLIENT_API bool ibPickGroupingScope(wxWindow* parent,
+                                       const std::vector<wxString>& groupings,
+                                       const std::vector<wxString>& separators,
+                                       wxString& inOut);
 
 // QUERY TEXT, PAINTED AS THE LANGUAGE — the desktop's: its words are the engine's keyword table, which is the server's.
 // Here the text reads plain.
