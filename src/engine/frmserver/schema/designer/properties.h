@@ -3,7 +3,8 @@
 
 // THE DESIGNER'S INSPECTOR — a metaobject's properties, read and edited by its id in a tab's tree. The client holds the
 // object it shows (frmclient ibValueMetaObject) and asks it of the server: the rows, in one batch, when a person selects
-// it and after each edit; an edit is given back through the object's door (ibPropertyGate). The designer's own.
+// it, and with the answer to each edit; an edit is given back through the object's door (ibPropertyGate). The designer's
+// own.
 
 #include "frmserver/schema/clientSchema.h"
 
@@ -21,6 +22,12 @@ public:
 	// it. Refused, nothing done: no such object, no such property, no value.
 	virtual std::function<void()> Command(const ibSession& session, s32 command,
 		const ibDataNode& args, ibProtocolRefusal& refusal, wxString& error) const override;
+
+	// …and Save is answered with the object's Properties as they are after it: the inspector draws them without a read.
+	virtual bool AnswersWithBuild(s32 command) const override
+	{
+		return static_cast<ibProtocolSchemaCommand>(command) == ibProtocolSchemaCommand::Save;
+	}
 };
 
 #endif

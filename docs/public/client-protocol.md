@@ -197,6 +197,8 @@ A schema the client's application does not have, or the person has no right to, 
 What a schema shows is read once for what the person does: a dialog opened by a schema's menu item is drawn from that
 item's answer, and the client asks again only after one of the schema's commands changed what it shows (assistant
 access: Options is one exchange; Start now is the command and one read of the token and endpoint it settled on).
+The inspector's Save (`Schema` 10, `Command` 4) is answered with the object's `Properties` as they are after it, beside
+the frame: an edit is one exchange. A server that sends none there is asked with `schema` again, as before.
 
 ## Questions to the person
 
