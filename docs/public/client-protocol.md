@@ -121,6 +121,11 @@ resource that may be the value), 2 (a dimension that may be the date) and 3 (a d
 fields of the calculation register that may answer for it), each with `Id` and `Title`. The edited description goes
 back through the row's `Set`, and the rows of the answer carry the lists for the register and date now bound. A client
 that reads no `Schedule` shows the row read-only; a server that writes none leaves it so.
+A command source's `ibPropertyCommandSource` row (a button's, a command bar item's Command) carries the commands of
+its form it may name as an optional node `CommandTree`, in the shape of the form editor's command tree: the three
+sections, each with a row per sub-group and per command (`Name`, `Picture`, `CommandPath` with children `Id`, `Kind`).
+The client's picker lists them; the chosen command's path goes back through the row's `Set`, and a cancelled picker, or
+the command bound already, sends nothing. Making a new form command is the form editor's command tree's own door.
 
 A picture is named by its id everywhere — in the view, a tab's `Icon`, a schema, a request, a list of choices: a
 backend picture's number, as a decimal (a class's own: its class id), or a configuration picture's guid. No answer
