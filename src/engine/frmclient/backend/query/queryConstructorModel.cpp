@@ -17,6 +17,19 @@ struct ibKnownQueryFields {
 	ibProtocolNode m_answer;
 };
 
+// …and a dynamic list's, by its main table and text.
+struct ibKnownListFields {
+	ibMetaID       m_mainTable = wxNOT_FOUND;
+	wxString       m_text;
+	ibProtocolNode m_answer;
+};
+
+std::map<long long, ibKnownListFields>& KnownListFields()
+{
+	static std::map<long long, ibKnownListFields> s_known;
+	return s_known;
+}
+
 std::map<long long, ibKnownQueryFields>& KnownQueryFields()
 {
 	static std::map<long long, ibKnownQueryFields> s_known;
@@ -50,6 +63,44 @@ void ibQueryFieldsKnown(long long tabId, const wxString& text, const ibProtocolN
 void ibQueryFieldsForget(long long tabId)
 {
 	KnownQueryFields().erase(tabId);
+	KnownListFields().erase(tabId);
+}
+
+std::vector<ibSettingsPlainField> ibListSourceFields(ibMetaID mainTable, const wxString& text, const ibMetaData* metaData,
+	wxString* error)
+{
+	if (error != nullptr)
+		error->clear();
+
+	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
+	if (frame == nullptr || metaData == nullptr || metaData->GetTabId() == 0)
+		return {};
+	if (mainTable == wxNOT_FOUND && wxString(text).Trim(true).Trim(false).IsEmpty())
+		return {};
+
+	const long long tabId = metaData->GetTabId();
+	ibProtocolNode answer;
+	const auto known = KnownListFields().find(tabId);
+	if (known != KnownListFields().end() && known->second.m_mainTable == mainTable && known->second.m_text == text) {
+		answer = known->second.m_answer;
+	}
+	else {
+		const ibTabDocument* const document = frame->FindDocument(tabId);
+		if (document == nullptr)
+			return {};
+		ibProtocolNode request;
+		request.SetValue(ibProtocolName::Kind, static_cast<long long>(ibProtocolComposerRequest::Source))
+			.SetValue(ibProtocolName::Text, text);
+		if (mainTable != wxNOT_FOUND)
+			request.SetValue(ibProtocolName::Id, static_cast<long long>(mainTable));
+		if (!document->Fetch(request, answer))
+			return {};
+		KnownListFields()[tabId] = ibKnownListFields{ mainTable, text, answer };
+	}
+	ibValueReferenceDataObject::ReadReferences(answer.FindChild(ibProtocolName::References));
+	if (error != nullptr)
+		*error = answer.GetString(ibProtocolName::Error);
+	return ibReadSettingsFields(answer.FindChild(ibProtocolName::Fields));
 }
 
 std::vector<ibQueryConstructorField> ibQueryFieldsOfText(const wxString& text, const ibMetaData* metaData, wxString* error)

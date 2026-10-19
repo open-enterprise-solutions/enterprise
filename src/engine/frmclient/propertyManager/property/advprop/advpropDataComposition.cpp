@@ -10,6 +10,7 @@
 #include "frmclient/propertyManager/property/private/propertyRegistry.h"
 #include "frmclient/propertyManager/propertyEditor.h"
 #include "frmclient/win/dlgs/settings/composer/composerSettings.h"           // the window it opens
+#include "frmclient/win/dlgs/settings/list/listSettings.h"                   // …and a dynamic list's
 
 // -----------------------------------------------------------------------
 // ibPGDataCompositionProperty
@@ -24,27 +25,30 @@ public:
 	ibPropertyDataCompositionLoader()
 	{
 		// A COMPOSITION on a form attribute opens the composer's window — outputs, resources, parameters, the query —
-		// on the author's road: the description itself is edited and written back.
-		//
-		// (The desktop registers the dynamic list's Settings on this cell too, with the list's window. Not here: the
-		// thin list window has no source to describe its fields from — no query page, no main table read — so the row
-		// stays read-only until it has.)
-		ibPropertyRegistry::Register(wxT("ibPropertyDataComposition"),
-			[](ibBackendProperty* property) -> wxPGProperty* {
-				ibCompositionDescription desc;
-				ibCompositionDescriptionMemory::ReadNode(property->GetNodeValue(), desc);
-				return new ibPGDataCompositionProperty(property->GetPropertyObject(), property->GetLabel(),
-					property->GetName(), wxVariant(new ibVariantDataComposition(property->GetPropertyObject(), desc)),
-					[](ibCompositionDescription& edited, const ibMetaData* metaData) {
-						return ibDialogComposerSettings::ShowComposerSettings(nullptr, edited, metaData);
-					});
-			},
-			[](const wxVariant& value) {
-				ibDataValue node;
-				if (ibVariantDataComposition* const composition = property_cast(value, ibVariantDataComposition))
-					ibCompositionDescriptionMemory::WriteNode(node, composition->GetCompositionDesc());
-				return node;
-			});
+		// on the author's road: the description itself is edited and written back. A DYNAMIC LIST opens the list's —
+		// filter, sort, grouping and its query — over the same description; its fields, the main table's and the
+		// query's, are asked of the form's tab (Kind Source).
+		auto registerCell = [](const wxChar* className, ibPGDataCompositionProperty::ibSettingsDoor door) {
+			ibPropertyRegistry::Register(className,
+				[door](ibBackendProperty* property) -> wxPGProperty* {
+					ibCompositionDescription desc;
+					ibCompositionDescriptionMemory::ReadNode(property->GetNodeValue(), desc);
+					return new ibPGDataCompositionProperty(property->GetPropertyObject(), property->GetLabel(),
+						property->GetName(), wxVariant(new ibVariantDataComposition(property->GetPropertyObject(), desc)), door);
+				},
+				[](const wxVariant& value) {
+					ibDataValue node;
+					if (ibVariantDataComposition* const composition = property_cast(value, ibVariantDataComposition))
+						ibCompositionDescriptionMemory::WriteNode(node, composition->GetCompositionDesc());
+					return node;
+				});
+		};
+		registerCell(wxT("ibPropertyDataComposition"), [](ibCompositionDescription& edited, const ibMetaData* metaData) {
+			return ibDialogComposerSettings::ShowComposerSettings(nullptr, edited, metaData);
+		});
+		registerCell(wxT("ibPropertyDynamicList"), [](ibCompositionDescription& edited, const ibMetaData* metaData) {
+			return ibDialogListSettings::ShowListSettings(edited, metaData);
+		});
 	}
 } g_dataCompositionLoader;
 

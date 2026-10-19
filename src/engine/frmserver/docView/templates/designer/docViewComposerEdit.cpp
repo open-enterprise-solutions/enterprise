@@ -3,6 +3,8 @@
 #include "backend/metaData.h"
 #include "backend/metaCollection/metaComposerObject.h"   // the composer — its description, its configuration
 #include "backend/query/queryConstructorModel.h"         // ibQueryFieldsOfText — the fields its query offers
+#include "backend/query/queryableFactory.h"              // a list's main table — its descriptor
+#include "backend/srcDataObject.h"                       // …which describes itself (ibSourceExplorer)
 #include "core/description/compositionDescription.h"     // ibCompositionDescriptionMemory — the node form
 #include "core/serialize/dataBuilder.h"
 #include "frmserver/win/dlgs/settings/settingsRequest.h" // ibWriteSettingsField / References — a field as the windows read it
@@ -21,6 +23,49 @@ void WriteQueryFields(ibDataNode& into, const wxString& text, const ibMetaData* 
 	for (const ibQueryConstructorField& field : ibQueryFieldsOfText(text, metaData, &error)) {
 		ibWriteSettingsField(fields, field.m_name, field.m_caption, wxNOT_FOUND, field.m_type, field.m_available, metaData);
 		types.push_back(field.m_type);
+	}
+	ibWriteSettingsReferences(into.Child(ibProtocolName::References), types, metaData);
+	if (!error.IsEmpty())
+		into.SetValue(ibProtocolName::Error, error);
+}
+
+
+// WHAT A DYNAMIC LIST OFFERS — the desktop's list settings window's answer (ibListSettingsPanel::BindFieldSource): the
+// fields of the table the list IS, and what its query adds on top; a name the table already offers is not added twice.
+void WriteListSourceFields(ibDataNode& into, ibMetaID mainTable, const wxString& text, const ibMetaData* metaData)
+{
+	ibDataNode& fields = into.Child(ibProtocolName::Fields);
+	std::vector<ibTypeDescription> types;
+	std::vector<wxString> names;
+
+	ibQueryableFactory* const factory = metaData != nullptr ? metaData->GetSourceFactory() : nullptr;
+	if (const ibQueryableSourceDescriptor* const descriptor = (factory != nullptr && mainTable != wxNOT_FOUND)
+		? factory->ResolveDescriptorById(mainTable) : nullptr) {
+		ibSourceDataObject::ibSourceExplorer explorer;
+		descriptor->FillSourceExplorer(explorer);
+		for (unsigned int i = 0; i < explorer.GetHelperCount(); ++i) {
+			const ibSourceDataObject::ibSourceExplorer* const node = explorer.GetHelper(i);
+			if (node == nullptr || node->IsTableSection())
+				continue;
+			ibWriteSettingsField(fields, node->GetSourceName(), node->GetSourceSynonym(),
+				static_cast<ibMetaID>(node->GetSourceId()), node->GetTypeValueDesc(),
+				node->GetColumn() == nullptr || node->GetColumn()->IsAvailable(), metaData);
+			types.push_back(node->GetTypeValueDesc());
+			names.push_back(node->GetSourceName());
+		}
+	}
+
+	wxString error;
+	if (!text.IsEmpty()) {
+		for (const ibQueryConstructorField& field : ibQueryFieldsOfText(text, metaData, &error)) {
+			bool already = false;
+			for (const wxString& name : names)
+				already = already || name.IsSameAs(field.m_name, false);
+			if (already)
+				continue;
+			ibWriteSettingsField(fields, field.m_name, field.m_caption, wxNOT_FOUND, field.m_type, field.m_available, metaData);
+			types.push_back(field.m_type);
+		}
 	}
 	ibWriteSettingsReferences(into.Child(ibProtocolName::References), types, metaData);
 	if (!error.IsEmpty())
@@ -112,6 +157,11 @@ bool ibFetchComposerRequest(const ibDataNode& request, ibDataNode& response, con
 			targets, metaData);
 		return true;
 	}
+	case ibProtocolComposerRequest::Source:
+		WriteListSourceFields(response, request.FindField(ibProtocolName::Id) != nullptr
+			? static_cast<ibMetaID>(request.GetValue<s32>(ibProtocolName::Id)) : static_cast<ibMetaID>(wxNOT_FOUND),
+			request.GetValue<wxString>(ibProtocolName::Text), metaData);
+		return true;
 	default:
 		return false;
 	}

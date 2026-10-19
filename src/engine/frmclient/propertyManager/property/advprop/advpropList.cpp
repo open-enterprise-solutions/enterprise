@@ -25,6 +25,16 @@ public:
 			return new ibPGListProperty(property->GetLabel(), property->GetName(), choices,
 				static_cast<int>(property->GetNodeValue().AsInt()));
 		});
+
+		// …and a DYNAMIC LIST'S SOURCE, the table it reads: the choices are the sources the configuration registers, the
+		// value the chosen one's table id (none picked: no value).
+		ibPropertyRegistry::Register(wxT("ibPropertyDynamicSource"), [](ibBackendProperty* property) -> wxPGProperty* {
+			ibPropertyChoiceList choices;
+			property->GetValueList(choices);
+			const ibDataValue value = property->GetNodeValue();
+			return new ibPGListProperty(property->GetLabel(), property->GetName(), choices,
+				value.Kind() == ibDataKind::Number ? static_cast<int>(value.AsInt()) : wxNOT_FOUND);
+		});
 	}
 }g_listLoader;
 

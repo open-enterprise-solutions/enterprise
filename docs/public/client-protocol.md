@@ -103,6 +103,13 @@ composition now has. The fields of another text are fetched by the tab: `fetch {
 A form designer tab answers the same two requests for an attribute of type DataComposition: its inspector row
 `ibPropertyDataComposition` carries the composition as its `Value`, the client opens the settings window over it,
 asks the form's tab for the fields (`Kind` 21, 22) and sends the edited composition back through the attribute's `Set`.
+An attribute of type DynamicList is edited the same way: its `ibPropertyDynamicList` row opens the list settings
+window (filter, sort, grouping, conditional appearance, its query) over the list's composition. The window asks the
+form's tab `Kind` 23 (Source) `{Id, Text}`: the fields of the list's main table (`Id`, its table id; omitted: none) and
+those its query text adds (`Text`, optional), answered as `Kind` 21 answers (`Fields`, `References`, `Error`); a
+reference opened is `Kind` 22. Its `ibPropertyDynamicSource` row carries the sources the configuration registers as
+choices (`Id` the table id, `Title` namespace.name); picking one is the row's `Set`, after which the list is rebuilt over
+that table. A list with no source keeps no settings in the form, as in the desktop designer.
 
 A picture is named by its id everywhere — in the view, a tab's `Icon`, a schema, a request, a list of choices: a
 backend picture's number, as a decimal (a class's own: its class id), or a configuration picture's guid. No answer

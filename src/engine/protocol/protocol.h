@@ -824,6 +824,8 @@ enum class ibProtocolComposerRequest : int {
 	Fields = 21,   // {Text} — the fields that query text offers: Fields, References, Error — as the tab's view has them
 	Expand = 22,   // {Targets} — a reference field opened: the fields of those targets, Expanded and their References —
 	               // as a settings window's Act Expand has them asked again
+	Source = 23,   // {Id, Text} — a dynamic list's fields: those of its main table (Id, optional) and what its query (Text,
+	               // optional) adds — Fields, References, Error — as the desktop's list settings window reads them
 };
 
 // WHAT A FORM'S TAB IS ASKED besides its module's — `fetch {Tab, Request: {Kind, …}}`, numbered past the module's
