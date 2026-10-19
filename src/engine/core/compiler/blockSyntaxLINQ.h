@@ -25,7 +25,7 @@
 //
 ////////////////////////////////////////////////////////////////////////////
 
-#include <wx/string.h>
+#include <wx/arrstr.h>   // wxbase exports std::vector<wxString> (wxArrayString's base) — seen here, a unit imports it
 
 #include "core/core.h"   // CORE_API
 
