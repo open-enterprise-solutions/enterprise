@@ -75,8 +75,11 @@ struct TotalsFoldFix : ::testing::Test {
 		ASSERT_NE(reg, nullptr);
 		auto* dimension = dynamic_cast<ibValueMetaObjectDimension*>(cfg.CreateMetaObject(g_metaDimensionCLSID, reg, false));
 		ASSERT_NE(dimension, nullptr);
-		dimension->GetTypeDesc().SetDefaultMetaType(reference_to_clsid(catalog->GetMetaID(), clsid_metaclass(catalog->GetClassType())));
 		cfg.CreateMetaObject(g_metaResourceCLSID, reg, false);
+		// Typed LAST: a creation moves the configuration's version, a type is read again at the next one and keeps only
+		// what is registered — and a catalog never run (a shell, as here) registers no type, so typed before the resource
+		// the dimension lost its reference and was laid out as a string (2026-10-19).
+		dimension->GetTypeDesc().SetDefaultMetaType(reference_to_clsid(catalog->GetMetaID(), clsid_metaclass(catalog->GetClassType())));
 
 		reg->ContributeTables(snapshot);
 		for (const ibSchemaTable& t : snapshot.Tables())
