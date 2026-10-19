@@ -37,6 +37,7 @@
 class ibApplicationInstance;
 class ibClientInstance;
 class ibClientFrame;
+class ibSession;
 
 class FRMSERVER_API ibClientHost {
 public:
@@ -99,6 +100,9 @@ private:
 		// work's own changes are not told (NotifyChanged) as well — the client would ask for an empty frame. Cleared
 		// on the worker right before the frame is drawn, so a change made after the draw is still told.
 		std::atomic<bool>                 answering{ false };
+		// What a schema command answers beside the frame once its work is done (ibClientSchema::Answer): written into
+		// the answer of the call that saw it done — the command's own, or the respond that let it finish. Under `lock`.
+		std::function<void(ibSession&, ibDataNode&)> answerAfter;
 		// One call of a client at a time: a call that leaves its work waiting for a response has returned by
 		// then, so the call carrying the response gets in.
 		std::mutex                        lock;
@@ -133,6 +137,8 @@ private:
 
 	// login's Read: the schemas the client names, built beside the frame of its start.
 	static void             ReadAtLogin(Client& client, const ibDataNode& params, ibDataNode& result);
+	// The schema command's answer beside the frame, when its work is done now (Client::answerAfter).
+	static void             AnswerAfter(Client& client, ibSession& session, ibDataNode& result);
 	std::shared_ptr<Client> FindClient(const wxString& id) const;
 	std::shared_ptr<Client> FindByDigest(const unsigned char* digest) const;
 	void                    RemoveClient(const wxString& id);

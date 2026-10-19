@@ -71,6 +71,9 @@ public:
 	// What has been done since (ibCommunicator::Generation): a read answered at this count is still true.
 	unsigned long long GetGeneration() const;
 
+	// The answer the last call settled with — its own, or the respond's that let its work finish.
+	const ibProtocolNode& GetSettledAnswer() const { return m_settledAnswer; }
+
 	// The process's main window.
 	static ibFrontendMainFrame* GetFrame() { return s_instance; }
 
@@ -341,6 +344,7 @@ private:
 	// While the tabs are drawn: the frame's View and the tab it is of (DrawTabs hands it to a tab it opens).
 	ibProtocolNode m_openingView;
 	long long m_openingTab = 0;
+	ibProtocolNode m_settledAnswer;
 	const ibProtocolMode            m_mode;
 	wxString                        m_user;       // the login's — the one the login window was told, when refused
 	wxString                        m_password;   // until the login — cleared by it

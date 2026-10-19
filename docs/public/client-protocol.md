@@ -229,6 +229,14 @@ access: Options is one exchange; Start now is the command and one read of the to
 The inspector's Save (`Schema` 10, `Command` 4) is answered with the object's `Properties` as they are after it, beside
 the frame: an edit is one exchange. A server that sends none there is asked with `schema` again, as before.
 
+The designer's configuration tree (`Schema` 9) answers its commands with what the tree shows next, beside the frame,
+when the client asks for it. Create (`Command` 2) takes `Open` — open the new object's editor in the same work, as
+the desktop's New did — and `Show`; its answer carries `Created` (the new id), `Opened` (whether an editor was opened)
+and the new object's `Properties`. Remove (`Command` 3) takes `Select` — the id the tree selects after it — and its
+answer carries `Selected` and that object's `Properties`. When the work waits on a question (a form's type), these
+ride the answer to the `respond` that lets it finish. A server that does not know the fields answers none of them,
+and the client opens the editor and reads the rows as before.
+
 A schema read (`schema` without `Command`) changes nothing, so a client may keep what it read and show it again
 without asking, until it makes a call that may change something — any but a schema read, `picture`, `frame` and
 `users`, and any call carrying `Pending` — or is told `changed`. The thin designer keeps the inspector's

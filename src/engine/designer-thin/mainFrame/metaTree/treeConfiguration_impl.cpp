@@ -15,6 +15,7 @@
 #include "clipboardLock.h"   // the Open/Close pair, taken as a guard — the desktop's
 #include "designer-thin/docManager/templates/docViewModuleEditor.h"   // a module's tab — the line a stop shows
 #include "frmclient/artProvider/artProvider.h"
+#include "frmclient/backend/metaCollection/metaObject.h"   // rows an answer brought, kept for the row shown next
 #include "frmclient/backend/metaCollection/metaObjectMetadata.h"      // the objects a modal editor of its menu is over
 #include "frmclient/backend/metaCollection/partial/commonObject.h"
 #include "frmclient/mainFrame/mainFrame.h"
@@ -369,12 +370,24 @@ void ibMetaTreeBase::CreateItem()
 
 	// ASK — the new object's row comes back with the frame and is selected, the inspector showing it; then its editor is
 	// opened, as the desktop's click did (NewItem, then OpenObjectForm): made while the row is shown, it shows its own.
+	// ⭐ ONE EXCHANGE: the same work opens the editor (Open) and the answer carries the object's rows (Show) — the
+	// answer of the respond that let it finish when it asked something (a form's kind). A server that knows neither
+	// answers neither (Opened, Created): the row's rows are read, and the editor opened, as before.
 	ibProtocolNode args;
 	args.SetValue(ibProtocolName::Type, type);
 	args.SetValue(ibProtocolName::Parent, parent);
+	args.SetValue(ibProtocolName::Open, true);
+	args.SetValue(ibProtocolName::Show, true);
 	std::set<long long> drawn;
 	ibObjectIds(m_root, drawn);
-	if (Command(ibProtocolMetaDataCommand::Create, args) && SelectCreated(drawn))
+	if (!Command(ibProtocolMetaDataCommand::Create, args))
+		return;
+	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
+	const ibProtocolNode answer = frame != nullptr ? frame->GetSettledAnswer() : ibProtocolNode();
+	if (answer.Has(ibProtocolName::Created) && answer.Has(ibProtocolName::Properties))
+		ibValueMetaObject::KeepRows(m_tab, static_cast<ibMetaID>(answer.GetInt(ibProtocolName::Created)),
+			answer.FindChild(ibProtocolName::Properties));
+	if (SelectCreated(drawn) && !answer.Has(ibProtocolName::Opened))
 		EditItem();
 }
 
@@ -430,9 +443,35 @@ void ibMetaTreeBase::RemoveItem()
 		return;
 
 	// ASK, then let the answer come back — the row goes with the frame, the editors over it with the server's Removed.
+	// ⭐ …and the rows of the object selected after it come in the same answer (Select → Selected, Properties): the
+	// row the tree goes to — the next one, else the one before, else the parent.
+	wxTreeItemId next = m_metaTreeCtrl->GetNextSibling(selection);
+	if (!next.IsOk())
+		next = m_metaTreeCtrl->GetPrevSibling(selection);
+	if (!next.IsOk())
+		next = m_metaTreeCtrl->GetItemParent(selection);
+	const long long select = next.IsOk() ? GetObject(next) : 0;
+	const ibTreeRow* const nextRow = next.IsOk() ? GetRow(next) : nullptr;
+	const wxString nextPath = nextRow != nullptr ? nextRow->m_path : wxString();
 	ibProtocolNode args;
 	args.SetValue(ibProtocolName::Id, id);
-	Command(ibProtocolMetaDataCommand::Remove, args);
+	if (select != 0)
+		args.SetValue(ibProtocolName::Select, select);
+	if (!Command(ibProtocolMetaDataCommand::Remove, args))
+		return;
+	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
+	const ibProtocolNode answer = frame != nullptr ? frame->GetSettledAnswer() : ibProtocolNode();
+	if (answer.Has(ibProtocolName::Selected) && answer.Has(ibProtocolName::Properties)) {
+		ibValueMetaObject::KeepRows(m_tab, static_cast<ibMetaID>(answer.GetInt(ibProtocolName::Selected)),
+			answer.FindChild(ibProtocolName::Properties));
+		// The frame drew the tree anew without the old row (the parent selected in its place): the row asked for is
+		// selected again, its rows already kept; else, the tree selected it as the old one went — shown again.
+		const wxTreeItemId item = nextPath.IsEmpty() ? wxTreeItemId() : FindItem(m_metaTreeCtrl->GetRootItem(), nextPath);
+		if (item.IsOk() && item != m_metaTreeCtrl->GetSelection())
+			m_metaTreeCtrl->SelectItem(item);
+		else
+			ActivateTree();
+	}
 }
 
 void ibMetaTreeBase::PropertyItem()

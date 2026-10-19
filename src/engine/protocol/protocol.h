@@ -123,6 +123,11 @@ namespace ibProtocolName {
 	inline constexpr const char* Button    = "Button";
 	inline constexpr const char* Response  = "Response";
 	inline constexpr const char* Selected  = "Selected";
+	inline constexpr const char* Created   = "Created";   // MetaData Create {Show}: the new object's id, beside the frame
+	inline constexpr const char* Open      = "Open";      // MetaData Create: open its editor in the same work
+	inline constexpr const char* Opened    = "Opened";    // MetaData Create {Open}: whether the same work opened its editor
+	inline constexpr const char* Show      = "Show";      // MetaData Create: answer the new object's Properties too
+	inline constexpr const char* Select    = "Select";    // MetaData Remove: the object selected after it, its Properties
 	inline constexpr const char* Multiple  = "Multiple";   // a choice's: several may be chosen — answered with Ids
 	inline constexpr const char* Ids       = "Ids";
 	inline constexpr const char* Act       = "Act";       // a saved settings' answer: what was done to the shelf
