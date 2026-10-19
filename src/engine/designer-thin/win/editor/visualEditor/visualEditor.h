@@ -12,6 +12,7 @@
 
 #include "core/description/commandDescription.h"  // ibCommandDescription — a command row's path
 #include "core/description/sourceDescription.h"   // ibSourceHop — an attribute row's path
+#include "protocol/protocol.h"                     // ibProtocol::ibSchema::ibProperties::ibSourceKind
 
 #include <wx/aui/auibook.h>
 #include <wx/splitter.h>
@@ -341,7 +342,9 @@ public:
 	// is the server's editor's door (`Attribute`), the form as it stands asked with.
 	//////////////////////////////////////////////////////////////////////////////////////////
 
-	class ibVisualEditorAttributeTree : public wxPanel {
+	class ibVisualEditorAttributeTreeItemData;   // a row's data — below
+
+		class ibVisualEditorAttributeTree : public wxPanel {
 	public:
 
 		ibVisualEditorAttributeTree(ibVisualEditor* owner, wxWindow* parent, int id = wxID_ANY);
@@ -354,6 +357,12 @@ public:
 
 		// The holder whose property that is — none: no attribute's.
 		ibFormAttributeValue* FindEntry(const ibPropertyObject* owner) const;
+
+		// ⭐ THE SOURCE WINDOW — the desktop's (frontend advpropSource.cpp): these rows, filtered by what a control may be
+		// bound to (`kind`; a column — of `table`), a reference opened as the tree opens it
+		// (Composition), the binding's own row selected; OK — `binding` the row's path. False: cancelled, or nothing.
+		bool PickSource(wxWindow* parent, ibProtocol::ibSchema::ibProperties::ibSourceKind kind,
+			const ibSourceDescription& table, ibSourceDescription& binding);
 
 	protected:
 
@@ -378,6 +387,8 @@ public:
 		// The rows under one, as the server wrote them — each with its item data; one with a composition of its own not yet
 		// asked gets the desktop's dummy [+].
 		void AppendRows(const wxTreeItemId& parent, const ibProtocolNode& rows);
+		// …and the rows under a row with a composition of its own, asked of the server (Composition): false — refused.
+		bool FetchComposition(const ibVisualEditorAttributeTreeItemData* data, ibProtocolNode& rows) const;
 
 		// The holder the tree item carries — what the inspector selects.
 		ibFormAttributeValue* GetEntryFromItem(const wxTreeItemId& item) const;

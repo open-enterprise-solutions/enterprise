@@ -14,10 +14,15 @@
 #include "frmclient/mainFrame/objinspect/objinspect.h"
 
 #include <wx/artprov.h>
+#include <wx/dialog.h>
 #include <wx/imaglist.h>
 #include <wx/menu.h>
+#include <wx/msgdlg.h>
+#include <wx/settings.h>
+#include <wx/sizer.h>
 
 #include <set>
+#include <functional>
 
 typedef ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorAttributeTree     ibAttributeTree;
 typedef ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorAttributeTreeItemData ibAttributeTreeItemData;
@@ -471,6 +476,14 @@ void ibAttributeTree::OnItemExpanding(wxTreeEvent& event)
 		return;
 	data->SetLoaded();
 
+	m_tcAttributes->DeleteChildren(event.GetItem());   // drop the dummy [+]
+	ibProtocolNode rows;
+	if (FetchComposition(data, rows))
+		AppendRows(event.GetItem(), rows);
+}
+
+bool ibAttributeTree::FetchComposition(const ibAttributeTreeItemData* data, ibProtocolNode& rows) const
+{
 	ibProtocolNode request;
 	request.SetValue(ibProtocol::ibView::ibFormDesigner::Kind, static_cast<int>(ibProtocol::ibView::ibFormDesigner::ibRequest::Composition));
 	request.SetValue(ibProtocol::ibView::ibFormDesigner::Form, m_formHandler->m_formNode);
@@ -480,10 +493,192 @@ void ibAttributeTree::OnItemExpanding(wxTreeEvent& event)
 	if (data->IsUnderList())
 		request.SetValue(ibProtocol::ibView::ibFormDesigner::UnderList, true);
 
-	m_tcAttributes->DeleteChildren(event.GetItem());   // drop the dummy [+]
 	ibProtocolNode answer;
-	if (m_formHandler->GetEditorDocument()->Fetch(request, answer))
-		AppendRows(event.GetItem(), answer.FindChild(ibProtocol::ibView::ibFormDesigner::Rows));
+	if (!m_formHandler->GetEditorDocument()->Fetch(request, answer))
+		return false;
+	rows = answer.FindChild(ibProtocol::ibView::ibFormDesigner::Rows);
+	return true;
+}
+
+namespace {
+
+// A row's hops, as the server wrote them (Path — items {Id, Type}).
+std::vector<ibSourceHop> PathOf(const ibProtocolNode& row)
+{
+	std::vector<ibSourceHop> path;
+	for (const ibProtocolNode& hop : row.GetList(ibProtocol::ibView::ibFormDesigner::Path)) {
+		const ibClassID type = ClsidOf(hop.GetString(ibProtocol::ibView::ibFormDesigner::Type));
+		path.push_back({ static_cast<ibSourceId>(hop.GetInt(ibProtocol::ibView::ibFormDesigner::Id)), type != 0 ? type : g_valueUndefinedCLSID });
+	}
+	return path;
+}
+
+// The same place — by the hops' ids: a reference hop's pinned type is the binding's to keep, not the place's.
+bool SamePlace(const std::vector<ibSourceHop>& path, const std::vector<ibSourceHop>& other, size_t count)
+{
+	if (path.size() != count || other.size() < count)
+		return false;
+	for (size_t idx = 0; idx < count; idx++) {
+		if (path[idx].m_id != other[idx].m_id)
+			return false;
+	}
+	return true;
+}
+
+// A row holds a table section somewhere in what came inline with it.
+bool HoldsTable(const ibProtocolNode& row)
+{
+	for (const ibProtocolNode& child : row.Children()) {
+		if (child.GetBool(ibProtocol::ibView::ibFormDesigner::TableSection) || HoldsTable(child))
+			return true;
+	}
+	return false;
+}
+
+// The row at that path, among these and what came inline with them — the table a column's box is bound to.
+bool FindRow(const ibProtocolNode& rows, const std::vector<ibSourceHop>& path, ibProtocolNode& found)
+{
+	for (const ibProtocolNode& row : rows.Children()) {
+		if (SamePlace(PathOf(row), path, path.size())) {
+			found = row;
+			return true;
+		}
+		if (FindRow(row, path, found))
+			return true;
+	}
+	return false;
+}
+
+} // namespace
+
+bool ibAttributeTree::PickSource(wxWindow* parent, ibProtocol::ibSchema::ibProperties::ibSourceKind kind,
+	const ibSourceDescription& table, ibSourceDescription& binding)
+{
+	using ibSourceKind = ibProtocol::ibSchema::ibProperties::ibSourceKind;
+
+	// WHERE THE TREE STARTS — the form's attributes as the editor last drew them; a column's, the columns of its table.
+	ibProtocolNode rows = m_formHandler->m_trees.FindChild(ibProtocol::ibView::ibFormDesigner::AttributeTree);
+	if (kind == ibSourceKind::Column) {
+		ibProtocolNode bound;
+		if (!table.IsOk() || !FindRow(rows, table.GetPath(), bound) || bound.Children().empty()) {
+			wxMessageBox(_("The table box of this column is not bound to a table."), _("Choice source"),
+				wxOK | wxICON_INFORMATION, parent);
+			return false;
+		}
+		rows = bound;
+	}
+
+	wxDialog dlg(parent, wxID_ANY, _("Choice source"), wxDefaultPosition, wxDefaultSize,
+		wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER | wxCLIP_CHILDREN);
+	wxTreeCtrl* const tc = new wxTreeCtrl(&dlg, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+		wxTR_HIDE_ROOT | wxTR_HAS_BUTTONS | wxTR_LINES_AT_ROOT | wxTR_NO_LINES | wxSUNKEN_BORDER | wxTR_SINGLE);
+	wxImageList* const images = m_tcAttributes->GetImageList();
+	tc->SetImageList(images);   // the attribute tree's — it outlives the window
+	const int image = images != nullptr && images->GetImageCount() > 0 ? 0 : -1;
+
+	// THE ROWS, FILTERED — a table: the table sections (and the attributes they are of); a field or a column: all but
+	// a table section; a row with a composition not yet asked, the dummy [+].
+	std::function<void(const wxTreeItemId&, const ibProtocolNode&)> append = [&](const wxTreeItemId& under, const ibProtocolNode& list) {
+		for (const ibProtocolNode& row : list.Children()) {
+			const bool tableSection = row.GetBool(ibProtocol::ibView::ibFormDesigner::TableSection);
+			if (kind == ibSourceKind::Table ? !(tableSection || HoldsTable(row)) : tableSection)
+				continue;
+			std::vector<ibMetaID> refTypes;
+			for (const ibProtocolNode& target : row.GetList(ibProtocol::ibView::ibFormDesigner::Targets))
+				refTypes.push_back(static_cast<ibMetaID>(target.AsInt()));
+			ibAttributeTreeItemData* const itemData = new ibAttributeTreeItemData(nullptr, PathOf(row), refTypes,
+				tableSection, 0, row.GetBool(ibProtocol::ibView::ibFormDesigner::UnderList));
+			const wxTreeItemId item = tc->AppendItem(under, row.GetString(ibProtocol::ibView::ibFormDesigner::Name), image, image, itemData);
+			if (kind == ibSourceKind::Table && !tableSection)
+				tc->SetItemTextColour(item, wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));   // only holds one
+			if (!row.Children().empty()) {
+				append(item, row);
+				itemData->SetLoaded();
+			}
+			else if (kind != ibSourceKind::Table && row.GetBool(ibProtocol::ibView::ibFormDesigner::HasComposition)) {
+				tc->AppendItem(item, wxEmptyString);
+			}
+		}
+	};
+	const wxTreeItemId root = tc->AddRoot(wxEmptyString);
+	append(root, rows);
+
+	// …a reference opened as the tree opens it — its composition asked once.
+	tc->Bind(wxEVT_TREE_ITEM_EXPANDING, [&](wxTreeEvent& event) {
+		ibAttributeTreeItemData* const data = static_cast<ibAttributeTreeItemData*>(tc->GetItemData(event.GetItem()));
+		if (data == nullptr || data->IsLoaded())
+			return;
+		data->SetLoaded();
+		tc->DeleteChildren(event.GetItem());
+		ibProtocolNode composition;
+		if (FetchComposition(data, composition))
+			append(event.GetItem(), composition);
+	});
+
+	// What may be chosen: a table section for a table, anything else for the rest.
+	auto chosen = [&]() -> ibAttributeTreeItemData* {
+		const wxTreeItemId item = tc->GetSelection();
+		ibAttributeTreeItemData* const data = item.IsOk() ? static_cast<ibAttributeTreeItemData*>(tc->GetItemData(item)) : nullptr;
+		if (data == nullptr || data->GetPath().empty())
+			return nullptr;
+		return kind == ibSourceKind::Table && !data->IsTableSection() ? nullptr : data;
+	};
+	tc->Bind(wxEVT_TREE_ITEM_ACTIVATED, [&](wxTreeEvent& event) {
+		if (chosen() != nullptr)
+			dlg.EndModal(wxID_OK);
+		else
+			event.Skip();
+	});
+
+	// THE BINDING'S OWN ROW — walked down its path, each row on the way opened (a reference asked as it opens).
+	{
+		const std::vector<ibSourceHop>& path = binding.GetPath();
+		wxTreeItemId under = root, found;
+		for (size_t count = kind == ibSourceKind::Column ? table.GetPath().size() + 1 : 1; count <= path.size(); count++) {
+			wxTreeItemId match;
+			wxTreeItemIdValue cookie;
+			for (wxTreeItemId child = tc->GetFirstChild(under, cookie); child.IsOk(); child = tc->GetNextChild(under, cookie)) {
+				const ibAttributeTreeItemData* const data = static_cast<ibAttributeTreeItemData*>(tc->GetItemData(child));
+				if (data != nullptr && SamePlace(data->GetPath(), path, count)) {
+					match = child;
+					break;
+				}
+			}
+			if (!match.IsOk())
+				break;
+			found = match;
+			if (count < path.size())
+				tc->Expand(match);
+			under = match;
+		}
+		if (found.IsOk()) {
+			tc->SelectItem(found);
+			tc->EnsureVisible(found);
+		}
+	}
+
+	wxBoxSizer* const topsizer = new wxBoxSizer(wxVERTICAL);
+	topsizer->Add(tc, wxSizerFlags(1).Expand().Border(wxALL, FromDIP(5)));
+	topsizer->Add(dlg.CreateStdDialogButtonSizer(wxOK | wxCANCEL), wxSizerFlags(0).Right().Border(wxBOTTOM | wxRIGHT, FromDIP(5)));
+	dlg.SetSizer(topsizer);
+	dlg.SetSize(dlg.FromDIP(wxSize(400, 300)));
+	dlg.CentreOnParent();
+	dlg.Bind(wxEVT_BUTTON, [&](wxCommandEvent& event) {
+		if (chosen() != nullptr)
+			event.Skip();   // …the dialog ends as it would
+	}, wxID_OK);
+	tc->SetFocus();
+
+	if (dlg.ShowModal() != wxID_OK)
+		return false;
+	const ibAttributeTreeItemData* const data = chosen();
+	if (data == nullptr)
+		return false;
+	ibSourceDescription picked;
+	for (const ibSourceHop& hop : data->GetPath())
+		picked.AppendSource(hop.m_id, hop.m_type);
+	binding = picked;
+	return true;
 }
 
 void ibAttributeTree::OnBeginDrag(wxTreeEvent& event)
