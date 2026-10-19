@@ -61,7 +61,8 @@ public:
 
 	wxPGPictureProperty(const wxString& label = wxPG_LABEL,
 		const wxString& name = wxPG_LABEL,
-		const wxVariant& value = wxVariant());
+		const wxVariant& value = wxVariant(),
+		const class ibDataNode* pictures = nullptr);
 
 	virtual ~wxPGPictureProperty() override {}
 

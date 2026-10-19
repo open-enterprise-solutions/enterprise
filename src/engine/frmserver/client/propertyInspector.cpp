@@ -21,6 +21,8 @@
 #include "backend/propertyManager/property/propertyOwner.h"        // ibPropertyOwner — a catalog's owners, by kind
 #include "backend/propertyManager/property/propertyRecord.h"       // ibPropertyRecord — a document's registers, sequences
 #include "backend/propertyManager/property/propertyGeneration.h"   // ibPropertyGeneration — what it is entered on
+#include "backend/propertyManager/property/propertyPicture.h"   // ibPropertyPicture — a picture, and the configuration's to pick
+#include "backend/metaCollection/metaPictureObject.h"
 #include "backend/propertyManager/property/propertyCalcSchedule.h"   // ibPropertyCalcSchedule — a register's schedule, and its lists
 #include "backend/propertyManager/property/propertyCommandSource.h"   // ibPropertyCommandSource — a button's, a bar item's command
 #include "frmserver/visualView/layers/commandBar.h"                  // …picked from its form's command tree (WriteCommandTree)
@@ -109,6 +111,32 @@ void AppendCommandTree(ibDataNode& row, const ibPropertyCommandSource* property)
 	ibValueForm* const form = door != nullptr ? door->GetCommandGateForm() : nullptr;
 	if (form != nullptr)
 		WriteCommandTree(row.Child(ibProtocolName::CommandTree), form);
+}
+
+// A PICTURE — the configuration's pictures it may be loaded from, as the desktop's cell listed them (advpropPicture.cpp):
+// the picture metaobjects of the owner's configuration, or of the one it extends. Each by its name and its Guid, not as a
+// Picture: a picture named in an answer is fetched before the answer is drawn, and the list is not drawn until it is
+// opened. Optional: a client that reads none offers no configuration picture by name.
+void AppendPictures(ibDataNode& row, const ibPropertyPicture* property)
+{
+	const ibPropertyObject* const owner = property->GetPropertyObject();
+	const ibMetaData* const metaData = owner != nullptr ? owner->GetMetaData() : nullptr;
+	if (metaData == nullptr)
+		return;
+	ibMetaData* metaDataOwner = nullptr;
+	const ibMetaData* const source = metaData->GetOwner(metaDataOwner) && metaDataOwner != nullptr ? metaDataOwner : metaData;
+
+	auto pictures = std::make_shared<ibDataNode>();
+	for (const auto object : source->GetAnyArrayObject(g_metaPictureCLSID)) {
+		ibValueMetaObjectPicture* picture = nullptr;
+		if (!object->ConvertToValue(picture))
+			continue;
+		ibDataNode& item = pictures->AddChild(0, static_cast<ibMetaID>(pictures->Children().size() + 1));
+		item.SetValue(ibProtocolName::Name, object->GetName());
+		const ibGuid guid = picture->GetGuid();
+		item.SetValue(ibProtocolName::Guid, guid.str());
+	}
+	row.SetProperty(ibProtocolName::Pictures, ibDataValue::Child(pictures));
 }
 
 // WHAT A TYPE'S PROPERTY MAY HOLD — the desktop's picker's offer (ibShowTypeSelector): the types the configuration offers
@@ -202,6 +230,10 @@ void ibPropertyInspector::AppendProperty(ibDataNode& parent, ibBackendProperty* 
 	// A COMMAND SOURCE — the form's command tree to pick from.
 	if (const ibPropertyCommandSource* const command = dynamic_cast<const ibPropertyCommandSource*>(property))
 		AppendCommandTree(row, command);
+
+	// A PICTURE — the configuration's pictures to pick from.
+	if (const ibPropertyPicture* const picture = dynamic_cast<const ibPropertyPicture*>(property))
+		AppendPictures(row, picture);
 
 	// A DYNAMIC LIST'S SOURCE — the sources it may read, as the desktop's drop-down offered them.
 	if (const ibPropertyDynamicSource* const source = dynamic_cast<const ibPropertyDynamicSource*>(property))

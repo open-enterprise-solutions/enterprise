@@ -132,6 +132,10 @@ its form it may name as an optional node `CommandTree`, in the shape of the form
 sections, each with a row per sub-group and per command (`Name`, `Picture`, `CommandPath` with children `Id`, `Kind`).
 The client's picker lists them; the chosen command's path goes back through the row's `Set`, and a cancelled picker, or
 the command bound already, sends nothing. Making a new form command is the form editor's command tree's own door.
+A picture's `ibPropertyPicture` row carries the configuration's pictures it may be loaded from (the picture
+metaobjects of the owner's configuration, or of the one it extends) as an optional node `Pictures`: children with
+`Name` and `Guid`. They are named by `Guid` rather than as a `Picture`, so the rows do not make the client fetch every
+configuration picture before it draws them. Picking one is the row's `Set` with the value `{Type 2, Guid}`.
 
 A picture is named by its id everywhere — in the view, a tab's `Icon`, a schema, a request, a list of choices: a
 backend picture's number, as a decimal (a class's own: its class id), or a configuration picture's guid. No answer
