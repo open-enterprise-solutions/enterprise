@@ -251,6 +251,7 @@
     <ClCompile Include="propertyManager\property\advprop\advpropColour.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropSize.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropList.cpp" />
+    <ClCompile Include="propertyManager\property\advprop\advpropChartBinding.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropEvent.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropEventTool.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropType.cpp" />
@@ -258,7 +259,6 @@
     <ClCompile Include="propertyManager\property\advprop\advpropDataComposition.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropModule.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropCalcSchedule.cpp" />
-    <ClCompile Include="propertyManager\property\advprop\advpropChartBinding.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropChoiceLink.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropCommandSource.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropDate.cpp" />
@@ -485,12 +485,12 @@
     <ClInclude Include="propertyManager\property\advprop\advpropEvent.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropEventTool.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropList.h" />
+    <ClInclude Include="propertyManager\property\advprop\advpropChartBinding.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropType.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropValuePicture.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropHyperLink.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropDataComposition.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropCalcSchedule.h" />
-    <ClInclude Include="propertyManager\property\advprop\advpropChartBinding.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropChoiceLink.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropCommandSource.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropGeneration.h" />
