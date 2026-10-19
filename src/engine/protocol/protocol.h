@@ -995,6 +995,10 @@ namespace ibProtocol {
 			// the command rows Name, Picture, CommandPath, Kind (ibInterfaceCommandType).
 			inline constexpr const char* CommandTree  = "CommandTree";
 			inline constexpr const char* CommandPath  = "CommandPath";    // the hops of a command — children Id
+			// …a control's Source: what it may be bound to (0 a table, 1 a column of its table, 2 a field), and for a
+			// column the path of the table its box is bound to (Parent — as a binding is written).
+			inline constexpr const char* SourceKind   = "SourceKind";
+			inline constexpr const char* Parent       = "Parent";
 
 		}
 

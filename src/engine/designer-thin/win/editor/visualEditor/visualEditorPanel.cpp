@@ -10,11 +10,37 @@
 #include "designer-thin/docManager/templates/docViewModuleEditor.h"
 #include "frmclient/backend/serialize/dataProtocol.h"   // ibReadProtocolNode — a control's values, as its node has them
 #include "frmclient/mainFrame/objinspect/objinspect.h"
+#include "frmclient/propertyManager/property/advprop/advpropSource.h"   // ibSetSourcePicker — a control's Source cell
+
+#include <set>
+
+namespace {
+
+// The form editors open — a control's Source cell asks the one whose control it is for its attribute tree.
+std::set<ibVisualEditorNotebook::ibVisualEditor*>& OpenEditors()
+{
+	static std::set<ibVisualEditorNotebook::ibVisualEditor*> editors;
+	return editors;
+}
+
+}
 
 ibVisualEditorNotebook::ibVisualEditor::ibVisualEditor(ibModuleEditDocument* document, ibVisualEditorNotebook* parent, int id) :
 	wxPanel(parent, id), m_document(document), m_visualNotebook(parent)
 {
 	CreateWideGui();
+
+	// THE SOURCE WINDOW — the attribute tree of the form whose control the cell is of (the one the inspector shows).
+	static const bool picker = (ibSetSourcePicker([](wxWindow* parent, const ibPropertyObject* owner, int kind,
+		const ibSourceDescription& table, ibSourceDescription& binding) {
+		for (ibVisualEditor* const editor : OpenEditors()) {
+			if (owner != nullptr && editor->GetCurrentElement() == owner)
+				return editor->GetAttributeTree()->PickSource(parent, kind, table, binding);
+		}
+		return false;
+	}), true);
+	(void)picker;
+	OpenEditors().insert(this);
 }
 
 void ibVisualEditorNotebook::ibVisualEditor::CreateWideGui()
@@ -252,6 +278,8 @@ bool ibVisualEditorNotebook::ibVisualEditor::SaveForm()
 
 ibVisualEditorNotebook::ibVisualEditor::~ibVisualEditor()
 {
+	OpenEditors().erase(this);
+
 	// The inspector lets go of a control of this form before the controls go.
 	ibValueFrame* const selected = GetSelectedObject();
 	if (selected != nullptr && objectInspector->GetSelectedObject() == selected)

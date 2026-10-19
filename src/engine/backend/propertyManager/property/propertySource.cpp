@@ -200,3 +200,33 @@ bool ibPropertySource::PasteNodeValue(const ibDataValue& value)
 	}
 	return true;
 }
+
+#include "backend/backend_type.h"   // ibBackendTypeSourceFactory — what the control may be bound to
+#include "backend/srcObject.h"        // ibSourceObject — complete for the cast of GetSourceObject (a column's table)
+#include "protocol/protocol.h"     // ibProtocol::ibSchema::ibProperties — the row's keys
+
+bool ibPropertySource::GetProtocolValue(ibDataNode& row)
+{
+	if (!ibProperty::GetProtocolValue(row))
+		return false;
+
+	// What the desktop's source window filtered its tree by (the owner's GetFilterSourceDataType): a table, a column of
+	// the table its table box is bound to, or a field; and for a column the box's own path. The tree itself is the form's
+	// attribute tree the client already holds.
+	const ibBackendTypeSourceFactory* const factory =
+		dynamic_cast<const ibBackendTypeSourceFactory*>(GetPropertyObject());
+	if (factory == nullptr)
+		return true;
+	const ibSourceDataType kind = factory->GetFilterSourceDataType();
+	row.SetValue(ibProtocol::ibSchema::ibProperties::SourceKind, static_cast<s32>(kind));
+	if (kind != ibSourceDataType::ibSourceDataType_tableColumn)
+		return true;
+	const ibBackendTypeSourceFactory* const parent =
+		dynamic_cast<const ibBackendTypeSourceFactory*>(factory->GetSourceObject());
+	if (parent == nullptr)
+		return true;
+	ibDataValue path;
+	ibSourceDescriptionMemory::WriteNode(path, parent->GetSourceDesc());
+	row.SetProperty(ibProtocol::ibSchema::ibProperties::Parent, path);
+	return true;
+}

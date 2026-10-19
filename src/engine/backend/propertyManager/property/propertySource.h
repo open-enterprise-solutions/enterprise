@@ -109,6 +109,10 @@ public:
 	virtual bool CopyNodeValue(ibDataValue& value) const override;
 	virtual bool PasteNodeValue(const ibDataValue& value) override;
 
+	// What its source window may offer: SourceKind (0 table / 1 column / 2 field), and for a column Parent — the
+	// path of the table its box is bound to. The tree itself is the form's attribute tree the client already holds.
+	virtual bool GetProtocolValue(ibDataNode& row) override;
+
 public:
 
 };
