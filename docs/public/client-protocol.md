@@ -128,6 +128,9 @@ reached). A page read from the top says `Before` 0 and no `Anchor`. The client a
 the read names the same `Anchor` and asks no more, or — when the page is the whole level, the top reached and `End` —
 around any row of it, cut out as the server would read it. Any other read is a `fetch`, as before. The fields are those
 of a `fetch` answer, so a client that does not look at them takes the page only for a read that matches it.
+A designer's module tab (its `View` `State`: `Syntax`, `Module`, `Modified`, `ReadOnly`) carries the module's `Text`
+in the frame that opens the tab, once; the client draws it without a `fetch`. A server that puts no `Text` there is
+asked with `fetch`, as before. A form's tab reads its module's text as it did.
 
 A table's column dragged in its header is `Move {Column, Holder, Position}`: `Holder` the group it now stands in, 0 the
 table. The client moves the column in its own copy of the form at once; the server's form follows.

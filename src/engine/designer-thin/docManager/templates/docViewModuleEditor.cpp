@@ -45,12 +45,29 @@ bool ibModuleEditView::OnCreate(ibFrontendDocument* docBase, long flags)
 	m_codeEditor->SetSTCFocus(true);
 	m_codeEditor->Bind(wxEVT_KILL_FOCUS, &ibModuleEditView::OnKillFocus, this);
 
-	return ibFrontendView::OnCreate(docBase, flags)
-		&& m_codeEditor->LoadModule();
+	// The text is loaded once the tab's view is drawn: its frame may carry it (ibModuleEditDocument::DrawView).
+	m_textPending = true;
+	return ibFrontendView::OnCreate(docBase, flags);
+}
+
+bool ibModuleEditView::LoadPendingText(const ibProtocolNode& state)
+{
+	if (!m_textPending || m_codeEditor == nullptr)
+		return false;
+	m_textPending = false;
+	if (state.IsNode() && state.Has(ibProtocolName::Text))
+		m_codeEditor->LoadModule(state);
+	else
+		m_codeEditor->LoadModule();
+	return true;
 }
 
 void ibModuleEditView::OnActivateView(bool activate, ibFrontendView* activeView, ibFrontendView* deactiveView)
 {
+	// …a tab shown before its view was drawn reads it as before — once the frame that made the tab has been drawn: the
+	// tab is shown first, inside the same frame, and its State may carry the text.
+	if (activate && m_textPending)
+		CallAfter([this]() { LoadPendingText(ibProtocolNode()); });
 	if (activate) m_codeEditor->ActivateEditor();
 }
 
@@ -192,10 +209,14 @@ bool ibModuleEditDocument::Save()
 
 void ibModuleEditDocument::DrawView(const ibProtocolNode& view, const ibProtocolNode& patch)
 {
+	const ibProtocolNode state = view.FindChild(ibProtocolName::State);
+	// The text of a tab just opened — from its frame (protocol: a module's State Text), or fetched.
+	if (ibModuleEditView* const moduleView = dynamic_cast<ibModuleEditView*>(GetFirstView()))
+		moduleView->LoadPendingText(state);
+
 	if (patch.IsNode() && !patch.Has(ibProtocolName::State))
 		return;
 
-	const ibProtocolNode state = view.FindChild(ibProtocolName::State);
 	m_modified = state.GetBool(ibProtocolName::Modified);
 
 	const wxString docPath = state.GetString(ibProtocolName::Module);

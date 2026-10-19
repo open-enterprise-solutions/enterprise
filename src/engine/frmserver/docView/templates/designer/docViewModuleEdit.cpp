@@ -45,6 +45,12 @@ void ibModuleTextView::OnDraw(ibDataNode& frame)
 	state.SetValue(wxT("Modified"), metaData != nullptr && metaData->IsModified());
 	// The module's address the debugger knows it by — its breakpoints' key, the place a runtime stops at.
 	state.SetValue(wxT("Module"), creator->GetDocPath());
+	// ⭐ THE TEXT RIDES THE FRAME THAT OPENS THE TAB — once: the client draws the module without asking for it (fetch).
+	// Only a module's own tab: a form's editor reads its Code page's text when the page is shown.
+	if (!m_textDrawn && GetClassInfo() == CLASSINFO(ibModuleTextView)) {
+		state.SetValue(wxT("Text"), creator->GetModuleText());
+		m_textDrawn = true;
+	}
 }
 
 // ----------------------------------------------------------------------------
