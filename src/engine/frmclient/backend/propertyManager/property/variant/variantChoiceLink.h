@@ -100,12 +100,14 @@ protected:
 	wxString                      m_display;   // as the link's above
 };
 
-// ⚠ THE PARAMETERS' WINDOW'S TWO QUESTIONS, NOT BROUGHT YET — the desktop's declarations, each a walk over the
-// configuration from this field: what it stands in (the object or the tabular section whose other fields are its
-// neighbours), and which fields of what it refers to an attribute could fill. The row carries neither, so neither
-// answers: no holder named, nothing an attribute fills.
-inline wxString ibChoiceHolderName(const ibPropertyObject* WXUNUSED(owner)) { return wxString(); }
-inline void ibChoiceParametersForSource(const ibPropertyObject* WXUNUSED(owner), const ibMetaID& WXUNUSED(sourceId),
-	std::vector<ibMetaID>& WXUNUSED(out), ibMetaID* WXUNUSED(obvious) = nullptr) {}
+// THE PARAMETERS' WINDOW'S TWO QUESTIONS — the desktop's declarations, each a walk over the configuration from this
+// field: what it stands in (the object or the tabular section whose other fields are its neighbours), and which fields
+// of what it refers to an attribute could fill, the likeliest first, and the one that is obvious. The server answers
+// both on the row (its Sources — ibPropertyInspector), so they are asked of the property; a row without them answers
+// none: no holder named, nothing an attribute fills.
+class FRMCLIENT_API ibBackendProperty;
+FRMCLIENT_API wxString ibChoiceHolderName(const ibBackendProperty* property);
+FRMCLIENT_API void ibChoiceParametersForSource(const ibBackendProperty* property, const ibMetaID& sourceId,
+	std::vector<ibMetaID>& out, ibMetaID* obvious = nullptr);
 
 #endif

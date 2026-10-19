@@ -26,10 +26,10 @@
 // the used ones were never taken off the offer. The catalogue below IS that answer, held: one source
 // for the name, the picture and the filtering, so the three cannot disagree.
 //
-// The desktop's (frontend/win/dlgs/choiceParameters), over the client's row. ⚠ ITS CATALOGUE IS THE SERVER'S AND IS
-// NOT BROUGHT YET — the target's types and their fields, this field's neighbours, what each could fill: every list is
-// a walk over the configuration (see BuildCatalogue). Empty, the window would read every field as one that refers to
-// nothing, so the row does not open it yet (advpropChoiceLink.cpp).
+// The desktop's (frontend/win/dlgs/choiceParameters), over the client's row. ITS CATALOGUE IS THE SERVER'S — the
+// target's types and their fields, this field's neighbours, what each could fill: every list is a walk over the
+// configuration, written on the row (its Targets and Sources). A row without them would read every field as one that
+// refers to nothing, so the row opens the window only when it has them (advpropChoiceLink.cpp).
 
 #include <wx/dialog.h>
 #include <wx/button.h>

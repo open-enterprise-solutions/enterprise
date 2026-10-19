@@ -95,15 +95,15 @@ void ibDialogChoiceParameters::BuildCatalogue()
 	// to more than one thing and they do not have the same fields. With one target type the prefix would
 	// be noise. These are offered in the NAME cell, as `Filter.<field>`.
 	ibPropertyChoiceList targets;
-	const ibPropertyObject* owner = m_property->GetPropertyObject();
-	ibFieldReferenceTypes(owner, targets);
+	ibFieldReferenceTypes(m_property, targets);
 
 	for (unsigned int type = 0; type < targets.GetCount(); type++) {
 		m_targets += (m_targets.IsEmpty() ? wxT("") : wxT(", ")) + targets.GetName(type);
 
-		// ⚠ THE FIELDS OF A TYPE ARE THE SERVER PROPERTY'S ANSWER (ibPropertyChoiceParameters::GetParameterList, asked
-		// with the class the configuration registered the type's reference under) — not brought yet: none.
+		// The fields of a type are the server property's answer (ibPropertyChoiceParameters::GetParameterList, asked
+		// with the class the configuration registered the type's reference under), brought on the row under the type.
 		ibPropertyChoiceList fields;
+		ibChoiceParameterList(m_property, (ibMetaID)targets.GetId(type), fields);
 		for (unsigned int idx = 0; idx < fields.GetCount(); idx++) {
 			keep(m_parameters, fields, idx, ibSourceDescription());
 			if (targets.GetCount() > 1)
@@ -114,10 +114,11 @@ void ibDialogChoiceParameters::BuildCatalogue()
 
 	// THE ATTRIBUTES — the fields standing beside this one, which supply the values. A neighbour is one
 	// hop from the holder they both belong to, and the holder is NAMED for the pane that lists them.
-	m_holder = ibChoiceHolderName(m_property->GetPropertyObject());
+	m_holder = ibChoiceHolderName(m_property);
 
-	// ⚠ …and so are the fields standing beside it (ibPropertyChoiceParameters::GetSourceList): none yet.
+	// …and so are the fields standing beside it (ibPropertyChoiceParameters::GetSourceList), the row's Sources.
 	ibPropertyChoiceList sources;
+	ibChoiceSourceList(m_property, sources);
 	for (unsigned int idx = 0; idx < sources.GetCount(); idx++) {
 		keep(m_sources, sources, idx, ibSourceDescription((ibMetaID)sources.GetId(idx)));
 		m_sourceWords.Add(m_sources.back().m_label);
@@ -444,7 +445,7 @@ ibChoiceParameterRowDescription ibDialogChoiceParameters::NewRow(size_t source) 
 	// else also fitted.
 	if (m_property != nullptr) {
 		std::vector<ibMetaID> fits;
-		ibChoiceParametersForSource(m_property->GetPropertyObject(), m_sources[source].m_id,
+		ibChoiceParametersForSource(m_property, m_sources[source].m_id,
 			fits, &row.m_parameter);
 	}
 
@@ -465,7 +466,7 @@ const std::vector<ibMetaID>& ibDialogChoiceParameters::FitsOf(size_t source) con
 
 	std::vector<ibMetaID> fits;
 	if (m_property != nullptr)
-		ibChoiceParametersForSource(m_property->GetPropertyObject(), m_sources[source].m_id, fits);
+		ibChoiceParametersForSource(m_property, m_sources[source].m_id, fits);
 	return m_fits.emplace(m_sources[source].m_id, std::move(fits)).first->second;
 }
 

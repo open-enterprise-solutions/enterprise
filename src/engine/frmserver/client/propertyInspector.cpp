@@ -16,6 +16,8 @@
 #include "backend/query/queryableFactory.h"                              // …picked from the sources the configuration has
 #include "backend/query/queryable.h"
 #include "backend/propertyManager/property/propertyCalcSchedule.h"   // ibPropertyCalcSchedule — a register's schedule, and its lists
+#include "backend/propertyManager/property/propertyChoiceLink.h"     // ibPropertyChoiceLink / …Parameters, ibFieldReferenceTypes
+#include "backend/propertyManager/property/variant/variantChoiceLink.h"   // ibChoiceHolderName, ibChoiceParametersForSource
 #include "core/serialize/dataBuilder.h"
 
 #include "clientFrame.h"   // ibClientFrame::SendPicture — a type's, a choice's picture, by its id
@@ -77,6 +79,71 @@ void AppendCalcSchedule(ibDataNode& row, const ibPropertyCalcSchedule* property)
 		append(link, 0, fields);
 	}
 	row.SetProperty(ibProtocolName::Schedule, ibDataValue::Child(lists));
+}
+
+// WHAT A FIELD'S CHOICE WINDOWS ASK OF THE CONFIGURATION — the desktop's link-by-type and choice-parameters windows
+// (frontend/win/dlgs/choiceLink, choiceParameters) asked these of the property at the moment they opened; the client
+// has no configuration to ask. Optional: a client that reads none opens the link's window without the question of
+// which type it decides, and says the parameters' window is not here.
+//
+// Targets — the reference types of the field (ibFieldReferenceTypes): Id (the type's metaobject), Title, Type (the
+// class its reference is registered under, as a link keeps it), Picture; for the parameters, each its children — the
+// fields a row may fill (GetParameterList): Id, Title, Picture.
+void AppendChoiceTargets(ibDataNode& row, const ibBackendProperty* property, const ibPropertyChoiceParameters* parameters)
+{
+	const ibPropertyObject* const owner = property->GetPropertyObject();
+	const ibMetaData* const metaData = owner != nullptr ? owner->GetMetaData() : nullptr;
+
+	const auto append = [](ibDataNode& parent, const ibPropertyChoiceList& list, unsigned int index) -> ibDataNode& {
+		ibDataNode& item = parent.AddChild(0, static_cast<ibMetaID>(parent.Children().size() + 1));
+		item.SetValue(ibProtocolName::Id, static_cast<s32>(list.GetId(index)));
+		item.SetValue(ibProtocolName::Title, list.GetName(index));   // names, as the desktop's windows named them
+		const ibPictureDescription& picture = list.GetPicture(index);
+		if (!picture.IsEmptyPicture())
+			item.SetValue(ibProtocolName::Picture, ibClientFrame::SendPicture(picture));
+		return item;
+	};
+
+	auto targets = std::make_shared<ibDataNode>();
+	ibPropertyChoiceList types;
+	ibFieldReferenceTypes(owner, types);
+	for (unsigned int index = 0; index < types.GetCount(); ++index) {
+		ibDataNode& target = append(*targets, types, index);
+		const ibClassID clsid = metaData != nullptr ? metaData->GetIDObjectFromMetaID(
+			static_cast<ibMetaID>(types.GetId(index)), ibCtorObjectMetaType::ibCtorObjectMetaType_Reference) : 0;
+		target.SetValue(ibProtocolName::Type, wxString::Format(wxT("%llu"), static_cast<unsigned long long>(clsid)));
+		if (parameters == nullptr || clsid == 0)
+			continue;
+		ibPropertyChoiceList fields;
+		parameters->GetParameterList(clsid, fields);
+		for (unsigned int field = 0; field < fields.GetCount(); ++field)
+			append(target, fields, field);
+	}
+	row.SetProperty(ibProtocolName::Targets, ibDataValue::Child(targets));
+
+	if (parameters == nullptr)
+		return;
+
+	// Sources — the fields standing beside it that may supply a value (GetSourceList), Title the holder they stand in
+	// (ibChoiceHolderName); each Id, Title, Picture, its children (Id) the parameters it could fill, the likeliest first
+	// (ibChoiceParametersForSource), and Default the one that is obvious — none: a real choice.
+	auto sources = std::make_shared<ibDataNode>();
+	sources->SetValue(ibProtocolName::Title, ibChoiceHolderName(owner));
+	ibPropertyChoiceList neighbours;
+	parameters->GetSourceList(neighbours);
+	for (unsigned int index = 0; index < neighbours.GetCount(); ++index) {
+		ibDataNode& source = append(*sources, neighbours, index);
+		std::vector<ibMetaID> fits;
+		ibMetaID obvious = 0;
+		ibChoiceParametersForSource(owner, static_cast<ibMetaID>(neighbours.GetId(index)), fits, &obvious);
+		if (obvious != 0)
+			source.SetValue(ibProtocolName::Default, static_cast<s32>(obvious));
+		for (const ibMetaID& fit : fits) {
+			ibDataNode& item = source.AddChild(0, static_cast<ibMetaID>(source.Children().size() + 1));
+			item.SetValue(ibProtocolName::Id, static_cast<s32>(fit));
+		}
+	}
+	row.SetProperty(ibProtocolName::Sources, ibDataValue::Child(sources));
 }
 
 // WHAT A TYPE'S PROPERTY MAY HOLD — the desktop's picker's offer (ibShowTypeSelector): the types the configuration offers
@@ -166,6 +233,12 @@ void ibPropertyInspector::AppendProperty(ibDataNode& parent, ibBackendProperty* 
 	// A CALCULATION REGISTER'S SCHEDULE — the lists of its sub-rows.
 	if (const ibPropertyCalcSchedule* const schedule = dynamic_cast<const ibPropertyCalcSchedule*>(property))
 		AppendCalcSchedule(row, schedule);
+
+	// A FIELD'S CHOICE — what its link-by-type and choice-parameters windows ask of the configuration.
+	if (dynamic_cast<const ibPropertyChoiceLink*>(property) != nullptr)
+		AppendChoiceTargets(row, property, nullptr);
+	if (const ibPropertyChoiceParameters* const parameters = dynamic_cast<const ibPropertyChoiceParameters*>(property))
+		AppendChoiceTargets(row, property, parameters);
 
 	// A DYNAMIC LIST'S SOURCE — the sources it may read, as the desktop's drop-down offered them.
 	if (const ibPropertyDynamicSource* const source = dynamic_cast<const ibPropertyDynamicSource*>(property))

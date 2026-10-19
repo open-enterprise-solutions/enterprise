@@ -121,6 +121,16 @@ resource that may be the value), 2 (a dimension that may be the date) and 3 (a d
 fields of the calculation register that may answer for it), each with `Id` and `Title`. The edited description goes
 back through the row's `Set`, and the rows of the answer carry the lists for the register and date now bound. A client
 that reads no `Schedule` shows the row read-only; a server that writes none leaves it so.
+A field's `ibPropertyChoiceLink` (link by type) and `ibPropertyChoiceParameters` rows carry what their windows ask of
+the configuration, as optional nodes. `Targets`, on both: the field's reference types, each `Id` (its metaobject),
+`Title`, `Type` (the class its reference is registered under, as a link keeps it) and `Picture`; on the parameters row
+each has as children the fields a parameter may fill (`Id`, `Title`, `Picture`). `Sources`, on the parameters row only:
+`Title` the object or tabular section the field stands in, and as children the fields beside it that may supply a
+value (`Id`, `Title`, `Picture`), each with as children (`Id`) the parameters it could fill, the likeliest first, and
+`Default` the one that is obvious (absent: a real choice). The edited description goes back through the row's `Set`. A
+client that reads none opens the link's window without the question of which type it decides and does not open the
+parameters' window. A description's `path` is read whether it arrives as a field (as written) or as a property (an
+object read from JSON).
 
 A picture is named by its id everywhere — in the view, a tab's `Icon`, a schema, a request, a list of choices: a
 backend picture's number, as a decimal (a class's own: its class id), or a configuration picture's guid. No answer

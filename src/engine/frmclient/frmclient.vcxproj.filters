@@ -921,6 +921,9 @@
     <ClCompile Include="backend\propertyManager\property\propertySerializable.cpp">
       <Filter>backend\propertyManager\property</Filter>
     </ClCompile>
+    <ClCompile Include="backend\propertyManager\property\propertyChoiceLink.cpp">
+      <Filter>backend\propertyManager\property</Filter>
+    </ClCompile>
     <ClInclude Include="backend\propertyManager\property\propertySerializable.h">
       <Filter>backend\propertyManager\property</Filter>
     </ClInclude>
