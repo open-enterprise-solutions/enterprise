@@ -378,10 +378,26 @@ void ibMetaTreeBase::CreateItem()
 		EditItem();
 }
 
+// WHETHER OPEN OPENS ANYTHING — the root says which kinds have an editor (Editors). A catalog's or a document's Edit
+// opened nothing and cost an exchange; a server that does not say is asked, as before.
+static bool ibOpensEditor(const ibProtocolNode& root, const ibProtocolNode& row)
+{
+	const ibProtocolNode editors = root.FindChild(ibProtocolName::Editors);
+	if (!editors.IsNode())
+		return true;
+	const wxString type = row.GetString(ibProtocolName::Type);
+	for (const ibProtocolNode& editor : editors.Children()) {
+		if (editor.GetString(ibProtocolName::Type) == type)
+			return true;
+	}
+	return false;
+}
+
 void ibMetaTreeBase::EditItem()
 {
-	const long long id = GetObject(m_metaTreeCtrl->GetSelection());
-	if (id == 0)
+	const wxTreeItemId selection = m_metaTreeCtrl->GetSelection();
+	const long long id = GetObject(selection);
+	if (id == 0 || !ibOpensEditor(m_root, GetRow(selection)->m_row))
 		return;
 
 	ibProtocolNode args;
