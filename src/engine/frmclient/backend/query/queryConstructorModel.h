@@ -68,4 +68,10 @@ class ibProtocolNode;
 FRMCLIENT_API void ibQueryFieldsKnown(long long tabId, const wxString& text, const ibProtocolNode& answer);
 FRMCLIENT_API void ibQueryFieldsForget(long long tabId);
 
+// A DYNAMIC LIST'S FIELDS on a tab — those of its main table (wxNOT_FOUND: none) and what its query adds, as the desktop's
+// list settings window reads them; asked of the tab (fetch {Tab, Request: {Kind: Source, Id, Text}}) once per main table
+// and text. Off a tab: none.
+FRMCLIENT_API std::vector<struct ibSettingsPlainField> ibListSourceFields(ibMetaID mainTable, const wxString& text,
+	const ibMetaData* metaData, wxString* error = nullptr);
+
 #endif

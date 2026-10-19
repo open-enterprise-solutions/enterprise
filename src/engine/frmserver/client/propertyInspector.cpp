@@ -12,6 +12,9 @@
 #include "backend/metaCollection/partial/chartOfAccountsDimensionKindsTable.h"
 #include "backend/metaCollection/partial/chartOfCalculationTypesRelationTable.h"
 #include "backend/propertyManager/property/propertyType.h"   // ibPropertyType — a type description, and what it may hold
+#include "backend/propertyManager/property/propertyDynamicSource.h"   // ibPropertyDynamicSource — a list's main table
+#include "backend/query/queryableFactory.h"                              // …picked from the sources the configuration has
+#include "backend/query/queryable.h"
 #include "core/serialize/dataBuilder.h"
 
 #include "clientFrame.h"   // ibClientFrame::SendPicture — a type's, a choice's picture, by its id
@@ -70,6 +73,28 @@ void AppendTypes(ibDataNode& row, const ibPropertyType* property)
 	}
 }
 
+// WHAT A DYNAMIC LIST MAY READ — the desktop's Source cell's drop-down (ibPGDynamicSourceProperty): every source this
+// configuration registers, by its table id (what the property stores), named namespace.name.
+void AppendSources(ibDataNode& row, const ibPropertyDynamicSource* property)
+{
+	const ibPropertyObject* const owner = property->GetPropertyObject();
+	const ibMetaData* const metaData = owner != nullptr ? owner->GetMetaData() : nullptr;
+	ibQueryableFactory* const factory = metaData != nullptr ? metaData->GetSourceFactory() : nullptr;
+	if (factory == nullptr)
+		return;
+	for (ibQueryableSourceDescriptor* const descriptor : factory->GetDescriptors()) {
+		if (descriptor == nullptr)
+			continue;
+		const ibBackendQueryable* const queryable = factory->Resolve(descriptor->GetNamespace(), descriptor->GetName());
+		const ibMetaID tableId = queryable != nullptr ? queryable->GetQueryTableId() : 0;
+		if (tableId == 0 || tableId == wxNOT_FOUND)
+			continue;   // a source with no table id (temp, computed) cannot be stored
+		ibDataNode& choice = row.AddChild(0, static_cast<ibMetaID>(row.Children().size() + 1));
+		choice.SetValue(ibProtocolName::Id, static_cast<s32>(tableId));
+		choice.SetValue(ibProtocolName::Title, descriptor->GetNamespace() + wxT(".") + descriptor->GetName());
+	}
+}
+
 } // namespace
 
 // ONE PROPERTY'S ROW — a property's or an event's, of any object, a form's control or a metaobject: its name and its
@@ -100,6 +125,10 @@ void ibPropertyInspector::AppendProperty(ibDataNode& parent, ibBackendProperty* 
 	// A TYPE — what it may hold, as the desktop's picker offered it.
 	if (const ibPropertyType* const type = dynamic_cast<const ibPropertyType*>(property))
 		AppendTypes(row, type);
+
+	// A DYNAMIC LIST'S SOURCE — the sources it may read, as the desktop's drop-down offered them.
+	if (const ibPropertyDynamicSource* const source = dynamic_cast<const ibPropertyDynamicSource*>(property))
+		AppendSources(row, source);
 
 	// AN EVENT — the parameters of its procedure, as the desktop's editor wrote the procedure's template.
 	if (const ibEvent* const event = dynamic_cast<const ibEvent*>(property)) {

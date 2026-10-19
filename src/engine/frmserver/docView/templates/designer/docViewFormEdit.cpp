@@ -1,5 +1,6 @@
 #include "docViewFormEdit.h"
 #include "docViewComposerEdit.h"   // ibFetchComposerRequest — what a composition's panel asks
+#include "backend/propertyManager/property/propertyDynamicSource.h"   // a list's Source, picked (SetProperty)
 
 #include "backend/metaCollection/metaFormObject.h"
 #include "backend/metaData.h"   // GetCompileCache — the form the configuration compiled, when it has one
@@ -76,10 +77,12 @@ bool ibFormDesignView::Fetch(const ibDataNode& request, ibDataNode& response)
 	}
 
 	// …AND A COMPOSITION AN ATTRIBUTE HOLDS, as its cell's window asks the configuration (ibPropertyDataComposition): the
-	// fields of its query, of a reference's targets — the composer tab's own requests, over the form's configuration.
+	// fields of its query, of a reference's targets, of a dynamic list — the composer tab's own requests, over the form's
+	// configuration.
 	switch (static_cast<ibProtocolComposerRequest>(kind)) {
 	case ibProtocolComposerRequest::Fields:
-	case ibProtocolComposerRequest::Expand: {
+	case ibProtocolComposerRequest::Expand:
+	case ibProtocolComposerRequest::Source: {
 		const ibMetaDocument* const document = GetDocument();
 		const ibValueMetaObject* const metaObject = document != nullptr ? document->GetMetaObject() : nullptr;
 		return ibFetchComposerRequest(request, response, metaObject != nullptr ? metaObject->GetMetaData() : nullptr);
@@ -171,6 +174,11 @@ bool ibFormDesignView::SetProperty(ibPropertyObject* object, const ibDataNode& r
 	if (!property->SetNodeValue(*value))
 		return false;
 	owner->OnPropertyChanged(property, oldValue, property->GetValue());
+	// A LIST'S SOURCE picked: the list is made anew over it — its main table, its columns (ibValueDynamicList::
+	// OnChildChanged, as the desktop's cell's SetSource rebuilds it); the main table lands in its description, which is
+	// what the form keeps.
+	if (dynamic_cast<const ibPropertyDynamicSource*>(property) != nullptr)
+		owner->OnChildChanged();
 	return true;
 }
 
