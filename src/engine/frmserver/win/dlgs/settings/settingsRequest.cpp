@@ -234,6 +234,12 @@ ibDataNode SettingsRequest(const ibDataNode& question, const ibSettingsDescripti
 
 } // namespace
 
+void ibWriteSettingsTargetFields(ibDataNode& expanded, ibDataNode& references, const std::vector<ibMetaID>& targets,
+	const ibMetaData* metaData)
+{
+	WriteTargetFields(expanded, references, targets, metaData);
+}
+
 bool ibRequestSettings(const ibDataNode& question, ibSettingsDescription& edited, const ibMetaData* metaData)
 {
 	ibBackendDocFrame* const frame = ibSession::CurrentFrame();

@@ -216,6 +216,7 @@
     <ClCompile Include="docManager\templates\docViewAssistant.cpp" />
     <ClCompile Include="docManager\templates\docViewCommonAttribute.cpp" />
     <ClCompile Include="docManager\templates\docViewFunctionalOption.cpp" />
+    <ClCompile Include="docManager\templates\docViewComposer.cpp" />
     <ClCompile Include="docManager\templates\docViewInterface.cpp" />
     <ClCompile Include="docManager\templates\docViewRole.cpp" />
     <ClCompile Include="mainFrame\local\localWindow.cpp" />
@@ -273,6 +274,7 @@
     <ClInclude Include="docManager\templates\docViewAssistant.h" />
     <ClInclude Include="docManager\templates\docViewCommonAttribute.h" />
     <ClInclude Include="docManager\templates\docViewFunctionalOption.h" />
+    <ClInclude Include="docManager\templates\docViewComposer.h" />
     <ClInclude Include="docManager\templates\docViewInterface.h" />
     <ClInclude Include="docManager\templates\docViewRole.h" />
     <ClInclude Include="mainFrame\local\localWindow.h" />

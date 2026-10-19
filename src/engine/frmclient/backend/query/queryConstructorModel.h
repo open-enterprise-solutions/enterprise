@@ -56,10 +56,16 @@ struct ibQueryConstructorField
 
 // ⭐⭐ WHAT FIELDS A QUERY TEXT OFFERS — on the client, as the server said: parsing the text and asking the configuration
 // are its, so it described the fields with the window's question (Fields — a field's name, its source's caption, its
-// type, whether the options leave it). `text` and `metaData` are the desktop's and are not read here; a window whose
-// text changes (the designer's Query tab) will ask the server again. `error` stays empty — a text the server could not
-// read offers no fields.
+// type, whether the options leave it). A configuration that is a tab's (a composer's panel, ibMetaData::GetTabId) asks
+// that tab for `text` — the server parses it; `error` is why it offers none. Otherwise `text` is not read: the fields
+// are the question's.
 FRMCLIENT_API std::vector<ibQueryConstructorField> ibQueryFieldsOfText(const wxString& text,
 	const ibMetaData* metaData, wxString* error = nullptr);
+
+// …AND WHAT A TAB'S VIEW ALREADY SAID OF A TEXT — a composer's tab draws its query's Fields and References with the view
+// (and Error): kept here by the tab, so the panel's read of that same text asks nothing; forgotten with the tab.
+class ibProtocolNode;
+FRMCLIENT_API void ibQueryFieldsKnown(long long tabId, const wxString& text, const ibProtocolNode& answer);
+FRMCLIENT_API void ibQueryFieldsForget(long long tabId);
 
 #endif

@@ -1,0 +1,44 @@
+#ifndef _DESIGNER_COMPOSER_EDIT_H__
+#define _DESIGNER_COMPOSER_EDIT_H__
+
+// A REPORT'S COMPOSER AS THE DESIGNER EDITS IT — the desktop designer's ibComposerEditDocument and ibComposerEditView
+// (designer/docManager/templates/docViewComposer.h): a tab of its own over the composer metaobject, whose content — the
+// query, the resources, the parameters, the structure and its settings — is edited by the composition panel
+// (ibComposerSettingsPanel). The panel is the client's (ViewKind Composer); this view says what it edits — the
+// composition in its node form and the fields its query offers — and takes back what was edited (Change {Composition}).
+// Not the desktop's names — see docViewModuleEdit.h.
+
+#include "frmserver/docView/docView.h"
+
+class FRMSERVER_API ibComposerCompositionView : public ibMetaView {
+public:
+	ibComposerCompositionView() : ibMetaView() {}
+
+	// View.State {ReadOnly}, View.Composition — the composer's description, View.Fields and View.References — what its
+	// query offers, as the settings windows have them; View.Error — why the query offers none.
+	virtual void OnDraw(ibDataNode& frame) override;
+	virtual ibProtocolViewKind GetViewKind() const override { return ibProtocolViewKind::Composer; }
+
+	// fetch {Tab, Request: {Kind: Fields, Text}} — the fields a query text offers, while it is being edited on the
+	// panel's Query tab (the desktop's panel read them of the text and the configuration, which are here).
+	virtual bool Fetch(const ibDataNode& request, ibDataNode& response) override;
+
+	// Input — the panel was edited: the configuration is modified; Change {Composition} — what the panel holds, put on
+	// the composer (the desktop's panel edited the metaobject's description in place).
+	virtual bool OnClientEvent(ibProtocolEvent event, const ibDataNode& args) override;
+
+	wxDECLARE_DYNAMIC_CLASS(ibComposerCompositionView);
+};
+
+// Its document — the composer metaobject's (ibMetaDocument::GetMetaObject); the composition lives in the composer,
+// saved with the configuration — nothing of its own to hold; its Save is the configuration's (see
+// docViewInterfaceEdit.h).
+class FRMSERVER_API ibComposerCompositionDocument : public ibMetaDocument {
+public:
+	ibComposerCompositionDocument() : ibMetaDocument() {}
+
+	wxDECLARE_NO_COPY_CLASS(ibComposerCompositionDocument);
+	wxDECLARE_DYNAMIC_CLASS(ibComposerCompositionDocument);
+};
+
+#endif
