@@ -191,6 +191,7 @@
     <ClCompile Include="win\dlgs\about.cpp" />
     <ClCompile Include="win\dlgs\activeUser.cpp" />
     <ClCompile Include="win\dlgs\applyChange.cpp" />
+    <ClCompile Include="win\dlgs\selectPredefined.cpp" />
     <ClCompile Include="win\dlgs\userItem.cpp" />
     <ClCompile Include="win\dlgs\userList.cpp" />
     <ClCompile Include="win\dlgs\authorization.cpp" />
@@ -454,6 +455,7 @@
     <ClInclude Include="win\dlgs\queryConstructor\queryConstructorInternal.h" />
     <ClInclude Include="win\dlgs\queryConstructor\queryExpressionDialog.h" />
     <ClInclude Include="win\dlgs\queryConstructor\queryGridModel.h" />
+    <ClInclude Include="win\dlgs\selectPredefined.h" />
     <ClInclude Include="win\dlgs\typeSelector.h" />
     <ClInclude Include="win\dlgs\formatConstructor\formatConstructor.h" />
     <ClInclude Include="win\dlgs\linqConstructor\linqConstructor.h" />

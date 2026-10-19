@@ -62,6 +62,7 @@ void ibFrontendMainFrameDesigner::CreateGUI()
 
 #include "frmclient/win/dlgs/applyChange.h"
 #include "frmclient/win/dlgs/formSelector/formSelector.h"
+#include "frmclient/win/dlgs/selectPredefined.h"
 
 void ibFrontendMainFrameDesigner::ShowRequest(const ibProtocolNode& request, ibProtocolNode& response)
 {
@@ -79,6 +80,11 @@ void ibFrontendMainFrameDesigner::ShowRequest(const ibProtocolNode& request, ibP
 		dialog.ShowModal(response);
 		break;
 	}
+	case ibProtocol::ibRequest::ibKind::PredefinedSelector:
+		// THE DESKTOP'S ibShowPredefinedSelector — EmptyRef / predefined / enum while a configuration is written.
+		// Cancelled — answered with nothing.
+		ibShowPredefinedSelector(request, response);
+		break;
 	default:
 		ibFrontendMainFrame::ShowRequest(request, response);
 		break;

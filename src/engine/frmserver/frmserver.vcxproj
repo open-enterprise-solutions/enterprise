@@ -219,6 +219,7 @@
     <ClCompile Include="win\dlgs\formEditor.cpp" />
     <ClCompile Include="win\dlgs\applyChange.cpp" />
     <ClCompile Include="win\dlgs\formSelector.cpp" />
+    <ClCompile Include="win\dlgs\selectPredefined.cpp" />
     <ClCompile Include="win\dlgs\generation.cpp" />
     <ClCompile Include="win\dlgs\settings\savedSettings.cpp" />
     <ClCompile Include="win\dlgs\settings\settingsRequest.cpp" />
@@ -373,6 +374,7 @@
     <ClInclude Include="win\dlgs\formEditor.h" />
     <ClInclude Include="win\dlgs\applyChange.h" />
     <ClInclude Include="win\dlgs\formSelector.h" />
+    <ClInclude Include="win\dlgs\selectPredefined.h" />
     <ClInclude Include="win\dlgs\generation.h" />
     <ClInclude Include="win\dlgs\settings\savedSettings.h" />
     <ClInclude Include="win\dlgs\settings\settingsRequest.h" />
