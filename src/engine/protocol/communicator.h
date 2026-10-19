@@ -62,6 +62,11 @@ public:
 	const ibProtocolNode& GetFrame() const { return m_frame; }
 	long long             GetFrameNumber() const { return m_number; }
 
+	// WHAT HAS BEEN DONE SINCE — moved by every call that may change something on the server (any but a schema read, a
+	// picture, the frame, the users; a call carrying held events always), and by the server's own `changed`. A read
+	// answered at one count is still true while the count stays: shown again, it is not asked again.
+	unsigned long long    Generation() const { return m_generation.load(std::memory_order_acquire); }
+
 private:
 
 	bool CallLocked(ibProtocolMethod method, const ibProtocolNode& params, ibProtocolNode& result,
@@ -95,6 +100,10 @@ private:
 	// window's, and must not wait for a fetch's exchange.
 	std::mutex                  m_pendingMutex;
 	std::vector<ibProtocolNode> m_pending;
+
+	// Generation — shared with the notification's thread.
+	std::shared_ptr<std::atomic<unsigned long long>> m_generationOwner = std::make_shared<std::atomic<unsigned long long>>(0);
+	std::atomic<unsigned long long>& m_generation = *m_generationOwner;
 };
 
 #endif

@@ -61,11 +61,14 @@ private:
 	const ibMetaID m_metaId;
 	ibMetaData m_metaData;
 
-	// THE ROWS AN EDIT WAS ANSWERED WITH (Send) — the object's Properties after it, taken in by the next Receive instead of
-	// a read of its own. Held, not taken in at once: an edit is sent from inside the grid's change, and taking rows in
-	// remakes the properties the grid is still editing.
-	mutable ibProtocolNode m_heldRows;
-	mutable bool m_rowsHeld = false;
+public:
+
+	// ⭐ ROWS ARE KEPT WHILE NOTHING HAS BEEN DONE (ibCommunicator::Generation) — read, or sent beside another answer
+	// (an edit's Save): an object shown again — clicked again, walked back to — takes them in again instead of asking. By the tab and the object's id: a row of the tree makes its object anew each time it is selected. Taken
+	// in by the next Receive, not at once: an edit is sent from inside the grid's change, and taking rows in remakes the
+	// properties the grid is still editing.
+	static void KeepRows(long long tabId, ibMetaID metaId, const ibProtocolNode& rows);
+	void KeepRows(const ibProtocolNode& rows) const { KeepRows(m_metaData.GetTabId(), m_metaId, rows); }
 };
 
 #endif

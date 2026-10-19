@@ -708,6 +708,11 @@ void ibFrontendMainFrame::UpdateHotKeys()
 	m_keyBinder.UpdateMenuBar(bar);
 }
 
+unsigned long long ibFrontendMainFrame::GetGeneration() const
+{
+	return m_communicator->Generation();
+}
+
 bool ibFrontendMainFrame::Show(bool show)
 {
 	if (!show)
