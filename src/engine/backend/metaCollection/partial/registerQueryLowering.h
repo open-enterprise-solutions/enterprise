@@ -1575,8 +1575,8 @@ inline void ibRegGuardInForce(ibSchemaMaterialize& m, const ibValueMetaObjectAtt
 // totals, whatever the movements held. The digits come from the DECLARATION; only the word
 // (NUMERIC / DECIMAL) is the dialect's. Three sites had this arithmetic, and one of them was wrong.
 //
-// The id is the caller's: the columns of one resource have to be told apart, and how (a high bit for
-// the second) is the caller's own arrangement.
+// The id is the caller's: the columns of one resource have to be told apart — the first takes the
+// resource's metaID, the second a virtual column's (ibRegDerivedColumnId).
 inline const ibBackendQueryColumn* ibRegAccumulatorColumn(ibSchemaTable& t, const wxString& name, ibMetaID id,
                                                           const ibValueMetaObjectAttributeBase* resource)
 {

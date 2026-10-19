@@ -237,10 +237,10 @@ void ibValueMetaObjectAccountingRegister::ContributeTables(ibSchemaSnapshot& out
 		// (§ above) as much as the value does — so the identity is carried by a hash column instead, and
 		// ibDeclareDerivedKey decides which of the two shapes this engine gets.
 		//
-		// The totals object's metaID names that column, through the high band no metaID occupies — the
-		// same arrangement the shard column uses one paragraph up, and for the same reason: the column
+		// The totals object's metaID names that column as a VIRTUAL column of it (ibRegDerivedColumnId) —
+		// an identity, as the shard column's one paragraph up is, and for the same reason: the column
 		// has to be ADDABLE to a table that already exists.
-		ibDeclareDerivedKey(t, totalsName, keyCols, totals->GetMetaID() | 0x40000000);
+		ibDeclareDerivedKey(t, totalsName, keyCols, ibRegDerivedColumnId(totals->GetMetaID()));
 
 		// A SIDE IS DECLARED WHOLE — table, columns, triggers and all — or not at all: the credit side
 		// exists in correspondence mode only (see the declaration at the end). Which movements land in a
@@ -351,11 +351,12 @@ void ibValueMetaObjectAccountingRegister::ContributeTables(ibSchemaSnapshot& out
 
 			// Accumulating columns carry an IDENTITY (not scaffold), so the differ can add and drop
 			// them as the register gains resources. The two ids derive from the resource's own metaID —
-			// the second through a HIGH bit, the only range no metaID occupies (they are small
-			// sequential integers, so a low-bit tweak lands on the neighbouring metaobject's id).
+			// the credit one a VIRTUAL column's, synthetic (ibRegDerivedColumnId): negative, so no metaID
+			// can be it. (It was the metaID with a high bit set, a range nobody had claimed yet rather than
+			// one nobody can; the id is not stored, both snapshots compute it, so the change moved no column.)
 			const auto declareColumn = [&](bool credit) {
 				const wxString name = resField + (credit ? wxT("_Cr") : wxT("_Dr"));
-				const ibMetaID id   = credit ? (res->GetMetaID() | 0x40000000) : res->GetMetaID();
+				const ibMetaID id   = credit ? ibRegDerivedColumnId(res->GetMetaID()) : res->GetMetaID();
 				// The figure is stored in the RESOURCE's own precision (ibRegAccumulatorColumn) — declared
 				// flat, the column was NUMERIC(18,0) and a resource carrying kopecks lost them on the way
 				// INTO the totals, whatever the movements held.

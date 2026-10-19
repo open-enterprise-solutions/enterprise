@@ -136,7 +136,8 @@ void ibValueMetaObjectAccumulationRegister::ContributeTables(ibSchemaSnapshot& o
 	// index has a segment ceiling, a reference dimension is three physical fields, and five reference
 	// dimensions already pass Firebird's sixteen. Past the ceiling the identity moves into a hash
 	// column and the match still runs over the key columns themselves.
-	ibDeclareDerivedKey(t, totalsName, keyCols, totals->GetMetaID() | 0x40000000);
+	// The hash column, when there is one, is a virtual column of the totals object (ibRegDerivedColumnId).
+	ibDeclareDerivedKey(t, totalsName, keyCols, ibRegDerivedColumnId(totals->GetMetaID()));
 
 	// ⭐⭐ AND AN INDEX A READING CAN RIDE — the dimensions FIRST, the period after them.
 	//
@@ -234,13 +235,14 @@ void ibValueMetaObjectAccumulationRegister::ContributeTables(ibSchemaSnapshot& o
 		// as the register gains resources or switches type. A scaffold field is created with its
 		// table and never migrated — which would mean a register whose resources changed kept a
 		// totals table shaped for the old ones. The two ids derive from the resource's own metaID,
-		// so they are stable across saves and unique within the table — the second one through a
-		// HIGH bit, which is the only range no metaID occupies (they are small sequential integers,
-		// so a low-bit tweak lands on the neighbouring metaobject's id).
+		// so they are stable across saves and unique within the table — the second one a VIRTUAL
+		// column's, synthetic (ibRegDerivedColumnId): negative, so no metaID can be it. (It was the
+		// metaID with a high bit set, a range nobody had claimed yet rather than one nobody can; the
+		// id is not stored, both snapshots compute it, so the change moved no column.)
 		// The figure is stored in the RESOURCE's own type (ibRegAccumulatorColumn) — declared flat it was
 		// NUMERIC(18,0), so a resource carrying a fraction lost it on the way INTO the totals.
 		const ibMetaID idIn  = res->GetMetaID();
-		const ibMetaID idOut = res->GetMetaID() | 0x40000000;
+		const ibMetaID idOut = ibRegDerivedColumnId(res->GetMetaID());
 
 		if (!withSign) {
 			// No record type — nothing signs a movement, so there is no expense side to keep apart.
