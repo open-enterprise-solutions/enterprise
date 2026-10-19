@@ -49,10 +49,14 @@ bool ibFormEditView::OnCreate(ibFrontendDocument* docBase, long flags)
 	m_visualNotebook = new ibVisualEditorNotebook(doc, m_viewFrame, wxID_ANY, flags);
 	m_visualNotebook->GetCodeEditor()->Bind(wxEVT_KILL_FOCUS, &ibFormEditView::OnKillFocus, this);
 
-	// ⭐ ONE EXCHANGE OPENS THE TAB — the form, its controls' rows, the classes and the module's text in one answer.
-	ibProtocolNode answer;
-	if (!doc->Fetch(ibProtocolNode(), answer))
-		return false;
+	// ⭐ THE FRAME THAT OPENS THE TAB CARRIES IT (State Opening) — the form, its controls' rows, the classes and the module's
+	// text, as one fetch answers them; a server that put none there is asked, as before.
+	ibProtocolNode answer = doc->GetOpeningState().FindChild(ibProtocolName::Opening);
+	if (!answer.IsNode() || !answer.Has(ibProtocolName::Form)) {
+		answer = ibProtocolNode();
+		if (!doc->Fetch(ibProtocolNode(), answer))
+			return false;
+	}
 
 	// The palette — the classes a control may be made of, as the answer has them; the desktop's asked its registry
 	// (a system control's class is not offered: Visible false).

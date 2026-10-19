@@ -116,6 +116,9 @@ private:
 
 	ibValuePtr<ibValueForm> m_valueForm;
 
+	// Whether what the tab is opened with rode a frame already (OnDraw, State Opening) — once.
+	bool m_openingDrawn = false;
+
 	wxDECLARE_DYNAMIC_CLASS(ibFormDesignView);
 };
 
