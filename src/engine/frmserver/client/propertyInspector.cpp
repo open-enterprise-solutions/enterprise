@@ -22,6 +22,8 @@
 #include "backend/propertyManager/property/propertyRecord.h"       // ibPropertyRecord — a document's registers, sequences
 #include "backend/propertyManager/property/propertyGeneration.h"   // ibPropertyGeneration — what it is entered on
 #include "backend/propertyManager/property/propertyCalcSchedule.h"   // ibPropertyCalcSchedule — a register's schedule, and its lists
+#include "backend/propertyManager/property/propertyCommandSource.h"   // ibPropertyCommandSource — a button's, a bar item's command
+#include "frmserver/visualView/layers/commandBar.h"                  // …picked from its form's command tree (WriteCommandTree)
 #include "core/serialize/dataBuilder.h"
 
 #include "clientFrame.h"   // ibClientFrame::SendPicture — a type's, a choice's picture, by its id
@@ -90,6 +92,23 @@ void AppendCalcSchedule(ibDataNode& row, const ibPropertyCalcSchedule* property)
 		append(link, 0, fields);
 	}
 	row.SetProperty(ibProtocolName::Schedule, ibDataValue::Child(lists));
+}
+
+// A COMMAND SOURCE — the commands of the owner's form it may name, as the desktop's picker gathered them over the
+// owner's command door (advpropCommandSource.cpp, ResolveDoor): a button, a bar is a door, a bar's item asks its bar.
+// The rows are the form editor's command tree's (WriteCommandTree). Optional: a client that reads none shows the
+// binding alone.
+void AppendCommandTree(ibDataNode& row, const ibPropertyCommandSource* property)
+{
+	const ibPropertyObject* const owner = property->GetPropertyObject();
+	const ibFrontendCommandReceiver* door = dynamic_cast<const ibFrontendCommandReceiver*>(owner);
+	if (door == nullptr) {
+		if (const ibValueCommandBarItem* const item = dynamic_cast<const ibValueCommandBarItem*>(owner))
+			door = item->GetBar();
+	}
+	ibValueForm* const form = door != nullptr ? door->GetCommandGateForm() : nullptr;
+	if (form != nullptr)
+		WriteCommandTree(row.Child(ibProtocolName::CommandTree), form);
 }
 
 // WHAT A TYPE'S PROPERTY MAY HOLD — the desktop's picker's offer (ibShowTypeSelector): the types the configuration offers
@@ -179,6 +198,10 @@ void ibPropertyInspector::AppendProperty(ibDataNode& parent, ibBackendProperty* 
 	// A CALCULATION REGISTER'S SCHEDULE — the lists of its sub-rows.
 	if (const ibPropertyCalcSchedule* const schedule = dynamic_cast<const ibPropertyCalcSchedule*>(property))
 		AppendCalcSchedule(row, schedule);
+
+	// A COMMAND SOURCE — the form's command tree to pick from.
+	if (const ibPropertyCommandSource* const command = dynamic_cast<const ibPropertyCommandSource*>(property))
+		AppendCommandTree(row, command);
 
 	// A DYNAMIC LIST'S SOURCE — the sources it may read, as the desktop's drop-down offered them.
 	if (const ibPropertyDynamicSource* const source = dynamic_cast<const ibPropertyDynamicSource*>(property))

@@ -4,6 +4,7 @@
 #include <wx/propgrid/propgrid.h>
 
 #include "frmclient/backend/backend_core.h"
+#include "core/serialize/dataBuilder.h"   // ibDataNode — the command tree the row brings
 
 class FRMCLIENT_API ibPropertyObject;
 
@@ -16,16 +17,20 @@ class FRMCLIENT_API ibPropertyObject;
 // object · main attribute · each table · general) grouped as a tree; picking one binds its command-hop path to the
 // button.
 //
-// ⚠ ON THE CLIENT IT SHOWS THE BINDING, IT DOES NOT MAKE ONE YET. The command sources are gathered by the form's
-// command door (ibFrontendCommandReceiver, GatherFormCommands) over the form's commands and its attributes'
-// — the server's; the cell reads as the server wrote it, and the button says so.
+// The command sources are gathered by the form's command door (ibFrontendCommandReceiver, GatherFormCommands) over the
+// form's commands and its attributes' — the server's: the row brings them (`CommandTree`, the form editor's command
+// tree's rows), and the dialog lists those. A row without them (an older server) says so instead. "New command..." is
+// the form editor's command tree's (its Create), not the picker's.
 class ibPGCommandSourceProperty : public wxPGProperty {
 public:
 
 	const ibPropertyObject* GetPropertyObject() const { return m_propertyObject; }
 
 	ibPGCommandSourceProperty(const ibPropertyObject* property = nullptr, const wxString& label = wxPG_LABEL,
-		const wxString& name = wxPG_LABEL, const wxVariant& value = wxNullVariant);
+		const wxString& name = wxPG_LABEL, const wxVariant& value = wxNullVariant, const ibDataNode* tree = nullptr);
+
+	// The row's command tree — the three sections, sub-groups and commands; none: null.
+	const ibDataNode* GetCommandTree() const { return m_hasTree ? &m_tree : nullptr; }
 
 	virtual wxString ValueToString(wxVariant& value,
 		wxPGPropValFormatFlags flags = wxPGPropValFormatFlags::Null) const override;
@@ -41,6 +46,8 @@ public:
 
 private:
 	const ibPropertyObject* m_propertyObject = nullptr;   // the command bar item — vends the form to gather from
+	ibDataNode m_tree;                                     // the row's `CommandTree`, as the server wrote it
+	bool m_hasTree = false;
 	WX_PG_DECLARE_PROPERTY_CLASS(ibPGCommandSourceProperty)
 };
 

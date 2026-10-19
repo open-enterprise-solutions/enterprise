@@ -21,6 +21,8 @@
 #include "backend/functionalOption/functionalOptionGate.h"   // ibFunctionalOptionGate — commands of a part this base does not use
 #include "backend/backend_composition.h"        // ibFilterNodeDescription / ibFilterDisplayMode_QuickAccess + ibStoredValue
 #include <set>                                  // std::set — the form's reference-type set
+#include <map>
+#include "protocol/protocol.h"                  // ibProtocolName — the command tree's rows
 
 // Command bar — a CONTAINER layer object (the shared runtime/property/metadata base is
 // ibValueLayerObject). Holds its commands + the AutoFill flag; a client draws it from the frame.
@@ -816,3 +818,54 @@ bool ibValueCommandBar::ReadData(const ibDataNode& node)
 // A runtime value must be registered. It is a SYSTEM type (clsid = system_to_clsid("CommandBar")).
 SYSTEM_TYPE_REGISTER(ibValueCommandBar, "CommandBar");
 SYSTEM_TYPE_REGISTER(ibValueCommandBarItem, "CommandBarItem");
+
+void WriteCommandTree(ibDataNode& node, ibValueForm* form)
+{
+	if (form == nullptr)
+		return;
+
+	// ALL three sections first (form / standard / global), in order, so they show even when EMPTY — GatherFormCommands
+	// labels its entries with exactly these strings. Rows are kept by their PLACE: a node's children move as it grows.
+	std::map<wxString, size_t> sections;
+	for (const wxString& section : GetCommandSections()) {
+		sections[section] = node.Children().size();
+		node.AddChild(0, 0).SetValue(ibProtocolName::Name, section);
+	}
+	std::map<wxString, size_t> subgroups;   // "section\x1fsubgroup" -> its place in the section (Standard nests per source)
+
+	for (const ibCommandSourceEntry& entry : GatherFormCommands(form)) {
+		auto section = sections.find(entry.group);
+		if (section == sections.end()) {   // defensive: an unexpected section -> appended at the end
+			section = sections.emplace(entry.group, node.Children().size()).first;
+			node.AddChild(0, 0).SetValue(ibProtocolName::Name, entry.group);
+		}
+		ibDataNode* parent = &node.Children()[section->second];
+		if (!entry.subgroup.IsEmpty()) {   // nested under a per-source SUB-group (the form / a table)
+			const wxString key = entry.group + wxT("\x1f") + entry.subgroup;
+			auto sub = subgroups.find(key);
+			if (sub == subgroups.end()) {
+				sub = subgroups.emplace(key, parent->Children().size()).first;
+				parent->AddChild(0, 0).SetValue(ibProtocolName::Name, entry.subgroup);
+			}
+			parent = &parent->Children()[sub->second];
+		}
+
+		// A form command's row is known by its id — the inspector's rows of it are; any other's, by its path only.
+		const ibFormCommandValue* const formCommand = entry.desc.IsOk() && !entry.desc.IsHop()
+			? form->FindFormCommandById(entry.desc.GetLeaf()) : nullptr;
+		ibDataNode& row = parent->AddChild(0, formCommand != nullptr ? formCommand->GetId() : 0);
+		row.SetValue(ibProtocolName::Name, entry.label);
+		const ibString picture = ibClientFrame::SendPicture(entry.picture);   // the command's own picture, else the tree's default
+		if (!picture.IsEmpty())
+			row.SetValue(ibProtocolName::Picture, picture);
+
+		std::vector<ibDataValue> hops;
+		for (const ibCommandHop& hop : entry.desc.GetPath()) {
+			std::shared_ptr<ibDataNode> hopNode = std::make_shared<ibDataNode>();
+			hopNode->SetValue(ibProtocolName::Id, static_cast<s32>(hop.m_id));
+			hops.push_back(ibDataValue::Child(hopNode));
+		}
+		row.AddField(ibProtocolName::CommandPath, ibDataValue::Array(std::move(hops)));
+		row.SetValue(ibProtocolName::Kind, static_cast<s32>(entry.desc.GetCommandType()));
+	}
+}

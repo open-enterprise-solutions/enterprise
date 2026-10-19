@@ -330,4 +330,9 @@ FRMSERVER_API std::vector<wxString> GetCommandSections();
 // The command-door twin of walking the form's source explorers. Empty when form is null.
 FRMSERVER_API std::vector<ibCommandSourceEntry> GatherFormCommands(ibValueForm* form);
 
+// The same gather as the rows a client draws (the form editor's command tree, the inspector's command-source row): the
+// three sections, each with a row per sub-group and per command — Name, Picture, CommandPath (children Id), Kind; a
+// form command's row its node id the command's. Nothing for no form.
+FRMSERVER_API void WriteCommandTree(class ibDataNode& node, ibValueForm* form);
+
 #endif
