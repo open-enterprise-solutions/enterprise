@@ -1,6 +1,7 @@
 #include "docManagerDesigner.h"
 
 #include "frmserver/schema/designer/assistant.h"
+#include "frmserver/schema/designer/configCompare.h"
 #include "frmserver/schema/designer/database.h"
 #include "frmserver/schema/designer/debugger.h"
 #include "frmserver/schema/designer/mcpServer.h"
@@ -90,4 +91,5 @@ ibDocManagerDesigner::ibDocManagerDesigner()
 	RegisterSchema(ibProtocol::ibSchema::ibKind::McpServer, std::make_unique<ibSchemaMcpServer>());
 	// …and the window onto it — Administration → Assistant window.
 	RegisterSchema(ibProtocol::ibSchema::ibKind::Assistant, std::make_unique<ibSchemaAssistant>());
+	RegisterSchema(ibProtocol::ibSchema::ibKind::ConfigCompare, std::make_unique<ibSchemaConfigCompare>());
 }

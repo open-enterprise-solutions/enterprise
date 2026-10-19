@@ -260,6 +260,7 @@ A schema is a dialog of the desktop held as data: the client shows it however it
 | 5 Registration journal | both | nothing | 1 Open — opens its tab (`Kind` 4) | active users |
 | 6 Debugging | the runtime | `Debugging` — the session's process listens for the designer; `Allowed` — it may be switched now (not on an application server, not while a start waits for the designer) | 2 Start, 3 Stop | — |
 | 7 Assistant access | the designer | the person's MCP server: `Enabled`, `Address`, `Port`, `Token`, `Running`, `Endpoint`, `Allowed` | 2 Start `{Enabled, Address, Port, Token}`, 3 Stop, 4 Save `{…}` | — |
+| 18 ConfigCompare | the designer | `Records` — Walk of two configurations (`Mode` File/Database/TwoFiles, `File`, `File2`) | 13 Merge `{Mode, File?, File2?, Pull, Ops}` — Add/Delete/Replace via CopyMetaObject | — |
 | 8 Users | the designer | `Users` (`Guid`, `Name`, `FullName`), and what a record is chosen from: `Roles` (`Guid`, `Name`, `Title`, `Mode`), `Languages` (`Guid`, `Title`, `Code`); with `Args {Guid}` — that one's `User` (`Guid`, `Name`, `FullName`, `Password` — whether one is stored, `Language`, `Roles`) | 4 Save `{Guid, Name, FullName, Language, Roles[, Password]}` — the password hashed by the server, absent: kept; 8 Remove `{Guid}` | data administration |
 
 A schema the client's application does not have, or the person has no right to, is refused.

@@ -766,6 +766,7 @@ namespace ibProtocol {
 			                     // down where the person chooses; Clear — asked first. Each said to the person by the server
 			Assistant    = 17,   // the designer's assistant window (Administration) — shows nothing; command Open opens its
 			                     // tab (ibView::ibKind::Assistant). Allowed while the base's assistant access is running
+			ConfigCompare = 18,  // ibConfigCompare — Walk of two configurations; Merge applies selected ops
 		};
 
 		// A schema's own commands — `schema {Schema, Command, Args}`. All functions and Sections take the one: Open
@@ -773,7 +774,7 @@ namespace ibProtocol {
 		// takes them and Save; Active users, the designer's, Kick, Reload and Release; the users Save and Remove; the
 		// designer's inspector (Properties) Save; its predefined values editor Create, Set and Remove; its texts
 		// (ObjectText) Save, and so the home page (HomePage); the base (Database) Load, Save and Clear; the assistant window
-		// (Assistant) Open. The designer's tree has its own (ibMetaData::ibCommand), and so its debugger's store.
+		// (Assistant) Open; ConfigCompare Merge. The designer's tree has its own (ibMetaData::ibCommand), and so its debugger's store.
 		enum class ibCommand : int {
 			Open    = 1,
 			Start   = 2,
@@ -787,7 +788,51 @@ namespace ibProtocol {
 			Set     = 10,
 			Load    = 11,
 			Clear   = 12,
+			Merge   = 13,  // ConfigCompare: apply selected Add/Delete/Replace ops
 		};
+
+		// THE DESIGNER'S CONFIGURATION COMPARE — Build {Mode, File?, File2?} walks two trees (ibMetaDiffWalker) →
+		// Records (Status, Parent, Depth, Group, Name, Picture, Property, Left, Right, LeftId, RightId). Mode: File —
+		// active vs uploaded File; Database — active vs its baseline; TwoFiles — File vs File2. Command Merge {Mode,
+		// File?, File2?, Pull, Ops: [{Op, LeftId, RightId, ParentLeftId, ParentRightId}]} — CopyMetaObject / Remove /
+		// Paste on the server; Push (Pull false) writes the right side back into File or File2.
+		namespace ibConfigCompare {
+
+			inline constexpr const char* Mode          = "Mode";
+			inline constexpr const char* File          = "File";
+			inline constexpr const char* File2         = "File2";
+			inline constexpr const char* Records       = "Records";
+			inline constexpr const char* Status        = "Status";
+			inline constexpr const char* Parent        = "Parent";
+			inline constexpr const char* Depth         = "Depth";
+			inline constexpr const char* Group         = "Group";
+			inline constexpr const char* Name          = "Name";
+			inline constexpr const char* Picture       = "Picture";
+			inline constexpr const char* Property      = "Property";
+			inline constexpr const char* Left          = "Left";
+			inline constexpr const char* Right         = "Right";
+			inline constexpr const char* LeftId        = "LeftId";
+			inline constexpr const char* RightId       = "RightId";
+			inline constexpr const char* Pull          = "Pull";
+			inline constexpr const char* Ops           = "Ops";
+			inline constexpr const char* Op            = "Op";
+			inline constexpr const char* ParentLeftId  = "ParentLeftId";
+			inline constexpr const char* ParentRightId = "ParentRightId";
+			inline constexpr const char* Applied       = "Applied";
+
+			enum class ibMode : int {
+				File     = 1,   // active configuration vs uploaded File
+				Database = 2,   // active vs its database baseline
+				TwoFiles = 3,   // File vs File2
+			};
+
+			enum class ibOp : int {
+				Add     = 1,
+				Delete  = 2,
+				Replace = 3,
+			};
+
+		}
 
 		// The runtime's: Groups (Title, Icon) of items (Item, Title, Icon); command Open {Item, Type}.
 		namespace ibAllFunctions {

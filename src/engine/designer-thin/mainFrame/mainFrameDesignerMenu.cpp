@@ -75,8 +75,7 @@ void ibFrontendMainFrameDesigner::InitializeDefaultMenu()
 
 	// ⚠ WHAT THE PERSON MAY DO IS THE SERVER'S TO SAY — its MetaData doors are refused without the right to the base, and
 	// the refusal is said; the desktop's items greyed by that right stand here. Open database configuration and the
-	// comparisons are the desktop's windows (docViewMetaFile, docViewConfigCompare), what fills them not yet the
-	// server's: they say so (OnOpenConfiguration, OnConfiguration; plan: thin-designer-editors.md §8).
+	// comparisons are the desktop's windows (docViewConfigCompare); Walk/Merge go through schema ConfigCompare.
 	m_menuConfiguration = new wxMenu;
 
 	menuItem = m_menuConfiguration->Append(wxID_DESIGNER_CONFIGURATION_OPEN_DATABASE, _("Open database configuration"));

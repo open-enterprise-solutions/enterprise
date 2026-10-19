@@ -2,30 +2,25 @@
 #define _DOCVIEW_CONFIG_COMPARE_H__
 
 // THE DESKTOP'S (designer/docManager/templates/docViewConfigCompare.h) WHOLE — a document of the client's, in a tab of
-// its own (no Kind the server raises it with). ⚠ NOT HERE YET: both sides' trees and the walk over them are the server's
-// (designer-thin/backend/metaCollection/metaDiff.h), and so is the merge Apply writes; no request carries either, and
-// nothing opens it — the menu's compares say so (ibFrontendMainFrameDesigner::OnConfiguration).
+// its own (no Kind the server raises it with). Records come from schema ConfigCompare Build (the server's Walk); Merge
+// is schema ConfigCompare command Merge (CopyMetaObject / Remove / Paste on the server). The menu opens it
+// (ibFrontendMainFrameDesigner::OnConfiguration).
 //
-// Configuration Compare/Merge — doc/view tab inside the designer shell
-// shell. Replaces the historical ibDialogConfigCompare (modal wxDialog)
-// so multiple comparisons can stay open at once (e.g. compare-with-DB
-// AND compare-with-file side by side). Document holds the walker
-// output + the two non-owning root pointers + optional save and
-// applied callbacks. View builds the toolbar + tree dataview +
+// Configuration Compare/Merge — doc/view tab inside the designer shell.
+// Document holds the walker output (wire records) + compare Mode/Files for
+// Apply + optional applied callback. View builds the toolbar + tree dataview +
 // filter / direction / Apply bottom strip.
 
-// docView.h must come first — pulls in wx/app.h + wx/docview.h so
-// wxString is fully defined before any header that uses it inline
-// (backend/clsid.h, configCompareModel.h).
 #include "frmclient/docView/docView.h"
 
 #include "core/clsid.h"
 #include "designer-thin/mainFrame/configCompare/configCompareModel.h"
+#include "protocol/protocol.h"
 
 #include <wx/object.h>
 
 #include <functional>
-#include <memory>
+#include <vector>
 
 constexpr ibClassID g_toolConfigCompareCLSID = make_clsid("TL_CCMP", ibClassKind_None);   // tool/doc id — not a registered type
 
@@ -39,25 +34,29 @@ class ibConfigCompareDocument : public ibFrontendDocument {
 public:
 	ibConfigCompareDocument();
 
-	// Caller wires the diff context BEFORE OnCreate runs (the view's
-	// BuildLayout reads roots/labels/model from here). Both sides are HELD
-	// for the document's life — a metadata is held by whoever works in it —
-	// and the diff walks their roots.
-	void Configure(std::shared_ptr<class ibMetaData> left,
-	               std::shared_ptr<class ibMetaData> right,
+	// Caller wires the diff context BEFORE OnCreate runs. Records are the
+	// server's Walk (schema ConfigCompare Build). Mode/Files identify the
+	// same sides for Merge; localRightPath is where a Push downloads the
+	// right-side file (empty — no Push / Database compare).
+	void Configure(std::vector<ibMetaDiffRecord> records,
 	               const wxString& leftLabel,
 	               const wxString& rightLabel,
-	               std::function<bool()> rightSaveCallback = {},
+	               ibProtocol::ibSchema::ibConfigCompare::ibMode mode,
+	               const wxString& fileId = wxString(),
+	               const wxString& file2Id = wxString(),
+	               const wxString& localRightPath = wxString(),
 	               std::function<void()> appliedCallback = {});
 
-	class ibValueMetaObject* GetLeftRoot()  const { return m_leftRoot;  }
-	class ibValueMetaObject* GetRightRoot() const { return m_rightRoot; }
 	const wxString& GetLeftLabel()  const { return m_leftLabel;  }
 	const wxString& GetRightLabel() const { return m_rightLabel; }
 
 	ibDataViewMetaDiffModel* GetModel() const { return m_model.get(); }
-	const std::function<bool()>& GetRightSaveCallback() const { return m_rightSaveCallback; }
-	const std::function<void()>& GetAppliedCallback()   const { return m_appliedCallback; }
+	ibProtocol::ibSchema::ibConfigCompare::ibMode GetMode() const { return m_mode; }
+	const wxString& GetFileId() const { return m_fileId; }
+	const wxString& GetFile2Id() const { return m_file2Id; }
+	const wxString& GetLocalRightPath() const { return m_localRightPath; }
+	bool CanPush() const { return !m_localRightPath.IsEmpty(); }
+	const std::function<void()>& GetAppliedCallback() const { return m_appliedCallback; }
 
 	virtual bool IsModified() const override { return false; }
 	virtual void Modify(bool) override {}
@@ -66,19 +65,18 @@ protected:
 	virtual bool DoSaveDocument(const wxString&) override { return true; }
 	virtual bool DoOpenDocument(const wxString&) override { return true; }
 
-	// The desktop's template made the view (wxDECLARE_DYNAMIC_CLASS); the thin's is the document's.
 	virtual ibFrontendView* DoCreateView() override;
 
 private:
-	std::shared_ptr<class ibMetaData> m_left;
-	std::shared_ptr<class ibMetaData> m_right;
-	class ibValueMetaObject* m_leftRoot  = nullptr;
-	class ibValueMetaObject* m_rightRoot = nullptr;
 	wxString m_leftLabel;
 	wxString m_rightLabel;
+	ibProtocol::ibSchema::ibConfigCompare::ibMode m_mode =
+		ibProtocol::ibSchema::ibConfigCompare::ibMode::File;
+	wxString m_fileId;
+	wxString m_file2Id;
+	wxString m_localRightPath;
 
 	wxObjectDataPtr<ibDataViewMetaDiffModel> m_model;
-	std::function<bool()> m_rightSaveCallback;
 	std::function<void()> m_appliedCallback;
 
 	wxDECLARE_NO_COPY_CLASS(ibConfigCompareDocument);
@@ -116,15 +114,12 @@ private:
 	void OnDirectionChanged(wxCommandEvent& event);
 	void OnItemCollapsing(ibDataViewEvent& event);
 
-	// Direction-parametrized merge primitives. pull = right → left,
-	// !pull = left → right.
-	void ApplyAdd(const ibMetaDiffRecord& rec, bool pull);
-	void ApplyDelete(const ibMetaDiffRecord& rec, bool pull);
-	void ApplyReplace(const ibMetaDiffRecord& rec, bool pull);
+	// Parent MetaIDs for an Add — walk the record tree for the nearest
+	// non-group object on the target side (same shape as the desktop's
+	// FindTargetParent, without live pointers).
+	void ParentIdsFor(const ibMetaDiffRecord& rec, int& parentLeftId, int& parentRightId) const;
 
 	bool HasOnlyInAncestor(int recordIndex) const;
-	class ibValueMetaObject* FindTargetParent(
-		const ibMetaDiffRecord& rec, bool pull) const;
 
 	void ExpandAllRecursive(const ibDataViewItem& parent);
 	void CollapseAllRecursive(const ibDataViewItem& parent);
@@ -135,7 +130,6 @@ private:
 	wxChoice*      m_directionChoice = nullptr;
 	wxButton*      m_buttonApply     = nullptr;
 
-	// Resolved at OnCreate; cached for every callback.
 	ibConfigCompareDocument* m_compareDoc = nullptr;
 };
 
