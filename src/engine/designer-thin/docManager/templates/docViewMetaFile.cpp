@@ -1,22 +1,20 @@
 #include "docViewMetaFile.h"
 
 #include "designer-thin/mainFrame/metaTree/treeConfiguration.h"
-
-// ----------------------------------------------------------------------------
-// ibTextEditView implementation
-// ----------------------------------------------------------------------------
+#include "frmclient/docView/tabDocument.h"
 
 bool ibMetadataEditView::OnCreate(ibFrontendDocument* docBase, long flags)
 {
-	// ⚠ NOT HERE YET: the desktop's `new ibConfigurationTree(doc, m_viewFrame)` and SetReadOnly(true) — a tree over the
-	// configuration the tab holds, its verbs shut. The thin's configuration tree is the frame's (tab 0); one over this
-	// tab's rows is not there. No tree: the tab stays empty.
+	const ibTabDocument* const tab = dynamic_cast<const ibTabDocument*>(docBase);
+	// A configuration browsed in a tab — File → Open (.oap) or Open database configuration: read-only.
+	m_metaTree = new ibConfigurationTree(m_viewFrame, tab != nullptr ? tab->GetTabId() : 0, true);
 	return ibFrontendView::OnCreate(docBase, flags);
 }
 
 void ibMetadataEditView::OnActivateView(bool activate, ibFrontendView* WXUNUSED(activeView), ibFrontendView* WXUNUSED(deactiveView))
 {
-	if (activate && m_metaTree != nullptr) m_metaTree->ActivateTree();
+	if (activate && m_metaTree != nullptr)
+		m_metaTree->ActivateTree();
 }
 
 void ibMetadataEditView::OnDraw(wxDC* WXUNUSED(dc))
@@ -26,26 +24,16 @@ void ibMetadataEditView::OnDraw(wxDC* WXUNUSED(dc))
 
 bool ibMetadataEditView::OnClose(bool deleteWindow)
 {
-	// ⚠ THE TAB IS THE SERVER'S: closing it asks there (ibTabDocument::Close), and its window goes with the document when
-	// the frame no longer has the tab — not here, as the desktop's did.
 	if (ibFrontendView::OnClose(deleteWindow)) {
-
 		if (m_metaTree != nullptr) {
 			m_metaTree->Freeze();
 			m_metaTree->Destroy();
-
 			m_metaTree = nullptr;
 		}
-
 		return true;
 	}
-
 	return false;
 }
-
-// ----------------------------------------------------------------------------
-// ibMetadataBrowserDocument implementation
-// ----------------------------------------------------------------------------
 
 void ibMetadataBrowserDocument::DrawView(const ibProtocolNode& view, const ibProtocolNode& WXUNUSED(patch))
 {
@@ -55,7 +43,6 @@ void ibMetadataBrowserDocument::DrawView(const ibProtocolNode& view, const ibPro
 
 ibConfigurationTree* ibMetadataBrowserDocument::GetMetaTree() const
 {
-	// GUARD THE CAST, not the pointer that went into it: a first view of another kind makes the cast yield null.
 	const ibMetadataEditView* const view = dynamic_cast<const ibMetadataEditView*>(GetFirstView());
 	return view != nullptr ? view->GetMetaTree() : nullptr;
 }

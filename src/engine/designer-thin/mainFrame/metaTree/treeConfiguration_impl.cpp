@@ -362,6 +362,9 @@ void ibMetaTreeBase::UpdateChoiceSelection(wxChoice* choice, const ibProtocolNod
 
 void ibMetaTreeBase::CreateItem()
 {
+	if (m_readOnly)
+		return;
+
 	wxString type;
 	long long parent = 0;
 	if (!GetPlace(m_metaTreeCtrl->GetSelection(), type, parent))
@@ -425,6 +428,9 @@ void ibMetaTreeBase::EditModule(const ibGuid& moduleName, int line, bool setRunL
 
 void ibMetaTreeBase::RemoveItem()
 {
+	if (m_readOnly)
+		return;
+
 	const wxTreeItemId selection = m_metaTreeCtrl->GetSelection();
 	const long long id = GetObject(selection);
 	if (id == 0 || selection == m_metaTreeCtrl->GetRootItem())
@@ -497,6 +503,9 @@ void ibMetaTreeBase::ActivateTree()
 
 void ibMetaTreeBase::UpItem()
 {
+	if (m_readOnly)
+		return;
+
 	const wxTreeItemId selection = m_metaTreeCtrl->GetSelection();
 	if (selection.IsOk())
 		MoveItem(selection, m_metaTreeCtrl->GetPrevSibling(selection));
@@ -504,6 +513,9 @@ void ibMetaTreeBase::UpItem()
 
 void ibMetaTreeBase::DownItem()
 {
+	if (m_readOnly)
+		return;
+
 	const wxTreeItemId selection = m_metaTreeCtrl->GetSelection();
 	if (selection.IsOk())
 		MoveItem(selection, m_metaTreeCtrl->GetNextSibling(selection));
@@ -545,6 +557,9 @@ bool ibMetaTreeBase::SelectCreated(const std::set<long long>& drawn)
 // desktop's SortItemsByName) — the places read from the rows each move brings back.
 void ibMetaTreeBase::SortItem()
 {
+	if (m_readOnly)
+		return;
+
 	const wxTreeItemId selection = m_metaTreeCtrl->GetSelection();
 	if (GetObject(selection) == 0 || selection == m_metaTreeCtrl->GetRootItem())
 		return;
@@ -687,13 +702,13 @@ void ibMetaTreeBase::UpdateToolbar()
 	const bool common = m_tab == 0 && row != nullptr && row->m_row.GetId() == -1 && m_metaTreeCtrl->GetItemParent(item) == root;
 	const bool object = GetObject(item) != 0 && item != root;
 
-	m_metaTreeToolbar->EnableTool(ID_METATREE_NEW, row != nullptr && item != root && !common);
+	m_metaTreeToolbar->EnableTool(ID_METATREE_NEW, !m_readOnly && row != nullptr && item != root && !common);
 	m_metaTreeToolbar->EnableTool(ID_METATREE_EDIT, object);
-	m_metaTreeToolbar->EnableTool(ID_METATREE_DELETE, object);
+	m_metaTreeToolbar->EnableTool(ID_METATREE_DELETE, !m_readOnly && object);
 
-	m_metaTreeToolbar->EnableTool(ID_METATREE_UP, object);
-	m_metaTreeToolbar->EnableTool(ID_METATREE_DOWM, object);
-	m_metaTreeToolbar->EnableTool(ID_METATREE_SORT, object);
+	m_metaTreeToolbar->EnableTool(ID_METATREE_UP, !m_readOnly && object);
+	m_metaTreeToolbar->EnableTool(ID_METATREE_DOWM, !m_readOnly && object);
+	m_metaTreeToolbar->EnableTool(ID_METATREE_SORT, !m_readOnly && object);
 
 	m_metaTreeToolbar->Refresh();
 }

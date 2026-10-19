@@ -6,10 +6,8 @@
 // THE DESKTOP'S (designer/docManager/templates/docViewMetaFile.h) IN A TAB THE SERVER WOULD RAISE: the configuration it
 // browses — the database's (Configuration ▸ Open database configuration: ibMetadataBrowserDocument) or a file's (File ▸
 // Open: ibMetadataFileDocument, the desktop's template g_metaCommonMetadataCLSID) — is the server's to load, run
-// read-only and close; this one would show its tree, the rows its view brings (DrawView). ⚠ NOT HERE YET: no Kind raises
-// it, the server's doc manager has no template for a configuration file, and the thin's configuration tree is the
-// frame's only (ibConfigurationTree: tab 0) — a read-only tree over another tab is not there. Nothing opens it: the menu
-// says so (ibFrontendMainFrameDesigner::OnOpenConfiguration).
+// read-only and close; this one shows its tree (ibView::ibKind::Configuration, MetaData rows). The tree is a tab's
+// ibConfigurationTree (read-only), not the frame's (tab 0).
 
 // The view using a standard wxTextCtrl to show its contents
 class ibMetadataEditView : public ibFrontendView {
