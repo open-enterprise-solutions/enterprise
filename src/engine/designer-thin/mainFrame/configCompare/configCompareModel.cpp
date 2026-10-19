@@ -251,16 +251,17 @@ void ibDataViewMetaDiffModel::GetValue(wxVariant& variant,
 			// Properties umbrella, which carries the visual cue.
 		}
 		else if (rec.IsGroup()) {
-			name = ibMetaDiffWalker::GroupLabelFor(rec.m_groupClsid);
+			name = !rec.m_name.IsEmpty() ? rec.m_name
+				: ibMetaDiffWalker::GroupLabelFor(rec.m_groupClsid);
 			iconClsid = rec.m_groupClsid;
 		}
 		else {
 			const ibValueMetaObject* obj = rec.GetAnyObject();
-			if (obj != nullptr) {
+			if (obj != nullptr)
 				name = obj->GetName();
-				// ⚠ NOT HERE YET: the desktop's obj->GetClassType() — the thin metaobject holds no class, the server
-				// does; its row would carry the picture's id. No icon until then.
-			}
+			else
+				name = rec.m_name;
+			iconClsid = rec.GetIconClsid();
 		}
 		wxBitmapBundle bitmap;
 		if (iconClsid == g_diffCommonUmbrellaClsid
@@ -287,8 +288,12 @@ void ibDataViewMetaDiffModel::GetValue(wxVariant& variant,
 			variant = wxVariant(rec.m_leftValue);
 		else if (rec.IsGroup())
 			variant = wxVariant(wxString());
-		else
+		else if (rec.m_left != nullptr)
 			variant = wxVariant(SideSummary(rec.m_left));
+		else if (!rec.m_leftValue.IsEmpty() || rec.m_leftId != 0)
+			variant = wxVariant(rec.m_leftValue.IsEmpty() ? _("(unnamed)") : rec.m_leftValue);
+		else
+			variant = wxVariant(_("Missing"));
 		break;
 	}
 	case kColRight: {
@@ -296,8 +301,12 @@ void ibDataViewMetaDiffModel::GetValue(wxVariant& variant,
 			variant = wxVariant(rec.m_rightValue);
 		else if (rec.IsGroup())
 			variant = wxVariant(wxString());
-		else
+		else if (rec.m_right != nullptr)
 			variant = wxVariant(SideSummary(rec.m_right));
+		else if (!rec.m_rightValue.IsEmpty() || rec.m_rightId != 0)
+			variant = wxVariant(rec.m_rightValue.IsEmpty() ? _("(unnamed)") : rec.m_rightValue);
+		else
+			variant = wxVariant(_("Missing"));
 		break;
 	}
 	default:

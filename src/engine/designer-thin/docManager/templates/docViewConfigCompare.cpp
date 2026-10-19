@@ -1,17 +1,15 @@
 #include "docViewConfigCompare.h"
 
-#include "core/diagnostics/journal.h"   // the merge's refusals
-#include "frmclient/backend/backend_exception.h"
+#include "core/diagnostics/journal.h"
 #include "designer-thin/backend/metaCollection/metaDiff.h"
-#include "frmclient/backend/metaCollection/metaObject.h"
-#include "frmclient/backend/metaData.h"
-
+#include "frmclient/mainFrame/mainFrame.h"
 #include "frmclient/win/ctrls/dataview/dataview.h"
 #include "frmclient/win/theme/luna_toolbarart.h"
 
 #include <wx/aui/auibar.h>
 #include <wx/button.h>
 #include <wx/choice.h>
+#include <wx/filename.h>
 #include <wx/msgdlg.h>
 #include <wx/sizer.h>
 #include <wx/stattext.h>
@@ -25,30 +23,23 @@ ibConfigCompareDocument::ibConfigCompareDocument() : ibFrontendDocument()
 }
 
 void ibConfigCompareDocument::Configure(
-	std::shared_ptr<ibMetaData> left,
-	std::shared_ptr<ibMetaData> right,
+	std::vector<ibMetaDiffRecord> records,
 	const wxString& leftLabel,
 	const wxString& rightLabel,
-	std::function<bool()> rightSaveCallback,
+	ibProtocol::ibSchema::ibConfigCompare::ibMode mode,
+	const wxString& fileId,
+	const wxString& file2Id,
+	const wxString& localRightPath,
 	std::function<void()> appliedCallback)
 {
-	m_left  = std::move(left);
-	m_right = std::move(right);
-	// ⚠ NOT HERE YET: the desktop's GetCommonMetaObject — a configuration's root, its tree whole — is the server's; the
-	// client's configuration is the tab it is shown in. No roots: the walk (the server's too) has nothing to pair.
-	m_leftRoot  = nullptr;
-	m_rightRoot = nullptr;
 	m_leftLabel  = leftLabel;
 	m_rightLabel = rightLabel;
-	m_rightSaveCallback = std::move(rightSaveCallback);
-	m_appliedCallback   = std::move(appliedCallback);
-
-	// Walk the diff up front. Linear in node count; keeps the document
-	// construction self-contained so the view sees an immutable model.
-	std::vector<ibMetaDiffRecord> records =
-		ibMetaDiffWalker::Walk(m_leftRoot, m_rightRoot);
+	m_mode = mode;
+	m_fileId = fileId;
+	m_file2Id = file2Id;
+	m_localRightPath = localRightPath;
+	m_appliedCallback = std::move(appliedCallback);
 	m_model.reset(new ibDataViewMetaDiffModel(std::move(records)));
-
 	SetTitle(wxString::Format(_("Compare: %s <-> %s"), leftLabel, rightLabel));
 }
 
@@ -241,8 +232,8 @@ void ibConfigCompareView::RefreshDirectionChoice()
 	m_directionChoice->Append(wxString::Format(_("%s -> %s"),
 		m_compareDoc->GetRightLabel(), m_compareDoc->GetLeftLabel()));
 
-	// Push exists only when there's a save target.
-	if (m_compareDoc->GetRightSaveCallback()) {
+	// Push exists only when there's a save target (file path to download into).
+	if (m_compareDoc->CanPush()) {
 		m_directionChoice->Append(wxString::Format(_("%s -> %s"),
 			m_compareDoc->GetLeftLabel(), m_compareDoc->GetRightLabel()));
 	}
@@ -353,7 +344,7 @@ void ibConfigCompareView::OnApplyMerge(wxCommandEvent& WXUNUSED(event))
 	const bool pull = (m_directionChoice == nullptr
 		|| m_directionChoice->GetSelection() == 0);
 
-	if (!pull && !m_compareDoc->GetRightSaveCallback()) {
+	if (!pull && !m_compareDoc->CanPush()) {
 		wxMessageBox(
 			_("Push direction has no save target - open the other "
 			  "configuration from a writable source first."),
@@ -361,29 +352,36 @@ void ibConfigCompareView::OnApplyMerge(wxCommandEvent& WXUNUSED(event))
 		return;
 	}
 
+	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
+	if (frame == nullptr) return;
+
 	const auto& records = model->GetRecords();
-	int applied = 0;
+	ibProtocolNode ops;
 	int skippedReorder = 0;
+	int opCount = 0;
 
 	for (size_t i = 0; i < records.size(); ++i) {
 		if (!model->IsSelected(static_cast<int>(i))) continue;
 		const ibMetaDiffRecord& rec = records[i];
 		if (!rec.IsMergeCandidate()) continue;
-
-		// Descendants of a selected OnlyIn* parent — parent's recursive
-		// CopyObject covers the subtree on a single Apply.
 		if (HasOnlyInAncestor(static_cast<int>(i))) continue;
 
-		bool addOp = false, delOp = false, replaceOp = false;
+		ibProtocol::ibSchema::ibConfigCompare::ibOp opKind{};
+		bool haveOp = false;
 		switch (rec.m_status) {
 		case ibMetaDiffStatus::OnlyInRight:
-			if (pull) addOp = true; else delOp = true;
+			opKind = pull ? ibProtocol::ibSchema::ibConfigCompare::ibOp::Add
+			              : ibProtocol::ibSchema::ibConfigCompare::ibOp::Delete;
+			haveOp = true;
 			break;
 		case ibMetaDiffStatus::OnlyInLeft:
-			if (pull) delOp = true; else addOp = true;
+			opKind = pull ? ibProtocol::ibSchema::ibConfigCompare::ibOp::Delete
+			              : ibProtocol::ibSchema::ibConfigCompare::ibOp::Add;
+			haveOp = true;
 			break;
 		case ibMetaDiffStatus::Changed:
-			replaceOp = true;
+			opKind = ibProtocol::ibSchema::ibConfigCompare::ibOp::Replace;
+			haveOp = true;
 			break;
 		case ibMetaDiffStatus::Reordered:
 			++skippedReorder;
@@ -391,33 +389,49 @@ void ibConfigCompareView::OnApplyMerge(wxCommandEvent& WXUNUSED(event))
 		default:
 			break;
 		}
+		if (!haveOp) continue;
 
-		try {
-			if (addOp)          { ApplyAdd(rec, pull);     ++applied; }
-			else if (delOp)     { ApplyDelete(rec, pull);  ++applied; }
-			else if (replaceOp) { ApplyReplace(rec, pull); ++applied; }
-		}
-		catch (const ibCoreException& err) {
-			ibJournalInfo(wxT("designer"), wxT("[merge] %s: %s"),
-				rec.GetAnyObject() != nullptr
-					? rec.GetAnyObject()->GetName()
-					: wxString(),
-				err.GetErrorDescription());
-		}
-		catch (...) {
-			ibJournalInfo(wxT("designer"), wxT("[merge] unknown error on %s"),
-				rec.GetAnyObject() != nullptr
-					? rec.GetAnyObject()->GetName()
-					: wxString());
-		}
+		int parentLeftId = 0, parentRightId = 0;
+		ParentIdsFor(rec, parentLeftId, parentRightId);
+
+		ibProtocolNode row = ops.AddChild();
+		row.SetValue(ibProtocol::ibSchema::ibConfigCompare::Op, static_cast<int>(opKind));
+		row.SetValue(ibProtocol::ibSchema::ibConfigCompare::LeftId, static_cast<int>(rec.m_leftId));
+		row.SetValue(ibProtocol::ibSchema::ibConfigCompare::RightId, static_cast<int>(rec.m_rightId));
+		row.SetValue(ibProtocol::ibSchema::ibConfigCompare::ParentLeftId, parentLeftId);
+		row.SetValue(ibProtocol::ibSchema::ibConfigCompare::ParentRightId, parentRightId);
+		++opCount;
 	}
 
-	// Persist the right-side config after a Push.
-	bool savedRight = true;
-	if (!pull && m_compareDoc->GetRightSaveCallback())
-		savedRight = m_compareDoc->GetRightSaveCallback()();
+	ibProtocolNode args;
+	args.SetValue(ibProtocol::ibSchema::ibConfigCompare::Mode, static_cast<int>(m_compareDoc->GetMode()));
+	if (!m_compareDoc->GetFileId().IsEmpty())
+		args.SetValue(ibProtocol::ibSchema::ibConfigCompare::File, m_compareDoc->GetFileId());
+	if (!m_compareDoc->GetFile2Id().IsEmpty())
+		args.SetValue(ibProtocol::ibSchema::ibConfigCompare::File2, m_compareDoc->GetFile2Id());
+	args.SetValue(ibProtocol::ibSchema::ibConfigCompare::Pull, pull);
+	args.SetValue(ibProtocol::ibSchema::ibConfigCompare::Ops, ops);
 
-	wxString msg = wxString::Format(_("Merge applied to %d item(s)."), applied);
+	ibProtocolNode params, answer;
+	params.SetValue(ibProtocol::ibSchema::Schema,
+		static_cast<long long>(ibProtocol::ibSchema::ibKind::ConfigCompare));
+	params.SetValue(ibProtocol::ibSchema::Command,
+		static_cast<long long>(ibProtocol::ibSchema::ibCommand::Merge));
+	params.SetValue(ibProtocol::ibSchema::Args, args);
+
+	const bool ok = frame->Call(ibProtocol::ibMethod::Schema, params, answer);
+	bool savedRight = true;
+	if (ok && !pull && m_compareDoc->CanPush()) {
+		const wxString outId = (m_compareDoc->GetMode()
+			== ibProtocol::ibSchema::ibConfigCompare::ibMode::TwoFiles)
+			? m_compareDoc->GetFile2Id()
+			: m_compareDoc->GetFileId();
+		savedRight = frame->DownloadFile(outId, m_compareDoc->GetLocalRightPath());
+	}
+
+	wxString msg = ok
+		? wxString::Format(_("Merge applied to %d item(s)."), opCount)
+		: _("Merge failed.");
 	if (skippedReorder > 0) {
 		msg += wxT("\n");
 		msg += wxString::Format(
@@ -425,7 +439,9 @@ void ibConfigCompareView::OnApplyMerge(wxCommandEvent& WXUNUSED(event))
 			skippedReorder);
 	}
 	msg += wxT("\n\n");
-	if (pull)
+	if (!ok)
+		msg += _("The server refused the merge.");
+	else if (pull)
 		msg += _("Use Configuration > Save configuration to persist the changes.");
 	else if (savedRight)
 		msg += _("The other-side file has been saved.");
@@ -433,11 +449,9 @@ void ibConfigCompareView::OnApplyMerge(wxCommandEvent& WXUNUSED(event))
 		msg += _("Warning: failed to save the other-side file.");
 
 	wxMessageBox(msg, _("Merge"),
-		wxOK | (savedRight ? wxICON_INFORMATION : wxICON_WARNING), m_viewFrame);
+		wxOK | ((ok && savedRight) ? wxICON_INFORMATION : wxICON_WARNING), m_viewFrame);
 
-	// Notify caller (designer mainFrame typically rebuilds m_metaWindow
-	// so the user sees the result against activeMetaData).
-	if (m_compareDoc->GetAppliedCallback())
+	if (ok && m_compareDoc->GetAppliedCallback())
 		m_compareDoc->GetAppliedCallback()();
 }
 
@@ -453,25 +467,24 @@ void ibConfigCompareView::RefreshApplyButtonState()
 	m_buttonApply->Enable(m_compareDoc->GetModel()->HasSelection());
 }
 
-// ⚠ NOT HERE YET — THE THREE MERGE PRIMITIVES. The desktop's copied the source through its configuration
-// (CopyMetaObject) and pasted it under the target's parent (FindTargetParent) through the other (PasteMetaObject, the
-// source's GUID kept: SetCommonGuid), removed the target (RemoveMetaObject), or both, the paste only when the remove went
-// through. Both configurations are the server's, and no request carries a merge: each refuses, and OnApplyMerge writes
-// the refusal as it writes any.
-
-void ibConfigCompareView::ApplyAdd(const ibMetaDiffRecord& WXUNUSED(rec), bool WXUNUSED(pull))
+void ibConfigCompareView::ParentIdsFor(const ibMetaDiffRecord& rec,
+	int& parentLeftId, int& parentRightId) const
 {
-	ibBackendCoreException::Error(_("Merging configurations is not in the thin client yet."));
-}
-
-void ibConfigCompareView::ApplyDelete(const ibMetaDiffRecord& WXUNUSED(rec), bool WXUNUSED(pull))
-{
-	ibBackendCoreException::Error(_("Merging configurations is not in the thin client yet."));
-}
-
-void ibConfigCompareView::ApplyReplace(const ibMetaDiffRecord& WXUNUSED(rec), bool WXUNUSED(pull))
-{
-	ibBackendCoreException::Error(_("Merging configurations is not in the thin client yet."));
+	parentLeftId = 0;
+	parentRightId = 0;
+	if (m_compareDoc == nullptr || m_compareDoc->GetModel() == nullptr)
+		return;
+	const auto& records = m_compareDoc->GetModel()->GetRecords();
+	int p = rec.m_parentIndex;
+	while (p >= 0) {
+		const ibMetaDiffRecord& parentRec = records[p];
+		if (!parentRec.IsGroup() && !parentRec.IsProperty()) {
+			parentLeftId = static_cast<int>(parentRec.m_leftId);
+			parentRightId = static_cast<int>(parentRec.m_rightId);
+			return;
+		}
+		p = parentRec.m_parentIndex;
+	}
 }
 
 bool ibConfigCompareView::HasOnlyInAncestor(int recordIndex) const
@@ -489,26 +502,6 @@ bool ibConfigCompareView::HasOnlyInAncestor(int recordIndex) const
 		p = rec.m_parentIndex;
 	}
 	return false;
-}
-
-ibValueMetaObject* ibConfigCompareView::FindTargetParent(
-	const ibMetaDiffRecord& rec, bool pull) const
-{
-	if (m_compareDoc == nullptr || m_compareDoc->GetModel() == nullptr)
-		return nullptr;
-	const auto& records = m_compareDoc->GetModel()->GetRecords();
-	int p = rec.m_parentIndex;
-	while (p >= 0) {
-		const ibMetaDiffRecord& parentRec = records[p];
-		if (!parentRec.IsGroup() && !parentRec.IsProperty()) {
-			ibValueMetaObject* candidate = pull
-				? parentRec.m_left
-				: parentRec.m_right;
-			if (candidate != nullptr) return candidate;
-		}
-		p = parentRec.m_parentIndex;
-	}
-	return nullptr;
 }
 
 void ibConfigCompareView::OnUpdate(ibFrontendView* /*sender*/, wxObject* /*hint*/)

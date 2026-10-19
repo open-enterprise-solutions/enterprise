@@ -5,6 +5,11 @@
 
 #include "mainFrameDesigner.h"
 
+#include <vector>
+#include <wx/filename.h>
+#include <wx/filedlg.h>
+#include <wx/msgdlg.h>
+
 //********************************************************************************
 //*                                 Debug commands                               *
 //********************************************************************************
@@ -12,6 +17,8 @@
 #include "frmclient/backend/appData.h"
 #include "designer-thin/backend/debugger/debugClient.h"
 #include "designer-thin/mainFrame/metaTree/treeConfiguration.h"
+#include "designer-thin/backend/metaCollection/metaDiff.h"
+#include "designer-thin/docManager/templates/docViewConfigCompare.h"
 
 // Common shape for the three places that save the configuration before
 // kicking off a child process (enterprise.exe / wenterprise-server.exe
@@ -170,6 +177,79 @@ void ibFrontendMainFrameDesigner::OnUpdateConfiguration(wxCommandEvent& WXUNUSED
 		debugClient->SaveAllBreakpoints();
 }
 
+
+namespace {
+
+// Records from schema ConfigCompare Build → ibMetaDiffRecord vector.
+std::vector<ibMetaDiffRecord> ReadCompareRecords(const ibProtocolNode& answer)
+{
+	std::vector<ibMetaDiffRecord> records;
+	for (const ibProtocolNode& row : answer.FindChild(ibProtocol::ibSchema::ibConfigCompare::Records).Children()) {
+		ibMetaDiffRecord rec;
+		rec.m_status = static_cast<ibMetaDiffStatus>(row.GetInt(ibProtocol::ibSchema::ibConfigCompare::Status));
+		rec.m_parentIndex = static_cast<int>(row.GetInt(ibProtocol::ibSchema::ibConfigCompare::Parent, -1));
+		rec.m_depth = static_cast<int>(row.GetInt(ibProtocol::ibSchema::ibConfigCompare::Depth));
+		const wxString group = row.GetString(ibProtocol::ibSchema::ibConfigCompare::Group);
+		if (!group.IsEmpty()) {
+			unsigned long long clsid = 0;
+			group.ToULongLong(&clsid);
+			rec.m_groupClsid = static_cast<ibClassID>(clsid);
+		}
+		rec.m_propertyName = row.GetString(ibProtocol::ibSchema::ibConfigCompare::Property);
+		rec.m_leftValue = row.GetString(ibProtocol::ibSchema::ibConfigCompare::Left);
+		rec.m_rightValue = row.GetString(ibProtocol::ibSchema::ibConfigCompare::Right);
+		rec.m_name = row.GetString(ibProtocol::ibSchema::ibConfigCompare::Name);
+		const wxString picture = row.GetString(ibProtocol::ibSchema::ibConfigCompare::Picture);
+		if (!picture.IsEmpty()) {
+			unsigned long long clsid = 0;
+			picture.ToULongLong(&clsid);
+			rec.m_iconClsid = static_cast<ibClassID>(clsid);
+		}
+		rec.m_leftId = static_cast<ibMetaID>(row.GetInt(ibProtocol::ibSchema::ibConfigCompare::LeftId));
+		rec.m_rightId = static_cast<ibMetaID>(row.GetInt(ibProtocol::ibSchema::ibConfigCompare::RightId));
+		records.push_back(std::move(rec));
+	}
+	return records;
+}
+
+bool CallCompareBuild(ibProtocol::ibSchema::ibConfigCompare::ibMode mode,
+	const wxString& fileId, const wxString& file2Id, ibProtocolNode& answer)
+{
+	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
+	if (frame == nullptr)
+		return false;
+	ibProtocolNode args;
+	args.SetValue(ibProtocol::ibSchema::ibConfigCompare::Mode, static_cast<int>(mode));
+	if (!fileId.IsEmpty())
+		args.SetValue(ibProtocol::ibSchema::ibConfigCompare::File, fileId);
+	if (!file2Id.IsEmpty())
+		args.SetValue(ibProtocol::ibSchema::ibConfigCompare::File2, file2Id);
+	ibProtocolNode params;
+	params.SetValue(ibProtocol::ibSchema::Schema,
+		static_cast<long long>(ibProtocol::ibSchema::ibKind::ConfigCompare));
+	params.SetValue(ibProtocol::ibSchema::Args, args);
+	return frame->Call(ibProtocol::ibMethod::Schema, params, answer);
+}
+
+void OpenCompareTab(ibFrontendDocManager* manager,
+	std::vector<ibMetaDiffRecord> records,
+	const wxString& leftLabel, const wxString& rightLabel,
+	ibProtocol::ibSchema::ibConfigCompare::ibMode mode,
+	const wxString& fileId, const wxString& file2Id,
+	const wxString& localRightPath)
+{
+	if (manager == nullptr)
+		return;
+	auto* doc = new ibConfigCompareDocument();
+	manager->AddDocument(doc);
+	doc->Configure(std::move(records), leftLabel, rightLabel, mode, fileId, file2Id, localRightPath,
+		{});  // Merge Call redraws MetaData in the frame; no separate tree reload.
+	if (!doc->OnCreate(wxEmptyString, 0))
+		doc->DeleteAllViews();
+}
+
+} // namespace
+
 void ibFrontendMainFrameDesigner::OnConfiguration(wxCommandEvent& event)
 {
 	if (wxID_DESIGNER_CONFIGURATION_LOAD_FROM_FILE == event.GetId())
@@ -203,20 +283,84 @@ void ibFrontendMainFrameDesigner::OnConfiguration(wxCommandEvent& event)
 			wxMessageBox(_("Successfully unloaded to: ") + saveFileDialog.GetPath());
 		}
 	}
-	else if (wxID_DESIGNER_CONFIGURATION_COMPARE_FILE == event.GetId()
-		|| wxID_DESIGNER_CONFIGURATION_COMPARE_DB == event.GetId()
-		|| wxID_DESIGNER_CONFIGURATION_COMPARE_TWO_FILES == event.GetId())
+	else if (wxID_DESIGNER_CONFIGURATION_COMPARE_FILE == event.GetId())
 	{
-		// ⚠ NOT HERE YET — THE THREE COMPARISONS. The desktop's loaded the other side — a file of the person's, the base's
-		// configuration under the edits, or two files — and opened the compare tab over both roots
-		// (ibConfigCompareDocument::Configure, designer-thin/docManager/templates/docViewConfigCompare.h), the walk over
-		// them done as it opened (ibMetaDiffWalker). Both sides and the walk are the server's: the other configuration loaded
-		// there (a file uploaded as Load does, or the base's), its records sent, and the merge the tab's Apply writes. Asked
-		// before any file is picked, so nobody chooses one for nothing.
-		wxMessageBox(_("Comparing configurations is not in the thin client yet."),
-			wxTheApp->GetAppDisplayName(), wxOK | wxICON_INFORMATION, this);
+		wxFileDialog openFileDialog(this, _("Choose configuration file to compare with"),
+			"", "",
+			ibFileFilter(ibFileKind::Application),
+			wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+		if (openFileDialog.ShowModal() == wxID_CANCEL)
+			return;
+
+		ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
+		wxString fileId;
+		if (frame == nullptr || !frame->UploadFile(openFileDialog.GetPath(), fileId)) {
+			wxMessageBox(_("Failed to upload configuration file."),
+				wxTheApp->GetAppDisplayName(), wxOK | wxICON_ERROR, this);
+			return;
+		}
+		ibProtocolNode answer;
+		if (!CallCompareBuild(ibProtocol::ibSchema::ibConfigCompare::ibMode::File, fileId, wxString(), answer)) {
+			wxMessageBox(_("Failed to compare with the configuration file."),
+				wxTheApp->GetAppDisplayName(), wxOK | wxICON_ERROR, this);
+			return;
+		}
+		OpenCompareTab(m_docManager, ReadCompareRecords(answer), _("Current"),
+			wxFileName(openFileDialog.GetPath()).GetFullName(),
+			ibProtocol::ibSchema::ibConfigCompare::ibMode::File,
+			fileId, wxString(), openFileDialog.GetPath());
+	}
+	else if (wxID_DESIGNER_CONFIGURATION_COMPARE_DB == event.GetId())
+	{
+		ibProtocolNode answer;
+		if (!CallCompareBuild(ibProtocol::ibSchema::ibConfigCompare::ibMode::Database,
+				wxString(), wxString(), answer)) {
+			wxMessageBox(_("Database configuration is not available."),
+				wxTheApp->GetAppDisplayName(), wxOK | wxICON_ERROR, this);
+			return;
+		}
+		// No Push — same as the desktop (no right-save callback).
+		OpenCompareTab(m_docManager, ReadCompareRecords(answer), _("Current"), _("Database"),
+			ibProtocol::ibSchema::ibConfigCompare::ibMode::Database,
+			wxString(), wxString(), wxString());
+	}
+	else if (wxID_DESIGNER_CONFIGURATION_COMPARE_TWO_FILES == event.GetId())
+	{
+		wxFileDialog dlgA(this, _("Choose left configuration file"),
+			"", "", ibFileFilter(ibFileKind::Application),
+			wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+		if (dlgA.ShowModal() == wxID_CANCEL)
+			return;
+		wxFileDialog dlgB(this, _("Choose right configuration file"),
+			"", "", ibFileFilter(ibFileKind::Application),
+			wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+		if (dlgB.ShowModal() == wxID_CANCEL)
+			return;
+
+		ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
+		wxString fileId, file2Id;
+		if (frame == nullptr
+			|| !frame->UploadFile(dlgA.GetPath(), fileId)
+			|| !frame->UploadFile(dlgB.GetPath(), file2Id)) {
+			wxMessageBox(_("Failed to upload one of the configuration files."),
+				wxTheApp->GetAppDisplayName(), wxOK | wxICON_ERROR, this);
+			return;
+		}
+		ibProtocolNode answer;
+		if (!CallCompareBuild(ibProtocol::ibSchema::ibConfigCompare::ibMode::TwoFiles,
+				fileId, file2Id, answer)) {
+			wxMessageBox(_("Failed to load one of the configuration files."),
+				wxTheApp->GetAppDisplayName(), wxOK | wxICON_ERROR, this);
+			return;
+		}
+		OpenCompareTab(m_docManager, ReadCompareRecords(answer),
+			wxFileName(dlgA.GetPath()).GetFullName(),
+			wxFileName(dlgB.GetPath()).GetFullName(),
+			ibProtocol::ibSchema::ibConfigCompare::ibMode::TwoFiles,
+			fileId, file2Id, dlgB.GetPath());
 	}
 }
+
 
 void ibFrontendMainFrameDesigner::OnUpdateSaveMetadata(wxUpdateUIEvent& event)
 {

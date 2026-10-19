@@ -8,9 +8,8 @@
 #include <wx/translation.h>
 
 // THE ENGINE'S COMPARISON (backend/metaCollection/metaDiff.h) AS THE THIN DESIGNER'S COMPARE TAB NAMES IT
-// (designer-thin/mainFrame/configCompare): the record and its status whole. ⚠ NOT HERE YET: the walk — two
-// configurations' trees side by side, each object's properties read — is the server's, and no request carries it; Walk
-// answers no records.
+// (designer-thin/mainFrame/configCompare): the record and its status whole. Records arrive from schema ConfigCompare
+// Build (the server's Walk); m_left/m_right stay null — Name, Picture, LeftId, RightId and the side strings name each row.
 //
 // Configuration comparison primitive.
 //
@@ -107,17 +106,25 @@ struct ibMetaDiffRecord {
 	wxString m_leftValue;
 	wxString m_rightValue;
 
+	// Filled from schema ConfigCompare Records — the server's Walk has no live pointers on the client.
+	wxString m_name;
+	ibClassID m_iconClsid = 0;
+	ibMetaID m_leftId = 0;
+	ibMetaID m_rightId = 0;
+
 	bool IsGroup() const { return m_groupClsid != 0; }
 	bool IsProperty() const { return !m_propertyName.IsEmpty(); }
 
 	// Convenience: the non-null pointer (left if present, else right).
-	// Returns nullptr for synthetic group rows.
+	// Returns nullptr for synthetic group rows — and always on the thin client (records are wire-filled).
 	ibValueMetaObject* GetAnyObject() const {
 		return m_left != nullptr ? m_left : m_right;
 	}
 
-	// (The engine's GetIconClsid — the wrapped object's class — is not here: the thin metaobject holds no class, the
-	// server does; and no window calls it.)
+	ibClassID GetIconClsid() const {
+		if (m_groupClsid != 0) return m_groupClsid;
+		return m_iconClsid;
+	}
 
 	// True when status is Same/Changed; both sides exist and were paired.
 	bool IsPaired() const {
@@ -145,8 +152,8 @@ public:
 	// synthetic group rows under every paired object, partitioning its
 	// children by CLSID, so the result mirrors the standard metadata-
 	// tree shape (Catalogs / Documents / Attributes / ...).
-	// ⚠ NOT HERE YET: the walk is the server's (both trees, their GUIDs, CompareObject, the properties) — no request
-	// carries it; no records.
+	// The walk is the server's (schema ConfigCompare Build). The thin designer never walks local trees — the client's
+	// metaobjects hold no children. Kept so the header matches the engine's; callers use wire Records instead.
 	static std::vector<ibMetaDiffRecord> Walk(
 		ibValueMetaObject* WXUNUSED(leftRoot),
 		ibValueMetaObject* WXUNUSED(rightRoot)

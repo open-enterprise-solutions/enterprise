@@ -202,6 +202,7 @@
     <ClCompile Include="schema\designer\metaData.cpp" />
     <ClCompile Include="schema\designer\homePage.cpp" />
     <ClCompile Include="schema\designer\objectText.cpp" />
+    <ClCompile Include="schema\designer\configCompare.cpp" />
     <ClCompile Include="schema\designer\database.cpp" />
     <ClCompile Include="schema\designer\debugger.cpp" />
     <ClCompile Include="schema\designer\predefined.cpp" />
@@ -355,6 +356,7 @@
     <ClInclude Include="schema\designer\metaData.h" />
     <ClInclude Include="schema\designer\homePage.h" />
     <ClInclude Include="schema\designer\objectText.h" />
+    <ClInclude Include="schema\designer\configCompare.h" />
     <ClInclude Include="schema\designer\database.h" />
     <ClInclude Include="schema\designer\debugger.h" />
     <ClInclude Include="schema\designer\predefined.h" />
