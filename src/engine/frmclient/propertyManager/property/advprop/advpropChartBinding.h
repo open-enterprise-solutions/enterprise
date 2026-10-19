@@ -11,10 +11,10 @@
 // ibPGChartBindingProperty
 // -----------------------------------------------------------------------
 
-// ⭐ ONE EDITOR FOR EVERY PROPERTY THAT NAMES METAOBJECTS BY ID — the desktop's (frontend advpropChartBinding.h): the
-// chart of an accounting, characteristic or calculation binding, the kind of accounting, the functional options, and
-// here also a catalog's owners, a document's registers and what it is entered on (the desktop's own Owner, Record and
-// Generation cells are copies of this one, down to the dialog).
+// ⭐ ONE EDITOR FOR THE PROPERTIES THAT BIND A CHART BY ID — the desktop's (frontend advpropChartBinding.h): the
+// chart of an accounting, characteristic or calculation binding, the kind of accounting, the functional options. A
+// catalog's owners, a document's registers and what it is entered on are the desktop's own cells, as there
+// (advpropOwner.cpp, advpropRecord.cpp, advpropGeneration.cpp).
 //
 // ⭐ THE CHOICES ARRIVE WITH THE ROW (the server's GetValueList: Choices, Multiple when a set may be ticked), and the
 // value is the property's node form — an Array of metaobject ids (ibMetaDescriptionMemory). Nothing is asked to draw or

@@ -69,8 +69,7 @@ public:
 		for (const wxChar* className : {
 				wxT("ibPropertyChartOfAccounts"), wxT("ibPropertyChartOfCharacteristicTypes"),
 				wxT("ibPropertyChartOfCalculationTypes"), wxT("ibPropertyAccountingKind"),
-				wxT("ibPropertyFunctionalOptions"), wxT("ibPropertyOwner"), wxT("ibPropertyRecord"),
-				wxT("ibPropertyGeneration") })
+				wxT("ibPropertyFunctionalOptions") })
 			ibPropertyRegistry::Register(className, maker, WriteIds);
 	}
 } g_chartBindingLoader;

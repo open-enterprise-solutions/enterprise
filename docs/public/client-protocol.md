@@ -240,6 +240,10 @@ is one exchange), after the configuration tree's Create (`Schema` 9, `Command` 2
 the configuration. When the work waits on a question (a form's type), they ride the answer to the `respond` that lets
 it finish. A server that sends none is read with `schema`, as before.
 
+A row's choices are its children: `Id`, `Title`, `Picture`; a type's row offers types (`Type` — a class id as text,
+`Title`, `Picture`). The metaobjects of an owner's, a register's or a sequence's row, and of what a document is entered
+on, come as a tree by kind: a kind is a child as a type is (`Type`, `Title`, `Picture`), its metaobjects its children.
+
 A schema read changes nothing and moves no frame number, so the client keeps the inspector's rows it received or read
 while the number stays: clicking an object again, or walking back to it, before anything else was done is not a call.
 

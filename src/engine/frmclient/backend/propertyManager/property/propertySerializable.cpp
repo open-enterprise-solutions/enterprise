@@ -31,6 +31,14 @@ ibPropertySerializable::ibPropertySerializable(ibPropertyCategory* cat, const ib
 			if (picture.IsOk())
 				icon.CopyFromBitmap(picture);
 			ibValue::RegisterCtor(clsid, title, icon);
+			// …or a KIND, its metaobjects under it (the server's tree, as the desktop's dialogs grouped them).
+			if (!choice.Children().empty()) {
+				for (const ibDataNode& member : choice.Children()) {
+					m_choices.Add(member.GetValue<wxString>(ibProtocolName::Title), member.GetValue<s32>(ibProtocolName::Id),
+						ibProtocolPicture(member.GetValue<wxString>(ibProtocolName::Picture)), clsid);
+				}
+				continue;
+			}
 			m_choices.Add(m_choices.GetCount(), title, wxEmptyString, wxVariant(wxULongLong(clsid)));
 			continue;
 		}

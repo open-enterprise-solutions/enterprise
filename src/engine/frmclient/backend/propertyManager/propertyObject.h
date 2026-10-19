@@ -151,28 +151,30 @@ class FRMCLIENT_API ibPropertyChoiceList {
 	// just been shown, or showing a person an identifier.
 	struct ibPropertyChoiceItem {
 		ibPropertyChoiceItem(long id, const wxString& name, const wxString& synonym,
-			const wxVariant& value, const wxBitmap& bmp)
-			: m_id(id), m_name(name), m_synonym(synonym), m_value(value), m_bmp(bmp) {}
+			const wxVariant& value, const wxBitmap& bmp, const ibClassID& clsid)
+			: m_id(id), m_name(name), m_synonym(synonym), m_value(value), m_bmp(bmp), m_clsid(clsid) {}
 		long      m_id;
 		wxString  m_name;
 		wxString  m_synonym;
 		wxVariant m_value;
 		wxBitmap  m_bmp;
+		ibClassID m_clsid;
 	};
 
 	std::vector<ibPropertyChoiceItem> m_items;
 
 public:
 
-	// The plain form — a number IS the value, which is what an enumeration and a list offer.
-	void Add(const wxString& name, long id, const wxBitmap& bmp = wxNullBitmap) {
-		m_items.emplace_back(id, name, wxEmptyString, wxVariant(id), bmp);
+	// The plain form — a number IS the value, which is what an enumeration and a list offer; a metaobject's, of its kind
+	// (its class), as the server named it.
+	void Add(const wxString& name, long id, const wxBitmap& bmp = wxNullBitmap, const ibClassID& clsid = 0) {
+		m_items.emplace_back(id, name, wxEmptyString, wxVariant(id), bmp, clsid);
 	}
 
 	// The full form — the number says which, the variant is what to place.
 	void Add(long id, const wxString& name, const wxString& synonym,
 		const wxVariant& value, const wxBitmap& bmp = wxNullBitmap) {
-		m_items.emplace_back(id, name, synonym, value, bmp);
+		m_items.emplace_back(id, name, synonym, value, bmp, 0);
 	}
 
 	unsigned int GetCount() const { return (unsigned int)m_items.size(); }
@@ -181,6 +183,9 @@ public:
 	wxString GetSynonym(unsigned int idx) const { return m_items[idx].m_synonym; }
 	const wxVariant& GetValue(unsigned int idx) const { return m_items[idx].m_value; }
 	const wxBitmap& GetBitmap(unsigned int idx) const { return m_items[idx].m_bmp; }
+	// Its kind, when it is a metaobject — what the desktop's dialogs grouped it under (Owner, Record, Generation), named
+	// and drawn as the server registered it (ibValue::GetAvailableCtor); 0 when it is of none.
+	ibClassID GetClassType(unsigned int idx) const { return m_items[idx].m_clsid; }
 
 
 	// The label a person reads: the synonym when there is one, the name otherwise. One place, so

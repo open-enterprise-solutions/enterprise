@@ -18,6 +18,9 @@
 #include "backend/propertyManager/property/propertyForm.h"          // ibPropertyForm — a form's own Form row
 #include "backend/propertyManager/property/propertySpreadsheet.h"   // …a template's, a module's: each opens its owner
 #include "backend/propertyManager/property/propertyModule.h"
+#include "backend/propertyManager/property/propertyOwner.h"        // ibPropertyOwner — a catalog's owners, by kind
+#include "backend/propertyManager/property/propertyRecord.h"       // ibPropertyRecord — a document's registers, sequences
+#include "backend/propertyManager/property/propertyGeneration.h"   // ibPropertyGeneration — what it is entered on
 #include "core/serialize/dataBuilder.h"
 
 #include "clientFrame.h"   // ibClientFrame::SendPicture — a type's, a choice's picture, by its id
@@ -155,13 +158,46 @@ void ibPropertyInspector::AppendProperty(ibDataNode& parent, ibBackendProperty* 
 	const ibPropertyChoiceMode mode = property->GetValueList(choices);
 	if (mode == ibPropertyChoiceMode::Mult)
 		row.SetValue(ibProtocolName::Multiple, true);
-	for (unsigned int index = 0; index < choices.GetCount(); ++index) {
-		ibDataNode& choice = row.AddChild(0, static_cast<ibMetaID>(index + 1));
+	const auto appendChoice = [&choices](ibDataNode& parent, unsigned int index) {
+		ibDataNode& choice = parent.AddChild(0, static_cast<ibMetaID>(parent.Children().size() + 1));
 		choice.SetValue(ibProtocolName::Id, static_cast<s32>(choices.GetId(index)));
 		choice.SetValue(ibProtocolName::Title, choices.GetLabel(index));
 		const ibPictureDescription& picture = choices.GetPicture(index);
 		if (!picture.IsEmptyPicture())
 			choice.SetValue(ibProtocolName::Picture, ibClientFrame::SendPicture(picture));
+	};
+	// ⭐ AN OWNER'S, A REGISTER'S, WHAT A DOCUMENT IS ENTERED ON GO AS A TREE BY KIND — the desktop's dialogs of these
+	// three grouped their metaobjects so, asking the configuration each one's class (FillFromChoices); a chart's binding
+	// listed flat. A kind is named and drawn as a type is (Type, Title, Picture), its choices under it, the kinds in the
+	// order they first appear.
+	const ibPropertyObject* const owner = property->GetPropertyObject();
+	const ibMetaData* const metaData = owner != nullptr ? owner->GetMetaData() : nullptr;
+	const bool byKind = metaData != nullptr && (dynamic_cast<const ibPropertyOwner*>(property) != nullptr
+		|| dynamic_cast<const ibPropertyRecord*>(property) != nullptr
+		|| dynamic_cast<const ibPropertyGeneration*>(property) != nullptr);
+	std::vector<ibClassID> choiceClass(choices.GetCount(), 0);
+	std::vector<ibClassID> kinds;
+	for (unsigned int index = 0; index < choices.GetCount(); ++index) {
+		const ibValueMetaObject* const metaObject = byKind
+			? metaData->FindAnyObjectByFilter(static_cast<ibMetaID>(choices.GetId(index))) : nullptr;
+		if (metaObject == nullptr) {
+			appendChoice(row, index);
+			continue;
+		}
+		choiceClass[index] = metaObject->GetClassType();
+		if (std::find(kinds.begin(), kinds.end(), choiceClass[index]) == kinds.end())
+			kinds.push_back(choiceClass[index]);
+	}
+	for (const ibClassID& clsid : kinds) {
+		const ibCtorAbstractType* const so = ibValue::GetAvailableCtor(clsid);
+		ibDataNode& kind = row.AddChild(0, static_cast<ibMetaID>(row.Children().size() + 1));
+		kind.SetValue(ibProtocolName::Type, wxString::Format(wxT("%llu"), static_cast<unsigned long long>(clsid)));
+		kind.SetValue(ibProtocolName::Title, so != nullptr ? so->GetClassName() : wxString());
+		kind.SetValue(ibProtocolName::Picture, ibClientFrame::SendPicture(clsid));
+		for (unsigned int index = 0; index < choices.GetCount(); ++index) {
+			if (choiceClass[index] == clsid)
+				appendChoice(kind, index);
+		}
 	}
 
 	if (!property->IsEditable())

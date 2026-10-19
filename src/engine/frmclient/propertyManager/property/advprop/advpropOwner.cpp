@@ -5,6 +5,9 @@
 #include "frmclient/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
 #include "frmclient/propertyManager/property/private/propertyRegistry.h"
 #include "frmclient/propertyManager/propertyEditor.h"
+#include "frmclient/backend/compiler/value.h"   // ibValue::GetAvailableCtor — a kind, as the server registered its class
+
+#include <map>
 
 #define icon_size 16
 
@@ -43,8 +46,10 @@ ibPGOwnerProperty::ibPGOwnerProperty(const ibPropertyObject* property, const wxS
 	const ibPropertyChoiceList& choices)
 	: wxPGProperty(label, strName), m_ownerProperty(property)
 {
-	for (unsigned int idx = 0; idx < choices.GetCount(); idx++)
+	for (unsigned int idx = 0; idx < choices.GetCount(); idx++) {
 		m_choices.Add(choices.GetLabel(idx), choices.GetBitmap(idx), choices.GetId(idx));
+		m_choiceClass.push_back(choices.GetClassType(idx));
+	}
 
 	m_flags |= wxPGPropertyFlags_ActiveButton; // Property button always enabled.
 
@@ -102,18 +107,30 @@ wxPGEditorDialogAdapter* ibPGOwnerProperty::GetEditorDialog() const
 			ibMetaID GetMetaID() const { return m_metaID; }
 		};
 
-		// ⭐ WHAT THE PROPERTY OFFERS — the choices it was built with, one item each. The desktop's walked the
-		// configuration's catalogs under a group of their class (FillByClsid); the client holds no configuration, and
-		// the row's choices are those catalogs, as the server's property listed them.
-		void FillFromChoices(const wxPGChoices& choices, ibCheckTree* tc, ibVariantDataOwner* data) {
+		// ⭐ WHAT THE PROPERTY OFFERS — the choices it was built with, one item each, under a group of their class as the
+		// desktop's walked the configuration's catalogs (FillByClsid). Each one's kind is the server's: it asked the
+		// configuration (the client holds none), and named and drew the kind as a type (ibValue::GetAvailableCtor).
+		void FillFromChoices(const wxPGChoices& choices, const std::vector<ibClassID>& choiceClass,
+			ibCheckTree* tc, ibVariantDataOwner* data) {
 
 			wxImageList* imageList = tc->GetImageList();
 			wxASSERT(imageList);
+			std::map<ibClassID, wxTreeItemId> groups;   // one per kind, opened where the kind first appears
 			for (unsigned int idx = 0; idx < choices.GetCount(); idx++) {
 				const ibMetaID id = choices.GetValue(idx);
+
+				const ibClassID clsid = choiceClass[idx];
+				auto group = groups.find(clsid);
+				if (group == groups.end()) {
+					const ibCtorAbstractType* so = ibValue::GetAvailableCtor(clsid);
+					const int groupIcon = so != nullptr ? imageList->Add(so->GetClassIcon()) : -1;
+					group = groups.emplace(clsid, tc->AppendItem(tc->GetRootItem(),
+						so != nullptr ? so->GetClassName() : wxString(), groupIcon, groupIcon)).first;
+				}
+
 				const wxBitmapBundle& bitmap = choices.Item(idx).GetBitmap();
 				const int icon = bitmap.IsOk() ? imageList->Add(bitmap.GetBitmap(wxSize(icon_size, icon_size))) : -1;
-				wxTreeItemId newItem = tc->AppendItem(tc->GetRootItem(), choices.GetLabel(idx),
+				wxTreeItemId newItem = tc->AppendItem(group->second, choices.GetLabel(idx),
 					icon, icon, new ibTreeItemPropertyData(id));
 
 				const bool checked = data != nullptr && data->GetMetaDesc().ContainMetaType(id);
@@ -172,7 +189,7 @@ wxPGEditorDialogAdapter* ibPGOwnerProperty::GetEditorDialog() const
 				new wxImageList(icon_size, icon_size)
 			);
 
-			FillFromChoices(dlgProp->GetChoices(), tc, data);
+			FillFromChoices(dlgProp->GetChoices(), dlgProp->m_choiceClass, tc, data);
 
 			tc->ExpandAll(); int res = dlg->ShowModal();
 
