@@ -119,7 +119,7 @@ A scheduled job's `ibPropertySchedule` row carries the schedule node as its `Val
 `StartMinute`, `EndMinute`, `StopAfterMinute`, `DaysOfWeek`, `DaysOfMonth`, `DaysOfMonthFromEnd`, `Months`,
 `WeekdayOrdinal`, `EveryNWeeks`, `EveryNMonths`, `PeriodAnchor`, `ActiveFrom`, `ActiveTo`) and the sentence as its
 `Presentation`. The client opens the schedule window over it and sends the edited node back through the row's `Set`;
-a cancelled window sends nothing. The dates travel as JSON writes a date, `yyyy-mm-dd hh:mm:ss`, the empty date as
+a cancelled window, or one closed with nothing changed, sends nothing. The dates travel as JSON writes a date, `yyyy-mm-dd hh:mm:ss`, the empty date as
 `""`, and either side reads them as text or as a date.
 
 A picture is named by its id everywhere — in the view, a tab's `Icon`, a schema, a request, a list of choices: a
