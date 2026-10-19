@@ -4,9 +4,9 @@
 
 #include "frmclient/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
 #include "frmclient/propertyManager/property/private/propertyRegistry.h"
-#include "frmclient/backend/propertyManager/property/propertySerializable.h"   // the row the configuration's pictures come with
+#include "core/serialize/dataBuilder.h"   // ibDataNode — the row the configuration's pictures come with
 
-#include "protocol/protocol.h"   // ibProtocolName — the row's keys
+#include "protocol/protocol.h"   // ibProtocol::ibSchema::ibProperties — the row's keys
 
 // -----------------------------------------------------------------------
 // wxPGPictureProperty
@@ -28,16 +28,12 @@ public:
 		ibPropertyRegistry::Register(wxT("ibPropertyPicture"), [](ibBackendProperty* property) -> wxPGProperty* {
 			ibPictureDescription pictureDesc;
 			ibPictureDescriptionMemory::ReadNode(property->GetNodeValue(), pictureDesc);
-			// …and the configuration's pictures it may be loaded from, by name (the row's Pictures, ibPropertyInspector).
-			const ibDataNode* pictures = nullptr;
-			if (const ibPropertySerializable* const row = dynamic_cast<const ibPropertySerializable*>(property)) {
-				if (const ibDataValue* const node = row->GetRow().FindProperty(ibProtocolName::Pictures)) {
-					if (node->Kind() == ibDataKind::Child)
-						pictures = node->AsChild().get();
-				}
-			}
+			// …and the configuration's pictures it may be loaded from, by name (the row's Pictures, its GetProtocolValue).
+			ibDataNode row;
+			property->GetProtocolValue(row);
 			return new wxPGPictureProperty(property->GetLabel(), property->GetName(),
-				wxVariant(new ibVariantDataPicture(property->GetPropertyObject(), pictureDesc)), pictures);
+				wxVariant(new ibVariantDataPicture(property->GetPropertyObject(), pictureDesc)),
+				row.GetProperty(ibProtocol::ibSchema::ibProperties::Pictures).AsChild());
 		},
 		[](const wxVariant& value) {
 			ibDataValue node;
@@ -65,7 +61,7 @@ static int s_indFilter = -1;
 wxPGPictureProperty::wxPGPictureProperty(const wxString& label,
 	const wxString& strName,
 	const wxVariant& value,
-	const ibDataNode* pictures) : wxPGProperty(label, strName),
+	const std::shared_ptr<ibDataNode>& pictures) : wxPGProperty(label, strName),
 	m_propertySource(nullptr),
 	m_propertyBackend(nullptr), m_propertyConfiguration(nullptr), m_propertyFile(nullptr)
 {
@@ -104,8 +100,8 @@ wxPGPictureProperty::wxPGPictureProperty(const wxString& label,
 		if (pictures != nullptr) {
 			for (const ibDataNode& item : pictures->Children()) {
 				wxPGChoiceEntry& entry = configurationChoices.AddAsSorted(
-					item.GetValue<wxString>(ibProtocolName::Name), system_config++);
-				m_confChoices.insert_or_assign(entry.GetValue(), ibGuid(item.GetValue<wxString>(ibProtocolName::Guid)));
+					item.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Name), system_config++);
+				m_confChoices.insert_or_assign(entry.GetValue(), ibGuid(item.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Guid)));
 			}
 		}
 

@@ -50,9 +50,9 @@ wxString ShapeOf(const ibProtocolNode& rows, const ibProtocolNode& attributes)
 {
 	wxString shape;
 	for (const ibProtocolNode& row : rows.Children())
-		shape << row.GetId() << wxT(':') << row.GetString(ibProtocolName::Name) << wxT(':')
-			<< row.GetBool(ibProtocolName::Main) << row.GetBool(ibProtocolName::HasComposition)
-			<< row.GetString(ibProtocolName::DropControl) << row.FindChild(ibProtocolName::Menu).IsNode() << wxT(';');
+		shape << row.GetId() << wxT(':') << row.GetString(ibProtocol::ibView::ibFormDesigner::Name) << wxT(':')
+			<< row.GetBool(ibProtocol::ibView::ibFormDesigner::Main) << row.GetBool(ibProtocol::ibView::ibFormDesigner::HasComposition)
+			<< row.GetString(ibProtocol::ibView::ibFormDesigner::DropControl) << row.FindChild(ibProtocol::ibView::ibFormDesigner::Menu).IsNode() << wxT(';');
 	shape << wxString::FromUTF8(attributes.Write());
 	return shape;
 }
@@ -61,7 +61,7 @@ wxString ShapeOf(const ibProtocolNode& rows, const ibProtocolNode& attributes)
 ibProtocolNode FindMenuItem(const ibProtocolNode& menu, const char* name)
 {
 	for (const ibProtocolNode& item : menu.Children()) {
-		if (item.GetString(ibProtocolName::Name) == wxString(name))
+		if (item.GetString(ibProtocol::ibView::ibFormDesigner::Name) == wxString(name))
 			return item;
 	}
 	return ibProtocolNode();
@@ -88,11 +88,11 @@ bool ibFormAttributeValue::IsEditable() const
 bool ibFormAttributeValue::Receive()
 {
 	ibProtocolNode request;
-	request.SetValue(ibProtocolName::Kind, static_cast<int>(ibProtocolFormDesignerRequest::Properties));
-	request.SetValue(ibProtocolName::Form, m_formHandler->m_formNode);
-	request.SetValue(ibProtocolName::Attribute, m_attributeId);
+	request.SetValue(ibProtocol::ibView::ibFormDesigner::Kind, static_cast<int>(ibProtocol::ibView::ibFormDesigner::ibRequest::Properties));
+	request.SetValue(ibProtocol::ibView::ibFormDesigner::Form, m_formHandler->m_formNode);
+	request.SetValue(ibProtocol::ibView::ibFormDesigner::Attribute, m_attributeId);
 	if (m_columnId != 0)
-		request.SetValue(ibProtocolName::Column, m_columnId);
+		request.SetValue(ibProtocol::ibView::ibFormDesigner::Column, m_columnId);
 	ibProtocolNode answer;
 	return m_formHandler->GetEditorDocument()->Fetch(request, answer) && ibPropertyObject::Receive(answer);
 }
@@ -104,9 +104,9 @@ void ibFormAttributeValue::OnPropertyChanged(ibProperty* property, const wxVaria
 
 void ibFormAttributeValue::ReadRow(const ibProtocolNode& row)
 {
-	m_name = row.GetString(ibProtocolName::Name);
-	m_main = row.GetBool(ibProtocolName::Main);
-	m_menu = row.FindChild(ibProtocolName::Menu).Clone();
+	m_name = row.GetString(ibProtocol::ibView::ibFormDesigner::Name);
+	m_main = row.GetBool(ibProtocol::ibView::ibFormDesigner::Main);
+	m_menu = row.FindChild(ibProtocol::ibView::ibFormDesigner::Menu).Clone();
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -267,12 +267,12 @@ void ibAttributeTree::AppendRows(const wxTreeItemId& parent, const ibProtocolNod
 	const int image = m_tcAttributes->GetImageList() != nullptr && m_tcAttributes->GetImageList()->GetImageCount() > 0 ? 0 : -1;
 	for (const ibProtocolNode& row : rows.Children()) {
 		std::vector<ibSourceHop> path;
-		for (const ibProtocolNode& hop : row.GetList(ibProtocolName::Path)) {
-			const ibClassID type = ClsidOf(hop.GetString(ibProtocolName::Type));
-			path.push_back({ static_cast<ibSourceId>(hop.GetInt(ibProtocolName::Id)), type != 0 ? type : g_valueUndefinedCLSID });
+		for (const ibProtocolNode& hop : row.GetList(ibProtocol::ibView::ibFormDesigner::Path)) {
+			const ibClassID type = ClsidOf(hop.GetString(ibProtocol::ibView::ibFormDesigner::Type));
+			path.push_back({ static_cast<ibSourceId>(hop.GetInt(ibProtocol::ibView::ibFormDesigner::Id)), type != 0 ? type : g_valueUndefinedCLSID });
 		}
 		std::vector<ibMetaID> refTypes;
-		for (const ibProtocolNode& target : row.GetList(ibProtocolName::Targets))
+		for (const ibProtocolNode& target : row.GetList(ibProtocol::ibView::ibFormDesigner::Targets))
 			refTypes.push_back(static_cast<ibMetaID>(target.AsInt()));
 
 		// A ROOT row: the holder + head-of-path; a composition row: its path alone.
@@ -280,10 +280,10 @@ void ibAttributeTree::AppendRows(const wxTreeItemId& parent, const ibProtocolNod
 		ibFormAttributeValue* const entry = found != m_entries.end() ? found->second.get() : nullptr;
 
 		ibAttributeTreeItemData* const itemData = new ibAttributeTreeItemData(entry, path, refTypes,
-			row.GetBool(ibProtocolName::TableSection), ClsidOf(row.GetString(ibProtocolName::DropControl)),
-			row.GetBool(ibProtocolName::UnderList));
-		const wxTreeItemId item = m_tcAttributes->AppendItem(parent, row.GetString(ibProtocolName::Name), image, image, itemData);
-		if (row.GetBool(ibProtocolName::Main))
+			row.GetBool(ibProtocol::ibView::ibFormDesigner::TableSection), ClsidOf(row.GetString(ibProtocol::ibView::ibFormDesigner::DropControl)),
+			row.GetBool(ibProtocol::ibView::ibFormDesigner::UnderList));
+		const wxTreeItemId item = m_tcAttributes->AppendItem(parent, row.GetString(ibProtocol::ibView::ibFormDesigner::Name), image, image, itemData);
+		if (row.GetBool(ibProtocol::ibView::ibFormDesigner::Main))
 			m_tcAttributes->SetItemBold(item);
 
 		if (!row.Children().empty()) {
@@ -291,7 +291,7 @@ void ibAttributeTree::AppendRows(const wxTreeItemId& parent, const ibProtocolNod
 			AppendRows(item, row);
 			itemData->SetLoaded();                  // already populated; OnItemExpanding no-ops on it
 		}
-		else if (row.GetBool(ibProtocolName::HasComposition)) {
+		else if (row.GetBool(ibProtocol::ibView::ibFormDesigner::HasComposition)) {
 			m_tcAttributes->AppendItem(item, wxEmptyString);   // dummy -> [+]; asked lazily on expand
 		}
 	}
@@ -353,7 +353,7 @@ bool ibAttributeTree::SelectColumnInInspector(const wxTreeItemId& item)
 
 	const long long attributeId = static_cast<long long>(path.front().m_id);
 	const auto head = m_entries.find(attributeId);
-	if (head == m_entries.end() || !FindMenuItem(head->second->GetMenu(), ibProtocolName::Column).Has(ibProtocolName::Name))
+	if (head == m_entries.end() || !FindMenuItem(head->second->GetMenu(), ibProtocol::ibView::ibFormDesigner::Column).Has(ibProtocol::ibView::ibFormDesigner::Name))
 		return false;
 
 	const long long columnId = static_cast<long long>(path.back().m_id);
@@ -424,7 +424,7 @@ void ibAttributeTree::OnContextMenu(wxContextMenuEvent& event)
 	// A value-table attribute grows COLUMNS on the attribute side (edited here; the bound tablebox then shows them) —
 	// its row's menu says so, and its title.
 	const ibProtocolNode addColumn = selEntry != nullptr ?
-		FindMenuItem(selEntry->GetMenu(), ibProtocolName::Column) : ibProtocolNode();
+		FindMenuItem(selEntry->GetMenu(), ibProtocol::ibView::ibFormDesigner::Column) : ibProtocolNode();
 	// A LOCKED form (over read-only metadata — a config opened from a DB / file) can be VIEWED but not
 	// restructured: every MUTATING action is disabled; the read-only-safe ones (Copy, Properties) stay live.
 	const bool editable = m_formHandler->IsEditable();
@@ -438,8 +438,8 @@ void ibAttributeTree::OnContextMenu(wxContextMenuEvent& event)
 	};
 
 	appendItem(ID_ATTR_ADD, _("Add"), wxART_NEW, editable);          // mutates → locked when read-only
-	if (addColumn.Has(ibProtocolName::Name))
-		appendItem(ID_ATTR_ADD_COLUMN, addColumn.GetString(ibProtocolName::Title), wxART_NEW, editable);   // value-table only
+	if (addColumn.Has(ibProtocol::ibView::ibFormDesigner::Name))
+		appendItem(ID_ATTR_ADD_COLUMN, addColumn.GetString(ibProtocol::ibView::ibFormDesigner::Title), wxART_NEW, editable);   // value-table only
 	appendItem(ID_ATTR_EDIT, _("Edit"), wxART_EDIT, hasAttr && editable);
 	appendItem(ID_ATTR_REMOVE, _("Delete"), wxART_DELETE, hasAttr && editable);
 	menu.AppendSeparator();
@@ -472,18 +472,18 @@ void ibAttributeTree::OnItemExpanding(wxTreeEvent& event)
 	data->SetLoaded();
 
 	ibProtocolNode request;
-	request.SetValue(ibProtocolName::Kind, static_cast<int>(ibProtocolFormDesignerRequest::Composition));
-	request.SetValue(ibProtocolName::Form, m_formHandler->m_formNode);
+	request.SetValue(ibProtocol::ibView::ibFormDesigner::Kind, static_cast<int>(ibProtocol::ibView::ibFormDesigner::ibRequest::Composition));
+	request.SetValue(ibProtocol::ibView::ibFormDesigner::Form, m_formHandler->m_formNode);
 	ibVisualEditor::WritePath(request, data->GetPath());
 	for (const ibMetaID& target : data->GetRefTypes())
-		request.AddItem(ibProtocolName::Targets, static_cast<long long>(target));
+		request.AddItem(ibProtocol::ibView::ibFormDesigner::Targets, static_cast<long long>(target));
 	if (data->IsUnderList())
-		request.SetValue(ibProtocolName::UnderList, true);
+		request.SetValue(ibProtocol::ibView::ibFormDesigner::UnderList, true);
 
 	m_tcAttributes->DeleteChildren(event.GetItem());   // drop the dummy [+]
 	ibProtocolNode answer;
 	if (m_formHandler->GetEditorDocument()->Fetch(request, answer))
-		AppendRows(event.GetItem(), answer.FindChild(ibProtocolName::Rows));
+		AppendRows(event.GetItem(), answer.FindChild(ibProtocol::ibView::ibFormDesigner::Rows));
 }
 
 void ibAttributeTree::OnBeginDrag(wxTreeEvent& event)

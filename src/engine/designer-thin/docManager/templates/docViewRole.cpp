@@ -42,7 +42,7 @@ bool ibRoleEditView::OnClose(bool deleteWindow)
 
 void ibRoleEditDocument::DrawView(const ibProtocolNode& view, const ibProtocolNode& patch)
 {
-	if (patch.IsNode() && !patch.Has(ibProtocolName::Rows) && !patch.Has(ibProtocolName::State))
+	if (patch.IsNode() && !patch.Has(ibProtocol::ibView::ibCheckTree::Rows) && !patch.Has(ibProtocol::ibView::State))
 		return;
 
 	if (ibRoleEditor* const roleEditor = GetRoleEditor())

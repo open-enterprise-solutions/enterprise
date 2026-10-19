@@ -142,12 +142,12 @@ void ibVisualHost::GenerateControl(ibValueFrame* control, bool firstCreated)
 void ibVisualHost::RefreshControl(ibValueFrame* control, ibDataNode& node)
 {
 	// The id is what an event comes back naming, so a control that never had one gets one now.
-	node.SetValue(ibProtocolName::ControlId, control->EnsureControlID());
-	node.SetValue(ibProtocolName::Name, control->GetControlName());
+	node.SetValue(ibProtocol::ibForm::ControlId, control->EnsureControlID());
+	node.SetValue(ibProtocol::ibForm::Name, control->GetControlName());
 	// …and, for the designer, whether it is open in its tree — the header's last field: the form it edits is handed
 	// back as drawn and loaded by LoadNode, which reads it.
 	if (IsDesignerHost())
-		node.SetValue(ibProtocolName::Expanded, control->GetExpanded());
+		node.SetValue(ibProtocol::ibForm::Expanded, control->GetExpanded());
 	// A reading, not a save: what a save refuses (an attribute not finished — a dynamic list with no source) is drawn
 	// all the same, its refusal is the save's (SaveNode). Stopping here sent the form without its controls (2026-10-15).
 	const long long writing = NowUs();
@@ -156,17 +156,17 @@ void ibVisualHost::RefreshControl(ibValueFrame* control, ibDataNode& node)
 	s_drawTimes.propertiesUs += updating - writing;
 	++s_drawTimes.controls;
 
-	ibDataNode& state = node.Child(ibProtocolName::State);
+	ibDataNode& state = node.Child(ibProtocol::ibForm::ibState::State);
 	control->OnUpdate(state, this);
 	// The state events the server is subscribed to on it — the client sends these at once, and holds the others.
 	std::vector<ibDataValue> subscribed;
 	for (int number = 1; number < 32; ++number) {
-		const ibProtocolEvent event = static_cast<ibProtocolEvent>(number);
-		if (ibProtocolIsStateEvent(event) && control->IsSubscribed(event))
+		const ibProtocol::ibEvent::ibKind event = static_cast<ibProtocol::ibEvent::ibKind>(number);
+		if (ibProtocol::ibEvent::IsStateEvent(event) && control->IsSubscribed(event))
 			subscribed.push_back(ibDataValue::Int(number));
 	}
 	if (!subscribed.empty())
-		state.AddField(ibProtocolName::Subscribed, ibDataValue::Array(std::move(subscribed)));
+		state.AddField(ibProtocol::ibForm::ibState::Subscribed, ibDataValue::Array(std::move(subscribed)));
 	const long long updated = NowUs() - updating;
 	s_drawTimes.statesUs += updated;
 	if (updated > 2000)

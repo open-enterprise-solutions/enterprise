@@ -8,7 +8,7 @@
 // them; what a person does in them comes back as the doors of the tree's schema (ibSchemaMetaData), and the rows follow
 // from the metadata, as on the desktop the row followed the stage and never the click.
 //
-// A row (protocol.h, ibProtocolSchema::MetaData): NodeId — its object's id, or below 0 a group row's place among its
+// A row (protocol.h, ibProtocol::ibSchema::ibKind::MetaData): NodeId — its object's id, or below 0 a group row's place among its
 // siblings; Title, Picture; Group — the metatype New makes under it; Type — its object's class; Synonym; Position —
 // its object's place among its parent's children. The node it is drawn into IS the root row, the metadata's own.
 //

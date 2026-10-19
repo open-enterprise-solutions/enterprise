@@ -118,17 +118,17 @@ bool ibAppDesigner::OnInit()
 		// A file base — opened in this process, by the library that brings the server in; the designer's is made
 		// where there is none yet, as the desktop designer made it.
 		ibProtocolNode request;
-		request.SetValue(ibProtocolName::Locale, appData->m_strLocale)
-			.SetValue(ibProtocolName::Create, true);
+		request.SetValue(ibProtocol::ibFileBase::Locale, appData->m_strLocale)
+			.SetValue(ibProtocol::ibFileBase::Create, true);
 		if (!appData->m_strFile.IsEmpty()) {
-			request.SetValue(ibProtocolName::Directory, appData->m_strFile);
+			request.SetValue(ibProtocol::ibFileBase::Directory, appData->m_strFile);
 		}
 		else {
-			request.SetValue(ibProtocolName::Server, appData->m_strServer)
-				.SetValue(ibProtocolName::Port, appData->m_strPort)
-				.SetValue(ibProtocolName::User, appData->m_strUser)
-				.SetValue(ibProtocolName::Password, appData->m_strPassword)
-				.SetValue(ibProtocolName::Database, appData->m_strDatabase);
+			request.SetValue(ibProtocol::ibFileBase::Server, appData->m_strServer)
+				.SetValue(ibProtocol::ibFileBase::Port, appData->m_strPort)
+				.SetValue(ibProtocol::ibFileBase::User, appData->m_strUser)
+				.SetValue(ibProtocol::ibFileBase::Password, appData->m_strPassword)
+				.SetValue(ibProtocol::ibFileBase::Database, appData->m_strDatabase);
 		}
 		auto file = std::make_unique<ibProtocolConnectionFile>();
 		if (!file->Open(request.Write(), error)) {

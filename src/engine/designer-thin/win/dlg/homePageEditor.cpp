@@ -17,6 +17,7 @@
 #include "frmclient/backend/backend_picture.h"                 // ibBackendPicture::GetPicture — the toolbar art
 #include "core/picturePredefined.h"
 #include "frmclient/win/theme/luna_toolbarart.h"
+#include "protocol/protocol.h"                                 // ibProtocol::ibSchema::ibHomePage — the forms' rows
 
 #include <map>
 
@@ -175,7 +176,7 @@ const ibDataNode* ibDialogHomePageEditor::FindItemForm(const ibHomePageItem& ite
 	// Resolved on every read — a form deleted since it was attached reads as missing
 	// instead of quietly disappearing from the list.
 	for (const ibDataNode& form : m_metaObject->GetFormArray()) {
-		if (form.GetValue<s32>(wxT("Id")) == item.m_formId)
+		if (form.GetValue<s32>(ibProtocol::ibSchema::ibHomePage::Id) == item.m_formId)
 			return &form;
 	}
 	return nullptr;
@@ -203,13 +204,13 @@ void ibDialogHomePageEditor::FillColumn(ibHomePageColumn column, long selectInde
 		int imageIndex = -1;
 		if (imageList != nullptr) {
 			const wxIcon rowIcon = metaForm != nullptr ?
-				FormIcon(*metaForm, wxT("Picture")) : ibBackendPicture::GetPictureAsIcon(g_picHomePageCLSID);
+				FormIcon(*metaForm, ibProtocol::ibSchema::ibHomePage::Picture) : ibBackendPicture::GetPictureAsIcon(g_picHomePageCLSID);
 			if (rowIcon.IsOk())
 				imageIndex = imageList->Add(rowIcon);
 		}
 
 		const long row = listCtrl->InsertItem((long)idx,
-			metaForm != nullptr ? metaForm->GetValue<wxString>(wxT("FullName")) : _("<not found>"), imageIndex);
+			metaForm != nullptr ? metaForm->GetValue<wxString>(ibProtocol::ibSchema::ibHomePage::FullName) : _("<not found>"), imageIndex);
 		// 0 means "share equally" — say so rather than showing a bare zero.
 		listCtrl->SetItem(row, model_height, item.m_height != 0 ?
 			wxString::Format(wxT("%u"), item.m_height) : wxString(_("same")));
@@ -445,8 +446,8 @@ void ibDialogHomePageFormSelect::FillTree()
 	// Every form's picture and its owner's asked for at once — not a call per form.
 	std::vector<wxString> pictures;
 	for (const ibDataNode& metaForm : m_metaObject->GetFormArray()) {
-		pictures.push_back(metaForm.GetValue<wxString>(wxT("Picture")));
-		pictures.push_back(metaForm.GetValue<wxString>(wxT("OwnerPicture")));
+		pictures.push_back(metaForm.GetValue<wxString>(ibProtocol::ibSchema::ibHomePage::Picture));
+		pictures.push_back(metaForm.GetValue<wxString>(ibProtocol::ibSchema::ibHomePage::OwnerPicture));
 	}
 	ibProtocolPictureReceive(pictures);
 
@@ -454,28 +455,29 @@ void ibDialogHomePageFormSelect::FillTree()
 
 		wxTreeItemId parentNode;
 
-		if (metaForm.GetValue<bool>(wxT("Common"))) {
+		if (metaForm.GetValue<bool>(ibProtocol::ibSchema::ibHomePage::Common)) {
 			if (!commonGroup.IsOk())
 				commonGroup = m_treeCtrl->AppendItem(root, _("Common forms"),
-					AppendIcon(FormIcon(metaForm, wxT("Picture"))), AppendIcon(FormIcon(metaForm, wxT("Picture"))));
+					AppendIcon(FormIcon(metaForm, ibProtocol::ibSchema::ibHomePage::Picture)),
+					AppendIcon(FormIcon(metaForm, ibProtocol::ibSchema::ibHomePage::Picture)));
 			parentNode = commonGroup;
 		}
 		else {
-			const s32 owner = metaForm.GetValue<s32>(wxT("Owner"));
+			const s32 owner = metaForm.GetValue<s32>(ibProtocol::ibSchema::ibHomePage::Owner);
 			if (owner == 0)
 				continue;
 			auto founded = groups.find(owner);
 			if (founded == groups.end()) {
-				const int ownerIcon = AppendIcon(FormIcon(metaForm, wxT("OwnerPicture")));
+				const int ownerIcon = AppendIcon(FormIcon(metaForm, ibProtocol::ibSchema::ibHomePage::OwnerPicture));
 				founded = groups.emplace(owner,
-					m_treeCtrl->AppendItem(root, metaForm.GetValue<wxString>(wxT("OwnerName")), ownerIcon, ownerIcon)).first;
+					m_treeCtrl->AppendItem(root, metaForm.GetValue<wxString>(ibProtocol::ibSchema::ibHomePage::OwnerName), ownerIcon, ownerIcon)).first;
 			}
 			parentNode = founded->second;
 		}
 
-		const int formIcon = AppendIcon(FormIcon(metaForm, wxT("Picture")));
-		m_treeCtrl->AppendItem(parentNode, metaForm.GetValue<wxString>(wxT("Name")),
-			formIcon, formIcon, new ibHomePageFormItemData(metaForm.GetValue<s32>(wxT("Id"))));
+		const int formIcon = AppendIcon(FormIcon(metaForm, ibProtocol::ibSchema::ibHomePage::Picture));
+		m_treeCtrl->AppendItem(parentNode, metaForm.GetValue<wxString>(ibProtocol::ibSchema::ibHomePage::Name),
+			formIcon, formIcon, new ibHomePageFormItemData(metaForm.GetValue<s32>(ibProtocol::ibSchema::ibHomePage::Id)));
 	}
 
 	m_treeCtrl->ExpandAll();

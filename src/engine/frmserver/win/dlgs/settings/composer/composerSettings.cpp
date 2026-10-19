@@ -8,7 +8,7 @@
 
 #include "frmserver/win/dlgs/settings/settingsRequest.h"   // ibRequestSettings — the window, asked until it answers
 
-#include "protocol/protocol.h"   // ibProtocolRequestKind::ComposerSettings
+#include "protocol/protocol.h"   // ibProtocol::ibRequest::ibKind::ComposerSettings
 
 namespace {
 
@@ -17,10 +17,10 @@ namespace {
 ibDataNode SettingsRequest(const ibCompositionDescription& composition, const ibMetaData* metaData)
 {
 	ibDataNode request;
-	request.SetValue(ibProtocolName::Kind, static_cast<s32>(ibProtocolRequestKind::ComposerSettings));
-	ibCompositionDescriptionMemory::WriteNode(request.Child(ibProtocolName::Composition), composition);
+	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<s32>(ibProtocol::ibRequest::ibKind::ComposerSettings));
+	ibCompositionDescriptionMemory::WriteNode(request.Child(ibProtocol::ibRequest::ibComposerSettings::Composition), composition);
 
-	ibDataNode& fields = request.Child(ibProtocolName::Fields);
+	ibDataNode& fields = request.Child(ibProtocol::ibRequest::ibListSettings::Fields);
 	std::vector<ibTypeDescription> types;
 	for (const ibQueryConstructorField& field : ibQueryFieldsOfText(composition.m_query, metaData)) {
 		// NO metaID — a field of a parsed text stands behind no metaobject attribute (the desktop's BindFieldSource).
@@ -28,7 +28,7 @@ ibDataNode SettingsRequest(const ibCompositionDescription& composition, const ib
 			ibPictureDescription(), metaData);
 		types.push_back(field.m_type);
 	}
-	ibWriteSettingsReferences(request.Child(ibProtocolName::References), types, metaData);
+	ibWriteSettingsReferences(request.Child(ibProtocol::ibRequest::ibListSettings::References), types, metaData);
 	return request;
 }
 

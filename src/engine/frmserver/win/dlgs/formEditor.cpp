@@ -6,12 +6,12 @@
 #include "core/serialize/dataBuilder.h"
 #include "backend/session/session.h"
 
-#include "frmserver/client/clientFrame.h"         // ibClientFrame::SendPicture — the pictures, by their ids
+#include "backend/backend_picture.h"              // ibBackendPicture::SendPicture — the pictures, by their ids
 #include "frmserver/client/propertyInspector.h"   // a property's row, as the inspector writes it
 #include "frmserver/settings/formSettings.h"
 #include "frmserver/visualView/ctrl/form.h"
 
-#include "protocol/protocol.h"   // ibProtocolRequestKind::FormEditor, ibProtocolFormEditorAct
+#include "protocol/protocol.h"   // ibProtocol::ibRequest::ibKind::FormEditor, ibProtocol::ibRequest::ibFormEditor::ibAct
 
 namespace {
 
@@ -21,7 +21,7 @@ namespace {
 void AppendControl(ibDataNode& controls, ibValueFrame* control)
 {
 	ibDataNode& described = controls.AddChild(0, 0);
-	described.SetValue(ibProtocolName::Control, control->GetControlID());
+	described.SetValue(ibProtocol::ibRequest::ibFormEditor::Control, control->GetControlID());
 	for (const wxString& name : ibValueFrame::GetAllowedUserProperty()) {
 		if (ibProperty* const property = control->GetProperty(name))
 			ibPropertyInspector::AppendProperty(described, property);
@@ -48,37 +48,37 @@ int ibDialogFormEditor::ShowModal()
 	long long result = wxNOT_FOUND;
 	for (;;) {
 		ibDataNode request;
-		request.SetValue(ibProtocolName::Kind, static_cast<s32>(ibProtocolRequestKind::FormEditor));
-		request.SetValue(ibProtocolName::Picture, ibClientFrame::SendPicture(g_picChangeFormCLSID));
-		request.SetValue(ibProtocolName::HasSetting, ibHasFormSettings(m_owner));
+		request.SetValue(ibProtocol::ibRequest::Kind, static_cast<s32>(ibProtocol::ibRequest::ibKind::FormEditor));
+		request.SetValue(ibProtocol::ibRequest::ibFormEditor::Picture, ibBackendPicture::SendPicture(g_picChangeFormCLSID));
+		request.SetValue(ibProtocol::ibRequest::ibFormEditor::HasSetting, ibHasFormSettings(m_owner));
 		if (result != wxNOT_FOUND)
-			request.SetValue(ibProtocolName::Result, static_cast<s32>(result));
+			request.SetValue(ibProtocol::ibRequest::ibFormEditor::Result, static_cast<s32>(result));
 
 		// The controls' classes and their pictures — what the desktop's editor lists its tree's icons from.
-		ibDataNode& classes = request.Child(ibProtocolName::Classes);
+		ibDataNode& classes = request.Child(ibProtocol::ibRequest::ibFormEditor::Classes);
 		for (const ibCtorAbstractType* ctor : ibValue::GetListCtorsByType(ibCtorObjectType::ibCtorObjectType_object_control)) {
 			ibDataNode& described = classes.AddChild(0, 0);
-			described.SetValue(ibProtocolName::Name, ctor->GetClassName());
-			described.SetValue(ibProtocolName::Picture, ibClientFrame::SendPicture(ctor->GetClassType()));
+			described.SetValue(ibProtocol::ibRequest::ibFormEditor::Name, ctor->GetClassName());
+			described.SetValue(ibProtocol::ibRequest::ibFormEditor::Picture, ibBackendPicture::SendPicture(ctor->GetClassType()));
 		}
 		// …and the form's controls, what a person may arrange of each — as they stand now: asked again after each act.
-		AppendControl(request.Child(ibProtocolName::Controls), m_owner);
+		AppendControl(request.Child(ibProtocol::ibRequest::ibFormEditor::Controls), m_owner);
 
 		ibDataNode response;
-		if (!frame->Request(request, response) || response.FindField(ibProtocolName::Act) == nullptr)
+		if (!frame->Request(request, response) || response.FindField(ibProtocol::ibRequest::ibFormEditor::Act) == nullptr)
 			return wxID_OK;   // closed
 
-		switch (static_cast<ibProtocolFormEditorAct>(response.GetValue<s32>(ibProtocolName::Act))) {
-		case ibProtocolFormEditorAct::Apply:
-			if (const ibDataNode* const controls = response.FindChild(ibProtocolName::Controls))
+		switch (static_cast<ibProtocol::ibRequest::ibFormEditor::ibAct>(response.GetValue<s32>(ibProtocol::ibRequest::ibFormEditor::Act))) {
+		case ibProtocol::ibRequest::ibFormEditor::ibAct::Apply:
+			if (const ibDataNode* const controls = response.FindChild(ibProtocol::ibRequest::ibFormEditor::Controls))
 				ibApplyFormSettings(m_owner, *controls);
 			m_owner->UpdateForm();
 			result = wxNOT_FOUND;
 			break;
-		case ibProtocolFormEditorAct::Save:
+		case ibProtocol::ibRequest::ibFormEditor::ibAct::Save:
 			result = static_cast<long long>(ibSaveFormSettings(m_owner));
 			break;
-		case ibProtocolFormEditorAct::Reset:
+		case ibProtocol::ibRequest::ibFormEditor::ibAct::Reset:
 			result = static_cast<long long>(ibResetFormSettings(m_owner));
 			break;
 		default:

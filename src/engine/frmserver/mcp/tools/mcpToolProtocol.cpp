@@ -95,9 +95,9 @@ public:
 		// A client in this same process: the call goes to the host as it is, no envelope, and its answer is the result.
 		// A refusal says why by its number, as the wire does in the error's code.
 		const ibDataNode* const given = params.FindChild(ArgParams().Name());
-		ibProtocolRefusal why = ibProtocolRefusal::None;
+		ibProtocol::ibRefusal why = ibProtocol::ibRefusal::None;
 		wxString error;
-		if (host->Call(ibProtocolMethodFromName(ArgMethod().Text(params).utf8_str()), given != nullptr ? *given : ibDataNode(),
+		if (host->Call(ibProtocol::MethodFromName(ArgMethod().Text(params).utf8_str()), given != nullptr ? *given : ibDataNode(),
 				result, why, error))
 			return true;
 		refusal = wxString::Format(wxT("refused %d: %s"), static_cast<s32>(why), error);

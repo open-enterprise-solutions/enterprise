@@ -16,11 +16,11 @@ namespace {
 // a composite (a type description) a node of its own. False: none.
 bool ReadValue(const ibDataNode& args, ibDataValue& value)
 {
-	if (const ibDataValue* const scalar = args.FindField(wxT("Value"))) {
+	if (const ibDataValue* const scalar = args.FindField(ibProtocol::ibSchema::ibProperties::Value)) {
 		value = *scalar;
 		return true;
 	}
-	if (const ibDataNode* const composite = args.FindChild(wxT("Value"))) {
+	if (const ibDataNode* const composite = args.FindChild(ibProtocol::ibSchema::ibProperties::Value)) {
 		value = ibDataValue::Child(std::make_shared<ibDataNode>(*composite));
 		return true;
 	}
@@ -37,31 +37,31 @@ bool ibSchemaProperties::AccessRight(const ibSession& session) const
 
 void ibSchemaProperties::Build(const ibSession& session, const ibDataNode& args, ibDataNode& result) const
 {
-	ibDataNode& properties = result.Child(wxT("Properties"));
+	ibDataNode& properties = result.Child(ibProtocol::ibSchema::ibProperties::Properties);
 
-	ibProtocolRefusal refusal = ibProtocolRefusal::None;
+	ibProtocol::ibRefusal refusal = ibProtocol::ibRefusal::None;
 	wxString error;
 	ibMetaData* const metaData = ibSchemaMetaData::FindMetaData(session, args, refusal, error);
 	if (metaData == nullptr) {
-		if (refusal == ibProtocolRefusal::NoSession)
+		if (refusal == ibProtocol::ibRefusal::NoSession)
 			return;
 		ibCoreException::Error(wxT("%s"), error);
 	}
-	ibValueMetaObject* const object = ibSchemaMetaData::FindObject(metaData, args, wxT("Id"), refusal, error);
+	ibValueMetaObject* const object = ibSchemaMetaData::FindObject(metaData, args, ibProtocol::ibSchema::ibProperties::Id, refusal, error);
 	if (object == nullptr)
 		ibCoreException::Error(wxT("%s"), error);
 
 	// …as the desktop's grid showed it: registered on it, asked what its state hides, its rows written — for this answer.
 	ibPropertyInspector inspector;
-	inspector.SelectObject(object, args.GetValue<s32>(wxT("Tab")));
+	inspector.SelectObject(object, args.GetValue<s32>(ibProtocol::ibSchema::ibProperties::Tab));
 	inspector.OnDraw(properties);
 }
 
 std::function<void()> ibSchemaProperties::Command(const ibSession& session, s32 command,
-	const ibDataNode& args, ibProtocolRefusal& refusal, wxString& error) const
+	const ibDataNode& args, ibProtocol::ibRefusal& refusal, wxString& error) const
 {
-	if (static_cast<ibProtocolSchemaCommand>(command) != ibProtocolSchemaCommand::Save) {
-		refusal = ibProtocolRefusal::BadParameter;
+	if (static_cast<ibProtocol::ibSchema::ibCommand>(command) != ibProtocol::ibSchema::ibCommand::Save) {
+		refusal = ibProtocol::ibRefusal::BadParameter;
 		error = wxT("the inspector takes Save alone");
 		return nullptr;
 	}
@@ -69,19 +69,19 @@ std::function<void()> ibSchemaProperties::Command(const ibSession& session, s32 
 	// The metaobject of that id in the tab's tree — or the header above an external file's (its rows the inspector's too).
 	ibMetaData* const metaData = ibSchemaMetaData::FindMetaData(session, args, refusal, error);
 	ibValueMetaObject* const object = metaData != nullptr
-		? ibSchemaMetaData::FindObject(metaData, args, wxT("Id"), refusal, error) : nullptr;
+		? ibSchemaMetaData::FindObject(metaData, args, ibProtocol::ibSchema::ibProperties::Id, refusal, error) : nullptr;
 	if (object == nullptr)
 		return nullptr;
 
-	const wxString name = args.GetValue<wxString>(wxT("Name"));
+	const wxString name = args.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Name);
 	ibDataValue value;
 	if ((object->GetProperty(name) == nullptr && object->GetEvent(name) == nullptr) || !ReadValue(args, value)) {
-		refusal = ibProtocolRefusal::BadParameter;
+		refusal = ibProtocol::ibRefusal::BadParameter;
 		error = wxString::Format(wxT("'%s' takes no such value of '%s'"), object->GetClassName(), name);
 		return nullptr;
 	}
 
-	const s32 tabId = args.GetValue<s32>(wxT("Tab"));
+	const s32 tabId = args.GetValue<s32>(ibProtocol::ibSchema::ibProperties::Tab);
 	return [object, name, value, tabId]() {
 		if (ibProperty* const property = object->GetProperty(name))
 			ibPropertyGate::SetValue(object, property, value);

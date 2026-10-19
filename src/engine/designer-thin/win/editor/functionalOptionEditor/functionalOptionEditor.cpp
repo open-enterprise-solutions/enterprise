@@ -11,7 +11,7 @@ namespace {
 // The pictures of `row` and the rows under it — asked of the server at once, not a call per row drawn.
 void PicturesOf(const ibProtocolNode& row, std::vector<wxString>& pictures)
 {
-	pictures.push_back(row.GetString(ibProtocolName::Picture));
+	pictures.push_back(row.GetString(ibProtocol::ibView::ibCheckTree::Picture));
 	for (const ibProtocolNode& child : row.Children())
 		PicturesOf(child, pictures);
 }
@@ -53,9 +53,9 @@ void ibFunctionalOptionEditor::OnCheckItem(wxTreeEvent& event)
 		// Written into the member — it keeps the options it belongs to — on the server
 		// (ibFunctionalOptionMembersView::OnClientEvent).
 		ibProtocolNode args;
-		args.SetValue(ibProtocolName::NodeId, data->GetMetaId());
-		args.SetValue(ibProtocolName::Checked, event.GetExtraLong() != 0);
-		m_document->Post(ibProtocolEvent::Toggle, args);
+		args.SetValue(ibProtocol::ibNode::Id, data->GetMetaId());
+		args.SetValue(ibProtocol::ibView::ibCheckTree::Checked, event.GetExtraLong() != 0);
+		m_document->Post(ibProtocol::ibEvent::ibKind::Toggle, args);
 	}
 
 	event.Skip();
@@ -127,11 +127,11 @@ wxTreeItemId ibFunctionalOptionEditor::GroupFor(const ibProtocolNode& row)
 	// the role editor and the section editor show.
 	wxImageList* imageList = m_membersCtrl->GetImageList();
 	wxASSERT(imageList);
-	const wxBitmap picture = ibProtocolPicture(row.GetString(ibProtocolName::Picture));
+	const wxBitmap picture = ibProtocolPicture(row.GetString(ibProtocol::ibView::ibCheckTree::Picture));
 	const int imageIndex = picture.IsOk() ? imageList->Add(picture) : wxNOT_FOUND;
 
 	const wxTreeItemId group = m_membersCtrl->AppendItem(m_treeMETADATA,
-		row.GetString(ibProtocolName::Title), imageIndex, imageIndex, new ibTreeItemObject(row.GetId()));
+		row.GetString(ibProtocol::ibView::ibCheckTree::Title), imageIndex, imageIndex, new ibTreeItemObject(row.GetId()));
 	if (row.GetId() == m_keepTopId)
 		m_keepTopNode = group;
 
@@ -143,14 +143,14 @@ wxTreeItemId ibFunctionalOptionEditor::AppendItem(const wxTreeItemId& parent, co
 {
 	wxImageList* imageList = m_membersCtrl->GetImageList();
 	wxASSERT(imageList);
-	const wxBitmap picture = ibProtocolPicture(row.GetString(ibProtocolName::Picture));
+	const wxBitmap picture = ibProtocolPicture(row.GetString(ibProtocol::ibView::ibCheckTree::Picture));
 	const int imageIndex = picture.IsOk() ? imageList->Add(picture) : wxNOT_FOUND;
 
 	const wxTreeItemId createItem = m_membersCtrl->AppendItem(
-		parent, row.GetString(ibProtocolName::Title), imageIndex, imageIndex, new ibTreeItemObject(row.GetId()));
+		parent, row.GetString(ibProtocol::ibView::ibCheckTree::Title), imageIndex, imageIndex, new ibTreeItemObject(row.GetId()));
 
-	const bool member = row.GetBool(ibProtocolName::Checked);
-	const bool editable = !row.GetBool(ibProtocolName::ReadOnly);
+	const bool member = row.GetBool(ibProtocol::ibView::ibCheckTree::Checked);
+	const bool editable = !row.GetBool(ibProtocol::ibView::ibCheckTree::ReadOnly);
 
 	m_membersCtrl->SetItemState(createItem,
 		member
@@ -178,20 +178,20 @@ void ibFunctionalOptionEditor::AppendChildren(const wxTreeItemId& parent, const 
 
 void ibFunctionalOptionEditor::FillData(const ibProtocolNode& view)
 {
-	const ibProtocolNode root = view.FindChild(ibProtocolName::Rows);
+	const ibProtocolNode root = view.FindChild(ibProtocol::ibView::ibCheckTree::Rows);
 
 	std::vector<wxString> pictures;
 	PicturesOf(root, pictures);
 	ibProtocolPictureReceive(pictures);
 
 	wxImageList* imageList = m_membersCtrl->GetImageList();
-	const wxBitmap picture = ibProtocolPicture(root.GetString(ibProtocolName::Picture));
+	const wxBitmap picture = ibProtocolPicture(root.GetString(ibProtocol::ibView::ibCheckTree::Picture));
 	if (picture.IsOk()) {
 		const int imageIndex = imageList->Add(picture);
 		m_membersCtrl->SetItemImage(m_treeMETADATA, imageIndex);
 		m_membersCtrl->SetItemImage(m_treeMETADATA, imageIndex, wxTreeItemIcon_Selected);
 	}
-	m_membersCtrl->SetItemText(m_treeMETADATA, root.GetString(ibProtocolName::Title));
+	m_membersCtrl->SetItemText(m_treeMETADATA, root.GetString(ibProtocol::ibView::ibCheckTree::Title));
 	m_membersCtrl->SetItemData(m_treeMETADATA, new ibTreeItemObject(root.GetId()));
 
 	// ASKED, NOT LISTED — on the server: every object that says it may belong, under a group named by its own metatype
@@ -212,5 +212,5 @@ void ibFunctionalOptionEditor::FillData(const ibProtocolNode& view)
 	for (const wxTreeItemId& group : m_groups)
 		m_membersCtrl->Expand(group);
 
-	SetReadOnly(view.FindChild(ibProtocolName::State).GetBool(ibProtocolName::ReadOnly));
+	SetReadOnly(view.FindChild(ibProtocol::ibView::State).GetBool(ibProtocol::ibView::ibCheckTree::ReadOnly));
 }

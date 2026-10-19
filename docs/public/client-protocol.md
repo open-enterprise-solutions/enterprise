@@ -265,9 +265,12 @@ is one exchange), after the configuration tree's Create (`Schema` 9, `Command` 2
 the configuration. When the work waits on a question (a form's type), they ride the answer to the `respond` that lets
 it finish. A server that sends none is read with `schema`, as before.
 
-A row's choices are its children: `Id`, `Title`, `Picture`; a type's row offers types (`Type` — a class id as text,
-`Title`, `Picture`). The metaobjects of an owner's, a register's or a sequence's row, and of what a document is entered
-on, come as a tree by kind: a kind is a child as a type is (`Type`, `Title`, `Picture`), its metaobjects its children.
+A row's choices are its children, flat: `Id`, `Title`, `Picture`, and `Data` when the choice has any — a u64 as a
+decimal; a metaobject's is its class. The classes the choices' `Data` names come once, as an optional node `Classes`
+(`Type`, `Name`, `Picture`): the client registers them and groups the metaobjects of an owner's, a register's or a
+sequence's row, and of what a document is entered on, under them, as the desktop's dialogs did. A type's row offers
+types (`Type` — a class id as text, `Title`, `Picture`). A row's `Value` is the property's stored value — an inner
+module's is the module's node, its `Id` the module the row's link opens.
 
 A schema read changes nothing and moves no frame number, so the client keeps the inspector's rows it received or read
 while the number stays: clicking an object again, or walking back to it, before anything else was done is not a call.

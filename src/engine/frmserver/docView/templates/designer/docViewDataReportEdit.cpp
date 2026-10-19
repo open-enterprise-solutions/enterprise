@@ -17,7 +17,7 @@ bool ibReportTreeView::OnCreate(ibDocument* doc, long flags)
 
 void ibReportTreeView::OnDraw(ibDataNode& frame)
 {
-	m_metaTree->OnDraw(frame.Child(wxT("MetaData")));
+	m_metaTree->OnDraw(frame.Child(ibProtocol::ibView::MetaData));
 }
 
 wxIMPLEMENT_DYNAMIC_CLASS(ibReportEditDocument, ibMetaDataDocument);

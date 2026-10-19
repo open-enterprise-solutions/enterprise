@@ -7,7 +7,7 @@
 #include "docViewFormEdit.h"
 
 #include "core/serialize/dataBuilder.h"
-#include "frmserver/client/clientFrame.h"               // ibClientFrame::SendPicture — a command's picture, by its id
+#include "backend/backend_picture.h"                    // ibBackendPicture::SendPicture — a command's picture, by its id
 #include "frmserver/visualView/ctrl/form.h"
 #include "frmserver/visualView/ctrl/formCommand.h"
 #include "frmserver/visualView/layers/commandBar.h"     // GetCommandSections / GatherFormCommands — the shared gather
@@ -28,14 +28,14 @@ void ibFormDesignView::FillCommandTree(ibDataNode& node)
 void ibFormDesignView::ReadPath(const ibDataNode& node, ibCommandDescription& desc)
 {
 	desc.ClearCommand();
-	const ibDataValue* const hops = node.FindField(ibProtocolName::CommandPath);
+	const ibDataValue* const hops = node.FindField(ibProtocol::ibView::ibFormDesigner::CommandPath);
 	if (hops == nullptr || hops->Kind() != ibDataKind::Array)
 		return;
 	for (const ibDataValue& hop : hops->AsArray()) {
 		if (hop.Kind() == ibDataKind::Child && hop.AsChild() != nullptr)
-			desc.AppendCommand(static_cast<ibMetaID>(hop.AsChild()->GetValue<s32>(ibProtocolName::Id)));
+			desc.AppendCommand(static_cast<ibMetaID>(hop.AsChild()->GetValue<s32>(ibProtocol::ibView::ibFormDesigner::Id)));
 	}
-	const s32 kind = node.GetValue<s32>(ibProtocolName::Kind);
+	const s32 kind = node.GetValue<s32>(ibProtocol::ibView::ibFormDesigner::Kind);
 	desc.SetCommandType(kind != 0 ? static_cast<ibInterfaceCommandType>(kind) : ibInterfaceCommandType_Default);
 }
 
@@ -47,22 +47,22 @@ bool ibFormDesignView::FetchFormCommand(const ibDataNode& request, ibDataNode& r
 {
 	// The desktop's tree's handlers, on the form the client holds. A form command is a form-LOCAL event (NOT a
 	// metaobject — nothing goes into the metadata tree).
-	const ibMetaID id = request.GetValue<s32>(ibProtocolName::FormCommand);
+	const ibMetaID id = request.GetValue<s32>(ibProtocol::ibView::ibFormDesigner::FormCommand);
 	ibFormCommandValue* const cmd = id != 0 ? m_valueForm->FindFormCommandById(id) : nullptr;
 	if (id != 0 && cmd == nullptr)
 		return false;
 
 	ibFormCommandValue* shown = cmd;
-	switch (static_cast<ibProtocolFormDesignerCommand>(request.GetValue<s32>(ibProtocolName::Command))) {
-	case ibProtocolFormDesignerCommand::Create:
+	switch (static_cast<ibProtocol::ibView::ibFormDesigner::ibCommand>(request.GetValue<s32>(ibProtocol::ibView::ibFormDesigner::Command))) {
+	case ibProtocol::ibView::ibFormDesigner::ibCommand::Create:
 		// Uniquely named, its Action EMPTY — the handler procedure does not exist yet; the developer creates it later
 		// through the event editor (the desktop's AddCommand).
 		shown = m_valueForm->AddFormCommand(m_valueForm->MakeUniqueFormCommandName());
 		break;
-	case ibProtocolFormDesignerCommand::Paste: {
+	case ibProtocol::ibView::ibFormDesigner::ibCommand::Paste: {
 		// The node the client copied of its form's FormCommands — the properties, the Action event, the form-unique id;
 		// a fresh entry of it, a unique name and id.
-		const ibDataNode* const copied = request.FindChild(ibProtocolName::Value);
+		const ibDataNode* const copied = request.FindChild(ibProtocol::ibView::ibFormDesigner::Value);
 		if (copied == nullptr)
 			return false;
 		ibDataNode node = *copied;
@@ -70,7 +70,7 @@ bool ibFormDesignView::FetchFormCommand(const ibDataNode& request, ibDataNode& r
 		shown = m_valueForm->PasteFormCommand(node);
 		break;
 	}
-	case ibProtocolFormDesignerCommand::Remove:
+	case ibProtocol::ibView::ibFormDesigner::ibCommand::Remove:
 		// A button bound to it now resolves to NOTHING — the button asks the command door on its own refresh and, getting
 		// no command back, breaks its own look. No walk-and-clear from here: the projection self-validates.
 		if (cmd == nullptr)
@@ -78,7 +78,7 @@ bool ibFormDesignView::FetchFormCommand(const ibDataNode& request, ibDataNode& r
 		m_valueForm->DeleteFormCommand(cmd->GetName());
 		shown = nullptr;
 		break;
-	case ibProtocolFormDesignerCommand::Set:
+	case ibProtocol::ibView::ibFormDesigner::ibCommand::Set:
 		// …the command asked first, as the inspector's door asks it — a name another command has is refused; a button
 		// bound to it takes its new name, caption, picture as the form is drawn again.
 		if (!SetProperty(cmd, request))
@@ -90,6 +90,6 @@ bool ibFormDesignView::FetchFormCommand(const ibDataNode& request, ibDataNode& r
 
 	WriteForm(response);
 	if (shown != nullptr)
-		response.SetValue(ibProtocolName::FormCommand, static_cast<s32>(shown->GetId()));
+		response.SetValue(ibProtocol::ibView::ibFormDesigner::FormCommand, static_cast<s32>(shown->GetId()));
 	return true;
 }

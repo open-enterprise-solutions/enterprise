@@ -242,12 +242,12 @@ void ibAssistantView::OnDraw(wxDC* WXUNUSED(dc))
 
 void ibAssistantView::Draw(const ibProtocolNode& view, const ibProtocolNode& patch)
 {
-	if (patch.IsNode() && !patch.Has(ibProtocolName::Rows) && !patch.Has(ibProtocolName::State))
+	if (patch.IsNode() && !patch.Has(ibProtocol::ibView::ibAssistant::Rows) && !patch.Has(ibProtocol::ibView::State))
 		return;
 
 	// The transcript only grows: the entries not shown yet go at its end. Fewer than shown — a transcript begun anew —
 	// is drawn from its first.
-	const std::vector<ibProtocolNode> entries = view.FindChild(ibProtocolName::Rows).Children();
+	const std::vector<ibProtocolNode> entries = view.FindChild(ibProtocol::ibView::ibAssistant::Rows).Children();
 	if (entries.size() < m_shownEntries && m_transcript != nullptr) {
 		m_transcript->SetReadOnly(false);
 		m_transcript->ClearAll();
@@ -255,13 +255,13 @@ void ibAssistantView::Draw(const ibProtocolNode& view, const ibProtocolNode& pat
 		m_shownEntries = 0;
 	}
 	for (size_t i = m_shownEntries; i < entries.size(); ++i)
-		AppendTranscript(m_transcript, entries[i].GetString(ibProtocolName::Text));
+		AppendTranscript(m_transcript, entries[i].GetString(ibProtocol::ibView::ibAssistant::Text));
 	m_shownEntries = entries.size();
 
 	// ⭐ AND THE WAITING, AS THE SERVER SAYS IT — begun by what was sent, ended by the answer, never by a timeout.
-	const ibProtocolNode state = view.FindChild(ibProtocolName::State);
-	m_pendingCount = state.GetInt(ibProtocolName::Pending);
-	if (state.GetBool(ibProtocolName::Waiting)) {
+	const ibProtocolNode state = view.FindChild(ibProtocol::ibView::State);
+	m_pendingCount = state.GetInt(ibProtocol::ibView::ibAssistant::Pending);
+	if (state.GetBool(ibProtocol::ibView::ibAssistant::Waiting)) {
 		if (!m_waitingTick.IsRunning()) {
 			m_waitingDots = 0;
 			m_waitingTick.Start(500);
@@ -289,8 +289,8 @@ void ibAssistantView::OnSend(wxCommandEvent& WXUNUSED(event))
 	// ⭐ ASKED IF IT CAN BE ASKED, LEFT WHERE IT CAN BE FOUND IF NOT — the server's (ibAssistantTranscriptView): the
 	// person sees the same thing either way; only the waiting differs.
 	ibProtocolNode args;
-	args.SetValue(ibProtocolName::Text, text);
-	document->Post(ibProtocolEvent::Change, args);
+	args.SetValue(ibProtocol::ibView::ibAssistant::Text, text);
+	document->Post(ibProtocol::ibEvent::ibKind::Change, args);
 
 	// Cleared once it is handed over.
 	m_input->Clear();

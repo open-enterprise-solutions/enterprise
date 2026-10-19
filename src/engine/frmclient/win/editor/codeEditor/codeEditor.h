@@ -21,7 +21,7 @@
 #include "core/compiler/translateCode.h"   // the lexem stream, and what the caret stands in
 #include "core/compiler/codeDef.h"   // CODE_VES / CODE_CES — the syntax the stream reads in, for fold-mode dispatch
 
-#include "protocol/protocol.h"   // ibProtocolModuleRequest — what the module's tab is asked
+#include "protocol/protocol.h"   // ibProtocol::ibView::ibModule::ibRequest — what the module's tab is asked
 #include "protocol/protocolNode.h"
 
 #include "frmclient/mainFrame/settings/editorsettings.h"
@@ -611,7 +611,7 @@ private:
 
 	// ⭐ WHAT THE DESKTOP'S EDITOR ASKED THE CONFIGURATION — the names at the caret, a call's form — asked of the tab, with
 	// the text as it is now and the caret in it (characters); false — no tab, or refused.
-	bool FetchAtCaret(ibProtocolModuleRequest kind, ibProtocolNode& answer);
+	bool FetchAtCaret(ibProtocol::ibView::ibModule::ibRequest kind, ibProtocolNode& answer);
 
 	void LoadAutoComplete();
 	void LoadToolTip(const wxPoint& pos);

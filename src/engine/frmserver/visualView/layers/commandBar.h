@@ -246,7 +246,7 @@ public:
 	// caption and picture as the representation chooses them, whether it is enabled, its tooltip, its kind —
 	// and for a group, its members with the same, greyed where a view-only form forbids a command that changes
 	// data. Everything a client needs to draw the bar and its submenus without asking again — the pictures by their
-	// ids (ibClientFrame::SendPicture).
+	// ids (ibBackendPicture::SendPicture).
 	void Update(ibDataNode& state);
 
 	// Reverse-lookup the child that produced the command with this id (built by BuildCommands).

@@ -19,8 +19,8 @@ void ibSheetView::OnDraw(ibDataNode& frame)
 	// sheet is its own and is not replaced: no Version, read once. Its grid lines shown, as the desktop's document showed
 	// them; a report in a form has none.
 	frame.SetClsid(g_controlGridBoxCLSID);
-	ibDataNode& state = frame.Child(wxT("State"));
-	state.SetValue(wxT("GridLines"), true);
+	ibDataNode& state = frame.Child(ibProtocol::ibView::State);
+	state.SetValue(ibProtocol::ibForm::ibSpreadsheet::GridLines, true);
 }
 
 bool ibSheetView::Fetch(const ibDataNode& WXUNUSED(request), ibDataNode& response)
@@ -29,19 +29,19 @@ bool ibSheetView::Fetch(const ibDataNode& WXUNUSED(request), ibDataNode& respons
 	return document != nullptr && ibFetchSpreadsheet(document->GetSpreadsheet(), response);
 }
 
-bool ibSheetView::OnClientEvent(ibProtocolEvent event, const ibDataNode& args)
+bool ibSheetView::OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args)
 {
 	ibSheetDocument* const document = dynamic_cast<ibSheetDocument*>(GetDocument());
 	if (document == nullptr)
 		return false;
 
 	switch (event) {
-	case ibProtocolEvent::Cell: {
+	case ibProtocol::ibEvent::ibKind::Cell: {
 		// A CELL BOUND TO A VALUE OPENS IT — the desktop editor's double click (ibGridEditor::OnMouseLeftDown): asked of
 		// the sheet, opened by the runtime; on a sheet being edited the click is the edit's. The cell as Fetch wrote it —
 		// from 1.
 		const ibSpreadsheetObject& spreadsheet = document->GetSpreadsheet();
-		const int row = args.GetValue<s32>(wxT("Row")) - 1, col = args.GetValue<s32>(wxT("Col")) - 1;
+		const int row = args.GetValue<s32>(ibProtocol::ibEvent::Row) - 1, col = args.GetValue<s32>(ibProtocol::ibEvent::Col) - 1;
 		if (spreadsheet.IsEditable() || row < 0 || col < 0)
 			return true;
 		ibString bound;
@@ -53,9 +53,9 @@ bool ibSheetView::OnClientEvent(ibProtocolEvent event, const ibDataNode& args)
 		}
 		return true;
 	}
-	case ibProtocolEvent::Change: {
+	case ibProtocol::ibEvent::ibKind::Change: {
 		ibSpreadsheetDescription sheet;
-		if (!ibSpreadsheetDescriptionMemory::ReadNode(args.GetProperty(wxT("Sheet")), sheet))
+		if (!ibSpreadsheetDescriptionMemory::ReadNode(args.GetProperty(ibProtocol::ibForm::ibSpreadsheet::Sheet), sheet))
 			return false;
 		document->SetSpreadsheetDesc(std::move(sheet));
 		return true;

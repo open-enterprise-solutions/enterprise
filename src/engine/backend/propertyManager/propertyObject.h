@@ -128,7 +128,7 @@ private:
 // was already ours; only the conversion sat on the wrong side.
 class BACKEND_API ibPropertyChoiceList {
 
-	// ⭐ FOUR THINGS, AND EACH ANSWERS A DIFFERENT QUESTION.
+	// ⭐ FIVE THINGS, AND EACH ANSWERS A DIFFERENT QUESTION.
 	//
 	//   id       — WHICH ONE THIS IS. A long, always: an enumeration member's number, a metaobject's
 	//              metaID. It is what a wxPGChoices entry carries, what a dialog reads back, and the
@@ -137,6 +137,8 @@ class BACKEND_API ibPropertyChoiceList {
 	//   name     — what it is called in code. This is what a script writes and what a caller names.
 	//   synonym  — what it is called to a person. Empty when there is nothing better than the name.
 	//   value    — WHAT THE PROPERTY BECOMES if this one is chosen.
+	//   data     — a u64 beside the id, for what a long does not hold: a metaobject's class, the kind a window groups
+	//              it under. 0: none.
 	//
 	// ⭐⭐ THE ID IS A NUMBER AND THE VALUE IS A VARIANT, and they are not the same fact. The number
 	// says WHICH; the variant is the thing itself, and for most of these families what physically
@@ -149,13 +151,14 @@ class BACKEND_API ibPropertyChoiceList {
 	// just been shown, or showing a person an identifier.
 	struct ibPropertyChoiceItem {
 		ibPropertyChoiceItem(long id, const wxString& name, const wxString& synonym,
-			const wxVariant& value, const ibPictureDescription& picture)
-			: m_id(id), m_name(name), m_synonym(synonym), m_value(value), m_picture(picture) {}
+			const wxVariant& value, const ibPictureDescription& picture, u64 data)
+			: m_id(id), m_name(name), m_synonym(synonym), m_value(value), m_picture(picture), m_data(data) {}
 		long                  m_id;
 		wxString              m_name;
 		wxString              m_synonym;
 		wxVariant             m_value;
 		ibPictureDescription  m_picture;
+		u64                   m_data;
 	};
 
 	std::vector<ibPropertyChoiceItem> m_items;
@@ -164,13 +167,13 @@ public:
 
 	// The plain form — a number IS the value, which is what an enumeration and a list offer.
 	void Add(const wxString& name, long id, const ibPictureDescription& picture = ibPictureDescription()) {
-		m_items.emplace_back(id, name, wxEmptyString, wxVariant(id), picture);
+		m_items.emplace_back(id, name, wxEmptyString, wxVariant(id), picture, 0);
 	}
 
 	// The full form — the number says which, the variant is what to place.
 	void Add(long id, const wxString& name, const wxString& synonym,
-		const wxVariant& value, const ibPictureDescription& picture = ibPictureDescription()) {
-		m_items.emplace_back(id, name, synonym, value, picture);
+		const wxVariant& value, const ibPictureDescription& picture = ibPictureDescription(), u64 data = 0) {
+		m_items.emplace_back(id, name, synonym, value, picture, data);
 	}
 
 	unsigned int GetCount() const { return (unsigned int)m_items.size(); }
@@ -180,6 +183,7 @@ public:
 	const wxVariant& GetValue(unsigned int idx) const { return m_items[idx].m_value; }
 	// Its picture, by its id — a window makes the image of it (ibBackendPicture::CreatePicture), a server sends the id.
 	const ibPictureDescription& GetPicture(unsigned int idx) const { return m_items[idx].m_picture; }
+	u64 GetData(unsigned int idx) const { return m_items[idx].m_data; }
 
 
 	// The label a person reads: the synonym when there is one, the name otherwise. One place, so
@@ -404,6 +408,14 @@ public:
 	virtual bool SetDataValue(const ibValue& varPropVal) = 0;
 	virtual bool GetDataValue(ibValue& pvarPropVal) const = 0;
 
+	// ⭐ PROPERTY -> PROTOCOL VALUE — the property as a client's inspector receives it, its row: its name, title, help and
+	// class (what the client shows it by, ibPropertyRegistry), its value as GetNodeValue writes it and how it reads, and
+	// whether it may be edited. A property whose editor asks more of the configuration than its value — the lists its
+	// window offers — adds that here, so the inspector asks every property the one question and knows none of them; what
+	// it may be set to is GetValueList's, which the inspector asks every property itself. False: it has no row (a
+	// composition, which the desktop's grid draws none for either).
+	virtual bool GetProtocolValue(ibDataNode& row);
+
 protected:
 
 	// THE BODIES BEHIND THE TWO DOORS — a type implements these, nobody calls them.
@@ -446,6 +458,9 @@ protected:
 	ibEvent(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString, const wxArrayString& args, const wxVariant& value) :ibBackendProperty(cat, name, label, helpString, value), m_args(args) { InitEvent(cat, value); }
 public:
 	const wxArrayString& GetArgs() const { return m_args; }
+
+	// …and the parameters of its procedure (Args), as the desktop's editor wrote the procedure's template.
+	virtual bool GetProtocolValue(ibDataNode& row) override;
 
 	// THE dispatcher this event fires through — PURE: every concrete event decides HOW it dispatches (ibEventControl
 	// vends a named-event / lambda value; a plain no-dispatch event returns nullptr). CallAsEvent asks for this and

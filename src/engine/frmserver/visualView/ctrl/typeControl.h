@@ -52,7 +52,7 @@ public:
 	static bool ChooseValue(ibControlFrame* ownerValue, const class ibValueMetaObject* choiceForm = nullptr);
 
 	// A NUMBER ON ITS CALCULATOR, A DATE ON ITS CALENDAR — the desktop's SimpleChoice, drawn by the client under the
-	// field pressed (ibProtocolRequestKind::SimpleChoice); the value chosen is handed to the field. False when the type
+	// field pressed (ibProtocol::ibRequest::ibKind::SimpleChoice); the value chosen is handed to the field. False when the type
 	// is neither.
 	static bool SimpleChoice(ibControlFrame* ownerValue, const ibClassID& clsid);
 

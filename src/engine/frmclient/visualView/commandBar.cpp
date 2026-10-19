@@ -29,10 +29,10 @@ std::string ShapeOf(const ibProtocolNode& commandBar)
 {
 	std::string shape;
 	for (const ibProtocolNode& entry : commandBar.Children()) {
-		shape += std::to_string(entry.GetInt(ibProtocolName::Id)) + '|';
-		shape += std::string(entry.GetString(ibProtocolName::Caption).utf8_str()) + '|';
-		shape += std::to_string(std::hash<std::string>()(std::string(entry.GetString(ibProtocolName::Picture).utf8_str()))) + '|';
-		shape += std::to_string(entry.GetInt(ibProtocolName::Kind)) + '|';
+		shape += std::to_string(entry.GetInt(ibProtocol::ibForm::ibCommandBar::Id)) + '|';
+		shape += std::string(entry.GetString(ibProtocol::ibForm::ibCommandBar::Caption).utf8_str()) + '|';
+		shape += std::to_string(std::hash<std::string>()(std::string(entry.GetString(ibProtocol::ibForm::ibCommandBar::Picture).utf8_str()))) + '|';
+		shape += std::to_string(entry.GetInt(ibProtocol::ibForm::ibCommandBar::Kind)) + '|';
 		shape += std::to_string(entry.Children().size()) + ';';
 	}
 	return shape;
@@ -80,8 +80,8 @@ void ibViewCommandBar::Update(const ibProtocolNode& commandBar)
 	const std::string shape = ShapeOf(commandBar);
 	if (shape == m_shape) {
 		for (std::size_t idx = 0; idx < entries.size(); ++idx) {
-			if (entries[idx].GetInt(ibProtocolName::Id) != kSeparatorId)
-				m_bar->EnableTool(kFirstToolId + static_cast<int>(idx), entries[idx].GetBool(ibProtocolName::Enabled, true));
+			if (entries[idx].GetInt(ibProtocol::ibForm::ibCommandBar::Id) != kSeparatorId)
+				m_bar->EnableTool(kFirstToolId + static_cast<int>(idx), entries[idx].GetBool(ibProtocol::ibForm::ibCommandBar::Enabled, true));
 		}
 		m_entries = commandBar.IsNode() ? commandBar.Clone() : ibProtocolNode();
 		m_bar->Refresh();
@@ -95,9 +95,9 @@ void ibViewCommandBar::Update(const ibProtocolNode& commandBar)
 	// The pictures of the bar and of its groups' members asked for at once — not a call per tool.
 	std::vector<wxString> pictures;
 	for (const ibProtocolNode& entry : entries) {
-		pictures.push_back(entry.GetString(ibProtocolName::Picture));
+		pictures.push_back(entry.GetString(ibProtocol::ibForm::ibCommandBar::Picture));
 		for (const ibProtocolNode& member : entry.Children())
-			pictures.push_back(member.GetString(ibProtocolName::Picture));
+			pictures.push_back(member.GetString(ibProtocol::ibForm::ibCommandBar::Picture));
 	}
 	ibProtocolPictureReceive(pictures);
 	m_bar->ClearTools();
@@ -105,7 +105,7 @@ void ibViewCommandBar::Update(const ibProtocolNode& commandBar)
 	bool anyTool = false;
 	for (std::size_t idx = 0; idx < entries.size(); ++idx) {
 		const ibProtocolNode& entry = entries[idx];
-		if (entry.GetInt(ibProtocolName::Id) == kSeparatorId) {
+		if (entry.GetInt(ibProtocol::ibForm::ibCommandBar::Id) == kSeparatorId) {
 			if (anyTool)
 				m_bar->AddSeparator();
 			continue;
@@ -114,12 +114,12 @@ void ibViewCommandBar::Update(const ibProtocolNode& commandBar)
 		// The server has said what is shown: a caption it left empty is a picture alone, a picture it left empty is a
 		// caption alone.
 		const int toolId = kFirstToolId + static_cast<int>(idx);
-		const wxString caption = entry.GetString(ibProtocolName::Caption);
-		m_bar->AddTool(toolId, caption, ibProtocolPicture(entry.GetString(ibProtocolName::Picture)), wxNullBitmap,
-			wxITEM_NORMAL, entry.GetString(ibProtocolName::Tooltip, caption), wxEmptyString, nullptr);
-		if (entry.GetInt(ibProtocolName::Kind) == static_cast<int>(ibProtocolCommandKind::Group))
+		const wxString caption = entry.GetString(ibProtocol::ibForm::ibCommandBar::Caption);
+		m_bar->AddTool(toolId, caption, ibProtocolPicture(entry.GetString(ibProtocol::ibForm::ibCommandBar::Picture)), wxNullBitmap,
+			wxITEM_NORMAL, entry.GetString(ibProtocol::ibForm::ibCommandBar::Tooltip, caption), wxEmptyString, nullptr);
+		if (entry.GetInt(ibProtocol::ibForm::ibCommandBar::Kind) == static_cast<int>(ibProtocol::ibForm::ibCommandBar::ibKind::Group))
 			m_bar->SetToolDropDown(toolId, true);
-		if (!entry.GetBool(ibProtocolName::Enabled, true))
+		if (!entry.GetBool(ibProtocol::ibForm::ibCommandBar::Enabled, true))
 			m_bar->EnableTool(toolId, false);
 		anyTool = true;
 	}
@@ -136,7 +136,7 @@ bool ibViewCommandBar::PopupGroup(int toolId)
 {
 	const std::vector<ibProtocolNode> entries = m_entries.Children();
 	const std::size_t idx = static_cast<std::size_t>(toolId - kFirstToolId);
-	if (idx >= entries.size() || entries[idx].GetInt(ibProtocolName::Kind) != static_cast<int>(ibProtocolCommandKind::Group))
+	if (idx >= entries.size() || entries[idx].GetInt(ibProtocol::ibForm::ibCommandBar::Kind) != static_cast<int>(ibProtocol::ibForm::ibCommandBar::ibKind::Group))
 		return false;
 
 	// Each command in its place among the group's — a command gone since is there, not enabled, so the places are
@@ -145,11 +145,11 @@ bool ibViewCommandBar::PopupGroup(int toolId)
 	const std::vector<ibProtocolNode> members = group.Children();
 	wxMenu menu;
 	for (std::size_t member = 0; member < members.size(); ++member) {
-		wxMenuItem* const item = menu.Append(kFirstMemberId + static_cast<int>(member), members[member].GetString(ibProtocolName::Caption));
-		const wxBitmap picture = ibProtocolPicture(members[member].GetString(ibProtocolName::Picture));
+		wxMenuItem* const item = menu.Append(kFirstMemberId + static_cast<int>(member), members[member].GetString(ibProtocol::ibForm::ibCommandBar::Caption));
+		const wxBitmap picture = ibProtocolPicture(members[member].GetString(ibProtocol::ibForm::ibCommandBar::Picture));
 		if (picture.IsOk())
 			item->SetBitmap(picture);
-		item->Enable(members[member].GetBool(ibProtocolName::Enabled, true));
+		item->Enable(members[member].GetBool(ibProtocol::ibForm::ibCommandBar::Enabled, true));
 	}
 	if (members.empty())
 		return true;
@@ -159,8 +159,8 @@ bool ibViewCommandBar::PopupGroup(int toolId)
 		return true;
 
 	ibProtocolNode args;
-	args.SetValue(ibProtocolName::Id, group.GetInt(ibProtocolName::Id))
-		.SetValue(ibProtocolName::Member, static_cast<long long>(chosen - kFirstMemberId));
+	args.SetValue(ibProtocol::ibEvent::Id, group.GetInt(ibProtocol::ibForm::ibCommandBar::Id))
+		.SetValue(ibProtocol::ibEvent::Member, static_cast<long long>(chosen - kFirstMemberId));
 	m_sendCommand(args);
 	return true;
 }
@@ -184,7 +184,7 @@ void ibViewCommandBar::OnTool(wxCommandEvent& event)
 		return;
 
 	ibProtocolNode args;
-	args.SetValue(ibProtocolName::Id, entries[idx].GetInt(ibProtocolName::Id));
+	args.SetValue(ibProtocol::ibEvent::Id, entries[idx].GetInt(ibProtocol::ibForm::ibCommandBar::Id));
 	m_sendCommand(args);
 }
 

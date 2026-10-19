@@ -56,19 +56,19 @@ public:
 	virtual void DrawView(const ibProtocolNode& WXUNUSED(view), const ibProtocolNode& WXUNUSED(patch)) {}
 
 	// Does the tab take this command now — the server's answer, the tab's Commands.
-	bool IsCommandEnabled(ibProtocolCommand command) const;
+	bool IsCommandEnabled(ibProtocol::ibFrame::ibCommand command) const;
 	// The command done to it, by the server — after whatever the window is doing now.
-	void DoCommand(ibProtocolCommand command) const;
+	void DoCommand(ibProtocol::ibFrame::ibCommand command) const;
 
 	// WHAT THE TAB'S VIEW IS ASKED, AND TOLD — the view of a tab that is no form, named by the tab: what it answers
 	// (fetch {Tab, Request}; false — refused, or no frame), and what the person did in it (event {Tab, Event, Args}),
 	// posted as the person's acts are.
 	bool Fetch(const ibProtocolNode& request, ibProtocolNode& answer) const;
-	void Post(ibProtocolEvent event, const ibProtocolNode& args = ibProtocolNode()) const;
+	void Post(ibProtocol::ibEvent::ibKind event, const ibProtocolNode& args = ibProtocolNode()) const;
 	// …or left for the next call to carry (Pending), the latest of its kind in place of the one before: what the view
 	// hands back without the person asking for anything yet (a module's text as the focus leaves it). Posted where the
 	// server takes none held.
-	void Hold(ibProtocolEvent event, const ibProtocolNode& args = ibProtocolNode()) const;
+	void Hold(ibProtocol::ibEvent::ibKind event, const ibProtocolNode& args = ibProtocolNode()) const;
 
 	// The State of the view in the frame that opened the tab — set while its views are made (OnCreate), empty after:
 	// what a view reads as it is made may ride there.

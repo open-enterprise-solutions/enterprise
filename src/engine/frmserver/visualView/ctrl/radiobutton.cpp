@@ -15,8 +15,8 @@ ibValueRadioButton::ibValueRadioButton() : ibValueWindow()
 void ibValueRadioButton::OnUpdate(ibDataNode& state, ibVisualHost* host)
 {
 	ibValueWindow::OnUpdate(state, host);
-	state.SetValue(wxT("Caption"), GetCaption());
-	state.SetValue(wxT("Selected"), m_propertySelected->GetValueAsBoolean());
+	state.SetValue(ibProtocol::ibForm::ibState::Caption, GetCaption());
+	state.SetValue(ibProtocol::ibForm::ibState::Selected, m_propertySelected->GetValueAsBoolean());
 }
 
 //*******************************************************************

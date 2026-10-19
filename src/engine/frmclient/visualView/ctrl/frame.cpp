@@ -19,49 +19,49 @@ namespace {
 
 ibValueFrame* MakeOfType(const wxString& type, ibVisualHostClient& host, long long controlId)
 {
-	if (type == ibProtocolType::SizerItem)
+	if (type == ibProtocol::ibForm::ibType::SizerItem)
 		return new ibValueSizerItem(host, controlId);
-	if (type == ibProtocolType::Boxsizer)
+	if (type == ibProtocol::ibForm::ibType::Boxsizer)
 		return new ibValueBoxSizer(host, controlId);
-	if (type == ibProtocolType::Wrapsizer)
+	if (type == ibProtocol::ibForm::ibType::Wrapsizer)
 		return new ibValueWrapSizer(host, controlId);
-	if (type == ibProtocolType::Gridsizer)
+	if (type == ibProtocol::ibForm::ibType::Gridsizer)
 		return new ibValueGridSizer(host, controlId);
-	if (type == ibProtocolType::Staticboxsizer)
+	if (type == ibProtocol::ibForm::ibType::Staticboxsizer)
 		return new ibValueStaticBoxSizer(host, controlId);
-	if (type == ibProtocolType::Statictext)
+	if (type == ibProtocol::ibForm::ibType::Statictext)
 		return new ibValueStaticText(host, controlId);
-	if (type == ibProtocolType::Textctrl)
+	if (type == ibProtocol::ibForm::ibType::Textctrl)
 		return new ibValueTextCtrl(host, controlId);
-	if (type == ibProtocolType::Button)
+	if (type == ibProtocol::ibForm::ibType::Button)
 		return new ibValueButton(host, controlId);
-	if (type == ibProtocolType::Checkbox)
+	if (type == ibProtocol::ibForm::ibType::Checkbox)
 		return new ibValueCheckbox(host, controlId);
-	if (type == ibProtocolType::Staticline)
+	if (type == ibProtocol::ibForm::ibType::Staticline)
 		return new ibValueStaticLine(host, controlId);
-	if (type == ibProtocolType::Tablebox)
+	if (type == ibProtocol::ibForm::ibType::Tablebox)
 		return new ibValueModelTableBox(host, controlId);
-	if (type == ibProtocolType::TableboxColumn)
+	if (type == ibProtocol::ibForm::ibType::TableboxColumn)
 		return new ibValueModelTableBoxColumn(host, controlId);
-	if (type == ibProtocolType::TableboxColumnGroup)
+	if (type == ibProtocol::ibForm::ibType::TableboxColumnGroup)
 		return new ibValueModelTableBoxColumnGroup(host, controlId);
-	if (type == ibProtocolType::Gridbox)
+	if (type == ibProtocol::ibForm::ibType::Gridbox)
 		return new ibValueGridBox(host, controlId);
-	if (type == ibProtocolType::Textbox)
+	if (type == ibProtocol::ibForm::ibType::Textbox)
 		return new ibValueTextBox(host, controlId);
-	if (type == ibProtocolType::Notebook)
+	if (type == ibProtocol::ibForm::ibType::Notebook)
 		return new ibValueNotebook(host, controlId);
-	if (type == ibProtocolType::NotebookPage)
+	if (type == ibProtocol::ibForm::ibType::NotebookPage)
 		return new ibValueNotebookPage(host, controlId);
-	if (type == ibProtocolType::Radiobutton)
+	if (type == ibProtocol::ibForm::ibType::Radiobutton)
 		return new ibValueRadioButton(host, controlId);
-	if (type == ibProtocolType::Slider)
+	if (type == ibProtocol::ibForm::ibType::Slider)
 		return new ibValueSlider(host, controlId);
-	if (type == ibProtocolType::Gauge)
+	if (type == ibProtocol::ibForm::ibType::Gauge)
 		return new ibValueGauge(host, controlId);
-	if (type == ibProtocolType::Htmlbox)
+	if (type == ibProtocol::ibForm::ibType::Htmlbox)
 		return new ibValueHTMLBox(host, controlId);
-	if (type == ibProtocolType::Chartbox)
+	if (type == ibProtocol::ibForm::ibType::Chartbox)
 		return new ibValueChartBox(host, controlId);
 	return nullptr;
 }
@@ -113,7 +113,7 @@ ibValueFrame* ibValueFrame::FindControlByName(const wxString& controlName) const
 
 bool ibValueControl::OnPropertyChanging(ibProperty* property, const wxVariant& newValue)
 {
-	if (property->GetName() == ibProtocolName::Name && FindControlByName(newValue.GetString()) != nullptr)
+	if (property->GetName() == ibProtocol::ibSchema::ibProperties::Name && FindControlByName(newValue.GetString()) != nullptr)
 		return false;
 
 	return true;
@@ -129,16 +129,16 @@ void ibValueFrame::SetSubscribedEvents(const std::vector<ibProtocolNode>& events
 	}
 }
 
-void ibValueFrame::Send(ibProtocolEvent event) const
+void ibValueFrame::Send(ibProtocol::ibEvent::ibKind event) const
 {
 	Send(event, ibProtocolNode());
 }
 
-void ibValueFrame::Send(ibProtocolEvent event, const ibProtocolNode& args) const
+void ibValueFrame::Send(ibProtocol::ibEvent::ibKind event, const ibProtocolNode& args) const
 {
 	// WHERE THE PERSON IS, the server not subscribed to it: it waits for the next call, whatever that call is — held unless
 	// the server speaks no protocol that carries it.
-	if (ibProtocolIsStateEvent(event) && !IsSubscribed(event) && m_host.Hold(m_controlId, event, args))
+	if (ibProtocol::ibEvent::IsStateEvent(event) && !IsSubscribed(event) && m_host.Hold(m_controlId, event, args))
 		return;
 	m_host.Send(m_controlId, event, args);
 }
@@ -153,9 +153,9 @@ void ibValueFrame::UpdateWindow(wxWindow* window, const ibProtocolNode& node)
 	if (window == nullptr)
 		return;
 
-	const ibProtocolNode state = node.FindChild(ibProtocolName::State);
-	const wxSize minSize = typeConv::StringToSize(node.GetString(ibProtocolName::MinimumSize));
-	const wxSize maxSize = typeConv::StringToSize(node.GetString(ibProtocolName::MaximumSize));
+	const ibProtocolNode state = node.FindChild(ibProtocol::ibForm::ibState::State);
+	const wxSize minSize = typeConv::StringToSize(node.GetString(ibProtocol::ibForm::ibProperty::MinimumSize));
+	const wxSize maxSize = typeConv::StringToSize(node.GetString(ibProtocol::ibForm::ibProperty::MaximumSize));
 
 	if (minSize != wxDefaultSize)
 		window->SetMinSize(minSize);
@@ -165,9 +165,9 @@ void ibValueFrame::UpdateWindow(wxWindow* window, const ibProtocolNode& node)
 	ApplyLook(window, node);
 
 	// The server has decided both: enabled with its form, shown where it is available and bound.
-	window->Enable(state.GetBool(ibProtocolName::Enabled, true));
-	window->Show(state.GetBool(ibProtocolName::Visible, true));
-	window->SetToolTip(state.GetString(ibProtocolName::Tooltip));
+	window->Enable(state.GetBool(ibProtocol::ibForm::ibState::Enabled, true));
+	window->Show(state.GetBool(ibProtocol::ibForm::ibState::Visible, true));
+	window->SetToolTip(state.GetString(ibProtocol::ibForm::ibState::Tooltip));
 
 	if (minSize != wxDefaultSize || maxSize != wxDefaultSize)
 		window->Layout();
@@ -179,13 +179,13 @@ void ibValueFrame::ApplyLook(wxWindow* window, const ibProtocolNode& node)
 		return;
 
 	// Unset, the form writes no text for it.
-	const wxString font = node.GetString(ibProtocolName::Font);
+	const wxString font = node.GetString(ibProtocol::ibForm::ibProperty::Font);
 	if (!font.IsEmpty())
 		window->SetFont(typeConv::StringToFont(font));
-	const wxString foreground = node.GetString(ibProtocolName::ForegroundColour);
+	const wxString foreground = node.GetString(ibProtocol::ibForm::ibProperty::ForegroundColour);
 	if (!foreground.IsEmpty())
 		window->SetForegroundColour(typeConv::StringToColour(foreground));
-	const wxString background = node.GetString(ibProtocolName::BackgroundColour);
+	const wxString background = node.GetString(ibProtocol::ibForm::ibProperty::BackgroundColour);
 	if (!background.IsEmpty())
 		window->SetBackgroundColour(typeConv::StringToColour(background));
 }

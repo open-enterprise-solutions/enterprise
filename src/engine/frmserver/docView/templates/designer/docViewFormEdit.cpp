@@ -6,9 +6,10 @@
 #include "backend/metaData.h"   // GetCompileCache — the form the configuration compiled, when it has one
 #include "backend/metadataConfiguration.h"   // the session's configuration — the form's object is in it
 #include "backend/session/session.h"
+#include "backend/backend_picture.h"   // ibBackendPicture::SendPicture — a class's picture, by its id
 #include "core/diagnostics/journal.h"
 #include "core/serialize/dataBuilder.h"
-#include "frmserver/client/clientFrame.h"         // ibClientFrame::SendPicture — a class's picture, by its id
+#include "frmserver/client/clientFrame.h"         // ibClientFrame::ShowProperties — the form's object's rows, in the inspector
 #include "frmserver/client/propertyInspector.h"   // a control's rows, as the designer's inspector writes them
 #include "frmserver/visualView/controlCtor.h"     // ibCtorControlTypeBase::IsControlSystem — not offered to place
 #include "frmserver/visualView/ctrl/formAttribute.h"   // ibFormAttributeValue — an attribute's rows (FetchProperties)
@@ -51,10 +52,10 @@ void ibFormDesignView::OnDraw(ibDataNode& frame)
 		else if (metaFormObject != nullptr)
 			caption = metaFormObject->GetSynonym();
 	}
-	ibDataNode* const state = frame.FindChild(ibProtocolName::State);
+	ibDataNode* const state = frame.FindChild(ibProtocol::ibView::State);
 	if (state == nullptr)
 		return;
-	state->SetValue(ibProtocolName::Caption, caption);
+	state->SetValue(ibProtocol::ibView::ibFormDesigner::Caption, caption);
 
 	// ⭐ WHAT THE TAB IS OPENED WITH RIDES THE FRAME THAT OPENS IT — once (Opening): the form, the classes and the module's
 	// text, as its Text fetch answers them. The client makes the editor without asking.
@@ -62,8 +63,8 @@ void ibFormDesignView::OnDraw(ibDataNode& frame)
 		return;
 	m_openingDrawn = true;
 	ibDataNode request;
-	request.SetValue(ibProtocolName::Kind, static_cast<s32>(ibProtocolModuleRequest::Text));
-	Fetch(request, state->Child(ibProtocolName::Opening));
+	request.SetValue(ibProtocol::ibView::ibFormDesigner::Kind, static_cast<s32>(ibProtocol::ibView::ibModule::ibRequest::Text));
+	Fetch(request, state->Child(ibProtocol::ibView::ibFormDesigner::Opening));
 
 	// …and the form's object's rows, which its Code page shows in the inspector (the tree's row it was opened from): the
 	// configuration's tree names it by tab 0; an external file's tree is a tab of its own, and its page reads them.
@@ -77,22 +78,22 @@ void ibFormDesignView::OnDraw(ibDataNode& frame)
 bool ibFormDesignView::Fetch(const ibDataNode& request, ibDataNode& response)
 {
 	// Asked about the form as the client holds it — it is loaded first.
-	if (const ibDataNode* const form = request.FindChild(ibProtocolName::Form)) {
+	if (const ibDataNode* const form = request.FindChild(ibProtocol::ibView::ibFormDesigner::Form)) {
 		if (!LoadForm(*form))
 			return false;
 	}
 
-	const s32 kind = request.GetValue<s32>(ibProtocolName::Kind);
-	switch (static_cast<ibProtocolFormDesignerRequest>(kind)) {
-	case ibProtocolFormDesignerRequest::Control:        return FetchControl(request, response);
-	case ibProtocolFormDesignerRequest::BoundControl:   return FetchBoundControl(request, response);
-	case ibProtocolFormDesignerRequest::CommandControl: return FetchCommandControl(request, response);
-	case ibProtocolFormDesignerRequest::Rows:           return FetchRows(request, response);
-	case ibProtocolFormDesignerRequest::Composition:    return FetchComposition(request, response);
-	case ibProtocolFormDesignerRequest::Attribute:      return FetchAttribute(request, response);
-	case ibProtocolFormDesignerRequest::FormCommand:    return FetchFormCommand(request, response);
-	case ibProtocolFormDesignerRequest::Properties:     return FetchProperties(request, response);
-	case ibProtocolFormDesignerRequest::Form:           WriteForm(response); return true;
+	const s32 kind = request.GetValue<s32>(ibProtocol::ibView::ibFormDesigner::Kind);
+	switch (static_cast<ibProtocol::ibView::ibFormDesigner::ibRequest>(kind)) {
+	case ibProtocol::ibView::ibFormDesigner::ibRequest::Control:        return FetchControl(request, response);
+	case ibProtocol::ibView::ibFormDesigner::ibRequest::BoundControl:   return FetchBoundControl(request, response);
+	case ibProtocol::ibView::ibFormDesigner::ibRequest::CommandControl: return FetchCommandControl(request, response);
+	case ibProtocol::ibView::ibFormDesigner::ibRequest::Rows:           return FetchRows(request, response);
+	case ibProtocol::ibView::ibFormDesigner::ibRequest::Composition:    return FetchComposition(request, response);
+	case ibProtocol::ibView::ibFormDesigner::ibRequest::Attribute:      return FetchAttribute(request, response);
+	case ibProtocol::ibView::ibFormDesigner::ibRequest::FormCommand:    return FetchFormCommand(request, response);
+	case ibProtocol::ibView::ibFormDesigner::ibRequest::Properties:     return FetchProperties(request, response);
+	case ibProtocol::ibView::ibFormDesigner::ibRequest::Form:           WriteForm(response); return true;
 	default:
 		break;
 	}
@@ -100,10 +101,10 @@ bool ibFormDesignView::Fetch(const ibDataNode& request, ibDataNode& response)
 	// …AND A COMPOSITION AN ATTRIBUTE HOLDS, as its cell's window asks the configuration (ibPropertyDataComposition): the
 	// fields of its query, of a reference's targets, of a dynamic list — the composer tab's own requests, over the form's
 	// configuration.
-	switch (static_cast<ibProtocolComposerRequest>(kind)) {
-	case ibProtocolComposerRequest::Fields:
-	case ibProtocolComposerRequest::Expand:
-	case ibProtocolComposerRequest::Source: {
+	switch (static_cast<ibProtocol::ibView::ibComposer::ibRequest>(kind)) {
+	case ibProtocol::ibView::ibComposer::ibRequest::Fields:
+	case ibProtocol::ibView::ibComposer::ibRequest::Expand:
+	case ibProtocol::ibView::ibComposer::ibRequest::Source: {
 		const ibMetaDocument* const document = GetDocument();
 		const ibValueMetaObject* const metaObject = document != nullptr ? document->GetMetaObject() : nullptr;
 		return ibFetchComposerRequest(request, response, metaObject != nullptr ? metaObject->GetMetaData() : nullptr);
@@ -112,7 +113,7 @@ bool ibFormDesignView::Fetch(const ibDataNode& request, ibDataNode& response)
 		break;
 	}
 
-	if (static_cast<ibProtocolModuleRequest>(kind) != ibProtocolModuleRequest::Text)
+	if (static_cast<ibProtocol::ibView::ibModule::ibRequest>(kind) != ibProtocol::ibView::ibModule::ibRequest::Text)
 		return ibModuleTextView::Fetch(request, response);
 
 	if (!ibModuleTextView::Fetch(request, response))
@@ -125,10 +126,10 @@ bool ibFormDesignView::Fetch(const ibDataNode& request, ibDataNode& response)
 bool ibFormDesignView::FetchProperties(const ibDataNode& request, ibDataNode& response)
 {
 	// The rows of an attribute, of a form command, as the inspector writes them — the client's holder of it shows them.
-	const ibMetaID attributeId = request.GetValue<s32>(ibProtocolName::Attribute);
-	const ibMetaID commandId = request.GetValue<s32>(ibProtocolName::FormCommand);
+	const ibMetaID attributeId = request.GetValue<s32>(ibProtocol::ibView::ibFormDesigner::Attribute);
+	const ibMetaID commandId = request.GetValue<s32>(ibProtocol::ibView::ibFormDesigner::FormCommand);
 	// …and of a value table's column of an attribute (Column): the column is the property object.
-	const ibMetaID columnId = request.GetValue<s32>(ibProtocolName::Column);
+	const ibMetaID columnId = request.GetValue<s32>(ibProtocol::ibView::ibFormDesigner::Column);
 	ibPropertyObject* object = nullptr;
 	if (attributeId != 0 && columnId != 0)
 		object = FindColumnById(m_valueForm->FindAttributeById(attributeId), columnId);
@@ -143,31 +144,31 @@ bool ibFormDesignView::FetchProperties(const ibDataNode& request, ibDataNode& re
 	inspector.SelectObject(object, attributeId != 0 ? attributeId : commandId, 0);
 	inspector.OnDraw(response);
 	if (columnId != 0)
-		response.SetValue(ibProtocolName::Column, static_cast<s32>(columnId));
+		response.SetValue(ibProtocol::ibView::ibFormDesigner::Column, static_cast<s32>(columnId));
 	return true;
 }
 
 bool ibFormDesignView::FetchRows(const ibDataNode& request, ibDataNode& response)
 {
-	ibValueFrame* const control = m_valueForm->FindControlByID(request.GetValue<s32>(ibProtocolName::Control));
+	ibValueFrame* const control = m_valueForm->FindControlByID(request.GetValue<s32>(ibProtocol::ibView::ibFormDesigner::Control));
 	if (control == nullptr)
 		return false;
 	// …and the control as the form so edited draws it — its State is the server's (enabled with its form, shown where
 	// available and bound): what an edit of the client's changes there, the client does not decide. A class's shape
 	// (WriteClasses): Node, Controls.
-	ibDataNode& drawn = response.Child(ibProtocolName::Node);
+	ibDataNode& drawn = response.Child(ibProtocol::ibView::ibFormDesigner::Node);
 	drawn = ibDataNode(control->GetClassType(), control->GetControlID());
 	RefreshControl(control, drawn);
-	WriteRows(control, response.Child(ibProtocolName::Controls));
+	WriteRows(control, response.Child(ibProtocol::ibView::ibFormDesigner::Controls));
 	return true;
 }
 
 bool ibFormDesignView::SetProperty(ibPropertyObject* object, const ibDataNode& request)
 {
-	const wxString name = request.GetValue<wxString>(ibProtocolName::Name);
-	const ibDataValue* value = request.FindProperty(ibProtocolName::Value);
+	const wxString name = request.GetValue<wxString>(ibProtocol::ibView::ibFormDesigner::Name);
+	const ibDataValue* value = request.FindProperty(ibProtocol::ibView::ibFormDesigner::Value);
 	if (value == nullptr)
-		value = request.FindField(ibProtocolName::Value);
+		value = request.FindField(ibProtocol::ibView::ibFormDesigner::Value);
 	if (object == nullptr || value == nullptr)
 		return false;
 
@@ -290,15 +291,15 @@ void ibFormDesignView::WriteForm(ibDataNode& response, const std::set<ibFormID>&
 
 	// The form whole — the client holds it from here on, so nothing is left to draw in part.
 	UpdateControl(m_valueForm);
-	UpdateVisualHost(response.Child(ibProtocolName::Form));
+	UpdateVisualHost(response.Child(ibProtocol::ibView::ibFormDesigner::Form));
 
 	// Each control's rows, as the designer's inspector shows them — what its state hides not sent (OnRefresh); no Tab:
 	// an edit of them is the client's. Those it holds already not again.
-	WriteRows(m_valueForm, response.Child(ibProtocolName::Controls), held);
+	WriteRows(m_valueForm, response.Child(ibProtocol::ibView::ibFormDesigner::Controls), held);
 
 	// …and the trees beside it — its attributes, its commands.
-	FillAttributeTree(response.Child(ibProtocolName::AttributeTree));
-	FillCommandTree(response.Child(ibProtocolName::CommandTree));
+	FillAttributeTree(response.Child(ibProtocol::ibView::ibFormDesigner::AttributeTree));
+	FillCommandTree(response.Child(ibProtocol::ibView::ibFormDesigner::CommandTree));
 }
 
 namespace {
@@ -312,11 +313,11 @@ struct ibControlMenuItem {
 };
 
 const ibControlMenuItem s_controlMenu[] = {
-	{ ibProtocolType::Notebook,            ibProtocolType::NotebookPage,        wxTRANSLATE("Add page") },
-	{ ibProtocolType::Tablebox,            ibProtocolType::TableboxColumn,      wxTRANSLATE("Add column") },
-	{ ibProtocolType::Tablebox,            ibProtocolType::TableboxColumnGroup, wxTRANSLATE("Add column group") },
-	{ ibProtocolType::TableboxColumnGroup, ibProtocolType::TableboxColumn,      wxTRANSLATE("Add column") },
-	{ ibProtocolType::TableboxColumnGroup, ibProtocolType::TableboxColumnGroup, wxTRANSLATE("Add column group") },
+	{ ibProtocol::ibForm::ibType::Notebook,            ibProtocol::ibForm::ibType::NotebookPage,        wxTRANSLATE("Add page") },
+	{ ibProtocol::ibForm::ibType::Tablebox,            ibProtocol::ibForm::ibType::TableboxColumn,      wxTRANSLATE("Add column") },
+	{ ibProtocol::ibForm::ibType::Tablebox,            ibProtocol::ibForm::ibType::TableboxColumnGroup, wxTRANSLATE("Add column group") },
+	{ ibProtocol::ibForm::ibType::TableboxColumnGroup, ibProtocol::ibForm::ibType::TableboxColumn,      wxTRANSLATE("Add column") },
+	{ ibProtocol::ibForm::ibType::TableboxColumnGroup, ibProtocol::ibForm::ibType::TableboxColumnGroup, wxTRANSLATE("Add column group") },
 };
 
 } // namespace
@@ -326,16 +327,16 @@ void ibFormDesignView::WriteClasses(ibDataNode& response)
 	// The classes a control may be made of, with their pictures — the editor's palette and its trees' icons; one the
 	// desktop did not offer to place (IsControlSystem — a sizer's item, a page) is not Visible. Each is made by the
 	// server (Control — its palette, its paste), so nothing of one is written but what is shown.
-	ibDataNode& classes = response.Child(ibProtocolName::Classes);
+	ibDataNode& classes = response.Child(ibProtocol::ibView::ibFormDesigner::Classes);
 	for (const ibCtorAbstractType* ctor : ibValue::GetListCtorsByType(ibCtorObjectType::ibCtorObjectType_object_control)) {
 		const wxString className = ctor->GetClassName();
 		ibDataNode& described = classes.AddChild(0, 0);
-		described.SetValue(ibProtocolName::Name, className);
-		described.SetValue(ibProtocolName::Picture, ibClientFrame::SendPicture(ctor->GetClassType()));
+		described.SetValue(ibProtocol::ibView::ibFormDesigner::Name, className);
+		described.SetValue(ibProtocol::ibView::ibFormDesigner::Picture, ibBackendPicture::SendPicture(ctor->GetClassType()));
 		const ibCtorControlTypeBase* const controlCtor = dynamic_cast<const ibCtorControlTypeBase*>(ctor);
 		if (controlCtor == nullptr)
 			continue;
-		described.SetValue(ibProtocolName::Type, controlCtor->GetTypeControlName());
+		described.SetValue(ibProtocol::ibView::ibFormDesigner::Type, controlCtor->GetTypeControlName());
 
 		// …its menu made once: Child adds a node each time it is called (a table's "Add column" was lost to its group's).
 		ibDataNode* menu = nullptr;
@@ -343,14 +344,14 @@ void ibFormDesignView::WriteClasses(ibDataNode& response)
 			if (className != item.control)
 				continue;
 			if (menu == nullptr)
-				menu = &described.Child(ibProtocolName::Menu);
+				menu = &described.Child(ibProtocol::ibView::ibFormDesigner::Menu);
 			ibDataNode& entry = menu->AddChild(0, 0);
-			entry.SetValue(ibProtocolName::Name, wxString(item.added));
-			entry.SetValue(ibProtocolName::Title, wxGetTranslation(item.title));
+			entry.SetValue(ibProtocol::ibView::ibFormDesigner::Name, wxString(item.added));
+			entry.SetValue(ibProtocol::ibView::ibFormDesigner::Title, wxGetTranslation(item.title));
 		}
 
 		if (controlCtor->IsControlSystem())
-			described.SetValue(ibProtocolName::Visible, false);
+			described.SetValue(ibProtocol::ibView::ibFormDesigner::Visible, false);
 	}
 }
 
@@ -363,7 +364,7 @@ void ibFormDesignView::WriteRows(ibValueFrame* control, ibDataNode& controls, co
 	}
 
 	ibDataNode& described = controls.AddChild(0, 0);
-	described.SetValue(ibProtocolName::Control, static_cast<s32>(control->GetControlID()));
+	described.SetValue(ibProtocol::ibView::ibFormDesigner::Control, static_cast<s32>(control->GetControlID()));
 	{
 		ibPropertyInspector inspector;
 		inspector.SelectObject(control, control->GetControlID(), 0);
@@ -376,30 +377,30 @@ void ibFormDesignView::WriteRows(ibValueFrame* control, ibDataNode& controls, co
 	// command made here to be written is taken off again.
 	if (control->HasCommandBar()) {
 		ibValueCommandBar* const bar = control->GetCommandBar();
-		ibDataNode& barRows = described.Child(ibProtocolName::CommandBar);
+		ibDataNode& barRows = described.Child(ibProtocol::ibView::ibFormDesigner::CommandBar);
 		{
 			ibPropertyInspector inspector;
 			inspector.SelectObject(bar, control->GetControlID(), 0);
 			inspector.OnDraw(barRows);
 		}
-		ibDataNode& commandRows = barRows.Child(ibProtocolName::Items);
+		ibDataNode& commandRows = barRows.Child(ibProtocol::ibView::ibFormDesigner::Items);
 		for (unsigned int idx = 0; idx < bar->GetCommandItemCount(); idx++) {
 			ibValueCommandBarItem* const item = bar->GetCommandItem(idx);
 			if (item == nullptr)
 				continue;
 			ibDataNode& itemRows = commandRows.AddChild(0, 0);
-			itemRows.SetValue(ibProtocolName::Name, item->GetName());
+			itemRows.SetValue(ibProtocol::ibView::ibFormDesigner::Name, item->GetName());
 			ibPropertyInspector inspector;
 			inspector.SelectObject(item, control->GetControlID(), 0);
 			inspector.OnDraw(itemRows);
 		}
 		ibValueCommandBarItem* const item = bar->AddCommandItem();
 		{
-			ibDataNode& itemRows = described.Child(ibProtocolName::CommandBarItem);
+			ibDataNode& itemRows = described.Child(ibProtocol::ibView::ibFormDesigner::CommandBarItem);
 			ibPropertyInspector inspector;
 			inspector.SelectObject(item, control->GetControlID(), 0);
 			inspector.OnDraw(itemRows);
-			item->WriteData(itemRows.Child(ibProtocolName::Node));
+			item->WriteData(itemRows.Child(ibProtocol::ibView::ibFormDesigner::Node));
 		}
 		bar->RemoveCommandItem(item);
 	}
@@ -415,22 +416,22 @@ void ibFormDesignView::CollectControls(ibValueFrame* control, std::set<ibFormID>
 		CollectControls(control->GetChild(idx), held);
 }
 
-bool ibFormDesignView::OnClientEvent(ibProtocolEvent event, const ibDataNode& args)
+bool ibFormDesignView::OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args)
 {
-	const ibDataNode* const form = args.FindChild(ibProtocolName::Form);
+	const ibDataNode* const form = args.FindChild(ibProtocol::ibView::ibFormDesigner::Form);
 	if (form == nullptr)
 		return ibModuleTextView::OnClientEvent(event, args);
 
 	// The form tested — as it stands on the client, shown as the runtime shows it (the desktop's TestForm).
-	if (event == ibProtocolEvent::Command &&
-		static_cast<ibProtocolModuleCommand>(args.GetValue<s32>(ibProtocolName::Id)) == ibProtocolModuleCommand::TestForm) {
+	if (event == ibProtocol::ibEvent::ibKind::Command &&
+		static_cast<ibProtocol::ibView::ibModule::ibCommand>(args.GetValue<s32>(ibProtocol::ibView::ibModule::Id)) == ibProtocol::ibView::ibModule::ibCommand::TestForm) {
 		if (!LoadForm(*form))
 			return false;
 		// Down to the doc/view side explicitly: ibMetaDocument IS-A ibBackendMetaDocument AND an ibDocument, so both
 		// ShowForm overloads would match it equally well.
 		return m_valueForm->ShowForm(static_cast<ibDocument*>(GetDocument()), false);
 	}
-	if (event != ibProtocolEvent::Change)
+	if (event != ibProtocol::ibEvent::ibKind::Change)
 		return ibModuleTextView::OnClientEvent(event, args);
 
 	ibMetaDocument* const document = GetDocument();

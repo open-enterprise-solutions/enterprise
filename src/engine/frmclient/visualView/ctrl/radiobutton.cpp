@@ -12,10 +12,10 @@ void ibValueRadioButton::Create(wxWindow* parent, const ibProtocolNode& /*node*/
 
 void ibValueRadioButton::Update(const ibProtocolNode& node)
 {
-	const ibProtocolNode state = node.FindChild(ibProtocolName::State);
+	const ibProtocolNode state = node.FindChild(ibProtocol::ibForm::ibState::State);
 
-	m_radioButton->SetLabel(state.GetString(ibProtocolName::Caption));
-	m_radioButton->SetValue(state.GetBool(ibProtocolName::Selected));
+	m_radioButton->SetLabel(state.GetString(ibProtocol::ibForm::ibState::Caption));
+	m_radioButton->SetValue(state.GetBool(ibProtocol::ibForm::ibState::Selected));
 
 	UpdateWindow(m_radioButton, node);
 }

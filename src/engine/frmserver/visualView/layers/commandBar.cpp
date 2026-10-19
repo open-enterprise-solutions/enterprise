@@ -13,7 +13,7 @@
 #include "backend/metaCollection/metaCommandGroupObject.h" // the platform's groups + the declared ones, in order
 #include <functional>                            // std::function — the recursive section walk
 #include "frmserver/visualView/ctrl/tableBox.h"  // g_controlTableBoxCLSID — the form's tables (their own commands)
-#include "frmserver/client/clientFrame.h"       // ibClientFrame::SendPicture — every command's picture, by its id
+#include "backend/backend_picture.h"            // ibBackendPicture::SendPicture — every command's picture, by its id
 #include "backend/srcDataObject.h"              // ibSourceDataObject / ibSourceExplorer + IsReference — the form's data types (parameterized-command filter)
 #include "core/description/typeDescription.h"            // ibTypeDescription::GetClsidList — a command's parameter type
 #include "backend/tabularModel.h"               // ibValueModel::GetModelComposer — the setting a quick filter edits
@@ -22,7 +22,7 @@
 #include "backend/backend_composition.h"        // ibFilterNodeDescription / ibFilterDisplayMode_QuickAccess + ibStoredValue
 #include <set>                                  // std::set — the form's reference-type set
 #include <map>
-#include "protocol/protocol.h"                  // ibProtocolName — the command tree's rows
+#include "protocol/protocol.h"                  // ibProtocol::ibForm::ibCommandBar — the command tree's rows
 
 // Command bar — a CONTAINER layer object (the shared runtime/property/metadata base is
 // ibValueLayerObject). Holds its commands + the AutoFill flag; a client draws it from the frame.
@@ -693,18 +693,18 @@ void ibValueCommandBar::Update(ibDataNode& state)
 
 	for (const ibCommandEntry& c : BuildCommands()) {
 		ibDataNode& entry = state.AddChild(0, 0);
-		entry.SetValue(ibProtocolName::Id, c.id);
+		entry.SetValue(ibProtocol::ibForm::ibCommandBar::Id, c.id);
 		if (c.id == wxNOT_FOUND) {
-			entry.SetValue(ibProtocolName::Separator, true);
+			entry.SetValue(ibProtocol::ibForm::ibCommandBar::Separator, true);
 			continue;
 		}
 
 		// The representation decides which of the two a client shows — said here once, not left to each client.
-		entry.SetValue(ibProtocolName::Caption, c.representation == ibRepresentation_Picture ? wxString() : c.caption);
-		entry.SetValue(ibProtocolName::Picture, c.representation == ibRepresentation_Text ? ibString() : ibClientFrame::SendPicture(c.picture));
-		entry.SetValue(ibProtocolName::Tooltip, c.tooltip.IsEmpty() ? c.caption : c.tooltip);
-		entry.SetValue(ibProtocolName::Enabled, c.enabled);
-		entry.SetValue(ibProtocolName::Kind, static_cast<s32>(c.kind));
+		entry.SetValue(ibProtocol::ibForm::ibCommandBar::Caption, c.representation == ibRepresentation_Picture ? wxString() : c.caption);
+		entry.SetValue(ibProtocol::ibForm::ibCommandBar::Picture, c.representation == ibRepresentation_Text ? ibString() : ibBackendPicture::SendPicture(c.picture));
+		entry.SetValue(ibProtocol::ibForm::ibCommandBar::Tooltip, c.tooltip.IsEmpty() ? c.caption : c.tooltip);
+		entry.SetValue(ibProtocol::ibForm::ibCommandBar::Enabled, c.enabled);
+		entry.SetValue(ibProtocol::ibForm::ibCommandBar::Kind, static_cast<s32>(c.kind));
 
 		// An item of the bar's own — its place among them, as its node is written (WriteData): what the designer selects
 		// it by when its tool is pressed (the desktop's FindItemByCommandId).
@@ -716,7 +716,7 @@ void ibValueCommandBar::Update(ibDataNode& state)
 				if (item != nullptr)
 					++position;
 			}
-			entry.SetValue(ibProtocolName::Position, position);
+			entry.SetValue(ibProtocol::ibForm::ibCommandBar::Position, position);
 		}
 
 		// A GROUP carries its submenu: its commands in the order they were gathered, each with the caption,
@@ -725,11 +725,11 @@ void ibValueCommandBar::Update(ibDataNode& state)
 			wxString caption; ibPictureDescription picture; bool modifies = true;
 			ibDataNode& member = entry.AddChild(0, 0);
 			const bool resolved = ResolveCommand(item->GetBindingDesc(), caption, picture, &modifies);
-			member.SetValue(ibProtocolName::Caption, caption);
-			member.SetValue(ibProtocolName::Picture, ibClientFrame::SendPicture(picture));
+			member.SetValue(ibProtocol::ibForm::ibCommandBar::Caption, caption);
+			member.SetValue(ibProtocol::ibForm::ibCommandBar::Picture, ibBackendPicture::SendPicture(picture));
 			// A member gone since the bar was built is listed, disabled, so the places stay the places
 			// ExecuteCommand(id, member) counts.
-			member.SetValue(ibProtocolName::Enabled, resolved && !(viewOnly && modifies));
+			member.SetValue(ibProtocol::ibForm::ibCommandBar::Enabled, resolved && !(viewOnly && modifies));
 		}
 	}
 }
@@ -829,7 +829,7 @@ void WriteCommandTree(ibDataNode& node, ibValueForm* form)
 	std::map<wxString, size_t> sections;
 	for (const wxString& section : GetCommandSections()) {
 		sections[section] = node.Children().size();
-		node.AddChild(0, 0).SetValue(ibProtocolName::Name, section);
+		node.AddChild(0, 0).SetValue(ibProtocol::ibSchema::ibProperties::Name, section);
 	}
 	std::map<wxString, size_t> subgroups;   // "section\x1fsubgroup" -> its place in the section (Standard nests per source)
 
@@ -837,7 +837,7 @@ void WriteCommandTree(ibDataNode& node, ibValueForm* form)
 		auto section = sections.find(entry.group);
 		if (section == sections.end()) {   // defensive: an unexpected section -> appended at the end
 			section = sections.emplace(entry.group, node.Children().size()).first;
-			node.AddChild(0, 0).SetValue(ibProtocolName::Name, entry.group);
+			node.AddChild(0, 0).SetValue(ibProtocol::ibSchema::ibProperties::Name, entry.group);
 		}
 		ibDataNode* parent = &node.Children()[section->second];
 		if (!entry.subgroup.IsEmpty()) {   // nested under a per-source SUB-group (the form / a table)
@@ -845,7 +845,7 @@ void WriteCommandTree(ibDataNode& node, ibValueForm* form)
 			auto sub = subgroups.find(key);
 			if (sub == subgroups.end()) {
 				sub = subgroups.emplace(key, parent->Children().size()).first;
-				parent->AddChild(0, 0).SetValue(ibProtocolName::Name, entry.subgroup);
+				parent->AddChild(0, 0).SetValue(ibProtocol::ibSchema::ibProperties::Name, entry.subgroup);
 			}
 			parent = &parent->Children()[sub->second];
 		}
@@ -854,18 +854,18 @@ void WriteCommandTree(ibDataNode& node, ibValueForm* form)
 		const ibFormCommandValue* const formCommand = entry.desc.IsOk() && !entry.desc.IsHop()
 			? form->FindFormCommandById(entry.desc.GetLeaf()) : nullptr;
 		ibDataNode& row = parent->AddChild(0, formCommand != nullptr ? formCommand->GetId() : 0);
-		row.SetValue(ibProtocolName::Name, entry.label);
-		const ibString picture = ibClientFrame::SendPicture(entry.picture);   // the command's own picture, else the tree's default
+		row.SetValue(ibProtocol::ibSchema::ibProperties::Name, entry.label);
+		const ibString picture = ibBackendPicture::SendPicture(entry.picture);   // the command's own picture, else the tree's default
 		if (!picture.IsEmpty())
-			row.SetValue(ibProtocolName::Picture, picture);
+			row.SetValue(ibProtocol::ibSchema::ibProperties::Picture, picture);
 
 		std::vector<ibDataValue> hops;
 		for (const ibCommandHop& hop : entry.desc.GetPath()) {
 			std::shared_ptr<ibDataNode> hopNode = std::make_shared<ibDataNode>();
-			hopNode->SetValue(ibProtocolName::Id, static_cast<s32>(hop.m_id));
+			hopNode->SetValue(ibProtocol::ibSchema::ibProperties::Id, static_cast<s32>(hop.m_id));
 			hops.push_back(ibDataValue::Child(hopNode));
 		}
-		row.AddField(ibProtocolName::CommandPath, ibDataValue::Array(std::move(hops)));
-		row.SetValue(ibProtocolName::Kind, static_cast<s32>(entry.desc.GetCommandType()));
+		row.AddField(ibProtocol::ibSchema::ibProperties::CommandPath, ibDataValue::Array(std::move(hops)));
+		row.SetValue(ibProtocol::ibSchema::ibProperties::Kind, static_cast<s32>(entry.desc.GetCommandType()));
 	}
 }

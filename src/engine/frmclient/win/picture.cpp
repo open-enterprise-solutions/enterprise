@@ -111,7 +111,7 @@ void ibProtocolPictureReceive(const std::vector<wxString>& ids)
 			continue;
 		}
 		asked.insert(id);
-		params.AddItem(ibProtocolName::Pictures, id);
+		params.AddItem(ibProtocol::ibPicture::Pictures, id);
 	}
 	if (asked.empty())
 		return;
@@ -119,12 +119,12 @@ void ibProtocolPictureReceive(const std::vector<wxString>& ids)
 	// Not answered — no window yet, refused: nothing is kept, and it is asked again the next time it is named.
 	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
 	ibProtocolNode answer;
-	if (frame == nullptr || !frame->Fetch(ibProtocolMethod::Picture, params, answer))
+	if (frame == nullptr || !frame->Fetch(ibProtocol::ibMethod::Picture, params, answer))
 		return;
-	for (const ibProtocolNode& picture : answer.FindChild(ibProtocolName::Pictures).Children()) {
-		const wxImage image = ibProtocolImage(picture.GetString(ibProtocolName::Picture));
+	for (const ibProtocolNode& picture : answer.FindChild(ibProtocol::ibPicture::Pictures).Children()) {
+		const wxImage image = ibProtocolImage(picture.GetString(ibProtocol::ibPicture::Picture));
 		std::lock_guard<std::mutex> lock(s_picturesLock);
-		Pictures()[picture.GetString(ibProtocolName::Id)] = image.IsOk() ? wxBitmap(image) : wxBitmap();
+		Pictures()[picture.GetString(ibProtocol::ibPicture::Id)] = image.IsOk() ? wxBitmap(image) : wxBitmap();
 	}
 }
 

@@ -117,7 +117,7 @@ class ibValueGridBox : public ibValueWindowComposite, public ibTypeControlFactor
 	// The events this box has: Cell {Row, Col} — a cell clicked, the question "what is this figure made of"
 	// (OnCellLeftClick), Row and Col counted from 1; Change {Sheet} — the sheet edited on the client, whole, in the form
 	// Fetch gives it. Anything else is the composite's.
-	virtual bool OnClientEvent(ibProtocolEvent event, const ibDataNode& args) override;
+	virtual bool OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args) override;
 
 	// ⭐ THE SHEET A CLIENT SHOWS, whole (ibFetchSpreadsheet), and the Version it was read at.
 	virtual bool Fetch(const ibDataNode& request, ibDataNode& response) override;

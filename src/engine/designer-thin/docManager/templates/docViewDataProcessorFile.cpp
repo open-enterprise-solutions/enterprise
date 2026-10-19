@@ -23,7 +23,7 @@ void ibDataProcessorEditView::OnDraw(wxDC* WXUNUSED(dc))
 void ibDataProcessorFileDocument::DrawView(const ibProtocolNode& view, const ibProtocolNode& WXUNUSED(patch))
 {
 	if (ibDataProcessorTree* const metaTree = GetMetaTree())
-		metaTree->Draw(view.FindChild(ibProtocolName::MetaData));
+		metaTree->Draw(view.FindChild(ibProtocol::ibView::MetaData));
 }
 
 ibDataProcessorTree* ibDataProcessorFileDocument::GetMetaTree() const

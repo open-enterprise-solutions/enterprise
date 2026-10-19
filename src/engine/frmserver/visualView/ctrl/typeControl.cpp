@@ -9,7 +9,7 @@
 #include "frmserver/visualView/choiceRequest.h"                      // ibRequestChoice — "pick one of these"
 #include "backend/backend_mainFrame.h"                                    // the frame a request to the person goes through
 #include "core/serialize/dataBuilder.h"                                // the request and its answer
-#include "protocol/protocol.h"                                            // ibProtocolRequestKind::SimpleChoice
+#include "protocol/protocol.h"                                            // ibProtocol::ibRequest::ibKind::SimpleChoice
 #include "backend/session/session.h"
 #include "backend/system/value/valueType.h"          // ibValueTypeDescription / g_valueTypeDescriptionCLSID
 #include "backend/choiceLinkResolver.h"               // what narrows this choice — type and conditions
@@ -89,12 +89,12 @@ bool ibTypeControlFactory::SimpleChoice(ibControlFrame* ownerValue, const ibClas
 	ownerValue->GetControlValue(current);
 
 	ibDataNode request;
-	request.SetValue(ibProtocolName::Kind, static_cast<s32>(ibProtocolRequestKind::SimpleChoice));
-	current.Serialize(request.Child(ibProtocolName::Value));
+	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<s32>(ibProtocol::ibRequest::ibKind::SimpleChoice));
+	current.Serialize(request.Child(ibProtocol::ibRequest::ibSimpleChoice::Value));
 
 	ibDataNode response;
 	if (frame->Request(request, response)) {
-		if (const ibDataNode* const chosen = response.FindChild(ibProtocolName::Value)) {
+		if (const ibDataNode* const chosen = response.FindChild(ibProtocol::ibRequest::ibSimpleChoice::Value)) {
 			ibValue value = ibValue::FromNode(*chosen);
 			ownerValue->ChoiceProcessing(value);
 		}

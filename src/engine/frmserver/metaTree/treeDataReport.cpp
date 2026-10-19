@@ -1,6 +1,7 @@
 #include "treeDataReport.h"
 
 #include "backend/metaCollection/metaComposerObject.h"   // the report's composers, as rows
+#include "backend/backend_picture.h"                     // ibBackendPicture::SendPicture — the root's picture, by its id
 #include "core/serialize/dataBuilder.h"
 
 #include "frmserver/client/clientFrame.h"
@@ -45,12 +46,12 @@ void ibDataReportTree::FillData(ibDataNode& root)
 	wxASSERT(commonMetadata);
 
 	root.SetMetaId(commonMetadata->GetMetaID());
-	root.SetValue(wxT("Title"), commonMetadata->GetName());
-	root.SetValue(wxT("Picture"), ibClientFrame::SendPicture(g_metaReportCLSID));
-	root.SetValue(wxT("Type"), ClsidText(commonMetadata->GetClassType()));
-	root.SetValue(wxT("Synonym"), commonMetadata->GetSynonym());
+	root.SetValue(ibProtocol::ibSchema::ibMetaData::Title, commonMetadata->GetName());
+	root.SetValue(ibProtocol::ibSchema::ibMetaData::Picture, ibBackendPicture::SendPicture(g_metaReportCLSID));
+	root.SetValue(ibProtocol::ibSchema::ibMetaData::Type, ClsidText(commonMetadata->GetClassType()));
+	root.SetValue(ibProtocol::ibSchema::ibMetaData::Synonym, commonMetadata->GetSynonym());
 	// …and its header, the fields above the rows — its properties' rows, as the inspector writes them.
-	ibDataNode& header = root.Child(wxT("Properties"));
+	ibDataNode& header = root.Child(ibProtocol::ibSchema::ibMetaData::Properties);
 	for (const wxChar* name : { wxT("Name"), wxT("Synonym"), wxT("Comment"), wxT("DefaultFormObject"), wxT("DefaultComposer") }) {
 		if (ibProperty* const property = commonMetadata->GetProperty(name))
 			ibPropertyInspector::AppendProperty(header, property);

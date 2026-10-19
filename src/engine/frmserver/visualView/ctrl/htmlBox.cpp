@@ -19,7 +19,7 @@ ibValueHTMLBox::ibValueHTMLBox() : ibValueWindow()
 void ibValueHTMLBox::OnUpdate(ibDataNode& state, ibVisualHost* host)
 {
 	ibValueWindow::OnUpdate(state, host);
-	state.SetValue(wxT("Page"), m_page);
+	state.SetValue(ibProtocol::ibForm::ibState::Page, m_page);
 }
 
 //**********************************************************************************

@@ -78,6 +78,11 @@ public:
 	virtual bool ReadNodeValue(const ibDataValue& value) override;
 	virtual bool WriteNodeValue(ibDataValue& value) const override;
 
+	// …and the sources it may read, as the desktop's Source cell's drop-down offered them (ibPGDynamicSourceProperty):
+	// every source the owner's configuration registers, by its table id (what the property stores), named
+	// namespace.name. (Not GetValueList: the desktop's cell keeps its own list, by position, and its inspector would
+	// rebuild on every edit to match one by table id.)
+	virtual bool GetProtocolValue(ibDataNode& row) override;
 };
 
 #endif // __PROPERTY_DYNAMIC_SOURCE_H__

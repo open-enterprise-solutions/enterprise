@@ -441,13 +441,13 @@ void ibAuditLogView::OnCommandMenu(wxCommandEvent& event)
 		// THE OBJECT IS OPENED BY THE SERVER, where the configuration is — a user's row and a metaobject's alike
 		// (ibAuditLogView::OnClientEvent there); what it opens comes as a tab of its own.
 		ibProtocolNode args, params;
-		args.SetValue(ibProtocolName::Ref, r->ref_guid)
-			.SetValue(ibProtocolName::RefMeta, r->ref_meta_id);
-		params.SetValue(ibProtocolName::Tab, m_auditDoc->GetTabId())
-			.SetValue(ibProtocolName::Event, static_cast<int>(ibProtocolEvent::Open))
-			.SetValue(ibProtocolName::Args, args);
+		args.SetValue(ibProtocol::ibView::ibAuditLog::Ref, r->ref_guid)
+			.SetValue(ibProtocol::ibView::ibAuditLog::RefMeta, r->ref_meta_id);
+		params.SetValue(ibProtocol::ibEvent::Tab, m_auditDoc->GetTabId())
+			.SetValue(ibProtocol::ibEvent::Event, static_cast<int>(ibProtocol::ibEvent::ibKind::Open))
+			.SetValue(ibProtocol::ibEvent::Args, args);
 		if (ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame())
-			frame->Post(ibProtocolMethod::Event, params);
+			frame->Post(ibProtocol::ibMethod::Event, params);
 		break;
 	}
 	}

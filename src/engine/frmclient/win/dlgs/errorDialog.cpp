@@ -208,15 +208,15 @@ void ibDialogError::SetFontColorSettings(const ibFontColorSettings& settings)
 
 void ibDialogError::OnButtonCloseProgramClick(wxCommandEvent& event)
 {
-	EndModal(static_cast<int>(ibProtocolErrorAct::CloseProgram)); event.Skip();
+	EndModal(static_cast<int>(ibProtocol::ibRequest::ibError::ibAct::CloseProgram)); event.Skip();
 }
 
 void ibDialogError::OnButtonGotoDesignerClick(wxCommandEvent& event)
 {
-	EndModal(static_cast<int>(ibProtocolErrorAct::GotoDesigner)); event.Skip();
+	EndModal(static_cast<int>(ibProtocol::ibRequest::ibError::ibAct::GotoDesigner)); event.Skip();
 }
 
 void ibDialogError::OnButtonCloseWindowClick(wxCommandEvent& event)
 {
-	EndModal(static_cast<int>(ibProtocolErrorAct::CloseWindow)); event.Skip();
+	EndModal(static_cast<int>(ibProtocol::ibRequest::ibError::ibAct::CloseWindow)); event.Skip();
 }

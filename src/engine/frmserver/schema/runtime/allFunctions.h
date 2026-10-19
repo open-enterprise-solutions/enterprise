@@ -25,7 +25,7 @@ public:
 
 	// Open — only an item the tree offers this person; anything else is refused, whatever its id names.
 	virtual std::function<void()> Command(const ibSession& session, s32 command,
-		const ibDataNode& args, ibProtocolRefusal& refusal, wxString& error) const override;
+		const ibDataNode& args, ibProtocol::ibRefusal& refusal, wxString& error) const override;
 };
 
 #endif

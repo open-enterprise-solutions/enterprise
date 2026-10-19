@@ -13,7 +13,7 @@
 #include "core/fileSystem/types.h"   // s32
 
 #include "frmserver/frmserver.h"
-#include "protocol/protocol.h"   // ibProtocolName — the rows
+#include "protocol/protocol.h"   // ibProtocol::ibForm::ibType — the rows
 
 class ibDataNode;
 class ibValueMetaObject;
@@ -26,9 +26,10 @@ public:
 	// The object hides or shows one of its properties, as its state decides (OnPropertyRefresh); gone, nothing is shown.
 	virtual bool PropertyHidden(const ibProperty* property, bool hide) override;
 
-	// ONE PROPERTY'S ROW, under `parent` — a property's or an event's, of any object: Name, Title, Help, Class, Value — as
-	// its node holds it, Presentation, ReadOnly; what it may be set to its children (Id, Title, Picture), Multiple. What
-	// the rows below are made of — and the header above an external file's tree (ibDataProcessorTree).
+	// ONE PROPERTY'S ROW, under `parent` — a property's or an event's, of any object: what it says of itself
+	// (ibBackendProperty::GetProtocolValue); what it may be set to its children (Id, Title, Picture), Multiple; none for
+	// a property with no row. What the rows below are made of — and the header above an external file's tree
+	// (ibDataProcessorTree).
 	static void AppendProperty(ibDataNode& parent, ibBackendProperty* property);
 
 	// THE OBJECT SHOWN — the desktop's verb, which took any property object: registered on it, and asked which of its

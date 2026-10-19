@@ -2,7 +2,7 @@
 #include "core/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "frmserver/visualView/ctrl/form.h"           // ibValueForm — GetOwnerForm (the command-door gate)
 #include "frmserver/visualView/layers/commandBar.h"   // GatherFormCommands — the icon/caption source the navigator uses
-#include "frmserver/client/clientFrame.h"             // ibClientFrame::SendPicture — the picture, by its id
+#include "backend/backend_picture.h"                  // ibBackendPicture::SendPicture — the picture, by its id
 
 
 //****************************************************************************
@@ -52,10 +52,10 @@ void ibValueButton::OnUpdate(ibDataNode& state, ibVisualHost* host)
 
 	// The caption is always written — it names the button even when only the picture is shown; the
 	// representation says which of the two are shown. The picture travels by its id, and only when it is shown at all.
-	state.SetValue(wxT("Caption"), title);
-	state.SetValue(wxT("Representation"), static_cast<s32>(rep));
+	state.SetValue(ibProtocol::ibForm::ibState::Caption, title);
+	state.SetValue(ibProtocol::ibForm::ibState::Representation, static_cast<s32>(rep));
 	if (rep != ibRepresentation::ibRepresentation_Text && !picture.IsEmptyPicture())
-		state.SetValue(wxT("Picture"), ibClientFrame::SendPicture(picture));
+		state.SetValue(ibProtocol::ibForm::ibState::Picture, ibBackendPicture::SendPicture(picture));
 
 	// A button carries ONLY a command — with none bound, OR the bound command DELETED (its path no longer resolves
 	// through the door), it has nothing to do, so it is NOT shown. The orphaned control still lives in the object
@@ -63,17 +63,17 @@ void ibValueButton::OnUpdate(ibDataNode& state, ibVisualHost* host)
 	// hides itself on a dead path — same rule whether the binding is empty or points at a gone command.
 	// Both answers below overwrite the window's own (SetField replaces; SetValue would write the key twice).
 	if (!cmdResolved)
-		state.SetField(wxT("Visible"), ibDataValue::Bool(false));
+		state.SetField(ibProtocol::ibForm::ibState::Visible, ibDataValue::Bool(false));
 	// A command button OBEYS the command's "modifies data" flag: a view-only form greys a data-changing command
 	// (controls aren't disabled in view-only, but command projections are — the same rule as the command bar).
 	else if (cmdModifies && ownerForm != nullptr && ownerForm->IsViewOnly())
-		state.SetField(wxT("Enabled"), ibDataValue::Bool(false));
+		state.SetField(ibProtocol::ibForm::ibState::Enabled, ibDataValue::Bool(false));
 
 	// A GROUP command opens its sub-commands (groups nest) — the client draws the submenu from these.
 	std::vector<ibFrontendCommandReceiver::ibCommandSubItem> subs;
 	if (cmdResolved && ResolveSubCommands(cmdDesc, subs)) {
 		std::vector<ibCommandDescription> leaves;
-		WalkGroup(subs, leaves, &state.Child(wxT("Members")));
+		WalkGroup(subs, leaves, &state.Child(ibProtocol::ibForm::ibButton::Members));
 	}
 }
 
@@ -83,9 +83,9 @@ void ibValueButton::WalkGroup(const std::vector<ibFrontendCommandReceiver::ibCom
 	for (const ibFrontendCommandReceiver::ibCommandSubItem& sub : subs) {
 		ibDataNode* member = node != nullptr ? &node->AddChild(0, 0) : nullptr;
 		if (member != nullptr) {
-			member->SetValue(wxT("Caption"), sub.caption);
+			member->SetValue(ibProtocol::ibForm::ibButton::Caption, sub.caption);
 			if (!sub.picture.IsEmptyPicture())
-				member->SetValue(wxT("Picture"), ibClientFrame::SendPicture(sub.picture));
+				member->SetValue(ibProtocol::ibForm::ibButton::Picture, ibBackendPicture::SendPicture(sub.picture));
 		}
 		std::vector<ibFrontendCommandReceiver::ibCommandSubItem> nested;
 		if (ResolveSubCommands(sub.desc, nested)) {   // a GROUP -> its own submenu
@@ -93,7 +93,7 @@ void ibValueButton::WalkGroup(const std::vector<ibFrontendCommandReceiver::ibCom
 			continue;
 		}
 		if (member != nullptr)                        // a LEAF -> a place the press names
-			member->SetValue(wxT("Member"), static_cast<s32>(leaves.size()));
+			member->SetValue(ibProtocol::ibForm::ibButton::Member, static_cast<s32>(leaves.size()));
 		leaves.push_back(sub.desc);
 	}
 }

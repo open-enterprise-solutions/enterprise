@@ -248,11 +248,11 @@ public:
 	// Column — a row activated; Sort, Move and Resize — a column's header (Column). A CELL'S are its
 	// column's, the field's events on a row (OnCellEvent). Everything else is the composite's (the
 	// command bar).
-	virtual bool OnClientEvent(ibProtocolEvent event, const ibDataNode& args) override;
+	virtual bool OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args) override;
 	// Input always — a cell's editor opens only when the table takes it (Edit in the frame that answers); Row while
 	// the script handles Selection. Nothing on the server reads the current row until the next call, which brings the
 	// held Row first.
-	virtual bool IsSubscribed(ibProtocolEvent event) const override;
+	virtual bool IsSubscribed(ibProtocol::ibEvent::ibKind event) const override;
 
 	// ⭐ THE ROWS A CLIENT SHOWS, written by the table itself. `request`: Direction (s32: 0 reset,
 	// 1 forward, -1 backward), Anchor (s32 row handle; 0 none), Count (s32, 1..500), Parent (s32 handle
@@ -322,7 +322,7 @@ private:
 	// ⭐ A CELL'S EVENT — Input, Change, Select, Open, Clear naming Row and Column: the field's events,
 	// and the column's. Its editor and its buttons work on the current line's value, as the window's
 	// did, so the row named becomes the current line first (unless the script refuses it).
-	bool OnCellEvent(ibProtocolEvent event, const ibDataNode& args);
+	bool OnCellEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args);
 	// …and the column it stands on across — what the by-column verbs and the Edit command read.
 	void OnCurrentColumnChanged(const ibFormID& columnId);
 	// A header clicked: sort by that column's field — flipped when it already is the sole sort — and

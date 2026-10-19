@@ -10,7 +10,7 @@ class ibMetaData;
 // (frontend/win/dlgs/settings/savedSettings.h), drawn by the client (frmclient/win/dlgs/settings/savedSettings.h).
 //
 // ⭐ THE WINDOW STAYS OPEN THROUGH EVERY ACT BUT THE LAST, as the desktop's does. Each act the client's window does to
-// the shelf is its answer (ibProtocolRequestKind::SavedSettings); it is done here, by the very calls the desktop's window
+// the shelf is its answer (ibProtocol::ibRequest::ibKind::SavedSettings); it is done here, by the very calls the desktop's window
 // makes, and the shelf as it now stands is asked again — Done saying how the act went — until the window closes.
 class ibDialogSavedSettings {
 public:

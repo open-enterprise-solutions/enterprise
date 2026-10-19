@@ -437,7 +437,7 @@ bool ibControlTextEditor::Enable(bool enable)
 	m_enabledIntent = enable;
 	// The thin client's process is one mode — the main window's: the designer's (sdesigner) or the runtime's.
 	const ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
-	const bool inDesigner = frame != nullptr && frame->GetMode() == ibProtocolMode::Designer;
+	const bool inDesigner = frame != nullptr && frame->GetMode() == ibProtocol::ibLogin::ibMode::Designer;
 
 	// Match the original "panel over the control" idiom: in designer mode the
 	// outer window stays enabled so clicks bubble up to the designer's

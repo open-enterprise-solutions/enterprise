@@ -48,7 +48,7 @@
 
 #include "frmserver/frmserver.h"          // FRMSERVER_API
 #include "frmserver/schema/clientSchema.h"  // the schemas a manager offers
-#include "protocol/protocol.h"  // ibProtocolEvent — what a person did in a view
+#include "protocol/protocol.h"  // ibProtocol::ibEvent::ibKind — what a person did in a view
 #include "backend/backend_form.h"       // ibBackendMetaDocument
 #include "backend/metaCollection/metaObject.h"
 
@@ -339,14 +339,14 @@ public:
 
     // What it shows — the view of its own a client draws it with (the tab's Kind; a form — the default, absent from
     // the wire).
-    virtual ibProtocolViewKind GetViewKind() const { return ibProtocolViewKind::Form; }
+    virtual ibProtocol::ibView::ibKind GetViewKind() const { return ibProtocol::ibView::ibKind::Form; }
     // WHAT A CLIENT READS OF THE VIEW ITSELF, a part at a time — a spreadsheet's cells, as a control of a form is read
     // (ibValueFrame::Fetch). False: this view has nothing to read.
     virtual bool Fetch(const ibDataNode& WXUNUSED(request), ibDataNode& WXUNUSED(response)) { return false; }
 
     // WHAT THE PERSON DID IN THE VIEW ITSELF, not in a control of a form — a text typed into a text document's view
     // (Change {Text}). False: this view takes no such event.
-    virtual bool OnClientEvent(ibProtocolEvent WXUNUSED(event), const ibDataNode& WXUNUSED(args)) { return false; }
+    virtual bool OnClientEvent(ibProtocol::ibEvent::ibKind WXUNUSED(event), const ibDataNode& WXUNUSED(args)) { return false; }
     virtual void OnUpdate(ibView *sender, wxObject *hint = nullptr);
     virtual void OnClosingDocument() {}
     virtual void OnChangeFilename();
@@ -562,10 +562,10 @@ public:
     //
     // The schema of that kind — what it shows and what it does are its own. nullptr: this application has no
     // such schema.
-    const ibClientSchema* FindSchema(ibProtocolSchema kind) const;
+    const ibClientSchema* FindSchema(ibProtocol::ibSchema::ibKind kind) const;
 
     // The schemas registered — what a client is told it may ask for.
-    std::vector<ibProtocolSchema> GetSchemaKinds() const;
+    std::vector<ibProtocol::ibSchema::ibKind> GetSchemaKinds() const;
 
     // ⭐ THE COMMANDS THIS APPLICATION'S DOCUMENTS ANSWER TO — registered as the templates and the schemas are: the
     // shared ones by the base's ctor, an application's own by its manager's ctor. What a client is told of each: its
@@ -573,11 +573,11 @@ public:
     const std::map<ibDocCommand, ibDocCommandInfo>& GetCommands() const { return m_commands; }
 
 protected:
-    void RegisterSchema(ibProtocolSchema kind, std::unique_ptr<ibClientSchema> schema);
+    void RegisterSchema(ibProtocol::ibSchema::ibKind kind, std::unique_ptr<ibClientSchema> schema);
     void RegisterCommand(ibDocCommand command, const wxString& title, const wxString& shortcut,
         ibClientStockPicture picture);
 
-    std::map<ibProtocolSchema, std::unique_ptr<ibClientSchema>> m_schemas;
+    std::map<ibProtocol::ibSchema::ibKind, std::unique_ptr<ibClientSchema>> m_schemas;
     std::map<ibDocCommand, ibDocCommandInfo>                       m_commands;
 
     // The manager's own list, by the document's declared identity — what FindOpenDocument(metaObject)

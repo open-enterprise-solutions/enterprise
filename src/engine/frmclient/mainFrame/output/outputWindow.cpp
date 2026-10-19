@@ -41,9 +41,9 @@ ibOutputWindow::ibOutputWindow(ibFrontendMainFrame* parent, wxWindowID winid)
 
 	// The level of a message is the picture in the margin - the provider's (artProvider/service/output*.svg).
 	const wxSize markerSize = FromDIP(wxSize(12, 12));
-	MarkerDefineBitmap(static_cast<int>(ibProtocolMessageLevel::Information), wxArtProvider::GetBitmap(wxART_OUTPUT_INFORMATION, wxART_SERVICE, markerSize));
-	MarkerDefineBitmap(static_cast<int>(ibProtocolMessageLevel::Warning), wxArtProvider::GetBitmap(wxART_OUTPUT_WARNING, wxART_SERVICE, markerSize));
-	MarkerDefineBitmap(static_cast<int>(ibProtocolMessageLevel::Error), wxArtProvider::GetBitmap(wxART_OUTPUT_ERROR, wxART_SERVICE, markerSize));
+	MarkerDefineBitmap(static_cast<int>(ibProtocol::ibFrame::ibMessage::ibLevel::Information), wxArtProvider::GetBitmap(wxART_OUTPUT_INFORMATION, wxART_SERVICE, markerSize));
+	MarkerDefineBitmap(static_cast<int>(ibProtocol::ibFrame::ibMessage::ibLevel::Warning), wxArtProvider::GetBitmap(wxART_OUTPUT_WARNING, wxART_SERVICE, markerSize));
+	MarkerDefineBitmap(static_cast<int>(ibProtocol::ibFrame::ibMessage::ibLevel::Error), wxArtProvider::GetBitmap(wxART_OUTPUT_ERROR, wxART_SERVICE, markerSize));
 
 	wxAcceleratorEntry entries[2];
 	entries[0].Set(wxACCEL_CTRL, (int)'A', idcmdSelectAll);
@@ -87,7 +87,7 @@ void ibOutputWindow::SetFontColorSettings(const ibFontColorSettings& settings)
 	SetEditable(false);
 }
 
-void ibOutputWindow::Output(const wxString& message, ibProtocolMessageLevel level)
+void ibOutputWindow::Output(const wxString& message, ibProtocol::ibFrame::ibMessage::ibLevel level)
 {
 	const int beforeAppendPosition = GetInsertionPoint();
 	const int beforeAppendLastPosition = GetLastPosition();

@@ -3,7 +3,8 @@
 #include "frmclient/win/theme/luna_tabart.h"
 
 #include "frmclient/docView/docView.h"   // ibDOC_READONLY
-#include "frmclient/backend/propertyManager/property/propertySerializable.h"   // ibPropertySerializable — an event's row, its Args
+#include "core/serialize/dataBuilder.h"   // ibDataNode — an event's row, its Args
+#include "protocol/protocol.h"            // ibProtocol::ibEvent::Args
 
 #include "core/compiler/scriptParseCode.h"
 #include "core/stringUtils.h"
@@ -63,7 +64,7 @@ bool ibVisualEditorNotebook::CanRedo() const
 
 // THE DESKTOP'S (designer visualEditorNotebook.cpp) over the module this tab holds: the syntax and the template are the
 // code editor's (the desktop's were the process's). The event's value itself is the server's — a row set (ModifyProperty).
-void ibVisualEditorNotebook::ModifyEvent(ibPropertySerializable* event, const wxVariant& oldValue, const wxVariant& newValue)
+void ibVisualEditorNotebook::ModifyEvent(ibProperty* event, const wxVariant& oldValue, const wxVariant& newValue)
 {
 	ibParseCode parser(m_codeEditor->GetCodeStyle()); bool procFounded = false;
 
@@ -123,9 +124,14 @@ void ibVisualEditorNotebook::ModifyEvent(ibPropertySerializable* event, const wx
 
 		wxString prcArgs;
 
-		for (auto& args : event->GetArgs()) {
-			if (!prcArgs.IsEmpty()) prcArgs += ", ";
-			prcArgs += args;
+		// Its procedure's parameters — the event's row's Args (the server's ibEvent::GetProtocolValue).
+		ibDataNode row;
+		event->GetProtocolValue(row);
+		if (const ibDataValue* const args = row.FindField(ibProtocol::ibEvent::Args)) {
+			for (const ibDataValue& arg : args->AsArray()) {
+				if (!prcArgs.IsEmpty()) prcArgs += ", ";
+				prcArgs += arg.AsString();
+			}
 		}
 
 		if (wxAuiNotebook::GetSelection() != wxNOTEBOOK_PAGE_CODE_EDITOR)

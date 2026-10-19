@@ -51,8 +51,8 @@ bool ibFormEditView::OnCreate(ibFrontendDocument* docBase, long flags)
 
 	// ⭐ THE FRAME THAT OPENS THE TAB CARRIES IT (State Opening) — the form, its controls' rows, the classes and the module's
 	// text, as one fetch answers them; a server that put none there is asked, as before.
-	ibProtocolNode answer = doc->GetOpeningState().FindChild(ibProtocolName::Opening);
-	if (!answer.IsNode() || !answer.Has(ibProtocolName::Form)) {
+	ibProtocolNode answer = doc->GetOpeningState().FindChild(ibProtocol::ibView::ibFormDesigner::Opening);
+	if (!answer.IsNode() || !answer.Has(ibProtocol::ibView::ibFormDesigner::Form)) {
 		answer = ibProtocolNode();
 		if (!doc->Fetch(ibProtocolNode(), answer))
 			return false;
@@ -62,18 +62,18 @@ bool ibFormEditView::OnCreate(ibFrontendDocument* docBase, long flags)
 	// (a system control's class is not offered: Visible false).
 	wxWindowID id = control_id;
 
-	const std::vector<ibProtocolNode> classes = answer.FindChild(ibProtocolName::Classes).Children();
+	const std::vector<ibProtocolNode> classes = answer.FindChild(ibProtocol::ibView::ibFormDesigner::Classes).Children();
 	std::vector<wxString> pictures;
 	for (const ibProtocolNode& described : classes)
-		pictures.push_back(described.GetString(ibProtocolName::Picture));
+		pictures.push_back(described.GetString(ibProtocol::ibView::ibFormDesigner::Picture));
 	ibProtocolPictureReceive(pictures);   // at once, not a call per class
 
 	for (const ibProtocolNode& described : classes) {
-		if (!described.GetBool(ibProtocolName::Visible, true))
+		if (!described.GetBool(ibProtocol::ibView::ibFormDesigner::Visible, true))
 			continue;
-		const wxBitmap controlImage = ibProtocolPicture(described.GetString(ibProtocolName::Picture));
+		const wxBitmap controlImage = ibProtocolPicture(described.GetString(ibProtocol::ibView::ibFormDesigner::Picture));
 		if (controlImage.IsOk()) {
-			m_controlDataArray.push_back({ described.GetString(ibProtocolName::Name), controlImage, id++ });
+			m_controlDataArray.push_back({ described.GetString(ibProtocol::ibView::ibFormDesigner::Name), controlImage, id++ });
 		}
 	}
 
@@ -283,16 +283,16 @@ void ibFormEditDocument::DrawView(const ibProtocolNode& view, const ibProtocolNo
 {
 	ibModuleEditDocument::DrawView(view, patch);
 
-	if (patch.IsNode() && !patch.Has(ibProtocolName::State))
+	if (patch.IsNode() && !patch.Has(ibProtocol::ibView::State))
 		return;
 
 	ibVisualEditorNotebook* const visualNotebook = GetVisualNotebook();
 	if (visualNotebook == nullptr)
 		return;
 
-	const ibProtocolNode state = view.FindChild(ibProtocolName::State);
-	visualNotebook->GetVisualEditor()->SetReadOnly(state.GetBool(ibProtocolName::ReadOnly));
-	visualNotebook->GetVisualEditor()->GetVisualEditor()->SetCaption(state.GetString(ibProtocolName::Caption));
+	const ibProtocolNode state = view.FindChild(ibProtocol::ibView::State);
+	visualNotebook->GetVisualEditor()->SetReadOnly(state.GetBool(ibProtocol::ibView::ibModule::ReadOnly));
+	visualNotebook->GetVisualEditor()->GetVisualEditor()->SetCaption(state.GetString(ibProtocol::ibView::ibFormDesigner::Caption));
 }
 
 wxCommandProcessor* ibFormEditDocument::OnCreateCommandProcessor()

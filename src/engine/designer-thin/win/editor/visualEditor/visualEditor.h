@@ -23,7 +23,6 @@
 #include <vector>
 
 class ibModuleEditDocument;
-class ibPropertySerializable;
 
 class ibFormAttributeValue;
 class ibFormCommandValue;
@@ -894,7 +893,7 @@ public:
 
 	// THE DESKTOP'S ModifyEvent — an event given a handler: its procedure in the module renamed, deleted, found or
 	// written from the template with the event's parameters, and the Code page shown on it.
-	void ModifyEvent(ibPropertySerializable* event, const wxVariant& oldValue, const wxVariant& newValue);
+	void ModifyEvent(ibProperty* event, const wxVariant& oldValue, const wxVariant& newValue);
 
 	// The form opened as the runtime shows it (the Form menu's Test form).
 	void TestForm() { m_visualEditor->TestForm(); }
@@ -1142,8 +1141,8 @@ public:
 		ibValueLayerObject(formHandler, controlId) {
 	}
 
-	virtual wxString GetClassName() const override { return ibProtocolName::CommandBar; }
-	virtual wxString GetObjectTypeName() const override { return ibProtocolName::CommandBar; }
+	virtual wxString GetClassName() const override { return ibProtocol::ibView::ibFormDesigner::CommandBar; }
+	virtual wxString GetObjectTypeName() const override { return ibProtocol::ibView::ibFormDesigner::CommandBar; }
 
 	virtual ibProtocolNode FindNode(const ibProtocolNode& control) const override;
 	virtual ibProtocolNode FindRows(const ibProtocolNode& control) const override;
@@ -1167,8 +1166,8 @@ public:
 		ibValueLayerObject(formHandler, controlId), m_index(index) {
 	}
 
-	virtual wxString GetClassName() const override { return ibProtocolName::CommandBarItem; }
-	virtual wxString GetObjectTypeName() const override { return ibProtocolName::CommandBarItem; }
+	virtual wxString GetClassName() const override { return ibProtocol::ibView::ibFormDesigner::CommandBarItem; }
+	virtual wxString GetObjectTypeName() const override { return ibProtocol::ibView::ibFormDesigner::CommandBarItem; }
 
 	// Its name stays unique among the bar's commands (the desktop's).
 	virtual bool OnPropertyChanging(ibProperty* property, const wxVariant& newValue) override;

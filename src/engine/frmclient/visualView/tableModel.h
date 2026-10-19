@@ -101,12 +101,12 @@ private:
 	// model's GetViewData).
 	static const ibViewTableRow* RowOf(const ibDataViewItem& item);
 
-	// A portion read — Direction 0 reset, 1 forward, -1 backward; the rows in `out`, how many read.
-	unsigned int Fetch(int direction, const ibDataViewItem& parent, const ibDataViewItem& anchor, int count,
-		ibDataViewItemArray& out) const;
+	// A portion read that way from the anchor; the rows in `out`, how many read.
+	unsigned int Fetch(ibProtocol::ibForm::ibTable::ibDirection direction, const ibDataViewItem& parent,
+		const ibDataViewItem& anchor, int count, ibDataViewItemArray& out) const;
 	// …with up to `before` rows ahead of it, first in `out`: `above` — how many came (the answer's Before).
-	unsigned int Fetch(int direction, const ibDataViewItem& parent, const ibDataViewItem& anchor, int count, int before,
-		ibDataViewItemArray& out, unsigned int& above) const;
+	unsigned int Fetch(ibProtocol::ibForm::ibTable::ibDirection direction, const ibDataViewItem& parent,
+		const ibDataViewItem& anchor, int count, int before, ibDataViewItemArray& out, unsigned int& above) const;
 
 	const ibViewFetcher m_fetcher;
 	const ibAnswered    m_answered;

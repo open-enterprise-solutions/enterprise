@@ -3,7 +3,7 @@
 #include <wx/imaglist.h>
 #include <wx/sizer.h>
 
-#include "protocol/protocol.h"   // ibProtocolName
+#include "protocol/protocol.h"   // ibProtocol::ibSchema::ibAllFunctions
 
 #include "frmclient/win/picture.h"
 
@@ -55,23 +55,23 @@ void ibDialogFunctionAll::BuildTree(const ibProtocolNode& shown)
 	};
 
 	// Every picture the tree names asked for at once — not a call per item drawn.
-	const std::vector<ibProtocolNode> groups = shown.FindChild(ibProtocolName::Groups).Children();
+	const std::vector<ibProtocolNode> groups = shown.FindChild(ibProtocol::ibSchema::ibAllFunctions::Groups).Children();
 	std::vector<wxString> pictures;
 	for (const ibProtocolNode& group : groups) {
-		pictures.push_back(group.GetString(ibProtocolName::Icon));
+		pictures.push_back(group.GetString(ibProtocol::ibSchema::ibAllFunctions::Icon));
 		for (const ibProtocolNode& item : group.Children())
-			pictures.push_back(item.GetString(ibProtocolName::Icon));
+			pictures.push_back(item.GetString(ibProtocol::ibSchema::ibAllFunctions::Icon));
 	}
 	ibProtocolPictureReceive(pictures);
 
 	wxTreeItemId root = m_treeCtrlElements->AddRoot(wxEmptyString);
 	for (const ibProtocolNode& group : groups) {
-		const int groupImage = imageOf(group.GetString(ibProtocolName::Icon));
-		wxTreeItemId groupItem = m_treeCtrlElements->AppendItem(root, group.GetString(ibProtocolName::Title), groupImage, groupImage);
+		const int groupImage = imageOf(group.GetString(ibProtocol::ibSchema::ibAllFunctions::Icon));
+		wxTreeItemId groupItem = m_treeCtrlElements->AppendItem(root, group.GetString(ibProtocol::ibSchema::ibAllFunctions::Title), groupImage, groupImage);
 		for (const ibProtocolNode& item : group.Children()) {
-			const int itemImage = imageOf(item.GetString(ibProtocolName::Icon));
-			m_treeCtrlElements->AppendItem(groupItem, item.GetString(ibProtocolName::Title), itemImage, itemImage,
-				new ibFunctionItem(item.GetInt(ibProtocolName::Item)));
+			const int itemImage = imageOf(item.GetString(ibProtocol::ibSchema::ibAllFunctions::Icon));
+			m_treeCtrlElements->AppendItem(groupItem, item.GetString(ibProtocol::ibSchema::ibAllFunctions::Title), itemImage, itemImage,
+				new ibFunctionItem(item.GetInt(ibProtocol::ibSchema::ibAllFunctions::Item)));
 		}
 	}
 

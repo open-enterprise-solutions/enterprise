@@ -32,7 +32,7 @@
 
 #include "frmserver/frmserver.h"
 
-#include "protocol/protocol.h"   // ibProtocolMethod — what a call is
+#include "protocol/protocol.h"   // ibProtocol::ibMethod — what a call is
 
 class ibApplicationInstance;
 class ibClientInstance;
@@ -49,12 +49,12 @@ public:
 	// `connection` — the transport's connection it came by, if it holds one (a WebSocket): the clients logged in
 	// through it are its own and go when it closes (Disconnect); `address` — the computer it comes from, the one
 	// the client's session is told. A client in this process passes neither.
-	// The methods and their parameters: ibProtocolMethod (protocol/protocol.h).
+	// The methods and their parameters: ibProtocol::ibMethod (protocol/protocol.h).
 	// Every response's frame: Title, Status, ActiveTab (a tab's id), Tabs (NodeId — the tab's id, Title, Icon,
 	// Locked), Request (a pending one: Id and the request), View (the active tab's view drawn: ibView::OnDraw) —
 	// or, to a call naming the frame it holds (Since), the Patch to it (clientPatch.h); beside either the events,
 	// Messages (Level, Text) and Clear, and the answer's number, Frame.
-	bool Call(ibProtocolMethod method, const ibDataNode& params, ibDataNode& result, ibProtocolRefusal& refusal,
+	bool Call(ibProtocol::ibMethod method, const ibDataNode& params, ibDataNode& result, ibProtocol::ibRefusal& refusal,
 		wxString& error, const void* connection = nullptr, const wxString& address = wxEmptyString);
 
 	// THE PORT'S CALL — one JSON-RPC request as text in, its response as text out (empty for a notification,
@@ -135,15 +135,15 @@ private:
 	std::shared_ptr<Client> FindByDigest(const unsigned char* digest) const;
 	void                    RemoveClient(const wxString& id);
 	// login {Token} and no User — the same client, no frame drawn.
-	bool                    ResumeByToken(const ibDataNode& params, ibDataNode& result, ibProtocolRefusal& refusal,
+	bool                    ResumeByToken(const ibDataNode& params, ibDataNode& result, ibProtocol::ibRefusal& refusal,
 		wxString& error, const void* connection);
 	// The password login's bearer: drawn, hashed into sys_session, digest kept, plaintext put on `result` once.
-	bool                    RememberToken(Client& client, ibDataNode& result, ibProtocolRefusal& refusal, wxString& error);
+	bool                    RememberToken(Client& client, ibDataNode& result, ibProtocol::ibRefusal& refusal, wxString& error);
 
 	// The work on the client's session worker, waited for until it settles; then the frame drawn into `result` —
 	// numbered, and the patch from the frame of number `since` when that is the last one the client was answered.
 	bool Run(Client& client, std::function<void(ibClientFrame*)> work, s32 since, ibDataNode& result,
-		ibProtocolRefusal& refusal, wxString& error);
+		ibProtocol::ibRefusal& refusal, wxString& error);
 	void Settle(Client& client);
 	// The frame: what it is (`state`, what a patch is made of) and what happened since the last answer (`events`:
 	// the messages, a clear) — drawn apart.

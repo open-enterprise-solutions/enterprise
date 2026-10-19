@@ -5,10 +5,9 @@
 #include "frmclient/propertyManager/property/private/prop.h"                    // wxPGPropertyFlags_*, property_cast
 #include "frmclient/propertyManager/property/private/propertyRegistry.h"        // ibPropertyRegistry::Register
 #include "frmclient/propertyManager/propertyEditor.h"
-#include "frmclient/backend/propertyManager/property/propertySerializable.h"   // the row the command tree comes with
 #include "frmclient/win/picture.h"                                             // ibProtocolPicture — a command's picture
 
-#include "protocol/protocol.h"   // ibProtocolName — the tree's keys
+#include "protocol/protocol.h"   // ibProtocol::ibSchema::ibProperties — the tree's keys
 
 #include <wx/treectrl.h>
 #include <functional>
@@ -20,21 +19,21 @@ namespace {
 // A row of the tree that is a command — it has its path; a section's, a sub-group's has none.
 bool IsCommandRow(const ibDataNode& row)
 {
-	return row.FindField(ibProtocolName::CommandPath) != nullptr;
+	return row.FindField(ibProtocol::ibSchema::ibProperties::CommandPath) != nullptr;
 }
 
 // The command a row names, as the form editor's tree reads it back (ibFormDesignView::ReadPath).
 ibCommandDescription ReadCommand(const ibDataNode& row)
 {
 	ibCommandDescription desc;
-	const ibDataValue* const hops = row.FindField(ibProtocolName::CommandPath);
+	const ibDataValue* const hops = row.FindField(ibProtocol::ibSchema::ibProperties::CommandPath);
 	if (hops == nullptr || hops->Kind() != ibDataKind::Array)
 		return desc;
 	for (const ibDataValue& hop : hops->AsArray()) {
 		if (hop.Kind() == ibDataKind::Child && hop.AsChild() != nullptr)
-			desc.AppendCommand(static_cast<ibMetaID>(hop.AsChild()->GetValue<s32>(ibProtocolName::Id)));
+			desc.AppendCommand(static_cast<ibMetaID>(hop.AsChild()->GetValue<s32>(ibProtocol::ibSchema::ibProperties::Id)));
 	}
-	const s32 kind = row.GetValue<s32>(ibProtocolName::Kind);
+	const s32 kind = row.GetValue<s32>(ibProtocol::ibSchema::ibProperties::Kind);
 	desc.SetCommandType(kind != 0 ? static_cast<ibInterfaceCommandType>(kind) : ibInterfaceCommandType_Default);
 	return desc;
 }
@@ -65,9 +64,8 @@ public:
 		ibPropertyRegistry::Register(wxT("ibPropertyCommandSource"), [](ibBackendProperty* property) -> wxPGProperty* {
 			ibCommandDescription commandDesc;
 			ibCommandDescriptionMemory::ReadNode(property->GetNodeValue(), commandDesc);
-			const ibDataNode* tree = nullptr;
-			if (const ibPropertySerializable* const row = dynamic_cast<const ibPropertySerializable*>(property))
-				tree = row->GetRow().FindChild(ibProtocolName::CommandTree);
+			ibDataNode row;
+			const ibDataNode* const tree = property->GetProtocolValue(row) ? row.FindChild(ibProtocol::ibSchema::ibProperties::CommandTree) : nullptr;
 			return new ibPGCommandSourceProperty(property->GetPropertyObject(), property->GetLabel(), property->GetName(),
 				wxVariant(new ibVariantDataCommandSource(commandDesc, property->GetValue().GetString())), tree);
 		},
@@ -157,14 +155,14 @@ wxPGEditorDialogAdapter* ibPGCommandSourceProperty::GetEditorDialog() const
 			std::function<void(const wxTreeItemId&, const ibDataNode&)> fill =
 				[&](const wxTreeItemId& parent, const ibDataNode& node) {
 				for (const ibDataNode& row : node.Children()) {
-					const wxString name = row.GetValue<wxString>(ibProtocolName::Name);
+					const wxString name = row.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Name);
 					if (!IsCommandRow(row)) {
 						const wxTreeItemId group = tc->AppendItem(parent, name, 0, 0);
 						fill(group, row);
 						continue;
 					}
 					int icon = 0;
-					const wxBitmap picture = ibProtocolPicture(row.GetValue<wxString>(ibProtocolName::Picture));
+					const wxBitmap picture = ibProtocolPicture(row.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Picture));
 					if (picture.IsOk())
 						icon = images->Add(picture.ConvertToImage().Rescale(16, 16));
 					const ibCommandDescription desc = ReadCommand(row);

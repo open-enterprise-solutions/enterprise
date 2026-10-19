@@ -137,3 +137,42 @@ bool ibPropertyCalcSchedule::WriteNodeValue(ibDataValue& value) const
 {
 	return ibCalcScheduleDescriptionMemory::WriteNode(value, GetValueAsScheduleDesc());
 }
+
+#include "protocol/protocol.h"            // ibProtocol::ibSchema::ibProperties — the row's keys
+#include "core/serialize/dataBuilder.h"
+
+bool ibPropertyCalcSchedule::GetProtocolValue(ibDataNode& row)
+{
+	if (!ibProperty::GetProtocolValue(row))
+		return false;
+
+	const ibCalcScheduleDescription& desc = GetValueAsScheduleDesc();
+	auto lists = std::make_shared<ibDataNode>();
+	const auto append = [](ibDataNode& parent, s32 kind, const ibPropertyChoiceList& list) {
+		for (unsigned int index = 0; index < list.GetCount(); ++index) {
+			ibDataNode& item = parent.AddChild(0, static_cast<ibMetaID>(parent.Children().size() + 1));
+			if (kind != 0)
+				item.SetValue(ibProtocol::ibSchema::ibProperties::Kind, kind);
+			item.SetValue(ibProtocol::ibSchema::ibProperties::Id, static_cast<s32>(list.GetId(index)));
+			item.SetValue(ibProtocol::ibSchema::ibProperties::Title, list.GetName(index));   // names, as the desktop's cell named them
+		}
+	};
+
+	ibPropertyChoiceList values, dates, links;
+	GetScheduleValueList(desc, values);
+	append(*lists, 1, values);
+	GetScheduleDateList(desc, dates);
+	append(*lists, 2, dates);
+	GetScheduleLinkList(desc, links);
+	for (unsigned int index = 0; index < links.GetCount(); ++index) {
+		ibDataNode& link = lists->AddChild(0, static_cast<ibMetaID>(lists->Children().size() + 1));
+		link.SetValue(ibProtocol::ibSchema::ibProperties::Kind, static_cast<s32>(3));
+		link.SetValue(ibProtocol::ibSchema::ibProperties::Id, static_cast<s32>(links.GetId(index)));
+		link.SetValue(ibProtocol::ibSchema::ibProperties::Title, links.GetName(index));
+		ibPropertyChoiceList fields;
+		GetScheduleFieldList(links.GetId(index), fields);
+		append(link, 0, fields);
+	}
+	row.SetProperty(ibProtocol::ibSchema::ibProperties::Schedule, ibDataValue::Child(lists));
+	return true;
+}

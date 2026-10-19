@@ -17,7 +17,7 @@ bool ibDataProcessorTreeView::OnCreate(ibDocument* doc, long flags)
 
 void ibDataProcessorTreeView::OnDraw(ibDataNode& frame)
 {
-	m_metaTree->OnDraw(frame.Child(wxT("MetaData")));
+	m_metaTree->OnDraw(frame.Child(ibProtocol::ibView::MetaData));
 }
 
 wxIMPLEMENT_DYNAMIC_CLASS(ibDataProcessorEditDocument, ibMetaDataDocument);

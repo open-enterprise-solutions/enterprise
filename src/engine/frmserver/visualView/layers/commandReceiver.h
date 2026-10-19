@@ -13,7 +13,7 @@
 // the command bar / a bar item). A projection INHERITS this so it IS-A door: it HOPS a command id path from the form
 // gate and, at the leaf, RUNS or READS a command; it supplies its own gate form (GetCommandGateForm), so there is no
 // temporary door and no form passed twice. It stays on the FRONTEND (it hands out the look a client draws — the
-// picture as described, sent by its id: ibClientFrame::SendPicture); the backend base is the slice the
+// picture as described, sent by its id: ibBackendPicture::SendPicture); the backend base is the slice the
 // command-source variant casts to, and this door IMPLEMENTS its WalkCommand (a walk that reads the leaf).
 class FRMSERVER_API ibFrontendCommandReceiver : public ibBackendCommandReceiver {
 public:
@@ -23,6 +23,10 @@ public:
 	// ibBackendCommandReceiver — validate a binding for the variant. WALK the hops on THIS door (ResolveValueByPath):
 	// a gone hop, or a leaf with no name, fails -> "<not found>". Defined once here; every control inherits it.
 	virtual bool WalkCommand(const ibCommandDescription& desc, wxString* outText = nullptr) const override;
+
+	// ibBackendCommandReceiver — the commands of this door's form, as the form editor's command tree writes them
+	// (::WriteCommandTree over GetCommandGateForm): what the command-source picker offers. Nothing for no form.
+	virtual void WriteCommandTree(class ibDataNode& node) const override;
 
 	// THE one command resolve — EVERY projection (button / bar / the inspector cell) calls this, so "does it exist +
 	// what's its look" is decided in ONE place, never guessed per-surface. Walk the path (ResolveValueByPath); where

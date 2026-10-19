@@ -9,7 +9,7 @@
 // THE DESKTOP'S (designer/docManager/templates/docViewFormEditor.h) IN A TAB THE SERVER RAISED: the form's tab is a
 // module's (frmserver ibFormDesignDocument over ibModuleTextDocument) whose form the CLIENT edits — the tab's one answer
 // brings the form, its controls' rows, the classes a control may be made of and the module's text
-// (ibProtocolViewKind::FormDesigner); the form goes back whole after each command and as the tab is saved or closed
+// (ibProtocol::ibView::ibKind::FormDesigner); the form goes back whole after each command and as the tab is saved or closed
 // (SaveForm).
 // ⚠ No wx class info, as the module's tab has none.
 

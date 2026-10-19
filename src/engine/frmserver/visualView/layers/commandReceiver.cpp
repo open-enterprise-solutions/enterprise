@@ -268,3 +268,8 @@ bool ibFrontendCommandReceiver::WalkCommand(const ibCommandDescription& desc, wx
 		*outText = path;
 	return true;
 }
+
+void ibFrontendCommandReceiver::WriteCommandTree(ibDataNode& node) const
+{
+	::WriteCommandTree(node, GetCommandGateForm());
+}

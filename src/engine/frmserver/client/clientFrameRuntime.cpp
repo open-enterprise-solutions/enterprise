@@ -18,26 +18,26 @@ ibClientFrameRuntime::ibClientFrameRuntime(ibSessionHolder&& holder, ibClientIns
 void ibClientFrameRuntime::InitializeDefaultMenu()
 {
 	// The runtime's menus a right closes are not there at all — the right is the schema's own.
-	if (IsSchemaAllowed(ibProtocolSchema::AllFunctions)) {
+	if (IsSchemaAllowed(ibProtocol::ibSchema::ibKind::AllFunctions)) {
 		ibClientMenu operations;
-		operations.Append(ibProtocolSchema::AllFunctions, _("All operations..."));
+		operations.Append(ibProtocol::ibSchema::ibKind::AllFunctions, _("All operations..."));
 		m_menu.AppendSubMenu(operations, _("Operations"));
 	}
 
 	ibClientMenu tools;
-	tools.Append(ibProtocolSchema::Debugging, _("Options..."));
+	tools.Append(ibProtocol::ibSchema::ibKind::Debugging, _("Options..."));
 	m_menu.AppendSubMenu(tools, _("Tools"));
 
-	if (IsSchemaAllowed(ibProtocolSchema::ActiveUser)) {
+	if (IsSchemaAllowed(ibProtocol::ibSchema::ibKind::ActiveUser)) {
 		ibClientMenu administration;
-		administration.Append(ibProtocolSchema::ActiveUser, _("Active users"));
+		administration.Append(ibProtocol::ibSchema::ibKind::ActiveUser, _("Active users"));
 		administration.AppendSeparator();
-		administration.Append(ibProtocolSchema::AuditLog, _("Registration journal"));
+		administration.Append(ibProtocol::ibSchema::ibKind::AuditLog, _("Registration journal"));
 		m_menu.AppendSubMenu(administration, _("Administration"));
 	}
 
 	ibClientMenu help;
-	help.Append(ibProtocolSchema::About, _("About"));
+	help.Append(ibProtocol::ibSchema::ibKind::About, _("About"));
 	m_menu.AppendSubMenu(help, _("Help"));
 }
 

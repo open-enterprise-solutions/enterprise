@@ -22,7 +22,7 @@
 #include "backend/session/sessionHolder.h"
 #include "frmserver/frmserver.h"
 
-#include "protocol/protocol.h"   // ibProtocolMode
+#include "protocol/protocol.h"   // ibProtocol::ibLogin::ibMode
 
 class ibApplicationInstance;
 class ibClientFrame;
@@ -34,7 +34,7 @@ public:
 	// The base is handed in: a process serves several, and the session belongs to one of them. The mode says which
 	// application's frame the client gets (ibClientFrame::Create).
 	ibClientInstance(ibApplicationInstance* applicationInstance, const wxString& id, const wxString& address,
-		ibProtocolMode mode);
+		ibProtocol::ibLogin::ibMode mode);
 	~ibClientInstance();
 
 	// Opens a session in the base as `user`, on the session's own worker. False: refused (the reason is
@@ -75,7 +75,7 @@ private:
 	wxString               m_id;
 	wxString               m_user;
 	wxString               m_address;
-	ibProtocolMode           m_mode;
+	ibProtocol::ibLogin::ibMode           m_mode;
 
 	mutable std::mutex m_mutex;          // the activity time
 	std::int64_t       m_lastActiveMs;

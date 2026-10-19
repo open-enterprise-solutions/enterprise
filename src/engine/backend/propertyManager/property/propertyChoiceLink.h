@@ -55,6 +55,11 @@ public:
 	// readable node value
 	virtual bool ReadNodeValue(const ibDataValue& value) override;
 	virtual bool WriteNodeValue(ibDataValue& value) const override;
+
+	// …and what its window asks of the configuration, as the desktop's link-by-type window did when it opened
+	// (frontend/win/dlgs/choiceLink): Targets — the reference types of the field (ibFieldReferenceTypes), each its Id,
+	// Title, Type (the class its reference is registered under) and Picture.
+	virtual bool GetProtocolValue(ibDataNode& row) override;
 };
 
 // ⭐ WHAT IS SHOWN IN THE LIST — the table beside the link above, holding an
@@ -99,6 +104,12 @@ public:
 	// readable node value
 	virtual bool ReadNodeValue(const ibDataValue& value) override;
 	virtual bool WriteNodeValue(ibDataValue& value) const override;
+
+	// …and what its window asks of the configuration, as the desktop's choice-parameters window did when it opened
+	// (frontend/win/dlgs/choiceParameters): Targets as the link's, each its children the fields a row may fill
+	// (GetParameterList); Sources — the fields beside it that may supply a value (GetSourceList), Title the holder they
+	// stand in, each its children (Id) the parameters it could fill, the likeliest first, and Default the obvious one.
+	virtual bool GetProtocolValue(ibDataNode& row) override;
 };
 
 // ⭐⭐ THE REFERENCE TYPES OF A FIELD, NAMED — ONE ANSWER, TWO ASKERS. The link's editor asks it to

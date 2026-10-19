@@ -108,28 +108,28 @@ void ibVisualEditorNotebook::ibVisualEditor::ActivateEditor()
 
 bool ibVisualEditorNotebook::ibVisualEditor::LoadForm(const ibProtocolNode& answer)
 {
-	const ibProtocolNode form = answer.FindChild(ibProtocolName::Form);
-	if (form.GetType() != ibProtocolType::ClientForm) {
+	const ibProtocolNode form = answer.FindChild(ibProtocol::ibView::ibFormDesigner::Form);
+	if (form.GetType() != ibProtocol::ibForm::ibType::ClientForm) {
 		ibJournalWarning(wxT("designer"), wxT("form editor: the tab's answer brought no form"));
 		return false;
 	}
 
-	m_classes = answer.FindChild(ibProtocolName::Classes);
+	m_classes = answer.FindChild(ibProtocol::ibView::ibFormDesigner::Classes);
 	m_objectTree->CreateTree(m_classes);
 
 	// ⭐ WHAT EACH CONTROL HAS IS THE SERVER'S TO SAY — its rows, as the designer's inspector writes them; the client's
 	// controls declare none (ibValueFrame). Kept by the control's id: a control built anew reads them again.
 	m_rows.clear();
-	for (const ibProtocolNode& described : answer.FindChild(ibProtocolName::Controls).Children())
-		m_rows[described.GetInt(ibProtocolName::Control)] = described;
+	for (const ibProtocolNode& described : answer.FindChild(ibProtocol::ibView::ibFormDesigner::Controls).Children())
+		m_rows[described.GetInt(ibProtocol::ibView::ibFormDesigner::Control)] = described;
 
 	// …and its attributes' and its commands' trees.
 	ibProtocolNode trees;
-	trees.SetValue(ibProtocolName::AttributeTree, answer.FindChild(ibProtocolName::AttributeTree));
-	trees.SetValue(ibProtocolName::CommandTree, answer.FindChild(ibProtocolName::CommandTree));
+	trees.SetValue(ibProtocol::ibView::ibFormDesigner::AttributeTree, answer.FindChild(ibProtocol::ibView::ibFormDesigner::AttributeTree));
+	trees.SetValue(ibProtocol::ibView::ibFormDesigner::CommandTree, answer.FindChild(ibProtocol::ibView::ibFormDesigner::CommandTree));
 
 	m_cmdProc.Reset();
-	Draw(form, trees, ibProtocolNode(), form.GetInt(ibProtocolName::ControlId));
+	Draw(form, trees, ibProtocolNode(), form.GetInt(ibProtocol::ibForm::ControlId));
 	if (GetValueForm() == nullptr)
 		return false;
 
@@ -142,14 +142,14 @@ void ibVisualEditorNotebook::ibVisualEditor::Draw(const ibProtocolNode& form, co
 {
 	// The trees first — a holder whose row is gone is let go of before the form's controls are.
 	m_trees = trees;
-	m_attributeTree->Draw(m_trees.FindChild(ibProtocolName::AttributeTree), form.FindChild(ibProtocolName::Attributes));
-	m_commandTree->Draw(m_trees.FindChild(ibProtocolName::CommandTree));
+	m_attributeTree->Draw(m_trees.FindChild(ibProtocol::ibView::ibFormDesigner::AttributeTree), form.FindChild(ibProtocol::ibView::ibFormDesigner::Attributes));
+	m_commandTree->Draw(m_trees.FindChild(ibProtocol::ibView::ibFormDesigner::CommandTree));
 
 	// ⚠ A PATCH THAT NAMES NOTHING IS NONE — the form drawn whole: a command's ibProtocolNode() is a node of no entries,
 	// and drawn as a patch it drew nothing (a control added, never shown — 2026-10-15). What the canvas is given for it is
 	// no node at all — a name an empty node does not have.
 	const bool patched = patch.IsNode() && !patch.Entries().empty();
-	const ibProtocolNode drawn = patched ? patch : patch.FindChild(ibProtocolName::Patch);
+	const ibProtocolNode drawn = patched ? patch : patch.FindChild(ibProtocol::ibFrame::Patch);
 
 	// A form drawn whole may be made of other controls — the inspector lets go of one of this form's before they go.
 	if (!patched) {
@@ -200,7 +200,7 @@ void ibVisualEditorNotebook::ibVisualEditor::Draw(const ibProtocolNode& form, co
 void ibVisualEditorNotebook::ibVisualEditor::Receive(const ibProtocolNode& node)
 {
 	ibValueForm* const valueForm = GetValueForm();
-	const long long controlId = node.GetInt(ibProtocolName::ControlId);
+	const long long controlId = node.GetInt(ibProtocol::ibForm::ControlId);
 	ibValueFrame* const control = controlId == valueForm->GetControlID() ? valueForm : valueForm->FindControlByID(controlId);
 
 	if (control != nullptr) {
@@ -211,7 +211,7 @@ void ibVisualEditorNotebook::ibVisualEditor::Receive(const ibProtocolNode& node)
 
 		// …and its values as its node has them now — what a command left; open in the tree too, the header's (SaveNode).
 		Receive(control, node);
-		control->SetExpanded(node.GetBool(ibProtocolName::Expanded, true));
+		control->SetExpanded(node.GetBool(ibProtocol::ibForm::Expanded, true));
 	}
 
 	for (const ibProtocolNode& child : node.Children())
@@ -222,7 +222,7 @@ void ibVisualEditorNotebook::ibVisualEditor::Receive(ibPropertyObject* object, c
 {
 	// A property's, as WriteData wrote it; the wire brings a scalar back a field.
 	ibProtocolNode values = node.Clone();
-	values.Remove(ibProtocolName::NodeChildren);
+	values.Remove(ibProtocol::ibNode::Children);
 	ibDataNode entries;
 	ibReadProtocolNode(values, entries);
 	for (unsigned int idx = 0; idx < object->GetPropertyCount(); idx++) {
@@ -244,8 +244,8 @@ bool ibVisualEditorNotebook::ibVisualEditor::SaveForm()
 	// HELD, not a call of its own — as a module's text is: what reads the form on the server (Save, the next request of
 	// the tab, a close) is a call, and carries it (Pending) ahead of its work; an edit asks the server nothing more.
 	ibProtocolNode args;
-	args.SetValue(ibProtocolName::Form, m_formNode);
-	m_document->Hold(ibProtocolEvent::Change, args);
+	args.SetValue(ibProtocol::ibView::ibFormDesigner::Form, m_formNode);
+	m_document->Hold(ibProtocol::ibEvent::ibKind::Change, args);
 	m_cmdProc.SetSavePoint();
 	return true;
 }

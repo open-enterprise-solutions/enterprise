@@ -68,7 +68,7 @@ void ibObjectIds(const ibProtocolNode& row, std::set<long long>& ids)
 // The pictures of `row` and the rows under it, by their ids — asked of the server at once, not a call per row drawn.
 void ibRowPictures(const ibProtocolNode& row, std::vector<wxString>& pictures)
 {
-	pictures.push_back(row.GetString(ibProtocolName::Picture));
+	pictures.push_back(row.GetString(ibProtocol::ibSchema::ibMetaData::Picture));
 	for (const ibProtocolNode& child : row.Children())
 		ibRowPictures(child, pictures);
 }
@@ -138,8 +138,8 @@ void ibMetaTreeBase::Draw(const ibProtocolNode& root)
 			else {
 				ibRowPaths(m_root, path, m_expanded);
 			}
-			const int image = GetImage(m_root.GetString(ibProtocolName::Picture));
-			rootItem = m_metaTreeCtrl->AddRoot(m_root.GetString(ibProtocolName::Title), image, image, new ibTreeRow(m_root, path));
+			const int image = GetImage(m_root.GetString(ibProtocol::ibSchema::ibMetaData::Picture));
+			rootItem = m_metaTreeCtrl->AddRoot(m_root.GetString(ibProtocol::ibSchema::ibMetaData::Title), image, image, new ibTreeRow(m_root, path));
 			// …the configuration's in bold (the desktop's); an external file's is hidden.
 			if (m_tab == 0)
 				m_metaTreeCtrl->SetItemBold(rootItem);
@@ -168,8 +168,8 @@ wxTreeItemId ibMetaTreeBase::InsertRow(const wxTreeItemId& parent, size_t positi
 	const wxString& parentPath)
 {
 	const wxString path = parentPath + wxString::Format(wxT("/%lld"), row.GetId());
-	const int image = GetImage(row.GetString(ibProtocolName::Picture));
-	const wxTreeItemId item = m_metaTreeCtrl->InsertItem(parent, position, row.GetString(ibProtocolName::Title),
+	const int image = GetImage(row.GetString(ibProtocol::ibSchema::ibMetaData::Picture));
+	const wxTreeItemId item = m_metaTreeCtrl->InsertItem(parent, position, row.GetString(ibProtocol::ibSchema::ibMetaData::Title),
 		image, image, new ibTreeRow(row, path));
 	DrawRow(item, row);
 	return item;
@@ -180,10 +180,10 @@ void ibMetaTreeBase::DrawRow(const wxTreeItemId& item, const ibProtocolNode& row
 	ibTreeRow* const data = static_cast<ibTreeRow*>(m_metaTreeCtrl->GetItemData(item));
 	data->m_row = row;
 
-	const wxString title = row.GetString(ibProtocolName::Title);
+	const wxString title = row.GetString(ibProtocol::ibSchema::ibMetaData::Title);
 	if (m_metaTreeCtrl->GetItemText(item) != title)
 		m_metaTreeCtrl->SetItemText(item, title);
-	const int image = GetImage(row.GetString(ibProtocolName::Picture));
+	const int image = GetImage(row.GetString(ibProtocol::ibSchema::ibMetaData::Picture));
 	if (m_metaTreeCtrl->GetItemImage(item) != image) {
 		m_metaTreeCtrl->SetItemImage(item, image, wxTreeItemIcon_Normal);
 		m_metaTreeCtrl->SetItemImage(item, image, wxTreeItemIcon_Selected);
@@ -239,8 +239,8 @@ bool ibMetaTreeBase::IsFound(const ibProtocolNode& row) const
 
 	if (row.GetId() > 0) {
 		const wxString needle = m_search.Lower();
-		if (row.GetString(ibProtocolName::Title).Lower().Find(needle) != wxNOT_FOUND
-			|| row.GetString(ibProtocolName::Synonym).Lower().Find(needle) != wxNOT_FOUND)
+		if (row.GetString(ibProtocol::ibSchema::ibMetaData::Title).Lower().Find(needle) != wxNOT_FOUND
+			|| row.GetString(ibProtocol::ibSchema::ibMetaData::Synonym).Lower().Find(needle) != wxNOT_FOUND)
 			return true;
 	}
 
@@ -304,13 +304,13 @@ bool ibMetaTreeBase::GetPlace(const wxTreeItemId& item, wxString& type, long lon
 	wxTreeItemId at = item;
 	for (; at.IsOk(); at = m_metaTreeCtrl->GetItemParent(at)) {
 		const ibTreeRow* const row = GetRow(at);
-		if (row != nullptr && row->m_row.Has(ibProtocolName::Group))
+		if (row != nullptr && row->m_row.Has(ibProtocol::ibSchema::ibMetaData::Group))
 			break;
 	}
 	if (!at.IsOk())
 		return false;
 
-	type = GetRow(at)->m_row.GetString(ibProtocolName::Group);
+	type = GetRow(at)->m_row.GetString(ibProtocol::ibSchema::ibMetaData::Group);
 	parent = 0;
 	for (const wxTreeItemId root = m_metaTreeCtrl->GetRootItem(); at.IsOk() && at != root; at = m_metaTreeCtrl->GetItemParent(at)) {
 		parent = GetObject(at);
@@ -320,23 +320,23 @@ bool ibMetaTreeBase::GetPlace(const wxTreeItemId& item, wxString& type, long lon
 	return true;
 }
 
-ibProtocolNode ibMetaTreeBase::GetParams(ibProtocolMetaDataCommand command, ibProtocolNode args) const
+ibProtocolNode ibMetaTreeBase::GetParams(ibProtocol::ibSchema::ibMetaData::ibCommand command, ibProtocolNode args) const
 {
 	if (m_tab != 0)
-		args.SetValue(ibProtocolName::Tab, m_tab);
+		args.SetValue(ibProtocol::ibSchema::ibMetaData::Tab, m_tab);
 
 	ibProtocolNode params;
-	params.SetValue(ibProtocolName::Schema, static_cast<long long>(ibProtocolSchema::MetaData));
-	params.SetValue(ibProtocolName::Command, static_cast<long long>(command));
-	params.SetValue(ibProtocolName::Args, args);
+	params.SetValue(ibProtocol::ibSchema::Schema, static_cast<long long>(ibProtocol::ibSchema::ibKind::MetaData));
+	params.SetValue(ibProtocol::ibSchema::Command, static_cast<long long>(command));
+	params.SetValue(ibProtocol::ibSchema::Args, args);
 	return params;
 }
 
-bool ibMetaTreeBase::Command(ibProtocolMetaDataCommand command, ibProtocolNode args) const
+bool ibMetaTreeBase::Command(ibProtocol::ibSchema::ibMetaData::ibCommand command, ibProtocolNode args) const
 {
 	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
 	ibProtocolNode answer;
-	return frame != nullptr && frame->Call(ibProtocolMethod::Schema, GetParams(command, args), answer);
+	return frame != nullptr && frame->Call(ibProtocol::ibMethod::Schema, GetParams(command, args), answer);
 }
 
 void ibMetaTreeBase::UpdateChoiceSelection(wxChoice* choice, const ibProtocolNode& property)
@@ -346,10 +346,10 @@ void ibMetaTreeBase::UpdateChoiceSelection(wxChoice* choice, const ibProtocolNod
 
 	int defSelection = 0;
 
-	const long long value = property.GetInt(ibProtocolName::Value);
+	const long long value = property.GetInt(ibProtocol::ibSchema::ibProperties::Value);
 	for (const ibProtocolNode& offered : property.Children()) {
-		const long long id = offered.GetInt(ibProtocolName::Id);
-		const int selection_id = choice->Append(offered.GetString(ibProtocolName::Title),
+		const long long id = offered.GetInt(ibProtocol::ibSchema::ibProperties::Id);
+		const int selection_id = choice->Append(offered.GetString(ibProtocol::ibSchema::ibProperties::Title),
 			reinterpret_cast<void*>(static_cast<intptr_t>(id)));
 		if (id == value)
 			defSelection = selection_id;
@@ -371,11 +371,11 @@ void ibMetaTreeBase::CreateItem()
 	// with the same answer (the frame's Properties), nothing is read; then its editor is opened, as the desktop's click
 	// did (NewItem, then OpenObjectForm): made while the row is shown, it shows its own.
 	ibProtocolNode args;
-	args.SetValue(ibProtocolName::Type, type);
-	args.SetValue(ibProtocolName::Parent, parent);
+	args.SetValue(ibProtocol::ibSchema::ibMetaData::Type, type);
+	args.SetValue(ibProtocol::ibSchema::ibMetaData::Parent, parent);
 	std::set<long long> drawn;
 	ibObjectIds(m_root, drawn);
-	if (Command(ibProtocolMetaDataCommand::Create, args) && SelectCreated(drawn))
+	if (Command(ibProtocol::ibSchema::ibMetaData::ibCommand::Create, args) && SelectCreated(drawn))
 		EditItem();
 }
 
@@ -383,12 +383,12 @@ void ibMetaTreeBase::CreateItem()
 // opened nothing and cost an exchange; a server that does not say is asked, as before.
 static bool ibOpensEditor(const ibProtocolNode& root, const ibProtocolNode& row)
 {
-	const ibProtocolNode editors = root.FindChild(ibProtocolName::Editors);
+	const ibProtocolNode editors = root.FindChild(ibProtocol::ibSchema::ibMetaData::Editors);
 	if (!editors.IsNode())
 		return true;
-	const wxString type = row.GetString(ibProtocolName::Type);
+	const wxString type = row.GetString(ibProtocol::ibSchema::ibMetaData::Type);
 	for (const ibProtocolNode& editor : editors.Children()) {
-		if (editor.GetString(ibProtocolName::Type) == type)
+		if (editor.GetString(ibProtocol::ibSchema::ibMetaData::Type) == type)
 			return true;
 	}
 	return false;
@@ -402,15 +402,15 @@ void ibMetaTreeBase::EditItem()
 		return;
 
 	ibProtocolNode args;
-	args.SetValue(ibProtocolName::Id, id);
-	Command(ibProtocolMetaDataCommand::Open, args);
+	args.SetValue(ibProtocol::ibSchema::ibMetaData::Id, id);
+	Command(ibProtocol::ibSchema::ibMetaData::ibCommand::Open, args);
 }
 
 void ibMetaTreeBase::EditModule(const ibGuid& moduleName, int line, bool setRunLine)
 {
 	ibProtocolNode args;
-	args.SetValue(ibProtocolName::Module, moduleName.str());
-	if (!Command(ibProtocolMetaDataCommand::Open, args))
+	args.SetValue(ibProtocol::ibSchema::ibMetaData::Module, moduleName.str());
+	if (!Command(ibProtocol::ibSchema::ibMetaData::ibCommand::Open, args))
 		return;
 
 	// The tab is drawn by now — the frame came with the answer; its module found by the address its State says.
@@ -442,10 +442,10 @@ void ibMetaTreeBase::RemoveItem()
 	const ibTreeRow* const nextRow = next.IsOk() ? GetRow(next) : nullptr;
 	const wxString nextPath = nextRow != nullptr ? nextRow->m_path : wxString();
 	ibProtocolNode args;
-	args.SetValue(ibProtocolName::Id, id);
+	args.SetValue(ibProtocol::ibSchema::ibMetaData::Id, id);
 	if (select != 0)
-		args.SetValue(ibProtocolName::Select, select);
-	if (!Command(ibProtocolMetaDataCommand::Remove, args) || nextPath.IsEmpty())
+		args.SetValue(ibProtocol::ibSchema::ibMetaData::Select, select);
+	if (!Command(ibProtocol::ibSchema::ibMetaData::ibCommand::Remove, args) || nextPath.IsEmpty())
 		return;
 
 	// The frame drew the tree anew without the old row, the parent selected in its place: the row it goes to selected
@@ -517,9 +517,9 @@ void ibMetaTreeBase::MoveItem(const wxTreeItemId& item, const wxTreeItemId& sibl
 
 	// The door moves it and announces `Moved`; the rows follow.
 	ibProtocolNode args;
-	args.SetValue(ibProtocolName::Id, id);
-	args.SetValue(ibProtocolName::Position, GetRow(sibling)->m_row.GetInt(ibProtocolName::Position));
-	Command(ibProtocolMetaDataCommand::Move, args);
+	args.SetValue(ibProtocol::ibSchema::ibMetaData::Id, id);
+	args.SetValue(ibProtocol::ibSchema::ibMetaData::Position, GetRow(sibling)->m_row.GetInt(ibProtocol::ibSchema::ibMetaData::Position));
+	Command(ibProtocol::ibSchema::ibMetaData::ibCommand::Move, args);
 }
 
 // A NEW OBJECT IS LEFT SELECTED AND OPENED, as the desktop's create and paste left it — its row the one the frame brought
@@ -560,14 +560,14 @@ void ibMetaTreeBase::SortItem()
 				rows.push_back(GetRow(row)->m_row);
 		}
 		std::sort(rows.begin(), rows.end(), [](const ibProtocolNode& a, const ibProtocolNode& b) {
-			return a.GetInt(ibProtocolName::Position) < b.GetInt(ibProtocolName::Position);
+			return a.GetInt(ibProtocol::ibSchema::ibMetaData::Position) < b.GetInt(ibProtocol::ibSchema::ibMetaData::Position);
 		});
 		return rows;
 	};
 
 	std::vector<ibProtocolNode> sorted = objects();
 	std::stable_sort(sorted.begin(), sorted.end(), [](const ibProtocolNode& a, const ibProtocolNode& b) {
-		return wxStrcmp(a.GetString(ibProtocolName::Title), b.GetString(ibProtocolName::Title)) < 0;
+		return wxStrcmp(a.GetString(ibProtocol::ibSchema::ibMetaData::Title), b.GetString(ibProtocol::ibSchema::ibMetaData::Title)) < 0;
 	});
 
 	for (size_t i = 0; i < sorted.size(); ++i) {
@@ -578,9 +578,9 @@ void ibMetaTreeBase::SortItem()
 			continue;
 
 		ibProtocolNode args;
-		args.SetValue(ibProtocolName::Id, sorted[i].GetId());
-		args.SetValue(ibProtocolName::Position, placed[i].GetInt(ibProtocolName::Position));
-		if (!Command(ibProtocolMetaDataCommand::Move, args))
+		args.SetValue(ibProtocol::ibSchema::ibMetaData::Id, sorted[i].GetId());
+		args.SetValue(ibProtocol::ibSchema::ibMetaData::Position, placed[i].GetInt(ibProtocol::ibSchema::ibMetaData::Position));
+		if (!Command(ibProtocol::ibSchema::ibMetaData::ibCommand::Move, args))
 			return;
 	}
 }
@@ -595,7 +595,7 @@ void ibMetaTreeBase::CopyItem()
 	if (id == 0 || selection == m_metaTreeCtrl->GetRootItem() || frame == nullptr)
 		return;
 
-	const wxString title = GetRow(selection)->m_row.GetString(ibProtocolName::Title);
+	const wxString title = GetRow(selection)->m_row.GetString(ibProtocol::ibSchema::ibMetaData::Title);
 	const wxString local = wxFileName::CreateTempFileName(wxT("oes"));
 	if (local.IsEmpty())
 		return;
@@ -603,10 +603,10 @@ void ibMetaTreeBase::CopyItem()
 	wxMemoryBuffer bytes;
 	wxString file;
 	ibProtocolNode args;
-	args.SetValue(ibProtocolName::Id, id);
+	args.SetValue(ibProtocol::ibSchema::ibMetaData::Id, id);
 	if (frame->UploadFile(local, file)) {
-		args.SetValue(ibProtocolName::File, file);
-		if (Command(ibProtocolMetaDataCommand::Copy, args) && frame->DownloadFile(file, local)) {
+		args.SetValue(ibProtocol::ibSchema::ibMetaData::File, file);
+		if (Command(ibProtocol::ibSchema::ibMetaData::ibCommand::Copy, args) && frame->DownloadFile(file, local)) {
 			wxFile read(local);
 			const wxFileOffset length = read.IsOpened() ? read.Length() : 0;
 			if (length > 0) {
@@ -665,12 +665,12 @@ void ibMetaTreeBase::PasteItem()
 	wxString file;
 	if (written && frame->UploadFile(local, file)) {
 		ibProtocolNode args;
-		args.SetValue(ibProtocolName::Type, type);
-		args.SetValue(ibProtocolName::Parent, parent);
-		args.SetValue(ibProtocolName::File, file);
+		args.SetValue(ibProtocol::ibSchema::ibMetaData::Type, type);
+		args.SetValue(ibProtocol::ibSchema::ibMetaData::Parent, parent);
+		args.SetValue(ibProtocol::ibSchema::ibMetaData::File, file);
 		std::set<long long> drawn;
 		ibObjectIds(m_root, drawn);
-		if (Command(ibProtocolMetaDataCommand::Paste, args))
+		if (Command(ibProtocol::ibSchema::ibMetaData::ibCommand::Paste, args))
 			SelectCreated(drawn);
 	}
 	wxRemoveFile(local);
@@ -700,8 +700,8 @@ void ibMetaTreeBase::UpdateToolbar()
 
 bool ibMetaTreeBase::AppendMetaMenu(wxMenu& menu, const ibProtocolNode& row)
 {
-	const ibProtocolNode items = row.FindChild(ibProtocolName::Menu);
-	const bool standard = items.GetBool(ibProtocolName::Standard, true);
+	const ibProtocolNode items = row.FindChild(ibProtocol::ibSchema::ibMetaData::Menu);
+	const bool standard = items.GetBool(ibProtocol::ibSchema::ibMetaData::Standard, true);
 
 	const std::vector<ibProtocolNode> entries = items.Children();
 	if (entries.empty())
@@ -709,7 +709,7 @@ bool ibMetaTreeBase::AppendMetaMenu(wxMenu& menu, const ibProtocolNode& row)
 
 	std::vector<wxString> pictures;
 	for (const ibProtocolNode& entry : entries)
-		pictures.push_back(entry.GetString(ibProtocolName::Picture));
+		pictures.push_back(entry.GetString(ibProtocol::ibSchema::ibMetaData::Picture));
 	ibProtocolPictureReceive(pictures);
 
 	for (size_t idx = 0; idx < entries.size(); idx++) {
@@ -717,14 +717,14 @@ bool ibMetaTreeBase::AppendMetaMenu(wxMenu& menu, const ibProtocolNode& row)
 		const ibProtocolNode& entry = entries[idx];
 
 		// THE LINE GOES WHERE THE KIND CHANGES — never where somebody asked for one.
-		if (idx > 0 && entries[idx - 1].GetInt(ibProtocolName::Kind) != entry.GetInt(ibProtocolName::Kind))
+		if (idx > 0 && entries[idx - 1].GetInt(ibProtocol::ibSchema::ibMetaData::Kind) != entry.GetInt(ibProtocol::ibSchema::ibMetaData::Kind))
 			ibAppendSeparator(&menu);
 
 		const int id = wxWindow::NewControlId();
-		wxMenuItem* menuItem = menu.Append(id, entry.GetString(ibProtocolName::Title));
+		wxMenuItem* menuItem = menu.Append(id, entry.GetString(ibProtocol::ibSchema::ibMetaData::Title));
 
-		const long long object = entry.GetInt(ibProtocolName::Object);
-		const wxBitmap bitmap = ibRowPicture(entry.GetString(ibProtocolName::Picture));
+		const long long object = entry.GetInt(ibProtocol::ibSchema::ibMetaData::Object);
+		const wxBitmap bitmap = ibRowPicture(entry.GetString(ibProtocol::ibSchema::ibMetaData::Picture));
 		if (bitmap.IsOk())
 			menuItem->SetBitmap(bitmap);
 
@@ -732,7 +732,7 @@ bool ibMetaTreeBase::AppendMetaMenu(wxMenu& menu, const ibProtocolNode& row)
 		// editor — a Command with nothing to open — is the tree's, over the row's object (the engine's ProcessCommand
 		// called it so), by the item's Name; one this tree does not have: shown, shut.
 		if (object == 0) {
-			const wxString name = entry.GetString(ibProtocolName::Name);
+			const wxString name = entry.GetString(ibProtocol::ibSchema::ibMetaData::Name);
 			const ibMetaID owner = static_cast<ibMetaID>(row.GetId());
 			if (name == wxT("PredefinedValues")) {
 				menu.Bind(wxEVT_MENU, [this, owner](wxCommandEvent&) {
@@ -753,8 +753,8 @@ bool ibMetaTreeBase::AppendMetaMenu(wxMenu& menu, const ibProtocolNode& row)
 		}
 		menu.Bind(wxEVT_MENU, [this, object](wxCommandEvent&) {
 			ibProtocolNode args;
-			args.SetValue(ibProtocolName::Id, object);
-			Command(ibProtocolMetaDataCommand::Open, args);
+			args.SetValue(ibProtocol::ibSchema::ibMetaData::Id, object);
+			Command(ibProtocol::ibSchema::ibMetaData::ibCommand::Open, args);
 		}, id);
 	}
 
@@ -821,32 +821,32 @@ void ibMetaTreeBase::Search(const wxString& search)
 
 bool ibConfigurationTree::IsModified() const
 {
-	return m_root.GetBool(ibProtocolName::Modified);
+	return m_root.GetBool(ibProtocol::ibSchema::ibMetaData::Modified);
 }
 
 bool ibConfigurationTree::IsEdited() const
 {
-	return m_root.GetBool(ibProtocolName::Edited);
+	return m_root.GetBool(ibProtocol::ibSchema::ibMetaData::Edited);
 }
 
 wxString ibConfigurationTree::GetConfigName() const
 {
-	return m_root.GetString(ibProtocolName::Title);
+	return m_root.GetString(ibProtocol::ibSchema::ibMetaData::Title);
 }
 
 bool ibConfigurationTree::SaveDatabase() const
 {
-	return Command(ibProtocolMetaDataCommand::Save, ibProtocolNode());
+	return Command(ibProtocol::ibSchema::ibMetaData::ibCommand::Save, ibProtocolNode());
 }
 
 bool ibConfigurationTree::RollbackConfiguration() const
 {
-	return Command(ibProtocolMetaDataCommand::Rollback, ibProtocolNode());
+	return Command(ibProtocol::ibSchema::ibMetaData::ibCommand::Rollback, ibProtocolNode());
 }
 
 bool ibConfigurationTree::ApplyConfiguration() const
 {
-	return Command(ibProtocolMetaDataCommand::Apply, ibProtocolNode());
+	return Command(ibProtocol::ibSchema::ibMetaData::ibCommand::Apply, ibProtocolNode());
 }
 
 bool ibConfigurationTree::LoadConfigFromFile(const wxString& strFileName) const
@@ -857,8 +857,8 @@ bool ibConfigurationTree::LoadConfigFromFile(const wxString& strFileName) const
 		return false;
 
 	ibProtocolNode args;
-	args.SetValue(ibProtocolName::File, file);
-	return Command(ibProtocolMetaDataCommand::Load, args);
+	args.SetValue(ibProtocol::ibSchema::ibMetaData::File, file);
+	return Command(ibProtocol::ibSchema::ibMetaData::ibCommand::Load, args);
 }
 
 // THE FILE IT IS WRITTEN INTO IS THE SERVER'S — a temporary one, made by uploading an empty file of this computer's
@@ -875,8 +875,8 @@ bool ibConfigurationTree::SaveConfigToFile(const wxString& strFileName) const
 	wxRemoveFile(local);
 
 	ibProtocolNode args;
-	args.SetValue(ibProtocolName::File, file);
+	args.SetValue(ibProtocol::ibSchema::ibMetaData::File, file);
 	return uploaded
-		&& Command(ibProtocolMetaDataCommand::Unload, args)
+		&& Command(ibProtocol::ibSchema::ibMetaData::ibCommand::Unload, args)
 		&& frame->DownloadFile(file, strFileName);
 }

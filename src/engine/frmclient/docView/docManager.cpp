@@ -257,15 +257,15 @@ bool ibFrontendDocManager::OpenForm(ibMetaID id, const ibMetaData& metaData)
 		return false;
 
 	ibProtocolNode args;
-	args.SetValue(ibProtocolName::Id, static_cast<long long>(id));
+	args.SetValue(ibProtocol::ibSchema::ibMetaData::Id, static_cast<long long>(id));
 	if (metaData.GetTabId() != 0)
-		args.SetValue(ibProtocolName::Tab, metaData.GetTabId());
+		args.SetValue(ibProtocol::ibSchema::ibMetaData::Tab, metaData.GetTabId());
 
 	ibProtocolNode params, answer;
-	params.SetValue(ibProtocolName::Schema, static_cast<long long>(ibProtocolSchema::MetaData));
-	params.SetValue(ibProtocolName::Command, static_cast<long long>(ibProtocolMetaDataCommand::Open));
-	params.SetValue(ibProtocolName::Args, args);
-	return frame->Call(ibProtocolMethod::Schema, params, answer);
+	params.SetValue(ibProtocol::ibSchema::Schema, static_cast<long long>(ibProtocol::ibSchema::ibKind::MetaData));
+	params.SetValue(ibProtocol::ibSchema::Command, static_cast<long long>(ibProtocol::ibSchema::ibMetaData::ibCommand::Open));
+	params.SetValue(ibProtocol::ibSchema::Args, args);
+	return frame->Call(ibProtocol::ibMethod::Schema, params, answer);
 }
 
 ibFrontendDocTemplate* ibFrontendDocManager::FindTemplateByDocClassInfo(const wxClassInfo* classInfo) const

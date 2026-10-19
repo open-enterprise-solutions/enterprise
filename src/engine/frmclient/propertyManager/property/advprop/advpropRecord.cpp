@@ -54,7 +54,7 @@ ibPGRecordProperty::ibPGRecordProperty(const ibPropertyObject* property, const w
 	// list here is the same one every other caller sees.
 	for (unsigned int idx = 0; idx < choices.GetCount(); idx++) {
 		m_choices.Add(choices.GetLabel(idx), choices.GetBitmap(idx), choices.GetId(idx));
-		m_choiceClass.push_back(choices.GetClassType(idx));
+		m_choiceData.push_back(choices.GetData(idx));
 	}
 
 	m_flags |= wxPGPropertyFlags_ActiveButton; // Property button always enabled.
@@ -114,9 +114,9 @@ wxPGEditorDialogAdapter* ibPGRecordProperty::GetEditorDialog() const
 		};
 
 		// ⭐⭐ WHAT IS OFFERED IS THE PROPERTY'S OWN ANSWER — the choices it was built with, one item each, grouped by kind
-		// as the desktop's (FillByClsid). Each one's kind is the server's: it asked the configuration (the client holds
-		// none), and named and drew the kind as a type (ibValue::GetAvailableCtor).
-		void FillFromChoices(const wxPGChoices& choices, const std::vector<ibClassID>& choiceClass,
+		// as the desktop's (FillByClsid). Each one's kind is its data — its class, as the server's property listed it —
+		// named and drawn as the server registered it (the row's Classes).
+		void FillFromChoices(const wxPGChoices& choices, const std::vector<u64>& choiceData,
 			ibCheckTree* tc, ibVariantDataRecord* data) {
 
 			wxImageList* imageList = tc->GetImageList();
@@ -125,7 +125,7 @@ wxPGEditorDialogAdapter* ibPGRecordProperty::GetEditorDialog() const
 			for (unsigned int idx = 0; idx < choices.GetCount(); idx++) {
 				const ibMetaID id = choices.GetValue(idx);
 
-				const ibClassID clsid = choiceClass[idx];
+				const ibClassID clsid = choiceData[idx];
 				auto group = groups.find(clsid);
 				if (group == groups.end()) {
 					const ibCtorAbstractType* so = ibValue::GetAvailableCtor(clsid);
@@ -195,7 +195,7 @@ wxPGEditorDialogAdapter* ibPGRecordProperty::GetEditorDialog() const
 				new wxImageList(icon_size, icon_size)
 			);
 
-			FillFromChoices(dlgProp->GetChoices(), dlgProp->m_choiceClass, tc, data);
+			FillFromChoices(dlgProp->GetChoices(), dlgProp->m_choiceData, tc, data);
 
 			tc->ExpandAll(); int res = dlg->ShowModal();
 			ibVariantDataRecord* clone = data->Clone();

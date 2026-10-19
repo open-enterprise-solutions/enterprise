@@ -51,7 +51,7 @@ public:
 	virtual void ChoiceProcessing(ibValue& vSelected) = 0;
 
 	// THE CHOICE'S WINDOW WENT — chosen or not (the client's): a calculator or a calendar drawn for a server's question
-	// answers it then (ibProtocolRequestKind::SimpleChoice).
+	// answers it then (ibProtocol::ibRequest::ibKind::SimpleChoice).
 	virtual void ChoiceDismissed() {}
 };
 
@@ -86,7 +86,7 @@ public:
 	virtual ~ibValueFrame() = default;
 
 	// ⭐ ITS PROPERTIES ARE THE SERVER'S — which a control has, and which a person may arrange: the client declares none
-	// (Max, 2026-10-14). The form's editor is asked with them, a control's rows each (ibProtocolRequestKind::FormEditor),
+	// (Max, 2026-10-14). The form's editor is asked with them, a control's rows each (ibProtocol::ibRequest::ibKind::FormEditor),
 	// and receives them (ibPropertyObject::Receive).
 
 	virtual wxString GetClassName() const override { return m_className; }
@@ -111,7 +111,7 @@ public:
 	// The state events the server is subscribed to on it — its State's Subscribed (protocol 3): something there runs on
 	// them. Any other state event waits for the client's next call (Send).
 	void SetSubscribedEvents(const std::vector<ibProtocolNode>& events);
-	bool IsSubscribed(ibProtocolEvent event) const { return (m_subscribedEvents & (1u << static_cast<int>(event))) != 0; }
+	bool IsSubscribed(ibProtocol::ibEvent::ibKind event) const { return (m_subscribedEvents & (1u << static_cast<int>(event))) != 0; }
 
 	// Open in the object tree; offered at all (the base's functional options are the server's: what it draws is offered).
 	void SetExpanded(bool expanded) { m_expanded = expanded; }
@@ -158,8 +158,8 @@ protected:
 	ibVisualHostClient& GetVisualHost() const { return m_host; }
 
 	// What the person did, to the server — Args, what the event says with it.
-	void Send(ibProtocolEvent event) const;
-	void Send(ibProtocolEvent event, const ibProtocolNode& args) const;
+	void Send(ibProtocol::ibEvent::ibKind event) const;
+	void Send(ibProtocol::ibEvent::ibKind event, const ibProtocolNode& args) const;
 
 	// Its fetches — kept by whoever reads with them, on whichever thread.
 	ibViewFetcher MakeFetcher() const;
@@ -182,7 +182,7 @@ private:
 	wxString m_name;           // its node's Name (GetControlName)
 	wxString m_title;          // what the server says it is called (GetControlTitle)
 	bool     m_expanded = true;
-	unsigned m_subscribedEvents = 0;   // a bit per ibProtocolEvent — its State's Subscribed
+	unsigned m_subscribedEvents = 0;   // a bit per ibProtocol::ibEvent::ibKind — its State's Subscribed
 };
 
 #endif

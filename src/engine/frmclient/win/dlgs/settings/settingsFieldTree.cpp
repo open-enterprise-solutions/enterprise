@@ -99,25 +99,25 @@ static std::vector<ibSettingsPlainField> AskTargetFields(const std::vector<ibMet
 		if (document == nullptr)
 			return {};
 		ibProtocolNode request, answer;
-		request.SetValue(ibProtocolName::Kind, static_cast<long long>(ibProtocolComposerRequest::Expand));
+		request.SetValue(ibProtocol::ibRequest::Kind, static_cast<long long>(ibProtocol::ibView::ibComposer::ibRequest::Expand));
 		for (const ibMetaID& target : targets)
-			request.AddItem(ibProtocolName::Targets, static_cast<long long>(target));
+			request.AddItem(ibProtocol::ibRequest::ibListSettings::Targets, static_cast<long long>(target));
 		if (!document->Fetch(request, answer))
 			return {};
-		ibValueReferenceDataObject::ReadReferences(answer.FindChild(ibProtocolName::References));
-		return ibReadSettingsFields(answer.FindChild(ibProtocolName::Expanded));
+		ibValueReferenceDataObject::ReadReferences(answer.FindChild(ibProtocol::ibRequest::ibListSettings::References));
+		return ibReadSettingsFields(answer.FindChild(ibProtocol::ibRequest::ibListSettings::Expanded));
 	}
 
 	ibProtocolNode act;
-	act.SetValue(ibProtocolName::Act, static_cast<long long>(ibProtocolListSettingsAct::Expand));
+	act.SetValue(ibProtocol::ibRequest::ibListSettings::Act, static_cast<long long>(ibProtocol::ibRequest::ibListSettings::ibAct::Expand));
 	for (const ibMetaID& target : targets)
-		act.AddItem(ibProtocolName::Targets, static_cast<long long>(target));
+		act.AddItem(ibProtocol::ibRequest::ibListSettings::Targets, static_cast<long long>(target));
 	if (!frame->Respond(act))
 		return {};
 
 	const ibProtocolNode request = frame->GetRequest();
-	ibValueReferenceDataObject::ReadReferences(request.FindChild(ibProtocolName::References));
-	return ibReadSettingsFields(request.FindChild(ibProtocolName::Expanded));
+	ibValueReferenceDataObject::ReadReferences(request.FindChild(ibProtocol::ibRequest::ibListSettings::References));
+	return ibReadSettingsFields(request.FindChild(ibProtocol::ibRequest::ibListSettings::Expanded));
 }
 
 // Lazily build a reference field node's children (its target's fields). An EMPTY typed
@@ -166,14 +166,14 @@ std::vector<ibSettingsPlainField> ibReadSettingsFields(const ibProtocolNode& fie
 	std::vector<ibSettingsPlainField> read;
 	for (const ibProtocolNode& described : fields.Children()) {
 		ibSettingsPlainField field;
-		field.m_name = described.GetString(ibProtocolName::Name);
-		field.m_presentation = described.GetString(ibProtocolName::Presentation);
-		field.m_id = static_cast<ibMetaID>(described.GetInt(ibProtocolName::Id, wxNOT_FOUND));
+		field.m_name = described.GetString(ibProtocol::ibRequest::ibListSettings::Name);
+		field.m_presentation = described.GetString(ibProtocol::ibRequest::ibListSettings::Presentation);
+		field.m_id = static_cast<ibMetaID>(described.GetInt(ibProtocol::ibRequest::ibListSettings::Id, wxNOT_FOUND));
 		auto type = std::make_shared<ibDataNode>();
-		ibReadProtocolNode(described.FindChild(ibProtocolName::Type), *type);
+		ibReadProtocolNode(described.FindChild(ibProtocol::ibRequest::ibListSettings::Type), *type);
 		ibTypeDescriptionMemory::ReadNode(ibDataValue::Child(type), field.m_type);
-		field.m_available = described.GetBool(ibProtocolName::Available, true);
-		field.m_picture = described.GetString(ibProtocolName::Picture);
+		field.m_available = described.GetBool(ibProtocol::ibRequest::ibListSettings::Available, true);
+		field.m_picture = described.GetString(ibProtocol::ibRequest::ibListSettings::Picture);
 		read.push_back(std::move(field));
 	}
 	return read;

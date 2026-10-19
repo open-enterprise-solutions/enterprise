@@ -11,7 +11,7 @@ namespace {
 // The pictures of `row` and the rows under it — asked of the server at once, not a call per row drawn.
 void PicturesOf(const ibProtocolNode& row, std::vector<wxString>& pictures)
 {
-	pictures.push_back(row.GetString(ibProtocolName::Picture));
+	pictures.push_back(row.GetString(ibProtocol::ibView::ibCheckTree::Picture));
 	for (const ibProtocolNode& child : row.Children())
 		PicturesOf(child, pictures);
 }
@@ -67,10 +67,10 @@ void ibRoleEditor::OnCheckItem(wxTreeEvent& event)
 	if (data != nullptr && m_document != nullptr) {
 		// Given by the role or taken away — the server's (ibRoleRightsView::OnClientEvent), and drawn back.
 		ibProtocolNode args;
-		args.SetValue(ibProtocolName::NodeId, data->GetMetaId());
-		args.SetValue(ibProtocolName::Name, data->GetRole());
-		args.SetValue(ibProtocolName::Checked, event.GetExtraLong() != 0);
-		m_document->Post(ibProtocolEvent::Toggle, args);
+		args.SetValue(ibProtocol::ibNode::Id, data->GetMetaId());
+		args.SetValue(ibProtocol::ibView::ibCheckTree::Name, data->GetRole());
+		args.SetValue(ibProtocol::ibView::ibCheckTree::Checked, event.GetExtraLong() != 0);
+		m_document->Post(ibProtocol::ibEvent::ibKind::Toggle, args);
 	}
 
 	event.Skip();
@@ -85,10 +85,10 @@ void ibRoleEditor::OnSelectedItem(wxTreeEvent& event) {
 	if (data != nullptr) {
 		wxTreeItemId root = m_checkCtrl->AddRoot(wxEmptyString);
 		for (const ibProtocolNode& role : data->GetRoles().Children()) {
-			wxTreeItemId newItem = m_checkCtrl->AppendItem(root, role.GetString(ibProtocolName::Title), wxNOT_FOUND, wxNOT_FOUND,
-				new wxTreeItemRoleData(data->GetMetaId(), role.GetString(ibProtocolName::Name)));
-			m_checkCtrl->SetItemState(newItem, !role.GetBool(ibProtocolName::ReadOnly) ? ibCheckTree::UNCHECKED : ibCheckTree::UNCHECKED_DISABLED);
-			m_checkCtrl->Check(newItem, role.GetBool(ibProtocolName::Checked));
+			wxTreeItemId newItem = m_checkCtrl->AppendItem(root, role.GetString(ibProtocol::ibView::ibCheckTree::Title), wxNOT_FOUND, wxNOT_FOUND,
+				new wxTreeItemRoleData(data->GetMetaId(), role.GetString(ibProtocol::ibView::ibCheckTree::Name)));
+			m_checkCtrl->SetItemState(newItem, !role.GetBool(ibProtocol::ibView::ibCheckTree::ReadOnly) ? ibCheckTree::UNCHECKED : ibCheckTree::UNCHECKED_DISABLED);
+			m_checkCtrl->Check(newItem, role.GetBool(ibProtocol::ibView::ibCheckTree::Checked));
 		}
 	}
 	m_checkCtrl->Thaw();
@@ -166,11 +166,11 @@ wxTreeItemId ibRoleEditor::GroupFor(const ibProtocolNode& row)
 	// tree shows.
 	wxImageList* imageList = m_roleCtrl->GetImageList();
 	wxASSERT(imageList);
-	const wxBitmap picture = ibProtocolPicture(row.GetString(ibProtocolName::Picture));
+	const wxBitmap picture = ibProtocolPicture(row.GetString(ibProtocol::ibView::ibCheckTree::Picture));
 	const int imageIndex = picture.IsOk() ? imageList->Add(picture) : wxNOT_FOUND;
 
 	const wxTreeItemId group = m_roleCtrl->AppendItem(m_treeMETADATA,
-		row.GetString(ibProtocolName::Title), imageIndex, imageIndex, new ibTreeItemObject(row.GetId(), ibProtocolNode()));
+		row.GetString(ibProtocol::ibView::ibCheckTree::Title), imageIndex, imageIndex, new ibTreeItemObject(row.GetId(), ibProtocolNode()));
 	if (row.GetId() == m_keepTopId)
 		m_keepTopNode = group;
 	return group;
@@ -180,11 +180,11 @@ wxTreeItemId ibRoleEditor::AppendItem(const wxTreeItemId& parent, const ibProtoc
 {
 	wxImageList* imageList = m_roleCtrl->GetImageList();
 	wxASSERT(imageList);
-	const wxBitmap picture = ibProtocolPicture(row.GetString(ibProtocolName::Picture));
+	const wxBitmap picture = ibProtocolPicture(row.GetString(ibProtocol::ibView::ibCheckTree::Picture));
 	const int imageIndex = picture.IsOk() ? imageList->Add(picture) : wxNOT_FOUND;
 	// Its rights kept with it — the rows go with the next answer, the check tree reads them when it is selected.
-	const wxTreeItemId item = m_roleCtrl->AppendItem(parent, row.GetString(ibProtocolName::Title), imageIndex, imageIndex,
-		new ibTreeItemObject(row.GetId(), row.FindChild(ibProtocolName::Roles).Clone()));
+	const wxTreeItemId item = m_roleCtrl->AppendItem(parent, row.GetString(ibProtocol::ibView::ibCheckTree::Title), imageIndex, imageIndex,
+		new ibTreeItemObject(row.GetId(), row.FindChild(ibProtocol::ibView::ibCheckTree::Roles).Clone()));
 	if (row.GetId() == m_keepSelId)   // the row that was selected before this rebuild — remember it for restore
 		m_keepSelNode = item;
 	if (row.GetId() == m_keepTopId)
@@ -194,7 +194,7 @@ wxTreeItemId ibRoleEditor::AppendItem(const wxTreeItemId& parent, const ibProtoc
 
 void ibRoleEditor::FillData(const ibProtocolNode& view)
 {
-	const ibProtocolNode root = view.FindChild(ibProtocolName::Rows);
+	const ibProtocolNode root = view.FindChild(ibProtocol::ibView::ibCheckTree::Rows);
 
 	std::vector<wxString> pictures;
 	PicturesOf(root, pictures);
@@ -202,14 +202,14 @@ void ibRoleEditor::FillData(const ibProtocolNode& view)
 
 	// The configuration's row — its rights are the configuration's own.
 	wxImageList* imageList = m_roleCtrl->GetImageList();
-	const wxBitmap picture = ibProtocolPicture(root.GetString(ibProtocolName::Picture));
+	const wxBitmap picture = ibProtocolPicture(root.GetString(ibProtocol::ibView::ibCheckTree::Picture));
 	if (picture.IsOk()) {
 		const int imageIndex = imageList->Add(picture);
 		m_roleCtrl->SetItemImage(m_treeMETADATA, imageIndex);
 		m_roleCtrl->SetItemImage(m_treeMETADATA, imageIndex, wxTreeItemIcon_Selected);
 	}
-	m_roleCtrl->SetItemText(m_treeMETADATA, root.GetString(ibProtocolName::Title));
-	m_roleCtrl->SetItemData(m_treeMETADATA, new ibTreeItemObject(root.GetId(), root.FindChild(ibProtocolName::Roles).Clone()));
+	m_roleCtrl->SetItemText(m_treeMETADATA, root.GetString(ibProtocol::ibView::ibCheckTree::Title));
+	m_roleCtrl->SetItemData(m_treeMETADATA, new ibTreeItemObject(root.GetId(), root.FindChild(ibProtocol::ibView::ibCheckTree::Roles).Clone()));
 	if (root.GetId() == m_keepSelId)
 		m_keepSelNode = m_treeMETADATA;
 
@@ -227,5 +227,5 @@ void ibRoleEditor::FillData(const ibProtocolNode& view)
 	}
 
 	m_roleCtrl->ExpandAll();
-	SetReadOnly(view.FindChild(ibProtocolName::State).GetBool(ibProtocolName::ReadOnly));
+	SetReadOnly(view.FindChild(ibProtocol::ibView::State).GetBool(ibProtocol::ibView::ibCheckTree::ReadOnly));
 }

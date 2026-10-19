@@ -33,6 +33,11 @@ public:
 	// a file's are made from what they keep.
 	static ibPicture GetServerPicture(const ibPictureDescription& pictureDesc, const class ibMetaData* metaData = nullptr);
 
+	// ⭐ A PICTURE BY ITS ID — all an answer names a picture by: a backend picture's number, a configuration picture's
+	// guid. The picture itself the client loads apart, by the id (ibProtocol::ibMethod::Picture), and keeps; one held as a
+	// file's bytes has no id of its own and goes as itself. Empty: no picture.
+	static ibString SendPicture(const ibPictureDescription& pictureDesc);
+
 #pragma region __picture_factory_h__
 	static bool IsRegisterPicture(const ibPictureID& id);
 	static wxBitmap GetPicture(const ibPictureID& id);

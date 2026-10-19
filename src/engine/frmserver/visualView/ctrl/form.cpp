@@ -56,7 +56,7 @@ ibValueForm::~ibValueForm()
 	// docs/private/record-locks.md Phase B.3.
 }
 
-bool ibValueForm::DispatchEvent(const ibFormID& controlId, ibProtocolEvent event, const ibDataNode& args)
+bool ibValueForm::DispatchEvent(const ibFormID& controlId, ibProtocol::ibEvent::ibKind event, const ibDataNode& args)
 {
 	ibValueFrame* const control = controlId == GetControlID() ? this : FindControlByID(controlId);
 	if (control == nullptr)
@@ -73,14 +73,14 @@ bool ibValueForm::DispatchEvent(const ibFormID& controlId, ibProtocolEvent event
 	for (ibValueFrame* node = control; node != nullptr; node = node->GetParent()) {
 		ibDataNode state;
 		node->OnUpdate(state, host);
-		const ibDataValue* enabled = state.FindField(ibProtocolName::Enabled);
-		const ibDataValue* visible = state.FindField(ibProtocolName::Visible);
+		const ibDataValue* enabled = state.FindField(ibProtocol::ibForm::ibState::Enabled);
+		const ibDataValue* visible = state.FindField(ibProtocol::ibForm::ibState::Visible);
 		if ((enabled != nullptr && !enabled->AsBool()) || (visible != nullptr && !visible->AsBool()))
 			return false;
 	}
 
 	// Picked out — the client's click on it, as the window host's was.
-	if (event == ibProtocolEvent::Focus) {
+	if (event == ibProtocol::ibEvent::ibKind::Focus) {
 		SetActiveControl(control);
 		host->SelectControl(control);
 		return true;
@@ -96,14 +96,14 @@ void ibValueForm::OnUpdate(ibDataNode& state, ibVisualHost* host)
 	// update of the form has its tables read their rows again (UpdateForm), which no frame drawn means.
 	RefreshLockBadge();
 
-	state.SetValue(ibProtocolName::Title, GetControlTitle());
-	state.SetValue(ibProtocolName::Enabled, IsFormEnabled());
-	state.SetValue(wxT("ViewOnly"), IsViewOnly());
-	state.SetValue(ibProtocolName::Modified, IsModified());
+	state.SetValue(ibProtocol::ibForm::ibState::Title, GetControlTitle());
+	state.SetValue(ibProtocol::ibForm::ibState::Enabled, IsFormEnabled());
+	state.SetValue(ibProtocol::ibForm::ibState::ViewOnly, IsViewOnly());
+	state.SetValue(ibProtocol::ibForm::ibState::Modified, IsModified());
 	if (!m_lockBadgeHolder.IsEmpty())
-		state.SetValue(wxT("LockedBy"), m_lockBadgeHolder);
+		state.SetValue(ibProtocol::ibForm::ibState::LockedBy, m_lockBadgeHolder);
 	if (HasCommandBar())
-		GetCommandBar()->Update(state.Child(ibProtocolName::CommandBar));
+		GetCommandBar()->Update(state.Child(ibProtocol::ibForm::ibCommandBar::CommandBar));
 }
 
 //**********************************************************************************
@@ -124,8 +124,8 @@ bool ibValueForm::ReadData(const ibDataNode& node)
 	// Its command bar — the "Layers" block a composite control keeps it in (ibValueWindowComposite::ReadData); a form
 	// saved without it keeps the bar it is made with.
 	if (ibValueCommandBar* bar = GetCommandBar()) {
-		if (const ibDataNode* layers = node.FindChild(ibProtocolName::Layers)) {
-			if (const ibDataNode* barNode = layers->FindChild(ibProtocolName::CommandBar))
+		if (const ibDataNode* layers = node.FindChild(ibProtocol::ibForm::ibCommandBar::Layers)) {
+			if (const ibDataNode* barNode = layers->FindChild(ibProtocol::ibForm::ibCommandBar::CommandBar))
 				bar->ReadData(*barNode);
 		}
 	}
@@ -147,7 +147,7 @@ bool ibValueForm::WriteData(ibDataNode& node) const
 	// …and its command bar, as a composite control writes its own (ibValueWindowComposite::WriteData): a command put on
 	// it was lost with the next drawing of the form (2026-10-15).
 	if (ibValueCommandBar* bar = GetCommandBar())
-		bar->WriteData(node.Child(ibProtocolName::Layers).Child(ibProtocolName::CommandBar));
+		bar->WriteData(node.Child(ibProtocol::ibForm::ibCommandBar::Layers).Child(ibProtocol::ibForm::ibCommandBar::CommandBar));
 	return ibValueFrame::WriteData(node) && attributes;
 }
 

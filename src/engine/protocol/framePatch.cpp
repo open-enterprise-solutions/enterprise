@@ -1,5 +1,5 @@
 #include "protocolNode.h"
-#include "protocol/protocol.h"   // ibProtocolName
+#include "protocol/protocol.h"   // ibProtocol::ibNode
 
 #include <algorithm>
 #include <map>
@@ -16,9 +16,9 @@ using json = nlohmann::json;
 // children, never an entry of it.
 bool IsStructural(const std::string& name)
 {
-	return name == ibProtocolName::NodeRemoved || name == ibProtocolName::NodeRemovedIds
-		|| name == ibProtocolName::NodeOrder || name == ibProtocolName::NodeChildrenWhole
-		|| name == ibProtocolName::NodeChildren || name == ibProtocolName::NodeType || name == ibProtocolName::NodeId;
+	return name == ibProtocol::ibNode::Removed || name == ibProtocol::ibNode::RemovedIds
+		|| name == ibProtocol::ibNode::Order || name == ibProtocol::ibNode::ChildrenWhole
+		|| name == ibProtocol::ibNode::Children || name == ibProtocol::ibNode::Type || name == ibProtocol::ibNode::Id;
 }
 
 // A child's id — 0 for one that has none.
@@ -26,7 +26,7 @@ long long IdOf(const json& node)
 {
 	if (!node.is_object())
 		return 0;
-	const auto id = node.find(ibProtocolName::NodeId);
+	const auto id = node.find(ibProtocol::ibNode::Id);
 	return id != node.end() && id->is_number() ? id->get<long long>() : 0;
 }
 
@@ -36,7 +36,7 @@ void ApplyNode(json& copy, const json& patch)
 		copy = json::object();
 
 	// The entries gone, first; then each the patch carries — merged when both are nodes.
-	const auto gone = patch.find(ibProtocolName::NodeRemoved);
+	const auto gone = patch.find(ibProtocol::ibNode::Removed);
 	if (gone != patch.end() && gone->is_array()) {
 		for (const json& name : *gone) {
 			if (name.is_string())
@@ -52,25 +52,25 @@ void ApplyNode(json& copy, const json& patch)
 		else
 			copy[entry.key()] = *entry;
 	}
-	for (const char* identity : { ibProtocolName::NodeType, ibProtocolName::NodeId }) {
+	for (const char* identity : { ibProtocol::ibNode::Type, ibProtocol::ibNode::Id }) {
 		const auto said = patch.find(identity);
 		if (said != patch.end())
 			copy[identity] = *said;
 	}
 
 	// Children without ids — whole, as the patch carries them.
-	const auto children = patch.find(ibProtocolName::NodeChildren);
-	const auto whole = patch.find(ibProtocolName::NodeChildrenWhole);
+	const auto children = patch.find(ibProtocol::ibNode::Children);
+	const auto whole = patch.find(ibProtocol::ibNode::ChildrenWhole);
 	if (whole != patch.end() && whole->is_boolean() && whole->get<bool>()) {
-		copy[ibProtocolName::NodeChildren] = children != patch.end() ? *children : json::array();
+		copy[ibProtocol::ibNode::Children] = children != patch.end() ? *children : json::array();
 		return;
 	}
-	const auto removedIds = patch.find(ibProtocolName::NodeRemovedIds);
-	const auto order = patch.find(ibProtocolName::NodeOrder);
+	const auto removedIds = patch.find(ibProtocol::ibNode::RemovedIds);
+	const auto order = patch.find(ibProtocol::ibNode::Order);
 	if (children == patch.end() && removedIds == patch.end() && order == patch.end())
 		return;
 
-	json& held = copy[ibProtocolName::NodeChildren];
+	json& held = copy[ibProtocol::ibNode::Children];
 	if (!held.is_array())
 		held = json::array();
 	// The array itself — a json's own iterator is bidirectional, and the order below is a sort.
@@ -127,7 +127,7 @@ std::size_t ibProtocolNode::GetChangeCount() const
 	// Its entries set, and the entries it removes (NodeRemoved) — not the words that name it and lead to its children.
 	std::size_t count = 0;
 	for (auto entry = m_node->begin(); entry != m_node->end(); ++entry) {
-		if (!IsStructural(entry.key()) || entry.key() == ibProtocolName::NodeRemoved)
+		if (!IsStructural(entry.key()) || entry.key() == ibProtocol::ibNode::Removed)
 			++count;
 	}
 	return count;

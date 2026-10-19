@@ -44,7 +44,7 @@ struct ibSettingsPlainField {
 	// WHAT A PERSON READS — the title the host gives the field (a composition: its title in force, the
 	// one printed over its column). Empty reads as the name. What a pick STORES stays the name above.
 	wxString          m_presentation;
-	// HOW IT IS DRAWN — the column's picture as the server names it (ibClientFrame::SendPicture), where the desktop's tree
+	// HOW IT IS DRAWN — the column's picture as the server names it (ibBackendPicture::SendPicture), where the desktop's tree
 	// walks a source's explorer; empty on a flat list, drawn with the attribute picture.
 	wxString          m_picture;
 };

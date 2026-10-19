@@ -14,10 +14,10 @@ bool ibSchemaAuditLog::AccessRight(const ibSession& session) const
 }
 
 std::function<void()> ibSchemaAuditLog::Command(const ibSession& session, s32 command,
-	const ibDataNode& WXUNUSED(args), ibProtocolRefusal& refusal, wxString& error) const
+	const ibDataNode& WXUNUSED(args), ibProtocol::ibRefusal& refusal, wxString& error) const
 {
-	if (static_cast<ibProtocolSchemaCommand>(command) != ibProtocolSchemaCommand::Open) {
-		refusal = ibProtocolRefusal::NotFound;
+	if (static_cast<ibProtocol::ibSchema::ibCommand>(command) != ibProtocol::ibSchema::ibCommand::Open) {
+		refusal = ibProtocol::ibRefusal::NotFound;
 		error = wxString::Format(wxT("the registration journal has no command %d"), command);
 		return nullptr;
 	}

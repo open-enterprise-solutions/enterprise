@@ -290,10 +290,10 @@ void ibFrontendMainFrameDesigner::OnUpdateDebugCommand(wxUpdateUIEvent& event)
 
 #include "frmclient/win/dlgs/userList.h"
 
-void ibFrontendMainFrameDesigner::ShowSchema(ibProtocolSchema schema, const ibProtocolNode& shown)
+void ibFrontendMainFrameDesigner::ShowSchema(ibProtocol::ibSchema::ibKind schema, const ibProtocolNode& shown)
 {
 	// The debugger's store, read in the login (GetStartSchemas) — the debugger made over it, nothing asked again.
-	if (schema == ibProtocolSchema::Debugger) {
+	if (schema == ibProtocol::ibSchema::ibKind::Debugger) {
 		if (m_debugClient == nullptr)
 			m_debugClient.reset(new ibDebuggerClient(shown));
 		return;
@@ -301,7 +301,7 @@ void ibFrontendMainFrameDesigner::ShowSchema(ibProtocolSchema schema, const ibPr
 
 	// Administration → Users — the server's menu item (its UserList schema); the desktop's OnUsers as it is, the list
 	// asked of the schema again by the dialog.
-	if (schema == ibProtocolSchema::UserList) {
+	if (schema == ibProtocol::ibSchema::ibKind::UserList) {
 		ibWindowPtr<ibDialogUserList> dlg(new ibDialogUserList(this, wxID_ANY));
 		dlg->Show();
 		return;
@@ -309,7 +309,7 @@ void ibFrontendMainFrameDesigner::ShowSchema(ibProtocolSchema schema, const ibPr
 
 	// Tools → Options — the server's menu item (its McpServer schema); the dialog the desktop's OnToolsSettings
 	// (designer/mainFrame/mainFrameDesignerEvent.cpp) as it is, its assistant access asked of the schema again.
-	if (schema != ibProtocolSchema::McpServer) {
+	if (schema != ibProtocol::ibSchema::ibKind::McpServer) {
 		ibFrontendMainFrame::ShowSchema(schema, shown);
 		return;
 	}

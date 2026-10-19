@@ -29,6 +29,9 @@ public:
 
 	bool IsEmptyCommand() const { return !m_commandDesc.IsOk(); }
 
+	// The button / bar item the binding is walked on — what its commands are asked of.
+	const ibBackendCommandReceiver* GetOwner() const { return m_owner; }
+
 	// The binding address — a command-hop path (own object / main attribute / table / general command). The
 	// variant's only stored state; the property serialises THIS (mirrors ibVariantDataSource::GetSourceDesc).
 	ibCommandDescription& GetCommandDesc() { return m_commandDesc; }

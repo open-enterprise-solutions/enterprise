@@ -16,7 +16,7 @@ public:
 	virtual bool OnCreate(ibDocument* doc, long flags) override;
 	virtual void OnDraw(ibDataNode& frame) override;
 
-	virtual ibProtocolViewKind GetViewKind() const override { return ibProtocolViewKind::Text; }
+	virtual ibProtocol::ibView::ibKind GetViewKind() const override { return ibProtocol::ibView::ibKind::Text; }
 
 private:
 

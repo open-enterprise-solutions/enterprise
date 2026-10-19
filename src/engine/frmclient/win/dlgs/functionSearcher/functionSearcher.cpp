@@ -46,7 +46,7 @@ ibFunctionList::ibFunctionList(ibTabDocument* moduleDoc, ibCodeEditor* parent)
 	ibProtocolNode defaultProcedures;
 	if (moduleDoc != nullptr) {
 		ibProtocolNode request;
-		request.SetValue(ibProtocolName::Kind, static_cast<int>(ibProtocolModuleRequest::Procedures));
+		request.SetValue(ibProtocol::ibView::ibModule::Kind, static_cast<int>(ibProtocol::ibView::ibModule::ibRequest::Procedures));
 		moduleDoc->Fetch(request, defaultProcedures);
 	}
 
@@ -89,7 +89,7 @@ ibFunctionList::ibFunctionList(ibTabDocument* moduleDoc, ibCodeEditor* parent)
 
 	//Get default proc — only available when a module's tab backs the editor.
 	for (const ibProtocolNode& defaultProcedure : defaultProcedures.Children()) {
-		wxString procedureName = defaultProcedure.GetString(ibProtocolName::Name);
+		wxString procedureName = defaultProcedure.GetString(ibProtocol::ibView::ibModule::Name);
 		auto it = std::find_if(arrayProcedures.begin(), arrayProcedures.end(),
 			[&procedureName](const wxString& proc) { return proc.CompareTo(procedureName, wxString::caseCompare::ignoreCase) == 0; });
 
@@ -109,7 +109,7 @@ ibFunctionList::ibFunctionList(ibTabDocument* moduleDoc, ibCodeEditor* parent)
 		m_aOffsets.insert_or_assign(item,
 			offset_proc_t { maxLine,  wxNOT_FOUND }
 		);
-		m_aArgs.insert_or_assign(item, defaultProcedure.GetString(ibProtocolName::Args));
+		m_aArgs.insert_or_assign(item, defaultProcedure.GetString(ibProtocol::ibView::ibModule::Args));
 	}
 
 	wxBoxSizer* boxsizerButton = new wxBoxSizer(wxVERTICAL);

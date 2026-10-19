@@ -24,7 +24,7 @@
 #include "frmclient/frmclient.h"   // FRMCLIENT_API
 #include "core/job/jobSchedule.h"
 
-// The desktop's (frontend/win/dlgs/jobSchedule), asked by the server (ibProtocolRequestKind::Schedule): the schedule
+// The desktop's (frontend/win/dlgs/jobSchedule), asked by the server (ibProtocol::ibRequest::ibKind::Schedule): the schedule
 // comes in the question, the edited one is the answer.
 class FRMCLIENT_API ibDialogJobSchedule : public wxDialog {
 public:

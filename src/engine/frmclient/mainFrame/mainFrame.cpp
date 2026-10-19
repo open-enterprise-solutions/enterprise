@@ -77,21 +77,21 @@ constexpr std::size_t kUploadPartSize = 1024 * 1024;
 // The stock picture an item is shown with — the art provider's (artProvider/), by the number the server names it by.
 wxArtID ArtOf(long long picture)
 {
-	switch (static_cast<ibProtocolStockPicture>(picture)) {
-	case ibProtocolStockPicture::New:    return wxART_NEW;
-	case ibProtocolStockPicture::Open:   return wxART_FILE_OPEN;
-	case ibProtocolStockPicture::Save:   return wxART_FILE_SAVE;
-	case ibProtocolStockPicture::SaveAs: return wxART_FILE_SAVE_AS;
-	case ibProtocolStockPicture::Close:  return wxART_CLOSE;
-	case ibProtocolStockPicture::Quit:   return wxART_QUIT;
-	case ibProtocolStockPicture::Undo:   return wxART_UNDO;
-	case ibProtocolStockPicture::Redo:   return wxART_REDO;
-	case ibProtocolStockPicture::Cut:    return wxART_CUT;
-	case ibProtocolStockPicture::Copy:   return wxART_COPY;
-	case ibProtocolStockPicture::Paste:  return wxART_PASTE;
-	case ibProtocolStockPicture::Delete: return wxART_DELETE;
-	case ibProtocolStockPicture::Find:   return wxART_FIND;
-	case ibProtocolStockPicture::Print:  return wxART_PRINT;
+	switch (static_cast<ibProtocol::ibFrame::ibMenu::ibStockPicture>(picture)) {
+	case ibProtocol::ibFrame::ibMenu::ibStockPicture::New:    return wxART_NEW;
+	case ibProtocol::ibFrame::ibMenu::ibStockPicture::Open:   return wxART_FILE_OPEN;
+	case ibProtocol::ibFrame::ibMenu::ibStockPicture::Save:   return wxART_FILE_SAVE;
+	case ibProtocol::ibFrame::ibMenu::ibStockPicture::SaveAs: return wxART_FILE_SAVE_AS;
+	case ibProtocol::ibFrame::ibMenu::ibStockPicture::Close:  return wxART_CLOSE;
+	case ibProtocol::ibFrame::ibMenu::ibStockPicture::Quit:   return wxART_QUIT;
+	case ibProtocol::ibFrame::ibMenu::ibStockPicture::Undo:   return wxART_UNDO;
+	case ibProtocol::ibFrame::ibMenu::ibStockPicture::Redo:   return wxART_REDO;
+	case ibProtocol::ibFrame::ibMenu::ibStockPicture::Cut:    return wxART_CUT;
+	case ibProtocol::ibFrame::ibMenu::ibStockPicture::Copy:   return wxART_COPY;
+	case ibProtocol::ibFrame::ibMenu::ibStockPicture::Paste:  return wxART_PASTE;
+	case ibProtocol::ibFrame::ibMenu::ibStockPicture::Delete: return wxART_DELETE;
+	case ibProtocol::ibFrame::ibMenu::ibStockPicture::Find:   return wxART_FIND;
+	case ibProtocol::ibFrame::ibMenu::ibStockPicture::Print:  return wxART_PRINT;
 	default:                             break;
 	}
 	return wxArtID();
@@ -100,12 +100,12 @@ wxArtID ArtOf(long long picture)
 // The wx command of an edit the server asks back. wxID_NONE: none.
 int EditCommandOf(long long command)
 {
-	switch (static_cast<ibProtocolCommand>(command)) {
-	case ibProtocolCommand::Cut:       return wxID_CUT;
-	case ibProtocolCommand::Copy:      return wxID_COPY;
-	case ibProtocolCommand::Paste:     return wxID_PASTE;
-	case ibProtocolCommand::Delete:    return wxID_DELETE;
-	case ibProtocolCommand::SelectAll: return wxID_SELECTALL;
+	switch (static_cast<ibProtocol::ibFrame::ibCommand>(command)) {
+	case ibProtocol::ibFrame::ibCommand::Cut:       return wxID_CUT;
+	case ibProtocol::ibFrame::ibCommand::Copy:      return wxID_COPY;
+	case ibProtocol::ibFrame::ibCommand::Paste:     return wxID_PASTE;
+	case ibProtocol::ibFrame::ibCommand::Delete:    return wxID_DELETE;
+	case ibProtocol::ibFrame::ibCommand::SelectAll: return wxID_SELECTALL;
 	default:                           break;
 	}
 	return wxID_NONE;
@@ -124,13 +124,13 @@ void EditFocused(int command)
 	focus->GetEventHandler()->ProcessEventLocally(event);
 }
 
-ibProtocolMessageLevel LevelOf(long long level)
+ibProtocol::ibFrame::ibMessage::ibLevel LevelOf(long long level)
 {
-	if (level == static_cast<long long>(ibProtocolMessageLevel::Warning))
-		return ibProtocolMessageLevel::Warning;
-	if (level == static_cast<long long>(ibProtocolMessageLevel::Error))
-		return ibProtocolMessageLevel::Error;
-	return ibProtocolMessageLevel::Information;
+	if (level == static_cast<long long>(ibProtocol::ibFrame::ibMessage::ibLevel::Warning))
+		return ibProtocol::ibFrame::ibMessage::ibLevel::Warning;
+	if (level == static_cast<long long>(ibProtocol::ibFrame::ibMessage::ibLevel::Error))
+		return ibProtocol::ibFrame::ibMessage::ibLevel::Error;
+	return ibProtocol::ibFrame::ibMessage::ibLevel::Information;
 }
 
 // A menu of the frame, as a list of what it is made of — the titles, the keys, what each item does — less whether an
@@ -139,14 +139,14 @@ void ShapeOf(const ibProtocolNode& menu, std::string& shape)
 {
 	for (const ibProtocolNode& item : menu.Children()) {
 		shape += '[';
-		if (item.GetBool(ibProtocolName::Separator))
+		if (item.GetBool(ibProtocol::ibFrame::ibMenu::Separator))
 			shape += '-';
-		shape += std::string(item.GetString(ibProtocolName::Title).utf8_str());
+		shape += std::string(item.GetString(ibProtocol::ibFrame::ibMenu::Title).utf8_str());
 		shape += '|';
-		shape += std::string(item.GetString(ibProtocolName::Shortcut).utf8_str());
+		shape += std::string(item.GetString(ibProtocol::ibFrame::ibMenu::Shortcut).utf8_str());
 		shape += '|';
-		shape += std::to_string(item.GetInt(ibProtocolName::Command, -1)) + '|' + std::to_string(item.GetInt(ibProtocolName::Schema, -1));
-		shape += '|' + std::to_string(item.GetInt(ibProtocolName::StockPicture));
+		shape += std::to_string(item.GetInt(ibProtocol::ibFrame::ibMenu::Command, -1)) + '|' + std::to_string(item.GetInt(ibProtocol::ibFrame::ibMenu::Schema, -1));
+		shape += '|' + std::to_string(item.GetInt(ibProtocol::ibFrame::ibMenu::StockPicture));
 		ShapeOf(item, shape);
 		shape += ']';
 	}
@@ -155,12 +155,12 @@ void ShapeOf(const ibProtocolNode& menu, std::string& shape)
 // The wx id of a command or a schema of the server's menu — by its number in the protocol.
 int MenuIdOf(const ibProtocolNode& item)
 {
-	if (item.Has(ibProtocolName::Schema) && item.Has(ibProtocolName::Command))
-		return kFirstSchemaCommandMenuId + static_cast<int>(item.GetInt(ibProtocolName::Schema)) * kSchemaCommandMenuIds
-			+ static_cast<int>(item.GetInt(ibProtocolName::Command));
-	if (item.Has(ibProtocolName::Schema))
-		return kFirstSchemaMenuId + static_cast<int>(item.GetInt(ibProtocolName::Schema));
-	return kFirstMenuId + static_cast<int>(item.GetInt(ibProtocolName::Command));
+	if (item.Has(ibProtocol::ibFrame::ibMenu::Schema) && item.Has(ibProtocol::ibFrame::ibMenu::Command))
+		return kFirstSchemaCommandMenuId + static_cast<int>(item.GetInt(ibProtocol::ibFrame::ibMenu::Schema)) * kSchemaCommandMenuIds
+			+ static_cast<int>(item.GetInt(ibProtocol::ibFrame::ibMenu::Command));
+	if (item.Has(ibProtocol::ibFrame::ibMenu::Schema))
+		return kFirstSchemaMenuId + static_cast<int>(item.GetInt(ibProtocol::ibFrame::ibMenu::Schema));
+	return kFirstMenuId + static_cast<int>(item.GetInt(ibProtocol::ibFrame::ibMenu::Command));
 }
 
 // A MENU REQUEST'S ITEMS, put into a popup menu as the desktop built it: an item with items of its own is a submenu,
@@ -169,26 +169,26 @@ int MenuIdOf(const ibProtocolNode& item)
 void AppendMenuItems(wxMenu& menu, const std::vector<ibProtocolNode>& items, std::vector<long long>& ids)
 {
 	for (const ibProtocolNode& item : items) {
-		const wxString caption = item.GetString(ibProtocolName::Caption);
+		const wxString caption = item.GetString(ibProtocol::ibRequest::ibMenu::Caption);
 		const std::vector<ibProtocolNode> subItems = item.Children();
 		if (!subItems.empty()) {
 			wxMenu* const submenu = new wxMenu;
 			AppendMenuItems(*submenu, subItems, ids);
-			menu.AppendSubMenu(submenu, caption)->Enable(item.GetBool(ibProtocolName::Enabled, true));
+			menu.AppendSubMenu(submenu, caption)->Enable(item.GetBool(ibProtocol::ibRequest::ibMenu::Enabled, true));
 			continue;
 		}
 		const int id = wxID_HIGHEST + 1 + static_cast<int>(ids.size());
-		ids.push_back(item.GetInt(ibProtocolName::Id));
-		const bool checked = item.GetBool(ibProtocolName::Checked);
+		ids.push_back(item.GetInt(ibProtocol::ibRequest::ibMenu::Id));
+		const bool checked = item.GetBool(ibProtocol::ibRequest::ibMenu::Checked);
 		wxMenuItem* const added = checked ? menu.AppendCheckItem(id, caption) : menu.Append(id, caption);
 		if (checked)
 			added->Check(true);
-		added->Enable(item.GetBool(ibProtocolName::Enabled, true));
+		added->Enable(item.GetBool(ibProtocol::ibRequest::ibMenu::Enabled, true));
 	}
 }
 
 // A FIELD'S VALUE FOR THE SERVER'S QUESTION — what the desktop's SimpleChoice is drawn over: the value the question carries,
-// the one chosen kept, and the wait ended when the calculator or the calendar goes (ibProtocolRequestKind::SimpleChoice).
+// the one chosen kept, and the wait ended when the calculator or the calendar goes (ibProtocol::ibRequest::ibKind::SimpleChoice).
 class ibSimpleChoiceHolder : public ibControlFrame {
 public:
 
@@ -246,11 +246,11 @@ wxWindow* FocusedEditor(wxWindow* otherwise)
 }
 
 // A SETTINGS WINDOW'S QUESTION — a list's or a report's: the one a value of the server's choosing is chosen for on the
-// way (ibProtocolListSettingsAct::Choose), and asked again with it.
+// way (ibProtocol::ibRequest::ibListSettings::ibAct::Choose), and asked again with it.
 bool IsSettingsRequest(const ibProtocolNode& request)
 {
-	const ibProtocolRequestKind kind = static_cast<ibProtocolRequestKind>(request.GetInt(ibProtocolName::Kind));
-	return kind == ibProtocolRequestKind::ListSettings || kind == ibProtocolRequestKind::ComposerSettings;
+	const ibProtocol::ibRequest::ibKind kind = static_cast<ibProtocol::ibRequest::ibKind>(request.GetInt(ibProtocol::ibRequest::Kind));
+	return kind == ibProtocol::ibRequest::ibKind::ListSettings || kind == ibProtocol::ibRequest::ibKind::ComposerSettings;
 }
 
 } // namespace
@@ -261,7 +261,7 @@ bool IsSettingsRequest(const ibProtocolNode& request)
 
 ibFrontendMainFrame* ibFrontendMainFrame::s_instance = nullptr;
 
-ibFrontendMainFrame::ibFrontendMainFrame(std::unique_ptr<ibCommunicator> communicator, ibProtocolMode mode,
+ibFrontendMainFrame::ibFrontendMainFrame(std::unique_ptr<ibCommunicator> communicator, ibProtocol::ibLogin::ibMode mode,
 	const wxString& user, const wxString& password, const wxString& title,
 	const wxPoint& pos, const wxSize& size, long style, const wxString& name)
 	: ibDocParentFrameAnyBase(this),
@@ -723,7 +723,7 @@ bool ibFrontendMainFrame::Show(bool show)
 	CreateGUI();
 
 	ibProtocolNode answer;
-	ibProtocolRefusal refusal = ibProtocolRefusal::None;
+	ibProtocol::ibRefusal refusal = ibProtocol::ibRefusal::None;
 	wxString error;
 	bool loggedIn = m_communicator->Login(m_user, m_password, m_mode, answer, refusal, error, GetStartSchemas());
 
@@ -732,12 +732,12 @@ bool ibFrontendMainFrame::Show(bool show)
 	// name is typed.
 	bool cancelled = false;
 	std::vector<wxString> users;
-	for (bool asked = false; !loggedIn && refusal == ibProtocolRefusal::LoginRefused; asked = true) {
+	for (bool asked = false; !loggedIn && refusal == ibProtocol::ibRefusal::LoginRefused; asked = true) {
 		if (asked) {
 			wxMessageBox(_("Wrong user or password entered!"), GetTitle(), wxOK | wxICON_ERROR);
 		}
 		else {
-			ibProtocolRefusal usersRefusal = ibProtocolRefusal::None;
+			ibProtocol::ibRefusal usersRefusal = ibProtocol::ibRefusal::None;
 			wxString usersError;
 			m_communicator->Users(users, usersRefusal, usersError);
 		}
@@ -756,7 +756,7 @@ bool ibFrontendMainFrame::Show(bool show)
 		// A start that ended the run itself (its BeforeStart cancelled it, a debugger's Stop in it) is no failure to say:
 		// the person ended it, or saw what it said — the desktop's start goes as quietly (enterprise/mainApp.cpp, Cancelled).
 		// Nor is a login window the person cancelled.
-		if (!cancelled && refusal != ibProtocolRefusal::StartRefused)
+		if (!cancelled && refusal != ibProtocol::ibRefusal::StartRefused)
 			wxMessageBox(!error.IsEmpty() ? error : wxString(_("The start was refused.")), GetTitle(), wxOK | wxICON_ERROR);
 		return false;
 	}
@@ -764,7 +764,7 @@ bool ibFrontendMainFrame::Show(bool show)
 	// WHAT THE SERVER SAYS UNASKED — the frame changed by itself (a report composed, a question asked by work nobody
 	// called): the frame asked for, after whatever the window is doing; told on another thread, made on this one.
 	m_communicator->Listen([this]() {
-		CallAfter([this]() { Post(ibProtocolMethod::Frame, ibProtocolNode()); });
+		CallAfter([this]() { Post(ibProtocol::ibMethod::Frame, ibProtocolNode()); });
 	});
 
 	SetClientSize(FromDIP(wxSize(800, 600)));
@@ -786,8 +786,8 @@ bool ibFrontendMainFrame::Show(bool show)
 	Raise();
 
 	// …and what the login read beside the frame (GetStartSchemas), each shown as a call of its own would have been.
-	for (const ibProtocolNode& read : answer.FindChild(ibProtocolName::Read).Children())
-		ShowSchema(static_cast<ibProtocolSchema>(read.GetInt(ibProtocolName::Schema)), read);
+	for (const ibProtocolNode& read : answer.FindChild(ibProtocol::ibLogin::Read).Children())
+		ShowSchema(static_cast<ibProtocol::ibSchema::ibKind>(read.GetInt(ibProtocol::ibLogin::Schema)), read);
 	return true;
 }
 
@@ -810,11 +810,11 @@ bool ibFrontendMainFrame::Destroy()
 	return wxAuiMDIParentFrame::Destroy();
 }
 
-bool ibFrontendMainFrame::Call(ibProtocolMethod method, const ibProtocolNode& params, ibProtocolNode& answer)
+bool ibFrontendMainFrame::Call(ibProtocol::ibMethod method, const ibProtocolNode& params, ibProtocolNode& answer)
 {
 	// Under way until it has settled — its questions asked, its refusal said: a call posted meanwhile waits for it.
 	++m_calling;
-	ibProtocolRefusal refusal = ibProtocolRefusal::None;
+	ibProtocol::ibRefusal refusal = ibProtocol::ibRefusal::None;
 	wxString error;
 	const bool called = m_communicator->Call(method, params, answer, refusal, error);
 	if (called)
@@ -827,14 +827,14 @@ bool ibFrontendMainFrame::Call(ibProtocolMethod method, const ibProtocolNode& pa
 	return called;
 }
 
-bool ibFrontendMainFrame::Call(ibProtocolMethod method, const ibProtocolNode& params, ibProtocolNode& answer,
-	ibProtocolRefusal& refusal, wxString& error)
+bool ibFrontendMainFrame::Call(ibProtocol::ibMethod method, const ibProtocolNode& params, ibProtocolNode& answer,
+	ibProtocol::ibRefusal& refusal, wxString& error)
 {
 	++m_calling;
 	const bool called = m_communicator->Call(method, params, answer, refusal, error);
 	if (called)
 		Settle(answer);
-	else if (refusal == ibProtocolRefusal::NoSession)
+	else if (refusal == ibProtocol::ibRefusal::NoSession)
 		Refused(refusal, error);
 	--m_calling;
 
@@ -855,7 +855,7 @@ void ibFrontendMainFrame::CallSettled()
 		CallAfter(&ibFrontendMainFrame::CallPosted);
 }
 
-void ibFrontendMainFrame::Post(ibProtocolMethod method, const ibProtocolNode& params)
+void ibFrontendMainFrame::Post(ibProtocol::ibMethod method, const ibProtocolNode& params)
 {
 	m_posted.push_back(ibPostedCall{ method, params });
 	CallAfter(&ibFrontendMainFrame::CallPosted);
@@ -880,28 +880,28 @@ void ibFrontendMainFrame::CloseTab(long long tabId)
 		return;
 
 	ibProtocolNode params;
-	params.SetValue(ibProtocolName::Tab, tabId);
-	Post(ibProtocolMethod::Close, params);
+	params.SetValue(ibProtocol::ibFrame::Tab, tabId);
+	Post(ibProtocol::ibMethod::Close, params);
 }
 
-bool ibFrontendMainFrame::Fetch(ibProtocolMethod method, const ibProtocolNode& params, ibProtocolNode& answer)
+bool ibFrontendMainFrame::Fetch(ibProtocol::ibMethod method, const ibProtocolNode& params, ibProtocolNode& answer)
 {
-	ibProtocolRefusal refusal = ibProtocolRefusal::None;
+	ibProtocol::ibRefusal refusal = ibProtocol::ibRefusal::None;
 	wxString error;
 	return m_communicator->Call(method, params, answer, refusal, error);
 }
 
-void ibFrontendMainFrame::ShowSchema(ibProtocolSchema schema, const ibProtocolNode& shown)
+void ibFrontendMainFrame::ShowSchema(ibProtocol::ibSchema::ibKind schema, const ibProtocolNode& shown)
 {
-	if (schema == ibProtocolSchema::ActiveUser) {
+	if (schema == ibProtocol::ibSchema::ibKind::ActiveUser) {
 		ibDialogActiveUser dialog(this, shown);
 		dialog.ShowModal();
 	}
-	else if (schema == ibProtocolSchema::About) {
+	else if (schema == ibProtocol::ibSchema::ibKind::About) {
 		ibDialogAbout dialog(this, shown);
 		dialog.ShowModal();
 	}
-	else if (schema == ibProtocolSchema::Debugging) {
+	else if (schema == ibProtocol::ibSchema::ibKind::Debugging) {
 		ibDialogEnterpriseOption dialog(this, shown);
 		dialog.ShowModal();
 	}
@@ -914,8 +914,8 @@ bool ibFrontendMainFrame::AllowClose()
 	// close it a second time. A session already gone has nothing to keep.
 	m_closingWindow = true;
 	ibProtocolNode params, answer;
-	params.SetValue(ibProtocolName::Command, static_cast<long long>(ibProtocolCommand::Exit));
-	Call(ibProtocolMethod::Command, params, answer);
+	params.SetValue(ibProtocol::ibFrame::Command, static_cast<long long>(ibProtocol::ibFrame::ibCommand::Exit));
+	Call(ibProtocol::ibMethod::Command, params, answer);
 	m_closingWindow = false;
 	return m_exitGranted || !m_communicator->IsLoggedIn();
 }
@@ -925,61 +925,61 @@ void ibFrontendMainFrame::Draw(const ibProtocolNode& answer)
 	// ⭐ AN ANSWER THAT IS NOT A FRAME — a schema's tree, a fetch's rows — CHANGED NOTHING IN THE WINDOW: the frame held
 	// stays (ibCommunicator::Take asks the same). Drawn whole, it rebuilt the inspector under the property window that
 	// asked it (Synonym's "..." → its languages) — the grid's rows freed under the button still dispatching (2026-10-14).
-	if (!answer.Has(ibProtocolName::Frame))
+	if (!answer.Has(ibProtocol::ibFrame::Frame))
 		return;
 
 	// THE INSPECTOR'S ROWS OF WHAT A DOOR ACTED ON (an edit, a new object, a tab opened over one) — received for the
 	// object before anything is drawn: the tree drawn below may select it, and its object takes them in instead of asking.
-	for (const ibProtocolNode& rows : answer.FindChild(ibProtocolName::Properties).Children())
-		ibValueMetaObject::Receive(rows.GetInt(ibProtocolName::Tab), static_cast<ibMetaID>(rows.GetId()), rows);
+	for (const ibProtocolNode& rows : answer.FindChild(ibProtocol::ibFrame::Properties).Children())
+		ibValueMetaObject::Receive(rows.GetInt(ibProtocol::ibFrame::Tab), static_cast<ibMetaID>(rows.GetId()), rows);
 
 	const ibProtocolNode& frame = m_communicator->GetFrame();
 
 	// ⭐ WHAT THE ANSWER CHANGED IS DRAWN — its patch names it, and a part it does not name is as it was; a frame sent
 	// whole is drawn whole.
-	const ibProtocolNode patch = answer.FindChild(ibProtocolName::Patch);
+	const ibProtocolNode patch = answer.FindChild(ibProtocol::ibFrame::Patch);
 	const bool whole = !patch.IsNode();
 
 	// THE LANGUAGE TEXT IS READ IN — the session's, as the server says it, before anything is drawn: a caption held
 	// whole (a property's Synonym) reads in it, as the desktop's read in its configuration's.
-	if (whole || patch.Has(ibProtocolName::Language))
-		ibBackendLocalization::SetUserLanguage(frame.GetString(ibProtocolName::Language));
+	if (whole || patch.Has(ibProtocol::ibFrame::Language))
+		ibBackendLocalization::SetUserLanguage(frame.GetString(ibProtocol::ibFrame::Language));
 
-	if (whole || patch.Has(ibProtocolName::Title)) {
-		const wxString title = frame.GetString(ibProtocolName::Title);
+	if (whole || patch.Has(ibProtocol::ibFrame::Title)) {
+		const wxString title = frame.GetString(ibProtocol::ibFrame::Title);
 		if (!title.IsEmpty() && title != GetTitle())
 			SetTitle(title);
 	}
-	if (GetStatusBar() != nullptr && (whole || patch.Has(ibProtocolName::Status)))
-		SetStatusText(frame.GetString(ibProtocolName::Status));
+	if (GetStatusBar() != nullptr && (whole || patch.Has(ibProtocol::ibFrame::Status)))
+		SetStatusText(frame.GetString(ibProtocol::ibFrame::Status));
 	// …and beside it the assistant's lamp. The endpoint, not just the word: when an assistant cannot connect, the first
 	// question is always which address and port it should have used, and the answer is then already on screen. Empty
 	// when it is off — its absence says the same thing.
-	if (GetStatusBar() != nullptr && (whole || patch.Has(ibProtocolName::Endpoint))) {
-		const wxString endpoint = frame.GetString(ibProtocolName::Endpoint);
+	if (GetStatusBar() != nullptr && (whole || patch.Has(ibProtocol::ibFrame::Endpoint))) {
+		const wxString endpoint = frame.GetString(ibProtocol::ibFrame::Endpoint);
 		SetStatusText(endpoint.IsEmpty() ? wxString() : wxString::Format(wxT("Assistant  %s"), endpoint),
 			ibDocBottomStatusBar::FieldAssistant);
 	}
 
-	if (whole || patch.Has(ibProtocolName::Menu))
-		DrawMenu(frame.FindChild(ibProtocolName::Menu));
-	if (whole || patch.Has(ibProtocolName::Templates))
-		DrawTemplates(frame.FindChild(ibProtocolName::Templates));
-	if (whole || patch.Has(ibProtocolName::Tabs))
-		DrawTabs(frame.FindChild(ibProtocolName::Tabs));
+	if (whole || patch.Has(ibProtocol::ibFrame::Menu))
+		DrawMenu(frame.FindChild(ibProtocol::ibFrame::Menu));
+	if (whole || patch.Has(ibProtocol::ibFrame::Templates))
+		DrawTemplates(frame.FindChild(ibProtocol::ibFrame::Templates));
+	if (whole || patch.Has(ibProtocol::ibFrame::Tabs))
+		DrawTabs(frame.FindChild(ibProtocol::ibFrame::Tabs));
 	DrawFrame(frame, patch);
-	DrawView(frame.GetInt(ibProtocolName::ActiveTab), frame.FindChild(ibProtocolName::View), patch);
+	DrawView(frame.GetInt(ibProtocol::ibFrame::ActiveTab), frame.FindChild(ibProtocol::ibFrame::View), patch);
 
 	// THE EVENTS — what happened since the last answer: read from the answer, never kept in the frame. Exit done: the
 	// client goes once its call has settled (Call, AllowClose).
-	if (answer.GetBool(ibProtocolName::Exit))
+	if (answer.GetBool(ibProtocol::ibFrame::Exit))
 		m_exitGranted = true;
 	if (m_outputWindow != nullptr) {
-		if (answer.GetBool(ibProtocolName::Clear))
+		if (answer.GetBool(ibProtocol::ibFrame::Clear))
 			m_outputWindow->Clear();
-		const std::vector<ibProtocolNode> messages = answer.FindChild(ibProtocolName::Messages).Children();
+		const std::vector<ibProtocolNode> messages = answer.FindChild(ibProtocol::ibFrame::Messages).Children();
 		for (const ibProtocolNode& message : messages)
-			m_outputWindow->Output(message.GetString(ibProtocolName::Text), LevelOf(message.GetInt(ibProtocolName::Level)));
+			m_outputWindow->Output(message.GetString(ibProtocol::ibFrame::ibMessage::Text), LevelOf(message.GetInt(ibProtocol::ibFrame::ibMessage::Level)));
 	}
 }
 
@@ -991,10 +991,10 @@ void ibFrontendMainFrame::DrawMenu(const ibProtocolNode& menu)
 	if (shape == m_menuShape) {
 		std::function<void(const ibProtocolNode&)> enable = [this, &enable](const ibProtocolNode& items) {
 			for (const ibProtocolNode& item : items.Children()) {
-				if (item.GetBool(ibProtocolName::Separator))
+				if (item.GetBool(ibProtocol::ibFrame::ibMenu::Separator))
 					continue;
-				if (item.Has(ibProtocolName::Command) || item.Has(ibProtocolName::Schema))
-					GetMenuBar()->Enable(MenuIdOf(item), item.GetBool(ibProtocolName::Enabled));
+				if (item.Has(ibProtocol::ibFrame::ibMenu::Command) || item.Has(ibProtocol::ibFrame::ibMenu::Schema))
+					GetMenuBar()->Enable(MenuIdOf(item), item.GetBool(ibProtocol::ibFrame::ibMenu::Enabled));
 				else
 					enable(item);
 			}
@@ -1014,23 +1014,23 @@ void ibFrontendMainFrame::DrawMenu(const ibProtocolNode& menu)
 	m_menuItems.clear();
 	std::function<void(wxMenu*, const ibProtocolNode&)> fill = [this, &fill](wxMenu* into, const ibProtocolNode& items) {
 		for (const ibProtocolNode& item : items.Children()) {
-			if (item.GetBool(ibProtocolName::Separator)) {
+			if (item.GetBool(ibProtocol::ibFrame::ibMenu::Separator)) {
 				into->AppendSeparator();
 				continue;
 			}
-			const wxString title = item.GetString(ibProtocolName::Title);
-			if (item.Has(ibProtocolName::Command) || item.Has(ibProtocolName::Schema)) {
+			const wxString title = item.GetString(ibProtocol::ibFrame::ibMenu::Title);
+			if (item.Has(ibProtocol::ibFrame::ibMenu::Command) || item.Has(ibProtocol::ibFrame::ibMenu::Schema)) {
 				const int id = MenuIdOf(item);
 				wxMenuItem* const added = into->Append(id, title);
-				const wxArtID art = ArtOf(item.GetInt(ibProtocolName::StockPicture));
+				const wxArtID art = ArtOf(item.GetInt(ibProtocol::ibFrame::ibMenu::StockPicture));
 				if (!art.IsEmpty())
 					added->SetBitmap(wxArtProvider::GetBitmapBundle(art, wxART_MENU, wxSize(16, 16)));
-				else if (item.Has(ibProtocolName::Picture)) {
-					const wxBitmap picture = ibProtocolPicture(item.GetString(ibProtocolName::Picture));
+				else if (item.Has(ibProtocol::ibFrame::ibMenu::Picture)) {
+					const wxBitmap picture = ibProtocolPicture(item.GetString(ibProtocol::ibFrame::ibMenu::Picture));
 					if (picture.IsOk())
 						added->SetBitmap(picture);
 				}
-				added->Enable(item.GetBool(ibProtocolName::Enabled));
+				added->Enable(item.GetBool(ibProtocol::ibFrame::ibMenu::Enabled));
 				m_menuItems[id] = MenuItemOf(item);
 				continue;
 			}
@@ -1062,7 +1062,7 @@ void ibFrontendMainFrame::DrawMenu(const ibProtocolNode& menu)
 	for (const ibProtocolNode& top : menu.Children()) {
 		wxMenu* const submenu = new wxMenu();
 		fill(submenu, top);
-		bar->Append(submenu, top.GetString(ibProtocolName::Title));
+		bar->Append(submenu, top.GetString(ibProtocol::ibFrame::ibMenu::Title));
 	}
 	if (m_menuHelp != nullptr)
 		bar->Append(m_menuHelp, wxGetStockLabel(wxID_HELP, wxSTOCK_NOFLAGS));
@@ -1078,10 +1078,10 @@ void ibFrontendMainFrame::DrawMenu(const ibProtocolNode& menu)
 ibFrontendMainFrame::ibMenuItem ibFrontendMainFrame::MenuItemOf(const ibProtocolNode& item)
 {
 	ibMenuItem what;
-	what.schema = item.Has(ibProtocolName::Schema);
-	what.number = static_cast<int>(what.schema ? item.GetInt(ibProtocolName::Schema) : item.GetInt(ibProtocolName::Command));
-	what.command = what.schema ? static_cast<int>(item.GetInt(ibProtocolName::Command)) : 0;
-	what.shortcut = item.GetString(ibProtocolName::Shortcut);
+	what.schema = item.Has(ibProtocol::ibFrame::ibMenu::Schema);
+	what.number = static_cast<int>(what.schema ? item.GetInt(ibProtocol::ibFrame::ibMenu::Schema) : item.GetInt(ibProtocol::ibFrame::ibMenu::Command));
+	what.command = what.schema ? static_cast<int>(item.GetInt(ibProtocol::ibFrame::ibMenu::Command)) : 0;
+	what.shortcut = item.GetString(ibProtocol::ibFrame::ibMenu::Shortcut);
 	return what;
 }
 
@@ -1094,14 +1094,14 @@ void ibFrontendMainFrame::DrawTemplates(const ibProtocolNode& templates)
 	const std::vector<ibProtocolNode> items = templates.Children();
 	std::vector<wxString> pictures;
 	for (const ibProtocolNode& item : items)
-		pictures.push_back(item.GetString(ibProtocolName::Picture));
+		pictures.push_back(item.GetString(ibProtocol::ibFile::Picture));
 	ibProtocolPictureReceive(pictures);
 	for (const ibProtocolNode& item : items) {
-		const wxString title = item.GetString(ibProtocolName::Title);
-		const long flags = ibTEMPLATE_VISIBLE | (item.GetBool(ibProtocolName::OnlyOpen) ? ibTEMPLATE_ONLY_OPEN : 0);
-		ibFrontendDocTemplate* const temp = new ibFrontendDocTemplate(m_docManager, title, item.GetString(ibProtocolName::Mask),
-			wxEmptyString, item.GetString(ibProtocolName::Extension), title, title, CLASSINFO(ibFrontendFileDocument), nullptr, flags);
-		const wxBitmap picture = ibProtocolPicture(item.GetString(ibProtocolName::Picture));
+		const wxString title = item.GetString(ibProtocol::ibFile::Title);
+		const long flags = ibTEMPLATE_VISIBLE | (item.GetBool(ibProtocol::ibFile::OnlyOpen) ? ibTEMPLATE_ONLY_OPEN : 0);
+		ibFrontendDocTemplate* const temp = new ibFrontendDocTemplate(m_docManager, title, item.GetString(ibProtocol::ibFile::Mask),
+			wxEmptyString, item.GetString(ibProtocol::ibFile::Extension), title, title, CLASSINFO(ibFrontendFileDocument), nullptr, flags);
+		const wxBitmap picture = ibProtocolPicture(item.GetString(ibProtocol::ibFile::Picture));
 		if (picture.IsOk()) {
 			wxIcon icon;
 			icon.CopyFromBitmap(picture);
@@ -1110,9 +1110,9 @@ void ibFrontendMainFrame::DrawTemplates(const ibProtocolNode& templates)
 	}
 }
 
-ibTabDocument* ibFrontendMainFrame::CreateDocument(ibProtocolViewKind kind, long long tabId)
+ibTabDocument* ibFrontendMainFrame::CreateDocument(ibProtocol::ibView::ibKind kind, long long tabId)
 {
-	if (kind == ibProtocolViewKind::AuditLog)
+	if (kind == ibProtocol::ibView::ibKind::AuditLog)
 		return new ibAuditLogDocument(tabId);
 	return new ibFormVisualDocument(tabId);
 }
@@ -1133,7 +1133,7 @@ void ibFrontendMainFrame::DrawTabs(const ibProtocolNode& tabs)
 	for (const ibProtocolNode& tab : tabs.Children()) {
 		const long long id = tab.GetId();
 		drawn.insert(id);
-		const wxString title = tab.GetString(ibProtocolName::Title);
+		const wxString title = tab.GetString(ibProtocol::ibFrame::ibTab::Title);
 
 		ibTabDocument* const document = FindDocument(id);
 		if (document != nullptr) {
@@ -1146,10 +1146,10 @@ void ibFrontendMainFrame::DrawTabs(const ibProtocolNode& tabs)
 		// …and a tab closing is not opened again — its form went with the window it was shown in (ibDialogDocChildFrame).
 		if (m_tabsClosing.count(id) != 0)
 			continue;
-		ibTabDocument* const opened = CreateDocument(static_cast<ibProtocolViewKind>(tab.GetInt(ibProtocolName::Kind)), id);
+		ibTabDocument* const opened = CreateDocument(static_cast<ibProtocol::ibView::ibKind>(tab.GetInt(ibProtocol::ibFrame::ibTab::Kind)), id);
 		m_documents[id] = opened;
 		opened->SetTitle(title);
-		const wxBitmap icon = ibProtocolPicture(tab.GetString(ibProtocolName::Icon));
+		const wxBitmap icon = ibProtocolPicture(tab.GetString(ibProtocol::ibFrame::ibTab::Icon));
 		if (icon.IsOk()) {
 			wxIcon picture;
 			picture.CopyFromBitmap(icon);
@@ -1157,15 +1157,15 @@ void ibFrontendMainFrame::DrawTabs(const ibProtocolNode& tabs)
 		}
 		// Under the form that owns it, when the server says it is owned — it goes with that one; the doc manager's
 		// otherwise.
-		if (ibTabDocument* const owner = FindDocument(tab.GetInt(ibProtocolName::Parent)))
+		if (ibTabDocument* const owner = FindDocument(tab.GetInt(ibProtocol::ibFrame::ibTab::Parent)))
 			opened->SetDocParent(owner);
 		else
 			m_docManager->AddDocument(opened);
 
 		// Not made — its view was not. Made with the State the frame drew it in, when it is the tab the frame shows.
 		const ibProtocolNode& frame = m_communicator->GetFrame();
-		if (id == frame.GetInt(ibProtocolName::ActiveTab))
-			opened->SetOpeningState(frame.FindChild(ibProtocolName::View).FindChild(ibProtocolName::State));
+		if (id == frame.GetInt(ibProtocol::ibFrame::ActiveTab))
+			opened->SetOpeningState(frame.FindChild(ibProtocol::ibFrame::View).FindChild(ibProtocol::ibView::State));
 		const bool made = opened->OnCreate(wxEmptyString, ibDOC_NEW);
 		opened->SetOpeningState(ibProtocolNode());
 		if (!made) {
@@ -1178,7 +1178,7 @@ void ibFrontendMainFrame::DrawTabs(const ibProtocolNode& tabs)
 		opened->SetCommandProcessor(opened->OnCreateCommandProcessor());
 
 		// The start page — first, and never closed: a locked tab, which wx keeps ahead of the others.
-		if (tab.GetBool(ibProtocolName::Locked)) {
+		if (tab.GetBool(ibProtocol::ibFrame::ibTab::Locked)) {
 			const int page = client->GetPageIndex(opened->GetDocumentWindow());
 			if (page != wxNOT_FOUND)
 				client->SetPageKind(static_cast<size_t>(page), wxAuiTabKind::Locked);
@@ -1232,7 +1232,7 @@ void ibFrontendMainFrame::DrawView(long long active, const ibProtocolNode& view,
 	// whole; a patch that leaves it as it was changes nothing (a node with no entries) — and a view not built yet is built
 	// all the same: a tab just opened is patched from the view the client kept, another tab's, and two alike leave no View
 	// in the patch. The other tabs keep what was drawn in them last.
-	chosen->DrawView(view,!patch.IsNode() || patch.Has(ibProtocolName::View) ? patch.FindChild(ibProtocolName::View) : ibProtocolNode());
+	chosen->DrawView(view,!patch.IsNode() || patch.Has(ibProtocol::ibFrame::View) ? patch.FindChild(ibProtocol::ibFrame::View) : ibProtocolNode());
 
 	m_drawing = false;
 }
@@ -1261,7 +1261,7 @@ void ibFrontendMainFrame::Ask()
 		// THE WINDOW UP ALREADY — a call made while it is up (a choice form's, over it) settles to its question: the window
 		// answers it itself; what was chosen for its cell is handed over. Another question is another window (the choice
 		// form's own settings), put up over it.
-		const wxString id = request.GetString(ibProtocolName::Id);
+		const wxString id = request.GetString(ibProtocol::ibRequest::Id);
 		if (!m_asking.empty() && m_asking.back() == id) {
 			TakeChosen(request);
 			return;
@@ -1283,13 +1283,13 @@ void ibFrontendMainFrame::Ask()
 
 void ibFrontendMainFrame::TakeChosen(const ibProtocolNode& request)
 {
-	const ibProtocolNode chosen = request.FindChild(ibProtocolName::Chosen);
-	if (m_choosing.owner == nullptr || !chosen.IsNode() || chosen.GetInt(ibProtocolName::Choice) != m_choosing.choice)
+	const ibProtocolNode chosen = request.FindChild(ibProtocol::ibRequest::ibListSettings::Chosen);
+	if (m_choosing.owner == nullptr || !chosen.IsNode() || chosen.GetInt(ibProtocol::ibRequest::ibListSettings::Choice) != m_choosing.choice)
 		return;
 	ibControlFrame* const owner = m_choosing.owner;
 	m_choosing = ibChoosing();
 	ibDataNode node;
-	ibReadProtocolNode(chosen.FindChild(ibProtocolName::Value), node);
+	ibReadProtocolNode(chosen.FindChild(ibProtocol::ibRequest::ibListSettings::Value), node);
 	ibValue value = ibValue::FromNode(node);
 	owner->ChoiceProcessing(value);
 }
@@ -1304,13 +1304,13 @@ bool ibFrontendMainFrame::ChooseValue(ibControlFrame* owner, const ibValue& curr
 
 	// The type the cell stands on, and the value in it when there is one — the server's own node, given back.
 	ibProtocolNode act;
-	act.SetValue(ibProtocolName::Act, static_cast<long long>(ibProtocolListSettingsAct::Choose))
-		.SetValue(ibProtocolName::Type, wxString() << current.GetClassType())
-		.SetValue(ibProtocolName::Choice, m_choice);
+	act.SetValue(ibProtocol::ibRequest::ibListSettings::Act, static_cast<long long>(ibProtocol::ibRequest::ibListSettings::ibAct::Choose))
+		.SetValue(ibProtocol::ibRequest::ibListSettings::Type, wxString() << current.GetClassType())
+		.SetValue(ibProtocol::ibRequest::ibListSettings::Choice, m_choice);
 	if (!current.IsEmpty()) {
 		ibDataNode node;
 		current.Serialize(node);
-		ibWriteProtocolNode(node, act.Child(ibProtocolName::Value));
+		ibWriteProtocolNode(node, act.Child(ibProtocol::ibRequest::ibListSettings::Value));
 	}
 	if (!Respond(act))
 		return false;
@@ -1334,7 +1334,7 @@ bool ibFrontendMainFrame::ChooseValue(ibControlFrame* owner, const ibValue& curr
 
 ibProtocolNode ibFrontendMainFrame::GetRequest() const
 {
-	return m_communicator->GetFrame().FindChild(ibProtocolName::Request);
+	return m_communicator->GetFrame().FindChild(ibProtocol::ibFrame::Request);
 }
 
 bool ibFrontendMainFrame::Respond(const ibProtocolNode& response)
@@ -1343,12 +1343,12 @@ bool ibFrontendMainFrame::Respond(const ibProtocolNode& response)
 	if (!request.IsNode())
 		return false;
 
-	const wxString id = request.GetString(ibProtocolName::Id);
+	const wxString id = request.GetString(ibProtocol::ibRequest::Id);
 	ibProtocolNode params, next;
-	params.SetValue(ibProtocolName::Id, id).SetValue(ibProtocolName::Response, response);
-	ibProtocolRefusal refusal = ibProtocolRefusal::None;
+	params.SetValue(ibProtocol::ibRequest::Id, id).SetValue(ibProtocol::ibRequest::Response, response);
+	ibProtocol::ibRefusal refusal = ibProtocol::ibRefusal::None;
 	wxString error;
-	if (!m_communicator->Call(ibProtocolMethod::Respond, params, next, refusal, error)) {
+	if (!m_communicator->Call(ibProtocol::ibMethod::Respond, params, next, refusal, error)) {
 		Refused(refusal, error);
 		return false;
 	}
@@ -1356,7 +1356,7 @@ bool ibFrontendMainFrame::Respond(const ibProtocolNode& response)
 
 	// …a window up answering along the way is asked again: the question pending now is its own.
 	if (!m_asking.empty() && m_asking.back() == id)
-		m_asking.back() = GetRequest().GetString(ibProtocolName::Id);
+		m_asking.back() = GetRequest().GetString(ibProtocol::ibRequest::Id);
 	return true;
 }
 
@@ -1370,45 +1370,45 @@ void ibFrontendMainFrame::ShowRequest(const ibProtocolNode& request, ibProtocolN
 			parent = wxGetTopLevelParent(window);
 	}
 
-	switch (static_cast<ibProtocolRequestKind>(request.GetInt(ibProtocolName::Kind))) {
-	case ibProtocolRequestKind::Message: {
+	switch (static_cast<ibProtocol::ibRequest::ibKind>(request.GetInt(ibProtocol::ibRequest::Kind))) {
+	case ibProtocol::ibRequest::ibKind::Message: {
 		// wx's own flags and codes travel — this client is wx.
-		const int button = wxMessageBox(request.GetString(ibProtocolName::Text), request.GetString(ibProtocolName::Caption),
-			static_cast<int>(request.GetInt(ibProtocolName::Style, wxOK)), parent);
-		response.SetValue(ibProtocolName::Button, button);
+		const int button = wxMessageBox(request.GetString(ibProtocol::ibRequest::ibMessage::Text), request.GetString(ibProtocol::ibRequest::ibMessage::Caption),
+			static_cast<int>(request.GetInt(ibProtocol::ibRequest::ibMessage::Style, wxOK)), parent);
+		response.SetValue(ibProtocol::ibRequest::ibMessage::Button, button);
 		break;
 	}
-	case ibProtocolRequestKind::Error: {
-		// THE DESKTOP'S ERROR WINDOW over a script's failure — the act chosen is the answer (ibProtocolErrorAct); closed —
+	case ibProtocol::ibRequest::ibKind::Error: {
+		// THE DESKTOP'S ERROR WINDOW over a script's failure — the act chosen is the answer (ibProtocol::ibRequest::ibError::ibAct); closed —
 		// answered with no Act, which the server takes for Close window.
 		ibDialogError dialog(this);
-		dialog.SetErrorMessage(request.GetString(ibProtocolName::Text));
+		dialog.SetErrorMessage(request.GetString(ibProtocol::ibRequest::ibError::Text));
 		const int act = dialog.ShowModal();
-		if (act == static_cast<int>(ibProtocolErrorAct::CloseWindow) || act == static_cast<int>(ibProtocolErrorAct::GotoDesigner)
-			|| act == static_cast<int>(ibProtocolErrorAct::CloseProgram))
-			response.SetValue(ibProtocolName::Act, act);
+		if (act == static_cast<int>(ibProtocol::ibRequest::ibError::ibAct::CloseWindow) || act == static_cast<int>(ibProtocol::ibRequest::ibError::ibAct::GotoDesigner)
+			|| act == static_cast<int>(ibProtocol::ibRequest::ibError::ibAct::CloseProgram))
+			response.SetValue(ibProtocol::ibRequest::ibError::Act, act);
 		break;
 	}
-	case ibProtocolRequestKind::Print: {
+	case ibProtocol::ibRequest::ibKind::Print: {
 		// THE DESKTOP'S PrintSpreadsheetDocument over a script's sheet, read into a document of its own as a spreadsheet's
 		// fetch is (ibValueGridBox): the page as the preview was last left, the same as File -> Print.
 		auto document = std::make_shared<ibSpreadsheetObject>();
 		auto sheet = std::make_shared<ibDataNode>();
-		ibReadProtocolNode(request.FindChild(ibProtocolName::Sheet), *sheet);
+		ibReadProtocolNode(request.FindChild(ibProtocol::ibRequest::ibPrint::Sheet), *sheet);
 		ibSpreadsheetDescriptionMemory::ReadNode(ibDataValue::Child(sheet), document->GetSpreadsheetDesc());
 
 		wxScopedPtr<ibGridEditorPrintout> printout(new ibGridEditorPrintout(document));
 		ibPrintPreviewFrame::ApplyFitToPageWidth(printout.get());
 		wxPrintDialogData printDialogData(m_docManager->GetPageSetupDialogData().GetPrintData());
 		wxPrinter printer(&printDialogData);
-		response.SetValue(ibProtocolName::Done, printer.Print(parent, printout.get(), true));
+		response.SetValue(ibProtocol::ibRequest::ibPrint::Done, printer.Print(parent, printout.get(), true));
 		break;
 	}
-	case ibProtocolRequestKind::Schedule: {
+	case ibProtocol::ibRequest::ibKind::Schedule: {
 		// THE DESKTOP'S ibDialogJobSchedule — it edits a buffer, the schedule as it came; OK answers the one edited,
 		// cancelled — none.
 		ibDataNode stored;
-		ibReadProtocolNode(request.FindChild(ibProtocolName::Schedule), stored);
+		ibReadProtocolNode(request.FindChild(ibProtocol::ibRequest::ibSchedule::Schedule), stored);
 		ibJobScheduleDescription schedule;
 		ibJobScheduleDescriptionMemory::ReadNode(ibDataValue::Child(std::make_shared<ibDataNode>(stored)), schedule);
 
@@ -1417,126 +1417,126 @@ void ibFrontendMainFrame::ShowRequest(const ibProtocolNode& request, ibProtocolN
 			break;
 		ibDataValue edited;
 		if (ibJobScheduleDescriptionMemory::WriteNode(edited, dialog.GetSchedule()) && edited.AsChild() != nullptr)
-			ibWriteProtocolNode(*edited.AsChild(), response.Child(ibProtocolName::Schedule));
+			ibWriteProtocolNode(*edited.AsChild(), response.Child(ibProtocol::ibRequest::ibSchedule::Schedule));
 		break;
 	}
-	case ibProtocolRequestKind::Choice: {
+	case ibProtocol::ibRequest::ibKind::Choice: {
 		const std::vector<ibProtocolNode> items = request.Children();
 		wxArrayString captions;
 		int selected = 0;
 		wxArrayInt ticked;
 		for (std::size_t i = 0; i < items.size(); ++i) {
-			captions.Add(items[i].GetString(ibProtocolName::Caption));
-			if (items[i].GetBool(ibProtocolName::Selected)) {
+			captions.Add(items[i].GetString(ibProtocol::ibRequest::ibChoice::Caption));
+			if (items[i].GetBool(ibProtocol::ibRequest::ibChoice::Selected)) {
 				selected = static_cast<int>(i);
 				ticked.Add(static_cast<int>(i));
 			}
 		}
 		// SEVERAL — the desktop's wxMultiChoiceDialog, those Selected ticked; cancelled — answered with no Ids.
-		if (request.GetBool(ibProtocolName::Multiple)) {
-			wxMultiChoiceDialog dialog(parent, request.GetString(ibProtocolName::Caption), request.GetString(ibProtocolName::Caption),
+		if (request.GetBool(ibProtocol::ibRequest::ibChoice::Multiple)) {
+			wxMultiChoiceDialog dialog(parent, request.GetString(ibProtocol::ibRequest::ibChoice::Caption), request.GetString(ibProtocol::ibRequest::ibChoice::Caption),
 				captions);
 			dialog.SetSelections(ticked);
 			if (dialog.ShowModal() == wxID_OK) {
 				for (const int index : dialog.GetSelections()) {
 					if (index >= 0 && index < static_cast<int>(items.size()))
-						response.AddItem(ibProtocolName::Ids, items[index].GetInt(ibProtocolName::Id));
+						response.AddItem(ibProtocol::ibRequest::ibChoice::Ids, items[index].GetInt(ibProtocol::ibRequest::ibChoice::Id));
 				}
 			}
 			break;
 		}
-		wxSingleChoiceDialog dialog(parent, request.GetString(ibProtocolName::Caption), request.GetString(ibProtocolName::Caption), captions);
+		wxSingleChoiceDialog dialog(parent, request.GetString(ibProtocol::ibRequest::ibChoice::Caption), request.GetString(ibProtocol::ibRequest::ibChoice::Caption), captions);
 		if (!captions.IsEmpty())
 			dialog.SetSelection(selected);
 		// Cancelled — answered with no Id: the server takes that for no choice.
 		if (dialog.ShowModal() == wxID_OK && dialog.GetSelection() >= 0
 			&& dialog.GetSelection() < static_cast<int>(items.size()))
-			response.SetValue(ibProtocolName::Id, items[dialog.GetSelection()].GetInt(ibProtocolName::Id));
+			response.SetValue(ibProtocol::ibRequest::ibChoice::Id, items[dialog.GetSelection()].GetInt(ibProtocol::ibRequest::ibChoice::Id));
 		break;
 	}
-	case ibProtocolRequestKind::Edit:
+	case ibProtocol::ibRequest::ibKind::Edit:
 		// Answered with nothing: a field changed sends its Change as it does when typed into.
-		EditFocused(EditCommandOf(request.GetInt(ibProtocolName::Command)));
+		EditFocused(EditCommandOf(request.GetInt(ibProtocol::ibRequest::ibEdit::Command)));
 		break;
-	case ibProtocolRequestKind::File: {
+	case ibProtocol::ibRequest::ibKind::File: {
 		// What may be chosen, as the desktop's doc manager filtered its File → Open: "Title (Mask)|Mask" each.
 		wxString wildcard;
 		for (const ibProtocolNode& item : request.Children()) {
-			const wxString mask = item.GetString(ibProtocolName::Mask);
+			const wxString mask = item.GetString(ibProtocol::ibRequest::ibFile::Mask);
 			if (!wildcard.IsEmpty())
 				wildcard += wxT("|");
-			wildcard += item.GetString(ibProtocolName::Title) + wxT(" (") + mask + wxT(")|") + mask;
+			wildcard += item.GetString(ibProtocol::ibRequest::ibFile::Title) + wxT(" (") + mask + wxT(")|") + mask;
 		}
 		// A file of the server's named — taken down where the person chooses (the desktop's save dialog); none — one of
 		// the person's chosen and uploaded (its open dialog).
-		const wxString taken = request.GetString(ibProtocolName::File);
-		wxFileDialog dialog(parent, request.GetString(ibProtocolName::Caption), wxEmptyString, wxEmptyString,
+		const wxString taken = request.GetString(ibProtocol::ibRequest::ibFile::File);
+		wxFileDialog dialog(parent, request.GetString(ibProtocol::ibRequest::ibFile::Caption), wxEmptyString, wxEmptyString,
 			!wildcard.IsEmpty() ? wildcard : wxString(wxFileSelectorDefaultWildcardStr),
 			taken.IsEmpty() ? (wxFD_OPEN | wxFD_FILE_MUST_EXIST) : (wxFD_SAVE | wxFD_OVERWRITE_PROMPT));
 		if (!taken.IsEmpty()) {
 			// Cancelled, or not taken down — answered with no Done.
 			if (dialog.ShowModal() == wxID_OK && DownloadFile(taken, dialog.GetPath()))
-				response.SetValue(ibProtocolName::Done, true);
+				response.SetValue(ibProtocol::ibRequest::ibFile::Done, true);
 			break;
 		}
 		// Cancelled, or not uploaded — answered with no File: the server takes that for nothing chosen.
 		wxString file;
 		if (dialog.ShowModal() == wxID_OK && UploadFile(dialog.GetPath(), file))
-			response.SetValue(ibProtocolName::File, file);
+			response.SetValue(ibProtocol::ibRequest::ibFile::File, file);
 		break;
 	}
-	case ibProtocolRequestKind::Generation: {
+	case ibProtocol::ibRequest::ibKind::Generation: {
 		// Cancelled — answered with no Id.
 		ibDialogGeneration dialog(request);
 		ibMetaID id = 0;
 		if (dialog.ShowModal(id))
-			response.SetValue(ibProtocolName::Id, static_cast<long long>(id));
+			response.SetValue(ibProtocol::ibRequest::ibGeneration::Id, static_cast<long long>(id));
 		break;
 	}
-	case ibProtocolRequestKind::ViewMode: {
-		// The server's mode numbers are the data view's own (ibProtocolViewMode); cancelled — answered with no Mode.
-		wxTableViewModeDialog dialog(parent, wxID_ANY, static_cast<ibDataViewViewMode>(request.GetInt(ibProtocolName::Mode)),
-			ibProtocolPicture(request.GetString(ibProtocolName::Picture)));
+	case ibProtocol::ibRequest::ibKind::ViewMode: {
+		// The server's mode numbers are the data view's own (ibProtocol::ibForm::ibTable::ibViewMode); cancelled — answered with no Mode.
+		wxTableViewModeDialog dialog(parent, wxID_ANY, static_cast<ibDataViewViewMode>(request.GetInt(ibProtocol::ibRequest::ibViewMode::Mode)),
+			ibProtocolPicture(request.GetString(ibProtocol::ibRequest::ibViewMode::Picture)));
 		if (dialog.ShowModal() == wxID_OK)
-			response.SetValue(ibProtocolName::Mode, static_cast<long long>(dialog.GetViewMode()));
+			response.SetValue(ibProtocol::ibRequest::ibViewMode::Mode, static_cast<long long>(dialog.GetViewMode()));
 		break;
 	}
-	case ibProtocolRequestKind::Menu: {
+	case ibProtocol::ibRequest::ibKind::Menu: {
 		// THE DESKTOP'S POPUP MENU, where the mouse is. Dismissed — answered with no Id.
 		wxMenu menu;
 		std::vector<long long> ids;
 		AppendMenuItems(menu, request.Children(), ids);
 		const int picked = GetPopupMenuSelectionFromUser(menu) - (wxID_HIGHEST + 1);
 		if (picked >= 0 && picked < static_cast<int>(ids.size()))
-			response.SetValue(ibProtocolName::Id, ids[picked]);
+			response.SetValue(ibProtocol::ibRequest::ibMenu::Id, ids[picked]);
 		break;
 	}
-	case ibProtocolRequestKind::SimpleChoice: {
+	case ibProtocol::ibRequest::ibKind::SimpleChoice: {
 		// THE DESKTOP'S ibTypeControlFactory::SimpleChoice — a number on its calculator, a date on its calendar, dropped
 		// under the field pressed; the value chosen is the answer, a window closed with none — none.
 		ibDataNode stored;
-		ibReadProtocolNode(request.FindChild(ibProtocolName::Value), stored);
+		ibReadProtocolNode(request.FindChild(ibProtocol::ibRequest::ibSimpleChoice::Value), stored);
 		ibSimpleChoiceHolder holder(ibValue::FromNode(stored));
 		if (ibTypeControlFactory::SimpleChoice(&holder, holder.GetValue().GetClassType(), FocusedEditor(this)))
 			holder.Wait();
 		if (holder.HasChosen()) {
 			ibDataNode chosen;
 			holder.GetChosen().Serialize(chosen);
-			ibWriteProtocolNode(chosen, response.Child(ibProtocolName::Value));
+			ibWriteProtocolNode(chosen, response.Child(ibProtocol::ibRequest::ibSimpleChoice::Value));
 		}
 		break;
 	}
-	case ibProtocolRequestKind::ListSettings:
+	case ibProtocol::ibRequest::ibKind::ListSettings:
 		// THE DESKTOP'S ibDialogListSettings::ShowUserSettings over a table's model — the model is the server's: the
 		// setting and its fields come in the question, the edited setting is the answer; cancelled — answered with none.
 		ibDialogListSettings::ShowUserSettings(parent, request, response);
 		break;
-	case ibProtocolRequestKind::ComposerSettings:
+	case ibProtocol::ibRequest::ibKind::ComposerSettings:
 		// THE DESKTOP'S ibDialogComposerSettings::ShowUserSettings over a report's model — the same road: the setting, the
 		// composition and its fields come in the question, the edited setting is the answer; cancelled — none.
 		ibDialogComposerSettings::ShowUserSettings(parent, request, response);
 		break;
-	case ibProtocolRequestKind::FormEditor: {
+	case ibProtocol::ibRequest::ibKind::FormEditor: {
 		// THE DESKTOP'S ibValueForm::ChangeForm — its editor over the form of the active tab; what a person may arrange of
 		// each control comes in the question (Controls). Its acts are answered on the way (UpdateForm, the setting's
 		// doors); closed — answered with no Act.
@@ -1550,13 +1550,14 @@ void ibFrontendMainFrame::ShowRequest(const ibProtocolNode& request, ibProtocolN
 		dlg.ShowModal();
 		break;
 	}
-	case ibProtocolRequestKind::SavedSettings: {
+	case ibProtocol::ibRequest::ibKind::SavedSettings: {
 		// THE SHELF'S WINDOW IS OPEN THROUGH EVERY ACT BUT THE LAST — each one answered on the way (Respond, inside the
 		// shelf's calls: settingsComposer.h), the shelf asked again in its place. Closed — answered with no Act.
 		ibDataComposer composer;
 		ibDialogSavedSettings::Show(parent, composer,
-			request.GetInt(ibProtocolName::Mode) == 0 ? ibDialogSavedSettings::Mode::Save : ibDialogSavedSettings::Mode::Restore,
-			ibSettingsCategory::Custom, ibGuid(request.GetString(ibProtocolName::Key)), nullptr);
+			request.GetInt(ibProtocol::ibRequest::ibSavedSettings::Mode) == static_cast<int>(ibProtocol::ibRequest::ibSavedSettings::ibMode::Save)
+				? ibDialogSavedSettings::Mode::Save : ibDialogSavedSettings::Mode::Restore,
+			ibSettingsCategory::Custom, ibGuid(request.GetString(ibProtocol::ibRequest::ibSavedSettings::Key)), nullptr);
 		break;
 	}
 	default:
@@ -1584,18 +1585,18 @@ bool ibFrontendMainFrame::UploadFile(const wxString& path, wxString& file)
 
 		ibProtocolNode params, answer;
 		if (first)
-			params.SetValue(ibProtocolName::Name, wxFileName(path).GetFullName());
+			params.SetValue(ibProtocol::ibFile::Name, wxFileName(path).GetFullName());
 		else
-			params.SetValue(ibProtocolName::File, file);
-		params.SetValue(ibProtocolName::Data, wxBase64Encode(part.data(), static_cast<std::size_t>(read)));
+			params.SetValue(ibProtocol::ibFile::File, file);
+		params.SetValue(ibProtocol::ibFile::Data, wxBase64Encode(part.data(), static_cast<std::size_t>(read)));
 
-		ibProtocolRefusal refusal = ibProtocolRefusal::None;
+		ibProtocol::ibRefusal refusal = ibProtocol::ibRefusal::None;
 		wxString error;
-		if (!m_communicator->Call(ibProtocolMethod::Upload, params, answer, refusal, error)) {
+		if (!m_communicator->Call(ibProtocol::ibMethod::Upload, params, answer, refusal, error)) {
 			Refused(refusal, error);
 			return false;
 		}
-		file = answer.GetString(ibProtocolName::File);
+		file = answer.GetString(ibProtocol::ibFile::File);
 		if (static_cast<std::size_t>(read) < part.size())
 			return true;
 	}
@@ -1610,23 +1611,23 @@ bool ibFrontendMainFrame::DownloadFile(const wxString& file, const wxString& pat
 	// In parts, as the server keeps them — the first answer says how many; an empty file is its part 0, empty.
 	for (long long part = 0, parts = 1; part < parts; ++part) {
 		ibProtocolNode params, answer;
-		params.SetValue(ibProtocolName::File, file).SetValue(ibProtocolName::Part, part);
+		params.SetValue(ibProtocol::ibFile::File, file).SetValue(ibProtocol::ibFile::Part, part);
 
-		ibProtocolRefusal refusal = ibProtocolRefusal::None;
+		ibProtocol::ibRefusal refusal = ibProtocol::ibRefusal::None;
 		wxString error;
-		if (!m_communicator->Call(ibProtocolMethod::Download, params, answer, refusal, error)) {
+		if (!m_communicator->Call(ibProtocol::ibMethod::Download, params, answer, refusal, error)) {
 			Refused(refusal, error);
 			return false;
 		}
-		parts = answer.GetInt(ibProtocolName::Parts);
-		const wxMemoryBuffer data = wxBase64Decode(answer.GetString(ibProtocolName::Data));
+		parts = answer.GetInt(ibProtocol::ibFile::Parts);
+		const wxMemoryBuffer data = wxBase64Decode(answer.GetString(ibProtocol::ibFile::Data));
 		if (data.GetDataLen() != 0 && target.Write(data.GetData(), data.GetDataLen()) != data.GetDataLen())
 			return false;
 	}
 	return target.Close();
 }
 
-void ibFrontendMainFrame::Refused(ibProtocolRefusal refusal, const wxString& error)
+void ibFrontendMainFrame::Refused(ibProtocol::ibRefusal refusal, const wxString& error)
 {
 	const wxString said = !error.IsEmpty() ? error : wxString(_("The server refused it."));
 
@@ -1634,7 +1635,7 @@ void ibFrontendMainFrame::Refused(ibProtocolRefusal refusal, const wxString& err
 	// says why after, ONCE. Said before it went, the message box ran a message loop in which every call due (a window's
 	// own refresh, a timer's) met the same refusal and put up a box of its own, one after another; the window going, a
 	// refusal it meets is said by nobody.
-	if (refusal == ibProtocolRefusal::NoSession) {
+	if (refusal == ibProtocol::ibRefusal::NoSession) {
 		if (m_closingWindow)
 			return;
 		Close(true);
@@ -1662,8 +1663,8 @@ void ibFrontendMainFrame::CallPosted()
 	Call(posted.method, posted.params, answer);
 
 	// A tab's close answered — closed, or kept by the person: it may be closed again.
-	if (posted.method == ibProtocolMethod::Close)
-		m_tabsClosing.erase(posted.params.GetInt(ibProtocolName::Tab));
+	if (posted.method == ibProtocol::ibMethod::Close)
+		m_tabsClosing.erase(posted.params.GetInt(ibProtocol::ibFrame::Tab));
 
 	// What was held while it waited, held now — after it, as it was done. A server that takes none held is called with
 	// each, before what was posted later.
@@ -1671,7 +1672,7 @@ void ibFrontendMainFrame::CallPosted()
 	for (const ibProtocolNode& event : posted.held) {
 		if (m_communicator->Hold(event))
 			continue;
-		next = m_posted.insert(next, ibPostedCall{ ibProtocolMethod::Event, event }) + 1;
+		next = m_posted.insert(next, ibPostedCall{ ibProtocol::ibMethod::Event, event }) + 1;
 		CallAfter(&ibFrontendMainFrame::CallPosted);
 	}
 }
@@ -1697,7 +1698,7 @@ void ibFrontendMainFrame::RemoveDocument(const ibTabDocument* document)
 
 ibProtocolNode ibFrontendMainFrame::FindTab(long long tabId) const
 {
-	for (const ibProtocolNode& tab : m_communicator->GetFrame().FindChild(ibProtocolName::Tabs).Children()) {
+	for (const ibProtocolNode& tab : m_communicator->GetFrame().FindChild(ibProtocol::ibFrame::Tabs).Children()) {
 		if (tab.GetId() == tabId)
 			return tab;
 	}
@@ -1706,7 +1707,7 @@ ibProtocolNode ibFrontendMainFrame::FindTab(long long tabId) const
 
 long long ibFrontendMainFrame::GetActiveTab() const
 {
-	return m_communicator->GetFrame().GetInt(ibProtocolName::ActiveTab);
+	return m_communicator->GetFrame().GetInt(ibProtocol::ibFrame::ActiveTab);
 }
 
 long long ibFrontendMainFrame::GetFrameNumber() const
@@ -1912,8 +1913,8 @@ void ibFrontendMainFrame::OnCloseAll(wxCommandEvent& WXUNUSED(event))
 	// The server closes them, in one call — not the base's loop over the active child (wxAuiMDIParentFrame::CloseAll):
 	// a tab's Close only posts its close, which that loop took for a refusal, and it stopped at the first.
 	ibProtocolNode params, answer;
-	params.SetValue(ibProtocolName::Command, static_cast<long long>(ibProtocolCommand::CloseAll));
-	Call(ibProtocolMethod::Command, params, answer);
+	params.SetValue(ibProtocol::ibFrame::Command, static_cast<long long>(ibProtocol::ibFrame::ibCommand::CloseAll));
+	Call(ibProtocol::ibMethod::Command, params, answer);
 }
 
 void ibFrontendMainFrame::OnMenu(wxCommandEvent& event)
@@ -1929,30 +1930,30 @@ void ibFrontendMainFrame::OnMenu(wxCommandEvent& event)
 	if (what.schema && what.command != 0) {
 		// The schema's command — done by the server, which asks the person what it needs to.
 		ibProtocolNode params, answer;
-		params.SetValue(ibProtocolName::Schema, static_cast<long long>(what.number));
-		params.SetValue(ibProtocolName::Command, static_cast<long long>(what.command));
-		Call(ibProtocolMethod::Schema, params, answer);
+		params.SetValue(ibProtocol::ibSchema::Schema, static_cast<long long>(what.number));
+		params.SetValue(ibProtocol::ibSchema::Command, static_cast<long long>(what.command));
+		Call(ibProtocol::ibMethod::Schema, params, answer);
 	}
 	else if (what.schema) {
-		OpenSchema(static_cast<ibProtocolSchema>(what.number));
+		OpenSchema(static_cast<ibProtocol::ibSchema::ibKind>(what.number));
 	}
 	else {
 		ibProtocolNode params, answer;
-		params.SetValue(ibProtocolName::Command, what.number);
-		Call(ibProtocolMethod::Command, params, answer);
+		params.SetValue(ibProtocol::ibSchema::Command, what.number);
+		Call(ibProtocol::ibMethod::Command, params, answer);
 	}
 }
 
-void ibFrontendMainFrame::OpenSchema(ibProtocolSchema schema)
+void ibFrontendMainFrame::OpenSchema(ibProtocol::ibSchema::ibKind schema)
 {
 	ibProtocolNode params, answer;
-	params.SetValue(ibProtocolName::Schema, static_cast<long long>(schema));
+	params.SetValue(ibProtocol::ibSchema::Schema, static_cast<long long>(schema));
 	// The journal shows nothing of its own: its command opens its tab, which the frame brings.
-	if (schema == ibProtocolSchema::AuditLog) {
-		params.SetValue(ibProtocolName::Command, static_cast<long long>(ibProtocolSchemaCommand::Open));
-		Call(ibProtocolMethod::Schema, params, answer);
+	if (schema == ibProtocol::ibSchema::ibKind::AuditLog) {
+		params.SetValue(ibProtocol::ibSchema::Command, static_cast<long long>(ibProtocol::ibSchema::ibCommand::Open));
+		Call(ibProtocol::ibMethod::Schema, params, answer);
 	}
-	else if (Call(ibProtocolMethod::Schema, params, answer))
+	else if (Call(ibProtocol::ibMethod::Schema, params, answer))
 		ShowSchema(schema, answer);
 }
 
@@ -1974,8 +1975,8 @@ void ibFrontendMainFrame::OnTabChanged(wxAuiNotebookEvent& event)
 
 	// After the event: the answer redraws the tabs, which is no work for the middle of a notebook's own event.
 	ibProtocolNode params;
-	params.SetValue(ibProtocolName::Tab, document->GetTabId());
-	Post(ibProtocolMethod::Activate, params);
+	params.SetValue(ibProtocol::ibFrame::Tab, document->GetTabId());
+	Post(ibProtocol::ibMethod::Activate, params);
 }
 
 // ---------------------------------------------------------------------------

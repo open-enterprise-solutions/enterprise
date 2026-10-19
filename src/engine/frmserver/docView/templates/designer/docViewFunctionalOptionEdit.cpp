@@ -4,7 +4,7 @@
 #include "backend/metaCollection/metaGroups.h"   // what a group is called, and where it stands
 #include "backend/objCtor.h"
 #include "core/serialize/dataBuilder.h"
-#include "frmserver/client/clientFrame.h"   // SendPicture — a row's icon
+#include "backend/backend_picture.h"   // ibBackendPicture::SendPicture — a row's icon
 
 #include <algorithm>
 #include <vector>
@@ -23,16 +23,16 @@ void ibFunctionalOptionMembersView::OnDraw(ibDataNode& frame)
 
 	// Read-only where the configuration may not be edited — the desktop's editor disabled its tree (SetReadOnly by
 	// ibDOC_READONLY).
-	ibDataNode& state = frame.Child(ibProtocolName::State);
-	state.SetValue(ibProtocolName::ReadOnly, !metaOption->IsEditable());
+	ibDataNode& state = frame.Child(ibProtocol::ibView::State);
+	state.SetValue(ibProtocol::ibView::ibCheckTree::ReadOnly, !metaOption->IsEditable());
 
-	FillData(frame.Child(ibProtocolName::Rows));
+	FillData(frame.Child(ibProtocol::ibView::ibCheckTree::Rows));
 }
 
-bool ibFunctionalOptionMembersView::OnClientEvent(ibProtocolEvent event, const ibDataNode& args)
+bool ibFunctionalOptionMembersView::OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args)
 {
 	ibValueMetaObject* const metaOption = GetDocument()->GetMetaObject();
-	if (metaOption == nullptr || event != ibProtocolEvent::Toggle)
+	if (metaOption == nullptr || event != ibProtocol::ibEvent::ibKind::Toggle)
 		return false;
 
 	// A member at any depth — a field of a tabular section is ticked on its own.
@@ -44,7 +44,7 @@ bool ibFunctionalOptionMembersView::OnClientEvent(ibProtocolEvent event, const i
 
 	// Written into the member — it keeps the options it belongs to (the desktop's OnCheckItem). Nothing else in the
 	// designer changes with it, so no other open editor has anything to re-read.
-	metaObject->SetFunctionalOption(metaOption->GetMetaID(), args.GetValue<bool>(ibProtocolName::Checked));
+	metaObject->SetFunctionalOption(metaOption->GetMetaID(), args.GetValue<bool>(ibProtocol::ibView::ibCheckTree::Checked));
 	return true;
 }
 
@@ -59,8 +59,8 @@ ibDataNode& ibFunctionalOptionMembersView::GroupFor(ibDataNode& root, const ibCl
 	// A group row is named by its place: it carries no object.
 	ibDataNode& group = root.AddChild(0, -static_cast<ibMetaID>(root.Children().size() + 1));
 	const wxString caption = ibMetaGroupCaption(clsid);
-	group.SetValue(ibProtocolName::Title, caption.IsEmpty() ? typeCtor->GetClassName() : caption);
-	group.SetValue(ibProtocolName::Picture, ibClientFrame::SendPicture(clsid));
+	group.SetValue(ibProtocol::ibView::ibCheckTree::Title, caption.IsEmpty() ? typeCtor->GetClassName() : caption);
+	group.SetValue(ibProtocol::ibView::ibCheckTree::Picture, ibBackendPicture::SendPicture(clsid));
 	return group;
 }
 
@@ -69,10 +69,10 @@ ibDataNode& ibFunctionalOptionMembersView::AppendItem(ibDataNode& parent, ibValu
 	const ibValueMetaObject* const metaOption = GetDocument()->GetMetaObject();
 
 	ibDataNode& item = parent.AddChild(0, metaObject->GetMetaID());
-	item.SetValue(ibProtocolName::Title, metaObject->GetName());
-	item.SetValue(ibProtocolName::Picture, ibClientFrame::SendPicture(metaObject->GetClassType()));
-	item.SetValue(ibProtocolName::Checked, metaObject->IsInFunctionalOption(metaOption->GetMetaID()));
-	item.SetValue(ibProtocolName::ReadOnly, !metaObject->IsEditable());
+	item.SetValue(ibProtocol::ibView::ibCheckTree::Title, metaObject->GetName());
+	item.SetValue(ibProtocol::ibView::ibCheckTree::Picture, ibBackendPicture::SendPicture(metaObject->GetClassType()));
+	item.SetValue(ibProtocol::ibView::ibCheckTree::Checked, metaObject->IsInFunctionalOption(metaOption->GetMetaID()));
+	item.SetValue(ibProtocol::ibView::ibCheckTree::ReadOnly, !metaObject->IsEditable());
 	return item;
 }
 
@@ -98,8 +98,8 @@ void ibFunctionalOptionMembersView::FillData(ibDataNode& root)
 	// The root wears the CONFIGURATION's icon, as the section and common attribute editors'; the desktop's kept the
 	// word "Configuration" on it.
 	root.SetMetaId(commonObject->GetMetaID());
-	root.SetValue(ibProtocolName::Title, _("Configuration"));
-	root.SetValue(ibProtocolName::Picture, ibClientFrame::SendPicture(g_metaCommonMetadataCLSID));
+	root.SetValue(ibProtocol::ibView::ibCheckTree::Title, _("Configuration"));
+	root.SetValue(ibProtocol::ibView::ibCheckTree::Picture, ibBackendPicture::SendPicture(g_metaCommonMetadataCLSID));
 
 	// ASKED, NOT LISTED: every object that says it may belong (IsFunctionalOptionAllowed), in the order of its group's
 	// declared place (ibMetaGroupOrder); a stable sort leaves each group's own objects as the metadata gives them.

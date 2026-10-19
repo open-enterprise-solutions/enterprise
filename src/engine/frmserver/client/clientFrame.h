@@ -26,7 +26,6 @@
 #include "backend/backend_mainFrame.h"
 #include "backend/uniqueKey.h"
 #include "core/serialize/dataBuilder.h"   // ibDataNode — a request and its response
-#include "core/description/pictureDescription.h"     // ibPictureDescription — a picture a frame names (SendPicture)
 
 #include "frmserver/docView/docView.h"     // ibDocParentFrameAnyBase — the document manager's slot
 
@@ -45,7 +44,7 @@ class FRMSERVER_API ibClientFrame : public ibBackendDocFrame, public ibDocParent
 public:
 
 	// The frame of a mode, built around an authenticated session — null for a mode the server does not have.
-	static std::unique_ptr<ibClientFrame> Create(ibProtocolMode mode, ibSessionHolder&& holder,
+	static std::unique_ptr<ibClientFrame> Create(ibProtocol::ibLogin::ibMode mode, ibSessionHolder&& holder,
 		ibClientInstance* clientInstance);
 
 	virtual ~ibClientFrame() override;
@@ -75,7 +74,7 @@ public:
 	// Messages for the client, kept until it takes them. The desktop's message pane is the same thing.
 	virtual void Message(const wxString& strMessage, ibStatusMessage status) override;
 	virtual void ClearMessage() override;
-	// A script's failure — the desktop's error window, asked of the client (ibProtocolRequestKind::Error).
+	// A script's failure — the desktop's error window, asked of the client (ibProtocol::ibRequest::ibKind::Error).
 	virtual void BackendError(const wxString& strFileName,
 		const wxString& strDocPath, const long line,
 		const wxString& strErrorMessage) override;
@@ -109,11 +108,11 @@ public:
 	// A SHEET SHOWN — the desktop's (ibFrontendMainFrame::ShowSpreadsheetDocument): a spreadsheet document of its own
 	// over it, in a tab of its own, under that title. What a list output and a script's Show() reach.
 	virtual bool ShowSpreadsheetDocument(const wxString& strTitle, std::shared_ptr<ibSpreadsheetObject>& spreadSheetDocument) override;
-	// …and a script's sheet printed, by the client's printer (ibProtocolRequestKind::Print) — with its print dialog,
+	// …and a script's sheet printed, by the client's printer (ibProtocol::ibRequest::ibKind::Print) — with its print dialog,
 	// as the desktop's always was.
 	virtual bool PrintSpreadsheetDocument(const std::shared_ptr<ibSpreadsheetObject>& doc, bool showPrintDlg = true) override;
 
-	// A SCHEDULE EDITED — the desktop's editor, asked of the client (ibProtocolRequestKind::Schedule). OK marks the active
+	// A SCHEDULE EDITED — the desktop's editor, asked of the client (ibProtocol::ibRequest::ibKind::Schedule). OK marks the active
 	// form modified, as the desktop's did: the edit happened in a window of its own, nothing else would notice it.
 	virtual bool ShowScheduleEditor(ibJobScheduleDescription& schedule) override;
 
@@ -129,11 +128,6 @@ public:
 	// THE CURRENT SESSION'S FRAME, when it is a client's — what the desktop's main window answered from its own
 	// GetFrame, in a process that holds many clients.
 	static ibClientFrame* GetFrame();
-
-	// ⭐ A PICTURE BY ITS ID — all an answer names a picture by: a backend picture's number, a configuration picture's
-	// guid. The picture itself the client loads apart, by the id (ibProtocolMethod::Picture), and keeps; one held as a
-	// file's bytes has no id of its own and goes as itself. Empty: no picture.
-	static ibString SendPicture(const ibPictureDescription& picture);
 
 	// The client is leaving: whatever is still open goes down unconditionally, as the desktop window's Destroy
 	// closed its documents. The forced close still ASKS each view (DeleteAllViews → Close(false)), so the
@@ -238,7 +232,7 @@ public:
 
 	// The person may use the schema of that kind: the application has it, and its own right lets them through
 	// (ibClientSchema::AccessRight) — what the menu offers, and what a call of it is refused by.
-	bool IsSchemaAllowed(ibProtocolSchema kind) const;
+	bool IsSchemaAllowed(ibProtocol::ibSchema::ibKind kind) const;
 
 protected:
 
@@ -254,7 +248,7 @@ protected:
 	// refuses everything else a client asks of it (HasPendingRequest).
 	virtual bool DoRequest(const ibDataNode& request, ibDataNode& response) override;
 
-	// A message box is one kind of request (ibProtocolRequestKind::Message: Text, Caption, Style — the wx button
+	// A message box is one kind of request (ibProtocol::ibRequest::ibKind::Message: Text, Caption, Style — the wx button
 	// flags; the response's Button is the wx code of the button pressed, 0 for none).
 	virtual int DoShowModalMessage(const wxString& message, const wxString& caption, int style) override;
 

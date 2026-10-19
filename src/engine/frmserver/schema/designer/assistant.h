@@ -21,7 +21,7 @@ public:
 
 	// Open — the window's tab; ONE window, and the command means "show me it": an open one is raised.
 	virtual std::function<void()> Command(const ibSession& session, s32 command,
-		const ibDataNode& args, ibProtocolRefusal& refusal, wxString& error) const override;
+		const ibDataNode& args, ibProtocol::ibRefusal& refusal, wxString& error) const override;
 };
 
 #endif

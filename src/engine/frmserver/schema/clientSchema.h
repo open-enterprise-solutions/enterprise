@@ -18,7 +18,7 @@
 #include "core/fileSystem/types.h"   // s32
 
 #include "frmserver/frmserver.h"
-#include "protocol/protocol.h"   // ibProtocolSchema, ibProtocolRefusal
+#include "protocol/protocol.h"   // ibProtocol::ibSchema::ibKind, ibProtocol::ibRefusal
 
 class ibDataNode;
 class ibSession;
@@ -48,7 +48,7 @@ public:
 	// person waits for the response. Empty with a refusal — why, and its text: the schema takes no such command, or
 	// not with these arguments — a schema acts only on what it offered; nothing is done then.
 	virtual std::function<void()> Command(const ibSession& session, s32 command,
-		const ibDataNode& args, ibProtocolRefusal& refusal, wxString& error) const;
+		const ibDataNode& args, ibProtocol::ibRefusal& refusal, wxString& error) const;
 
 protected:
 

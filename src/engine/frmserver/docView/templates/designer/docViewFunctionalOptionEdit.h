@@ -18,9 +18,9 @@ public:
 	// The option's members — the configuration's row, under it a group per metatype, under each the objects of it that
 	// may belong, under each its fields and tables at every depth, ticked where they belong to this one.
 	virtual void OnDraw(ibDataNode& frame) override;
-	virtual ibProtocolViewKind GetViewKind() const override { return ibProtocolViewKind::FunctionalOption; }
+	virtual ibProtocol::ibView::ibKind GetViewKind() const override { return ibProtocol::ibView::ibKind::FunctionalOption; }
 	// An object, a field or a table ticked or not (Toggle {NodeId, Checked}) — in the option or out of it.
-	virtual bool OnClientEvent(ibProtocolEvent event, const ibDataNode& args) override;
+	virtual bool OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args) override;
 
 private:
 

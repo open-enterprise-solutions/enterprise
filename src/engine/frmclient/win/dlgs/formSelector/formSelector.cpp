@@ -19,12 +19,12 @@ constexpr int kFirstChoiceId = wxID_HIGHEST + 1;
 ibDialogSelectTypeForm::ibDialogSelectTypeForm(const ibProtocolNode& request)
 	: wxDialog(ibFrontendMainFrame::GetFrame(), wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE | wxDIALOG_ADAPTATION_ANY_SIZER)
 {
-	SetTitle(request.GetString(ibProtocolName::Caption));
+	SetTitle(request.GetString(ibProtocol::ibRequest::ibFormType::Caption));
 	SetClientSize(FromDIP(wxSize(480, 320)));
 
 	for (const ibProtocolNode& choice : request.Children())
-		m_listChoice.emplace_back(choice.GetString(ibProtocolName::Name), choice.GetString(ibProtocolName::Caption),
-			static_cast<int>(choice.GetInt(ibProtocolName::Id)));
+		m_listChoice.emplace_back(choice.GetString(ibProtocol::ibRequest::ibFormType::Name), choice.GetString(ibProtocol::ibRequest::ibFormType::Caption),
+			static_cast<int>(choice.GetInt(ibProtocol::ibRequest::ibFormType::Id)));
 
 	wxBoxSizer* bSizerMain = new wxBoxSizer(wxVERTICAL);
 	wxStaticBoxSizer* sbSizerMain = new wxStaticBoxSizer(new wxStaticBox(this, wxID_ANY, _("Select form type")), wxVERTICAL);
@@ -60,14 +60,14 @@ ibDialogSelectTypeForm::ibDialogSelectTypeForm(const ibProtocolNode& request)
 
 	wxBoxSizer* bSizerRight = new wxBoxSizer(wxVERTICAL);
 
-	m_textCtrlName = new wxTextCtrl(this, wxID_ANY, request.GetString(ibProtocolName::Name), wxDefaultPosition, wxDefaultSize, 0);
+	m_textCtrlName = new wxTextCtrl(this, wxID_ANY, request.GetString(ibProtocol::ibRequest::ibFormType::Name), wxDefaultPosition, wxDefaultSize, 0);
 	m_textCtrlName->Connect(wxEVT_TEXT, wxCommandEventHandler(ibDialogSelectTypeForm::OnTextEnter), nullptr, this);
 	bSizerRight->Add(m_textCtrlName, 0, wxALL | wxEXPAND, 1);
 
-	m_textCtrlSynonym = new wxTextCtrl(this, wxID_ANY, request.GetString(ibProtocolName::Synonym), wxDefaultPosition, wxDefaultSize, 0);
+	m_textCtrlSynonym = new wxTextCtrl(this, wxID_ANY, request.GetString(ibProtocol::ibRequest::ibFormType::Synonym), wxDefaultPosition, wxDefaultSize, 0);
 	bSizerRight->Add(m_textCtrlSynonym, 0, wxALL | wxEXPAND, 1);
 
-	m_textCtrlComment = new wxTextCtrl(this, wxID_ANY, request.GetString(ibProtocolName::Comment), wxDefaultPosition, wxDefaultSize, 0);
+	m_textCtrlComment = new wxTextCtrl(this, wxID_ANY, request.GetString(ibProtocol::ibRequest::ibFormType::Comment), wxDefaultPosition, wxDefaultSize, 0);
 	bSizerRight->Add(m_textCtrlComment, 0, wxALL | wxEXPAND, 1);
 
 	bSizerHeader->Add(bSizerRight, 1, wxEXPAND, FromDIP(5));
@@ -107,10 +107,10 @@ bool ibDialogSelectTypeForm::ShowModal(ibProtocolNode& response)
 	if (m_listChoice.empty() || wxDialog::ShowModal() != wxID_OK)
 		return false;
 
-	response.SetValue(ibProtocolName::Id, static_cast<long long>(m_choice));
-	response.SetValue(ibProtocolName::Name, m_textCtrlName->GetValue());
-	response.SetValue(ibProtocolName::Synonym, m_textCtrlSynonym->GetValue());
-	response.SetValue(ibProtocolName::Comment, m_textCtrlComment->GetValue());
+	response.SetValue(ibProtocol::ibRequest::ibFormType::Id, static_cast<long long>(m_choice));
+	response.SetValue(ibProtocol::ibRequest::ibFormType::Name, m_textCtrlName->GetValue());
+	response.SetValue(ibProtocol::ibRequest::ibFormType::Synonym, m_textCtrlSynonym->GetValue());
+	response.SetValue(ibProtocol::ibRequest::ibFormType::Comment, m_textCtrlComment->GetValue());
 	return true;
 }
 

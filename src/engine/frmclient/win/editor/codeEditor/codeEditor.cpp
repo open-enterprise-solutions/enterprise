@@ -460,7 +460,7 @@ bool ibCodeEditor::LoadModule()
 		return false;
 	}
 
-	// The text the tab's view holds (ibProtocolModuleRequest::Text): what the desktop's read of the metaobject.
+	// The text the tab's view holds (ibProtocol::ibView::ibModule::ibRequest::Text): what the desktop's read of the metaobject.
 	ibProtocolNode answer;
 	if (!m_document->Fetch(ibProtocolNode(), answer)) {
 		ClearAll();
@@ -475,7 +475,7 @@ bool ibCodeEditor::LoadModule(const ibProtocolNode& answer)
 {
 	ClearAll();
 
-	m_moduleText = answer.GetString(ibProtocolName::Text);
+	m_moduleText = answer.GetString(ibProtocol::ibView::ibModule::Text);
 
 	if (IsEditable()) {
 		SetText(m_moduleText); m_initialized = true;
@@ -512,8 +512,8 @@ bool ibCodeEditor::SaveModule()
 		const wxString text = GetText();
 		if (text != m_moduleText) {
 			ibProtocolNode args;
-			args.SetValue(ibProtocolName::Text, text);
-			m_document->Hold(ibProtocolEvent::Change, args);
+			args.SetValue(ibProtocol::ibView::ibModule::Text, text);
+			m_document->Hold(ibProtocol::ibEvent::ibKind::Change, args);
 			m_moduleText = text;
 		}
 		return true;
@@ -648,8 +648,8 @@ void ibCodeEditor::SyntaxControl()
 	SaveModule();
 
 	ibProtocolNode args;
-	args.SetValue(ibProtocolName::Id, static_cast<int>(ibProtocolModuleCommand::SyntaxControl));
-	m_document->Post(ibProtocolEvent::Command, args);
+	args.SetValue(ibProtocol::ibView::ibModule::Id, static_cast<int>(ibProtocol::ibView::ibModule::ibCommand::SyntaxControl));
+	m_document->Post(ibProtocol::ibEvent::ibKind::Command, args);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -8,7 +8,7 @@
 #include <wx/listctrl.h>
 
 // The desktop's (frontend/win/dlgs/functionSearcher): its module's procedures and functions, and the handlers it may
-// have — the module's tab asked for those (ibProtocolModuleRequest::Procedures), its document the desktop's metaobject.
+// have — the module's tab asked for those (ibProtocol::ibView::ibModule::ibRequest::Procedures), its document the desktop's metaobject.
 class ibTabDocument;
 class ibCodeEditor;
 

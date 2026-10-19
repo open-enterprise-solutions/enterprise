@@ -40,7 +40,7 @@ void ibClientFrameDesigner::CreateStartupPage()
 
 void ibClientFrameDesigner::OnDraw(ibDataNode& state)
 {
-	m_metaTree.OnDraw(state.Child(wxT("MetaData")));
+	m_metaTree.OnDraw(state.Child(ibProtocol::ibFrame::MetaData));
 }
 
 void ibClientFrameDesigner::BackendError(const wxString& WXUNUSED(strFileName),
@@ -57,22 +57,22 @@ void ibClientFrameDesigner::InitializeDefaultMenu()
 	// File and Edit are the client's doc manager's. The designer's items stand whatever the rights; the schema's own
 	// right switches its item off (as drawn).
 	ibClientMenu administration;
-	administration.Append(ibProtocolSchema::UserList, _("Users"));
-	administration.Append(ibProtocolSchema::ActiveUser, _("Active users"));
+	administration.Append(ibProtocol::ibSchema::ibKind::UserList, _("Users"));
+	administration.Append(ibProtocol::ibSchema::ibKind::ActiveUser, _("Active users"));
 	administration.AppendSeparator();
-	administration.Append(ibProtocolSchema::AuditLog, _("Registration journal"));
+	administration.Append(ibProtocol::ibSchema::ibKind::AuditLog, _("Registration journal"));
 	administration.AppendSeparator();
-	administration.Append(ibProtocolSchema::Database, ibProtocolSchemaCommand::Load, _("Restore database"));
-	administration.Append(ibProtocolSchema::Database, ibProtocolSchemaCommand::Save, _("Dump database"));
+	administration.Append(ibProtocol::ibSchema::ibKind::Database, ibProtocol::ibSchema::ibCommand::Load, _("Restore database"));
+	administration.Append(ibProtocol::ibSchema::ibKind::Database, ibProtocol::ibSchema::ibCommand::Save, _("Dump database"));
 	administration.AppendSeparator();
-	administration.Append(ibProtocolSchema::Database, ibProtocolSchemaCommand::Clear, _("Clear database"));
+	administration.Append(ibProtocol::ibSchema::ibKind::Database, ibProtocol::ibSchema::ibCommand::Clear, _("Clear database"));
 	administration.AppendSeparator();
-	ibClientMenu::Item& assistant = administration.Append(ibProtocolSchema::Assistant, ibProtocolSchemaCommand::Open,
+	ibClientMenu::Item& assistant = administration.Append(ibProtocol::ibSchema::ibKind::Assistant, ibProtocol::ibSchema::ibCommand::Open,
 		_("Assistant window"));
 	assistant.picture = g_picAssistantCLSID;
 	m_menu.AppendSubMenu(administration, _("Administration"));
 
 	ibClientMenu tools;
-	tools.Append(ibProtocolSchema::McpServer, _("Options..."));
+	tools.Append(ibProtocol::ibSchema::ibKind::McpServer, _("Options..."));
 	m_menu.AppendSubMenu(tools, _("Tools"));
 }

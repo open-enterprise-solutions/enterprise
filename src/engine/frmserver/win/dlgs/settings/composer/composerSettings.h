@@ -9,7 +9,7 @@ class BACKEND_API ibValueSpreadsheetModel;
 // composerSettings.h), drawn by the client (frmclient/win/dlgs/settings/composer/composerSettings.h).
 //
 // The sequence is the desktop's ShowUserSettings, and it lives here: the composition resolves itself, a COPY of the
-// setting in force is taken, the person changes the copy — the client's window, asked (ibProtocolRequestKind::
+// setting in force is taken, the person changes the copy — the client's window, asked (ibProtocol::ibRequest::ibKind::
 // ComposerSettings) with the composition it arranges and the fields its query offers — and on OK it is set on the
 // model's composer. What crosses is a setting and descriptions, never the running object.
 class ibDialogComposerSettings {

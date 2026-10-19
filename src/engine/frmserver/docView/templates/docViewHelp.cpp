@@ -25,10 +25,10 @@ void ibHelpEditView::OnDraw(ibDataNode& frame)
 	// Drawn as a text document's is (ibTextEditView::OnDraw): a textbox's node, the text it shows, and whether it takes
 	// typing — help is read, so it does not.
 	frame.SetClsid(g_controlTextBoxCLSID);
-	ibDataNode& state = frame.Child(wxT("State"));
-	state.SetValue(wxT("Text"), document->GetText());
+	ibDataNode& state = frame.Child(ibProtocol::ibView::State);
+	state.SetValue(ibProtocol::ibView::ibText::Text, document->GetText());
 	if (m_readOnly)
-		state.SetValue(wxT("ReadOnly"), true);
+		state.SetValue(ibProtocol::ibView::ibText::ReadOnly, true);
 }
 
 // ----------------------------------------------------------------------------

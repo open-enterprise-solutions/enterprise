@@ -25,7 +25,7 @@ ibFrontendMainFrameDesigner* ibFrontendMainFrameDesigner::GetFrame() {
 ibFrontendMainFrameDesigner::ibFrontendMainFrameDesigner(std::unique_ptr<ibCommunicator> communicator,
 	const wxString& user, const wxString& password,
 	const wxString& title, const wxPoint& pos, const wxSize& size)
-	: ibFrontendMainFrame(std::move(communicator), ibProtocolMode::Designer, user, password, title, pos, size),
+	: ibFrontendMainFrame(std::move(communicator), ibProtocol::ibLogin::ibMode::Designer, user, password, title, pos, size),
 	m_stackWindow(new ibStackWindow(this, wxID_ANY)),
 	m_watchWindow(new ibWatchWindow(this, wxID_ANY)),
 	m_localWindow(new ibLocalWindow(this, wxID_ANY))
@@ -65,14 +65,14 @@ void ibFrontendMainFrameDesigner::CreateGUI()
 
 void ibFrontendMainFrameDesigner::ShowRequest(const ibProtocolNode& request, ibProtocolNode& response)
 {
-	switch (static_cast<ibProtocolRequestKind>(request.GetInt(ibProtocolName::Kind))) {
-	case ibProtocolRequestKind::ApplyChange:
+	switch (static_cast<ibProtocol::ibRequest::ibKind>(request.GetInt(ibProtocol::ibRequest::Kind))) {
+	case ibProtocol::ibRequest::ibKind::ApplyChange:
 		// THE DESKTOP'S ibDialogApplyChange over the restructure's ledger — the base held on the server while it is open.
 		// Cancelled — answered with no Done: everything rolled back.
 		if (ibDialogApplyChange::ShowApplyChange(request, this))
-			response.SetValue(ibProtocolName::Done, true);
+			response.SetValue(ibProtocol::ibRequest::ibApplyChange::Done, true);
 		break;
-	case ibProtocolRequestKind::FormType: {
+	case ibProtocol::ibRequest::ibKind::FormType: {
 		// THE DESKTOP'S ibDialogSelectTypeForm over a form just made. Cancelled — answered with no Id: the form taken
 		// away again.
 		ibDialogSelectTypeForm dialog(request);
@@ -89,10 +89,10 @@ void ibFrontendMainFrameDesigner::ShowRequest(const ibProtocolNode& request, ibP
 
 void ibFrontendMainFrameDesigner::DrawFrame(const ibProtocolNode& frame, const ibProtocolNode& patch)
 {
-	if (m_metaWindow == nullptr || (patch.IsNode() && !patch.Has(ibProtocolName::MetaData)))
+	if (m_metaWindow == nullptr || (patch.IsNode() && !patch.Has(ibProtocol::ibFrame::MetaData)))
 		return;
 
-	const ibProtocolNode root = frame.FindChild(ibProtocolName::MetaData);
+	const ibProtocolNode root = frame.FindChild(ibProtocol::ibFrame::MetaData);
 	m_metaWindow->Draw(root);
 
 	// THE CAPTION — the desktop's Modify: "*" while somebody edited the configuration, "<!>" while the base does not hold
@@ -103,10 +103,10 @@ void ibFrontendMainFrameDesigner::DrawFrame(const ibProtocolNode& frame, const i
 
 	wxString caption = _("Configuration") + ' ';
 
-	if (root.GetBool(ibProtocolName::Edited))
+	if (root.GetBool(ibProtocol::ibSchema::ibMetaData::Edited))
 		caption += wxT('*');
 
-	if (root.IsNode() && !root.GetBool(ibProtocolName::ConfigSave, true))
+	if (root.IsNode() && !root.GetBool(ibProtocol::ibSchema::ibMetaData::ConfigSave, true))
 		caption += wxT("<!>");
 
 	if (caption != paneInfo.caption) {
@@ -137,34 +137,34 @@ void ibFrontendMainFrameDesigner::Debugger_OnStateChanged()
 #include "designer-thin/docManager/templates/docViewComposer.h"
 #include "designer-thin/docManager/templates/docViewAssistant.h"
 
-ibTabDocument* ibFrontendMainFrameDesigner::CreateDocument(ibProtocolViewKind kind, long long tabId)
+ibTabDocument* ibFrontendMainFrameDesigner::CreateDocument(ibProtocol::ibView::ibKind kind, long long tabId)
 {
-	if (kind == ibProtocolViewKind::DataProcessor)
+	if (kind == ibProtocol::ibView::ibKind::DataProcessor)
 		return new ibDataProcessorFileDocument(tabId);
-	if (kind == ibProtocolViewKind::Report)
+	if (kind == ibProtocol::ibView::ibKind::Report)
 		return new ibReportFileDocument(tabId);
-	if (kind == ibProtocolViewKind::Module)
+	if (kind == ibProtocol::ibView::ibKind::Module)
 		return new ibModuleEditDocument(tabId);
-	if (kind == ibProtocolViewKind::FormDesigner)
+	if (kind == ibProtocol::ibView::ibKind::FormDesigner)
 		return new ibFormEditDocument(tabId);
-	if (kind == ibProtocolViewKind::Interface)
+	if (kind == ibProtocol::ibView::ibKind::Interface)
 		return new ibInterfaceEditDocument(tabId);
-	if (kind == ibProtocolViewKind::CommonAttribute)
+	if (kind == ibProtocol::ibView::ibKind::CommonAttribute)
 		return new ibCommonAttributeEditDocument(tabId);
-	if (kind == ibProtocolViewKind::FunctionalOption)
+	if (kind == ibProtocol::ibView::ibKind::FunctionalOption)
 		return new ibFunctionalOptionEditDocument(tabId);
-	if (kind == ibProtocolViewKind::Role)
+	if (kind == ibProtocol::ibView::ibKind::Role)
 		return new ibRoleEditDocument(tabId);
-	if (kind == ibProtocolViewKind::Composer)
+	if (kind == ibProtocol::ibView::ibKind::Composer)
 		return new ibComposerEditDocument(tabId);
-	if (kind == ibProtocolViewKind::Assistant)
+	if (kind == ibProtocol::ibView::ibKind::Assistant)
 		return new ibAssistantDocument(tabId);
 	return ibFrontendMainFrame::CreateDocument(kind, tabId);
 }
 
-std::vector<ibProtocolSchema> ibFrontendMainFrameDesigner::GetStartSchemas() const
+std::vector<ibProtocol::ibSchema::ibKind> ibFrontendMainFrameDesigner::GetStartSchemas() const
 {
-	return { ibProtocolSchema::Debugger };
+	return { ibProtocol::ibSchema::ibKind::Debugger };
 }
 
 bool ibFrontendMainFrameDesigner::Show(bool show)

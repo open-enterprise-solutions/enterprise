@@ -255,18 +255,18 @@ public:
 	// …and the children have written theirs: what a container says once its children are drawn.
 	virtual void OnUpdated(ibDataNode& state, ibVisualHost* host) {}
 
-	// ⭐ AN EVENT FROM THE CLIENT, on this control: `event` is what happened to it (ibProtocolEvent), `args` the rest
+	// ⭐ AN EVENT FROM THE CLIENT, on this control: `event` is what happened to it (ibProtocol::ibEvent::ibKind), `args` the rest
 	// of it. Each control answers the events it has and maps them onto its own model methods; the base answers
 	// Command — an entry of the control's command bar pressed. False — not an event this control has. Reached
 	// only through the form's door (ibValueForm::DispatchEvent), which has already refused a control that is not
 	// enabled or not shown.
-	virtual bool OnClientEvent(ibProtocolEvent event, const ibDataNode& args);
-	// …and of the state events (ibProtocolIsStateEvent), the ones it is subscribed to: something here runs on them, so
+	virtual bool OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args);
+	// …and of the state events (ibProtocol::ibEvent::IsStateEvent), the ones it is subscribed to: something here runs on them, so
 	// the client sends them at once (its State's Subscribed); any other one waits for the client's next call. Asked
 	// at each frame, so a handler a script hangs on at run time subscribes with the frame it draws. The base: Focus, on
 	// a control with a view of its own — the form's menu and toolbar become that view's.
-	virtual bool IsSubscribed(ibProtocolEvent event) const {
-		return event == ibProtocolEvent::Focus && GetControlView() != nullptr;
+	virtual bool IsSubscribed(ibProtocol::ibEvent::ibKind event) const {
+		return event == ibProtocol::ibEvent::ibKind::Focus && GetControlView() != nullptr;
 	}
 
 	// ⭐ A PART OF WHAT THIS CONTROL SHOWS, written when the client asks for it — what is too large to travel in

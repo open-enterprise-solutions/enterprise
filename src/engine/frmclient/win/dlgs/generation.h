@@ -10,7 +10,7 @@
 #include "protocol/protocolNode.h"
 
 // THE OBJECT TO BASE A NEW ONE ON — the desktop's ibDialogGeneration (frontend/win/dlgs/generation.h). What it lists
-// the server sent (ibProtocolRequestKind::Generation) — a row per object generated, its Id, Caption and Picture, and
+// the server sent (ibProtocol::ibRequest::ibKind::Generation) — a row per object generated, its Id, Caption and Picture, and
 // the window's Picture; the desktop's read them of the configuration.
 class ibDialogGeneration : public wxDialog {
 	wxListCtrl* m_listData;

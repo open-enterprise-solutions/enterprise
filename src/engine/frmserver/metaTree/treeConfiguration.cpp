@@ -10,12 +10,13 @@
 #include "backend/metaCollection/partial/chartOfAccounts.h"   // the chart's own two branches — AddChartOfAccountsItem
 #include "backend/metaCollection/partial/commonObject.h"
 #include "backend/metaCollection/partial/dataReport.h"  // ibValueMetaObjectReport — AddReportItem
+#include "backend/backend_picture.h"                    // ibBackendPicture::SendPicture — the rows' pictures, by their ids
 #include "core/serialize/dataBuilder.h"
 
 #include "frmserver/client/clientFrame.h"
 #include "frmserver/docView/docView.h"
 #include "frmserver/win/dlgs/formSelector.h"   // ibDialogSelectTypeForm — the form's kind, asked
-#include "protocol/protocol.h"                  // ibProtocolName::FormType — the form's kind, its property
+#include "protocol/protocol.h"                  // ibProtocol::ibSchema::ibMetaData::FormType — the form's kind, its property
 
 #include <algorithm>    // std::stable_sort — the groups in the declared order
 #include <functional>   // std::function — a group fills its nested groups first
@@ -263,7 +264,7 @@ bool ibMetaTreeBase::AskFormKind(ibValueMetaObject* object)
 
 	// Placed the way the object inspector places one: ask the owner, set, tell the owner. A generic form keeps the kind
 	// it was made with.
-	ibProperty* const kind = form->GetProperty(ibProtocolName::FormType);
+	ibProperty* const kind = form->GetProperty(ibProtocol::ibSchema::ibMetaData::FormType);
 	if (kind != nullptr && chosen != defaultFormType) {
 		const wxVariant before = kind->GetValue();
 		if (form->OnPropertyChanging(kind, wxVariant((long)chosen))) {
@@ -337,31 +338,31 @@ ibDataNode& ibMetaTreeBase::AppendGroupItem(ibDataNode& parent, const ibClassID&
 	// A group row is named by its place: it carries no object, and its place under its parent is fixed by the layout.
 	const ibMetaID place = -static_cast<ibMetaID>(parent.Children().size() + 1);
 	ibDataNode& item = parent.AddChild(0, place);
-	item.SetValue(wxT("Title"), name);
-	item.SetValue(wxT("Picture"), ibClientFrame::SendPicture(clsid));
-	item.SetValue(wxT("Group"), ClsidText(clsid));
+	item.SetValue(ibProtocol::ibSchema::ibMetaData::Title, name);
+	item.SetValue(ibProtocol::ibSchema::ibMetaData::Picture, ibBackendPicture::SendPicture(clsid));
+	item.SetValue(ibProtocol::ibSchema::ibMetaData::Group, ClsidText(clsid));
 	return item;
 }
 
 ibDataNode& ibMetaTreeBase::AppendGroupItem(ibDataNode& parent, const ibClassID& clsid, ibValueMetaObject* metaObject)
 {
 	ibDataNode& item = AppendItem(parent, metaObject);
-	item.SetValue(wxT("Group"), ClsidText(clsid));
+	item.SetValue(ibProtocol::ibSchema::ibMetaData::Group, ClsidText(clsid));
 	return item;
 }
 
 ibDataNode& ibMetaTreeBase::AppendItem(ibDataNode& parent, ibValueMetaObject* metaObject)
 {
 	ibDataNode& item = parent.AddChild(0, metaObject->GetMetaID());
-	item.SetValue(wxT("Title"), metaObject->GetName());
+	item.SetValue(ibProtocol::ibSchema::ibMetaData::Title, metaObject->GetName());
 	// Every metaobject's icon is its class's.
-	item.SetValue(wxT("Picture"), ibClientFrame::SendPicture(metaObject->GetClassType()));
-	item.SetValue(wxT("Type"), ClsidText(metaObject->GetClassType()));
-	item.SetValue(wxT("Synonym"), metaObject->GetSynonym());
+	item.SetValue(ibProtocol::ibSchema::ibMetaData::Picture, ibBackendPicture::SendPicture(metaObject->GetClassType()));
+	item.SetValue(ibProtocol::ibSchema::ibMetaData::Type, ClsidText(metaObject->GetClassType()));
+	item.SetValue(ibProtocol::ibSchema::ibMetaData::Synonym, metaObject->GetSynonym());
 	// …and its guid — what a record of the base keeps it by (a user's roles and language: ibDialogUserItem).
-	item.SetValue(wxT("Guid"), metaObject->GetDocPath());
+	item.SetValue(ibProtocol::ibSchema::ibMetaData::Guid, metaObject->GetDocPath());
 	if (const ibValueMetaObject* const owner = metaObject->GetParent())
-		item.SetValue(wxT("Position"), static_cast<s32>(owner->GetChildPosition(metaObject)));
+		item.SetValue(ibProtocol::ibSchema::ibMetaData::Position, static_cast<s32>(owner->GetChildPosition(metaObject)));
 	AppendMenu(item, metaObject);
 	return item;
 }
@@ -373,28 +374,28 @@ void ibMetaTreeBase::AppendMenu(ibDataNode& item, ibValueMetaObject* metaObject)
 	if (items.empty() && !standardSuppressed)
 		return;
 
-	ibDataNode& menu = item.Child(wxT("Menu"));
+	ibDataNode& menu = item.Child(ibProtocol::ibSchema::ibMetaData::Menu);
 	if (standardSuppressed)
-		menu.SetValue(wxT("Standard"), false);
+		menu.SetValue(ibProtocol::ibSchema::ibMetaData::Standard, false);
 
 	for (const ibMetaMenuItem& entry : items) {
 		ibDataNode& row = menu.AddChild(0, static_cast<ibMetaID>(menu.Children().size() + 1));
-		row.SetValue(wxT("Kind"), static_cast<s32>(entry.m_kind));
-		row.SetValue(wxT("Name"), entry.m_name);
-		row.SetValue(wxT("Title"), entry.m_caption);
+		row.SetValue(ibProtocol::ibSchema::ibMetaData::Kind, static_cast<s32>(entry.m_kind));
+		row.SetValue(ibProtocol::ibSchema::ibMetaData::Name, entry.m_name);
+		row.SetValue(ibProtocol::ibSchema::ibMetaData::Title, entry.m_caption);
 		// What it opens, by its id — and of what class, so a module no row shows (an object's inner module) is made
 		// on the far side, under the object whose row this is.
 		if (entry.m_metaObject != nullptr) {
-			row.SetValue(wxT("Object"), static_cast<s32>(entry.m_metaObject->GetMetaID()));
-			row.SetValue(wxT("Type"), ClsidText(entry.m_metaObject->GetClassType()));
+			row.SetValue(ibProtocol::ibSchema::ibMetaData::Object, static_cast<s32>(entry.m_metaObject->GetMetaID()));
+			row.SetValue(ibProtocol::ibSchema::ibMetaData::Type, ClsidText(entry.m_metaObject->GetClassType()));
 		}
 		// Its picture — of what it opens, else its own (the desktop's AppendMetaMenu).
 		if (entry.m_metaObject != nullptr)
-			row.SetValue(wxT("Picture"), ibClientFrame::SendPicture(entry.m_metaObject->GetClassType()));
+			row.SetValue(ibProtocol::ibSchema::ibMetaData::Picture, ibBackendPicture::SendPicture(entry.m_metaObject->GetClassType()));
 		else if (entry.m_picture != 0)
-			row.SetValue(wxT("Picture"), ibClientFrame::SendPicture(entry.m_picture));
+			row.SetValue(ibProtocol::ibSchema::ibMetaData::Picture, ibBackendPicture::SendPicture(entry.m_picture));
 		if (entry.m_id != wxNOT_FOUND)
-			row.SetValue(wxT("Command"), static_cast<s32>(entry.m_id));
+			row.SetValue(ibProtocol::ibSchema::ibMetaData::Command, static_cast<s32>(entry.m_id));
 	}
 }
 
@@ -659,11 +660,11 @@ void ibConfigurationTree::ExpandMetaItem(ibValueMetaObject* metaItem, ibDataNode
 	// A LANGUAGE SAYS ITS CODE — what a translated text is keyed by: the translation window's boxes are the languages',
 	// each by its code (ibDialogTranslateConstructor).
 	else if (clsid == g_metaLanguageCLSID)
-		item.SetValue(wxT("Code"), static_cast<ibValueMetaObjectLanguage*>(metaItem)->GetLangCode());
+		item.SetValue(ibProtocol::ibSchema::ibMetaData::Code, static_cast<ibValueMetaObjectLanguage*>(metaItem)->GetLangCode());
 
 	// A ROLE SAYS HOW IT COMBINES — what a user's membership of it is written with (ibDialogUserItem).
 	else if (clsid == g_metaRoleCLSID)
-		item.SetValue(wxT("Mode"), static_cast<s32>(static_cast<ibValueMetaObjectRole*>(metaItem)->GetRoleCompositionMode()));
+		item.SetValue(ibProtocol::ibSchema::ibMetaData::Mode, static_cast<s32>(static_cast<ibValueMetaObjectRole*>(metaItem)->GetRoleCompositionMode()));
 
 	// A COMMAND HOLDS COMMANDS.
 	else if (clsid == g_metaCommandCLSID || clsid == g_metaCommonCommandCLSID) {
@@ -714,23 +715,23 @@ void ibConfigurationTree::FillData(ibDataNode& root)
 	wxASSERT(commonMetadata);
 
 	root.SetMetaId(commonMetadata->GetMetaID());
-	root.SetValue(wxT("Title"), m_metaData->GetConfigName());
-	root.SetValue(wxT("Picture"), ibClientFrame::SendPicture(g_metaCommonMetadataCLSID));
-	root.SetValue(wxT("Type"), ClsidText(commonMetadata->GetClassType()));
+	root.SetValue(ibProtocol::ibSchema::ibMetaData::Title, m_metaData->GetConfigName());
+	root.SetValue(ibProtocol::ibSchema::ibMetaData::Picture, ibBackendPicture::SendPicture(g_metaCommonMetadataCLSID));
+	root.SetValue(ibProtocol::ibSchema::ibMetaData::Type, ClsidText(commonMetadata->GetClassType()));
 	// …the dialect its modules are written in — what the desktop's process held (ibCompileCode::GetCodeStyle).
-	root.SetValue(wxT("Syntax"), static_cast<s32>(m_metaData->GetCommonMetaObject()->GetCompileSyntax()));
+	root.SetValue(ibProtocol::ibSchema::ibMetaData::Syntax, static_cast<s32>(m_metaData->GetCommonMetaObject()->GetCompileSyntax()));
 	// …and its state — what the desktop's caption asked of it (ibFrontendMainFrameDesigner::Modify).
-	root.SetValue(wxT("Modified"), m_metaData->IsModified());
-	root.SetValue(wxT("Edited"), m_metaData->IsEdited());
-	root.SetValue(wxT("ConfigSave"), m_metaData->IsConfigSave());
+	root.SetValue(ibProtocol::ibSchema::ibMetaData::Modified, m_metaData->IsModified());
+	root.SetValue(ibProtocol::ibSchema::ibMetaData::Edited, m_metaData->IsEdited());
+	root.SetValue(ibProtocol::ibSchema::ibMetaData::ConfigSave, m_metaData->IsConfigSave());
 	// …and the kinds Open opens an editor of (ibDocManager::OpenForm): a catalog's or a document's row opens nothing,
 	// and the client does not ask for it.
-	ibDataNode& editors = root.Child(wxT("Editors"));
+	ibDataNode& editors = root.Child(ibProtocol::ibSchema::ibMetaData::Editors);
 	for (const ibClassID& clsid : m_frame->GetDocumentManager()->GetMetaTemplateClasses()) {
 		if (clsid == 0)
 			continue;   // a template of no metaobject's (a text, a spreadsheet)
 		ibDataNode& editor = editors.AddChild(0, static_cast<ibMetaID>(editors.Children().size() + 1));
-		editor.SetValue(wxT("Type"), ClsidText(clsid));
+		editor.SetValue(ibProtocol::ibSchema::ibMetaData::Type, ClsidText(clsid));
 	}
 	AppendMenu(root, commonMetadata);
 
@@ -767,7 +768,7 @@ void ibConfigurationTree::FillData(ibDataNode& root)
 	};
 
 	ibDataNode& common = root.AddChild(0, -1);
-	common.SetValue(wxT("Title"), commonName);
+	common.SetValue(ibProtocol::ibSchema::ibMetaData::Title, commonName);
 	for (const ibMetaTreeGroupDef* def : rows) {
 		if (def->m_owner == 0 && ibMetaGroupBandOf(def->m_clsid) == ibMetaGroupBand::Common)
 			fillGroup(common, def);

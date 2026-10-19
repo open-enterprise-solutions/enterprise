@@ -15,14 +15,6 @@ public:
 
 	ibPropertySerializable(ibPropertyCategory* cat, const ibDataNode& row);
 
-	// The metaobject it opens — a module its owner holds (the row's Object); none: 0.
-	ibMetaID GetObjectId() const { return m_objectId; }
-	// An event's: its procedure's parameters, as the desktop's ibEvent has them (the row's Args); none: empty.
-	const wxArrayString& GetArgs() const { return m_args; }
-	// The row as the server wrote it — for a cell that reads more of it than every row has (a calculation register's
-	// Schedule: the lists its sub-rows choose from).
-	const ibDataNode& GetRow() const { return m_row; }
-
 	// …unless the server says it is not (its own IsEditable — the row's ReadOnly).
 	virtual bool IsEditable() const override { return !m_readOnly && ibProperty::IsEditable(); }
 	// Its type, as the server names it — the key its presentation is registered by.
@@ -32,6 +24,9 @@ public:
 	// Not a value of the engine's — the server holds that.
 	virtual bool SetDataValue(const ibValue& WXUNUSED(varPropVal)) override { return false; }
 	virtual bool GetDataValue(ibValue& WXUNUSED(pvarPropVal)) const override { return false; }
+
+	// The row it was made of, as the server wrote it.
+	virtual bool GetProtocolValue(ibDataNode& row) const override { row = m_row; return true; }
 
 protected:
 
@@ -47,8 +42,6 @@ private:
 	ibPropertyChoiceList m_choices;
 	ibPropertyChoiceMode m_mode = ibPropertyChoiceMode::None;
 	bool m_readOnly = false;
-	ibMetaID m_objectId = 0;
-	wxArrayString m_args;
 };
 
 #endif

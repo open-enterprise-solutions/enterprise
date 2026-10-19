@@ -141,6 +141,6 @@ void ibFrontendMainFrameDesigner::InitializeDefaultMenu()
 	     wxID_FRONTEND_SYNTAX_HELPER);
 	// About — the server's schema, asked for and shown as its menu item would be.
 	Bind(wxEVT_MENU,
-	     [this](wxCommandEvent&) { OpenSchema(ibProtocolSchema::About); },
+	     [this](wxCommandEvent&) { OpenSchema(ibProtocol::ibSchema::ibKind::About); },
 	     wxID_DESIGNER_ABOUT);
 }

@@ -5,7 +5,7 @@
 #include "backend/metaCollection/metaGroups.h"   // what a group is called, and where it stands
 #include "backend/objCtor.h"
 #include "core/serialize/dataBuilder.h"
-#include "frmserver/client/clientFrame.h"   // SendPicture — a row's icon
+#include "backend/backend_picture.h"   // ibBackendPicture::SendPicture — a row's icon
 
 #include <algorithm>
 #include <vector>
@@ -25,17 +25,17 @@ void ibCommonAttributeCompositionView::OnDraw(ibDataNode& frame)
 
 	// Read-only where the configuration may not be edited — the desktop's editor disabled its tree (SetReadOnly by
 	// ibDOC_READONLY).
-	ibDataNode& state = frame.Child(ibProtocolName::State);
-	state.SetValue(ibProtocolName::ReadOnly, !metaCommonAttribute->IsEditable());
+	ibDataNode& state = frame.Child(ibProtocol::ibView::State);
+	state.SetValue(ibProtocol::ibView::ibCheckTree::ReadOnly, !metaCommonAttribute->IsEditable());
 
-	FillData(frame.Child(ibProtocolName::Rows));
+	FillData(frame.Child(ibProtocol::ibView::ibCheckTree::Rows));
 }
 
-bool ibCommonAttributeCompositionView::OnClientEvent(ibProtocolEvent event, const ibDataNode& args)
+bool ibCommonAttributeCompositionView::OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args)
 {
 	ibValueMetaObjectCommonAttribute* const metaCommonAttribute =
 		GetDocument()->ConvertMetaObjectToType<ibValueMetaObjectCommonAttribute>();
-	if (metaCommonAttribute == nullptr || event != ibProtocolEvent::Toggle)
+	if (metaCommonAttribute == nullptr || event != ibProtocol::ibEvent::ibKind::Toggle)
 		return false;
 
 	ibMetaData* const metaData = metaCommonAttribute->GetMetaData();
@@ -47,7 +47,7 @@ bool ibCommonAttributeCompositionView::OnClientEvent(ibProtocolEvent event, cons
 	// THE ATTRIBUTE ITSELF MOVES, not a flag — the desktop's OnCheckItem. Its pass over the open documents
 	// (UpdateAllViews, so the object's attribute list re-reads) is not here: a view is drawn anew for every frame a
 	// client is sent.
-	metaCommonAttribute->SetCompositionObject(metaObject, args.GetValue<bool>(ibProtocolName::Checked));
+	metaCommonAttribute->SetCompositionObject(metaObject, args.GetValue<bool>(ibProtocol::ibView::ibCheckTree::Checked));
 	return true;
 }
 
@@ -62,8 +62,8 @@ ibDataNode& ibCommonAttributeCompositionView::GroupFor(ibDataNode& root, const i
 	// A group row is named by its place: it carries no object.
 	ibDataNode& group = root.AddChild(0, -static_cast<ibMetaID>(root.Children().size() + 1));
 	const wxString caption = ibMetaGroupCaption(clsid);
-	group.SetValue(ibProtocolName::Title, caption.IsEmpty() ? typeCtor->GetClassName() : caption);
-	group.SetValue(ibProtocolName::Picture, ibClientFrame::SendPicture(clsid));
+	group.SetValue(ibProtocol::ibView::ibCheckTree::Title, caption.IsEmpty() ? typeCtor->GetClassName() : caption);
+	group.SetValue(ibProtocol::ibView::ibCheckTree::Picture, ibBackendPicture::SendPicture(clsid));
 	return group;
 }
 
@@ -73,10 +73,10 @@ ibDataNode& ibCommonAttributeCompositionView::AppendItem(ibDataNode& parent, ibV
 		GetDocument()->ConvertMetaObjectToType<ibValueMetaObjectCommonAttribute>();
 
 	ibDataNode& item = parent.AddChild(0, metaObject->GetMetaID());
-	item.SetValue(ibProtocolName::Title, metaObject->GetName());
-	item.SetValue(ibProtocolName::Picture, ibClientFrame::SendPicture(metaObject->GetClassType()));
-	item.SetValue(ibProtocolName::Checked, metaCommonAttribute->IsCompositionObject(metaObject));
-	item.SetValue(ibProtocolName::ReadOnly, !metaObject->IsEditable());
+	item.SetValue(ibProtocol::ibView::ibCheckTree::Title, metaObject->GetName());
+	item.SetValue(ibProtocol::ibView::ibCheckTree::Picture, ibBackendPicture::SendPicture(metaObject->GetClassType()));
+	item.SetValue(ibProtocol::ibView::ibCheckTree::Checked, metaCommonAttribute->IsCompositionObject(metaObject));
+	item.SetValue(ibProtocol::ibView::ibCheckTree::ReadOnly, !metaObject->IsEditable());
 	return item;
 }
 
@@ -90,8 +90,8 @@ void ibCommonAttributeCompositionView::FillData(ibDataNode& root)
 
 	// The root wears the CONFIGURATION's icon, as the section editor's; the desktop's kept the word "Configuration" on it.
 	root.SetMetaId(commonObject->GetMetaID());
-	root.SetValue(ibProtocolName::Title, _("Configuration"));
-	root.SetValue(ibProtocolName::Picture, ibClientFrame::SendPicture(g_metaCommonMetadataCLSID));
+	root.SetValue(ibProtocol::ibView::ibCheckTree::Title, _("Configuration"));
+	root.SetValue(ibProtocol::ibView::ibCheckTree::Picture, ibBackendPicture::SendPicture(g_metaCommonMetadataCLSID));
 
 	// ASKED, NOT LISTED: every metaobject that says it can carry one (IsCompositionAllowed), in the order of its group's
 	// declared place (ibMetaGroupOrder); a stable sort leaves each group's own objects as the metadata gives them.

@@ -31,10 +31,10 @@ public:
 			return;
 		m_sent = held;
 		ibProtocolNode params, answer;
-		params.SetValue(ibProtocolName::Tab, m_document->GetTabId())
-			.SetValue(ibProtocolName::Event, static_cast<int>(ibProtocolEvent::Change))
-			.SetValue(ibProtocolName::Args, args);
-		frame->Call(ibProtocolMethod::Event, params, answer);
+		params.SetValue(ibProtocol::ibEvent::Tab, m_document->GetTabId())
+			.SetValue(ibProtocol::ibEvent::Event, static_cast<int>(ibProtocol::ibEvent::ibKind::Change))
+			.SetValue(ibProtocol::ibEvent::Args, args);
+		frame->Call(ibProtocol::ibMethod::Event, params, answer);
 	}
 
 	// What the server has — the composition the tab was built of.
@@ -54,7 +54,7 @@ private:
 		ibDataNode composition;
 		ibCompositionDescriptionMemory::WriteNode(composition, m_edited);
 		ibProtocolNode args;
-		ibWriteProtocolNode(composition, args.Child(ibProtocolName::Composition));
+		ibWriteProtocolNode(composition, args.Child(ibProtocol::ibView::ibComposer::Composition));
 		return args;
 	}
 
@@ -81,12 +81,12 @@ void ibComposerEditView::Build(const ibProtocolNode& view)
 		return;
 
 	ibDataNode composition;
-	ibReadProtocolNode(view.FindChild(ibProtocolName::Composition), composition);
+	ibReadProtocolNode(view.FindChild(ibProtocol::ibView::ibComposer::Composition), composition);
 	ibCompositionDescriptionMemory::ReadNode(composition, m_composition);
 
 	m_composerPanel = new ibComposerTabEditor(m_viewFrame, m_composition, &m_metaData,
 		dynamic_cast<const ibTabDocument*>(GetDocument()));
-	m_composerPanel->SetReadOnly(view.FindChild(ibProtocolName::State).GetBool(ibProtocolName::ReadOnly));
+	m_composerPanel->SetReadOnly(view.FindChild(ibProtocol::ibView::State).GetBool(ibProtocol::ibView::ibComposer::ReadOnly));
 	m_composerPanel->Remember();
 
 	wxSizer* sizer = m_viewFrame->GetSizer();
@@ -141,7 +141,7 @@ void ibComposerEditDocument::DrawView(const ibProtocolNode& view, const ibProtoc
 {
 	// The fields the view said, for the text it said them of — read before the panel is built, which reads them.
 	ibDataNode node;
-	ibReadProtocolNode(view.FindChild(ibProtocolName::Composition), node);
+	ibReadProtocolNode(view.FindChild(ibProtocol::ibView::ibComposer::Composition), node);
 	ibCompositionDescription composition;
 	ibCompositionDescriptionMemory::ReadNode(node, composition);
 	ibQueryFieldsKnown(GetTabId(), composition.m_query, view);

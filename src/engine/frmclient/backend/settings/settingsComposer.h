@@ -14,7 +14,7 @@ class ibMetaData;
 
 // A PERSON'S SHELF OF SETTINGS — the engine's (backend/settings/settingsComposer.h), as the client's window of it
 // (ibDialogSavedSettings) calls it. The shelf is the server's: what is listed is the question the server waits on
-// (ibProtocolRequestKind::SavedSettings), and an act is its answer — done there, and the shelf asked again with how
+// (ibProtocol::ibRequest::ibKind::SavedSettings), and an act is its answer — done there, and the shelf asked again with how
 // it went. Whose shelf it is, the server knows: the category and the key are not read here.
 
 FRMCLIENT_API ibGuid ibSaveComposerSettings(ibSettingsCategory category, const ibGuid& objectKey,

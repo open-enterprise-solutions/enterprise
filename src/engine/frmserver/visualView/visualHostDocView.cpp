@@ -299,7 +299,7 @@ bool ibFormVisualEditView::OnCreate(ibDocument* WXUNUSED(doc), long WXUNUSED(fla
 void ibFormVisualEditView::OnDraw(ibDataNode& frame)
 {
 	// The key a client names this form by when it is not its tab's own — a cell of the start page.
-	frame.SetValue(wxT("Key"), GetValueForm()->GetFormKey().GetGuid().str());
+	frame.SetValue(ibProtocol::ibForm::Key, GetValueForm()->GetFormKey().GetGuid().str());
 	UpdateVisualHost(frame);
 }
 

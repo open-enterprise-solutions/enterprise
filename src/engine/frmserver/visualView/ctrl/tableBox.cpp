@@ -14,7 +14,7 @@
 #include "formAttribute.h"                              // the attribute this box is bound to — its source IS the address
 #include "backend/srcDataObject.h"                      // …and the source answers with the guid of what it reads
 #include "backend/appData.h"
-#include "frmserver/client/clientFrame.h"               // ibClientFrame::SendPicture — a row's picture, by its id
+#include "backend/backend_picture.h"                    // ibBackendPicture::SendPicture — a row's picture, by its id
 #include "frmserver/visualView/visualHost.h"            // IsDesignerHost — what the form is held by
 
 #include <algorithm>
@@ -650,14 +650,14 @@ void ibValueModelTableBox::OnUpdate(ibDataNode& state, ibVisualHost* host)
 {
 	ibValueWindowComposite::OnUpdate(state, host);
 
-	state.SetValue(wxT("ChoiceMode"), IsChoiceMode());
-	state.SetValue(wxT("ViewMode"), static_cast<s32>(m_propertyViewMode->GetValueAsEnum()));
+	state.SetValue(ibProtocol::ibForm::ibTable::ChoiceMode, IsChoiceMode());
+	state.SetValue(ibProtocol::ibForm::ibTable::ViewMode, static_cast<s32>(m_propertyViewMode->GetValueAsEnum()));
 
 	// The designer's picture of the form must not attach the runtime data model (a read would issue SQL
 	// against a metadata table that doesn't exist yet, or that the designer session has no runtime to query
 	// against).
 	if (host->IsDesignerHost() || m_tableModel == nullptr) {
-		state.SetValue(wxT("Version"), m_rowsVersion);
+		state.SetValue(ibProtocol::ibForm::ibTable::Version, m_rowsVersion);
 		return;
 	}
 
@@ -686,7 +686,7 @@ void ibValueModelTableBox::OnUpdate(ibDataNode& state, ibVisualHost* host)
 				ApplyCurrentLine(line);
 		}
 	}
-	state.SetValue(wxT("Version"), m_rowsVersion);
+	state.SetValue(ibProtocol::ibForm::ibTable::Version, m_rowsVersion);
 
 	// THE FIRST PAGE RIDES THE FRAME THAT NAMES ITS VERSION — once. Same shape as Fetch (rows as children,
 	// End, Before, Pictures). The client that reads Rows here skips the opening fetch; one that does not still asks.
@@ -705,24 +705,24 @@ void ibValueModelTableBox::OnUpdate(ibDataNode& state, ibVisualHost* host)
 			anchor = FindRowHandle(m_tableCurrentLine->GetLineItem());
 		const s32 count = 105;   // 100 + kBufferSlack — the client's first page when the viewport is unset
 		ibDataNode request, fetched;
-		request.SetValue(wxT("Direction"), 0);
-		request.SetValue(wxT("Anchor"), anchor);
-		request.SetValue(wxT("Parent"), 0);
-		request.SetValue(wxT("Count"), count);
+		request.SetValue(ibProtocol::ibForm::ibTable::Direction, static_cast<s32>(ibProtocol::ibForm::ibTable::ibDirection::Reset));
+		request.SetValue(ibProtocol::ibForm::ibTable::Anchor, anchor);
+		request.SetValue(ibProtocol::ibForm::ibTable::Parent, 0);
+		request.SetValue(ibProtocol::ibForm::ibTable::Count, count);
 		// A current row not handed out yet (a row just added) is not one to read around: the level is read from the top —
 		// no rows ahead of it (Before 0), so the client knows it for the top.
 		const bool fromTop = m_rowsSentVersion != -1 && anchor == 0;
 		if (anchor != 0)
-			request.SetValue(wxT("Before"), count);
+			request.SetValue(ibProtocol::ibForm::ibTable::Before, count);
 		if (fromTop)
 			m_fetchFromTop = true;
 		if (Fetch(request, fetched)) {
 			if (anchor != 0)
-				fetched.SetValue(wxT("Anchor"), anchor);
+				fetched.SetValue(ibProtocol::ibForm::ibTable::Anchor, anchor);
 			if (fromTop)
-				fetched.SetValue(wxT("Before"), 0);
-			fetched.SetValue(wxT("Count"), count);
-			state.Child(wxT("Rows")) = std::move(fetched);
+				fetched.SetValue(ibProtocol::ibForm::ibTable::Before, 0);
+			fetched.SetValue(ibProtocol::ibForm::ibTable::Count, count);
+			state.Child(ibProtocol::ibForm::ibTable::Rows) = std::move(fetched);
 			m_rowsSentVersion = m_rowsVersion;
 		}
 	}
@@ -744,17 +744,17 @@ void ibValueModelTableBox::OnUpdate(ibDataNode& state, ibVisualHost* host)
 	// ⭐ ONLY A ROW THE SERVER MOVED TO — never the client's own said back: an answer drawn before the client told its
 	// newer move put the cursor back where the person had left it, and the row "jumped".
 	if (currentRow != 0 && currentRow != m_clientRow) {
-		state.SetValue(wxT("CurrentRow"), currentRow);
+		state.SetValue(ibProtocol::ibForm::ibTable::CurrentRow, currentRow);
 		m_clientRow = currentRow;
 	}
 	if (m_currentColumn != 0)
-		state.SetValue(wxT("CurrentColumn"), static_cast<s32>(m_currentColumn));
+		state.SetValue(ibProtocol::ibForm::ibTable::CurrentColumn, static_cast<s32>(m_currentColumn));
 
 	// The cell whose editor is open — while its row is still one the client was given.
 	if (m_editRow != 0 && m_fetchedRows.find(m_editRow) != m_fetchedRows.end()) {
-		ibDataNode& edit = state.Child(wxT("Edit"));
-		edit.SetValue(wxT("Row"), m_editRow);
-		edit.SetValue(wxT("Column"), static_cast<s32>(m_editColumn));
+		ibDataNode& edit = state.Child(ibProtocol::ibForm::ibTable::Edit);
+		edit.SetValue(ibProtocol::ibForm::ibTable::Row, m_editRow);
+		edit.SetValue(ibProtocol::ibForm::ibTable::Column, static_cast<s32>(m_editColumn));
 	}
 
 	// THE CONTEXT MENU — the desktop's OnContextMenu: the table's standard commands, picked back as Action {Id}; a
@@ -762,16 +762,16 @@ void ibValueModelTableBox::OnUpdate(ibDataNode& state, ibVisualHost* host)
 	if (m_formOwner != nullptr) {
 		const ibStandardCommandSet actions = GetStandardCommands(m_formOwner->GetTypeForm());
 		const bool viewOnly = m_formOwner->IsViewOnly();
-		ibDataNode& menu = state.Child(wxT("ContextMenu"));
+		ibDataNode& menu = state.Child(ibProtocol::ibForm::ibTable::ContextMenu);
 		for (unsigned int idx = 0; idx < actions.GetCount(); idx++) {
 			const ibActionID id = actions.GetID(idx);
 			if (id == wxNOT_FOUND)
 				continue;
 			ibDataNode& entry = menu.AddChild(0, 0);
-			entry.SetValue(wxT("Id"), static_cast<s32>(id));
-			entry.SetValue(wxT("Caption"), actions.GetCaptionByID(id));
-			entry.SetValue(wxT("Picture"), ibClientFrame::SendPicture(actions.GetPictureByID(id)));
-			entry.SetValue(wxT("Enabled"), !(viewOnly && actions.GetModifiesDataByID(id)));
+			entry.SetValue(ibProtocol::ibForm::ibCommandBar::Id, static_cast<s32>(id));
+			entry.SetValue(ibProtocol::ibForm::ibCommandBar::Caption, actions.GetCaptionByID(id));
+			entry.SetValue(ibProtocol::ibForm::ibCommandBar::Picture, ibBackendPicture::SendPicture(actions.GetPictureByID(id)));
+			entry.SetValue(ibProtocol::ibForm::ibCommandBar::Enabled, !(viewOnly && actions.GetModifiesDataByID(id)));
 		}
 	}
 }
@@ -908,10 +908,10 @@ bool ibValueModelTableBox::Fetch(const ibDataNode& request, ibDataNode& response
 	m_fetching = true;
 	wxON_BLOCK_EXIT_SET(m_fetching, false);
 
-	const s32 direction = request.GetValue<s32>(wxT("Direction"));
-	const s32 anchorHandle = request.GetValue<s32>(wxT("Anchor"));
-	const s32 parentHandle = request.GetValue<s32>(wxT("Parent"));
-	const int count = std::clamp<int>(request.GetValue<s32>(wxT("Count")), 1, s_maxFetchCount);
+	const s32 direction = request.GetValue<s32>(ibProtocol::ibForm::ibTable::Direction);
+	const s32 anchorHandle = request.GetValue<s32>(ibProtocol::ibForm::ibTable::Anchor);
+	const s32 parentHandle = request.GetValue<s32>(ibProtocol::ibForm::ibTable::Parent);
+	const int count = std::clamp<int>(request.GetValue<s32>(ibProtocol::ibForm::ibTable::Count), 1, s_maxFetchCount);
 
 	// THE LEVEL — the container the client opened (a tree's expanded row, the folder drilled into), else
 	// the top. A FLAT List view passes the ignore-parent SENTINEL, so the model walks the WHOLE table in one
@@ -988,7 +988,7 @@ bool ibValueModelTableBox::Fetch(const ibDataNode& request, ibDataNode& response
 		}
 		// (protocol 4) …AND THE ROWS AHEAD OF THE PAGE, when the client asks for them (Before) — in the same answer, first,
 		// so a row kept mid-view costs no second fetch.
-		const int before = std::clamp<int>(request.GetValue<s32>(wxT("Before")), 0, s_maxFetchCount);
+		const int before = std::clamp<int>(request.GetValue<s32>(ibProtocol::ibForm::ibTable::Before), 0, s_maxFetchCount);
 		if (before > 0) {
 			unsigned int above = 0;
 			if (fetched > 0) {
@@ -999,7 +999,7 @@ bool ibValueModelTableBox::Fetch(const ibDataNode& request, ibDataNode& response
 				items = rows;
 				ahead = above;
 			}
-			response.SetValue(wxT("Before"), static_cast<s32>(above));
+			response.SetValue(ibProtocol::ibForm::ibTable::Before, static_cast<s32>(above));
 		}
 		break;
 	}
@@ -1050,16 +1050,16 @@ bool ibValueModelTableBox::Fetch(const ibDataNode& request, ibDataNode& response
 		}
 
 		ibDataNode& row = response.AddChild(0, handle);
-		row.SetValue(wxT("Container"), item.IsContainer());
+		row.SetValue(ibProtocol::ibForm::ibTable::Container, item.IsContainer());
 
 		wxString groupCaption;
 		if (item.GetGroupCaption(groupCaption))
-			row.SetValue(wxT("Group"), groupCaption);
+			row.SetValue(ibProtocol::ibForm::ibTable::Group, groupCaption);
 
 		// The row's state picture, by its id — the picture itself the client loads apart.
 		const ibPictureID picture = m_tableModel->GetRowPicture(item);
 		if (picture != 0)
-			row.SetValue(wxT("Picture"), ibClientFrame::SendPicture(picture));
+			row.SetValue(ibProtocol::ibForm::ibTable::Picture, ibBackendPicture::SendPicture(picture));
 
 		// A row none of whose shown cells can be edited (a list row, a group heading) — the client opens
 		// no inline editor on it, and a double-click goes to the table (OnRowActivated).
@@ -1068,7 +1068,7 @@ bool ibValueModelTableBox::Fetch(const ibDataNode& request, ibDataNode& response
 			rowEditable = columnEditable[col]
 				&& m_tableModel->EditableLine(item, static_cast<unsigned int>(columns[col]->GetModelColumn()));
 		if (!rowEditable)
-			row.SetValue(wxT("ReadOnly"), true);
+			row.SetValue(ibProtocol::ibForm::ibTable::ReadOnly, true);
 
 		for (size_t col = 0; col < columns.size(); col++) {
 			// A container's cells only where the model has a value — and always the first column shown, where the
@@ -1102,10 +1102,10 @@ bool ibValueModelTableBox::Fetch(const ibDataNode& request, ibDataNode& response
 	TrimRows(dir == ibFetchDirection::Backward, keep);
 
 	if (fetched < static_cast<unsigned int>(count))
-		response.SetValue(wxT("End"), true);
+		response.SetValue(ibProtocol::ibForm::ibTable::End, true);
 	// …the same for a read: the row the server moved to, not the client's own.
 	if (currentHandle != 0 && currentHandle != m_clientRow && m_fetchedRows.find(currentHandle) != m_fetchedRows.end()) {
-		response.SetValue(wxT("CurrentRow"), currentHandle);
+		response.SetValue(ibProtocol::ibForm::ibTable::CurrentRow, currentHandle);
 		m_clientRow = currentHandle;
 	}
 	return true;
@@ -1115,14 +1115,14 @@ bool ibValueModelTableBox::Fetch(const ibDataNode& request, ibDataNode& response
 //*                              What the client did                                *
 //***********************************************************************************
 
-bool ibValueModelTableBox::OnClientEvent(ibProtocolEvent event, const ibDataNode& args)
+bool ibValueModelTableBox::OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args)
 {
-	const bool onCell = args.FindField(wxT("Column")) != nullptr;
+	const bool onCell = args.FindField(ibProtocol::ibEvent::Column) != nullptr;
 
 	switch (event) {
-	case ibProtocolEvent::Row: {
-		const s32 rowHandle = args.GetValue<s32>(wxT("Row"));
-		const ibFormID columnId = onCell ? args.GetValue<s32>(wxT("Column")) : m_currentColumn;
+	case ibProtocol::ibEvent::ibKind::Row: {
+		const s32 rowHandle = args.GetValue<s32>(ibProtocol::ibEvent::Row);
+		const ibFormID columnId = onCell ? args.GetValue<s32>(ibProtocol::ibEvent::Column) : m_currentColumn;
 		// The cursor moved off the cell being edited: its editor is closed, and what was typed and not
 		// committed (Change) is dropped.
 		if (rowHandle != m_editRow || columnId != m_editColumn)
@@ -1132,31 +1132,31 @@ bool ibValueModelTableBox::OnClientEvent(ibProtocolEvent event, const ibDataNode
 			OnCurrentColumnChanged(columnId);
 		return true;
 	}
-	case ibProtocolEvent::Open:
+	case ibProtocol::ibEvent::ibKind::Open:
 		if (onCell)
 			return OnCellEvent(event, args);
-		OnRowActivated(args.GetValue<s32>(wxT("Row")));
+		OnRowActivated(args.GetValue<s32>(ibProtocol::ibEvent::Row));
 		return true;
-	case ibProtocolEvent::Input:
-	case ibProtocolEvent::Change:
-	case ibProtocolEvent::Select:
-	case ibProtocolEvent::Clear:
+	case ibProtocol::ibEvent::ibKind::Input:
+	case ibProtocol::ibEvent::ibKind::Change:
+	case ibProtocol::ibEvent::ibKind::Select:
+	case ibProtocol::ibEvent::ibKind::Clear:
 		return OnCellEvent(event, args);
-	case ibProtocolEvent::Sort:
-		OnColumnClick(args.GetValue<s32>(wxT("Column")));
+	case ibProtocol::ibEvent::ibKind::Sort:
+		OnColumnClick(args.GetValue<s32>(ibProtocol::ibEvent::Column));
 		return true;
-	case ibProtocolEvent::Move:
-		return OnColumnMoved(args.GetValue<s32>(wxT("Column")), args.GetValue<s32>(wxT("Holder")),
-			static_cast<unsigned int>(args.GetValue<s32>(wxT("Position"))));
-	case ibProtocolEvent::Resize:
-		OnColumnResized(args.GetValue<s32>(wxT("Column")), args.GetValue<s32>(wxT("Width")));
+	case ibProtocol::ibEvent::ibKind::Move:
+		return OnColumnMoved(args.GetValue<s32>(ibProtocol::ibEvent::Column), args.GetValue<s32>(ibProtocol::ibEvent::Holder),
+			static_cast<unsigned int>(args.GetValue<s32>(ibProtocol::ibEvent::Position)));
+	case ibProtocol::ibEvent::ibKind::Resize:
+		OnColumnResized(args.GetValue<s32>(ibProtocol::ibEvent::Column), args.GetValue<s32>(ibProtocol::ibEvent::Width));
 		return true;
-	case ibProtocolEvent::Action: {
+	case ibProtocol::ibEvent::ibKind::Action: {
 		// One of the commands its context menu offered — the desktop's OnCommandMenu; one it did not offer, or greyed
 		// there, is not done.
 		if (m_formOwner == nullptr)
 			return false;
-		const ibActionID id = args.GetValue<s32>(wxT("Id"));
+		const ibActionID id = args.GetValue<s32>(ibProtocol::ibEvent::Id);
 		const ibStandardCommandSet actions = GetStandardCommands(m_formOwner->GetTypeForm());
 		bool offered = false;
 		for (unsigned int idx = 0; idx < actions.GetCount() && !offered; idx++)
@@ -1171,27 +1171,27 @@ bool ibValueModelTableBox::OnClientEvent(ibProtocolEvent event, const ibDataNode
 	}
 }
 
-bool ibValueModelTableBox::IsSubscribed(ibProtocolEvent event) const
+bool ibValueModelTableBox::IsSubscribed(ibProtocol::ibEvent::ibKind event) const
 {
 	switch (event) {
 	// A cell's Input moves the current line as Row does, and only the selection handler runs on it: the client knows
 	// which cells take an editor (the frame's editable cells), so held, it rides with the Change it comes before.
-	case ibProtocolEvent::Input:
-	case ibProtocolEvent::Row:   return HasHandler(m_eventSelection);
+	case ibProtocol::ibEvent::ibKind::Input:
+	case ibProtocol::ibEvent::ibKind::Row:   return HasHandler(m_eventSelection);
 	default:                     return ibValueWindowComposite::IsSubscribed(event);
 	}
 }
 
-bool ibValueModelTableBox::OnCellEvent(ibProtocolEvent event, const ibDataNode& args)
+bool ibValueModelTableBox::OnCellEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args)
 {
-	const s32 rowHandle = args.GetValue<s32>(wxT("Row"));
-	ibValueModelTableBoxColumn* const column = FindColumn(args.GetValue<s32>(wxT("Column")));
+	const s32 rowHandle = args.GetValue<s32>(ibProtocol::ibEvent::Row);
+	ibValueModelTableBoxColumn* const column = FindColumn(args.GetValue<s32>(ibProtocol::ibEvent::Column));
 	if (column == nullptr || !OnCurrentRowChanged(rowHandle))
 		return false;
 	OnCurrentColumnChanged(column->GetControlID());
 
 	switch (event) {
-	case ibProtocolEvent::Input:
+	case ibProtocol::ibEvent::ibKind::Input:
 		// The client opened its editor on the cell — the table takes it, or the next frame (no Edit) closes it.
 		if (OnCellEditStarting(rowHandle, column->GetControlID())) {
 			m_editRow = rowHandle;
@@ -1200,19 +1200,19 @@ bool ibValueModelTableBox::OnCellEvent(ibProtocolEvent event, const ibDataNode& 
 		else if (m_editRow == rowHandle && m_editColumn == column->GetControlID())
 			m_editRow = 0;
 		return true;
-	case ibProtocolEvent::Change:
+	case ibProtocol::ibEvent::ibKind::Change:
 		// The value committed into the current line's cell — with its type when the client has one (Value), else the
 		// text it typed — and the edit is over.
 		m_editRow = 0;
-		if (const ibDataNode* const value = args.FindChild(wxT("Value")))
+		if (const ibDataNode* const value = args.FindChild(ibProtocol::ibEvent::Value))
 			column->ValueProcessing(*value);
 		else
-			column->OnTextEnter(args.GetValue<wxString>(wxT("Text")));
+			column->OnTextEnter(args.GetValue<wxString>(ibProtocol::ibEvent::Text));
 		column->OnEditingDone();
 		return true;
-	case ibProtocolEvent::Select: column->OnSelectButtonPressed(); return true;
-	case ibProtocolEvent::Open:   column->OnOpenButtonPressed();   return true;
-	case ibProtocolEvent::Clear:  column->OnClearButtonPressed();  return true;
+	case ibProtocol::ibEvent::ibKind::Select: column->OnSelectButtonPressed(); return true;
+	case ibProtocol::ibEvent::ibKind::Open:   column->OnOpenButtonPressed();   return true;
+	case ibProtocol::ibEvent::ibKind::Clear:  column->OnClearButtonPressed();  return true;
 	default:                    return false;
 	}
 }

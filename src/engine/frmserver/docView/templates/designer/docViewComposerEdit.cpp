@@ -18,16 +18,16 @@ namespace {
 void WriteQueryFields(ibDataNode& into, const wxString& text, const ibMetaData* metaData)
 {
 	wxString error;
-	ibDataNode& fields = into.Child(ibProtocolName::Fields);
+	ibDataNode& fields = into.Child(ibProtocol::ibView::ibComposer::Fields);
 	std::vector<ibTypeDescription> types;
 	for (const ibQueryConstructorField& field : ibQueryFieldsOfText(text, metaData, &error)) {
 		ibWriteSettingsField(fields, field.m_name, field.m_caption, wxNOT_FOUND, field.m_type, field.m_available,
 			ibPictureDescription(), metaData);
 		types.push_back(field.m_type);
 	}
-	ibWriteSettingsReferences(into.Child(ibProtocolName::References), types, metaData);
+	ibWriteSettingsReferences(into.Child(ibProtocol::ibView::ibComposer::References), types, metaData);
 	if (!error.IsEmpty())
-		into.SetValue(ibProtocolName::Error, error);
+		into.SetValue(ibProtocol::ibView::ibComposer::Error, error);
 }
 
 
@@ -35,7 +35,7 @@ void WriteQueryFields(ibDataNode& into, const wxString& text, const ibMetaData* 
 // fields of the table the list IS, and what its query adds on top; a name the table already offers is not added twice.
 void WriteListSourceFields(ibDataNode& into, ibMetaID mainTable, const wxString& text, const ibMetaData* metaData)
 {
-	ibDataNode& fields = into.Child(ibProtocolName::Fields);
+	ibDataNode& fields = into.Child(ibProtocol::ibView::ibComposer::Fields);
 	std::vector<ibTypeDescription> types;
 	std::vector<wxString> names;
 
@@ -69,9 +69,9 @@ void WriteListSourceFields(ibDataNode& into, ibMetaID mainTable, const wxString&
 			types.push_back(field.m_type);
 		}
 	}
-	ibWriteSettingsReferences(into.Child(ibProtocolName::References), types, metaData);
+	ibWriteSettingsReferences(into.Child(ibProtocol::ibView::ibComposer::References), types, metaData);
 	if (!error.IsEmpty())
-		into.SetValue(ibProtocolName::Error, error);
+		into.SetValue(ibProtocol::ibView::ibComposer::Error, error);
 }
 
 } // namespace
@@ -90,11 +90,11 @@ void ibComposerCompositionView::OnDraw(ibDataNode& frame)
 		return;
 
 	// Read-only where the configuration may not be edited — the desktop's panel took SetReadOnly(ibDOC_READONLY).
-	ibDataNode& state = frame.Child(ibProtocolName::State);
-	state.SetValue(ibProtocolName::ReadOnly, !metaComposer->IsEditable());
+	ibDataNode& state = frame.Child(ibProtocol::ibView::State);
+	state.SetValue(ibProtocol::ibView::ibComposer::ReadOnly, !metaComposer->IsEditable());
 
 	const ibCompositionDescription& composition = metaComposer->GetCompositionDesc();
-	ibCompositionDescriptionMemory::WriteNode(frame.Child(ibProtocolName::Composition), composition);
+	ibCompositionDescriptionMemory::WriteNode(frame.Child(ibProtocol::ibView::ibComposer::Composition), composition);
 	WriteQueryFields(frame, composition.m_query, metaComposer->GetMetaData());
 }
 
@@ -105,7 +105,7 @@ bool ibComposerCompositionView::Fetch(const ibDataNode& request, ibDataNode& res
 	return metaComposer != nullptr && ibFetchComposerRequest(request, response, metaComposer->GetMetaData());
 }
 
-bool ibComposerCompositionView::OnClientEvent(ibProtocolEvent event, const ibDataNode& args)
+bool ibComposerCompositionView::OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args)
 {
 	ibMetaDocument* const document = GetDocument();
 	ibValueMetaObjectComposer* const metaComposer = document->ConvertMetaObjectToType<ibValueMetaObjectComposer>();
@@ -113,11 +113,11 @@ bool ibComposerCompositionView::OnClientEvent(ibProtocolEvent event, const ibDat
 		return false;
 
 	switch (event) {
-	case ibProtocolEvent::Input:
+	case ibProtocol::ibEvent::ibKind::Input:
 		document->Modify(true);
 		return true;
-	case ibProtocolEvent::Change: {
-		const ibDataNode* const node = args.FindChild(ibProtocolName::Composition);
+	case ibProtocol::ibEvent::ibKind::Change: {
+		const ibDataNode* const node = args.FindChild(ibProtocol::ibView::ibComposer::Composition);
 		ibCompositionDescription composition;
 		if (node == nullptr || !ibCompositionDescriptionMemory::ReadNode(*node, composition))
 			return false;
@@ -144,25 +144,25 @@ wxIMPLEMENT_DYNAMIC_CLASS(ibComposerCompositionDocument, ibMetaDocument);
 
 bool ibFetchComposerRequest(const ibDataNode& request, ibDataNode& response, const ibMetaData* metaData)
 {
-	switch (static_cast<ibProtocolComposerRequest>(request.GetValue<s32>(ibProtocolName::Kind))) {
-	case ibProtocolComposerRequest::Fields:
-		WriteQueryFields(response, request.GetValue<wxString>(ibProtocolName::Text), metaData);
+	switch (static_cast<ibProtocol::ibView::ibComposer::ibRequest>(request.GetValue<s32>(ibProtocol::ibView::ibComposer::Kind))) {
+	case ibProtocol::ibView::ibComposer::ibRequest::Fields:
+		WriteQueryFields(response, request.GetValue<wxString>(ibProtocol::ibView::ibComposer::Text), metaData);
 		return true;
-	case ibProtocolComposerRequest::Expand: {
+	case ibProtocol::ibView::ibComposer::ibRequest::Expand: {
 		std::vector<ibMetaID> targets;
-		if (const ibDataValue* const listed = request.FindField(ibProtocolName::Targets)) {
+		if (const ibDataValue* const listed = request.FindField(ibProtocol::ibView::ibComposer::Targets)) {
 			if (listed->Kind() == ibDataKind::Array)
 				for (const ibDataValue& id : listed->AsArray())
 					targets.push_back(static_cast<ibMetaID>(id.AsInt()));
 		}
-		ibWriteSettingsTargetFields(response.Child(ibProtocolName::Expanded), response.Child(ibProtocolName::References),
+		ibWriteSettingsTargetFields(response.Child(ibProtocol::ibView::ibComposer::Expanded), response.Child(ibProtocol::ibView::ibComposer::References),
 			targets, metaData);
 		return true;
 	}
-	case ibProtocolComposerRequest::Source:
-		WriteListSourceFields(response, request.FindField(ibProtocolName::Id) != nullptr
-			? static_cast<ibMetaID>(request.GetValue<s32>(ibProtocolName::Id)) : static_cast<ibMetaID>(wxNOT_FOUND),
-			request.GetValue<wxString>(ibProtocolName::Text), metaData);
+	case ibProtocol::ibView::ibComposer::ibRequest::Source:
+		WriteListSourceFields(response, request.FindField(ibProtocol::ibView::ibComposer::Id) != nullptr
+			? static_cast<ibMetaID>(request.GetValue<s32>(ibProtocol::ibView::ibComposer::Id)) : static_cast<ibMetaID>(wxNOT_FOUND),
+			request.GetValue<wxString>(ibProtocol::ibView::ibComposer::Text), metaData);
 		return true;
 	default:
 		return false;

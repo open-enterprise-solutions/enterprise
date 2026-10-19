@@ -10,24 +10,24 @@
 
 bool ibFormVisualCommandProcessor::Undo()
 {
-	m_document.DoCommand(ibProtocolCommand::Undo);
+	m_document.DoCommand(ibProtocol::ibFrame::ibCommand::Undo);
 	return true;
 }
 
 bool ibFormVisualCommandProcessor::Redo()
 {
-	m_document.DoCommand(ibProtocolCommand::Redo);
+	m_document.DoCommand(ibProtocol::ibFrame::ibCommand::Redo);
 	return true;
 }
 
 bool ibFormVisualCommandProcessor::CanUndo() const
 {
-	return m_document.IsCommandEnabled(ibProtocolCommand::Undo);
+	return m_document.IsCommandEnabled(ibProtocol::ibFrame::ibCommand::Undo);
 }
 
 bool ibFormVisualCommandProcessor::CanRedo() const
 {
-	return m_document.IsCommandEnabled(ibProtocolCommand::Redo);
+	return m_document.IsCommandEnabled(ibProtocol::ibFrame::ibCommand::Redo);
 }
 
 // ----------------------------------------------------------------------------

@@ -19,7 +19,7 @@ public:
 
 	// Open — the journal's tab, as the desktop's menu item opened it, in the session's configuration.
 	virtual std::function<void()> Command(const ibSession& session, s32 command,
-		const ibDataNode& args, ibProtocolRefusal& refusal, wxString& error) const override;
+		const ibDataNode& args, ibProtocol::ibRefusal& refusal, wxString& error) const override;
 };
 
 #endif

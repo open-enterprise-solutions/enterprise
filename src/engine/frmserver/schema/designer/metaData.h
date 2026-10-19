@@ -31,17 +31,17 @@ public:
 	// object, a class its parent does not take, no such file, no such right. Each with Tab — in that tab's tree, an
 	// external file's (ibMetaDataDocument), not the configuration's: the configuration's own refused there.
 	virtual std::function<void()> Command(const ibSession& session, s32 command,
-		const ibDataNode& args, ibProtocolRefusal& refusal, wxString& error) const override;
+		const ibDataNode& args, ibProtocol::ibRefusal& refusal, wxString& error) const override;
 
 	// WHOSE TREE THE DOOR IS IN — the tab's, by its id (Tab): the file its document holds, an external data processor's or
 	// report's; a metaobject's tab (a form, a module) — the configuration it is in; none — the session's. Refused, null,
 	// when there is no such. The tree's dialogs ask the same (ibSchemaPredefined), and the languages (ibSchemaLanguages).
-	static ibMetaData* FindMetaData(const ibSession& session, const ibDataNode& args, ibProtocolRefusal& refusal,
+	static ibMetaData* FindMetaData(const ibSession& session, const ibDataNode& args, ibProtocol::ibRefusal& refusal,
 		wxString& error);
 
 	// The object `name` names by its id — refused, null, when nothing of the configuration has it.
 	static ibValueMetaObject* FindObject(ibMetaData* metaData, const ibDataNode& args, const wxString& name,
-		ibProtocolRefusal& refusal, wxString& error);
+		ibProtocol::ibRefusal& refusal, wxString& error);
 };
 
 #endif

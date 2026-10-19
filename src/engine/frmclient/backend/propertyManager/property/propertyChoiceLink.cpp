@@ -1,38 +1,45 @@
 #include "propertyChoiceLink.h"
 #include "variant/variantChoiceLink.h"
 
-#include "propertySerializable.h"
-#include "frmclient/win/picture.h"   // ibProtocolPicture — an item's picture, as the wire carries it
-#include "protocol/protocol.h"       // ibProtocolName — the row's keys, as the server's inspector writes them
+#include "core/serialize/dataBuilder.h"   // ibDataNode — the row the lists come with
+#include "frmclient/win/picture.h"        // ibProtocolPicture — an item's picture, as the wire carries it
+#include "protocol/protocol.h"            // ibProtocol::ibSchema::ibProperties — the row's keys, as the server's property writes them
 
 // WHAT A FIELD'S CHOICE WINDOWS ASK, READ OFF ITS ROW — the server writes it where the desktop's windows asked the
-// configuration (frmserver ibPropertyInspector, AppendChoiceTargets): the row's Targets (the field's reference types,
-// each its fields a parameter may fill) and Sources (the fields beside it, each the parameters it could fill).
+// configuration (its ibPropertyChoiceLink / ibPropertyChoiceParameters::GetProtocolValue): the row's Targets (the
+// field's reference types, each its fields a parameter may fill) and Sources (the fields beside it, each the
+// parameters it could fill).
 
 namespace {
 
-const ibDataNode* RowNode(const ibBackendProperty* property, const char* name)
+// The row the property came of (its GetProtocolValue); none: empty, and every list with it.
+ibDataNode RowOf(const ibBackendProperty* property)
 {
-	const ibPropertySerializable* const row = dynamic_cast<const ibPropertySerializable*>(property);
-	if (row == nullptr)
-		return nullptr;
-	const ibDataValue* const value = row->GetRow().FindProperty(name);
-	return value != nullptr && value->Kind() == ibDataKind::Child ? value->AsChild().get() : nullptr;
+	ibDataNode row;
+	if (property != nullptr)
+		property->GetProtocolValue(row);
+	return row;
+}
+
+// A list the row brings (Targets, Sources); none: empty.
+std::shared_ptr<ibDataNode> RowNode(const ibDataNode& row, const char* name)
+{
+	return row.GetProperty(name).AsChild();
 }
 
 void AddItem(ibPropertyChoiceList& list, const ibDataNode& item)
 {
-	const wxString title = item.GetValue<wxString>(ibProtocolName::Title);
-	const s32 id = item.GetValue<s32>(ibProtocolName::Id);
+	const wxString title = item.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Title);
+	const s32 id = item.GetValue<s32>(ibProtocol::ibSchema::ibProperties::Id);
 	list.Add(id, title, wxEmptyString, wxVariant((long)id),
-		ibProtocolPicture(item.GetValue<wxString>(ibProtocolName::Picture)));
+		ibProtocolPicture(item.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Picture)));
 }
 
-const ibDataNode* Target(const ibBackendProperty* property, const ibMetaID& type)
+const ibDataNode* Target(const ibDataNode& row, const ibMetaID& type)
 {
-	if (const ibDataNode* const targets = RowNode(property, ibProtocolName::Targets)) {
+	if (const std::shared_ptr<ibDataNode> targets = RowNode(row, ibProtocol::ibSchema::ibProperties::Targets)) {
 		for (const ibDataNode& target : targets->Children()) {
-			if ((ibMetaID)target.GetValue<s32>(ibProtocolName::Id) == type)
+			if ((ibMetaID)target.GetValue<s32>(ibProtocol::ibSchema::ibProperties::Id) == type)
 				return &target;
 		}
 	}
@@ -43,7 +50,8 @@ const ibDataNode* Target(const ibBackendProperty* property, const ibMetaID& type
 
 void ibFieldReferenceTypes(const ibBackendProperty* property, ibPropertyChoiceList& list)
 {
-	if (const ibDataNode* const targets = RowNode(property, ibProtocolName::Targets)) {
+	const ibDataNode row = RowOf(property);
+	if (const std::shared_ptr<ibDataNode> targets = RowNode(row, ibProtocol::ibSchema::ibProperties::Targets)) {
 		for (const ibDataNode& target : targets->Children())
 			AddItem(list, target);
 	}
@@ -51,17 +59,19 @@ void ibFieldReferenceTypes(const ibBackendProperty* property, ibPropertyChoiceLi
 
 ibClassID ibFieldReferenceClass(const ibBackendProperty* property, const ibMetaID& type)
 {
-	const ibDataNode* const target = Target(property, type);
+	const ibDataNode row = RowOf(property);
+	const ibDataNode* const target = Target(row, type);
 	if (target == nullptr)
 		return 0;
 	unsigned long long clsid = 0;
-	target->GetValue<wxString>(ibProtocolName::Type).ToULongLong(&clsid);
+	target->GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Type).ToULongLong(&clsid);
 	return static_cast<ibClassID>(clsid);
 }
 
 void ibChoiceParameterList(const ibBackendProperty* property, const ibMetaID& type, ibPropertyChoiceList& list)
 {
-	if (const ibDataNode* const target = Target(property, type)) {
+	const ibDataNode row = RowOf(property);
+	if (const ibDataNode* const target = Target(row, type)) {
 		for (const ibDataNode& field : target->Children())
 			AddItem(list, field);
 	}
@@ -69,7 +79,8 @@ void ibChoiceParameterList(const ibBackendProperty* property, const ibMetaID& ty
 
 void ibChoiceSourceList(const ibBackendProperty* property, ibPropertyChoiceList& list)
 {
-	if (const ibDataNode* const sources = RowNode(property, ibProtocolName::Sources)) {
+	const ibDataNode row = RowOf(property);
+	if (const std::shared_ptr<ibDataNode> sources = RowNode(row, ibProtocol::ibSchema::ibProperties::Sources)) {
 		for (const ibDataNode& source : sources->Children())
 			AddItem(list, source);
 	}
@@ -77,13 +88,15 @@ void ibChoiceSourceList(const ibBackendProperty* property, ibPropertyChoiceList&
 
 bool ibChoiceHasLists(const ibBackendProperty* property)
 {
-	return RowNode(property, ibProtocolName::Targets) != nullptr && RowNode(property, ibProtocolName::Sources) != nullptr;
+	const ibDataNode row = RowOf(property);
+	return RowNode(row, ibProtocol::ibSchema::ibProperties::Targets) != nullptr && RowNode(row, ibProtocol::ibSchema::ibProperties::Sources) != nullptr;
 }
 
 wxString ibChoiceHolderName(const ibBackendProperty* property)
 {
-	const ibDataNode* const sources = RowNode(property, ibProtocolName::Sources);
-	return sources != nullptr ? sources->GetValue<wxString>(ibProtocolName::Title) : wxString();
+	const ibDataNode row = RowOf(property);
+	const std::shared_ptr<ibDataNode> sources = RowNode(row, ibProtocol::ibSchema::ibProperties::Sources);
+	return sources != nullptr ? sources->GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Title) : wxString();
 }
 
 void ibChoiceParametersForSource(const ibBackendProperty* property, const ibMetaID& sourceId,
@@ -91,16 +104,17 @@ void ibChoiceParametersForSource(const ibBackendProperty* property, const ibMeta
 {
 	if (obvious != nullptr)
 		*obvious = 0;
-	const ibDataNode* const sources = RowNode(property, ibProtocolName::Sources);
+	const ibDataNode row = RowOf(property);
+	const std::shared_ptr<ibDataNode> sources = RowNode(row, ibProtocol::ibSchema::ibProperties::Sources);
 	if (sources == nullptr)
 		return;
 	for (const ibDataNode& source : sources->Children()) {
-		if ((ibMetaID)source.GetValue<s32>(ibProtocolName::Id) != sourceId)
+		if ((ibMetaID)source.GetValue<s32>(ibProtocol::ibSchema::ibProperties::Id) != sourceId)
 			continue;
 		for (const ibDataNode& fit : source.Children())
-			out.push_back((ibMetaID)fit.GetValue<s32>(ibProtocolName::Id));
+			out.push_back((ibMetaID)fit.GetValue<s32>(ibProtocol::ibSchema::ibProperties::Id));
 		if (obvious != nullptr)
-			*obvious = (ibMetaID)source.GetValue<s32>(ibProtocolName::Default);
+			*obvious = (ibMetaID)source.GetValue<s32>(ibProtocol::ibSchema::ibProperties::Default);
 		return;
 	}
 }

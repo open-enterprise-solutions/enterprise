@@ -13,7 +13,7 @@
 #include "core/serialize/dataBuilder.h"
 
 #include "frmserver/client/clientPatch.h"
-#include "protocol/protocol.h"                // ibProtocolName, ibProtocolEvent — the words both halves write
+#include "protocol/protocol.h"                // ibProtocol::ibForm::ibState, ibProtocol::ibEvent::ibKind — the words both halves write
 #include "protocol/protocolNode.h"
 
 namespace {
@@ -163,11 +163,11 @@ TEST(ClientFrameApply, ChildrenWithoutIdsComeWhole)
 // comes with a patch, and a patch takes it away — the form modified, its fields no longer listen to Input.
 TEST(ClientFrameApply, SubscriptionComesAndGoes)
 {
-	const wxString subscribed = wxString::FromUTF8(ibProtocolName::Subscribed);
+	const wxString subscribed = wxString::FromUTF8(ibProtocol::ibForm::ibState::Subscribed);
 	const auto subscribedOf = [](const ibProtocolNode& frame) {
 		std::vector<long long> events;
-		const ibProtocolNode state = frame.Children()[0].FindChild(ibProtocolName::State);
-		for (const ibProtocolNode& event : state.GetList(ibProtocolName::Subscribed))
+		const ibProtocolNode state = frame.Children()[0].FindChild(ibProtocol::ibForm::ibState::State);
+		for (const ibProtocolNode& event : state.GetList(ibProtocol::ibForm::ibState::Subscribed))
 			events.push_back(event.AsInt());
 		return events;
 	};
@@ -178,8 +178,8 @@ TEST(ClientFrameApply, SubscriptionComesAndGoes)
 
 	ibDataNode listening;
 	Ballast(listening);
-	const long long input = static_cast<int>(ibProtocolEvent::Input);
-	const long long row = static_cast<int>(ibProtocolEvent::Row);
+	const long long input = static_cast<int>(ibProtocol::ibEvent::ibKind::Input);
+	const long long row = static_cast<int>(ibProtocol::ibEvent::ibKind::Row);
 	Control(listening, 1, wxT("Number")).FindChild(wxT("State"))->AddField(subscribed,
 		ibDataValue::Array(std::vector<ibDataValue>{ ibDataValue::Int(input), ibDataValue::Int(row) }));
 

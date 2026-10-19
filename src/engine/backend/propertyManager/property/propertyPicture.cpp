@@ -60,4 +60,31 @@ bool ibPropertyPicture::ReadNodeValue(const ibDataValue& value)
 bool ibPropertyPicture::WriteNodeValue(ibDataValue& value) const
 {
 	return ibBackendPictureDescriptionMemory::WriteNode(value, GetValueAsPictureDesc());
+}
+
+#include "protocol/protocol.h"                          // ibProtocol::ibSchema::ibProperties — the row's keys
+#include "backend/metaData.h"
+#include "backend/metaCollection/metaPictureObject.h"   // ibValueMetaObjectPicture — its Guid
+
+bool ibPropertyPicture::GetProtocolValue(ibDataNode& row)
+{
+	if (!ibProperty::GetProtocolValue(row))
+		return false;
+
+	const ibPropertyObject* const owner = m_owner;   // CONST: the non-const GetMetaData wxFAILs
+	const ibMetaData* const metaData = owner != nullptr ? owner->GetMetaData() : nullptr;
+	if (metaData == nullptr)
+		return true;
+	ibMetaData* metaDataOwner = nullptr;
+	const ibMetaData* const source = metaData->GetOwner(metaDataOwner) && metaDataOwner != nullptr ? metaDataOwner : metaData;
+
+	auto pictures = std::make_shared<ibDataNode>();
+	for (const ibValueMetaObjectPicture* const picture : source->GetAnyArrayObject<ibValueMetaObjectPicture>(g_metaPictureCLSID)) {
+		ibDataNode& item = pictures->AddChild(0, static_cast<ibMetaID>(pictures->Children().size() + 1));
+		item.SetValue(ibProtocol::ibSchema::ibProperties::Name, picture->GetName());
+		const ibGuid guid = picture->GetGuid();
+		item.SetValue(ibProtocol::ibSchema::ibProperties::Guid, guid.str());
+	}
+	row.SetProperty(ibProtocol::ibSchema::ibProperties::Pictures, ibDataValue::Child(pictures));
+	return true;
 }

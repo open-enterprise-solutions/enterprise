@@ -69,23 +69,23 @@ ibDocManagerDesigner::ibDocManagerDesigner()
 		ibTEMPLATE_INVISIBLE);
 
 	// The configuration tree — its doors; the rows are the frame's (ibClientFrameDesigner).
-	RegisterSchema(ibProtocolSchema::MetaData, std::make_unique<ibSchemaMetaData>());
+	RegisterSchema(ibProtocol::ibSchema::ibKind::MetaData, std::make_unique<ibSchemaMetaData>());
 	// …and its predefined values editor — what an object declares, and its edits.
-	RegisterSchema(ibProtocolSchema::Predefined, std::make_unique<ibSchemaPredefined>());
+	RegisterSchema(ibProtocol::ibSchema::ibKind::Predefined, std::make_unique<ibSchemaPredefined>());
 	// …and its texts — an object's help and technical information.
-	RegisterSchema(ibProtocolSchema::ObjectText, std::make_unique<ibSchemaObjectText>());
+	RegisterSchema(ibProtocol::ibSchema::ibKind::ObjectText, std::make_unique<ibSchemaObjectText>());
 	// …and the configuration's home page workspace.
-	RegisterSchema(ibProtocolSchema::HomePage, std::make_unique<ibSchemaHomePage>());
+	RegisterSchema(ibProtocol::ibSchema::ibKind::HomePage, std::make_unique<ibSchemaHomePage>());
 	// The debugger's store — the configuration's modules and their breakpoints; the debugger is the client's.
-	RegisterSchema(ibProtocolSchema::Debugger, std::make_unique<ibSchemaDebugger>());
+	RegisterSchema(ibProtocol::ibSchema::ibKind::Debugger, std::make_unique<ibSchemaDebugger>());
 	// The inspector's edit — the object it shows, a form's control or a metaobject alike, its property given a value.
-	RegisterSchema(ibProtocolSchema::Properties, std::make_unique<ibSchemaProperties>());
+	RegisterSchema(ibProtocol::ibSchema::ibKind::Properties, std::make_unique<ibSchemaProperties>());
 	// The designer's Administration → Users — the base's users.
-	RegisterSchema(ibProtocolSchema::UserList, std::make_unique<ibSchemaUserList>());
+	RegisterSchema(ibProtocol::ibSchema::ibKind::UserList, std::make_unique<ibSchemaUserList>());
 	// …and Restore, Dump and Clear database — the base as a whole.
-	RegisterSchema(ibProtocolSchema::Database, std::make_unique<ibSchemaDatabase>());
+	RegisterSchema(ibProtocol::ibSchema::ibKind::Database, std::make_unique<ibSchemaDatabase>());
 	// The designer's options — the person's assistant access (its MCP page).
-	RegisterSchema(ibProtocolSchema::McpServer, std::make_unique<ibSchemaMcpServer>());
+	RegisterSchema(ibProtocol::ibSchema::ibKind::McpServer, std::make_unique<ibSchemaMcpServer>());
 	// …and the window onto it — Administration → Assistant window.
-	RegisterSchema(ibProtocolSchema::Assistant, std::make_unique<ibSchemaAssistant>());
+	RegisterSchema(ibProtocol::ibSchema::ibKind::Assistant, std::make_unique<ibSchemaAssistant>());
 }

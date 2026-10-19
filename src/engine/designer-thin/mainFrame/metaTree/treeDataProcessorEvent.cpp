@@ -60,11 +60,11 @@ void ibDataProcessorTree::OnButtonModuleClicked(wxCommandEvent& WXUNUSED(event))
 {
 	// ⭐ TAKEN FROM THE STRUCTURE THE OBJECT ALREADY OFFERS — its menu's entry that names the object module, opened by
 	// its id (the desktop's).
-	for (const ibProtocolNode& entry : m_root.FindChild(ibProtocolName::Menu).Children()) {
-		if (entry.GetString(ibProtocolName::Name) == wxT("ObjectModule") && entry.GetInt(ibProtocolName::Object) != 0) {
+	for (const ibProtocolNode& entry : m_root.FindChild(ibProtocol::ibSchema::ibMetaData::Menu).Children()) {
+		if (entry.GetString(ibProtocol::ibSchema::ibMetaData::Name) == wxT("ObjectModule") && entry.GetInt(ibProtocol::ibSchema::ibMetaData::Object) != 0) {
 			ibProtocolNode args;
-			args.SetValue(ibProtocolName::Id, entry.GetInt(ibProtocolName::Object));
-			Command(ibProtocolMetaDataCommand::Open, args);
+			args.SetValue(ibProtocol::ibSchema::ibMetaData::Id, entry.GetInt(ibProtocol::ibSchema::ibMetaData::Object));
+			Command(ibProtocol::ibSchema::ibMetaData::ibCommand::Open, args);
 			break;
 		}
 	}

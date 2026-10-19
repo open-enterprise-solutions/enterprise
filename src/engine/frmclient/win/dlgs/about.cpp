@@ -45,7 +45,7 @@ ibDialogAbout::ibDialogAbout(wxWindow* parent, const ibProtocolNode& shown, int 
 
 	// --- Header block (title, subtitle, copyright link) ---
 	m_staticTextHeader = new wxStaticText(this, wxID_ANY,
-		wxString::Format(wxT("Open Enterprise Solutions, build %lld"), shown.GetInt(ibProtocolName::Build)),
+		wxString::Format(wxT("Open Enterprise Solutions, build %lld"), shown.GetInt(ibProtocol::ibSchema::ibAbout::Build)),
 		wxDefaultPosition, wxDefaultSize, wxALIGN_CENTER_HORIZONTAL);
 	m_staticTextHeader->SetFont(headerFont);
 	root->Add(m_staticTextHeader, 0, wxEXPAND | wxTOP | wxLEFT | wxRIGHT, kPad * 2);
@@ -79,19 +79,19 @@ ibDialogAbout::ibDialogAbout(wxWindow* parent, const ibProtocolNode& shown, int 
 	wxFlexGridSizer* grid = new wxFlexGridSizer(/*rows*/0, /*cols*/2, kRowGap, kPad * 2);
 	grid->AddGrowableCol(1, 1);
 
-	const wxString database = shown.GetString(ibProtocolName::Database);   // empty — no base
+	const wxString database = shown.GetString(ibProtocol::ibSchema::ibAbout::Database);   // empty — no base
 	m_textCtrl1 = !database.IsEmpty() ? AddInfoRow(infoHost, grid, _("Database"), database) : nullptr;
 
-	m_textCtrl2 = AddInfoRow(infoHost, grid, _("Application"), shown.GetString(ibProtocolName::Application));
-	m_textCtrl3 = AddInfoRow(infoHost, grid, _("User"),        shown.GetString(ibProtocolName::User));
-	m_textCtrl4 = AddInfoRow(infoHost, grid, _("Locale"),      shown.GetString(ibProtocolName::Locale));
+	m_textCtrl2 = AddInfoRow(infoHost, grid, _("Application"), shown.GetString(ibProtocol::ibSchema::ibAbout::Application));
+	m_textCtrl3 = AddInfoRow(infoHost, grid, _("User"),        shown.GetString(ibProtocol::ibSchema::ibAbout::User));
+	m_textCtrl4 = AddInfoRow(infoHost, grid, _("Locale"),      shown.GetString(ibProtocol::ibSchema::ibAbout::Locale));
 
 	infoSizer->Add(grid, 0, wxEXPAND | wxALL, kPad);
 	root->Add(infoSizer, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, kPad);
 
 	// --- Plugins block: only if any are loaded; otherwise skip entirely ---
 	{
-		const std::vector<ibProtocolNode> plugins = shown.FindChild(ibProtocolName::Plugins).Children();
+		const std::vector<ibProtocolNode> plugins = shown.FindChild(ibProtocol::ibSchema::ibAbout::Plugins).Children();
 		if (!plugins.empty()) {
 
 			wxStaticBoxSizer* pluginsSizer = new wxStaticBoxSizer(
@@ -99,9 +99,9 @@ ibDialogAbout::ibDialogAbout(wxWindow* parent, const ibProtocolNode& shown, int 
 
 			wxString text;
 			for (const ibProtocolNode& p : plugins) {
-				text << p.GetString(ibProtocolName::Name)
+				text << p.GetString(ibProtocol::ibSchema::ibAbout::Name)
 					<< wxT("  ")
-					<< p.GetString(ibProtocolName::Version)
+					<< p.GetString(ibProtocol::ibSchema::ibAbout::Version)
 					<< wxT("\n");
 			}
 			if (!text.empty() && text.Last() == wxT('\n'))
@@ -148,7 +148,7 @@ ibDialogAbout::ibDialogAbout(wxWindow* parent, const ibProtocolNode& shown, int 
 
 	Centre(wxBOTH);
 
-	const wxBitmap picture = ibProtocolPicture(shown.GetString(ibProtocolName::Picture));
+	const wxBitmap picture = ibProtocolPicture(shown.GetString(ibProtocol::ibSchema::ibAbout::Picture));
 	if (picture.IsOk()) {
 		wxIcon dlg_icon;
 		dlg_icon.CopyFromBitmap(picture);

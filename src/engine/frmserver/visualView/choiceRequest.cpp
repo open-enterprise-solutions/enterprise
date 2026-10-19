@@ -4,8 +4,8 @@
 #include "core/serialize/dataBuilder.h"
 #include "backend/session/session.h"
 
-#include "frmserver/client/clientFrame.h"   // ibClientFrame::SendPicture — an item's picture, by its id
-#include "protocol/protocol.h"      // ibProtocolRequestKind::Choice
+#include "backend/backend_picture.h"   // ibBackendPicture::SendPicture — an item's picture, by its id
+#include "protocol/protocol.h"      // ibProtocol::ibRequest::ibKind::Choice
 
 namespace {
 
@@ -13,16 +13,16 @@ namespace {
 ibDataNode ChoiceRequest(const wxString& caption, const std::vector<ibChoiceItem>& items)
 {
 	ibDataNode request;
-	request.SetValue(wxT("Kind"), static_cast<s32>(ibProtocolRequestKind::Choice));
-	request.SetValue(wxT("Caption"), caption);
+	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<s32>(ibProtocol::ibRequest::ibKind::Choice));
+	request.SetValue(ibProtocol::ibRequest::ibChoice::Caption, caption);
 	for (const ibChoiceItem& item : items) {
 		ibDataNode& node = request.AddChild(0, 0);
-		node.SetValue(wxT("Id"), item.id);
-		node.SetValue(wxT("Caption"), item.caption);
+		node.SetValue(ibProtocol::ibRequest::ibChoice::Id, item.id);
+		node.SetValue(ibProtocol::ibRequest::ibChoice::Caption, item.caption);
 		if (!item.icon.IsEmptyPicture())
-			node.SetValue(wxT("Picture"), ibClientFrame::SendPicture(item.icon));
+			node.SetValue(ibProtocol::ibRequest::ibChoice::Picture, ibBackendPicture::SendPicture(item.icon));
 		if (item.selected)
-			node.SetValue(wxT("Selected"), true);
+			node.SetValue(ibProtocol::ibRequest::ibChoice::Selected, true);
 	}
 	return request;
 }
@@ -40,7 +40,7 @@ bool ibRequestChoice(const wxString& caption, const std::vector<ibChoiceItem>& i
 	if (!frame->Request(request, response))
 		return false;
 
-	const s32 id = response.GetValue<s32>(wxT("Id"));
+	const s32 id = response.GetValue<s32>(ibProtocol::ibRequest::ibChoice::Id);
 	for (const ibChoiceItem& item : items) {
 		if (item.id == id) {
 			chosen = id;
@@ -57,13 +57,13 @@ bool ibRequestChoice(const wxString& caption, const std::vector<ibChoiceItem>& i
 		return false;
 
 	ibDataNode request = ChoiceRequest(caption, items);
-	request.SetValue(wxT("Multiple"), true);
+	request.SetValue(ibProtocol::ibRequest::ibChoice::Multiple, true);
 	ibDataNode response;
 	if (!frame->Request(request, response))
 		return false;
 
 	// Only what was offered comes back, in the order it was offered.
-	const ibDataValue* const ids = response.FindField(wxT("Ids"));
+	const ibDataValue* const ids = response.FindField(ibProtocol::ibRequest::ibChoice::Ids);
 	if (ids == nullptr || ids->Kind() != ibDataKind::Array)
 		return false;
 	chosen.clear();
@@ -85,12 +85,12 @@ void WriteMenu(ibDataNode& parent, const std::vector<ibMenuItem>& items)
 {
 	for (const ibMenuItem& item : items) {
 		ibDataNode& node = parent.AddChild(0, 0);
-		node.SetValue(wxT("Id"), item.id);
-		node.SetValue(wxT("Caption"), item.caption);
+		node.SetValue(ibProtocol::ibRequest::ibMenu::Id, item.id);
+		node.SetValue(ibProtocol::ibRequest::ibMenu::Caption, item.caption);
 		if (item.checked)
-			node.SetValue(wxT("Checked"), true);
+			node.SetValue(ibProtocol::ibRequest::ibMenu::Checked, true);
 		if (!item.enabled)
-			node.SetValue(wxT("Enabled"), false);
+			node.SetValue(ibProtocol::ibRequest::ibMenu::Enabled, false);
 		WriteMenu(node, item.items);
 	}
 }
@@ -114,14 +114,14 @@ bool ibRequestMenu(const std::vector<ibMenuItem>& items, s32& chosen)
 		return false;
 
 	ibDataNode request;
-	request.SetValue(wxT("Kind"), static_cast<s32>(ibProtocolRequestKind::Menu));
+	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<s32>(ibProtocol::ibRequest::ibKind::Menu));
 	WriteMenu(request, items);
 
 	ibDataNode response;
-	if (!frame->Request(request, response) || response.FindField(wxT("Id")) == nullptr)
+	if (!frame->Request(request, response) || response.FindField(ibProtocol::ibRequest::ibMenu::Id) == nullptr)
 		return false;   // dismissed
 
-	const s32 id = response.GetValue<s32>(wxT("Id"));
+	const s32 id = response.GetValue<s32>(ibProtocol::ibRequest::ibMenu::Id);
 	if (!IsMenuCommand(items, id))
 		return false;
 	chosen = id;

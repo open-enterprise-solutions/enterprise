@@ -20,7 +20,7 @@ public:
 	virtual ~ibProtocolConnection() = default;
 
 	virtual bool Exchange(const std::string& request, std::string& answer,
-		ibProtocolRefusal& refusal, wxString& error) = 0;
+		ibProtocol::ibRefusal& refusal, wxString& error) = 0;
 
 	// Open this connection again after it has closed. False when there is nowhere to return to — a file base has
 	// no socket. The default is false, so a connection that cannot return does not pretend to.

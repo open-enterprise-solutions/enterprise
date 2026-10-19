@@ -56,44 +56,44 @@ bool ibAuditLogView::Fetch(const ibDataNode& request, ibDataNode& response)
 		return false;
 
 	ibLogFilter filter;
-	filter.from_ms = MsOf(request, wxT("From"));
-	filter.to_ms = MsOf(request, wxT("To"));
+	filter.from_ms = MsOf(request, ibProtocol::ibView::ibAuditLog::From);
+	filter.to_ms = MsOf(request, ibProtocol::ibView::ibAuditLog::To);
 	filter.min_level = -1;
-	request.GetValue(wxT("Level"), filter.min_level);
-	filter.user_name = request.GetValue<wxString>(wxT("User"));
-	filter.session_id = request.GetValue<wxString>(wxT("Session"));
-	filter.source = request.GetValue<wxString>(wxT("Source"));
-	filter.event_type = request.GetValue<wxString>(wxT("Event"));
-	filter.ref_guid = request.GetValue<wxString>(wxT("Ref"));
-	filter.search = request.GetValue<wxString>(wxT("Search"));
-	filter.offset = static_cast<std::size_t>(request.GetValue<s32>(wxT("Offset")));
-	filter.limit = static_cast<std::size_t>(request.GetValue<s32>(wxT("Count")));
+	request.GetValue(ibProtocol::ibView::ibAuditLog::Level, filter.min_level);
+	filter.user_name = request.GetValue<wxString>(ibProtocol::ibView::ibAuditLog::User);
+	filter.session_id = request.GetValue<wxString>(ibProtocol::ibView::ibAuditLog::Session);
+	filter.source = request.GetValue<wxString>(ibProtocol::ibView::ibAuditLog::Source);
+	filter.event_type = request.GetValue<wxString>(ibProtocol::ibEvent::Event);
+	filter.ref_guid = request.GetValue<wxString>(ibProtocol::ibView::ibAuditLog::Ref);
+	filter.search = request.GetValue<wxString>(ibProtocol::ibView::ibAuditLog::Search);
+	filter.offset = static_cast<std::size_t>(request.GetValue<s32>(ibProtocol::ibView::ibAuditLog::Offset));
+	filter.limit = static_cast<std::size_t>(request.GetValue<s32>(ibProtocol::ibView::ibAuditLog::Count));
 
 	for (const ibLogRow& entry : reader->Query(filter)) {
 		ibDataNode& row = response.AddChild(0, 0);
-		row.SetValue(wxT("Time"), ibNumber(static_cast<long long>(entry.ts_ms)));
-		row.SetValue(wxT("Level"), static_cast<s32>(entry.level));
-		row.SetValue(wxT("Session"), entry.session_id);
-		row.SetValue(wxT("User"), entry.user_name);
-		row.SetValue(wxT("Host"), entry.host);
-		row.SetValue(wxT("Source"), entry.source);
-		row.SetValue(wxT("Event"), entry.event_type);
-		row.SetValue(wxT("Message"), entry.message);
-		row.SetValue(wxT("Ref"), entry.ref_guid);
-		row.SetValue(wxT("RefMeta"), static_cast<s32>(entry.ref_meta_id));
+		row.SetValue(ibProtocol::ibView::ibAuditLog::Time, ibNumber(static_cast<long long>(entry.ts_ms)));
+		row.SetValue(ibProtocol::ibView::ibAuditLog::Level, static_cast<s32>(entry.level));
+		row.SetValue(ibProtocol::ibView::ibAuditLog::Session, entry.session_id);
+		row.SetValue(ibProtocol::ibView::ibAuditLog::User, entry.user_name);
+		row.SetValue(ibProtocol::ibView::ibAuditLog::Host, entry.host);
+		row.SetValue(ibProtocol::ibView::ibAuditLog::Source, entry.source);
+		row.SetValue(ibProtocol::ibEvent::Event, entry.event_type);
+		row.SetValue(ibProtocol::ibView::ibAuditLog::Message, entry.message);
+		row.SetValue(ibProtocol::ibView::ibAuditLog::Ref, entry.ref_guid);
+		row.SetValue(ibProtocol::ibView::ibAuditLog::RefMeta, static_cast<s32>(entry.ref_meta_id));
 	}
 	return true;
 }
 
-bool ibAuditLogView::OnClientEvent(ibProtocolEvent event, const ibDataNode& args)
+bool ibAuditLogView::OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args)
 {
 	const ibAuditLogDocument* const document = dynamic_cast<const ibAuditLogDocument*>(GetDocument());
-	const wxString ref = args.GetValue<wxString>(wxT("Ref"));
-	if (document == nullptr || event != ibProtocolEvent::Open || ref.IsEmpty())
+	const wxString ref = args.GetValue<wxString>(ibProtocol::ibView::ibAuditLog::Ref);
+	if (document == nullptr || event != ibProtocol::ibEvent::ibKind::Open || ref.IsEmpty())
 		return false;
 
 	const ibGuid guid(ref);
-	const ibMetaID metaId = args.GetValue<s32>(wxT("RefMeta"));
+	const ibMetaID metaId = args.GetValue<s32>(ibProtocol::ibView::ibAuditLog::RefMeta);
 	if (metaId == 0) {
 		// Convention from Phase 2g — system-table sys_user row. The desktop opened the User Admin dialog keyed by
 		// guid (sys_user is not a metaobject); that dialog is not the server's yet — the person is told so.

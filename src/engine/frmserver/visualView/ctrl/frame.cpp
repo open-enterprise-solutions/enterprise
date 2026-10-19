@@ -107,9 +107,9 @@ bool ibValueFrame::SaveControl(const ibValueMetaObjectFormBase* metaForm, ibWrit
 // the form is one transparent node tree (the provider frames each child in kChildBlock).
 bool ibValueFrame::LoadNode(const ibDataNode& node)
 {
-	m_controlId = (ibFormID)node.GetValue<s32>(ibProtocolName::ControlId);
-	SetControlName(node.GetValue<wxString>(ibProtocolName::Name));
-	m_expanded = node.GetValue<bool>(ibProtocolName::Expanded);
+	m_controlId = (ibFormID)node.GetValue<s32>(ibProtocol::ibForm::ControlId);
+	SetControlName(node.GetValue<wxString>(ibProtocol::ibForm::Name));
+	m_expanded = node.GetValue<bool>(ibProtocol::ibForm::Expanded);
 	if (!ReadData(node))
 		return false;
 
@@ -126,7 +126,7 @@ bool ibValueFrame::LoadNode(const ibDataNode& node)
 			// this names WHAT and WHERE, which the reason alone does not carry.
 			if (child == nullptr) {
 				ibJournalError(wxT("ui.form"), _("Control '%s' of '%s' could not be restored (class id %lld)"),
-					childNode.GetValue<wxString>(ibProtocolName::Name), GetControlName(), (long long)childNode.GetClsid());
+					childNode.GetValue<wxString>(ibProtocol::ibForm::Name), GetControlName(), (long long)childNode.GetClsid());
 				continue;
 			}
 			if (!child->LoadNode(childNode))
@@ -138,9 +138,9 @@ bool ibValueFrame::LoadNode(const ibDataNode& node)
 
 bool ibValueFrame::SaveNode(ibDataNode& node) const
 {
-	node.SetValue(ibProtocolName::ControlId, (s32)m_controlId);
-	node.SetValue(ibProtocolName::Name,      GetControlName());
-	node.SetValue(ibProtocolName::Expanded,  m_expanded);
+	node.SetValue(ibProtocol::ibForm::ControlId, (s32)m_controlId);
+	node.SetValue(ibProtocol::ibForm::Name,      GetControlName());
+	node.SetValue(ibProtocol::ibForm::Expanded,  m_expanded);
 	if (!WriteData(node))
 		return false;
 
@@ -156,18 +156,18 @@ bool ibValueFrame::SaveNode(ibDataNode& node) const
 	return true;
 }
 
-bool ibValueFrame::OnClientEvent(ibProtocolEvent event, const ibDataNode& args)
+bool ibValueFrame::OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args)
 {
-	if (event != ibProtocolEvent::Command || !HasCommandBar())
+	if (event != ibProtocol::ibEvent::ibKind::Command || !HasCommandBar())
 		return false;
 	// The designer's test form previews the form, it does not run it — a command pressed there is not executed (the
 	// desktop's ibValueToolbar::OnTool, and its command bar's tool in the designer).
 	const ibFormVisualDocument* const visualDoc = GetVisualDocument();
 	if (visualDoc != nullptr && visualDoc->IsVisualDemonstrationDoc())
 		return true;
-	const ibActionID id = args.GetValue<s32>(ibProtocolName::Id);
-	if (args.FindField(ibProtocolName::Member) != nullptr)
-		GetCommandBar()->ExecuteCommand(id, static_cast<size_t>(args.GetValue<s32>(ibProtocolName::Member)));
+	const ibActionID id = args.GetValue<s32>(ibProtocol::ibEvent::Id);
+	if (args.FindField(ibProtocol::ibEvent::Member) != nullptr)
+		GetCommandBar()->ExecuteCommand(id, static_cast<size_t>(args.GetValue<s32>(ibProtocol::ibEvent::Member)));
 	else
 		GetCommandBar()->ExecuteCommand(id, GetOwnerForm());
 	return true;
@@ -179,9 +179,9 @@ bool ibValueFrame::OnClientEvent(ibProtocolEvent event, const ibDataNode& args)
 // source property rides its hops on guids and re-homes them onto the pasted object. Children recurse the same pair.
 bool ibValueFrame::CopyNode(ibDataNode& node) const
 {
-	node.SetValue(ibProtocolName::ControlId, (s32)m_controlId);
-	node.SetValue(ibProtocolName::Name,      GetControlName());
-	node.SetValue(ibProtocolName::Expanded,  m_expanded);
+	node.SetValue(ibProtocol::ibForm::ControlId, (s32)m_controlId);
+	node.SetValue(ibProtocol::ibForm::Name,      GetControlName());
+	node.SetValue(ibProtocol::ibForm::Expanded,  m_expanded);
 
 	for (unsigned int idx = 0; idx < ibPropertyObject::GetPropertyCount(); idx++)
 		if (ibProperty* prop = ibPropertyObject::GetProperty(idx)) {
@@ -214,9 +214,9 @@ bool ibValueFrame::CopyNode(ibDataNode& node) const
 
 bool ibValueFrame::PasteNode(const ibDataNode& node)
 {
-	m_controlId = (ibFormID)node.GetValue<s32>(ibProtocolName::ControlId);
-	SetControlName(node.GetValue<wxString>(ibProtocolName::Name));
-	m_expanded = node.GetValue<bool>(ibProtocolName::Expanded);
+	m_controlId = (ibFormID)node.GetValue<s32>(ibProtocol::ibForm::ControlId);
+	SetControlName(node.GetValue<wxString>(ibProtocol::ibForm::Name));
+	m_expanded = node.GetValue<bool>(ibProtocol::ibForm::Expanded);
 
 	for (unsigned int idx = 0; idx < ibPropertyObject::GetPropertyCount(); idx++)
 		if (ibProperty* prop = ibPropertyObject::GetProperty(idx))
@@ -238,7 +238,7 @@ bool ibValueFrame::PasteNode(const ibDataNode& node)
 			// as "the clipboard lost it", which is the one thing the user cannot investigate.
 			if (child == nullptr) {
 				ibJournalError(wxT("ui.form"), _("Control '%s' of '%s' could not be pasted (class id %lld)"),
-					childNode.GetValue<wxString>(ibProtocolName::Name), GetControlName(), (long long)childNode.GetClsid());
+					childNode.GetValue<wxString>(ibProtocol::ibForm::Name), GetControlName(), (long long)childNode.GetClsid());
 				continue;
 			}
 			if (!child->PasteNode(childNode))

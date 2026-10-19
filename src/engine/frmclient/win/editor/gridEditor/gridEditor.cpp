@@ -221,10 +221,10 @@ void ibGridEditor::DockTable()
 
 // See the header. Built on first use and kept: a spinner that is created and destroyed per compose
 // flickers, and the second compose is the common case.
-void ibGridEditor::ShowComposeState(ibProtocolComposeState state)
+void ibGridEditor::ShowComposeState(ibProtocol::ibForm::ibSpreadsheet::ibComposeState state)
 {
 	if (m_composeState == nullptr) {
-		if (state == ibProtocolComposeState::Composed)
+		if (state == ibProtocol::ibForm::ibSpreadsheet::ibComposeState::Composed)
 			return;   // nothing built, nothing to hide
 
 		wxWindow* const panel = new wxPanel(this, wxID_ANY);
@@ -240,14 +240,14 @@ void ibGridEditor::ShowComposeState(ibProtocolComposeState state)
 		m_composeState = panel;
 	}
 
-	if (state == ibProtocolComposeState::Composed) {
+	if (state == ibProtocol::ibForm::ibSpreadsheet::ibComposeState::Composed) {
 		m_composeSpinner->Stop();
 		m_composeState->Hide();
 		return;
 	}
 
 	// WHICH OF THE TWO — the spinner turns while the report fills; an outdated sheet waits for the person.
-	const bool composing = state == ibProtocolComposeState::Composing;
+	const bool composing = state == ibProtocol::ibForm::ibSpreadsheet::ibComposeState::Composing;
 	if (composing)
 		m_composeSpinner->Start();
 	else

@@ -43,7 +43,7 @@ bool ibTabDocument::IsCloseOnOwnerClose() const
 
 bool ibTabDocument::IsModified() const
 {
-	return IsCommandEnabled(ibProtocolCommand::Save);
+	return IsCommandEnabled(ibProtocol::ibFrame::ibCommand::Save);
 }
 
 bool ibTabDocument::Close()
@@ -59,7 +59,7 @@ bool ibTabDocument::Close()
 bool ibTabDocument::Save()
 {
 	if (GetSaveFilter().IsEmpty()) {
-		DoCommand(ibProtocolCommand::Save);
+		DoCommand(ibProtocol::ibFrame::ibCommand::Save);
 		return true;
 	}
 	if (GetFilename().IsEmpty())
@@ -75,7 +75,7 @@ bool ibTabDocument::SaveAs()
 		return false;
 
 	// Named as its tab is, the first time — a modified one's title ends with its «*».
-	wxString name = GetFilename().IsEmpty() ? frame->FindTab(m_tabId).GetString(ibProtocolName::Title) : wxFileNameFromPath(GetFilename());
+	wxString name = GetFilename().IsEmpty() ? frame->FindTab(m_tabId).GetString(ibProtocol::ibFrame::ibTab::Title) : wxFileNameFromPath(GetFilename());
 	name.Trim();
 	if (name.EndsWith(wxT("*")))
 		name.RemoveLast();
@@ -92,10 +92,10 @@ wxString ibTabDocument::GetSaveFilter() const
 		return wxString();
 
 	wxString filter;
-	for (const ibProtocolNode& format : frame->FindTab(m_tabId).FindChild(ibProtocolName::Formats).Children()) {
+	for (const ibProtocolNode& format : frame->FindTab(m_tabId).FindChild(ibProtocol::ibFrame::ibTab::Formats).Children()) {
 		if (!filter.IsEmpty())
 			filter += wxT("|");
-		filter += format.GetString(ibProtocolName::Title) + wxT("|") + format.GetString(ibProtocolName::Mask);
+		filter += format.GetString(ibProtocol::ibFrame::ibTab::Title) + wxT("|") + format.GetString(ibProtocol::ibFrame::ibTab::Mask);
 	}
 	return filter;
 }
@@ -109,28 +109,28 @@ bool ibTabDocument::DoSaveDocument(const wxString& file)
 	// SAVED BY THE SERVER as a file of this one's name — written as the name says — and taken down from it, the tab's
 	// File: the document is the server's, the file on the disk the person's.
 	ibProtocolNode params, answer;
-	params.SetValue(ibProtocolName::Command, static_cast<long long>(ibProtocolCommand::SaveAs))
-		.SetValue(ibProtocolName::Name, wxFileNameFromPath(file));
-	if (!frame->Call(ibProtocolMethod::Command, params, answer))
+	params.SetValue(ibProtocol::ibFrame::Command, static_cast<long long>(ibProtocol::ibFrame::ibCommand::SaveAs))
+		.SetValue(ibProtocol::ibFrame::Name, wxFileNameFromPath(file));
+	if (!frame->Call(ibProtocol::ibMethod::Command, params, answer))
 		return false;
-	const wxString saved = frame->FindTab(m_tabId).GetString(ibProtocolName::File);
+	const wxString saved = frame->FindTab(m_tabId).GetString(ibProtocol::ibFrame::ibTab::File);
 	return !saved.IsEmpty() && frame->DownloadFile(saved, file);
 }
 
-bool ibTabDocument::IsCommandEnabled(ibProtocolCommand command) const
+bool ibTabDocument::IsCommandEnabled(ibProtocol::ibFrame::ibCommand command) const
 {
 	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
 	if (frame == nullptr)
 		return false;
 
-	for (const ibProtocolNode& taken : frame->FindTab(m_tabId).GetList(ibProtocolName::Commands)) {
+	for (const ibProtocolNode& taken : frame->FindTab(m_tabId).GetList(ibProtocol::ibFrame::ibTab::Commands)) {
 		if (taken.AsInt() == static_cast<long long>(command))
 			return true;
 	}
 	return false;
 }
 
-void ibTabDocument::DoCommand(ibProtocolCommand command) const
+void ibTabDocument::DoCommand(ibProtocol::ibFrame::ibCommand command) const
 {
 	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
 	if (frame == nullptr)
@@ -139,8 +139,8 @@ void ibTabDocument::DoCommand(ibProtocolCommand command) const
 	// Posted, as the person's acts on a tab are: it goes after the tab was made the server's active one, which the
 	// command is done on.
 	ibProtocolNode params;
-	params.SetValue(ibProtocolName::Command, static_cast<long long>(command));
-	frame->Post(ibProtocolMethod::Command, params);
+	params.SetValue(ibProtocol::ibFrame::Command, static_cast<long long>(command));
+	frame->Post(ibProtocol::ibMethod::Command, params);
 }
 
 bool ibTabDocument::Fetch(const ibProtocolNode& request, ibProtocolNode& answer) const
@@ -150,34 +150,34 @@ bool ibTabDocument::Fetch(const ibProtocolNode& request, ibProtocolNode& answer)
 		return false;
 
 	ibProtocolNode params;
-	params.SetValue(ibProtocolName::Tab, m_tabId)
-		.SetValue(ibProtocolName::Request, request);
-	return frame->Fetch(ibProtocolMethod::Fetch, params, answer);
+	params.SetValue(ibProtocol::ibFetch::Tab, m_tabId)
+		.SetValue(ibProtocol::ibFetch::Request, request);
+	return frame->Fetch(ibProtocol::ibMethod::Fetch, params, answer);
 }
 
-void ibTabDocument::Post(ibProtocolEvent event, const ibProtocolNode& args) const
+void ibTabDocument::Post(ibProtocol::ibEvent::ibKind event, const ibProtocolNode& args) const
 {
 	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
 	if (frame == nullptr)
 		return;
 
 	ibProtocolNode params;
-	params.SetValue(ibProtocolName::Tab, m_tabId)
-		.SetValue(ibProtocolName::Event, static_cast<int>(event))
-		.SetValue(ibProtocolName::Args, args);
-	frame->Post(ibProtocolMethod::Event, params);
+	params.SetValue(ibProtocol::ibEvent::Tab, m_tabId)
+		.SetValue(ibProtocol::ibEvent::Event, static_cast<int>(event))
+		.SetValue(ibProtocol::ibEvent::Args, args);
+	frame->Post(ibProtocol::ibMethod::Event, params);
 }
 
-void ibTabDocument::Hold(ibProtocolEvent event, const ibProtocolNode& args) const
+void ibTabDocument::Hold(ibProtocol::ibEvent::ibKind event, const ibProtocolNode& args) const
 {
 	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
 	if (frame == nullptr)
 		return;
 
 	ibProtocolNode params;
-	params.SetValue(ibProtocolName::Tab, m_tabId)
-		.SetValue(ibProtocolName::Event, static_cast<int>(event))
-		.SetValue(ibProtocolName::Args, args);
+	params.SetValue(ibProtocol::ibEvent::Tab, m_tabId)
+		.SetValue(ibProtocol::ibEvent::Event, static_cast<int>(event))
+		.SetValue(ibProtocol::ibEvent::Args, args);
 	if (!frame->Hold(params))
-		frame->Post(ibProtocolMethod::Event, params);
+		frame->Post(ibProtocol::ibMethod::Event, params);
 }

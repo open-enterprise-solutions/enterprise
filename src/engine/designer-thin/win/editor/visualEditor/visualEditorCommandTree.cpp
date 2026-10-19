@@ -37,9 +37,9 @@ namespace {
 ibCommandDescription CommandOf(const ibProtocolNode& row)
 {
 	ibCommandDescription desc;
-	for (const ibProtocolNode& hop : row.GetList(ibProtocolName::CommandPath))
-		desc.AppendCommand(static_cast<ibMetaID>(hop.GetInt(ibProtocolName::Id)));
-	const long long kind = row.GetInt(ibProtocolName::Kind);
+	for (const ibProtocolNode& hop : row.GetList(ibProtocol::ibView::ibFormDesigner::CommandPath))
+		desc.AppendCommand(static_cast<ibMetaID>(hop.GetInt(ibProtocol::ibView::ibFormDesigner::Id)));
+	const long long kind = row.GetInt(ibProtocol::ibView::ibFormDesigner::Kind);
 	desc.SetCommandType(kind != 0 ? static_cast<ibInterfaceCommandType>(kind) : ibInterfaceCommandType_Default);
 	return desc;
 }
@@ -49,10 +49,10 @@ ibCommandDescription CommandOf(const ibProtocolNode& row)
 void ShapeOf(const ibProtocolNode& rows, wxString& shape)
 {
 	for (const ibProtocolNode& row : rows.Children()) {
-		shape << row.GetId() << wxT(':') << row.GetString(ibProtocolName::Name) << wxT(':')
-			<< row.GetString(ibProtocolName::Picture) << wxT(':') << row.GetInt(ibProtocolName::Kind);
-		for (const ibProtocolNode& hop : row.GetList(ibProtocolName::CommandPath))
-			shape << wxT('/') << hop.GetInt(ibProtocolName::Id);
+		shape << row.GetId() << wxT(':') << row.GetString(ibProtocol::ibView::ibFormDesigner::Name) << wxT(':')
+			<< row.GetString(ibProtocol::ibView::ibFormDesigner::Picture) << wxT(':') << row.GetInt(ibProtocol::ibView::ibFormDesigner::Kind);
+		for (const ibProtocolNode& hop : row.GetList(ibProtocol::ibView::ibFormDesigner::CommandPath))
+			shape << wxT('/') << hop.GetInt(ibProtocol::ibView::ibFormDesigner::Id);
 		shape << wxT('{');
 		ShapeOf(row, shape);
 		shape << wxT('}');
@@ -63,7 +63,7 @@ void ShapeOf(const ibProtocolNode& rows, wxString& shape)
 void PicturesOf(const ibProtocolNode& rows, std::vector<wxString>& pictures)
 {
 	for (const ibProtocolNode& row : rows.Children()) {
-		pictures.push_back(row.GetString(ibProtocolName::Picture));
+		pictures.push_back(row.GetString(ibProtocol::ibView::ibFormDesigner::Picture));
 		PicturesOf(row, pictures);
 	}
 }
@@ -87,9 +87,9 @@ bool ibFormCommandValue::IsEditable() const
 bool ibFormCommandValue::Receive()
 {
 	ibProtocolNode request;
-	request.SetValue(ibProtocolName::Kind, static_cast<int>(ibProtocolFormDesignerRequest::Properties));
-	request.SetValue(ibProtocolName::Form, m_formHandler->m_formNode);
-	request.SetValue(ibProtocolName::FormCommand, m_commandId);
+	request.SetValue(ibProtocol::ibView::ibFormDesigner::Kind, static_cast<int>(ibProtocol::ibView::ibFormDesigner::ibRequest::Properties));
+	request.SetValue(ibProtocol::ibView::ibFormDesigner::Form, m_formHandler->m_formNode);
+	request.SetValue(ibProtocol::ibView::ibFormDesigner::FormCommand, m_commandId);
 	ibProtocolNode answer;
 	return m_formHandler->GetEditorDocument()->Fetch(request, answer) && ibPropertyObject::Receive(answer);
 }
@@ -101,7 +101,7 @@ void ibFormCommandValue::OnPropertyChanged(ibProperty* property, const wxVariant
 
 void ibFormCommandValue::ReadRow(const ibProtocolNode& row)
 {
-	m_name = row.GetString(ibProtocolName::Name);
+	m_name = row.GetString(ibProtocol::ibView::ibFormDesigner::Name);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -226,7 +226,7 @@ void ibCommandTree::Draw(const ibProtocolNode& rows)
 	m_formCommandsGroup = wxTreeItemId();
 	wxTreeItemId keepNode;
 	for (const ibProtocolNode& section : rows.Children()) {
-		const wxTreeItemId sectionNode = m_tcCommands->AppendItem(root, section.GetString(ibProtocolName::Name), 0, 0);
+		const wxTreeItemId sectionNode = m_tcCommands->AppendItem(root, section.GetString(ibProtocol::ibView::ibFormDesigner::Name), 0, 0);
 		if (!m_formCommandsGroup.IsOk())
 			m_formCommandsGroup = sectionNode;
 		AppendRows(sectionNode, section, images, m_selectedDesc, keepNode);
@@ -264,13 +264,13 @@ void ibCommandTree::AppendRows(const wxTreeItemId& parent, const ibProtocolNode&
 	for (const ibProtocolNode& row : rows.Children()) {
 		const ibCommandDescription desc = CommandOf(row);
 		if (!desc.IsOk()) {   // a per-source SUB-group (the form / a table) — its commands under it
-			AppendRows(m_tcCommands->AppendItem(parent, row.GetString(ibProtocolName::Name), 0, 0), row, images, keepDesc,
+			AppendRows(m_tcCommands->AppendItem(parent, row.GetString(ibProtocol::ibView::ibFormDesigner::Name), 0, 0), row, images, keepDesc,
 				keepNode);
 			continue;
 		}
-		const wxBitmap picture = ibProtocolPicture(row.GetString(ibProtocolName::Picture));
+		const wxBitmap picture = ibProtocolPicture(row.GetString(ibProtocol::ibView::ibFormDesigner::Picture));
 		const int icon = picture.IsOk() ? images->Add(picture) : 0;   // the command's own picture, else default
-		const wxTreeItemId node = m_tcCommands->AppendItem(parent, row.GetString(ibProtocolName::Name), icon, icon,
+		const wxTreeItemId node = m_tcCommands->AppendItem(parent, row.GetString(ibProtocol::ibView::ibFormDesigner::Name), icon, icon,
 			new ibAttributeTreeItemData(desc));
 		if (keepDesc.IsOk() && desc == keepDesc)   // the row that was selected before this rebuild — remember it
 			keepNode = node;

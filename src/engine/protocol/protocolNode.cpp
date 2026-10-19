@@ -1,5 +1,5 @@
 #include "protocolNode.h"
-#include "protocol/protocol.h"   // ibProtocolName
+#include "protocol/protocol.h"   // ibProtocol::ibNode
 
 #include <nlohmann/json.hpp>
 
@@ -134,17 +134,17 @@ bool      ibProtocolNode::AsBool() const   { return BoolOf(m_node, false); }
 
 long long ibProtocolNode::GetId() const
 {
-	return GetInt(ibProtocolName::NodeId);
+	return GetInt(ibProtocol::ibNode::Id);
 }
 
 wxString ibProtocolNode::GetType() const
 {
-	return GetString(ibProtocolName::NodeType);
+	return GetString(ibProtocol::ibNode::Type);
 }
 
 std::vector<ibProtocolNode> ibProtocolNode::Children() const
 {
-	return GetList(ibProtocolName::NodeChildren);
+	return GetList(ibProtocol::ibNode::Children);
 }
 
 ibProtocolNode& ibProtocolNode::SetValue(const char* name, const wxString& text)
@@ -200,7 +200,7 @@ ibProtocolNode ibProtocolNode::AddChild()
 		return ibProtocolNode(nullptr, nullptr);
 	if (!m_node->is_object())
 		*m_node = json::object();
-	json& children = (*m_node)[ibProtocolName::NodeChildren];
+	json& children = (*m_node)[ibProtocol::ibNode::Children];
 	if (!children.is_array())
 		children = json::array();
 	children.push_back(json::object());

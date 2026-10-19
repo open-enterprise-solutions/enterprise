@@ -5,7 +5,7 @@
 #include "backend/metadataConfiguration.h"
 #include "core/serialize/dataBuilder.h"
 #include "backend/session/session.h"                       // the configuration the session works in
-#include "frmserver/client/clientFrame.h"                  // ibClientFrame::SendPicture — the icons, by their ids
+#include "backend/backend_picture.h"                       // ibBackendPicture::SendPicture — the icons, by their ids
 
 #include <vector>
 
@@ -69,40 +69,40 @@ void ibSchemaAllFunctions::Build(const ibSession& session, const ibDataNode& WXU
 		return;
 
 	const std::vector<ibFunctionGroup> groups = FunctionGroups();
-	ibDataNode& nodes = tree.Child(wxT("Groups"));
+	ibDataNode& nodes = tree.Child(ibProtocol::ibSchema::ibAllFunctions::Groups);
 	for (std::size_t i = 0; i < groups.size(); ++i) {
 		ibDataNode& group = nodes.AddChild(0, static_cast<ibMetaID>(i));
-		group.SetValue(wxT("Title"), groups[i].title);
-		group.SetValue(wxT("Icon"), ibClientFrame::SendPicture(groups[i].clsid));
+		group.SetValue(ibProtocol::ibSchema::ibAllFunctions::Title, groups[i].title);
+		group.SetValue(ibProtocol::ibSchema::ibAllFunctions::Icon, ibBackendPicture::SendPicture(groups[i].clsid));
 
 		for (const ibValueMetaObjectGenericData* object : OfferedObjects(metaData, groups[i].clsid)) {
 			ibDataNode& item = group.AddChild(0, object->GetMetaID());
-			item.SetValue(wxT("Item"), static_cast<s32>(object->GetMetaID()));
-			item.SetValue(wxT("Title"), object->GetSynonym());
-			item.SetValue(wxT("Icon"), ibClientFrame::SendPicture(object->GetClassType()));
+			item.SetValue(ibProtocol::ibSchema::ibAllFunctions::Item, static_cast<s32>(object->GetMetaID()));
+			item.SetValue(ibProtocol::ibSchema::ibAllFunctions::Title, object->GetSynonym());
+			item.SetValue(ibProtocol::ibSchema::ibAllFunctions::Icon, ibBackendPicture::SendPicture(object->GetClassType()));
 		}
 	}
 }
 
 std::function<void()> ibSchemaAllFunctions::Command(const ibSession& session, s32 command,
-	const ibDataNode& args, ibProtocolRefusal& refusal, wxString& error) const
+	const ibDataNode& args, ibProtocol::ibRefusal& refusal, wxString& error) const
 {
 	if (static_cast<ibSchemaAllFunctionsCommand>(command) != ibSchemaAllFunctionsCommand::Open) {
-		refusal = ibProtocolRefusal::NotFound;
+		refusal = ibProtocol::ibRefusal::NotFound;
 		error = wxString::Format(wxT("All functions has no command %d"), command);
 		return nullptr;
 	}
 
 	const ibMetaDataConfigurationBase* const metaData = session.GetMetaData();
 	if (metaData == nullptr) {
-		refusal = ibProtocolRefusal::Failed;
+		refusal = ibProtocol::ibRefusal::Failed;
 		error = wxT("the session has no configuration");
 		return nullptr;
 	}
 
-	const ibMetaID itemId = args.GetValue<s32>(wxT("Item"));
+	const ibMetaID itemId = args.GetValue<s32>(ibProtocol::ibSchema::ibAllFunctions::Item);
 	s32 type = ibInterfaceCommandType::ibInterfaceCommandType_Default;
-	args.GetValue(wxT("Type"), type);
+	args.GetValue(ibProtocol::ibSchema::ibAllFunctions::Type, type);
 	const ibInterfaceCommandType commandType = static_cast<ibInterfaceCommandType>(type);
 
 	// Only what the tree offers this person: the same groups, the same gate, the same right.
@@ -114,7 +114,7 @@ std::function<void()> ibSchemaAllFunctions::Command(const ibSession& session, s3
 		}
 	}
 
-	refusal = ibProtocolRefusal::NotFound;
+	refusal = ibProtocol::ibRefusal::NotFound;
 	error = wxString::Format(wxT("All functions offers no item %d"), itemId);
 	return nullptr;
 }

@@ -79,6 +79,10 @@ public:
 	// Validate the binding by WALKING its hops. Gateway bool: false = a hop no longer resolves (the command is gone,
 	// "<not found>"). `outText` (optional) receives the resolved leaf's name when the whole path is valid.
 	virtual bool WalkCommand(const ibCommandDescription& desc, wxString* outText = nullptr) const = 0;
+
+	// The commands a binding may name, as rows — the form editor's command tree (the frontend's WriteCommandTree over
+	// this receiver's form), which the command-source row carries for its picker.
+	virtual void WriteCommandTree(class ibDataNode& node) const = 0;
 };
 
 #endif // !__BACKEND_COMMAND_H__

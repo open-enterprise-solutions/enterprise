@@ -12,7 +12,7 @@ class ibMetaData;
 // answer is the server's (a window is handed what it needs, or asks).
 class FRMCLIENT_API ibApplicationData {
 public:
-	// The designer — the frame logged in as one (ibProtocolMode::Designer): the thin designer is.
+	// The designer — the frame logged in as one (ibProtocol::ibLogin::ibMode::Designer): the thin designer is.
 	bool DesignerMode() const;
 
 	// A client of the same base started beside this one, on this computer — `strAppName` the binary next to this one,

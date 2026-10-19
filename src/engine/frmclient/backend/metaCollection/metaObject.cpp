@@ -23,12 +23,12 @@ namespace {
 // The object's texts' params — its id, in its tree's tab — `args` filled.
 ibProtocolNode ObjectTextParams(ibMetaID id, const ibMetaData& metaData, ibProtocolNode args)
 {
-	args.SetValue(ibProtocolName::Id, static_cast<long long>(id));
-	args.SetValue(ibProtocolName::Tab, metaData.GetTabId());
+	args.SetValue(ibProtocol::ibSchema::ibObjectText::Id, static_cast<long long>(id));
+	args.SetValue(ibProtocol::ibSchema::ibObjectText::Tab, metaData.GetTabId());
 
 	ibProtocolNode params;
-	params.SetValue(ibProtocolName::Schema, static_cast<long long>(ibProtocolSchema::ObjectText));
-	params.SetValue(ibProtocolName::Args, args);
+	params.SetValue(ibProtocol::ibSchema::Schema, static_cast<long long>(ibProtocol::ibSchema::ibKind::ObjectText));
+	params.SetValue(ibProtocol::ibSchema::Args, args);
 	return params;
 }
 
@@ -37,7 +37,7 @@ wxString ReadObjectText(ibMetaID id, const ibMetaData& metaData, const char* nam
 {
 	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
 	ibProtocolNode answer;
-	if (frame == nullptr || !frame->Call(ibProtocolMethod::Schema, ObjectTextParams(id, metaData, ibProtocolNode()), answer))
+	if (frame == nullptr || !frame->Call(ibProtocol::ibMethod::Schema, ObjectTextParams(id, metaData, ibProtocolNode()), answer))
 		return wxString();
 	return answer.GetString(name);
 }
@@ -52,31 +52,31 @@ void SaveObjectText(ibMetaID id, const ibMetaData& metaData, const char* name, c
 	ibProtocolNode args;
 	args.SetValue(name, text);
 	ibProtocolNode params = ObjectTextParams(id, metaData, args);
-	params.SetValue(ibProtocolName::Command, static_cast<long long>(ibProtocolSchemaCommand::Save));
+	params.SetValue(ibProtocol::ibSchema::Command, static_cast<long long>(ibProtocol::ibSchema::ibCommand::Save));
 	ibProtocolNode answer;
-	frame->Call(ibProtocolMethod::Schema, params, answer);
+	frame->Call(ibProtocol::ibMethod::Schema, params, answer);
 }
 
 } // namespace
 
 wxString ibValueMetaObject::GetHelpContent() const
 {
-	return ReadObjectText(m_metaId, m_metaData, ibProtocolName::Help);
+	return ReadObjectText(m_metaId, m_metaData, ibProtocol::ibSchema::ibObjectText::Help);
 }
 
 void ibValueMetaObject::SetHelpContent(const wxString& strHelpContent)
 {
-	SaveObjectText(m_metaId, m_metaData, ibProtocolName::Help, strHelpContent);
+	SaveObjectText(m_metaId, m_metaData, ibProtocol::ibSchema::ibObjectText::Help, strHelpContent);
 }
 
 wxString ibValueMetaObject::GetNoteContent() const
 {
-	return ReadObjectText(m_metaId, m_metaData, ibProtocolName::Note);
+	return ReadObjectText(m_metaId, m_metaData, ibProtocol::ibSchema::ibObjectText::Note);
 }
 
 void ibValueMetaObject::SetNoteContent(const wxString& strNoteContent)
 {
-	SaveObjectText(m_metaId, m_metaData, ibProtocolName::Note, strNoteContent);
+	SaveObjectText(m_metaId, m_metaData, ibProtocol::ibSchema::ibObjectText::Note, strNoteContent);
 }
 
 bool ibValueMetaObject::Send(const wxString& name, const ibDataValue& value) const
@@ -86,19 +86,19 @@ bool ibValueMetaObject::Send(const wxString& name, const ibDataValue& value) con
 		return false;
 
 	ibDataNode args;
-	args.SetValue(ibProtocolName::Id, static_cast<s32>(m_metaId));
-	args.SetValue(ibProtocolName::Name, name);
-	args.SetValue(ibProtocolName::Tab, static_cast<s32>(m_metaData.GetTabId()));
+	args.SetValue(ibProtocol::ibSchema::ibProperties::Id, static_cast<s32>(m_metaId));
+	args.SetValue(ibProtocol::ibSchema::ibProperties::Name, name);
+	args.SetValue(ibProtocol::ibSchema::ibProperties::Tab, static_cast<s32>(m_metaData.GetTabId()));
 	if (value.Kind() == ibDataKind::Child)
-		args.SetProperty(ibProtocolName::Value, value);
+		args.SetProperty(ibProtocol::ibSchema::ibProperties::Value, value);
 	else
-		args.AddField(ibProtocolName::Value, value);
+		args.AddField(ibProtocol::ibSchema::ibProperties::Value, value);
 
 	ibProtocolNode params, answer;
-	params.SetValue(ibProtocolName::Schema, static_cast<long long>(ibProtocolSchema::Properties));
-	params.SetValue(ibProtocolName::Command, static_cast<long long>(ibProtocolSchemaCommand::Save));
-	ibWriteProtocolNode(args, params.Child(ibProtocolName::Args));
-	return frame->Call(ibProtocolMethod::Schema, params, answer);
+	params.SetValue(ibProtocol::ibSchema::Schema, static_cast<long long>(ibProtocol::ibSchema::ibKind::Properties));
+	params.SetValue(ibProtocol::ibSchema::Command, static_cast<long long>(ibProtocol::ibSchema::ibCommand::Save));
+	ibWriteProtocolNode(args, params.Child(ibProtocol::ibSchema::Args));
+	return frame->Call(ibProtocol::ibMethod::Schema, params, answer);
 }
 
 namespace {
@@ -152,13 +152,13 @@ bool ibValueMetaObject::Receive()
 	}
 
 	ibProtocolNode params, answer;
-	params.SetValue(ibProtocolName::Schema, static_cast<long long>(ibProtocolSchema::Properties));
-	ibProtocolNode args = params.Child(ibProtocolName::Args);
-	args.SetValue(ibProtocolName::Id, static_cast<long long>(m_metaId));
-	args.SetValue(ibProtocolName::Tab, m_metaData.GetTabId());
-	if (!frame->Call(ibProtocolMethod::Schema, params, answer))
+	params.SetValue(ibProtocol::ibSchema::Schema, static_cast<long long>(ibProtocol::ibSchema::ibKind::Properties));
+	ibProtocolNode args = params.Child(ibProtocol::ibSchema::Args);
+	args.SetValue(ibProtocol::ibSchema::ibProperties::Id, static_cast<long long>(m_metaId));
+	args.SetValue(ibProtocol::ibSchema::ibProperties::Tab, m_metaData.GetTabId());
+	if (!frame->Call(ibProtocol::ibMethod::Schema, params, answer))
 		return false;
-	const ibProtocolNode rows = answer.FindChild(ibProtocolName::Properties);
+	const ibProtocolNode rows = answer.FindChild(ibProtocol::ibSchema::ibProperties::Properties);
 	Receive(m_metaData.GetTabId(), m_metaId, rows);
 	return ibPropertyObject::Receive(rows);
 }

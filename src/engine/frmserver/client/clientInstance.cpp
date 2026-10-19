@@ -22,7 +22,7 @@ std::int64_t NowMs()
 } // namespace
 
 ibClientInstance::ibClientInstance(ibApplicationInstance* applicationInstance, const wxString& id, const wxString& address,
-	ibProtocolMode mode)
+	ibProtocol::ibLogin::ibMode mode)
 	: m_applicationInstance(applicationInstance), m_id(id), m_address(address), m_mode(mode), m_lastActiveMs(NowMs())
 {
 }
@@ -51,7 +51,7 @@ bool ibClientInstance::Login(const wxString& user, const wxString& password)
 	// session and the row. A wrong password just lets the holder die here, which removes the row.
 	// ITS KIND IS THE CLIENT'S MODE: the runtime's a thin client; the designer's a thin designer — a designer as the
 	// desktop's is (no runtime, the one designer of the base), whatever process hosts it.
-	const ibSessionKind kind = m_mode == ibProtocolMode::Designer ? ibSessionKind::ThinDesigner : ibSessionKind::ThinClient;
+	const ibSessionKind kind = m_mode == ibProtocol::ibLogin::ibMode::Designer ? ibSessionKind::ThinDesigner : ibSessionKind::ThinClient;
 	ibSessionHolder holder;
 	try {
 		holder = m_applicationInstance->CreateSession<ibClientSession>(kind, m_id, m_address);

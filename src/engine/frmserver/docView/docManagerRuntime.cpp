@@ -20,9 +20,9 @@ ibDocManagerRuntime::ibDocManagerRuntime()
 	AddDocTemplate(g_metaExternalReportCLSID, _("External report"), ibFileMask(ibFileKind::Report), ibFileExtension(ibFileKind::Report), _("Report Doc"), _("Report View"), CLASSINFO(ibReportFileDocument), CLASSINFO(ibReportEditView), ibTEMPLATE_VISIBLE | ibTEMPLATE_ONLY_OPEN);
 
 	// All functions — it opens what the runtime runs.
-	RegisterSchema(ibProtocolSchema::AllFunctions, std::make_unique<ibSchemaAllFunctions>());
+	RegisterSchema(ibProtocol::ibSchema::ibKind::AllFunctions, std::make_unique<ibSchemaAllFunctions>());
 	// …and the section panel, from which the same runtime opens what a section offers.
-	RegisterSchema(ibProtocolSchema::Sections, std::make_unique<ibSchemaSections>());
+	RegisterSchema(ibProtocol::ibSchema::ibKind::Sections, std::make_unique<ibSchemaSections>());
 	// …and debugging it, switched in its Options.
-	RegisterSchema(ibProtocolSchema::Debugging, std::make_unique<ibSchemaDebugging>());
+	RegisterSchema(ibProtocol::ibSchema::ibKind::Debugging, std::make_unique<ibSchemaDebugging>());
 }

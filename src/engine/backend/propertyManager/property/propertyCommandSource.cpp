@@ -66,3 +66,14 @@ bool ibPropertyCommandSource::WriteNodeValue(ibDataValue& value) const
 {
 	return ibCommandDescriptionMemory::WriteNode(value, GetValueAsCommandDesc());
 }
+
+#include "protocol/protocol.h"   // ibProtocol::ibSchema::ibProperties — the row's keys
+
+bool ibPropertyCommandSource::GetProtocolValue(ibDataNode& row)
+{
+	if (!ibProperty::GetProtocolValue(row))
+		return false;
+	if (const ibBackendCommandReceiver* const receiver = get_cell_variant<ibVariantDataCommandSource>()->GetOwner())
+		receiver->WriteCommandTree(row.Child(ibProtocol::ibSchema::ibProperties::CommandTree));
+	return true;
+}

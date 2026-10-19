@@ -7,7 +7,7 @@
 #include "frmclient/backend/propertyManager/propertyManager.h"
 #include "frmclient/backend/system/value/valueSpreadsheet.h"
 
-#include "protocol/protocol.h"   // ibProtocolComposeState — what the sheet is to its report
+#include "protocol/protocol.h"   // ibProtocol::ibForm::ibSpreadsheet::ibComposeState — what the sheet is to its report
 
 static const wxArrayString wxEmptyArrayString;
 
@@ -831,7 +831,7 @@ public:
 	// was built, and a report is re-formed when the person says Compose (Max, 2026-10-12).
 	//
 	// Idempotent: showing it twice is one plate, hiding a hidden one does nothing.
-	void ShowComposeState(ibProtocolComposeState state);
+	void ShowComposeState(ibProtocol::ibForm::ibSpreadsheet::ibComposeState state);
 
 	// ⭐ THE SHEET FILLS THE WINDOW. A document holds as many columns and rows as somebody put into
 	// it — a composed report may hold two — and the space to the right of them is not "outside the

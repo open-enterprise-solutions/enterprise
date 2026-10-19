@@ -11,7 +11,7 @@ namespace {
 // The pictures of `row` and the rows under it — asked of the server at once, not a call per row drawn.
 void PicturesOf(const ibProtocolNode& row, std::vector<wxString>& pictures)
 {
-	pictures.push_back(row.GetString(ibProtocolName::Picture));
+	pictures.push_back(row.GetString(ibProtocol::ibView::ibCheckTree::Picture));
 	for (const ibProtocolNode& child : row.Children())
 		PicturesOf(child, pictures);
 }
@@ -53,9 +53,9 @@ void ibCommonAttributeCompositionEditor::OnCheckItem(wxTreeEvent& event)
 		// THE ATTRIBUTE ITSELF MOVES, not a flag: checking creates the copy inside that
 		// object, unchecking deletes it — on the server (ibCommonAttributeCompositionView::OnClientEvent).
 		ibProtocolNode args;
-		args.SetValue(ibProtocolName::NodeId, data->GetMetaId());
-		args.SetValue(ibProtocolName::Checked, event.GetExtraLong() != 0);
-		m_document->Post(ibProtocolEvent::Toggle, args);
+		args.SetValue(ibProtocol::ibNode::Id, data->GetMetaId());
+		args.SetValue(ibProtocol::ibView::ibCheckTree::Checked, event.GetExtraLong() != 0);
+		m_document->Post(ibProtocol::ibEvent::ibKind::Toggle, args);
 	}
 
 	event.Skip();
@@ -114,11 +114,11 @@ wxTreeItemId ibCommonAttributeCompositionEditor::GroupFor(const ibProtocolNode& 
 	// shows.
 	wxImageList* imageList = m_compositionCtrl->GetImageList();
 	wxASSERT(imageList);
-	const wxBitmap picture = ibProtocolPicture(row.GetString(ibProtocolName::Picture));
+	const wxBitmap picture = ibProtocolPicture(row.GetString(ibProtocol::ibView::ibCheckTree::Picture));
 	const int imageIndex = picture.IsOk() ? imageList->Add(picture) : wxNOT_FOUND;
 
 	const wxTreeItemId group = m_compositionCtrl->AppendItem(m_treeMETADATA,
-		row.GetString(ibProtocolName::Title), imageIndex, imageIndex, new ibTreeItemObject(row.GetId()));
+		row.GetString(ibProtocol::ibView::ibCheckTree::Title), imageIndex, imageIndex, new ibTreeItemObject(row.GetId()));
 	if (row.GetId() == m_keepTopId)
 		m_keepTopNode = group;
 	return group;
@@ -128,14 +128,14 @@ wxTreeItemId ibCommonAttributeCompositionEditor::AppendItem(const wxTreeItemId& 
 {
 	wxImageList* imageList = m_compositionCtrl->GetImageList();
 	wxASSERT(imageList);
-	const wxBitmap picture = ibProtocolPicture(row.GetString(ibProtocolName::Picture));
+	const wxBitmap picture = ibProtocolPicture(row.GetString(ibProtocol::ibView::ibCheckTree::Picture));
 	const int imageIndex = picture.IsOk() ? imageList->Add(picture) : wxNOT_FOUND;
 
 	const wxTreeItemId createItem = m_compositionCtrl->AppendItem(
-		parent, row.GetString(ibProtocolName::Title), imageIndex, imageIndex, new ibTreeItemObject(row.GetId()));
+		parent, row.GetString(ibProtocol::ibView::ibCheckTree::Title), imageIndex, imageIndex, new ibTreeItemObject(row.GetId()));
 
-	const bool carried = row.GetBool(ibProtocolName::Checked);
-	const bool editable = !row.GetBool(ibProtocolName::ReadOnly);
+	const bool carried = row.GetBool(ibProtocol::ibView::ibCheckTree::Checked);
+	const bool editable = !row.GetBool(ibProtocol::ibView::ibCheckTree::ReadOnly);
 
 	m_compositionCtrl->SetItemState(createItem,
 		carried
@@ -153,20 +153,20 @@ wxTreeItemId ibCommonAttributeCompositionEditor::AppendItem(const wxTreeItemId& 
 
 void ibCommonAttributeCompositionEditor::FillData(const ibProtocolNode& view)
 {
-	const ibProtocolNode root = view.FindChild(ibProtocolName::Rows);
+	const ibProtocolNode root = view.FindChild(ibProtocol::ibView::ibCheckTree::Rows);
 
 	std::vector<wxString> pictures;
 	PicturesOf(root, pictures);
 	ibProtocolPictureReceive(pictures);
 
 	wxImageList* imageList = m_compositionCtrl->GetImageList();
-	const wxBitmap picture = ibProtocolPicture(root.GetString(ibProtocolName::Picture));
+	const wxBitmap picture = ibProtocolPicture(root.GetString(ibProtocol::ibView::ibCheckTree::Picture));
 	if (picture.IsOk()) {
 		const int imageIndex = imageList->Add(picture);
 		m_compositionCtrl->SetItemImage(m_treeMETADATA, imageIndex);
 		m_compositionCtrl->SetItemImage(m_treeMETADATA, imageIndex, wxTreeItemIcon_Selected);
 	}
-	m_compositionCtrl->SetItemText(m_treeMETADATA, root.GetString(ibProtocolName::Title));
+	m_compositionCtrl->SetItemText(m_treeMETADATA, root.GetString(ibProtocol::ibView::ibCheckTree::Title));
 	m_compositionCtrl->SetItemData(m_treeMETADATA, new ibTreeItemObject(root.GetId()));
 
 	// ASKED, NOT LISTED — on the server: every metaobject that says it can carry one, under a group named by its own
@@ -183,5 +183,5 @@ void ibCommonAttributeCompositionEditor::FillData(const ibProtocolNode& view)
 	}
 
 	m_compositionCtrl->ExpandAll();
-	SetReadOnly(view.FindChild(ibProtocolName::State).GetBool(ibProtocolName::ReadOnly));
+	SetReadOnly(view.FindChild(ibProtocol::ibView::State).GetBool(ibProtocol::ibView::ibCheckTree::ReadOnly));
 }

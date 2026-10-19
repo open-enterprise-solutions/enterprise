@@ -139,7 +139,7 @@ void ibDebuggerClientBridgeDesigner::OnMessageFromServer(const ibDebugLineData& 
 		mainFrame->GetMetaWindow()->EditModule(ibGuid(data.m_moduleName), data.m_line, false);
 
 	if (mainFrame != nullptr && mainFrame->GetOutputWindow() != nullptr)
-		mainFrame->GetOutputWindow()->Output(message, ibProtocolMessageLevel::Error);
+		mainFrame->GetOutputWindow()->Output(message, ibProtocol::ibFrame::ibMessage::ibLevel::Error);
 }
 
 void ibDebuggerClientBridgeDesigner::OnSetToolTip(const ibDebugExpressionData& data, const wxString& resultStr)

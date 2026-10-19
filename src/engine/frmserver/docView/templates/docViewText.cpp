@@ -25,19 +25,19 @@ void ibTextEditView::OnDraw(ibDataNode& frame)
 	// THE TAB'S VIEW IS A TEXTBOX'S NODE — a client draws it with the one it draws a form's text box with, as a sheet's
 	// is a gridbox's. The text it shows, and whether it takes typing; what is typed comes back as Change {Text}.
 	frame.SetClsid(g_controlTextBoxCLSID);
-	ibDataNode& state = frame.Child(wxT("State"));
-	state.SetValue(wxT("Text"), document->GetText());
+	ibDataNode& state = frame.Child(ibProtocol::ibView::State);
+	state.SetValue(ibProtocol::ibView::ibText::Text, document->GetText());
 	if (m_readOnly)
-		state.SetValue(wxT("ReadOnly"), true);
+		state.SetValue(ibProtocol::ibView::ibText::ReadOnly, true);
 }
 
-bool ibTextEditView::OnClientEvent(ibProtocolEvent event, const ibDataNode& args)
+bool ibTextEditView::OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args)
 {
 	ibTextDocument* const document = dynamic_cast<ibTextDocument*>(GetDocument());
-	if (document == nullptr || event != ibProtocolEvent::Change || m_readOnly)
+	if (document == nullptr || event != ibProtocol::ibEvent::ibKind::Change || m_readOnly)
 		return false;
 
-	document->SetText(args.GetValue<wxString>(wxT("Text")));
+	document->SetText(args.GetValue<wxString>(ibProtocol::ibView::ibText::Text));
 	return true;
 }
 

@@ -11,9 +11,9 @@ void ibValueTextCtrl::Create(wxWindow* parent, const ibProtocolNode& /*node*/)
 {
 	m_textEditor = new ibControlNavigationTextEditor(parent, wxID_ANY);
 
-	m_textEditor->Bind(wxEVT_CONTROL_BUTTON_SELECT, [this](wxCommandEvent&) { Send(ibProtocolEvent::Select); });
-	m_textEditor->Bind(wxEVT_CONTROL_BUTTON_OPEN, [this](wxCommandEvent&) { Send(ibProtocolEvent::Open); });
-	m_textEditor->Bind(wxEVT_CONTROL_BUTTON_CLEAR, [this](wxCommandEvent&) { Send(ibProtocolEvent::Clear); });
+	m_textEditor->Bind(wxEVT_CONTROL_BUTTON_SELECT, [this](wxCommandEvent&) { Send(ibProtocol::ibEvent::ibKind::Select); });
+	m_textEditor->Bind(wxEVT_CONTROL_BUTTON_OPEN, [this](wxCommandEvent&) { Send(ibProtocol::ibEvent::ibKind::Open); });
+	m_textEditor->Bind(wxEVT_CONTROL_BUTTON_CLEAR, [this](wxCommandEvent&) { Send(ibProtocol::ibEvent::ibKind::Clear); });
 
 	m_textEditor->Bind(wxEVT_CONTROL_TEXT_ENTER, &ibValueTextCtrl::OnTextEnter, this);
 	m_textEditor->Bind(wxEVT_CONTROL_TEXT_INPUT, &ibValueTextCtrl::OnTextInput, this);
@@ -23,24 +23,24 @@ void ibValueTextCtrl::Create(wxWindow* parent, const ibProtocolNode& /*node*/)
 
 void ibValueTextCtrl::Update(const ibProtocolNode& node)
 {
-	const ibProtocolNode state = node.FindChild(ibProtocolName::State);
+	const ibProtocolNode state = node.FindChild(ibProtocol::ibForm::ibState::State);
 
-	m_textEditor->SetLabel(state.GetString(ibProtocolName::Caption));
+	m_textEditor->SetLabel(state.GetString(ibProtocol::ibForm::ibState::Caption));
 
 	// The value as text — none in the designer. Not over what is being typed: that is the person's until committed.
-	if (state.Has(ibProtocolName::Text) && !m_editing) {
-		const wxString text = state.GetString(ibProtocolName::Text);
+	if (state.Has(ibProtocol::ibForm::ibState::Text) && !m_editing) {
+		const wxString text = state.GetString(ibProtocol::ibForm::ibState::Text);
 		if (m_textEditor->GetValue() != text)
 			m_textEditor->SetValue(text);
 	}
 
-	m_textEditor->SetPasswordMode(node.GetBool(ibProtocolName::PasswordMode));
-	m_textEditor->SetMultilineMode(node.GetBool(ibProtocolName::MultilineMode));
+	m_textEditor->SetPasswordMode(node.GetBool(ibProtocol::ibForm::ibProperty::PasswordMode));
+	m_textEditor->SetMultilineMode(node.GetBool(ibProtocol::ibForm::ibProperty::MultilineMode));
 	// The server has decided it: the form's text edit mode and a binding that can be written.
-	m_textEditor->SetTextEditMode(!state.GetBool(ibProtocolName::ReadOnly));
-	m_textEditor->ShowSelectButton(node.GetBool(ibProtocolName::ButtonSelect));
-	m_textEditor->ShowOpenButton(node.GetBool(ibProtocolName::ButtonOpen));
-	m_textEditor->ShowClearButton(node.GetBool(ibProtocolName::ButtonClear));
+	m_textEditor->SetTextEditMode(!state.GetBool(ibProtocol::ibForm::ibState::ReadOnly));
+	m_textEditor->ShowSelectButton(node.GetBool(ibProtocol::ibForm::ibProperty::ButtonSelect));
+	m_textEditor->ShowOpenButton(node.GetBool(ibProtocol::ibForm::ibProperty::ButtonOpen));
+	m_textEditor->ShowClearButton(node.GetBool(ibProtocol::ibForm::ibProperty::ButtonClear));
 
 	UpdateWindow(m_textEditor, node);
 }
@@ -73,8 +73,8 @@ void ibValueTextCtrl::Commit()
 	m_editing = false;
 
 	ibProtocolNode args;
-	args.SetValue(ibProtocolName::Text, m_textEditor->GetValue());
-	Send(ibProtocolEvent::Change, args);
+	args.SetValue(ibProtocol::ibEvent::Text, m_textEditor->GetValue());
+	Send(ibProtocol::ibEvent::ibKind::Change, args);
 }
 
 //*******************************************************************
@@ -86,7 +86,7 @@ void ibValueTextCtrl::OnTextInput(wxCommandEvent& event)
 	// The first keystroke of an edit: the object is modified, nothing is committed.
 	if (!m_editing) {
 		m_editing = true;
-		Send(ibProtocolEvent::Input);
+		Send(ibProtocol::ibEvent::ibKind::Input);
 	}
 	event.Skip();
 }

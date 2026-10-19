@@ -14,21 +14,21 @@
 
 // A cell names itself on the wire as Fetch wrote it — from 1; the sheet, and the handler, count from 0. A
 // click that names no cell is no click.
-bool ibValueGridBox::OnClientEvent(ibProtocolEvent event, const ibDataNode& args)
+bool ibValueGridBox::OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args)
 {
 	switch (event) {
-	case ibProtocolEvent::Cell: {
-		const int row = args.GetValue<s32>(wxT("Row")) - 1, col = args.GetValue<s32>(wxT("Col")) - 1;
+	case ibProtocol::ibEvent::ibKind::Cell: {
+		const int row = args.GetValue<s32>(ibProtocol::ibEvent::Row) - 1, col = args.GetValue<s32>(ibProtocol::ibEvent::Col) - 1;
 		if (row >= 0 && col >= 0)
 			OnCellLeftClick(row, col);
 		return true;
 	}
-	case ibProtocolEvent::Change: {
+	case ibProtocol::ibEvent::ibKind::Change: {
 		// THE SHEET AS THE PERSON LEFT IT — edited on the client and handed over whole (Change {Sheet}): the sheet on
 		// show from then on, which is the model's own. Its version stays: the client holds that sheet already.
 		ibSpreadsheetDescription sheet;
 		if (!m_gridDocument->GetSpreadsheet().IsEditable()
-			|| !ibSpreadsheetDescriptionMemory::ReadNode(args.GetProperty(wxT("Sheet")), sheet))
+			|| !ibSpreadsheetDescriptionMemory::ReadNode(args.GetProperty(ibProtocol::ibForm::ibSpreadsheet::Sheet), sheet))
 			return false;
 		m_gridDocument->SetSpreadsheetDesc(std::move(sheet));
 		return true;

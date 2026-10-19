@@ -39,6 +39,10 @@ public:
 	// Load & save — the DUMB command-hop path (ibCommandDescriptionMemory, symmetric to the source path).
 	virtual bool ReadNodeValue(const ibDataValue& value) override;
 	virtual bool WriteNodeValue(ibDataValue& value) const override;
+
+	// …and the commands of the owner's form it may name, as the desktop's picker gathered them over the owner's command
+	// door (advpropCommandSource.cpp): CommandTree, the form editor's (ibBackendCommandReceiver::WriteCommandTree).
+	virtual bool GetProtocolValue(ibDataNode& row) override;
 };
 
 #endif // !__PROPERTY_COMMAND_SOURCE_H__

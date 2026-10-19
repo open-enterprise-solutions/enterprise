@@ -4,7 +4,7 @@
 #include "backend/metaCollection/metaGroups.h"   // what a group is called, and where it stands
 #include "backend/objCtor.h"
 #include "core/serialize/dataBuilder.h"
-#include "frmserver/client/clientFrame.h"   // SendPicture — a row's icon
+#include "backend/backend_picture.h"   // ibBackendPicture::SendPicture — a row's icon
 
 #include <algorithm>
 #include <vector>
@@ -22,16 +22,16 @@ void ibInterfaceCompositionView::OnDraw(ibDataNode& frame)
 		return;
 
 	// Read-only where the section may not be edited — the desktop's editor disabled its tree (FillData: Enable).
-	ibDataNode& state = frame.Child(ibProtocolName::State);
-	state.SetValue(ibProtocolName::ReadOnly, !metaInterface->IsEnabled());
+	ibDataNode& state = frame.Child(ibProtocol::ibView::State);
+	state.SetValue(ibProtocol::ibView::ibCheckTree::ReadOnly, !metaInterface->IsEnabled());
 
-	FillData(frame.Child(ibProtocolName::Rows));
+	FillData(frame.Child(ibProtocol::ibView::ibCheckTree::Rows));
 }
 
-bool ibInterfaceCompositionView::OnClientEvent(ibProtocolEvent event, const ibDataNode& args)
+bool ibInterfaceCompositionView::OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args)
 {
 	ibValueMetaObject* const metaInterface = GetDocument()->GetMetaObject();
-	if (metaInterface == nullptr || event != ibProtocolEvent::Toggle)
+	if (metaInterface == nullptr || event != ibProtocol::ibEvent::ibKind::Toggle)
 		return false;
 
 	// The ticked object is the args' NodeId — the node's identity on the wire (jsonProvider reads it into the metaId),
@@ -44,7 +44,7 @@ bool ibInterfaceCompositionView::OnClientEvent(ibProtocolEvent event, const ibDa
 
 	// The desktop's OnCheckItem. Its pass over the open documents (UpdateAllViews, so an open form's navigator re-gathers
 	// the section) is not here: a view is drawn anew for every frame a client is sent.
-	metaObject->SetInterface(metaInterface->GetMetaID(), args.GetValue<bool>(ibProtocolName::Checked));
+	metaObject->SetInterface(metaInterface->GetMetaID(), args.GetValue<bool>(ibProtocol::ibView::ibCheckTree::Checked));
 	return true;
 }
 
@@ -59,8 +59,8 @@ ibDataNode& ibInterfaceCompositionView::GroupFor(ibDataNode& root, const ibClass
 	// A group row is named by its place: it carries no object.
 	ibDataNode& group = root.AddChild(0, -static_cast<ibMetaID>(root.Children().size() + 1));
 	const wxString caption = ibMetaGroupCaption(clsid);
-	group.SetValue(ibProtocolName::Title, caption.IsEmpty() ? typeCtor->GetClassName() : caption);
-	group.SetValue(ibProtocolName::Picture, ibClientFrame::SendPicture(clsid));
+	group.SetValue(ibProtocol::ibView::ibCheckTree::Title, caption.IsEmpty() ? typeCtor->GetClassName() : caption);
+	group.SetValue(ibProtocol::ibView::ibCheckTree::Picture, ibBackendPicture::SendPicture(clsid));
 	return group;
 }
 
@@ -70,10 +70,10 @@ ibDataNode& ibInterfaceCompositionView::AppendItem(ibDataNode& parent, ibValueMe
 
 	// Bare NAME (GetName) — the item already sits UNDER its type group, as on the desktop's.
 	ibDataNode& item = parent.AddChild(0, metaObject->GetMetaID());
-	item.SetValue(ibProtocolName::Title, metaObject->GetName());
-	item.SetValue(ibProtocolName::Picture, ibClientFrame::SendPicture(metaObject->GetClassType()));
-	item.SetValue(ibProtocolName::Checked, metaObject->IsSetInterface(metaInterface->GetMetaID()));
-	item.SetValue(ibProtocolName::ReadOnly, !metaObject->IsEditable());
+	item.SetValue(ibProtocol::ibView::ibCheckTree::Title, metaObject->GetName());
+	item.SetValue(ibProtocol::ibView::ibCheckTree::Picture, ibBackendPicture::SendPicture(metaObject->GetClassType()));
+	item.SetValue(ibProtocol::ibView::ibCheckTree::Checked, metaObject->IsSetInterface(metaInterface->GetMetaID()));
+	item.SetValue(ibProtocol::ibView::ibCheckTree::ReadOnly, !metaObject->IsEditable());
 	return item;
 }
 
@@ -85,8 +85,8 @@ void ibInterfaceCompositionView::FillData(ibDataNode& root)
 	wxASSERT(commonObject);
 
 	root.SetMetaId(commonObject->GetMetaID());
-	root.SetValue(ibProtocolName::Title, commonObject->GetName());
-	root.SetValue(ibProtocolName::Picture, ibClientFrame::SendPicture(g_metaCommonMetadataCLSID));
+	root.SetValue(ibProtocol::ibView::ibCheckTree::Title, commonObject->GetName());
+	root.SetValue(ibProtocol::ibView::ibCheckTree::Picture, ibBackendPicture::SendPicture(g_metaCommonMetadataCLSID));
 
 	// ASKED, NOT LISTED: every metaobject that says it can be checked into a section (IsInterfaceAllowed), in the order
 	// of its group's declared place (ibMetaGroupOrder); a stable sort leaves each group's own objects as the metadata

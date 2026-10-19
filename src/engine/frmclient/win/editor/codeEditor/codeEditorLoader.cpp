@@ -18,7 +18,7 @@
 // configuration were the desktop's process's, and are the server's. Asked of the tab's view, which answers as the
 // desktop's editor did (frmserver ibModuleTextView: FetchCompletion, FetchCallTip). The debugger's answer for a caret the
 // compiler could not resolve (the desktop's LoadFromDebugger, ShowAutoComplete) comes with the debugger.
-bool ibCodeEditor::FetchAtCaret(ibProtocolModuleRequest kind, ibProtocolNode& answer)
+bool ibCodeEditor::FetchAtCaret(ibProtocol::ibView::ibModule::ibRequest kind, ibProtocolNode& answer)
 {
 	if (m_document == nullptr)
 		return false;
@@ -26,9 +26,9 @@ bool ibCodeEditor::FetchAtCaret(ibProtocolModuleRequest kind, ibProtocolNode& an
 	// The text as it is now — what the person typed may not be the server's yet — and the caret in characters, as the
 	// compiler measures it (GetRealPosition).
 	ibProtocolNode request;
-	request.SetValue(ibProtocolName::Kind, static_cast<int>(kind))
-		.SetValue(ibProtocolName::Text, GetText())
-		.SetValue(ibProtocolName::Position, GetRealPosition());
+	request.SetValue(ibProtocol::ibView::ibModule::Kind, static_cast<int>(kind))
+		.SetValue(ibProtocol::ibView::ibModule::Text, GetText())
+		.SetValue(ibProtocol::ibView::ibModule::Position, GetRealPosition());
 	return m_document->Fetch(request, answer);
 }
 
@@ -647,12 +647,12 @@ void ibCodeEditor::LoadAutoComplete()
 	m_ac.Start(currentWord, currentPos, lenEntered, TextHeight(GetCurrentLine()));
 
 	// What may be written here, by the place the caret stands in — the members after a dot, a call's names, what is in
-	// scope — the tab's answer (ibProtocolModuleRequest::Complete); the icon each wears is its kind.
+	// scope — the tab's answer (ibProtocol::ibView::ibModule::ibRequest::Complete); the icon each wears is its kind.
 	ibProtocolNode answer;
-	if (FetchAtCaret(ibProtocolModuleRequest::Complete, answer)) {
+	if (FetchAtCaret(ibProtocol::ibView::ibModule::ibRequest::Complete, answer)) {
 		for (const ibProtocolNode& name : answer.Children()) {
-			m_ac.Append(static_cast<short>(name.GetInt(ibProtocolName::Kind)),
-				name.GetString(ibProtocolName::Name), name.GetString(ibProtocolName::Help));
+			m_ac.Append(static_cast<short>(name.GetInt(ibProtocol::ibView::ibModule::Kind)),
+				name.GetString(ibProtocol::ibView::ibModule::Name), name.GetString(ibProtocol::ibView::ibModule::Help));
 		}
 	}
 
@@ -723,12 +723,12 @@ void ibCodeEditor::LoadCallTip()
 		return;
 
 	// The constructor's help after a `new`, the member's after a dot, a written function's parameters — the tab's
-	// answer (ibProtocolModuleRequest::CallTip).
+	// answer (ibProtocol::ibView::ibModule::ibRequest::CallTip).
 	ibProtocolNode answer;
-	if (!FetchAtCaret(ibProtocolModuleRequest::CallTip, answer))
+	if (!FetchAtCaret(ibProtocol::ibView::ibModule::ibRequest::CallTip, answer))
 		return;
 
-	const wxString description = answer.GetString(ibProtocolName::Text);
+	const wxString description = answer.GetString(ibProtocol::ibView::ibModule::Text);
 	if (!description.IsEmpty())
 		m_ct.Show(screenPos, description);
 }

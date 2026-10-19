@@ -133,13 +133,13 @@ protected:
 	virtual void DrawFrame(const ibProtocolNode& frame, const ibProtocolNode& patch) override;
 
 	// The designer's tabs — an external data processor's and report's tree — over the base's.
-	virtual ibTabDocument* CreateDocument(ibProtocolViewKind kind, long long tabId) override;
+	virtual ibTabDocument* CreateDocument(ibProtocol::ibView::ibKind kind, long long tabId) override;
 
 	// The debugger's store, read in the login — not a call of its own at the start.
-	virtual std::vector<ibProtocolSchema> GetStartSchemas() const override;
+	virtual std::vector<ibProtocol::ibSchema::ibKind> GetStartSchemas() const override;
 	// The designer's Users and Options — the desktop's dialogs (Administration → Users, Tools → Options) — and the
 	// debugger made over its store as the login read it, over the base's schemas.
-	virtual void ShowSchema(ibProtocolSchema schema, const ibProtocolNode& shown) override;
+	virtual void ShowSchema(ibProtocol::ibSchema::ibKind schema, const ibProtocolNode& shown) override;
 	// …and the questions only the designer is asked — the restructure's ledger (the desktop's ibDialogApplyChange), the
 	// kind of a form just made (ibDialogSelectTypeForm); the rest — the base's.
 	virtual void ShowRequest(const ibProtocolNode& request, ibProtocolNode& response) override;

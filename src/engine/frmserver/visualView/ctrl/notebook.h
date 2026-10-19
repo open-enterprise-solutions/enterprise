@@ -33,7 +33,7 @@ public:
 	virtual void OnUpdate(ibDataNode& state, ibVisualHost* host) override;
 
 	// Page — a page picked (Page: its control id); Move — the active page's tab dragged (Position).
-	virtual bool OnClientEvent(ibProtocolEvent event, const ibDataNode& args) override;
+	virtual bool OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args) override;
 
 	//methods
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray) override;       //method call

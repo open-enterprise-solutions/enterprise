@@ -124,7 +124,7 @@ BACKEND_API wxString ibRpcWriteError(const ibDataValue& id, ibRpcError code, con
 
 // An APPLICATION'S OWN refusal — a code of its own numbering, outside the range JSON-RPC reserves for itself
 // (-32768..-32000), which the specification leaves to the application: the client protocol's reasons
-// (frmserver's ibProtocolRefusal), which a client branches on.
+// (frmserver's ibProtocol::ibRefusal), which a client branches on.
 BACKEND_API wxString ibRpcWriteError(const ibDataValue& id, s32 code, const wxString& message);
 
 #endif // _IB_RPC_MESSAGE_H_

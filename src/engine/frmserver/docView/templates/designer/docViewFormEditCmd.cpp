@@ -134,22 +134,22 @@ wxString ResolveDropControlClass(ibValueForm* form, const ibSourceDescription& d
 	}
 
 	if (isTable)
-		return ibProtocolType::Tablebox;
+		return ibProtocol::ibForm::ibType::Tablebox;
 	// ⭐ A COMPOSITION OR A SPREADSHEET DOCUMENT DROPS AS A GRIDBOX (Max, 2026-08-19). Both are shown
 	// by the same control and by no other: the document IS what a gridbox displays, and a composition
 	// composes one. Dropping either therefore builds the box that can show it, bound to the attribute
 	// that was dragged.
 	if (typeDesc.GetClsidCount() == 1 &&
 		(typeDesc.ContainType(g_valueDataCompositionCLSID) || typeDesc.ContainType(g_valueSpreadsheetCLSID)))
-		return ibProtocolType::Gridbox;
+		return ibProtocol::ibForm::ibType::Gridbox;
 	if (typeDesc.GetClsidCount() == 1 && typeDesc.ContainType(ibValueTypes::TYPE_BOOLEAN))
-		return ibProtocolType::Checkbox;
+		return ibProtocol::ibForm::ibType::Checkbox;
 	// A SCHEDULE is shown, not typed — the static text renders it as its own sentence and opens
 	// the four-tab editor on a click. Same choice the runtime auto-build makes (formObject.cpp),
 	// so dropping one and generating one give the same form.
 	if (typeDesc.GetClsidCount() == 1 && typeDesc.ContainType(g_valueScheduleCLSID))
-		return ibProtocolType::Statictext;
-	return ibProtocolType::Textctrl;
+		return ibProtocol::ibForm::ibType::Statictext;
+	return ibProtocol::ibForm::ibType::Textctrl;
 }
 
 } // namespace
@@ -165,23 +165,23 @@ bool ibFormDesignView::FetchControl(const ibDataNode& request, ibDataNode& respo
 	// too. The rows of the controls the client handed it holds already: the answer brings the new ones'.
 	std::set<ibFormID> held;
 	CollectControls(m_valueForm, held);
-	ibValueFrame* const target = m_valueForm->FindControlByID(request.GetValue<s32>(ibProtocolName::Control));
+	ibValueFrame* const target = m_valueForm->FindControlByID(request.GetValue<s32>(ibProtocol::ibView::ibFormDesigner::Control));
 	ibValueFrame* made = nullptr;
-	if (static_cast<ibProtocolFormDesignerCommand>(request.GetValue<s32>(ibProtocolName::Command)) ==
-		ibProtocolFormDesignerCommand::Paste) {
-		const ibDataNode* const copied = request.FindChild(ibProtocolName::Value);
+	if (static_cast<ibProtocol::ibView::ibFormDesigner::ibCommand>(request.GetValue<s32>(ibProtocol::ibView::ibFormDesigner::Command)) ==
+		ibProtocol::ibView::ibFormDesigner::ibCommand::Paste) {
+		const ibDataNode* const copied = request.FindChild(ibProtocol::ibView::ibFormDesigner::Value);
 		if (copied == nullptr)
 			return false;
 		made = PasteObject(target != nullptr ? target : GetValueForm(), *copied);
 	}
 	else {
 		made = CreateControlOfClass(target != nullptr ? target : GetValueForm(),
-			request.GetValue<wxString>(ibProtocolName::Class), nullptr);
+			request.GetValue<wxString>(ibProtocol::ibView::ibFormDesigner::Class), nullptr);
 	}
 	if (made == nullptr)
 		return false;
 	WriteForm(response, held);
-	response.SetValue(ibProtocolName::Selected, static_cast<s32>(made->GetControlID()));
+	response.SetValue(ibProtocol::ibView::ibFormDesigner::Selected, static_cast<s32>(made->GetControlID()));
 	return true;
 }
 
@@ -190,14 +190,14 @@ bool ibFormDesignView::FetchBoundControl(const ibDataNode& request, ibDataNode& 
 	// Dropped on a control — none named: on the form; the new ones' rows only, as the palette's.
 	std::set<ibFormID> held;
 	CollectControls(m_valueForm, held);
-	ibValueFrame* const target = m_valueForm->FindControlByID(request.GetValue<s32>(ibProtocolName::Control));
+	ibValueFrame* const target = m_valueForm->FindControlByID(request.GetValue<s32>(ibProtocol::ibView::ibFormDesigner::Control));
 	ibSourceDescription desc;
 	ReadPath(request, desc);
 	ibValueFrame* const made = CreateBoundControl(target != nullptr ? target : GetValueForm(), desc);
 	if (made == nullptr)
 		return false;
 	WriteForm(response, held);
-	response.SetValue(ibProtocolName::Selected, static_cast<s32>(made->GetControlID()));
+	response.SetValue(ibProtocol::ibView::ibFormDesigner::Selected, static_cast<s32>(made->GetControlID()));
 	return true;
 }
 
@@ -205,8 +205,8 @@ bool ibFormDesignView::FetchCommandControl(const ibDataNode& request, ibDataNode
 {
 	// The command as the command tree's row has it (CommandPath, Kind) — under Value: the request's own Kind is the
 	// request's.
-	ibValueFrame* const target = m_valueForm->FindControlByID(request.GetValue<s32>(ibProtocolName::Control));
-	const ibDataNode* const command = request.FindChild(ibProtocolName::Value);
+	ibValueFrame* const target = m_valueForm->FindControlByID(request.GetValue<s32>(ibProtocol::ibView::ibFormDesigner::Control));
+	const ibDataNode* const command = request.FindChild(ibProtocol::ibView::ibFormDesigner::Value);
 	if (command == nullptr)
 		return false;
 	ibCommandDescription desc;
@@ -215,7 +215,7 @@ bool ibFormDesignView::FetchCommandControl(const ibDataNode& request, ibDataNode
 	std::set<ibFormID> held;
 	CollectControls(m_valueForm, held);
 	ibValueFrame* const owner = target != nullptr ? target : GetValueForm();
-	ibValueCommandBar* const dropBar = request.GetValue<bool>(ibProtocolName::CommandBar) && owner->HasCommandBar() ?
+	ibValueCommandBar* const dropBar = request.GetValue<bool>(ibProtocol::ibView::ibFormDesigner::CommandBar) && owner->HasCommandBar() ?
 		owner->GetCommandBar() : nullptr;
 	ibValueFrame* const made = CreateCommandButton(owner, desc, dropBar);
 	if (made == nullptr)
@@ -223,7 +223,7 @@ bool ibFormDesignView::FetchCommandControl(const ibDataNode& request, ibDataNode
 	// …the new ones' rows, and the control whose bar the command joined: its bar's rows have it now.
 	held.erase(made->GetControlID());
 	WriteForm(response, held);
-	response.SetValue(ibProtocolName::Selected, static_cast<s32>(made->GetControlID()));
+	response.SetValue(ibProtocol::ibView::ibFormDesigner::Selected, static_cast<s32>(made->GetControlID()));
 	return true;
 }
 
@@ -259,11 +259,11 @@ ibValueFrame* ibFormDesignView::CreateBoundControl(ibValueFrame* parentHint, con
 			// attribute or object field) as a FOREIGN / object column (Mode 2 — one value per row); a column
 			// of a DIFFERENT table (ResolveDropControlClass declines it) has no per-row value here.
 			const wxString foreignClass = ResolveDropControlClass(m_valueForm, desc);
-			if (foreignClass != ibProtocolType::Textctrl && foreignClass != ibProtocolType::Checkbox)
+			if (foreignClass != ibProtocol::ibForm::ibType::Textctrl && foreignClass != ibProtocol::ibForm::ibType::Checkbox)
 				break;
 		}
 
-		ibValueFrame* column = m_valueForm->CreateObject(ibProtocolType::TableboxColumn, box);
+		ibValueFrame* column = m_valueForm->CreateObject(ibProtocol::ibForm::ibType::TableboxColumn, box);
 		if (column == nullptr)
 			break;
 		SetBoundSource(column, desc);   // bind BEFORE build -> renders visible
@@ -322,7 +322,7 @@ ibValueFrame* ibFormDesignView::CreateCommandButton(ibValueFrame* target, const 
 	// binding. The new button lands next to the target, through the SAME create flow any dropped control uses
 	// (CreateControlOfClass). The bind leaves the Title UNSET so the command supplies the DEFAULT caption + icon
 	// (button->Update resolves them live via the command door).
-	return CreateControlOfClass(target, ibProtocolType::Button, [&desc, &caption](ibValueFrame* control) {
+	return CreateControlOfClass(target, ibProtocol::ibForm::ibType::Button, [&desc, &caption](ibValueFrame* control) {
 		if (control != nullptr && control->GetClassType() == g_controlButtonCLSID) {   // type by clsid, not dynamic_cast
 			ibValueButton* button = static_cast<ibValueButton*>(control);
 			button->SetCommandDesc(desc, caption);

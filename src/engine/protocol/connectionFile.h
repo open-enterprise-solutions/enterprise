@@ -21,7 +21,7 @@ public:
 	virtual ~ibProtocolConnectionFile();
 
 	virtual bool Exchange(const std::string& request, std::string& answer,
-		ibProtocolRefusal& refusal, wxString& error) override;
+		ibProtocol::ibRefusal& refusal, wxString& error) override;
 	// What the base says unasked — on the base's thread that says it (a session's).
 	virtual void Listen(std::function<void(const std::string& text)> notified) override;
 

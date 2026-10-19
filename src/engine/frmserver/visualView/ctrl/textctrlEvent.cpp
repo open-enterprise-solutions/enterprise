@@ -77,28 +77,28 @@ void ibValueTextCtrl::ChoiceProcessing(ibValue& vSelected)
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
 
-bool ibValueTextCtrl::OnClientEvent(ibProtocolEvent event, const ibDataNode& args)
+bool ibValueTextCtrl::OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args)
 {
 	switch (event) {
-	case ibProtocolEvent::Input:  OnTextUpdated(); return true;
-	case ibProtocolEvent::Change: {
+	case ibProtocol::ibEvent::ibKind::Input:  OnTextUpdated(); return true;
+	case ibProtocol::ibEvent::ibKind::Change: {
 		// The value with its type when the client has one (Value), else the text it typed.
-		if (const ibDataNode* const value = args.FindChild(wxT("Value")))
+		if (const ibDataNode* const value = args.FindChild(ibProtocol::ibEvent::Value))
 			ValueProcessing(*value);
 		else
-			OnTextEnter(args.GetValue<wxString>(wxT("Text")));
+			OnTextEnter(args.GetValue<wxString>(ibProtocol::ibEvent::Text));
 		return true;
 	}
-	case ibProtocolEvent::Select: OnSelectButtonPressed(); return true;
-	case ibProtocolEvent::Open:   OnOpenButtonPressed(); return true;
-	case ibProtocolEvent::Clear:  OnClearButtonPressed(); return true;
+	case ibProtocol::ibEvent::ibKind::Select: OnSelectButtonPressed(); return true;
+	case ibProtocol::ibEvent::ibKind::Open:   OnOpenButtonPressed(); return true;
+	case ibProtocol::ibEvent::ibKind::Clear:  OnClearButtonPressed(); return true;
 	default:                    return ibValueWindow::OnClientEvent(event, args);
 	}
 }
 
-bool ibValueTextCtrl::IsSubscribed(ibProtocolEvent event) const
+bool ibValueTextCtrl::IsSubscribed(ibProtocol::ibEvent::ibKind event) const
 {
-	if (event != ibProtocolEvent::Input)
+	if (event != ibProtocol::ibEvent::ibKind::Input)
 		return ibValueWindow::IsSubscribed(event);
 	// What OnTextUpdated would modify, and only while it is not.
 	ibSourceDataObject* const sourceObject = m_formOwner != nullptr ? m_formOwner->GetSourceObject() : nullptr;

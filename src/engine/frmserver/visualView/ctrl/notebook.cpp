@@ -36,7 +36,7 @@ void ibValueNotebook::OnUpdate(ibDataNode& state, ibVisualHost* host)
 	ibValueWindow::OnUpdate(state, host);
 
 	ibValueNotebookPage* selectedPage = GetActivePage();
-	state.SetValue(wxT("ActivePage"), selectedPage != nullptr ? selectedPage->GetControlID() : 0);
+	state.SetValue(ibProtocol::ibForm::ibNotebook::ActivePage, selectedPage != nullptr ? selectedPage->GetControlID() : 0);
 }
 
 //**********************************************************************************

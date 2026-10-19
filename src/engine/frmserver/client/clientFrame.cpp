@@ -56,13 +56,13 @@ ibDocManager* ibDocManager::GetDocumentManager()
 	return frame != nullptr ? frame->GetDocumentManager() : nullptr;
 }
 
-std::unique_ptr<ibClientFrame> ibClientFrame::Create(ibProtocolMode mode, ibSessionHolder&& holder,
+std::unique_ptr<ibClientFrame> ibClientFrame::Create(ibProtocol::ibLogin::ibMode mode, ibSessionHolder&& holder,
 	ibClientInstance* clientInstance)
 {
 	switch (mode) {
-	case ibProtocolMode::Runtime:
+	case ibProtocol::ibLogin::ibMode::Runtime:
 		return std::unique_ptr<ibClientFrame>(new ibClientFrameRuntime(std::move(holder), clientInstance));
-	case ibProtocolMode::Designer:
+	case ibProtocol::ibLogin::ibMode::Designer:
 		return std::unique_ptr<ibClientFrame>(new ibClientFrameDesigner(std::move(holder), clientInstance));
 	}
 	return nullptr;
@@ -146,12 +146,12 @@ void ibClientFrame::BackendError(const wxString& strFileName,
 	// THE DESKTOP'S ERROR WINDOW (ibFrontendMainFrameEnterprise::BackendError), asked of the client: the person chooses
 	// what becomes of the failure. Closed without a choice — as Close window.
 	ibDataNode request;
-	request.SetValue(wxT("Kind"), static_cast<s32>(ibProtocolRequestKind::Error));
-	request.SetValue(wxT("Picture"), SendPicture(g_picErrorCLSID));
-	request.SetValue(wxT("Text"), strErrorMessage);
+	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<s32>(ibProtocol::ibRequest::ibKind::Error));
+	request.SetValue(ibProtocol::ibRequest::ibError::Picture, ibBackendPicture::SendPicture(g_picErrorCLSID));
+	request.SetValue(ibProtocol::ibRequest::ibError::Text, strErrorMessage);
 
 	ibDataNode response;
-	const s32 act = DoRequest(request, response) ? response.GetValue<s32>(wxT("Act")) : 0;   // 0 — closed: Close window
+	const s32 act = DoRequest(request, response) ? response.GetValue<s32>(ibProtocol::ibRequest::ibError::Act) : 0;   // 0 — closed: Close window
 
 	// ⭐ THE ANSWERS ARE CUMULATIVE, as the desktop's: the error stays in the messages whatever was chosen; Go to designer
 	// also sends it to the designer debugging this base; Close program does both, and the client goes.
@@ -160,12 +160,12 @@ void ibClientFrame::BackendError(const wxString& strFileName,
 		m_pendingMessages.push_back({ ibStatusMessage_Error, strErrorMessage });
 	}
 
-	if (act == static_cast<s32>(ibProtocolErrorAct::GotoDesigner) || act == static_cast<s32>(ibProtocolErrorAct::CloseProgram)) {
+	if (act == static_cast<s32>(ibProtocol::ibRequest::ibError::ibAct::GotoDesigner) || act == static_cast<s32>(ibProtocol::ibRequest::ibError::ibAct::CloseProgram)) {
 		if (ibDebuggerServer* const server = debugServer)
 			server->SendErrorToClient(strFileName, strDocPath, line, strErrorMessage);
 	}
 
-	if (act == static_cast<s32>(ibProtocolErrorAct::CloseProgram))
+	if (act == static_cast<s32>(ibProtocol::ibRequest::ibError::ibAct::CloseProgram))
 		ExitClient(true);
 }
 
@@ -248,13 +248,13 @@ bool ibClientFrame::DoRequest(const ibDataNode& request, ibDataNode& response)
 int ibClientFrame::DoShowModalMessage(const wxString& message, const wxString& caption, int style)
 {
 	ibDataNode request;
-	request.SetValue(wxT("Kind"), static_cast<s32>(ibProtocolRequestKind::Message));
-	request.SetValue(wxT("Text"), message);
-	request.SetValue(wxT("Caption"), caption);
-	request.SetValue(wxT("Style"), style);
+	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<s32>(ibProtocol::ibRequest::ibKind::Message));
+	request.SetValue(ibProtocol::ibRequest::ibMessage::Text, message);
+	request.SetValue(ibProtocol::ibRequest::ibMessage::Caption, caption);
+	request.SetValue(ibProtocol::ibRequest::ibMessage::Style, style);
 
 	ibDataNode response;
-	return DoRequest(request, response) ? response.GetValue<s32>(wxT("Button")) : 0;   // 0 — no button: cancelled
+	return DoRequest(request, response) ? response.GetValue<s32>(ibProtocol::ibRequest::ibMessage::Button) : 0;   // 0 — no button: cancelled
 }
 
 bool ibClientFrame::HasPendingRequest() const
@@ -405,12 +405,12 @@ bool ibClientFrame::PrintSpreadsheetDocument(const std::shared_ptr<ibSpreadsheet
 	// THE SHEET AS A SPREADSHEET'S FETCH WRITES IT (ibFetchSpreadsheet) — its texts as shown: the client's sheet holds no
 	// parameters, and prints it as the desktop's printed its own.
 	ibDataNode request;
-	request.SetValue(wxT("Kind"), static_cast<s32>(ibProtocolRequestKind::Print));
+	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<s32>(ibProtocol::ibRequest::ibKind::Print));
 	if (!doc || !ibFetchSpreadsheet(*doc, request))
 		return false;
 
 	ibDataNode response;
-	return DoRequest(request, response) && response.GetValue<bool>(wxT("Done"));
+	return DoRequest(request, response) && response.GetValue<bool>(ibProtocol::ibRequest::ibPrint::Done);
 }
 
 bool ibClientFrame::ShowScheduleEditor(ibJobScheduleDescription& schedule)
@@ -420,14 +420,14 @@ bool ibClientFrame::ShowScheduleEditor(ibJobScheduleDescription& schedule)
 		return false;
 
 	ibDataNode request;
-	request.SetValue(wxT("Kind"), static_cast<s32>(ibProtocolRequestKind::Schedule));
-	request.SetField(wxT("Schedule"), stored);
+	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<s32>(ibProtocol::ibRequest::ibKind::Schedule));
+	request.SetField(ibProtocol::ibRequest::ibSchedule::Schedule, stored);
 
 	// CANCEL IS THE ONLY "NOTHING HAPPENED" — answered with no Schedule.
 	ibDataNode response;
 	if (!DoRequest(request, response))
 		return false;
-	const ibDataValue* const edited = response.FindField(wxT("Schedule"));
+	const ibDataValue* const edited = response.FindField(ibProtocol::ibRequest::ibSchedule::Schedule);
 	if (edited == nullptr || !ibJobScheduleDescriptionMemory::ReadNode(*edited, schedule))
 		return false;
 
@@ -477,20 +477,6 @@ ibClientFrame* ibClientFrame::GetFrame()
 	// The server's own session (kind Service) has no frame.
 	ibSession* const session = ibSession::Current();
 	return session != nullptr ? dynamic_cast<ibClientFrame*>(session->GetFrame()) : nullptr;
-}
-
-ibString ibClientFrame::SendPicture(const ibPictureDescription& picture)
-{
-	if (picture.IsEmptyPicture())
-		return ibString();
-	// A picture held as a file's bytes has no name of its own: it goes as itself.
-	if (picture.m_type == ibPictureType::eFromFile)
-		return ibBackendPicture::GetServerPicture(picture).GetData();
-
-	// A backend picture's number as a decimal — a u64 is past what a JSON number keeps; a configuration picture's guid.
-	return picture.m_type == ibPictureType::eFromBackend
-		? ibString::Format(wxT("%llu"), static_cast<unsigned long long>(picture.m_class_identifier))
-		: ibString(picture.m_meta_guid.str());
 }
 
 void ibClientFrame::CloseDocuments()
@@ -583,7 +569,7 @@ bool ibClientFrame::CloseAll()
 	return true;
 }
 
-bool ibClientFrame::IsSchemaAllowed(ibProtocolSchema kind) const
+bool ibClientFrame::IsSchemaAllowed(ibProtocol::ibSchema::ibKind kind) const
 {
 	const ibClientSchema* const schema = GetDocumentManager() != nullptr ? GetDocumentManager()->FindSchema(kind) : nullptr;
 	return schema != nullptr && schema->AccessRight(*GetSession());
@@ -733,8 +719,8 @@ bool ibClientFrame::EditFocused(ibDocCommand command)
 	// The field under the focus is the client's, and what it holds selected: the client does it there. Nothing comes
 	// back — a field changed sends its Change as it does when typed into.
 	ibDataNode request;
-	request.SetValue(wxT("Kind"), static_cast<s32>(ibProtocolRequestKind::Edit));
-	request.SetValue(wxT("Command"), static_cast<s32>(command));
+	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<s32>(ibProtocol::ibRequest::ibKind::Edit));
+	request.SetValue(ibProtocol::ibRequest::ibEdit::Command, static_cast<s32>(command));
 
 	ibDataNode response;
 	return Request(request, response);
@@ -745,19 +731,19 @@ bool ibClientFrame::OpenChosenFile()
 	// What may be chosen — the templates a person picks (the desktop's File → Open filter), as the frame's Templates
 	// list them.
 	ibDataNode request;
-	request.SetValue(wxT("Kind"), static_cast<s32>(ibProtocolRequestKind::File));
-	request.SetValue(wxT("Caption"), _("Open"));
+	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<s32>(ibProtocol::ibRequest::ibKind::File));
+	request.SetValue(ibProtocol::ibRequest::ibFile::Caption, _("Open"));
 	for (const ibDocTemplate* const temp : m_docManager->GetTemplatesVector()) {
 		if (!temp->IsVisible())
 			continue;
 		ibDataNode& item = request.AddChild(0, 0);
-		item.SetValue(wxT("Title"), temp->GetDescription());
-		item.SetValue(wxT("Mask"), temp->GetFileFilter());
+		item.SetValue(ibProtocol::ibRequest::ibFile::Title, temp->GetDescription());
+		item.SetValue(ibProtocol::ibRequest::ibFile::Mask, temp->GetFileFilter());
 	}
 
 	// Cancelled — nothing chosen, nothing opened.
 	ibDataNode response;
-	const wxString id = Request(request, response) ? response.GetValue<wxString>(wxT("File")) : wxString();
+	const wxString id = Request(request, response) ? response.GetValue<wxString>(ibProtocol::ibRequest::ibFile::File) : wxString();
 	if (id.IsEmpty())
 		return false;
 

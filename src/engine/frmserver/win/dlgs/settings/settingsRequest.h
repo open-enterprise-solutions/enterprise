@@ -1,9 +1,9 @@
 #ifndef __SETTINGS_REQUEST_H__
 #define __SETTINGS_REQUEST_H__
 
-// A SETTINGS WINDOW PUT TO THE PERSON — a list's (ibDialogListSettings, ibProtocolRequestKind::ListSettings) and a
+// A SETTINGS WINDOW PUT TO THE PERSON — a list's (ibDialogListSettings, ibProtocol::ibRequest::ibKind::ListSettings) and a
 // report's (ibDialogComposerSettings, ComposerSettings), through the current session's frame. The window edits a COPY
-// of the setting in force; on the way it asks the server what only the configuration answers (ibProtocolListSettingsAct:
+// of the setting in force; on the way it asks the server what only the configuration answers (ibProtocol::ibRequest::ibListSettings::ibAct:
 // the fields of a reference's targets, a value chosen), and its answer is read against the configuration — one the
 // schema refuses is asked again, with why. What the window is told besides the setting — its fields, and what it
 // arranges — is the door's.
@@ -34,7 +34,7 @@ FRMSERVER_API void ibWriteSettingsReferences(ibDataNode& references, const std::
 
 // THE FIELDS OF A REFERENCE'S TARGETS — a settings window's Act Expand, answered: `expanded` one field per name (its type
 // the union of the targets'), `references` which of their types are references. For a door that asks no window (a
-// composer's tab, ibProtocolComposerRequest::Expand).
+// composer's tab, ibProtocol::ibView::ibComposer::ibRequest::Expand).
 FRMSERVER_API void ibWriteSettingsTargetFields(ibDataNode& expanded, ibDataNode& references,
 	const std::vector<ibMetaID>& targets, const ibMetaData* metaData);
 

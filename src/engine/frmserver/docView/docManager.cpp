@@ -308,13 +308,13 @@ ibDocManager::ibDocManager(long WXUNUSED(flags), bool initialize)
 		ibTEMPLATE_INVISIBLE);
 
 	// Active users — the sessions and the locks; the designer's dialog and the runtime's showed the same tables.
-	RegisterSchema(ibProtocolSchema::ActiveUser, std::make_unique<ibSchemaActiveUser>());
+	RegisterSchema(ibProtocol::ibSchema::ibKind::ActiveUser, std::make_unique<ibSchemaActiveUser>());
 	// The registration journal — a tab its command opens; both applications' Administration had it.
-	RegisterSchema(ibProtocolSchema::AuditLog, std::make_unique<ibSchemaAuditLog>());
+	RegisterSchema(ibProtocol::ibSchema::ibKind::AuditLog, std::make_unique<ibSchemaAuditLog>());
 	// About — what the client works in; both applications' Help showed it.
-	RegisterSchema(ibProtocolSchema::About, std::make_unique<ibSchemaAbout>());
+	RegisterSchema(ibProtocol::ibSchema::ibKind::About, std::make_unique<ibSchemaAbout>());
 	// The configuration's languages — what a translated text is written in; both applications' translation window.
-	RegisterSchema(ibProtocolSchema::Languages, std::make_unique<ibSchemaLanguages>());
+	RegisterSchema(ibProtocol::ibSchema::ibKind::Languages, std::make_unique<ibSchemaLanguages>());
 
 	// The commands every document answers to — and the window's besides, Open, Exit and the edit commands — with the
 	// default keys the desktop's windows gave them (SetDefaultHotKeys) and the pictures its menu showed them with. A
@@ -334,7 +334,7 @@ ibDocManager::ibDocManager(long WXUNUSED(flags), bool initialize)
 	RegisterCommand(ibDocCommand::SaveAs,    _("Save as..."), wxEmptyString, ibClientStockPicture::SaveAs);
 }
 
-void ibDocManager::RegisterSchema(ibProtocolSchema kind, std::unique_ptr<ibClientSchema> schema)
+void ibDocManager::RegisterSchema(ibProtocol::ibSchema::ibKind kind, std::unique_ptr<ibClientSchema> schema)
 {
 	m_schemas[kind] = std::move(schema);
 }
@@ -345,15 +345,15 @@ void ibDocManager::RegisterCommand(ibDocCommand command, const wxString& title, 
 	m_commands[command] = ibDocCommandInfo{ title, shortcut, picture };
 }
 
-const ibClientSchema* ibDocManager::FindSchema(ibProtocolSchema kind) const
+const ibClientSchema* ibDocManager::FindSchema(ibProtocol::ibSchema::ibKind kind) const
 {
 	const auto found = m_schemas.find(kind);
 	return found != m_schemas.end() ? found->second.get() : nullptr;
 }
 
-std::vector<ibProtocolSchema> ibDocManager::GetSchemaKinds() const
+std::vector<ibProtocol::ibSchema::ibKind> ibDocManager::GetSchemaKinds() const
 {
-	std::vector<ibProtocolSchema> kinds;
+	std::vector<ibProtocol::ibSchema::ibKind> kinds;
 	for (const auto& schema : m_schemas)
 		kinds.push_back(schema.first);
 	return kinds;

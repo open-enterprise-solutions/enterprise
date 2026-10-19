@@ -80,8 +80,8 @@ static void Receive(ibValueForm* form)
 	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
 	if (frame == nullptr)
 		return;
-	for (const ibProtocolNode& described : frame->GetRequest().FindChild(ibProtocolName::Controls).Children()) {
-		ibValueFrame* const control = form->FindControlByID(described.GetInt(ibProtocolName::Control));
+	for (const ibProtocolNode& described : frame->GetRequest().FindChild(ibProtocol::ibRequest::ibFormEditor::Controls).Children()) {
+		ibValueFrame* const control = form->FindControlByID(described.GetInt(ibProtocol::ibRequest::ibFormEditor::Control));
 		if (control != nullptr)
 			control->Receive(described);
 	}

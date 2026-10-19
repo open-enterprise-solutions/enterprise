@@ -18,20 +18,20 @@ namespace {
 bool RequestFile(ibBackendDocFrame* frame, const wxString& caption, wxString& file)
 {
 	ibDataNode request;
-	request.SetValue(wxT("Kind"), static_cast<s32>(ibProtocolRequestKind::File));
-	request.SetValue(wxT("Caption"), caption);
+	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<s32>(ibProtocol::ibRequest::ibKind::File));
+	request.SetValue(ibProtocol::ibRequest::ibFile::Caption, caption);
 	if (!file.IsEmpty())
-		request.SetValue(wxT("File"), file);
+		request.SetValue(ibProtocol::ibRequest::ibFile::File, file);
 	ibDataNode& item = request.AddChild(0, 0);
-	item.SetValue(wxT("Title"), _("Data files"));
-	item.SetValue(wxT("Mask"), ibFileMask(ibFileKind::Save));
+	item.SetValue(ibProtocol::ibRequest::ibFile::Title, _("Data files"));
+	item.SetValue(ibProtocol::ibRequest::ibFile::Mask, ibFileMask(ibFileKind::Save));
 
 	ibDataNode response;
 	if (!frame->Request(request, response))
 		return false;
 	if (!file.IsEmpty())
-		return response.GetValue<bool>(wxT("Done"));
-	file = response.GetValue<wxString>(wxT("File"));
+		return response.GetValue<bool>(ibProtocol::ibRequest::ibFile::Done);
+	file = response.GetValue<wxString>(ibProtocol::ibRequest::ibFile::File);
 	return !file.IsEmpty();
 }
 
@@ -49,19 +49,19 @@ void ibSchemaDatabase::Build(const ibSession& WXUNUSED(session), const ibDataNod
 }
 
 std::function<void()> ibSchemaDatabase::Command(const ibSession& session, s32 command,
-	const ibDataNode& WXUNUSED(args), ibProtocolRefusal& refusal, wxString& error) const
+	const ibDataNode& WXUNUSED(args), ibProtocol::ibRefusal& refusal, wxString& error) const
 {
 	ibApplicationInstance* const applicationInstance = session.GetApplicationInstance();
 	if (applicationInstance == nullptr) {
-		refusal = ibProtocolRefusal::NoSession;
+		refusal = ibProtocol::ibRefusal::NoSession;
 		error = wxT("the session has no base");
 		return nullptr;
 	}
 
 	// ⚠ THE TABS ARE NOT CLOSED FIRST, as the desktop's were: a restore closes every session after, this one among them,
 	// and a clear leaves the configuration the tabs edit as it was.
-	switch (static_cast<ibProtocolSchemaCommand>(command)) {
-	case ibProtocolSchemaCommand::Load:
+	switch (static_cast<ibProtocol::ibSchema::ibCommand>(command)) {
+	case ibProtocol::ibSchema::ibCommand::Load:
 		return [applicationInstance]() {
 			ibBackendDocFrame* const frame = ibSession::CurrentFrame();
 			wxString id;
@@ -90,14 +90,14 @@ std::function<void()> ibSchemaDatabase::Command(const ibSession& session, s32 co
 			}
 			frame->ShowModalMessage(failure, wxMessageBoxCaptionStr, wxOK | wxCENTRE | wxICON_ERROR);
 		};
-	case ibProtocolSchemaCommand::Save: {
+	case ibProtocol::ibSchema::ibCommand::Save: {
 		// THE DUMP IS WRITTEN FIRST, into a file of the session's, and then taken down: the server cannot write where
 		// the person chose. The desktop asked first — a dump cancelled here has been made for nothing.
 		ibTempStorage* const storage = ibApplicationInstance::GetTempStorage(applicationInstance);
 		const wxString id = storage != nullptr
 			? storage->Create(session.Identity().m_guid, wxT("database.") + ibFileExtension(ibFileKind::Save)) : wxString();
 		if (id.IsEmpty()) {
-			refusal = ibProtocolRefusal::Failed;
+			refusal = ibProtocol::ibRefusal::Failed;
 			error = wxT("no file to dump the base into");
 			return nullptr;
 		}
@@ -119,7 +119,7 @@ std::function<void()> ibSchemaDatabase::Command(const ibSession& session, s32 co
 				wxMessageBoxCaptionStr, wxOK | wxCENTRE | wxICON_ERROR);
 		};
 	}
-	case ibProtocolSchemaCommand::Clear:
+	case ibProtocol::ibSchema::ibCommand::Clear:
 		return [applicationInstance]() {
 			ibBackendDocFrame* const frame = ibSession::CurrentFrame();
 			if (frame == nullptr || frame->ShowModalMessage(_("Are you sure you want to clear the database?"),
@@ -135,7 +135,7 @@ std::function<void()> ibSchemaDatabase::Command(const ibSession& session, s32 co
 		break;
 	}
 
-	refusal = ibProtocolRefusal::NotFound;
+	refusal = ibProtocol::ibRefusal::NotFound;
 	error = wxString::Format(wxT("the base has no command %d"), command);
 	return nullptr;
 }

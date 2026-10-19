@@ -5,9 +5,8 @@
 #include "frmclient/propertyManager/property/private/prop.h"
 #include "frmclient/propertyManager/property/private/propertyRegistry.h"
 #include "frmclient/propertyManager/propertyEditor.h"
-#include "frmclient/backend/propertyManager/property/propertySerializable.h"   // the row the lists come with
 
-#include "protocol/protocol.h"   // ibProtocolName — the row's keys
+#include "protocol/protocol.h"   // ibProtocol::ibSchema::ibProperties — the row's keys
 
 namespace {
 
@@ -54,7 +53,7 @@ wxPGChoices ibPGCalcScheduleProperty::GetChoices(const std::vector<const ibDataN
 	wxPGChoices choices;
 	choices.Add(_("<not set>"), 0);
 	for (const ibDataNode* item : items)
-		choices.Add(item->GetValue<wxString>(ibProtocolName::Title), item->GetValue<s32>(ibProtocolName::Id));   // names, as the type row names its types
+		choices.Add(item->GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Title), item->GetValue<s32>(ibProtocol::ibSchema::ibProperties::Id));   // names, as the type row names its types
 	return choices;
 }
 
@@ -62,7 +61,7 @@ std::vector<const ibDataNode*> ibPGCalcScheduleProperty::GetItems(s32 kind) cons
 {
 	std::vector<const ibDataNode*> items;
 	for (const ibDataNode& item : m_lists.Children()) {
-		if (item.GetValue<s32>(ibProtocolName::Kind) == kind)
+		if (item.GetValue<s32>(ibProtocol::ibSchema::ibProperties::Kind) == kind)
 			items.push_back(&item);
 	}
 	return items;
@@ -79,10 +78,10 @@ ibPGCalcScheduleProperty::ibPGCalcScheduleProperty(ibBackendProperty* property, 
 	for (unsigned int idx = 0; idx < registers.GetCount(); idx++)
 		m_choices.Add(registers.GetName(idx), registers.GetBitmap(idx), registers.GetId(idx));
 
-	// THE ROW'S LISTS — the server's property's answers for the register bound now (ibPropertyInspector,
-	// AppendCalcSchedule).
-	if (const ibPropertySerializable* const row = dynamic_cast<const ibPropertySerializable*>(m_property)) {
-		if (const ibDataValue* const node = row->GetRow().FindProperty(ibProtocolName::Schedule)) {
+	// THE ROW'S LISTS — the server's property's answers for the register bound now (its GetProtocolValue).
+	ibDataNode row;
+	if (m_property != nullptr && m_property->GetProtocolValue(row)) {
+		if (const ibDataValue* const node = row.FindProperty(ibProtocol::ibSchema::ibProperties::Schedule)) {
 			if (node->Kind() == ibDataKind::Child && node->AsChild() != nullptr) {
 				m_lists = *node->AsChild();
 				m_hasLists = true;
@@ -102,7 +101,7 @@ ibPGCalcScheduleProperty::ibPGCalcScheduleProperty(ibBackendProperty* property, 
 	const std::vector<const ibDataNode*> links = GetItems(kListLink);
 	for (size_t idx = 0; idx < links.size(); idx++) {
 		const ibDataNode& link = *links[idx];
-		const ibMetaID dimension = link.GetValue<s32>(ibProtocolName::Id);
+		const ibMetaID dimension = link.GetValue<s32>(ibProtocol::ibSchema::ibProperties::Id);
 		std::vector<const ibDataNode*> fields;
 		for (const ibDataNode& field : link.Children())
 			fields.push_back(&field);
@@ -113,7 +112,7 @@ ibPGCalcScheduleProperty::ibPGCalcScheduleProperty(ibBackendProperty* property, 
 		wxEnumProperty* row = new wxEnumProperty(rowLabel, wxString::Format(wxT("link%li"), static_cast<long>(dimension)),
 			fieldChoices, 0);
 		row->SetHelpString(wxString::Format(_("The field of the register that answers for the schedule's dimension '%s'."),
-			link.GetValue<wxString>(ibProtocolName::Title)));
+			link.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Title)));
 		AddPrivateChild(row);
 		m_linkRows.push_back(row);
 		m_linkDimensions.push_back(dimension);

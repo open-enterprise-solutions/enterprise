@@ -217,7 +217,7 @@ ibValue ibValue::FromNode(const ibDataNode& node)
 	ibValue made;
 	made.m_typeClass = ibValueTypes::TYPE_VALUE;
 	made.m_classType = clsid;
-	made.m_text = node.GetValue<wxString>(ibProtocolName::Presentation);
+	made.m_text = node.GetValue<wxString>(ibProtocol::ibRequest::ibListSettings::Presentation);
 	made.m_stored = std::make_shared<const ibDataNode>(node);
 	return made;
 }
@@ -281,12 +281,12 @@ std::vector<ibCtorAbstractType*> ibValue::GetListCtorsByType(ibCtorObjectType ob
 	if (frame == nullptr || objectType != ibCtorObjectType::ibCtorObjectType_object_control)
 		return listed;
 
-	for (const ibProtocolNode& described : frame->GetRequest().FindChild(ibProtocolName::Classes).Children()) {
+	for (const ibProtocolNode& described : frame->GetRequest().FindChild(ibProtocol::ibRequest::ibFormEditor::Classes).Children()) {
 		wxIcon icon;
-		const wxBitmap picture = ibProtocolPicture(described.GetString(ibProtocolName::Picture));
+		const wxBitmap picture = ibProtocolPicture(described.GetString(ibProtocol::ibRequest::ibFormEditor::Picture));
 		if (picture.IsOk())
 			icon.CopyFromBitmap(picture);
-		s_ctors.push_back(std::make_unique<ibCtorAbstractType>(described.GetString(ibProtocolName::Name), icon));
+		s_ctors.push_back(std::make_unique<ibCtorAbstractType>(described.GetString(ibProtocol::ibRequest::ibFormEditor::Name), icon));
 		listed.push_back(s_ctors.back().get());
 	}
 	return listed;

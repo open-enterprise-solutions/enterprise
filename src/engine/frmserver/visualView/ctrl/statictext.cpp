@@ -74,12 +74,12 @@ void ibValueStaticText::OnUpdate(ibDataNode& state, ibVisualHost* host)
 	ibValue value;
 	const bool read = GetControlValue(value);
 
-	state.SetValue(wxT("Caption"), GetControlTitle());
-	state.SetValue(wxT("Text"), read ? value.GetString() : ibString());
+	state.SetValue(ibProtocol::ibForm::ibState::Caption, GetControlTitle());
+	state.SetValue(ibProtocol::ibForm::ibState::Text, read ? value.GetString() : ibString());
 
 	// A link only where there is something to open: an empty value is plain text, because a link
 	// that leads nowhere is worse than no link.
-	state.SetValue(wxT("Link"), read && !value.IsEmpty());
+	state.SetValue(ibProtocol::ibForm::ibState::Link, read && !value.IsEmpty());
 
 	// Multi-line captions ride on explicit '\n' in the text; word-wrap at a pixel width is not
 	// supported (Wrap / Markup are kept on the metaobject for backward compatibility and have no

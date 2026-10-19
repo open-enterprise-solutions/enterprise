@@ -23,7 +23,7 @@ public:
 	// given these, or one more of that Guid (the engine's SetPredefinedValue); Remove {Id, Guid}. Refused, nothing done:
 	// no such object or item, a name it has already, a parent that holds nothing.
 	virtual std::function<void()> Command(const ibSession& session, s32 command,
-		const ibDataNode& args, ibProtocolRefusal& refusal, wxString& error) const override;
+		const ibDataNode& args, ibProtocol::ibRefusal& refusal, wxString& error) const override;
 };
 
 #endif

@@ -82,3 +82,42 @@ bool ibPropertyType::WriteNodeValue(ibDataValue& value) const
 {
 	return ibTypeDescriptionMemory::WriteNode(value, GetValueAsTypeDesc());
 }
+
+////////////////////////////////////////////////////////////////////////
+
+#include "protocol/protocol.h"         // ibProtocol::ibSchema::ibProperties — the row's keys
+#include "backend/backend_picture.h"   // ibBackendPicture::SendPicture — a type's picture, by its class
+#include "backend/metaData.h"          // GetAvailableCtor — a type, named as its configuration names it
+#include "backend/objCtor.h"
+
+#include <algorithm>
+
+bool ibPropertyType::GetProtocolValue(ibDataNode& row)
+{
+	if (!ibProperty::GetProtocolValue(row))
+		return false;
+
+	const ibSelectorDataType filter = GetFilterDataType();
+	const ibPropertyObject* const owner = m_owner;   // CONST: the non-const GetMetaData wxFAILs
+	const ibMetaData* const metaData = owner != nullptr ? owner->GetMetaData() : nullptr;
+
+	std::vector<ibClassID> offered;
+	ibBackendTypeConfigFactory::GetTypesByFilter(filter, metaData, offered);
+	for (const ibClassID& held : GetValueAsTypeDesc().GetClsidList()) {
+		if (std::find(offered.begin(), offered.end(), held) == offered.end())
+			offered.push_back(held);
+	}
+
+	row.SetValue(ibProtocol::ibSchema::ibProperties::Multiple, filter != ibSelectorDataType::ibSelectorDataType_table);
+	for (const ibClassID& clsid : offered) {
+		const ibCtorAbstractType* const so = metaData != nullptr
+			? metaData->GetAvailableCtor(clsid) : ibValue::GetAvailableCtor(clsid);
+		if (so == nullptr)
+			continue;
+		ibDataNode& type = row.AddChild(0, static_cast<ibMetaID>(row.Children().size() + 1));
+		type.SetValue(ibProtocol::ibSchema::ibProperties::Type, wxString::Format(wxT("%llu"), static_cast<unsigned long long>(clsid)));
+		type.SetValue(ibProtocol::ibSchema::ibProperties::Title, so->GetClassName());
+		type.SetValue(ibProtocol::ibSchema::ibProperties::Picture, ibBackendPicture::SendPicture(clsid));
+	}
+	return true;
+}

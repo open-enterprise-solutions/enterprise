@@ -277,7 +277,7 @@ public:
 	// The PANEL below is handed the copy and nothing else — no model. Whose setting it is, and what
 	// accepting it means, is this door's business; a setting is a setting, and the panel edits one.
 	//
-	// ON THE CLIENT the model is the server's: the copy and the fields come in its question (ibProtocolRequestKind::
+	// ON THE CLIENT the model is the server's: the copy and the fields come in its question (ibProtocol::ibRequest::ibKind::
 	// ListSettings), and on OK the edited copy is the answer.
 	static bool ShowUserSettings(wxWindow* parent, const ibProtocolNode& request, ibProtocolNode& response);
 

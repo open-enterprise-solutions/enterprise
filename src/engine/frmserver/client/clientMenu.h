@@ -32,8 +32,8 @@ public:
 	struct Item {
 		ibClientMenuItemKind kind = ibClientMenuItemKind::Separator;
 		ibDocCommand         command{};   // a command's
-		ibProtocolSchema   schema{};    // a schema's
-		ibProtocolSchemaCommand schemaCommand{};   // …and the schema's command it does (none: the schema shown)
+		ibProtocol::ibSchema::ibKind   schema{};    // a schema's
+		ibProtocol::ibSchema::ibCommand schemaCommand{};   // …and the schema's command it does (none: the schema shown)
 		wxString             title;       // a schema's and a menu's — a command's is its own
 		ibPictureID          picture = 0; // …the same, wx's SetBitmap on the item: an engine's, by its id — the client
 		                                  // keeps it (core/picturePredefined); 0: drawn without one
@@ -41,8 +41,8 @@ public:
 	};
 
 	Item& Append(ibDocCommand command);
-	Item& Append(ibProtocolSchema schema, const wxString& title);
-	Item& Append(ibProtocolSchema schema, ibProtocolSchemaCommand command, const wxString& title);
+	Item& Append(ibProtocol::ibSchema::ibKind schema, const wxString& title);
+	Item& Append(ibProtocol::ibSchema::ibKind schema, ibProtocol::ibSchema::ibCommand command, const wxString& title);
 	Item& AppendSubMenu(const ibClientMenu& menu, const wxString& title);
 	void  AppendSeparator();
 

@@ -33,22 +33,22 @@ void ibModuleTextView::OnDraw(ibDataNode& frame)
 	// read-only where the configuration may not be edited (ibDOC_READONLY on the desktop's).
 	// Added to the State already there — a form editor's frame is its form's, the form's State in it (Child would make
 	// a fresh one, and the form's title and command bar went).
-	ibDataNode* const drawn = frame.FindChild(wxT("State"));
-	ibDataNode& state = drawn != nullptr ? *drawn : frame.Child(wxT("State"));
-	state.SetValue(wxT("Syntax"), static_cast<s32>(ibCompileCode::GetCodeStyle()));
+	ibDataNode* const drawn = frame.FindChild(ibProtocol::ibView::State);
+	ibDataNode& state = drawn != nullptr ? *drawn : frame.Child(ibProtocol::ibView::State);
+	state.SetValue(ibProtocol::ibView::ibModule::Syntax, static_cast<s32>(ibCompileCode::GetCodeStyle()));
 	if (!creator->IsEditable())
-		state.SetValue(wxT("ReadOnly"), true);
+		state.SetValue(ibProtocol::ibView::ibModule::ReadOnly, true);
 	// Whether the configuration the module is in is modified — the document itself never is (ibMetaDocument::IsModified),
 	// and Save is offered all along: what the desktop's editor marked on every key the client says once, on the first key
 	// while this is false (event Input).
 	const ibMetaData* const metaData = creator->GetMetaData();
-	state.SetValue(wxT("Modified"), metaData != nullptr && metaData->IsModified());
+	state.SetValue(ibProtocol::ibView::ibModule::Modified, metaData != nullptr && metaData->IsModified());
 	// The module's address the debugger knows it by — its breakpoints' key, the place a runtime stops at.
-	state.SetValue(wxT("Module"), creator->GetDocPath());
+	state.SetValue(ibProtocol::ibView::ibModule::Module, creator->GetDocPath());
 	// ⭐ THE TEXT RIDES THE FRAME THAT OPENS THE TAB — once: the client draws the module without asking for it (fetch).
 	// Only a module's own tab: a form's editor reads its Code page's text when the page is shown.
 	if (!m_textDrawn && GetClassInfo() == CLASSINFO(ibModuleTextView)) {
-		state.SetValue(wxT("Text"), creator->GetModuleText());
+		state.SetValue(ibProtocol::ibView::ibModule::Text, creator->GetModuleText());
 		m_textDrawn = true;
 	}
 }
@@ -65,9 +65,9 @@ namespace {
 void AppendName(ibDataNode& response, ibContentType kind, const wxString& name, const wxString& help)
 {
 	ibDataNode& row = response.AddChild(0, 0);
-	row.SetValue(wxT("Kind"), static_cast<s32>(kind));
-	row.SetValue(wxT("Name"), name);
-	row.SetValue(wxT("Help"), help);
+	row.SetValue(ibProtocol::ibView::ibModule::Kind, static_cast<s32>(kind));
+	row.SetValue(ibProtocol::ibView::ibModule::Name, name);
+	row.SetValue(ibProtocol::ibView::ibModule::Help, help);
 }
 
 void AddKeywordFromObject(ibDataNode& response, const ibValue& vObject)
@@ -314,17 +314,17 @@ bool ibModuleTextView::Fetch(const ibDataNode& request, ibDataNode& response)
 	if (creator == nullptr)
 		return false;
 
-	const wxString text = request.GetValue<wxString>(wxT("Text"));
-	const unsigned int caret = static_cast<unsigned int>(request.GetValue<s32>(wxT("Position")));
+	const wxString text = request.GetValue<wxString>(ibProtocol::ibView::ibModule::Text);
+	const unsigned int caret = static_cast<unsigned int>(request.GetValue<s32>(ibProtocol::ibView::ibModule::Position));
 
-	switch (static_cast<ibProtocolModuleRequest>(request.GetValue<s32>(wxT("Kind")))) {
-	case ibProtocolModuleRequest::Complete:
+	switch (static_cast<ibProtocol::ibView::ibModule::ibRequest>(request.GetValue<s32>(ibProtocol::ibView::ibModule::Kind))) {
+	case ibProtocol::ibView::ibModule::ibRequest::Complete:
 		LoadAutoComplete(response, text, caret, creator);
 		return true;
-	case ibProtocolModuleRequest::CallTip:
-		response.SetValue(wxT("Text"), LoadCallTip(text, caret, creator));
+	case ibProtocol::ibView::ibModule::ibRequest::CallTip:
+		response.SetValue(ibProtocol::ibView::ibModule::Text, LoadCallTip(text, caret, creator));
 		return true;
-	case ibProtocolModuleRequest::Procedures:
+	case ibProtocol::ibView::ibModule::ibRequest::Procedures:
 		// The handlers the module may have (the desktop's procedures dialog offered those not written yet) — their
 		// parameters as a template writes them.
 		for (unsigned int idx = 0; idx < creator->GetDefaultProcedureCount(); idx++) {
@@ -335,26 +335,26 @@ bool ibModuleTextView::Fetch(const ibDataNode& request, ibDataNode& response)
 				procArgs += arg;
 			}
 			ibDataNode& row = response.AddChild(0, 0);
-			row.SetValue(wxT("Name"), creator->GetDefaultProcedureName(idx));
-			row.SetValue(wxT("Args"), procArgs);
+			row.SetValue(ibProtocol::ibView::ibModule::Name, creator->GetDefaultProcedureName(idx));
+			row.SetValue(ibProtocol::ibView::ibModule::Args, procArgs);
 		}
 		return true;
 	default:
 		// Only the text — whether it takes typing is the view's State, drawn with the frame.
-		response.SetValue(wxT("Text"), creator->GetModuleText());
+		response.SetValue(ibProtocol::ibView::ibModule::Text, creator->GetModuleText());
 		return true;
 	}
 }
 
-bool ibModuleTextView::OnClientEvent(ibProtocolEvent event, const ibDataNode& args)
+bool ibModuleTextView::OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args)
 {
 	ibMetaDocument* const document = GetDocument();
 
 	// The check reads the module, and is asked of one that may not be edited too (the desktop's toolbar had it there).
-	if (event == ibProtocolEvent::Command) {
+	if (event == ibProtocol::ibEvent::ibKind::Command) {
 		const ibModuleTextDocument* const moduleDocument = dynamic_cast<const ibModuleTextDocument*>(document);
 		if (moduleDocument == nullptr
-			|| static_cast<ibProtocolModuleCommand>(args.GetValue<s32>(wxT("Id"))) != ibProtocolModuleCommand::SyntaxControl)
+			|| static_cast<ibProtocol::ibView::ibModule::ibCommand>(args.GetValue<s32>(ibProtocol::ibView::ibModule::Id)) != ibProtocol::ibView::ibModule::ibCommand::SyntaxControl)
 			return false;
 		moduleDocument->SyntaxControl(true);
 		return true;
@@ -366,13 +366,13 @@ bool ibModuleTextView::OnClientEvent(ibProtocolEvent event, const ibDataNode& ar
 		return false;
 
 	switch (event) {
-	case ibProtocolEvent::Input:
+	case ibProtocol::ibEvent::ibKind::Input:
 		document->Modify(true);
 		return true;
-	case ibProtocolEvent::Change:
+	case ibProtocol::ibEvent::ibKind::Change:
 		// Where the desktop's editor wrote on save (ibCodeEditorDesigner::SaveModule) — the metaobject's text — and the
 		// configuration modified (ibMetaDocument::Modify).
-		creator->SetModuleText(args.GetValue<wxString>(wxT("Text")));
+		creator->SetModuleText(args.GetValue<wxString>(ibProtocol::ibView::ibModule::Text));
 		document->Modify(true);
 		return true;
 	default:

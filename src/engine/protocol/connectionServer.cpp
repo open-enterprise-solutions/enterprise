@@ -175,7 +175,7 @@ bool ibProtocolConnectionServer::Reconnect(wxString& error)
 }
 
 bool ibProtocolConnectionServer::Exchange(const std::string& request, std::string& answer,
-	ibProtocolRefusal& refusal, wxString& error)
+	ibProtocol::ibRefusal& refusal, wxString& error)
 {
 	std::lock_guard<std::mutex> exchanging(m_exchanging);
 
@@ -183,14 +183,14 @@ bool ibProtocolConnectionServer::Exchange(const std::string& request, std::strin
 	{
 		std::lock_guard<std::mutex> lock(m_mutex);
 		if (!m_socket || m_closed) {
-			refusal = ibProtocolRefusal::NoSession;
+			refusal = ibProtocol::ibRefusal::NoSession;
 			error = wxT("the connection to the server is closed");
 			return false;
 		}
 		m_answer.reset();
 	}
 	if (!m_socket->send(request)) {
-		refusal = ibProtocolRefusal::NoSession;
+		refusal = ibProtocol::ibRefusal::NoSession;
 		error = wxT("the request could not be sent");
 		return false;
 	}
@@ -199,7 +199,7 @@ bool ibProtocolConnectionServer::Exchange(const std::string& request, std::strin
 	std::unique_lock<std::mutex> lock(m_mutex);
 	m_answered.wait(lock, [this]() { return m_answer.has_value() || m_closed; });
 	if (!m_answer.has_value()) {
-		refusal = ibProtocolRefusal::NoSession;
+		refusal = ibProtocol::ibRefusal::NoSession;
 		error = wxT("the server closed the connection");
 		return false;
 	}
@@ -232,7 +232,7 @@ void ibProtocolConnectionServer::ReadMessages()
 		// (the server's notifications are a line), so an answer of a frame is never parsed twice.
 		if (message.size() <= kNotificationMax) {
 			ibProtocolNode node;
-			if (ibProtocolNode::Read(message, node) && node.Has(ibProtocolName::RpcMethod) && !node.Has(ibProtocolName::RpcId)) {
+			if (ibProtocolNode::Read(message, node) && node.Has(ibProtocol::ibRpc::Method) && !node.Has(ibProtocol::ibRpc::Id)) {
 				std::function<void(const std::string&)> notified;
 				{
 					std::lock_guard<std::mutex> lock(m_mutex);

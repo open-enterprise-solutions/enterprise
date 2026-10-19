@@ -92,7 +92,7 @@ public:
 		long style = wxDEFAULT_FRAME_STYLE);
 
 	// What it logged in to — the thin client's process is one mode, the window's.
-	ibProtocolMode GetMode() const { return m_mode; }
+	ibProtocol::ibLogin::ibMode GetMode() const { return m_mode; }
 
 	// The font and colours code is shown in — the messages' too (the desktop's window held them for its editors and its
 	// output alike) — and how its editors edit.
@@ -122,16 +122,16 @@ public:
 	// A call of the window's, through the communicator: the frame drawn again after it, its messages shown, a
 	// question it asks put to the person until the work settles. The answer as it came — a schema's tree, a fetch's
 	// rows are read from it. False — refused, and the person told why.
-	bool Call(ibProtocolMethod method, const ibProtocolNode& params, ibProtocolNode& answer);
+	bool Call(ibProtocol::ibMethod method, const ibProtocolNode& params, ibProtocolNode& answer);
 	// …the same, its refusal handed back and said to nobody: the caller says it where it belongs (a settings page, beside
 	// the control that fixes it). A session gone closes the client all the same.
-	bool Call(ibProtocolMethod method, const ibProtocolNode& params, ibProtocolNode& answer,
-		ibProtocolRefusal& refusal, wxString& error);
+	bool Call(ibProtocol::ibMethod method, const ibProtocolNode& params, ibProtocolNode& answer,
+		ibProtocol::ibRefusal& refusal, wxString& error);
 	// A call nobody waits on — what the person did in a view, a tab chosen or closed: made after the event that
 	// raised it, in the order posted, and never inside another call — but inside a question a call is asking, as the
 	// desktop's modal loop runs the events of the windows over it (a choice form a window opened, CreateChildFrame):
 	// what the person can reach while a window asks is the modal's to say.
-	void Post(ibProtocolMethod method, const ibProtocolNode& params);
+	void Post(ibProtocol::ibMethod method, const ibProtocolNode& params);
 	// …or a state event left for the next call to carry (ibCommunicator::Hold) — after the calls posted before it, which
 	// would carry it ahead of what was done first. False — the server takes none held: it is posted as its own call.
 	bool Hold(const ibProtocolNode& event);
@@ -152,7 +152,7 @@ public:
 	// A fetch — a control's (Fetch: a table's rows, a spreadsheet's cells; `params` — the control, its request, the view
 	// it is of) or the pictures of their ids (Picture): the answer is no frame, nothing is drawn or asked, and a refusal is
 	// only false. It speaks to the communicator alone, so a control's own thread may make it.
-	bool Fetch(ibProtocolMethod method, const ibProtocolNode& params, ibProtocolNode& answer);
+	bool Fetch(ibProtocol::ibMethod method, const ibProtocolNode& params, ibProtocolNode& answer);
 	// A file of the person's, up to the server in its parts — `file` the id it was given. False: not read, or refused
 	// (said to the person).
 	bool UploadFile(const wxString& path, wxString& file);
@@ -206,11 +206,11 @@ protected:
 
 	// The schemas the window shows at its start — read in the login (its Read), each answered beside the frame and shown
 	// (ShowSchema) once the window is up, as a call of its own would have been. Default: none.
-	virtual std::vector<ibProtocolSchema> GetStartSchemas() const { return {}; }
+	virtual std::vector<ibProtocol::ibSchema::ibKind> GetStartSchemas() const { return {}; }
 	// A schema of the menu, asked for and answered, shown — or one of the start's (GetStartSchemas). The base shows what
 	// both modes have (Active users, About); a mode's window shows its own (the runtime's All functions, the designer's
 	// debugger store) and leaves the rest to the base.
-	virtual void ShowSchema(ibProtocolSchema schema, const ibProtocolNode& shown);
+	virtual void ShowSchema(ibProtocol::ibSchema::ibKind schema, const ibProtocolNode& shown);
 	// A question, put to the person; what they answered in `response` (nothing — cancelled). The base asks what both
 	// modes are asked; a mode's window asks its own (the designer's restructure ledger) and leaves the rest to the base.
 	virtual void ShowRequest(const ibProtocolNode& request, ibProtocolNode& response);
@@ -218,7 +218,7 @@ protected:
 	// THE DOCUMENT OF A TAB THE SERVER RAISED, by the tab's Kind (DrawTabs) — the desktop doc template's CreateDocument for
 	// a tab, as it has no template. The base makes what both modes have (a form, the journal); a mode's window makes its
 	// own (the designer's tree of an external file) and leaves the rest to the base.
-	virtual ibTabDocument* CreateDocument(ibProtocolViewKind kind, long long tabId);
+	virtual ibTabDocument* CreateDocument(ibProtocol::ibView::ibKind kind, long long tabId);
 
 	// The File and Edit menus — the desktop's, the doc manager's commands — and the bar they start it. A mode's window
 	// makes its own menu (the designer's Help) and calls this.
@@ -229,7 +229,7 @@ protected:
 
 	// The communicator comes in with the window and the window holds it — and with it the client — from then on. The
 	// login is the window's (Show), so the start's messages and questions are drawn into it.
-	ibFrontendMainFrame(std::unique_ptr<ibCommunicator> communicator, ibProtocolMode mode,
+	ibFrontendMainFrame(std::unique_ptr<ibCommunicator> communicator, ibProtocol::ibLogin::ibMode mode,
 		const wxString& user, const wxString& password, const wxString& title,
 		const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxDefaultSize,
 		long style = wxDEFAULT_FRAME_STYLE, const wxString& name = wxASCII_STR(wxFrameNameStr));
@@ -238,7 +238,7 @@ protected:
 
 	// A schema of the menu opened — asked for and shown (ShowSchema); the journal's tab opened by its command. What an
 	// item of the server's menu does, and of the window's own (the designer's About).
-	void OpenSchema(ibProtocolSchema schema);
+	void OpenSchema(ibProtocol::ibSchema::ibKind schema);
 
 	// THE PERSON'S OPTIONS WRITTEN BACK — the designer's Options: the font and colours, how editors edit, the keys as
 	// they stand, into the file LoadOptions reads; and kept as read, so a menu built again keeps the keys.
@@ -278,7 +278,7 @@ private:
 	};
 
 	struct ibPostedCall {
-		ibProtocolMethod            method;
+		ibProtocol::ibMethod            method;
 		ibProtocolNode              params;
 		std::vector<ibProtocolNode> held;   // the state events held while it waited — held once it is made (Hold)
 	};
@@ -312,7 +312,7 @@ private:
 	// A value chosen for the cell of the window asking (ChooseValue), when the question says one was — handed to it once.
 	void TakeChosen(const ibProtocolNode& request);
 	// A call refused, said to the person — and a client whose session is gone, closed.
-	void Refused(ibProtocolRefusal refusal, const wxString& error);
+	void Refused(ibProtocol::ibRefusal refusal, const wxString& error);
 	// …and once a call has settled: the client gone when the server's Exit was done, the calls posted made.
 	void CallSettled();
 	// The first call posted, made — unless a call is under way: that one makes it when it has settled.
@@ -338,7 +338,7 @@ private:
 	static ibFrontendMainFrame* s_instance;
 
 	std::unique_ptr<ibCommunicator> m_communicator;
-	const ibProtocolMode            m_mode;
+	const ibProtocol::ibLogin::ibMode            m_mode;
 	wxString                        m_user;       // the login's — the one the login window was told, when refused
 	wxString                        m_password;   // until the login — cleared by it
 	wxXmlDocument                   m_options;     // the person's options as read (LoadOptions) — their keys put over the

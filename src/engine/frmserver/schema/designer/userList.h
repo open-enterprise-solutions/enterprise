@@ -24,7 +24,7 @@ public:
 	// configuration by their guids, the password hashed (absent: the stored one kept), and refused when no user would
 	// keep a role with the administration rights; Remove {Guid} — the list's Delete. Done in the asking.
 	virtual std::function<void()> Command(const ibSession& session, s32 command,
-		const ibDataNode& args, ibProtocolRefusal& refusal, wxString& error) const override;
+		const ibDataNode& args, ibProtocol::ibRefusal& refusal, wxString& error) const override;
 };
 
 #endif

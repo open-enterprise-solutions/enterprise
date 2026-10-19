@@ -757,7 +757,7 @@ public:
 	// (Max, 2026-08-24).
 	//
 	// ON THE CLIENT the model is the server's: the copy, the composition it arranges and its fields come in its question
-	// (ibProtocolRequestKind::ComposerSettings), and on OK the edited copy is the answer.
+	// (ibProtocol::ibRequest::ibKind::ComposerSettings), and on OK the edited copy is the answer.
 	static bool ShowUserSettings(wxWindow* parent, const class ibProtocolNode& request, class ibProtocolNode& response);
 
 	// ⭐⭐ THE VARIANT PICKER — a menu of what the author named, and picking one IS setting a setting

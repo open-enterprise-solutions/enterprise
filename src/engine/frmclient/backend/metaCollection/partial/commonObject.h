@@ -13,7 +13,7 @@
 
 // THE ENGINE'S HIERARCHICAL REFERENCE OBJECT (backend/metaCollection/partial/commonObject.h) as far as the predefined
 // values editor asks it (designer-thin/win/dlg/predefinedEditor.h): a catalog's, a chart's — the object of that id in
-// the configuration it was opened from, its predefined items the server's (ibProtocolSchema::Predefined), read when the
+// the configuration it was opened from, its predefined items the server's (ibProtocol::ibSchema::ibKind::Predefined), read when the
 // editor opens and after each of its edits.
 class FRMCLIENT_API ibValueMetaObjectRecordDataHierarchyMutableRef : public ibValueMetaObject {
 public:
@@ -114,7 +114,7 @@ public:
 	//predefined values
 	const std::vector<wxObjectDataPtr<ibPredefinedValueObject>>& GetPredefinedValueArray() const { return m_predefinedObjectVector; }
 
-	// …as the server's editor holds them (ibProtocolSchema::Predefined), read anew — when the editor opens and after
+	// …as the server's editor holds them (ibProtocol::ibSchema::ibKind::Predefined), read anew — when the editor opens and after
 	// each of its edits; the array keeps what was read till then.
 	void ReadPredefinedValues();
 

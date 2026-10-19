@@ -32,14 +32,14 @@ public:
 	// The module's State, and the card's title — the form itself rides the fetch: the client holds it.
 	virtual void OnDraw(ibDataNode& frame) override;
 	// ⭐ THE TAB OPENED IN ONE ANSWER — the module's text, and the form whole (Form, Controls, Classes, AttributeTree,
-	// CommandTree); what only the server knows of the form the client edits (ibProtocolFormDesignerRequest) — asked about the
+	// CommandTree); what only the server knows of the form the client edits (ibProtocol::ibView::ibFormDesigner::ibRequest) — asked about the
 	// form the request carries; the module's requests by their Kind.
 	virtual bool Fetch(const ibDataNode& request, ibDataNode& response) override;
 	// ⭐ THE FORM HANDED BACK WHOLE (Change with Form) — loaded over the one held, as the desktop's editor kept it; the
 	// form tested (Command TestForm, with Form) — shown as the runtime shows it, the desktop's TestForm; the module's
 	// Input and Change, the module's.
-	virtual bool OnClientEvent(ibProtocolEvent event, const ibDataNode& args) override;
-	virtual ibProtocolViewKind GetViewKind() const override { return ibProtocolViewKind::FormDesigner; }
+	virtual bool OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args) override;
+	virtual ibProtocol::ibView::ibKind GetViewKind() const override { return ibProtocol::ibView::ibKind::FormDesigner; }
 
 	virtual ibValueForm* GetValueForm() const override { return m_valueForm; }
 	virtual bool IsDesignerHost() const override { return true; }
@@ -57,7 +57,7 @@ public:
 
 private:
 
-	// THE TAB'S REQUESTS ABOUT THE FORM (ibProtocolFormDesignerRequest), each on the form the request carries: the rows under an
+	// THE TAB'S REQUESTS ABOUT THE FORM (ibProtocol::ibView::ibFormDesigner::ibRequest), each on the form the request carries: the rows under an
 	// attribute row (Composition); a door of the attribute tree, of the command tree (Attribute, FormCommand); a control
 	// bound to a dropped row, running a dropped command (BoundControl, CommandControl); the rows of an attribute or a
 	// form command (Properties); a control's rows again (Rows).

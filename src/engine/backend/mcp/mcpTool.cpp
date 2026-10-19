@@ -1098,6 +1098,11 @@ void ibMcpSayProperties(const ibPropertyObject* object, ibDataNode& node,
 					item->SetValue(wxT("name"), choices.GetName(choice));
 					if (!choices.GetSynonym(choice).IsEmpty())
 						item->SetValue(wxT("synonym"), choices.GetSynonym(choice));
+					// …and its kind, where its data names a class (a metaobject's): what the class is registered as.
+					if (const u64 data = choices.GetData(choice)) {
+						if (const ibCtorAbstractType* const kind = ibValue::GetAvailableCtor(data))
+							item->SetValue(wxT("kind"), kind->GetClassName());
+					}
 					words.push_back(ibDataValue::Child(item));
 				}
 

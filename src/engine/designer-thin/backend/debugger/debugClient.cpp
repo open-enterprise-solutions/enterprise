@@ -87,7 +87,7 @@ static void ShiftLineMap(std::map<unsigned int, Entry>& lines, unsigned int line
 static void Message(const wxString& said)
 {
 	if (mainFrame != nullptr && mainFrame->GetOutputWindow() != nullptr)
-		mainFrame->GetOutputWindow()->Output(said, ibProtocolMessageLevel::Error);
+		mainFrame->GetOutputWindow()->Output(said, ibProtocol::ibFrame::ibMessage::ibLevel::Error);
 }
 
 } // namespace

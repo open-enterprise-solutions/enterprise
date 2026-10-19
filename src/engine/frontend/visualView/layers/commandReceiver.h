@@ -23,6 +23,10 @@ public:
 	// a gone hop, or a leaf with no name, fails -> "<not found>". Defined once here; every control inherits it.
 	virtual bool WalkCommand(const ibCommandDescription& desc, wxString* outText = nullptr) const override;
 
+	// ibBackendCommandReceiver — the protocol row's command tree. The desktop speaks no protocol: its picker gathers
+	// in its own editor, so there is nothing to write.
+	virtual void WriteCommandTree(class ibDataNode& node) const override {}
+
 	// THE one command resolve — EVERY projection (button / bar / the inspector cell) calls this, so "does it exist +
 	// what's its look" is decided in ONE place, never guessed per-surface. Walk the path (ResolveValueByPath); where
 	// the walk is fragile (a tablebox command resolves the hop but vends an EMPTY caption / no icon in the designer)

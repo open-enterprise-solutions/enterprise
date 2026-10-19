@@ -89,18 +89,18 @@ std::vector<ibSettingsPlainField> ibListSourceFields(ibMetaID mainTable, const w
 		if (document == nullptr)
 			return {};
 		ibProtocolNode request;
-		request.SetValue(ibProtocolName::Kind, static_cast<long long>(ibProtocolComposerRequest::Source))
-			.SetValue(ibProtocolName::Text, text);
+		request.SetValue(ibProtocol::ibView::ibComposer::Kind, static_cast<long long>(ibProtocol::ibView::ibComposer::ibRequest::Source))
+			.SetValue(ibProtocol::ibView::ibComposer::Text, text);
 		if (mainTable != wxNOT_FOUND)
-			request.SetValue(ibProtocolName::Id, static_cast<long long>(mainTable));
+			request.SetValue(ibProtocol::ibView::ibComposer::Id, static_cast<long long>(mainTable));
 		if (!document->Fetch(request, answer))
 			return {};
 		KnownListFields()[tabId] = ibKnownListFields{ mainTable, text, answer };
 	}
-	ibValueReferenceDataObject::ReadReferences(answer.FindChild(ibProtocolName::References));
+	ibValueReferenceDataObject::ReadReferences(answer.FindChild(ibProtocol::ibView::ibComposer::References));
 	if (error != nullptr)
-		*error = answer.GetString(ibProtocolName::Error);
-	return ibReadSettingsFields(answer.FindChild(ibProtocolName::Fields));
+		*error = answer.GetString(ibProtocol::ibView::ibComposer::Error);
+	return ibReadSettingsFields(answer.FindChild(ibProtocol::ibView::ibComposer::Fields));
 }
 
 std::vector<ibQueryConstructorField> ibQueryFieldsOfText(const wxString& text, const ibMetaData* metaData, wxString* error)
@@ -130,18 +130,18 @@ std::vector<ibQueryConstructorField> ibQueryFieldsOfText(const wxString& text, c
 			if (document == nullptr)
 				return {};
 			ibProtocolNode request;
-			request.SetValue(ibProtocolName::Kind, static_cast<long long>(ibProtocolComposerRequest::Fields))
-				.SetValue(ibProtocolName::Text, text);
+			request.SetValue(ibProtocol::ibView::ibComposer::Kind, static_cast<long long>(ibProtocol::ibView::ibComposer::ibRequest::Fields))
+				.SetValue(ibProtocol::ibView::ibComposer::Text, text);
 			if (!document->Fetch(request, answer))
 				return {};
 			ibQueryFieldsKnown(tabId, text, answer);
 		}
-		ibValueReferenceDataObject::ReadReferences(answer.FindChild(ibProtocolName::References));
+		ibValueReferenceDataObject::ReadReferences(answer.FindChild(ibProtocol::ibView::ibComposer::References));
 		if (error != nullptr)
-			*error = answer.GetString(ibProtocolName::Error);
-		return ReadQueryFields(answer.FindChild(ibProtocolName::Fields));
+			*error = answer.GetString(ibProtocol::ibView::ibComposer::Error);
+		return ReadQueryFields(answer.FindChild(ibProtocol::ibView::ibComposer::Fields));
 	}
 
 	// …A WINDOW THE SERVER ASKED reads the question's: the fields it described with it.
-	return ReadQueryFields(frame->GetRequest().FindChild(ibProtocolName::Fields));
+	return ReadQueryFields(frame->GetRequest().FindChild(ibProtocol::ibView::ibComposer::Fields));
 }

@@ -38,7 +38,7 @@ public:
 
 protected:
 	const ibPropertyObject* m_ownerProperty = nullptr;
-	std::vector<ibClassID> m_choiceClass;   // each choice's kind, by its index (ibPropertyChoiceList::GetClassType)
+	std::vector<u64> m_choiceData;   // each choice's data — its class — by its index (ibPropertyChoiceList::GetData)
 private:
 	WX_PG_DECLARE_PROPERTY_CLASS(ibPGGenerationProperty);
 };

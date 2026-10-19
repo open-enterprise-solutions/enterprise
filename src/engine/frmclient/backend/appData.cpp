@@ -10,7 +10,7 @@
 bool ibApplicationData::DesignerMode() const
 {
 	const ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
-	return frame != nullptr && frame->GetMode() == ibProtocolMode::Designer;
+	return frame != nullptr && frame->GetMode() == ibProtocol::ibLogin::ibMode::Designer;
 }
 
 long ibApplicationData::RunApplication(const wxString& strAppName, bool searchDebug, bool useManifest) const

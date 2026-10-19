@@ -130,7 +130,7 @@ private:
 // was already ours; only the conversion sat on the wrong side.
 class FRMCLIENT_API ibPropertyChoiceList {
 
-	// ⭐ FOUR THINGS, AND EACH ANSWERS A DIFFERENT QUESTION.
+	// ⭐ FIVE THINGS, AND EACH ANSWERS A DIFFERENT QUESTION.
 	//
 	//   id       — WHICH ONE THIS IS. A long, always: an enumeration member's number, a metaobject's
 	//              metaID. It is what a wxPGChoices entry carries, what a dialog reads back, and the
@@ -139,6 +139,8 @@ class FRMCLIENT_API ibPropertyChoiceList {
 	//   name     — what it is called in code. This is what a script writes and what a caller names.
 	//   synonym  — what it is called to a person. Empty when there is nothing better than the name.
 	//   value    — WHAT THE PROPERTY BECOMES if this one is chosen.
+	//   data     — a u64 beside the id, for what a long does not hold: a metaobject's class, the kind a window groups
+	//              it under. 0: none.
 	//
 	// ⭐⭐ THE ID IS A NUMBER AND THE VALUE IS A VARIANT, and they are not the same fact. The number
 	// says WHICH; the variant is the thing itself, and for most of these families what physically
@@ -151,30 +153,29 @@ class FRMCLIENT_API ibPropertyChoiceList {
 	// just been shown, or showing a person an identifier.
 	struct ibPropertyChoiceItem {
 		ibPropertyChoiceItem(long id, const wxString& name, const wxString& synonym,
-			const wxVariant& value, const wxBitmap& bmp, const ibClassID& clsid)
-			: m_id(id), m_name(name), m_synonym(synonym), m_value(value), m_bmp(bmp), m_clsid(clsid) {}
+			const wxVariant& value, const wxBitmap& bmp, u64 data)
+			: m_id(id), m_name(name), m_synonym(synonym), m_value(value), m_bmp(bmp), m_data(data) {}
 		long      m_id;
 		wxString  m_name;
 		wxString  m_synonym;
 		wxVariant m_value;
 		wxBitmap  m_bmp;
-		ibClassID m_clsid;
+		u64       m_data;
 	};
 
 	std::vector<ibPropertyChoiceItem> m_items;
 
 public:
 
-	// The plain form — a number IS the value, which is what an enumeration and a list offer; a metaobject's, of its kind
-	// (its class), as the server named it.
-	void Add(const wxString& name, long id, const wxBitmap& bmp = wxNullBitmap, const ibClassID& clsid = 0) {
-		m_items.emplace_back(id, name, wxEmptyString, wxVariant(id), bmp, clsid);
+	// The plain form — a number IS the value, which is what an enumeration and a list offer.
+	void Add(const wxString& name, long id, const wxBitmap& bmp = wxNullBitmap) {
+		m_items.emplace_back(id, name, wxEmptyString, wxVariant(id), bmp, 0);
 	}
 
 	// The full form — the number says which, the variant is what to place.
 	void Add(long id, const wxString& name, const wxString& synonym,
-		const wxVariant& value, const wxBitmap& bmp = wxNullBitmap) {
-		m_items.emplace_back(id, name, synonym, value, bmp, 0);
+		const wxVariant& value, const wxBitmap& bmp = wxNullBitmap, u64 data = 0) {
+		m_items.emplace_back(id, name, synonym, value, bmp, data);
 	}
 
 	unsigned int GetCount() const { return (unsigned int)m_items.size(); }
@@ -183,9 +184,7 @@ public:
 	wxString GetSynonym(unsigned int idx) const { return m_items[idx].m_synonym; }
 	const wxVariant& GetValue(unsigned int idx) const { return m_items[idx].m_value; }
 	const wxBitmap& GetBitmap(unsigned int idx) const { return m_items[idx].m_bmp; }
-	// Its kind, when it is a metaobject — what the desktop's dialogs grouped it under (Owner, Record, Generation), named
-	// and drawn as the server registered it (ibValue::GetAvailableCtor); 0 when it is of none.
-	ibClassID GetClassType(unsigned int idx) const { return m_items[idx].m_clsid; }
+	u64 GetData(unsigned int idx) const { return m_items[idx].m_data; }
 
 
 	// The label a person reads: the synonym when there is one, the name otherwise. One place, so
@@ -413,6 +412,11 @@ public:
 	//Set/Get property data
 	virtual bool SetDataValue(const ibValue& varPropVal) = 0;
 	virtual bool GetDataValue(ibValue& pvarPropVal) const = 0;
+
+	// ⭐ PROPERTY -> PROTOCOL VALUE — the row the server's property answered the inspector with (its own GetProtocolValue,
+	// the same question): its value, and what its window offers beyond the value (the lists it chooses from), read by
+	// whichever cell shows it — of any property, so none is cast to the one class that holds a row. False: it came of none.
+	virtual bool GetProtocolValue(ibDataNode& row) const { return false; }
 
 protected:
 

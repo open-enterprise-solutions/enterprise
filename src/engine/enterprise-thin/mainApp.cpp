@@ -100,17 +100,17 @@ bool ibAppEnterprise::OnInit()
 	else if (!m_strFile.IsEmpty() || (!m_strServer.IsEmpty() && !m_strDatabase.IsEmpty())) {
 		// A file base — opened in this process, by the library that brings the server in.
 		ibProtocolNode request;
-		request.SetValue(ibProtocolName::Locale, m_strLocale)
-			.SetValue(ibProtocolName::Debug, m_debugEnable);
+		request.SetValue(ibProtocol::ibFileBase::Locale, m_strLocale)
+			.SetValue(ibProtocol::ibFileBase::Debug, m_debugEnable);
 		if (!m_strFile.IsEmpty()) {
-			request.SetValue(ibProtocolName::Directory, m_strFile);
+			request.SetValue(ibProtocol::ibFileBase::Directory, m_strFile);
 		}
 		else {
-			request.SetValue(ibProtocolName::Server, m_strServer)
-				.SetValue(ibProtocolName::Port, m_strPort)
-				.SetValue(ibProtocolName::User, m_strUser)
-				.SetValue(ibProtocolName::Password, m_strPassword)
-				.SetValue(ibProtocolName::Database, m_strDatabase);
+			request.SetValue(ibProtocol::ibFileBase::Server, m_strServer)
+				.SetValue(ibProtocol::ibFileBase::Port, m_strPort)
+				.SetValue(ibProtocol::ibFileBase::User, m_strUser)
+				.SetValue(ibProtocol::ibFileBase::Password, m_strPassword)
+				.SetValue(ibProtocol::ibFileBase::Database, m_strDatabase);
 		}
 		auto file = std::make_unique<ibProtocolConnectionFile>();
 		if (!file->Open(request.Write(), error)) {

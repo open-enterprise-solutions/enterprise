@@ -31,8 +31,8 @@ ibDialogApplyChange::ibDialogApplyChange(const ibProtocolNode& request, wxWindow
 
 	bool hasErrors = false;
 	for (const ibProtocolNode& entry : request.Children()) {
-		m_resultBox->Append(entry.GetString(ibProtocolName::Text));
-		if (entry.GetInt(ibProtocolName::Level) == s_levelError)
+		m_resultBox->Append(entry.GetString(ibProtocol::ibRequest::ibApplyChange::Text));
+		if (entry.GetInt(ibProtocol::ibRequest::ibApplyChange::Level) == s_levelError)
 			hasErrors = true;
 	}
 
@@ -63,7 +63,7 @@ ibDialogApplyChange::ibDialogApplyChange(const ibProtocolNode& request, wxWindow
 
 	wxDialog::Centre(wxBOTH);
 
-	const wxBitmap picture = ibProtocolPicture(request.GetString(ibProtocolName::Picture));
+	const wxBitmap picture = ibProtocolPicture(request.GetString(ibProtocol::ibRequest::ibApplyChange::Picture));
 	if (picture.IsOk()) {
 		wxIcon dlg_icon;
 		dlg_icon.CopyFromBitmap(picture);

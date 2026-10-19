@@ -211,6 +211,20 @@ ibPicture ibBackendPicture::GetServerPicture(const ibPictureDescription& picture
 	return bitmap.IsOk() ? FromImage(bitmap.ConvertToImage()) : ibPicture();
 }
 
+ibString ibBackendPicture::SendPicture(const ibPictureDescription& pictureDesc)
+{
+	if (pictureDesc.IsEmptyPicture())
+		return ibString();
+	// A picture held as a file's bytes has no name of its own: it goes as itself.
+	if (pictureDesc.m_type == ibPictureType::eFromFile)
+		return GetServerPicture(pictureDesc).GetData();
+
+	// A backend picture's number as a decimal — a u64 is past what a JSON number keeps; a configuration picture's guid.
+	return pictureDesc.m_type == ibPictureType::eFromBackend
+		? ibString::Format(wxT("%llu"), static_cast<unsigned long long>(pictureDesc.m_class_identifier))
+		: ibString(pictureDesc.m_meta_guid.str());
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #pragma region __picture_factory_h__

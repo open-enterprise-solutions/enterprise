@@ -147,9 +147,9 @@ bool ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::OnLeftClickFrom
 	if (ibValueFrame* const barOwner = GetCommandBarOwner(currentWindow)) {
 		const ibViewCommandBar* const bar = barOwner->GetCommandBar();
 		const ibProtocolNode entry = bar->FindEntryByPosition(bar->GetWindow()->ScreenToClient(wxGetMousePosition()));
-		if (entry.Has(ibProtocolName::Position))
+		if (entry.Has(ibProtocol::ibForm::ibCommandBar::Position))
 			m_formHandler->GetObjectTree()->SelectCommandItem(barOwner->GetControlID(),
-				static_cast<unsigned int>(entry.GetInt(ibProtocolName::Position)));
+				static_cast<unsigned int>(entry.GetInt(ibProtocol::ibForm::ibCommandBar::Position)));
 		else
 			m_formHandler->SelectObject(barOwner);
 		return true;
@@ -257,7 +257,7 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::SetObjectSelect
 
 	if (wxWindow* const window = drawn->GetWindow()) {
 		// A notebook's page is boxed as its notebook (the desktop's: asked of the control's class).
-		ibValueFrame* const notebook = drawn->GetClassName() == ibProtocolType::NotebookPage ? drawn->GetParent() : nullptr;
+		ibValueFrame* const notebook = drawn->GetClassName() == ibProtocol::ibForm::ibType::NotebookPage ? drawn->GetParent() : nullptr;
 		wxWindow* const boxed = notebook != nullptr && notebook->GetWindow() != nullptr ? notebook->GetWindow() : window;
 		item = boxed;
 		selPanel = boxed->GetParent();

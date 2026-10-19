@@ -8,7 +8,7 @@
 
 #include "frmserver/win/dlgs/settings/settingsRequest.h"   // ibRequestSettings — the window, asked until it answers
 
-#include "protocol/protocol.h"   // ibProtocolRequestKind::ListSettings
+#include "protocol/protocol.h"   // ibProtocol::ibRequest::ibKind::ListSettings
 
 namespace {
 
@@ -16,11 +16,11 @@ namespace {
 ibDataNode SettingsRequest(ibValueModel* model, const ibMetaData* metaData)
 {
 	ibDataNode request;
-	request.SetValue(ibProtocolName::Kind, static_cast<s32>(ibProtocolRequestKind::ListSettings));
+	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<s32>(ibProtocol::ibRequest::ibKind::ListSettings));
 
 	// 🛑 AND THE COLUMNS ARE DESCRIBED FOR EVERY MODEL, not only for the ones with no description — the desktop's: a
 	// list whose source is a METAOBJECT carries no query text to parse fields out of; its fields are its columns.
-	ibDataNode& fields = request.Child(ibProtocolName::Fields);
+	ibDataNode& fields = request.Child(ibProtocol::ibRequest::ibListSettings::Fields);
 	std::vector<ibTypeDescription> types;
 
 	// ⭐⭐ A DYNAMIC LIST — ITS MAIN TABLE'S FIELDS, AND WHAT ITS QUERY ADDS ON TOP: the list's own answer
@@ -50,7 +50,7 @@ ibDataNode SettingsRequest(ibValueModel* model, const ibMetaData* metaData)
 			types.push_back(col->GetColumnTypeValue());
 		}
 	}
-	ibWriteSettingsReferences(request.Child(ibProtocolName::References), types, metaData);
+	ibWriteSettingsReferences(request.Child(ibProtocol::ibRequest::ibListSettings::References), types, metaData);
 	return request;
 }
 

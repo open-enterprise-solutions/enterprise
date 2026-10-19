@@ -12,10 +12,10 @@ void ibValueHTMLBox::Create(wxWindow* parent, const ibProtocolNode& /*node*/)
 
 void ibValueHTMLBox::Update(const ibProtocolNode& node)
 {
-	const ibProtocolNode state = node.FindChild(ibProtocolName::State);
+	const ibProtocolNode state = node.FindChild(ibProtocol::ibForm::ibState::State);
 
 	// Set again, it scrolls back to the top — only another page is.
-	const wxString page = state.GetString(ibProtocolName::Page);
+	const wxString page = state.GetString(ibProtocol::ibForm::ibState::Page);
 	if (page != m_page) {
 		m_page = page;
 		m_htmlBox->SetPage(m_page);

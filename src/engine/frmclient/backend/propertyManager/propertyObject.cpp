@@ -12,7 +12,7 @@
 #include "frmclient/backend/propertyManager/property/variant/variantOwner.h"   // the variant a relationship holds
 #include "frmclient/backend/serialize/dataProtocol.h"                         // ibReadProtocolNode — the answer's rows
 #include "frmclient/win/picture.h"                                            // ibProtocolPictureReceive — the choices' pictures
-#include "protocol/protocol.h"                                                // ibProtocolName — the rows' keys
+#include "protocol/protocol.h"                                                // ibProtocol::ibSchema::ibProperties — the rows' keys
 
 #define propBlock 0x00023456
 #define eventBlock 0x00023457
@@ -21,7 +21,7 @@
 static void PicturesOf(const ibDataNode& rows, std::vector<wxString>& pictures)
 {
 	for (const ibDataNode& row : rows.Children()) {
-		if (const ibDataValue* const picture = row.FindField(ibProtocolName::Picture))
+		if (const ibDataValue* const picture = row.FindField(ibProtocol::ibSchema::ibProperties::Picture))
 			pictures.push_back(picture->AsString());
 		PicturesOf(row, pictures);
 	}
@@ -514,9 +514,9 @@ void ibPropertyObject::Receive(ibPropertyCategory* category, const ibDataNode& r
 {
 	for (const ibDataNode& row : rows.Children()) {
 		// A CATEGORY — a row with no class, its rows within.
-		if (row.FindField(ibProtocolName::Class) == nullptr)
-			Receive(CreatePropertyCategory(category, row.GetValue<wxString>(ibProtocolName::Name),
-				row.GetValue<wxString>(ibProtocolName::Title)), row);
+		if (row.FindField(ibProtocol::ibSchema::ibProperties::Class) == nullptr)
+			Receive(CreatePropertyCategory(category, row.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Name),
+				row.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Title)), row);
 		else
 			CreateProperty<ibPropertySerializable>(category, row);
 	}

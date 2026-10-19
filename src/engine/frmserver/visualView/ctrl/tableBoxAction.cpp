@@ -10,14 +10,14 @@
 #include <memory>
 #include "backend/metaCollection/partial/commonObject.h"
 #include "core/picturePredefined.h"          // g_pic*CLSID — the TableBox composes the standard command band
-#include "frmserver/client/clientFrame.h"      // ibClientFrame::SendPicture — a request's picture, by its id
+#include "backend/backend_picture.h"           // ibBackendPicture::SendPicture — a request's picture, by its id
 #include "backend/backend_composition.h"        // the description the quick filter writes into + ibStoreValue
 #include "backend/appData.h"
 #include "backend/settings/settingsComposer.h"  // the reader's shelf — ibSettingsCategory::List, restore / save
 #include "frmserver/visualView/choiceRequest.h" // ibRequestChoice — the columns printed
 #include "frmserver/win/dlgs/settings/savedSettings.h"   // ibDialogSavedSettings — the reader's shelf
 #include "frmserver/win/dlgs/settings/list/listSettings.h"   // ibDialogListSettings — the reader's settings window
-#include "protocol/protocol.h"     // ibProtocolRequestKind::ViewMode — the client's window of the view mode
+#include "protocol/protocol.h"     // ibProtocol::ibRequest::ibKind::ViewMode — the client's window of the view mode
 #include "core/serialize/dataBuilder.h"      // ibDataNode — a request and its answer
 #include "form.h"
 
@@ -541,15 +541,15 @@ void ibValueModelTableBox::Command_ShowViewMode()
 		return;
 
 	ibDataNode request;
-	request.SetValue(wxT("Kind"), static_cast<s32>(ibProtocolRequestKind::ViewMode));
-	request.SetValue(wxT("Picture"), ibClientFrame::SendPicture(g_picHierarchyCLSID));
-	request.SetValue(wxT("Mode"), static_cast<s32>(m_propertyViewMode->GetValueAsEnum()));
+	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<s32>(ibProtocol::ibRequest::ibKind::ViewMode));
+	request.SetValue(ibProtocol::ibRequest::ibViewMode::Picture, ibBackendPicture::SendPicture(g_picHierarchyCLSID));
+	request.SetValue(ibProtocol::ibRequest::ibViewMode::Mode, static_cast<s32>(m_propertyViewMode->GetValueAsEnum()));
 
 	ibDataNode response;
-	if (!frame->Request(request, response) || response.FindField(wxT("Mode")) == nullptr)
+	if (!frame->Request(request, response) || response.FindField(ibProtocol::ibRequest::ibViewMode::Mode) == nullptr)
 		return;   // cancelled
 
-	const s32 chosen = response.GetValue<s32>(wxT("Mode"));
+	const s32 chosen = response.GetValue<s32>(ibProtocol::ibRequest::ibViewMode::Mode);
 	if (chosen >= ibDataViewTree && chosen <= ibDataViewList)
 		OnViewModeChanged(static_cast<ibDataViewViewMode>(chosen));
 }

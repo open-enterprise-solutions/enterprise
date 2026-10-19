@@ -17,11 +17,11 @@ public:
 	ibSheetView() : ibMetaView() {}
 
 	virtual void OnDraw(ibDataNode& frame) override;
-	virtual ibProtocolViewKind GetViewKind() const override { return ibProtocolViewKind::Spreadsheet; }
+	virtual ibProtocol::ibView::ibKind GetViewKind() const override { return ibProtocol::ibView::ibKind::Spreadsheet; }
 	virtual bool Fetch(const ibDataNode& request, ibDataNode& response) override;
 	// The sheet the person edited on the client, handed over (Change {Sheet}) — the document's sheet from then on; a cell
 	// clicked (Cell {Row, Col}) — the value it is bound to, opened.
-	virtual bool OnClientEvent(ibProtocolEvent event, const ibDataNode& args) override;
+	virtual bool OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args) override;
 
 	wxDECLARE_DYNAMIC_CLASS(ibSheetView);
 };

@@ -20,7 +20,7 @@ public:
 	// THE ROWS, into the frame's MetaData — the tree as it stands.
 	virtual void OnDraw(ibDataNode& frame) override;
 
-	virtual ibProtocolViewKind GetViewKind() const override { return ibProtocolViewKind::Report; }
+	virtual ibProtocol::ibView::ibKind GetViewKind() const override { return ibProtocol::ibView::ibKind::Report; }
 
 	ibDataReportTree* GetMetaTree() const { return m_metaTree.get(); }
 

@@ -29,10 +29,10 @@ void ibValueReferenceDataObject::ReadReferences(const ibProtocolNode& references
 {
 	for (const ibProtocolNode& reference : references.Children()) {
 		unsigned long long clsid = 0;
-		if (!reference.GetString(ibProtocolName::Type).ToULongLong(&clsid) || clsid == 0)
+		if (!reference.GetString(ibProtocol::ibRequest::ibListSettings::Type).ToULongLong(&clsid) || clsid == 0)
 			continue;
 		std::vector<ibMetaID> ids;
-		for (const ibProtocolNode& target : reference.GetList(ibProtocolName::Targets))
+		for (const ibProtocolNode& target : reference.GetList(ibProtocol::ibRequest::ibListSettings::Targets))
 			ids.push_back(static_cast<ibMetaID>(target.AsInt()));
 		Targets()[static_cast<ibClassID>(clsid)] = std::move(ids);
 	}

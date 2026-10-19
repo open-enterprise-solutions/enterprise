@@ -50,7 +50,7 @@ bool ibMetadataEditView::OnClose(bool deleteWindow)
 void ibMetadataBrowserDocument::DrawView(const ibProtocolNode& view, const ibProtocolNode& WXUNUSED(patch))
 {
 	if (ibConfigurationTree* const metaTree = GetMetaTree())
-		metaTree->Draw(view.FindChild(ibProtocolName::MetaData));
+		metaTree->Draw(view.FindChild(ibProtocol::ibView::MetaData));
 }
 
 ibConfigurationTree* ibMetadataBrowserDocument::GetMetaTree() const

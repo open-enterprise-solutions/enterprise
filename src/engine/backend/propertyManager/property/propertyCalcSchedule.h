@@ -53,6 +53,11 @@ public:
 	// readable node value
 	virtual bool ReadNodeValue(const ibDataValue& value) override;
 	virtual bool WriteNodeValue(ibDataValue& value) const override;
+
+	// …and the lists its sub-rows choose from, for the register bound now, as the desktop's cell asked them
+	// (ibPGCalcScheduleProperty) — Schedule: Kind 1 the resources that may be the value, 2 the dimensions that may be
+	// the date, 3 each dimension to link, its children the fields that may answer for it.
+	virtual bool GetProtocolValue(ibDataNode& row) override;
 };
 
 #endif

@@ -48,7 +48,7 @@ ibPGGenerationProperty::ibPGGenerationProperty(const ibPropertyObject* property,
 {
 	for (unsigned int idx = 0; idx < choices.GetCount(); idx++) {
 		m_choices.Add(choices.GetLabel(idx), choices.GetBitmap(idx), choices.GetId(idx));
-		m_choiceClass.push_back(choices.GetClassType(idx));
+		m_choiceData.push_back(choices.GetData(idx));
 	}
 
 	m_flags |= wxPGPropertyFlags_ActiveButton; // Property button always enabled.
@@ -107,9 +107,9 @@ wxPGEditorDialogAdapter* ibPGGenerationProperty::GetEditorDialog() const
 		};
 
 		// ⭐ WHAT THE PROPERTY OFFERS, grouped by kind — the choices it was built with (ibPropertyGeneration::GetValueList),
-		// not a list of kinds of this dialog's own. Each one's kind is the server's: it asked the configuration, as the
-		// desktop's did (the client holds none), and named and drew the kind as a type (ibValue::GetAvailableCtor).
-		void FillFromChoices(const wxPGChoices& choices, const std::vector<ibClassID>& choiceClass,
+		// not a list of kinds of this dialog's own. Each one's kind is its data — its class, as the server's property
+		// listed it — named and drawn as the server registered it (the row's Classes).
+		void FillFromChoices(const wxPGChoices& choices, const std::vector<u64>& choiceData,
 			ibCheckTree* tc, ibVariantDataGeneration* data) {
 
 			wxImageList* imageList = tc->GetImageList();
@@ -118,7 +118,7 @@ wxPGEditorDialogAdapter* ibPGGenerationProperty::GetEditorDialog() const
 			for (unsigned int idx = 0; idx < choices.GetCount(); idx++) {
 				const ibMetaID id = choices.GetValue(idx);
 
-				const ibClassID clsid = choiceClass[idx];
+				const ibClassID clsid = choiceData[idx];
 				auto group = groups.find(clsid);
 				if (group == groups.end()) {
 					const ibCtorAbstractType* so = ibValue::GetAvailableCtor(clsid);
@@ -188,7 +188,7 @@ wxPGEditorDialogAdapter* ibPGGenerationProperty::GetEditorDialog() const
 				new wxImageList(icon_size, icon_size)
 			);
 
-			FillFromChoices(dlgProp->GetChoices(), dlgProp->m_choiceClass, tc, data);
+			FillFromChoices(dlgProp->GetChoices(), dlgProp->m_choiceData, tc, data);
 
 			tc->ExpandAll(); int res = dlg->ShowModal();
 

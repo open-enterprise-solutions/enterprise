@@ -2175,7 +2175,7 @@ bool ibDialogComposerSettings::ShowUserSettings(wxWindow* parent, const ibProtoc
 	ibSettingsDescription edited;
 	{
 		ibDataNode settings;
-		ibReadProtocolNode(request.FindChild(ibProtocolName::Settings), settings);
+		ibReadProtocolNode(request.FindChild(ibProtocol::ibRequest::ibListSettings::Settings), settings);
 		ibSettingsDescriptionMemory::ReadNode(settings, edited);
 	}
 
@@ -2195,16 +2195,16 @@ bool ibDialogComposerSettings::ShowUserSettings(wxWindow* parent, const ibProtoc
 	ibCompositionDescription shown;
 	{
 		ibDataNode composition;
-		ibReadProtocolNode(request.FindChild(ibProtocolName::Composition), composition);
+		ibReadProtocolNode(request.FindChild(ibProtocol::ibRequest::ibComposerSettings::Composition), composition);
 		ibCompositionDescriptionMemory::ReadNode(composition, shown);
 	}
 
 	// …and which of the fields' types are references, and to what (the [+] a field gets) — the fields themselves the
 	// panel reads as the desktop's does, by its query (ibQueryFieldsOfText answers with the question's Fields).
-	ibValueReferenceDataObject::ReadReferences(request.FindChild(ibProtocolName::References));
+	ibValueReferenceDataObject::ReadReferences(request.FindChild(ibProtocol::ibRequest::ibListSettings::References));
 
 	// A setting the server refused comes back with why — said before the window opens on it again.
-	const wxString error = request.GetString(ibProtocolName::Error);
+	const wxString error = request.GetString(ibProtocol::ibRequest::ibListSettings::Error);
 	if (!error.IsEmpty())
 		wxMessageBox(error, _("Data composer settings"), wxOK | wxICON_WARNING, top);
 
@@ -2226,7 +2226,7 @@ bool ibDialogComposerSettings::ShowUserSettings(wxWindow* parent, const ibProtoc
 	// says it is outdated); one it refuses is asked again, with why.
 	ibDataNode settings;
 	ibSettingsDescriptionMemory::WriteNode(settings, edited);
-	ibWriteProtocolNode(settings, response.Child(ibProtocolName::Settings));
+	ibWriteProtocolNode(settings, response.Child(ibProtocol::ibRequest::ibListSettings::Settings));
 	return true;
 }
 

@@ -28,14 +28,14 @@ void ibValueWindow::OnUpdate(ibDataNode& state, ibVisualHost* host)
 	ibValueForm* ownerForm = GetOwnerForm();
 	const bool formEnabled = (ownerForm == nullptr) ? true : ownerForm->IsFormEnabled();
 
-	state.SetValue(ibProtocolName::Enabled, m_propertyEnabled->GetValueAsBoolean() && formEnabled);
+	state.SetValue(ibProtocol::ibForm::ibState::Enabled, m_propertyEnabled->GetValueAsBoolean() && formEnabled);
 
 	// A source-bound control with NO source picked is never shown — it is unusable until bound. IsUnbound is
 	// a base virtual — false for plain windows, overridden by the source controls — so no cross-cast is
 	// needed. Nor is an element that is NOT AVAILABLE (control.h): the functional options of this base switch
 	// it off, by the field it stands on or by the options it names itself. Two questions, asked side by side.
-	state.SetValue(ibProtocolName::Visible, m_propertyVisible->GetValueAsBoolean() && IsAvailable() && !IsUnbound());
-	state.SetValue(ibProtocolName::Tooltip, m_propertyTooltip->GetValueAsTranslateString());
+	state.SetValue(ibProtocol::ibForm::ibState::Visible, m_propertyVisible->GetValueAsBoolean() && IsAvailable() && !IsUnbound());
+	state.SetValue(ibProtocol::ibForm::ibState::Tooltip, m_propertyTooltip->GetValueAsTranslateString());
 }
 
 //**********************************************************************************
@@ -100,7 +100,7 @@ void ibValueWindowComposite::OnUpdate(ibDataNode& state, ibVisualHost* host)
 	ibValueWindow::OnUpdate(state, host);
 	// A suppressed bar is simply not in the state: the form's own bar carries those commands.
 	if (HasCommandBar())
-		GetCommandBar()->Update(state.Child(ibProtocolName::CommandBar));
+		GetCommandBar()->Update(state.Child(ibProtocol::ibForm::ibCommandBar::CommandBar));
 }
 
 bool ibValueWindowComposite::WriteData(ibDataNode& node) const
@@ -108,15 +108,15 @@ bool ibValueWindowComposite::WriteData(ibDataNode& node) const
 	// "Layers" block — the command bar is the first (and today only) layer; a search field /
 	// status bar would add more sub-nodes here without touching the call sites.
 	if (ibValueCommandBar* bar = GetCommandBar())
-		bar->WriteData(node.Child(ibProtocolName::Layers).Child(ibProtocolName::CommandBar));
+		bar->WriteData(node.Child(ibProtocol::ibForm::ibCommandBar::Layers).Child(ibProtocol::ibForm::ibCommandBar::CommandBar));
 	return ibValueWindow::WriteData(node);
 }
 
 bool ibValueWindowComposite::ReadData(const ibDataNode& node)
 {
 	if (ibValueCommandBar* bar = GetCommandBar()) {
-		if (const ibDataNode* layers = node.FindChild(ibProtocolName::Layers)) {
-			if (const ibDataNode* barNode = layers->FindChild(ibProtocolName::CommandBar))
+		if (const ibDataNode* layers = node.FindChild(ibProtocol::ibForm::ibCommandBar::Layers)) {
+			if (const ibDataNode* barNode = layers->FindChild(ibProtocol::ibForm::ibCommandBar::CommandBar))
 				bar->ReadData(*barNode);
 		}
 	}

@@ -17,7 +17,7 @@ public:
 	// View.State {ReadOnly}, View.Composition — the composer's description, View.Fields and View.References — what its
 	// query offers, as the settings windows have them; View.Error — why the query offers none.
 	virtual void OnDraw(ibDataNode& frame) override;
-	virtual ibProtocolViewKind GetViewKind() const override { return ibProtocolViewKind::Composer; }
+	virtual ibProtocol::ibView::ibKind GetViewKind() const override { return ibProtocol::ibView::ibKind::Composer; }
 
 	// fetch {Tab, Request: {Kind: Fields, Text}} — the fields a query text offers, while it is being edited on the
 	// panel's Query tab (the desktop's panel read them of the text and the configuration, which are here).
@@ -25,7 +25,7 @@ public:
 
 	// Input — the panel was edited: the configuration is modified; Change {Composition} — what the panel holds, put on
 	// the composer (the desktop's panel edited the metaobject's description in place).
-	virtual bool OnClientEvent(ibProtocolEvent event, const ibDataNode& args) override;
+	virtual bool OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args) override;
 
 	wxDECLARE_DYNAMIC_CLASS(ibComposerCompositionView);
 };

@@ -3,7 +3,7 @@
 
 // THE DESIGNER'S DEBUGGER'S STORE — the breakpoints the thin designer's debugger keeps (its engine's client, carried
 // over: designer-thin/backend/debugger), in the base the configuration is in: the rows of its session's ibDebuggerClient,
-// by the verbs that client writes them with (ibProtocolDebuggerCommand). The debugger itself — the runtimes, the stops,
+// by the verbs that client writes them with (ibProtocol::ibSchema::ibDebugger::ibCommand). The debugger itself — the runtimes, the stops,
 // the watches — is the client's own. The designer's own.
 
 #include "frmserver/schema/clientSchema.h"
@@ -19,10 +19,10 @@ public:
 	// Condition).
 	virtual void Build(const ibSession& session, const ibDataNode& args, ibDataNode& result) const override;
 
-	// The store's verbs (ibProtocolDebuggerCommand). Refused: no debugger, a breakpoint on a line the configuration does
+	// The store's verbs (ibProtocol::ibSchema::ibDebugger::ibCommand). Refused: no debugger, a breakpoint on a line the configuration does
 	// not have (its reason).
 	virtual std::function<void()> Command(const ibSession& session, s32 command,
-		const ibDataNode& args, ibProtocolRefusal& refusal, wxString& error) const override;
+		const ibDataNode& args, ibProtocol::ibRefusal& refusal, wxString& error) const override;
 };
 
 #endif

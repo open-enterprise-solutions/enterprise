@@ -18,9 +18,9 @@ public:
 	// The role's rights — the configuration's row, under it a group per metatype, under each the objects of it that have
 	// rights, each with its rights (Roles) as this role gives them.
 	virtual void OnDraw(ibDataNode& frame) override;
-	virtual ibProtocolViewKind GetViewKind() const override { return ibProtocolViewKind::Role; }
+	virtual ibProtocol::ibView::ibKind GetViewKind() const override { return ibProtocol::ibView::ibKind::Role; }
 	// A right ticked or not (Toggle {NodeId, Name, Checked}) — given by the role or taken away.
-	virtual bool OnClientEvent(ibProtocolEvent event, const ibDataNode& args) override;
+	virtual bool OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args) override;
 
 private:
 

@@ -43,7 +43,7 @@ void ibValueGridBox::Create(wxWindow* parent, const ibProtocolNode& /*node*/)
 
 	// The chrome: its command bar above it.
 	m_commandBar = std::make_unique<ibViewCommandBar>(m_panel, GetVisualHost(), [this](const ibProtocolNode& args) {
-		Send(ibProtocolEvent::Command, args);
+		Send(ibProtocol::ibEvent::ibKind::Command, args);
 	});
 	sizer->Add(m_commandBar->GetWindow(), 0, wxEXPAND);
 
@@ -75,9 +75,9 @@ void ibValueGridBox::Create(wxWindow* parent, const ibProtocolNode& /*node*/)
 
 void ibValueGridBox::Update(const ibProtocolNode& node)
 {
-	const ibProtocolNode state = node.FindChild(ibProtocolName::State);
+	const ibProtocolNode state = node.FindChild(ibProtocol::ibForm::ibState::State);
 
-	m_commandBar->Update(state.FindChild(ibProtocolName::CommandBar));
+	m_commandBar->Update(state.FindChild(ibProtocol::ibForm::ibCommandBar::CommandBar));
 
 	ibGridEditor* const gridWindow = m_gridView->GetGridCtrl();
 	if (gridWindow == nullptr)
@@ -85,32 +85,32 @@ void ibValueGridBox::Update(const ibProtocolNode& node)
 
 	// ANOTHER SHEET ON SHOW — composed again, replaced: read whole, into a document's sheet of its own, which the
 	// editor then shows as the desktop's shows the one its model holds.
-	const long long version = state.GetInt(ibProtocolName::Version);
+	const long long version = state.GetInt(ibProtocol::ibForm::ibSpreadsheet::Version);
 	if (version != m_version) {
 		// Sheet may already ride in this State's frame (composed report). Else Fetch, as before.
 		ibProtocolNode answer = state;
-		bool have = state.Has(ibProtocolName::Sheet);
+		bool have = state.Has(ibProtocol::ibForm::ibSpreadsheet::Sheet);
 		if (!have)
-			have = m_fetcher(ibProtocolNode(), answer) && answer.GetInt(ibProtocolName::Version) == version;
+			have = m_fetcher(ibProtocolNode(), answer) && answer.GetInt(ibProtocol::ibForm::ibSpreadsheet::Version) == version;
 		if (have) {
 			m_version = version;
 
 			auto document = std::make_shared<ibSpreadsheetObject>();
 			auto sheet = std::make_shared<ibDataNode>();
-			ibReadProtocolNode(answer.FindChild(ibProtocolName::Sheet), *sheet);
+			ibReadProtocolNode(answer.FindChild(ibProtocol::ibForm::ibSpreadsheet::Sheet), *sheet);
 			ibSpreadsheetDescriptionMemory::ReadNode(ibDataValue::Child(sheet), document->GetSpreadsheetDesc());
-			document->EnableEditing(!answer.GetBool(ibProtocolName::ReadOnly));
+			document->EnableEditing(!answer.GetBool(ibProtocol::ibForm::ibSpreadsheet::ReadOnly));
 			m_gridDocument->SetSpreadsheetDocument(document);
 		}
 	}
 
 	// What the sheet is to its report — «Composing…» over it until it is delivered, or the word to compose again once
 	// the setting changed since it was built.
-	gridWindow->ShowComposeState(static_cast<ibProtocolComposeState>(state.GetInt(ibProtocolName::ComposeState)));
+	gridWindow->ShowComposeState(static_cast<ibProtocol::ibForm::ibSpreadsheet::ibComposeState>(state.GetInt(ibProtocol::ibForm::ibSpreadsheet::ComposeState)));
 	// The grid lines a document's sheet shows; a report's are its cells' borders.
-	gridWindow->EnableGridLines(state.GetBool(ibProtocolName::GridLines));
+	gridWindow->EnableGridLines(state.GetBool(ibProtocol::ibForm::ibSpreadsheet::GridLines));
 	// …and the areas a template's sheet shows, as the desktop's editor of one did.
-	gridWindow->EnableGridArea(state.GetBool(ibProtocolName::GridArea));
+	gridWindow->EnableGridArea(state.GetBool(ibProtocol::ibForm::ibSpreadsheet::GridArea));
 
 	UpdateWindow(m_panel, node);
 	// …and its command bar takes the box's look (the desktop's ApplyLook(part)).
@@ -135,14 +135,14 @@ void ibValueGridBox::OnSheetModified(const ibSpreadsheetDescription& spreadsheet
 		return;
 
 	ibProtocolNode args;
-	ibWriteProtocolNode(*sheet.AsChild(), args.Child(ibProtocolName::Sheet));
-	Send(ibProtocolEvent::Change, args);
+	ibWriteProtocolNode(*sheet.AsChild(), args.Child(ibProtocol::ibForm::ibSpreadsheet::Sheet));
+	Send(ibProtocol::ibEvent::ibKind::Change, args);
 }
 
 void ibValueGridBox::OnCellLeftClick(ibGridEvent& event)
 {
 	ibProtocolNode args;
-	args.SetValue(ibProtocolName::Row, event.GetRow() + 1)
-		.SetValue(ibProtocolName::Col, event.GetCol() + 1);
-	Send(ibProtocolEvent::Cell, args);
+	args.SetValue(ibProtocol::ibEvent::Row, event.GetRow() + 1)
+		.SetValue(ibProtocol::ibEvent::Col, event.GetCol() + 1);
+	Send(ibProtocol::ibEvent::ibKind::Cell, args);
 }

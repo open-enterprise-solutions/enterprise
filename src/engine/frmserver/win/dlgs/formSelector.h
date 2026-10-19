@@ -10,7 +10,7 @@ class ibValueMetaObjectFormBase;
 
 // THE KIND OF A FORM JUST MADE — the desktop's ibDialogSelectTypeForm (frontend/win/dlgs/formSelector), its window the
 // designer's (designer-thin/win/dlgs/formSelector): the kinds and the names they give are sent
-// (ibProtocolRequestKind::FormType), the kind chosen and the form's Name, Synonym and Comment the person typed come back
+// (ibProtocol::ibRequest::ibKind::FormType), the kind chosen and the form's Name, Synonym and Comment the person typed come back
 // and are put on the form, as the desktop's OK put them. The configuration's tree asks it as the desktop's does
 // (ibMetaTreeBase::AskFormKind).
 class ibDialogSelectTypeForm {

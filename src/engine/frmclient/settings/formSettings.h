@@ -4,7 +4,7 @@
 /////////////////////////////////////////////////////////////////////////////
 // HOW A PERSON ARRANGED A FORM FOR THEMSELVES — the desktop's door (frontend/settings/formSettings.h), as its form editor
 // calls it. The setting is the server's (frmserver/settings/formSettings.h): what is stored is asked of it, and an act
-// is the editor's answer (ibProtocolRequestKind::FormEditor) — done there, and the editor asked again.
+// is the editor's answer (ibProtocol::ibRequest::ibKind::FormEditor) — done there, and the editor asked again.
 /////////////////////////////////////////////////////////////////////////////
 
 #include "frmclient/frmclient.h"

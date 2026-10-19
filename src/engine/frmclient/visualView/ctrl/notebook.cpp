@@ -14,7 +14,7 @@ namespace {
 // The desktop's style of a notebook at runtime: its tabs where the form put them, moved, scrolled and split.
 long NotebookStyleOf(const ibProtocolNode& node)
 {
-	return static_cast<long>(node.GetInt(ibProtocolName::OrientPage, wxAUI_NB_TOP)) |
+	return static_cast<long>(node.GetInt(ibProtocol::ibForm::ibNotebook::OrientPage, wxAUI_NB_TOP)) |
 		wxAUI_NB_TAB_MOVE |
 		wxAUI_NB_SCROLL_BUTTONS |
 		wxAUI_NB_TAB_SPLIT;
@@ -37,11 +37,11 @@ void ibValueNotebook::Create(wxWindow* parent, const ibProtocolNode& node)
 
 void ibValueNotebook::Update(const ibProtocolNode& node)
 {
-	const ibProtocolNode state = node.FindChild(ibProtocolName::State);
+	const ibProtocolNode state = node.FindChild(ibProtocol::ibForm::ibState::State);
 
 	m_notebook->SetWindowStyle(NotebookStyleOf(node));
 
-	m_activePage = state.GetInt(ibProtocolName::ActivePage);
+	m_activePage = state.GetInt(ibProtocol::ibForm::ibNotebook::ActivePage);
 	SelectActivePage();
 
 	UpdateWindow(m_notebook, node);
@@ -73,8 +73,8 @@ void ibValueNotebook::OnPageChanged(wxAuiNotebookEvent& event)
 		m_activePage = child->GetControlID();
 
 		ibProtocolNode args;
-		args.SetValue(ibProtocolName::Page, m_activePage);
-		Send(ibProtocolEvent::Page, args);
+		args.SetValue(ibProtocol::ibEvent::Page, m_activePage);
+		Send(ibProtocol::ibEvent::ibKind::Page, args);
 		return;
 	}
 }
@@ -84,8 +84,8 @@ void ibValueNotebook::OnEndDrag(wxAuiNotebookEvent& event)
 	event.Skip();
 
 	ibProtocolNode args;
-	args.SetValue(ibProtocolName::Position, static_cast<long long>(event.GetSelection()));
-	Send(ibProtocolEvent::Move, args);
+	args.SetValue(ibProtocol::ibEvent::Position, static_cast<long long>(event.GetSelection()));
+	Send(ibProtocol::ibEvent::ibKind::Move, args);
 }
 
 //***********************************************************************************
@@ -99,12 +99,12 @@ void ibValueNotebookPage::Create(wxWindow* parent, const ibProtocolNode& /*node*
 
 void ibValueNotebookPage::Update(const ibProtocolNode& node)
 {
-	const ibProtocolNode state = node.FindChild(ibProtocolName::State);
+	const ibProtocolNode state = node.FindChild(ibProtocol::ibForm::ibState::State);
 	ibValueNotebook* const owner = GetNotebook();
 	wxAuiNotebook* const notebook = owner->m_notebook;
 
 	// Its place among the pages that are on the notebook — those before it.
-	const bool shown = state.GetBool(ibProtocolName::Visible, true);
+	const bool shown = state.GetBool(ibProtocol::ibForm::ibState::Visible, true);
 	int pos = wxNOT_FOUND;
 	if (shown) {
 		pos = 0;
@@ -129,14 +129,14 @@ void ibValueNotebookPage::Update(const ibProtocolNode& node)
 	}
 
 	// The server has resolved what the tab carries: no title on a picture-only tab, no picture on a text-only one.
-	const wxString title = state.GetString(ibProtocolName::Title);
-	const wxBitmap picture = ibProtocolPicture(state.GetString(ibProtocolName::Picture));
+	const wxString title = state.GetString(ibProtocol::ibForm::ibState::Title);
+	const wxBitmap picture = ibProtocolPicture(state.GetString(ibProtocol::ibForm::ibState::Picture));
 	if (was != pos)
 		notebook->InsertPage(pos, m_page, title, false, picture);
 	notebook->SetPageText(pos, title);
 	notebook->SetPageBitmap(pos, picture);
 
-	m_page->SetOrientation(static_cast<int>(node.GetInt(ibProtocolName::Orient, wxVERTICAL)));
+	m_page->SetOrientation(static_cast<int>(node.GetInt(ibProtocol::ibForm::ibProperty::Orient, wxVERTICAL)));
 
 	owner->SelectActivePage();
 }

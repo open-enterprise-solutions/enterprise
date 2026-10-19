@@ -18,14 +18,14 @@ public:
 	ibModuleTextView() : ibMetaView() {}
 
 	virtual void OnDraw(ibDataNode& frame) override;
-	virtual ibProtocolViewKind GetViewKind() const override { return ibProtocolViewKind::Module; }
+	virtual ibProtocol::ibView::ibKind GetViewKind() const override { return ibProtocol::ibView::ibKind::Module; }
 	// The text as the metaobject keeps it ({Text}); what the desktop's code editor asked the configuration, by the
-	// request's Kind (ibProtocolModuleRequest) — the names at the editor's caret, a call's form, the default procedures.
+	// request's Kind (ibProtocol::ibView::ibModule::ibRequest) — the names at the editor's caret, a call's form, the default procedures.
 	virtual bool Fetch(const ibDataNode& request, ibDataNode& response) override;
 	// Typing started (Input) — the configuration modified, as the desktop's editor marked it on the first key; the
 	// text the person typed, handed over (Change {Text}) — the module's from then on; the module checked (Command
 	// {Id: SyntaxControl}).
-	virtual bool OnClientEvent(ibProtocolEvent event, const ibDataNode& args) override;
+	virtual bool OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args) override;
 
 private:
 

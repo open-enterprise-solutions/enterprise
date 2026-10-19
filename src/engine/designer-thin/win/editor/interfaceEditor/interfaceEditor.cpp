@@ -11,7 +11,7 @@ namespace {
 // The pictures of `row` and the rows under it — asked of the server at once, not a call per row drawn.
 void PicturesOf(const ibProtocolNode& row, std::vector<wxString>& pictures)
 {
-	pictures.push_back(row.GetString(ibProtocolName::Picture));
+	pictures.push_back(row.GetString(ibProtocol::ibView::ibCheckTree::Picture));
 	for (const ibProtocolNode& child : row.Children())
 		PicturesOf(child, pictures);
 }
@@ -50,9 +50,9 @@ void ibInterfaceEditor::OnCheckItem(wxTreeEvent& event)
 	if (data != nullptr && data->GetMetaId() > 0 && m_document != nullptr) {
 		// In the section or out of it — the server's (ibInterfaceCompositionView::OnClientEvent), and drawn back.
 		ibProtocolNode args;
-		args.SetValue(ibProtocolName::NodeId, data->GetMetaId());
-		args.SetValue(ibProtocolName::Checked, event.GetExtraLong() != 0);
-		m_document->Post(ibProtocolEvent::Toggle, args);
+		args.SetValue(ibProtocol::ibNode::Id, data->GetMetaId());
+		args.SetValue(ibProtocol::ibView::ibCheckTree::Checked, event.GetExtraLong() != 0);
+		m_document->Post(ibProtocol::ibEvent::ibKind::Toggle, args);
 	}
 
 	event.Skip();
@@ -113,11 +113,11 @@ wxTreeItemId ibInterfaceEditor::GroupFor(const ibProtocolNode& row)
 	// (ibMetaGroupCaption), the same the configuration tree shows.
 	wxImageList* imageList = m_interfaceCtrl->GetImageList();
 	wxASSERT(imageList);
-	const wxBitmap picture = ibProtocolPicture(row.GetString(ibProtocolName::Picture));
+	const wxBitmap picture = ibProtocolPicture(row.GetString(ibProtocol::ibView::ibCheckTree::Picture));
 	const int imageIndex = picture.IsOk() ? imageList->Add(picture) : wxNOT_FOUND;
 
 	const wxTreeItemId group = m_interfaceCtrl->AppendItem(m_treeMETADATA,
-		row.GetString(ibProtocolName::Title), imageIndex, imageIndex, new ibTreeItemObject(row.GetId()));
+		row.GetString(ibProtocol::ibView::ibCheckTree::Title), imageIndex, imageIndex, new ibTreeItemObject(row.GetId()));
 	if (row.GetId() == m_keepTopId)
 		m_keepTopNode = group;
 	return group;
@@ -127,13 +127,13 @@ wxTreeItemId ibInterfaceEditor::AppendItem(const wxTreeItemId& parent, const ibP
 {
 	wxImageList* imageList = m_interfaceCtrl->GetImageList();
 	wxASSERT(imageList);
-	const wxBitmap picture = ibProtocolPicture(row.GetString(ibProtocolName::Picture));
+	const wxBitmap picture = ibProtocolPicture(row.GetString(ibProtocol::ibView::ibCheckTree::Picture));
 	const int imageIndex = picture.IsOk() ? imageList->Add(picture) : wxNOT_FOUND;
 	// Bare NAME — the item already sits UNDER its type group, as on the desktop's.
-	wxTreeItemId createItem = m_interfaceCtrl->AppendItem(parent, row.GetString(ibProtocolName::Title), imageIndex, imageIndex, new ibTreeItemObject(row.GetId()));
-	const bool editable = !row.GetBool(ibProtocolName::ReadOnly);
+	wxTreeItemId createItem = m_interfaceCtrl->AppendItem(parent, row.GetString(ibProtocol::ibView::ibCheckTree::Title), imageIndex, imageIndex, new ibTreeItemObject(row.GetId()));
+	const bool editable = !row.GetBool(ibProtocol::ibView::ibCheckTree::ReadOnly);
 	m_interfaceCtrl->SetItemState(createItem,
-		row.GetBool(ibProtocolName::Checked) ?
+		row.GetBool(ibProtocol::ibView::ibCheckTree::Checked) ?
 		editable ? ibCheckTree::CHECKED : ibCheckTree::CHECKED_DISABLED :
 		editable ? ibCheckTree::UNCHECKED : ibCheckTree::UNCHECKED_DISABLED
 	);
@@ -147,7 +147,7 @@ wxTreeItemId ibInterfaceEditor::AppendItem(const wxTreeItemId& parent, const ibP
 
 void ibInterfaceEditor::FillData(const ibProtocolNode& view)
 {
-	const ibProtocolNode root = view.FindChild(ibProtocolName::Rows);
+	const ibProtocolNode root = view.FindChild(ibProtocol::ibView::ibCheckTree::Rows);
 
 	std::vector<wxString> pictures;
 	PicturesOf(root, pictures);
@@ -155,13 +155,13 @@ void ibInterfaceEditor::FillData(const ibProtocolNode& view)
 
 	// The configuration's row — its name and its picture, as the server's row has them.
 	wxImageList* imageList = m_interfaceCtrl->GetImageList();
-	const wxBitmap picture = ibProtocolPicture(root.GetString(ibProtocolName::Picture));
+	const wxBitmap picture = ibProtocolPicture(root.GetString(ibProtocol::ibView::ibCheckTree::Picture));
 	if (picture.IsOk()) {
 		const int imageIndex = imageList->Add(picture);
 		m_interfaceCtrl->SetItemImage(m_treeMETADATA, imageIndex);
 		m_interfaceCtrl->SetItemImage(m_treeMETADATA, imageIndex, wxTreeItemIcon_Selected);
 	}
-	m_interfaceCtrl->SetItemText(m_treeMETADATA, root.GetString(ibProtocolName::Title));
+	m_interfaceCtrl->SetItemText(m_treeMETADATA, root.GetString(ibProtocol::ibView::ibCheckTree::Title));
 	m_interfaceCtrl->SetItemData(m_treeMETADATA, new ibTreeItemObject(root.GetId()));
 
 	// The server's walk — every object that may be in a section, under its group (a group row: below 0); an object of a
@@ -178,5 +178,5 @@ void ibInterfaceEditor::FillData(const ibProtocolNode& view)
 	}
 
 	m_interfaceCtrl->ExpandAll();
-	SetReadOnly(view.FindChild(ibProtocolName::State).GetBool(ibProtocolName::ReadOnly));
+	SetReadOnly(view.FindChild(ibProtocol::ibView::State).GetBool(ibProtocol::ibView::ibCheckTree::ReadOnly));
 }

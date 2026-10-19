@@ -40,9 +40,9 @@ public:
 
 	// What the person did with a control, to the server — after the event that said so: the answer draws the view
 	// again, and a control is not torn down inside its own handler.
-	void Send(long long controlId, ibProtocolEvent event, const ibProtocolNode& args);
+	void Send(long long controlId, ibProtocol::ibEvent::ibKind event, const ibProtocolNode& args);
 	// …or a state event left for the next call to carry (ibFrontendMainFrame::Hold); false — Send it.
-	bool Hold(long long controlId, ibProtocolEvent event, const ibProtocolNode& args);
+	bool Hold(long long controlId, ibProtocol::ibEvent::ibKind event, const ibProtocolNode& args);
 
 	// A control's fetches, of the view drawn now — the form it is on, named by its key; a view that is no form, by its tab.
 	ibViewFetcher MakeFetcher(long long controlId) const;
@@ -81,7 +81,7 @@ protected:
 private:
 
 	// An event as a call names it — the control, what happened to it, and the view it is of: sent, or held (Send, Hold).
-	ibProtocolNode EventOf(long long controlId, ibProtocolEvent event, const ibProtocolNode& args) const;
+	ibProtocolNode EventOf(long long controlId, ibProtocol::ibEvent::ibKind event, const ibProtocolNode& args) const;
 
 	// The form's own: its colours, its controls' orientation, its command bar.
 	void UpdateForm(const ibProtocolNode& form);
@@ -192,7 +192,7 @@ public:
 
 	// While the form's active control is a document of its own, the undo is that document's.
 	virtual wxCommandProcessor* GetCommandProcessor() const override;
-	// The form's undo is the server's (ibProtocolCommand::Undo).
+	// The form's undo is the server's (ibProtocol::ibFrame::ibCommand::Undo).
 	virtual wxCommandProcessor* OnCreateCommandProcessor() override;
 
 	ibFormVisualEditView* GetFirstView() const;

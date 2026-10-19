@@ -12,7 +12,7 @@ class FRMCLIENT_API ibValueForm : public ibValueFrame {
 public:
 
 	// Of its class as a control made for a node is (ibValueFrame::Make) — what its editor finds its picture by.
-	explicit ibValueForm(ibVisualHostClient& host) : ibValueFrame(host, 0) { m_className = ibProtocolType::ClientForm; }
+	explicit ibValueForm(ibVisualHostClient& host) : ibValueFrame(host, 0) { m_className = ibProtocol::ibForm::ibType::ClientForm; }
 
 	// The form draws nothing of its own here — its host draws its look and its command bar.
 	virtual void Create(wxWindow* WXUNUSED(parent), const ibProtocolNode& WXUNUSED(node)) override {}

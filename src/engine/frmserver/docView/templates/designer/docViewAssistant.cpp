@@ -50,22 +50,22 @@ void ibAssistantTranscriptView::OnDraw(ibDataNode& frame)
 
 	// ⚠ TWO SILENCES, TOLD APART BY ASKING. A message still sitting in the queue has been collected by nobody — the
 	// client says "waiting for an assistant" then, and "processing" once it is taken (the desktop's RefreshWaiting).
-	ibDataNode& state = frame.Child(ibProtocolName::State);
-	state.SetValue(ibProtocolName::Waiting, m_waiting);
-	state.SetValue(ibProtocolName::Pending, static_cast<s32>(server != nullptr ? server->PendingCount() : 0));
+	ibDataNode& state = frame.Child(ibProtocol::ibView::State);
+	state.SetValue(ibProtocol::ibView::ibAssistant::Waiting, m_waiting);
+	state.SetValue(ibProtocol::ibView::ibAssistant::Pending, static_cast<s32>(server != nullptr ? server->PendingCount() : 0));
 
 	// An entry a row, named by its place: the transcript only grows, so what reaches a client is the new entries.
-	ibDataNode& rows = frame.Child(ibProtocolName::Rows);
+	ibDataNode& rows = frame.Child(ibProtocol::ibView::ibAssistant::Rows);
 	for (std::size_t i = 0; i < m_transcript.size(); ++i)
-		rows.AddChild(0, static_cast<ibMetaID>(i + 1)).SetValue(ibProtocolName::Text, m_transcript[i]);
+		rows.AddChild(0, static_cast<ibMetaID>(i + 1)).SetValue(ibProtocol::ibView::ibAssistant::Text, m_transcript[i]);
 }
 
-bool ibAssistantTranscriptView::OnClientEvent(ibProtocolEvent event, const ibDataNode& args)
+bool ibAssistantTranscriptView::OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args)
 {
-	if (event != ibProtocolEvent::Change)
+	if (event != ibProtocol::ibEvent::ibKind::Change)
 		return false;
 
-	const wxString text = args.GetValue<wxString>(ibProtocolName::Text);
+	const wxString text = args.GetValue<wxString>(ibProtocol::ibView::ibAssistant::Text);
 	if (text.IsEmpty())
 		return false;
 

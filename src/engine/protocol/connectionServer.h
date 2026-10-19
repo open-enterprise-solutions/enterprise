@@ -33,7 +33,7 @@ public:
 	virtual ~ibProtocolConnectionServer();
 
 	virtual bool Exchange(const std::string& request, std::string& answer,
-		ibProtocolRefusal& refusal, wxString& error) override;
+		ibProtocol::ibRefusal& refusal, wxString& error) override;
 	// The same address, opened again. False when Open has never succeeded.
 	virtual bool Reconnect(wxString& error) override;
 	// What the server says unasked — on the thread that reads the socket.

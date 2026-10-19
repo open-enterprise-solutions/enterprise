@@ -13,21 +13,21 @@ ibUserInfo ibUserInfo::Read(const ibGuid& userGuid)
 		return info;
 
 	ibProtocolNode params, answer;
-	params.SetValue(ibProtocolName::Schema, static_cast<long long>(ibProtocolSchema::UserList));
-	params.Child(ibProtocolName::Args).SetValue(ibProtocolName::Guid, userGuid.str());
-	if (!frame->Call(ibProtocolMethod::Schema, params, answer))
+	params.SetValue(ibProtocol::ibSchema::Schema, static_cast<long long>(ibProtocol::ibSchema::ibKind::UserList));
+	params.Child(ibProtocol::ibSchema::Args).SetValue(ibProtocol::ibSchema::ibUserList::Guid, userGuid.str());
+	if (!frame->Call(ibProtocol::ibMethod::Schema, params, answer))
 		return info;
 
-	const ibProtocolNode user = answer.FindChild(ibProtocolName::User);
+	const ibProtocolNode user = answer.FindChild(ibProtocol::ibSchema::ibUserList::User);
 	if (user.IsEmpty())
 		return info;
 
-	info.m_strUserGuid = user.GetString(ibProtocolName::Guid);
-	info.m_strUserName = user.GetString(ibProtocolName::Name);
-	info.m_strUserFullName = user.GetString(ibProtocolName::FullName);
-	info.m_bPasswordSet = user.GetBool(ibProtocolName::Password);
-	info.m_strLanguageGuid = user.GetString(ibProtocolName::Language);
-	for (const ibProtocolNode& role : user.GetList(ibProtocolName::Roles))
+	info.m_strUserGuid = user.GetString(ibProtocol::ibSchema::ibUserList::Guid);
+	info.m_strUserName = user.GetString(ibProtocol::ibSchema::ibUserList::Name);
+	info.m_strUserFullName = user.GetString(ibProtocol::ibSchema::ibUserList::FullName);
+	info.m_bPasswordSet = user.GetBool(ibProtocol::ibSchema::ibUserList::Password);
+	info.m_strLanguageGuid = user.GetString(ibProtocol::ibSchema::ibUserList::Language);
+	for (const ibProtocolNode& role : user.GetList(ibProtocol::ibSchema::ibUserList::Roles))
 		info.m_roleArray.emplace_back().m_strRoleGuid = role.AsString();
 	return info;
 }
@@ -39,19 +39,19 @@ bool ibUserInfo::Save(const ibUserInfo& info)
 		return false;
 
 	ibProtocolNode params, answer;
-	params.SetValue(ibProtocolName::Schema, static_cast<long long>(ibProtocolSchema::UserList));
-	params.SetValue(ibProtocolName::Command, static_cast<long long>(ibProtocolSchemaCommand::Save));
-	ibProtocolNode args = params.Child(ibProtocolName::Args);
-	args.SetValue(ibProtocolName::Guid, info.m_strUserGuid);
-	args.SetValue(ibProtocolName::Name, info.m_strUserName);
-	args.SetValue(ibProtocolName::FullName, info.m_strUserFullName);
-	args.SetValue(ibProtocolName::Language, info.m_strLanguageGuid);
+	params.SetValue(ibProtocol::ibSchema::Schema, static_cast<long long>(ibProtocol::ibSchema::ibKind::UserList));
+	params.SetValue(ibProtocol::ibSchema::Command, static_cast<long long>(ibProtocol::ibSchema::ibCommand::Save));
+	ibProtocolNode args = params.Child(ibProtocol::ibSchema::Args);
+	args.SetValue(ibProtocol::ibSchema::ibUserList::Guid, info.m_strUserGuid);
+	args.SetValue(ibProtocol::ibSchema::ibUserList::Name, info.m_strUserName);
+	args.SetValue(ibProtocol::ibSchema::ibUserList::FullName, info.m_strUserFullName);
+	args.SetValue(ibProtocol::ibSchema::ibUserList::Language, info.m_strLanguageGuid);
 	// No list — no roles: the user is saved with none.
 	for (const ibUserRole& role : info.m_roleArray)
-		args.AddItem(ibProtocolName::Roles, role.m_strRoleGuid);
+		args.AddItem(ibProtocol::ibSchema::ibUserList::Roles, role.m_strRoleGuid);
 	if (info.m_bPasswordTouched)
-		args.SetValue(ibProtocolName::Password, info.m_strUserPassword);
-	return frame->Call(ibProtocolMethod::Schema, params, answer);
+		args.SetValue(ibProtocol::ibSchema::ibUserList::Password, info.m_strUserPassword);
+	return frame->Call(ibProtocol::ibMethod::Schema, params, answer);
 }
 
 bool ibUserInfo::Delete(const ibGuid& userGuid)
@@ -61,10 +61,10 @@ bool ibUserInfo::Delete(const ibGuid& userGuid)
 		return false;
 
 	ibProtocolNode params, answer;
-	params.SetValue(ibProtocolName::Schema, static_cast<long long>(ibProtocolSchema::UserList));
-	params.SetValue(ibProtocolName::Command, static_cast<long long>(ibProtocolSchemaCommand::Remove));
-	params.Child(ibProtocolName::Args).SetValue(ibProtocolName::Guid, userGuid.str());
-	return frame->Call(ibProtocolMethod::Schema, params, answer);
+	params.SetValue(ibProtocol::ibSchema::Schema, static_cast<long long>(ibProtocol::ibSchema::ibKind::UserList));
+	params.SetValue(ibProtocol::ibSchema::Command, static_cast<long long>(ibProtocol::ibSchema::ibCommand::Remove));
+	params.Child(ibProtocol::ibSchema::Args).SetValue(ibProtocol::ibSchema::ibUserList::Guid, userGuid.str());
+	return frame->Call(ibProtocol::ibMethod::Schema, params, answer);
 }
 
 std::vector<ibUserInfo::Brief> ibUserInfo::ListAll()
@@ -75,15 +75,15 @@ std::vector<ibUserInfo::Brief> ibUserInfo::ListAll()
 		return list;
 
 	ibProtocolNode params, answer;
-	params.SetValue(ibProtocolName::Schema, static_cast<long long>(ibProtocolSchema::UserList));
-	if (!frame->Call(ibProtocolMethod::Schema, params, answer))
+	params.SetValue(ibProtocol::ibSchema::Schema, static_cast<long long>(ibProtocol::ibSchema::ibKind::UserList));
+	if (!frame->Call(ibProtocol::ibMethod::Schema, params, answer))
 		return list;
 
-	for (const ibProtocolNode& row : answer.FindChild(ibProtocolName::Users).Children()) {
+	for (const ibProtocolNode& row : answer.FindChild(ibProtocol::ibSchema::ibUserList::Users).Children()) {
 		Brief entry;
-		entry.m_strUserGuid = row.GetString(ibProtocolName::Guid);
-		entry.m_strUserName = row.GetString(ibProtocolName::Name);
-		entry.m_strUserFullName = row.GetString(ibProtocolName::FullName);
+		entry.m_strUserGuid = row.GetString(ibProtocol::ibSchema::ibUserList::Guid);
+		entry.m_strUserName = row.GetString(ibProtocol::ibSchema::ibUserList::Name);
+		entry.m_strUserFullName = row.GetString(ibProtocol::ibSchema::ibUserList::FullName);
 		list.emplace_back(std::move(entry));
 	}
 	return list;
@@ -97,16 +97,16 @@ std::vector<ibUserInfo::RoleBrief> ibUserInfo::ListRoles()
 		return list;
 
 	ibProtocolNode params, answer;
-	params.SetValue(ibProtocolName::Schema, static_cast<long long>(ibProtocolSchema::UserList));
-	if (!frame->Call(ibProtocolMethod::Schema, params, answer))
+	params.SetValue(ibProtocol::ibSchema::Schema, static_cast<long long>(ibProtocol::ibSchema::ibKind::UserList));
+	if (!frame->Call(ibProtocol::ibMethod::Schema, params, answer))
 		return list;
 
-	for (const ibProtocolNode& row : answer.FindChild(ibProtocolName::Roles).Children()) {
+	for (const ibProtocolNode& row : answer.FindChild(ibProtocol::ibSchema::ibUserList::Roles).Children()) {
 		RoleBrief entry;
-		entry.m_strRoleGuid = row.GetString(ibProtocolName::Guid);
-		entry.m_strRoleName = row.GetString(ibProtocolName::Name);
-		entry.m_strRoleTitle = row.GetString(ibProtocolName::Title);
-		entry.m_mode = static_cast<ibRoleCompositionMode>(row.GetInt(ibProtocolName::Mode, ibRoleCompositionMode_Union));
+		entry.m_strRoleGuid = row.GetString(ibProtocol::ibSchema::ibUserList::Guid);
+		entry.m_strRoleName = row.GetString(ibProtocol::ibSchema::ibUserList::Name);
+		entry.m_strRoleTitle = row.GetString(ibProtocol::ibSchema::ibUserList::Title);
+		entry.m_mode = static_cast<ibRoleCompositionMode>(row.GetInt(ibProtocol::ibSchema::ibUserList::Mode, ibRoleCompositionMode_Union));
 		list.emplace_back(std::move(entry));
 	}
 	return list;
@@ -120,17 +120,17 @@ std::vector<ibUserInfo::LanguageBrief> ibUserInfo::ListLanguages(const ibMetaDat
 		return list;
 
 	ibProtocolNode params, answer;
-	params.SetValue(ibProtocolName::Schema, static_cast<long long>(ibProtocolSchema::Languages));
+	params.SetValue(ibProtocol::ibSchema::Schema, static_cast<long long>(ibProtocol::ibSchema::ibKind::Languages));
 	if (metaData != nullptr)
-		params.Child(ibProtocolName::Args).SetValue(ibProtocolName::Tab, metaData->GetTabId());
-	if (!frame->Call(ibProtocolMethod::Schema, params, answer))
+		params.Child(ibProtocol::ibSchema::Args).SetValue(ibProtocol::ibSchema::ibLanguages::Tab, metaData->GetTabId());
+	if (!frame->Call(ibProtocol::ibMethod::Schema, params, answer))
 		return list;
 
-	for (const ibProtocolNode& row : answer.FindChild(ibProtocolName::Languages).Children()) {
+	for (const ibProtocolNode& row : answer.FindChild(ibProtocol::ibSchema::ibLanguages::Languages).Children()) {
 		LanguageBrief entry;
-		entry.m_strLanguageGuid = row.GetString(ibProtocolName::Guid);
-		entry.m_strLanguageTitle = row.GetString(ibProtocolName::Title);
-		entry.m_strLanguageCode = row.GetString(ibProtocolName::Code);
+		entry.m_strLanguageGuid = row.GetString(ibProtocol::ibSchema::ibUserList::Guid);
+		entry.m_strLanguageTitle = row.GetString(ibProtocol::ibSchema::ibUserList::Title);
+		entry.m_strLanguageCode = row.GetString(ibProtocol::ibSchema::ibLanguages::Code);
 		list.emplace_back(std::move(entry));
 	}
 	return list;

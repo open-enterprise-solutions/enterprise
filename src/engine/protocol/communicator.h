@@ -34,18 +34,18 @@ public:
 	// something, or ask).
 	// `schemas` — those the client would read right after it (Read): answered beside the frame, each with its Schema; one
 	// the person may not read is left out, and the client asks for it.
-	bool Login(const wxString& user, const wxString& password, ibProtocolMode mode, ibProtocolNode& result,
-		ibProtocolRefusal& refusal, wxString& error, const std::vector<ibProtocolSchema>& schemas = {});
+	bool Login(const wxString& user, const wxString& password, ibProtocol::ibLogin::ibMode mode, ibProtocolNode& result,
+		ibProtocol::ibRefusal& refusal, wxString& error, const std::vector<ibProtocol::ibSchema::ibKind>& schemas = {});
 	// users {} — the names the login window offers, asked before the login.
-	bool Users(std::vector<wxString>& names, ibProtocolRefusal& refusal, wxString& error);
+	bool Users(std::vector<wxString>& names, ibProtocol::ibRefusal& refusal, wxString& error);
 	void Logout();
 
 	// Any other call, the client and the frame held named for it (Client, Since). An answer that is a frame (it
 	// carries its number, Frame) is taken into the one kept; the answer is given back as it came — the events of a
 	// frame are read from it, and so are a fetch's rows, a schema's tree, a file's part.
-	bool Call(ibProtocolMethod method, const ibProtocolNode& params, ibProtocolNode& result,
-		ibProtocolRefusal& refusal, wxString& error);
-	// ⭐ A STATE EVENT LEFT FOR THE NEXT CALL — an event's params (protocol 3, ibProtocolIsStateEvent): kept, the latest of
+	bool Call(ibProtocol::ibMethod method, const ibProtocolNode& params, ibProtocolNode& result,
+		ibProtocol::ibRefusal& refusal, wxString& error);
+	// ⭐ A STATE EVENT LEFT FOR THE NEXT CALL — an event's params (protocol 3, ibProtocol::ibEvent::IsStateEvent): kept, the latest of
 	// its kind per control in place of the one before, and carried by the next call, whatever it is, as Pending, in the
 	// order done. False — the server speaks no protocol that carries it: the caller sends it as its own call.
 	bool Hold(const ibProtocolNode& event);
@@ -64,11 +64,11 @@ public:
 
 private:
 
-	bool CallLocked(ibProtocolMethod method, const ibProtocolNode& params, ibProtocolNode& result,
-		ibProtocolRefusal& refusal, wxString& error);
+	bool CallLocked(ibProtocol::ibMethod method, const ibProtocolNode& params, ibProtocolNode& result,
+		ibProtocol::ibRefusal& refusal, wxString& error);
 	// The socket dropped and the server offered to resume: open it again, login {Token} under a new id, and send
 	// `sent` again under the id it already carries. False — the session is gone, or this connection cannot return.
-	bool Resume(const std::string& sent, std::string& answer, ibProtocolRefusal& refusal, wxString& error);
+	bool Resume(const std::string& sent, std::string& answer, ibProtocol::ibRefusal& refusal, wxString& error);
 	// The answer's frame, whole or as a patch, taken into the one kept; an answer that is no frame leaves it.
 	void Take(const ibProtocolNode& answer);
 	// The client is gone (logged out, or its session is): nothing of it is kept.
@@ -83,7 +83,7 @@ private:
 	wxString       m_client;
 	wxString       m_token;    // the bearer, kept here. The server stores only its hash.
 	bool           m_resume = false;   // the server listed `resume` — a dropped socket is asked for again
-	ibProtocolMode m_mode = ibProtocolMode::Runtime;
+	ibProtocol::ibLogin::ibMode m_mode = ibProtocol::ibLogin::ibMode::Runtime;
 	std::atomic<int> m_protocol{ 1 };   // read by Hold on the window's thread while a fetch may be in a call
 	long long      m_number = 0;
 	ibProtocolNode m_frame;

@@ -20,8 +20,8 @@ class ibMetaView;
 // toolbar, its search, its menus and keys. The ROWS are the server's: its ibConfigurationTree (frmserver/metaTree)
 // writes them into the frame's MetaData, an external file's tree into its tab's View; a row is NodeId — its object's
 // id, or below 0 a group row's place among its siblings — Title, Picture, Group (what New makes under it), Type,
-// Position, Menu (protocol.h, ibProtocolSchema::MetaData). What a person does goes back as the doors of schema
-// MetaData (ibProtocolMetaDataCommand), and the rows come back with the frame: a click ASKS, the row follows from the
+// Position, Menu (protocol.h, ibProtocol::ibSchema::ibKind::MetaData). What a person does goes back as the doors of schema
+// MetaData (ibProtocol::ibSchema::ibMetaData::ibCommand), and the rows come back with the frame: a click ASKS, the row follows from the
 // metadata — as on the desktop it followed the stage and never the click.
 class ibMetaTreeBase : public wxPanel {
 public:
@@ -56,8 +56,8 @@ protected:
 
 	// THE DOORS — schema MetaData's parameters: the command, its arguments, the tab's id with them; and the command
 	// asked, the frame drawn after it. False: refused (said to the person).
-	ibProtocolNode GetParams(ibProtocolMetaDataCommand command, ibProtocolNode args) const;
-	bool Command(ibProtocolMetaDataCommand command, ibProtocolNode args) const;
+	ibProtocolNode GetParams(ibProtocol::ibSchema::ibMetaData::ibCommand command, ibProtocolNode args) const;
+	bool Command(ibProtocol::ibSchema::ibMetaData::ibCommand command, ibProtocolNode args) const;
 	// …and a header's choice drawn from its property's row: "<not selected>", what may be chosen (its children: Title,
 	// Id), the one chosen by its Value.
 	void UpdateChoiceSelection(wxChoice* choice, const ibProtocolNode& property);

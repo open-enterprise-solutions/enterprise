@@ -157,7 +157,7 @@ public:
 	// the day it registers.
 	//
 	// ⭐ A NUMBER, NOT AN IMAGE: the class whose picture it is, as a tree row names one to the client
-	// (ibClientFrame::SendPicture). Whoever draws it makes its own image from it — the desktop beside
+	// (ibBackendPicture::SendPicture). Whoever draws it makes its own image from it — the desktop beside
 	// the server, the client from the server's answer.
 	//
 	// Body in metaAttributeObject_res.cpp, next to the attribute class it names: this header must not

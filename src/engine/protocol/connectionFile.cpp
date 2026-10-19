@@ -77,10 +77,10 @@ ibProtocolConnectionFile::~ibProtocolConnectionFile()
 }
 
 bool ibProtocolConnectionFile::Exchange(const std::string& request, std::string& answer,
-	ibProtocolRefusal& refusal, wxString& error)
+	ibProtocol::ibRefusal& refusal, wxString& error)
 {
 	if (m_base == nullptr || m_call == nullptr || !m_call(m_base, request, answer, error)) {
-		refusal = ibProtocolRefusal::Failed;
+		refusal = ibProtocol::ibRefusal::Failed;
 		if (error.IsEmpty())
 			error = wxT("no base is open");
 		return false;

@@ -11,24 +11,24 @@
 namespace {
 
 // One of the schema's commands, with its one argument. False — refused, and the person told why.
-bool ActiveUserCommand(ibProtocolSchemaCommand command, const char* name, const wxString& value)
+bool ActiveUserCommand(ibProtocol::ibSchema::ibCommand command, const char* name, const wxString& value)
 {
 	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
 	if (frame == nullptr)
 		return false;
 
 	ibProtocolNode params, answer;
-	params.SetValue(ibProtocolName::Schema, static_cast<long long>(ibProtocolSchema::ActiveUser));
-	params.SetValue(ibProtocolName::Command, static_cast<long long>(command));
-	params.Child(ibProtocolName::Args).SetValue(name, value);
-	return frame->Call(ibProtocolMethod::Schema, params, answer);
+	params.SetValue(ibProtocol::ibSchema::Schema, static_cast<long long>(ibProtocol::ibSchema::ibKind::ActiveUser));
+	params.SetValue(ibProtocol::ibSchema::Command, static_cast<long long>(command));
+	params.Child(ibProtocol::ibSchema::Args).SetValue(name, value);
+	return frame->Call(ibProtocol::ibMethod::Schema, params, answer);
 }
 
 }
 
 void ibDialogActiveUser::RefreshActiveUserTable(const ibProtocolNode& shown)
 {
-	const ibProtocolNode arr = shown.FindChild(ibProtocolName::Sessions);
+	const ibProtocolNode arr = shown.FindChild(ibProtocol::ibSchema::ibActiveUser::Sessions);
 
 	if (m_sessionArray != arr.Write()) {
 
@@ -54,21 +54,21 @@ void ibDialogActiveUser::RefreshActiveUserTable(const ibProtocolNode& shown)
 		m_activeTable->AssignImageList(imageList, wxIMAGE_LIST_SMALL);
 
 		const int imageUser =
-			imageList->Add(ibProtocolPicture(shown.GetString(ibProtocolName::Picture)));
+			imageList->Add(ibProtocolPicture(shown.GetString(ibProtocol::ibSchema::ibActiveUser::Picture)));
 
 		for (const ibProtocolNode& row : arr.Children()) {
 
-			const long index = m_activeTable->InsertItem(m_activeTable->GetItemCount(), row.GetString(ibProtocolName::User));
+			const long index = m_activeTable->InsertItem(m_activeTable->GetItemCount(), row.GetString(ibProtocol::ibSchema::ibActiveUser::User));
 
-			m_activeTable->SetItem(index, 0, row.GetString(ibProtocolName::User), imageUser);
-			m_activeTable->SetItem(index, 1, row.GetString(ibProtocolName::Application));
-			m_activeTable->SetItem(index, 2, row.GetString(ibProtocolName::Type));
-			m_activeTable->SetItem(index, 3, row.GetString(ibProtocolName::Started));
-			m_activeTable->SetItem(index, 4, row.GetString(ibProtocolName::Computer));
-			m_activeTable->SetItem(index, 5, row.GetString(ibProtocolName::Session));
-			m_activeTable->SetItem(index, 6, row.GetString(ibProtocolName::Activity));
+			m_activeTable->SetItem(index, 0, row.GetString(ibProtocol::ibSchema::ibActiveUser::User), imageUser);
+			m_activeTable->SetItem(index, 1, row.GetString(ibProtocol::ibSchema::ibActiveUser::Application));
+			m_activeTable->SetItem(index, 2, row.GetString(ibProtocol::ibSchema::ibActiveUser::Type));
+			m_activeTable->SetItem(index, 3, row.GetString(ibProtocol::ibSchema::ibActiveUser::Started));
+			m_activeTable->SetItem(index, 4, row.GetString(ibProtocol::ibSchema::ibActiveUser::Computer));
+			m_activeTable->SetItem(index, 5, row.GetString(ibProtocol::ibSchema::ibActiveUser::Session));
+			m_activeTable->SetItem(index, 6, row.GetString(ibProtocol::ibSchema::ibActiveUser::Activity));
 
-			if (current_session == row.GetString(ibProtocolName::Session))
+			if (current_session == row.GetString(ibProtocol::ibSchema::ibActiveUser::Session))
 				m_activeTable->SetItemState(index, wxLIST_STATE_SELECTED | wxLIST_STATE_FOCUSED, wxLIST_STATE_SELECTED | wxLIST_STATE_FOCUSED);
 
 		}
@@ -82,7 +82,7 @@ void ibDialogActiveUser::RefreshLocksTable(const ibProtocolNode& shown)
 {
 	if (m_locksTable == nullptr) return;
 
-	const std::vector<ibProtocolNode> rows = shown.FindChild(ibProtocolName::Locks).Children();
+	const std::vector<ibProtocolNode> rows = shown.FindChild(ibProtocol::ibSchema::ibActiveUser::Locks).Children();
 
 	// Only rebuild when the row count actually changed — RefreshActiveUserTable
 	// gates on a content hash; sys_lock has no equivalent hash yet, so use the
@@ -108,15 +108,15 @@ void ibDialogActiveUser::RefreshLocksTable(const ibProtocolNode& shown)
 
 	for (const auto& r : rows) {
 		const long index = m_locksTable->InsertItem(
-			m_locksTable->GetItemCount(), r.GetString(ibProtocolName::Namespace));
-		m_locksTable->SetItem(index, 0, r.GetString(ibProtocolName::Namespace));
-		m_locksTable->SetItem(index, 1, r.GetString(ibProtocolName::Key));
-		m_locksTable->SetItem(index, 2, r.GetString(ibProtocolName::Mode));
-		m_locksTable->SetItem(index, 3, r.GetString(ibProtocolName::User));
-		m_locksTable->SetItem(index, 4, r.GetString(ibProtocolName::Acquired));
-		m_locksTable->SetItem(index, 5, r.GetString(ibProtocolName::Lock));
+			m_locksTable->GetItemCount(), r.GetString(ibProtocol::ibSchema::ibActiveUser::Namespace));
+		m_locksTable->SetItem(index, 0, r.GetString(ibProtocol::ibSchema::ibActiveUser::Namespace));
+		m_locksTable->SetItem(index, 1, r.GetString(ibProtocol::ibSchema::ibActiveUser::Key));
+		m_locksTable->SetItem(index, 2, r.GetString(ibProtocol::ibSchema::ibActiveUser::Mode));
+		m_locksTable->SetItem(index, 3, r.GetString(ibProtocol::ibSchema::ibActiveUser::User));
+		m_locksTable->SetItem(index, 4, r.GetString(ibProtocol::ibSchema::ibActiveUser::Acquired));
+		m_locksTable->SetItem(index, 5, r.GetString(ibProtocol::ibSchema::ibActiveUser::Lock));
 
-		if (!selectedGuid.IsEmpty() && r.GetString(ibProtocolName::Lock) == selectedGuid)
+		if (!selectedGuid.IsEmpty() && r.GetString(ibProtocol::ibSchema::ibActiveUser::Lock) == selectedGuid)
 			m_locksTable->SetItemState(index,
 				wxLIST_STATE_SELECTED | wxLIST_STATE_FOCUSED,
 				wxLIST_STATE_SELECTED | wxLIST_STATE_FOCUSED);
@@ -149,7 +149,7 @@ ibDialogActiveUser::ibDialogActiveUser(wxWindow* parent, const ibProtocolNode& s
 	wxDialog::Centre(wxBOTH);
 
 	wxIcon dlg_icon;
-	dlg_icon.CopyFromBitmap(ibProtocolPicture(shown.GetString(ibProtocolName::Icon)));
+	dlg_icon.CopyFromBitmap(ibProtocolPicture(shown.GetString(ibProtocol::ibSchema::ibActiveUser::Icon)));
 
 	wxDialog::SetIcon(dlg_icon);
 	wxDialog::SetFocus();
@@ -187,8 +187,8 @@ void ibDialogActiveUser::OnIdleHandler(wxTimerEvent& WXUNUSED(event))
 	// Asked of the server again, as the desktop's read its registry again.
 	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
 	ibProtocolNode params, shown;
-	params.SetValue(ibProtocolName::Schema, static_cast<long long>(ibProtocolSchema::ActiveUser));
-	if (frame == nullptr || !frame->Call(ibProtocolMethod::Schema, params, shown))
+	params.SetValue(ibProtocol::ibSchema::Schema, static_cast<long long>(ibProtocol::ibSchema::ibKind::ActiveUser));
+	if (frame == nullptr || !frame->Call(ibProtocol::ibMethod::Schema, params, shown))
 		return;
 
 	RefreshActiveUserTable(shown);
@@ -246,7 +246,7 @@ void ibDialogActiveUser::OnKickSelected(wxCommandEvent&)
 		wxTheApp->GetAppDisplayName(), wxYES_NO | wxICON_QUESTION, this);
 	if (answer != wxYES) return;
 
-	ActiveUserCommand(ibProtocolSchemaCommand::Kick, ibProtocolName::Session, guid);
+	ActiveUserCommand(ibProtocol::ibSchema::ibCommand::Kick, ibProtocol::ibSchema::ibActiveUser::Session, guid);
 }
 
 void ibDialogActiveUser::OnReloadSelected(wxCommandEvent&)
@@ -259,7 +259,7 @@ void ibDialogActiveUser::OnReloadSelected(wxCommandEvent&)
 
 	// Same self-guard as kick — the server's.
 
-	ActiveUserCommand(ibProtocolSchemaCommand::Reload, ibProtocolName::Session, guid);
+	ActiveUserCommand(ibProtocol::ibSchema::ibCommand::Reload, ibProtocol::ibSchema::ibActiveUser::Session, guid);
 }
 
 void ibDialogActiveUser::OnLocksContextMenu(wxListEvent& event)
@@ -298,7 +298,7 @@ void ibDialogActiveUser::OnForceReleaseSelected(wxCommandEvent&)
 		wxTheApp->GetAppDisplayName(), wxYES_NO | wxICON_QUESTION, this);
 	if (answer != wxYES) return;
 
-	if (!ActiveUserCommand(ibProtocolSchemaCommand::Release, ibProtocolName::Lock, lockGuid))
+	if (!ActiveUserCommand(ibProtocol::ibSchema::ibCommand::Release, ibProtocol::ibSchema::ibActiveUser::Lock, lockGuid))
 		return;
 
 	// Force immediate refresh — the 1s timer would catch this anyway,

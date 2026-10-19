@@ -5,7 +5,7 @@
 #include "backend/metaCollection/metaSectionObject.h"   // a section's sub-sections
 #include "backend/objCtor.h"
 #include "core/serialize/dataBuilder.h"
-#include "frmserver/client/clientFrame.h"   // SendPicture — a row's icon
+#include "backend/backend_picture.h"   // ibBackendPicture::SendPicture — a row's icon
 
 #include <algorithm>
 #include <vector>
@@ -23,16 +23,16 @@ void ibRoleRightsView::OnDraw(ibDataNode& frame)
 		return;
 
 	// Read-only where the role may not be edited — the desktop's editor disabled its check tree (FillData: Enable).
-	ibDataNode& state = frame.Child(ibProtocolName::State);
-	state.SetValue(ibProtocolName::ReadOnly, !metaRole->IsEnabled());
+	ibDataNode& state = frame.Child(ibProtocol::ibView::State);
+	state.SetValue(ibProtocol::ibView::ibCheckTree::ReadOnly, !metaRole->IsEnabled());
 
-	FillData(frame.Child(ibProtocolName::Rows));
+	FillData(frame.Child(ibProtocol::ibView::ibCheckTree::Rows));
 }
 
-bool ibRoleRightsView::OnClientEvent(ibProtocolEvent event, const ibDataNode& args)
+bool ibRoleRightsView::OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args)
 {
 	ibValueMetaObject* const metaRole = GetDocument()->GetMetaObject();
-	if (metaRole == nullptr || event != ibProtocolEvent::Toggle || !metaRole->IsEditable())
+	if (metaRole == nullptr || event != ibProtocol::ibEvent::ibKind::Toggle || !metaRole->IsEditable())
 		return false;
 
 	// The object at any depth — a sub-section has rights of its own; the configuration's row is its common object.
@@ -40,13 +40,13 @@ bool ibRoleRightsView::OnClientEvent(ibProtocolEvent event, const ibDataNode& ar
 	ibValueMetaObject* const metaObject = metaData != nullptr
 		? metaData->FindAnyObjectByFilter(args.GetMetaId(), true) : nullptr;   // NodeId: the node's identity, not a field
 	const ibRole* const role = metaObject != nullptr
-		? metaObject->GetRole(args.GetValue<wxString>(ibProtocolName::Name)) : nullptr;
+		? metaObject->GetRole(args.GetValue<wxString>(ibProtocol::ibView::ibCheckTree::Name)) : nullptr;
 	if (role == nullptr)
 		return false;
 
 	// The desktop's OnCheckItem. Its pass over the open documents (UpdateAllViews, so read-only state and command
 	// greying re-evaluate against the new right) is not here: a view is drawn anew for every frame a client is sent.
-	metaObject->SetRight(role, metaRole->GetMetaID(), args.GetValue<bool>(ibProtocolName::Checked));
+	metaObject->SetRight(role, metaRole->GetMetaID(), args.GetValue<bool>(ibProtocol::ibView::ibCheckTree::Checked));
 	return true;
 }
 
@@ -61,16 +61,16 @@ ibDataNode& ibRoleRightsView::GroupFor(ibDataNode& root, const ibClassID& clsid)
 	// A group row is named by its place: it carries no object.
 	ibDataNode& group = root.AddChild(0, -static_cast<ibMetaID>(root.Children().size() + 1));
 	const wxString caption = ibMetaGroupCaption(clsid);
-	group.SetValue(ibProtocolName::Title, caption.IsEmpty() ? typeCtor->GetClassName() : caption);
-	group.SetValue(ibProtocolName::Picture, ibClientFrame::SendPicture(clsid));
+	group.SetValue(ibProtocol::ibView::ibCheckTree::Title, caption.IsEmpty() ? typeCtor->GetClassName() : caption);
+	group.SetValue(ibProtocol::ibView::ibCheckTree::Picture, ibBackendPicture::SendPicture(clsid));
 	return group;
 }
 
 ibDataNode& ibRoleRightsView::AppendItem(ibDataNode& parent, ibValueMetaObject* metaObject)
 {
 	ibDataNode& item = parent.AddChild(0, metaObject->GetMetaID());
-	item.SetValue(ibProtocolName::Title, metaObject->GetName());
-	item.SetValue(ibProtocolName::Picture, ibClientFrame::SendPicture(metaObject->GetClassType()));
+	item.SetValue(ibProtocol::ibView::ibCheckTree::Title, metaObject->GetName());
+	item.SetValue(ibProtocol::ibView::ibCheckTree::Picture, ibBackendPicture::SendPicture(metaObject->GetClassType()));
 	AppendRoles(item, metaObject);
 	return item;
 }
@@ -80,15 +80,15 @@ void ibRoleRightsView::AppendRoles(ibDataNode& item, const ibValueMetaObject* me
 	const ibValueMetaObject* const metaRole = GetDocument()->GetMetaObject();
 
 	// Each right greyed where the role may not be edited, as the desktop's check tree had them (UNCHECKED_DISABLED).
-	ibDataNode& roles = item.Child(ibProtocolName::Roles);
+	ibDataNode& roles = item.Child(ibProtocol::ibView::ibCheckTree::Roles);
 	for (unsigned int idx = 0; idx < metaObject->GetRoleCount(); idx++) {
 		const ibRole* role = metaObject->GetRole(idx);
 		wxASSERT(role);
 		ibDataNode& right = roles.AddChild(0, 0);
-		right.SetValue(ibProtocolName::Name, role->GetName());
-		right.SetValue(ibProtocolName::Title, role->GetLabel());
-		right.SetValue(ibProtocolName::Checked, metaObject->AccessRight(role, metaRole->GetMetaID()));
-		right.SetValue(ibProtocolName::ReadOnly, !metaRole->IsEditable());
+		right.SetValue(ibProtocol::ibView::ibCheckTree::Name, role->GetName());
+		right.SetValue(ibProtocol::ibView::ibCheckTree::Title, role->GetLabel());
+		right.SetValue(ibProtocol::ibView::ibCheckTree::Checked, metaObject->AccessRight(role, metaRole->GetMetaID()));
+		right.SetValue(ibProtocol::ibView::ibCheckTree::ReadOnly, !metaRole->IsEditable());
 	}
 }
 
@@ -117,8 +117,8 @@ void ibRoleRightsView::FillData(ibDataNode& root)
 
 	// The configuration's row is its common object's — its rights are the configuration's own.
 	root.SetMetaId(commonObject->GetMetaID());
-	root.SetValue(ibProtocolName::Title, commonObject->GetName());
-	root.SetValue(ibProtocolName::Picture, ibClientFrame::SendPicture(g_metaCommonMetadataCLSID));
+	root.SetValue(ibProtocol::ibView::ibCheckTree::Title, commonObject->GetName());
+	root.SetValue(ibProtocol::ibView::ibCheckTree::Picture, ibBackendPicture::SendPicture(g_metaCommonMetadataCLSID));
 	AppendRoles(root, commonObject);
 
 	// ASKED, NOT LISTED — does this object HAVE any rights? One with none has nothing to grant or deny, so it has no row

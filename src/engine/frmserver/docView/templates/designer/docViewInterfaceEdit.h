@@ -17,9 +17,9 @@ public:
 	// The section's composition — the configuration's row, under it a group per metatype, under each the objects of it
 	// that may be in a section, ticked where this one keeps them.
 	virtual void OnDraw(ibDataNode& frame) override;
-	virtual ibProtocolViewKind GetViewKind() const override { return ibProtocolViewKind::Interface; }
+	virtual ibProtocol::ibView::ibKind GetViewKind() const override { return ibProtocol::ibView::ibKind::Interface; }
 	// An object ticked or not (Toggle {NodeId, Checked}) — in the section or out of it.
-	virtual bool OnClientEvent(ibProtocolEvent event, const ibDataNode& args) override;
+	virtual bool OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args) override;
 
 private:
 

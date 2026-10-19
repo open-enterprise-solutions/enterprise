@@ -6,8 +6,8 @@
 
 void ibDialogEnterpriseOption::FillOption(const ibProtocolNode& shown)
 {
-	m_enableDebugger->SetValue(shown.GetBool(ibProtocolName::Debugging));
-	m_enableDebugger->Enable(shown.GetBool(ibProtocolName::Allowed));
+	m_enableDebugger->SetValue(shown.GetBool(ibProtocol::ibSchema::ibDebugging::Debugging));
+	m_enableDebugger->Enable(shown.GetBool(ibProtocol::ibSchema::ibDebugging::Allowed));
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////
@@ -49,15 +49,15 @@ void ibDialogEnterpriseOption::OnEnableDebugger(wxCommandEvent& event)
 	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
 	if (frame != nullptr) {
 		ibProtocolNode params, answer;
-		params.SetValue(ibProtocolName::Schema, static_cast<long long>(ibProtocolSchema::Debugging));
-		params.SetValue(ibProtocolName::Command, static_cast<long long>(m_enableDebugger->GetValue()
-			? ibProtocolSchemaCommand::Start : ibProtocolSchemaCommand::Stop));
-		frame->Call(ibProtocolMethod::Schema, params, answer);
+		params.SetValue(ibProtocol::ibSchema::Schema, static_cast<long long>(ibProtocol::ibSchema::ibKind::Debugging));
+		params.SetValue(ibProtocol::ibSchema::Command, static_cast<long long>(m_enableDebugger->GetValue()
+			? ibProtocol::ibSchema::ibCommand::Start : ibProtocol::ibSchema::ibCommand::Stop));
+		frame->Call(ibProtocol::ibMethod::Schema, params, answer);
 
 		ibProtocolNode shown;
 		params = ibProtocolNode();
-		params.SetValue(ibProtocolName::Schema, static_cast<long long>(ibProtocolSchema::Debugging));
-		if (frame->Call(ibProtocolMethod::Schema, params, shown))
+		params.SetValue(ibProtocol::ibSchema::Schema, static_cast<long long>(ibProtocol::ibSchema::ibKind::Debugging));
+		if (frame->Call(ibProtocol::ibMethod::Schema, params, shown))
 			FillOption(shown);
 	}
 

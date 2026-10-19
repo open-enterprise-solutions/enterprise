@@ -15,8 +15,8 @@ namespace {
 void WriteControl(const ibValueFrame* control, long long position, ibProtocolNode controls)
 {
 	ibProtocolNode node = controls.AddChild();
-	node.SetValue(ibProtocolName::Control, control->GetControlID())
-		.SetValue(ibProtocolName::Position, position);
+	node.SetValue(ibProtocol::ibRequest::ibFormEditor::Control, control->GetControlID())
+		.SetValue(ibProtocol::ibRequest::ibFormEditor::Position, position);
 
 	ibDataNode properties;
 	const ibPropertyCategory* const category = control->GetCategory();
@@ -63,7 +63,7 @@ void ibValueForm::SetActiveControl(ibValueFrame* control)
 		return;
 	m_activeControl = control;
 	if (control != nullptr)
-		control->Send(ibProtocolEvent::Focus);
+		control->Send(ibProtocol::ibEvent::ibKind::Focus);
 }
 
 void ibValueForm::UpdateForm()
@@ -73,8 +73,8 @@ void ibValueForm::UpdateForm()
 		return;
 
 	ibProtocolNode response;
-	response.SetValue(ibProtocolName::Act, static_cast<long long>(ibProtocolFormEditorAct::Apply));
-	WriteControl(this, wxNOT_FOUND, response.Child(ibProtocolName::Controls));
+	response.SetValue(ibProtocol::ibRequest::ibFormEditor::Act, static_cast<long long>(ibProtocol::ibRequest::ibFormEditor::ibAct::Apply));
+	WriteControl(this, wxNOT_FOUND, response.Child(ibProtocol::ibRequest::ibFormEditor::Controls));
 
 	// …and drawn anew by the answer: the controls read what they hold from the frame, as they always do.
 	frame->Respond(response);

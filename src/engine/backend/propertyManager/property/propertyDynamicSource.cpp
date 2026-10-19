@@ -75,3 +75,26 @@ bool ibPropertyDynamicSource::WriteNodeValue(ibDataValue& value) const
 	value = ibDataValue::Int((int)tableId);
 	return true;
 }
+
+#include "protocol/protocol.h"   // ibProtocol::ibSchema::ibProperties — the row's keys
+
+bool ibPropertyDynamicSource::GetProtocolValue(ibDataNode& row)
+{
+	if (!ibProperty::GetProtocolValue(row))
+		return false;
+	ibQueryableFactory* const factory = ibDynamicSourceFactory(m_owner);
+	if (factory == nullptr)
+		return true;
+	for (ibQueryableSourceDescriptor* const descriptor : factory->GetDescriptors()) {
+		if (descriptor == nullptr)
+			continue;
+		const ibBackendQueryable* const queryable = factory->Resolve(descriptor->GetNamespace(), descriptor->GetName());
+		const ibMetaID tableId = queryable != nullptr ? queryable->GetQueryTableId() : 0;
+		if (tableId == 0 || tableId == wxNOT_FOUND)
+			continue;   // a source with no table id (temp, computed) cannot be stored
+		ibDataNode& choice = row.AddChild(0, static_cast<ibMetaID>(row.Children().size() + 1));
+		choice.SetValue(ibProtocol::ibSchema::ibProperties::Id, static_cast<s32>(tableId));
+		choice.SetValue(ibProtocol::ibSchema::ibProperties::Title, descriptor->GetNamespace() + wxT(".") + descriptor->GetName());
+	}
+	return true;
+}

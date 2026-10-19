@@ -33,12 +33,12 @@ void ShapeOf(ibValueFrame* obj, wxString& shape)
 // …and the commands of each control's bar, as its node has them: one added, removed, moved or renamed is drawn too.
 void ShapeOf(const ibProtocolNode& node, const std::map<long long, ibProtocolNode>& rows, wxString& shape)
 {
-	const long long controlId = node.GetInt(ibProtocolName::ControlId);
+	const long long controlId = node.GetInt(ibProtocol::ibForm::ControlId);
 	const auto found = rows.find(controlId);
-	if (found != rows.end() && found->second.FindChild(ibProtocolName::CommandBar).IsNode()) {
+	if (found != rows.end() && found->second.FindChild(ibProtocol::ibForm::ibCommandBar::CommandBar).IsNode()) {
 		shape << controlId << wxT('{');
-		for (const ibProtocolNode& item : node.FindChild(ibProtocolName::Layers).FindChild(ibProtocolName::CommandBar).Children())
-			shape << item.GetString(ibProtocolName::Name) << wxT(';');
+		for (const ibProtocolNode& item : node.FindChild(ibProtocol::ibForm::ibCommandBar::Layers).FindChild(ibProtocol::ibForm::ibCommandBar::CommandBar).Children())
+			shape << item.GetString(ibProtocol::ibForm::Name) << wxT(';');
 		shape << wxT('}');
 	}
 	for (const ibProtocolNode& child : node.Children())
@@ -51,7 +51,7 @@ bool CanDeleteControl(const ibValueFrame* obj)
 {
 	if (obj == nullptr || obj->GetParent() == nullptr)
 		return false;
-	if (obj->GetClassName() == ibProtocolType::NotebookPage || obj->GetClassName() == ibProtocolType::TableboxColumn)
+	if (obj->GetClassName() == ibProtocol::ibForm::ibType::NotebookPage || obj->GetClassName() == ibProtocol::ibForm::ibType::TableboxColumn)
 		return obj->GetParent()->GetChildCount() > 1;
 	return true;
 }
@@ -182,7 +182,7 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::AddComman
 	// The desktop's HasCommandBar: the server writes the bar's rows only of a control that has one.
 	const long long controlId = obj->GetControlID();
 	const auto found = m_formHandler->m_rows.find(controlId);
-	if (found == m_formHandler->m_rows.end() || !found->second.FindChild(ibProtocolName::CommandBar).IsNode())
+	if (found == m_formHandler->m_rows.end() || !found->second.FindChild(ibProtocol::ibView::ibFormDesigner::CommandBar).IsNode())
 		return;
 
 	// Selecting it edits the bar's settings (AutoFill) — what it holds received as it is shown. Icon = the toolbar's.
@@ -190,7 +190,7 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::AddComman
 	if (bar == nullptr)
 		bar.reset(new ibValueCommandBar(m_formHandler, controlId));
 	const wxTreeItemId barNode = m_tcObjects->AppendItem(parent, _("Command interface"),
-		GetImageIndex(ibProtocolName::CommandBar), wxNOT_FOUND, new ibVisualEditorObjectTreeItemData(bar.get()));
+		GetImageIndex(ibProtocol::ibView::ibFormDesigner::CommandBar), wxNOT_FOUND, new ibVisualEditorObjectTreeItemData(bar.get()));
 	m_layerItemMap[bar.get()] = barNode;   // the bar node — re-selectable by identity after a rebuild
 
 	// Its commands as sub-nodes — remembered too, so a just-added / moved command can be re-selected after the rebuild.
@@ -199,8 +199,8 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::AddComman
 		std::unique_ptr<ibValueCommandBarItem>& item = m_commandBarItems[{ controlId, idx }];
 		if (item == nullptr)
 			item.reset(new ibValueCommandBarItem(m_formHandler, controlId, idx));
-		const wxTreeItemId itemNode = m_tcObjects->AppendItem(barNode, items[idx].GetString(ibProtocolName::Name),
-			GetImageIndex(ibProtocolName::CommandBarItem), wxNOT_FOUND, new ibVisualEditorObjectTreeItemData(item.get()));
+		const wxTreeItemId itemNode = m_tcObjects->AppendItem(barNode, items[idx].GetString(ibProtocol::ibView::ibFormDesigner::Name),
+			GetImageIndex(ibProtocol::ibView::ibFormDesigner::CommandBarItem), wxNOT_FOUND, new ibVisualEditorObjectTreeItemData(item.get()));
 		m_layerItemMap[item.get()] = itemNode;
 	}
 
@@ -233,12 +233,12 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::CreateTre
 	};
 
 	for (const ibProtocolNode& described : classes.Children())
-		addIcon(described.GetString(ibProtocolName::Name), ibProtocolPicture(described.GetString(ibProtocolName::Picture)));
+		addIcon(described.GetString(ibProtocol::ibView::ibFormDesigner::Name), ibProtocolPicture(described.GetString(ibProtocol::ibView::ibFormDesigner::Picture)));
 
 	// The command bar and its command — the engine's pictures, not a class the server describes (the desktop's were its
 	// toolbar's and tool's).
-	addIcon(ibProtocolName::CommandBar, ibBackendPicture::GetPicture(g_picCommandBarCLSID));
-	addIcon(ibProtocolName::CommandBarItem, ibBackendPicture::GetPicture(g_picCommandBarItemCLSID));
+	addIcon(ibProtocol::ibView::ibFormDesigner::CommandBar, ibBackendPicture::GetPicture(g_picCommandBarCLSID));
+	addIcon(ibProtocol::ibView::ibFormDesigner::CommandBarItem, ibBackendPicture::GetPicture(g_picCommandBarItemCLSID));
 
 	m_tcObjects->AssignImageList(m_iconList);
 }
@@ -683,15 +683,15 @@ ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorItemPopupMenu::ibVisualEdi
 	wxMenuItem* item = nullptr;
 
 	for (const ibProtocolNode& described : handler->m_classes.Children()) {
-		if (described.GetString(ibProtocolName::Name) != obj->GetClassName())
+		if (described.GetString(ibProtocol::ibView::ibFormDesigner::Name) != obj->GetClassName())
 			continue;
-		for (const ibProtocolNode& added : described.FindChild(ibProtocolName::Menu).Children()) {
-			const wxString className = added.GetString(ibProtocolName::Name);
-			item = Append(MENU_CREATE_OBJECT + static_cast<int>(m_classNames.size()), added.GetString(ibProtocolName::Title));
+		for (const ibProtocolNode& added : described.FindChild(ibProtocol::ibView::ibFormDesigner::Menu).Children()) {
+			const wxString className = added.GetString(ibProtocol::ibView::ibFormDesigner::Name);
+			item = Append(MENU_CREATE_OBJECT + static_cast<int>(m_classNames.size()), added.GetString(ibProtocol::ibView::ibFormDesigner::Title));
 			for (const ibProtocolNode& made : handler->m_classes.Children()) {
-				if (made.GetString(ibProtocolName::Name) != className)
+				if (made.GetString(ibProtocol::ibView::ibFormDesigner::Name) != className)
 					continue;
-				const wxBitmap picture = ibProtocolPicture(made.GetString(ibProtocolName::Picture));
+				const wxBitmap picture = ibProtocolPicture(made.GetString(ibProtocol::ibView::ibFormDesigner::Picture));
 				if (picture.IsOk())
 					item->SetBitmap(picture);
 				break;

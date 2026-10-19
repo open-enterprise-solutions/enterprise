@@ -762,7 +762,7 @@ bool ibDialogListSettings::ShowUserSettings(wxWindow* parent, const ibProtocolNo
 	ibSettingsDescription edited;
 	{
 		ibDataNode settings;
-		ibReadProtocolNode(request.FindChild(ibProtocolName::Settings), settings);
+		ibReadProtocolNode(request.FindChild(ibProtocol::ibRequest::ibListSettings::Settings), settings);
 		ibSettingsDescriptionMemory::ReadNode(settings, edited);
 	}
 
@@ -784,11 +784,11 @@ bool ibDialogListSettings::ShowUserSettings(wxWindow* parent, const ibProtocolNo
 	// (Max, 2026-08-24, screenshot). The panel prefers the query when there IS one.
 	// …as the server described them: its columns — name, how it reads, id, type, whether the options leave them — and
 	// which of their types are references, and to what (the [+] a field gets).
-	ibValueReferenceDataObject::ReadReferences(request.FindChild(ibProtocolName::References));
-	fields = ibReadSettingsFields(request.FindChild(ibProtocolName::Fields));
+	ibValueReferenceDataObject::ReadReferences(request.FindChild(ibProtocol::ibRequest::ibListSettings::References));
+	fields = ibReadSettingsFields(request.FindChild(ibProtocol::ibRequest::ibListSettings::Fields));
 
 	// A setting the server refused comes back with why — said before the window opens on it again.
-	const wxString error = request.GetString(ibProtocolName::Error);
+	const wxString error = request.GetString(ibProtocol::ibRequest::ibListSettings::Error);
 	if (!error.IsEmpty())
 		wxMessageBox(error, _("List settings"), wxOK | wxICON_WARNING, top);
 
@@ -800,6 +800,6 @@ bool ibDialogListSettings::ShowUserSettings(wxWindow* parent, const ibProtocolNo
 	// it refuses is asked again, with why.
 	ibDataNode settings;
 	ibSettingsDescriptionMemory::WriteNode(settings, edited);
-	ibWriteProtocolNode(settings, response.Child(ibProtocolName::Settings));
+	ibWriteProtocolNode(settings, response.Child(ibProtocol::ibRequest::ibListSettings::Settings));
 	return true;
 }
