@@ -240,9 +240,11 @@ bool ibVisualEditorNotebook::ibVisualEditor::SaveForm()
 	if (m_cmdProc.IsAtSavePoint() || !m_formNode.IsNode())
 		return true;
 
+	// HELD, not a call of its own — as a module's text is: what reads the form on the server (Save, the next request of
+	// the tab, a close) is a call, and carries it (Pending) ahead of its work; an edit asks the server nothing more.
 	ibProtocolNode args;
 	args.SetValue(ibProtocolName::Form, m_formNode);
-	m_document->Post(ibProtocolEvent::Change, args);
+	m_document->Hold(ibProtocolEvent::Change, args);
 	m_cmdProc.SetSavePoint();
 	return true;
 }
