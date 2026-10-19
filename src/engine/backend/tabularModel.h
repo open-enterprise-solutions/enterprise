@@ -1152,7 +1152,9 @@ public:
 		// rows THROUGH this (m_valueTable set → the storage IS the displayed row), so the edit lands directly; a
 		// DB-list COPY node (self-contained, m_valueTable null) just mirrors into the copy for the inline editor
 		// (the grid is read-only — a real edit goes via the object form). Out-of-line (non-trivial).
-		virtual bool SetValue(const ibMetaID& id, const ibValue& variant, bool notify = false);
+		// ⚠ EXPORTED BY ITSELF: a class nested in a BACKEND_API class is not exported with it on MSVC, and this one
+		// is defined out of line (tabularModel.cpp) — a caller outside the backend (test_tabularEnumPersist) did not link.
+		BACKEND_API virtual bool SetValue(const ibMetaID& id, const ibValue& variant, bool notify = false);
 
 		bool SetValue(unsigned int col, const wxVariant& variant, bool notify = false) {
 			try {
