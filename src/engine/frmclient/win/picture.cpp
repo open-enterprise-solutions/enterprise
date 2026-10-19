@@ -46,7 +46,31 @@ wxBitmap EnginePicture(const wxString& id)
 	return image.IsOk() ? wxBitmap(image.Scale(16, 16, wxIMAGE_QUALITY_HIGH)) : wxBitmap();
 }
 
+// The picture ids an answer names, wherever they are: a field that holds one by its name (Picture, Icon, OwnerPicture…).
+void NamedPictures(const ibProtocolNode& node, std::vector<wxString>& ids)
+{
+	for (const auto& [name, value] : node.Entries()) {
+		if (value.IsString()) {
+			if (name == "Icon" || (name.size() >= 7 && name.compare(name.size() - 7, 7, "Picture") == 0))
+				ids.push_back(value.AsString());
+		}
+		else if (value.IsNode())
+			NamedPictures(value, ids);
+		else if (value.IsList()) {
+			for (const ibProtocolNode& item : node.GetList(name.c_str()))
+				NamedPictures(item, ids);
+		}
+	}
+}
+
 } // namespace
+
+void ibProtocolPictureReceiveAll(const ibProtocolNode& answer)
+{
+	std::vector<wxString> ids;
+	NamedPictures(answer, ids);
+	ibProtocolPictureReceive(ids);
+}
 
 wxBitmap ibProtocolPicture(const wxString& value)
 {
