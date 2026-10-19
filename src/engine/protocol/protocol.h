@@ -341,6 +341,8 @@ namespace ibProtocolName {
 	inline constexpr const char* Anchor           = "Anchor";
 	inline constexpr const char* Parent           = "Parent";
 	inline constexpr const char* Count            = "Count";
+	inline constexpr const char* Before           = "Before";   // (protocol 4) a reset fetch's: the rows wanted ahead of
+	                                                            // the page — answered with how many stand first
 	inline constexpr const char* End              = "End";
 	inline constexpr const char* Container        = "Container";
 	inline constexpr const char* Group            = "Group";
@@ -421,7 +423,10 @@ namespace ibProtocolType {
 //   3  …and a state event (ibProtocolIsStateEvent) its control's State does not list in Subscribed is held by the client,
 //      the latest of each kind per control, and carried by its next call, whatever it is, as Pending — which the
 //      server applies, in order, before the call itself.
-constexpr int ibProtocolVersion = 3;
+//   4  …and a reset fetch (Direction 0) may name Before: the server reads up to that many rows ahead of the page too,
+//      puts them first, and answers Before — how many of the rows stand ahead of it. An answer without Before is a
+//      server below 4: the client reads them itself, a second fetch.
+constexpr int ibProtocolVersion = 4;
 
 // WHAT A CLIENT ASKS THE SERVER. On the wire a method is a name, as JSON-RPC has it; in code it is a type: the server
 // reads the name once (ibProtocolMethodFromName) and nothing past it compares strings. A name is never changed; a new
