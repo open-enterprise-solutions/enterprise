@@ -115,6 +115,12 @@ those its query text adds (`Text`, optional), answered as `Kind` 21 answers (`Fi
 reference opened is `Kind` 22. Its `ibPropertyDynamicSource` row carries the sources the configuration registers as
 choices (`Id` the table id, `Title` namespace.name); picking one is the row's `Set`, after which the list is rebuilt over
 that table. A list with no source keeps no settings in the form, as in the desktop designer.
+A calculation register's `ibPropertyCalcSchedule` row carries, besides the registers it may name as its choices, the
+lists its sub-rows choose from for the register bound now as an optional node `Schedule`: children with `Kind` 1 (a
+resource that may be the value), 2 (a dimension that may be the date) and 3 (a dimension to link, its own children the
+fields of the calculation register that may answer for it), each with `Id` and `Title`. The edited description goes
+back through the row's `Set`, and the rows of the answer carry the lists for the register and date now bound. A client
+that reads no `Schedule` shows the row read-only; a server that writes none leaves it so.
 
 A picture is named by its id everywhere — in the view, a tab's `Icon`, a schema, a request, a list of choices: a
 backend picture's number, as a decimal (a class's own: its class id), or a configuration picture's guid. No answer

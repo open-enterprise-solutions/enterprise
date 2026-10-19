@@ -19,6 +19,9 @@ public:
 	ibMetaID GetObjectId() const { return m_objectId; }
 	// An event's: its procedure's parameters, as the desktop's ibEvent has them (the row's Args); none: empty.
 	const wxArrayString& GetArgs() const { return m_args; }
+	// The row as the server wrote it — for a cell that reads more of it than every row has (a calculation register's
+	// Schedule: the lists its sub-rows choose from).
+	const ibDataNode& GetRow() const { return m_row; }
 
 	// …unless the server says it is not (its own IsEditable — the row's ReadOnly).
 	virtual bool IsEditable() const override { return !m_readOnly && ibProperty::IsEditable(); }
@@ -38,6 +41,7 @@ protected:
 
 private:
 
+	ibDataNode m_row;
 	wxString m_type;
 	ibDataValue m_value;
 	ibPropertyChoiceList m_choices;

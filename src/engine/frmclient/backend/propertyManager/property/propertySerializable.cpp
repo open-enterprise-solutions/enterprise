@@ -6,6 +6,7 @@
 ibPropertySerializable::ibPropertySerializable(ibPropertyCategory* cat, const ibDataNode& row) :
 	ibProperty(cat, row.GetValue<wxString>(ibProtocolName::Name), row.GetValue<wxString>(ibProtocolName::Title),
 		row.GetValue<wxString>(ibProtocolName::Help), wxVariant(row.GetValue<wxString>(ibProtocolName::Presentation))),
+	m_row(row),
 	m_type(row.GetValue<wxString>(ibProtocolName::Class)),
 	m_readOnly(row.GetValue<bool>(ibProtocolName::ReadOnly)),
 	m_objectId(row.GetValue<s32>(ibProtocolName::Object))
