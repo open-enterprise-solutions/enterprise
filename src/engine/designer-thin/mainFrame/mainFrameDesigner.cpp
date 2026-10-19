@@ -161,6 +161,21 @@ ibTabDocument* ibFrontendMainFrameDesigner::CreateDocument(ibProtocolViewKind ki
 	return ibFrontendMainFrame::CreateDocument(kind, tabId);
 }
 
+std::vector<int> ibFrontendMainFrameDesigner::ReadsAtLogin() const
+{
+	return { static_cast<int>(ibProtocolSchema::Debugger) };
+}
+
+void ibFrontendMainFrameDesigner::TakeLogin(const ibProtocolNode& answer)
+{
+	for (const ibProtocolNode& read : answer.FindChild(ibProtocolName::Read).Children()) {
+		if (read.GetInt(ibProtocolName::Schema) == static_cast<long long>(ibProtocolSchema::Debugger)) {
+			m_debuggerStore = read;
+			m_debuggerStoreRead = true;
+		}
+	}
+}
+
 bool ibFrontendMainFrameDesigner::Show(bool show)
 {
 	bool ret = ibFrontendMainFrame::Show(show);
@@ -168,7 +183,7 @@ bool ibFrontendMainFrameDesigner::Show(bool show)
 		// The debugger, over the configuration now logged in to — the desktop's was made with its configuration
 		// (ibMetaDataConfigurationStorage::OnInitialize).
 		if (m_debugClient == nullptr)
-			m_debugClient.reset(new ibDebuggerClient);
+			m_debugClient.reset(new ibDebuggerClient(m_debuggerStoreRead ? &m_debuggerStore : nullptr));
 
 		// The assistant comes up with the designer where the desktop's window started it — on the server, as the
 		// designer's session starts (ibClientFrameDesigner::CreateStartupPage); its refusal comes in the messages.

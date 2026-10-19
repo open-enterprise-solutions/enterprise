@@ -46,6 +46,8 @@ namespace ibProtocolName {
 	inline constexpr const char* Features = "Features";
 	inline constexpr const char* FeatureResume = "resume";   // the same-process window only. A client names it in
 	                                                          // login's Features to opt into the idempotency slot.
+	inline constexpr const char* Read     = "Read";      // login: the schemas the client reads at its start ({Schema}),
+	                                                   // answered beside the frame, each with its Schema
 	inline constexpr const char* Client   = "Client";
 	inline constexpr const char* Since    = "Since";
 	inline constexpr const char* Pending  = "Pending";   // (protocol 3) the state events held since the last call, in

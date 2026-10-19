@@ -32,7 +32,7 @@ deflate (RFC 1951 — a browser's `DecompressionStream("deflate-raw")`). A text 
 
 | Method | Parameters | Answer |
 |---|---|---|
-| `login` | `User`, `Password`, `Mode` (1 runtime — the default, 2 designer), `Protocol` (the newest version the client speaks, 1 if absent), `Features` (what this client accepts; `resume` opts into the slot below) | `Client`, `Protocol` (the version both speak), `Features` (what the server offers; `resume` when a dropped thin runtime is kept), `Token` (that runtime only, once), and the frame |
+| `login` | `User`, `Password`, `Mode` (1 runtime — the default, 2 designer), `Protocol` (the newest version the client speaks, 1 if absent), `Features` (what this client accepts; `resume` opts into the slot below), `Read` (the schemas the client reads right after its start, each `{Schema}`) | `Client`, `Protocol` (the version both speak), `Features` (what the server offers; `resume` when a dropped thin runtime is kept), `Token` (that runtime only, once), `Read` (each schema of the login's `Read` the server built, as `schema` answers it, with its `Schema`), and the frame |
 | `login` | `Token` and no `User`, only while that client is detached | the same `Client`, `Protocol`, `Features`, and no frame and no new `Token`. The next `frame` `{Since}` is the patch |
 | `users` | — (before the login, no `Client`) | `Users` — the names the login window offers |
 | `logout` | `Client` | — |
@@ -50,6 +50,11 @@ deflate (RFC 1951 — a browser's `DecompressionStream("deflate-raw")`). A text 
 | `command` | `Client`, `Command` | the frame — the command done on the active tab's document |
 | `presentation` | `Client`, `Value`, `Format` | `Text` — the value as a person reads it, formatted by the server (`Format`: the codes `Format()` takes) |
 | `picture` | `Client`, `Pictures` — the ids | `Pictures` — each `Id`, `Picture` (PNG, base64; empty when there is none of that id) |
+
+`login`'s `Read` saves the start's own reads: the designer names the debugger's store (`Schema` 15), which was a
+call of its own at every start. A schema the server does not know, the person has no right to, or that could not be
+built is left out of the answer, and so is everything while the start waits on a question; an older server answers no
+`Read` at all. Either way the client reads what is missing with `schema`, as before — no protocol version is needed.
 
 A method name is never changed; a new method takes a new name. Every number below is the protocol's: never
 renumbered, a new one takes the next. A field a side does not know is skipped; an absent field is its default — so

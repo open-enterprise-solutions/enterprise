@@ -131,6 +131,8 @@ private:
 		std::atomic<std::int64_t>         resumeDeadlineMs{ 0 };
 	};
 
+	// login's Read: the schemas the client names, built beside the frame of its start.
+	static void             ReadAtLogin(Client& client, const ibDataNode& params, ibDataNode& result);
 	std::shared_ptr<Client> FindClient(const wxString& id) const;
 	std::shared_ptr<Client> FindByDigest(const unsigned char* digest) const;
 	void                    RemoveClient(const wxString& id);

@@ -196,6 +196,10 @@ protected:
 	// server, which answers only once no question of the start is pending. Default: nothing; the runtime builds its
 	// section panel.
 	virtual void CreateStartupPage() {}
+	// The schemas read right after the login, asked in it (login's Read), and the answer they came in: a server that
+	// answers them puts each beside the frame, with its Schema.
+	virtual std::vector<int> ReadsAtLogin() const { return {}; }
+	virtual void TakeLogin(const ibProtocolNode& WXUNUSED(answer)) {}
 
 	// May the window go down? The server's Exit closes each tab but the start page, asking about what is unsaved; a tab
 	// the person kept keeps the window.

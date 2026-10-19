@@ -120,7 +120,7 @@ ibCommunicator::~ibCommunicator()
 }
 
 bool ibCommunicator::Login(const wxString& user, const wxString& password, ibProtocolMode mode, ibProtocolNode& result,
-	ibProtocolRefusal& refusal, wxString& error)
+	ibProtocolRefusal& refusal, wxString& error, const std::vector<int>& reads)
 {
 	std::lock_guard<std::mutex> lock(m_mutex);
 	Forget();
@@ -132,6 +132,8 @@ bool ibCommunicator::Login(const wxString& user, const wxString& password, ibPro
 		.SetValue(ibProtocolName::Protocol, ibProtocolVersion);
 	// Opt into the slot. A server that does not offer `resume` ignores it.
 	params.AddItem(ibProtocolName::Features, wxString::FromUTF8(ibProtocolName::FeatureResume));
+	for (const int schema : reads)
+		params.AddItem(ibProtocolName::Read).SetValue(ibProtocolName::Schema, static_cast<long long>(schema));
 	if (!CallLocked(ibProtocolMethod::Login, params, result, refusal, error))
 		return false;
 
