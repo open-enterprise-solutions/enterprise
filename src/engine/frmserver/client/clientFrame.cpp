@@ -348,14 +348,14 @@ bool ibClientFrame::UpdateFormUniqueKey(const ibUniqueKeyPair& guid)
 bool ibClientFrame::ShowSpreadsheetDocument(const wxString& strTitle, std::shared_ptr<ibSpreadsheetObject>& spreadSheetDocument)
 {
 	class ibSpreadsheetMemoryDocument :
-		public ibSpreadsheetFileDocument {
+		public ibSheetFileDocument {
 	public:
 
 		ibSpreadsheetMemoryDocument(const wxString& strTitle, const std::shared_ptr<ibSpreadsheetObject>& spreadSheetDocument) :
-			ibSpreadsheetFileDocument(spreadSheetDocument)
+			ibSheetFileDocument(spreadSheetDocument)
 		{
-			ibSpreadsheetFileDocument::SetTitle(strTitle);
-			ibSpreadsheetFileDocument::SetFilename(strTitle);
+			ibSheetFileDocument::SetTitle(strTitle);
+			ibSheetFileDocument::SetFilename(strTitle);
 		}
 	};
 

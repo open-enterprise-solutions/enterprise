@@ -48,8 +48,8 @@ bool ibValueGridBox::GetControlValue(ibValue& pvarControlVal) const
 
 ibValueGridBox::ibValueGridBox() : ibValueWindowComposite(),
 m_spreadsheetModel(new ibValueSpreadsheetDocument()),   // nothing bound yet — a sheet of its own IS a model
-m_gridDocument(new ibSpreadsheetGridBoxDocument()),
-m_gridView(new ibSpreadsheetGridBoxView())
+m_gridDocument(new ibSheetGridBoxDocument()),
+m_gridView(new ibSheetGridBoxView())
 {
 	m_gridView->SetDocument(m_gridDocument);
 	m_gridDocument->SetSpreadsheetDocument(m_spreadsheetModel->GetSpreadsheetDocument());

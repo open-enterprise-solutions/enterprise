@@ -11,10 +11,10 @@
 
 // The view of a spreadsheet document — its sheet drawn as a gridbox draws its own: a gridbox's node, the sheet read by a
 // client the same way (ibFetchSpreadsheet).
-class FRMSERVER_API ibSpreadsheetEditView : public ibMetaView
+class FRMSERVER_API ibSheetView : public ibMetaView
 {
 public:
-	ibSpreadsheetEditView() : ibMetaView() {}
+	ibSheetView() : ibMetaView() {}
 
 	virtual void OnDraw(ibDataNode& frame) override;
 	virtual ibProtocolViewKind GetViewKind() const override { return ibProtocolViewKind::Spreadsheet; }
@@ -23,23 +23,23 @@ public:
 	// clicked (Cell {Row, Col}) — the value it is bound to, opened.
 	virtual bool OnClientEvent(ibProtocolEvent event, const ibDataNode& args) override;
 
-	wxDECLARE_DYNAMIC_CLASS(ibSpreadsheetEditView);
+	wxDECLARE_DYNAMIC_CLASS(ibSheetView);
 };
 
 // ----------------------------------------------------------------------------
-// ibSpreadsheetDocument: ibDocument and its sheet married
+// ibSheetDocument: ibDocument and its sheet married
 // ----------------------------------------------------------------------------
 
 #include "backend/metaCollection/metaSpreadsheetObject.h"
 
-class FRMSERVER_API ibSpreadsheetDocument : public ibMetaDocument {
+class FRMSERVER_API ibSheetDocument : public ibMetaDocument {
 public:
 
 	virtual ibPictureDescription GetIcon() const {
 		return ibPictureDescription(g_metaCommonTemplateCLSID);
 	}
 
-	ibSpreadsheetDocument() : ibMetaDocument() {}
+	ibSheetDocument() : ibMetaDocument() {}
 
 	// The sheet the document holds…
 	virtual const ibSpreadsheetObject& GetSpreadsheet() const = 0;
@@ -47,18 +47,18 @@ public:
 	virtual void SetSpreadsheetDesc(ibSpreadsheetDescription&& spreadsheetDesc) = 0;
 
 private:
-	wxDECLARE_NO_COPY_CLASS(ibSpreadsheetDocument);
-	wxDECLARE_ABSTRACT_CLASS(ibSpreadsheetDocument);
+	wxDECLARE_NO_COPY_CLASS(ibSheetDocument);
+	wxDECLARE_ABSTRACT_CLASS(ibSheetDocument);
 };
 
 // ----------------------------------------------------------------------------
 // A very simple spreadsheet document class
 // ----------------------------------------------------------------------------
 
-class FRMSERVER_API ibSpreadsheetFileDocument : public ibSpreadsheetDocument {
+class FRMSERVER_API ibSheetFileDocument : public ibSheetDocument {
 public:
 
-	ibSpreadsheetFileDocument(const std::shared_ptr<ibSpreadsheetObject>& spreadSheetDocument = std::make_shared<ibSpreadsheetObject>()) : ibSpreadsheetDocument(), m_spreadSheetDocument(spreadSheetDocument) { m_childDoc = false; }
+	ibSheetFileDocument(const std::shared_ptr<ibSpreadsheetObject>& spreadSheetDocument = std::make_shared<ibSpreadsheetObject>()) : ibSheetDocument(), m_spreadSheetDocument(spreadSheetDocument) { m_childDoc = false; }
 
 	virtual bool OnNewDocument() override {
 
@@ -98,8 +98,8 @@ protected:
 
 private:
 
-	wxDECLARE_NO_COPY_CLASS(ibSpreadsheetFileDocument);
-	wxDECLARE_DYNAMIC_CLASS(ibSpreadsheetFileDocument);
+	wxDECLARE_NO_COPY_CLASS(ibSheetFileDocument);
+	wxDECLARE_DYNAMIC_CLASS(ibSheetFileDocument);
 };
 
 // ----------------------------------------------------------------------------
@@ -108,10 +108,10 @@ private:
 
 // A spreadsheet file document — it holds the sheet the box shows and saves it as every format the registry
 // writes — in no manager's list and no tab of its own.
-class FRMSERVER_API ibSpreadsheetGridBoxDocument : public ibSpreadsheetFileDocument {
+class FRMSERVER_API ibSheetGridBoxDocument : public ibSheetFileDocument {
 public:
 
-	ibSpreadsheetGridBoxDocument();
+	ibSheetGridBoxDocument();
 
 	// The one door a sheet is shown through.
 	void SetSpreadsheetDocument(const std::shared_ptr<ibSpreadsheetObject>& spreadSheetDocument) { m_spreadSheetDocument = spreadSheetDocument; }
@@ -122,20 +122,20 @@ public:
 
 private:
 
-	wxDECLARE_NO_COPY_CLASS(ibSpreadsheetGridBoxDocument);
-	wxDECLARE_DYNAMIC_CLASS(ibSpreadsheetGridBoxDocument);
+	wxDECLARE_NO_COPY_CLASS(ibSheetGridBoxDocument);
+	wxDECLARE_DYNAMIC_CLASS(ibSheetGridBoxDocument);
 };
 
 // Its view, for as long as the box lives. Its frame is the box's, not one of its own, so there is no title to mark.
-class FRMSERVER_API ibSpreadsheetGridBoxView : public ibSpreadsheetEditView {
+class FRMSERVER_API ibSheetGridBoxView : public ibSheetView {
 public:
 
-	ibSpreadsheetGridBoxView() : ibSpreadsheetEditView() {}
+	ibSheetGridBoxView() : ibSheetView() {}
 
 	virtual void OnChangeFilename() override {}
 
 private:
-	wxDECLARE_DYNAMIC_CLASS(ibSpreadsheetGridBoxView);
+	wxDECLARE_DYNAMIC_CLASS(ibSheetGridBoxView);
 };
 
 #endif
