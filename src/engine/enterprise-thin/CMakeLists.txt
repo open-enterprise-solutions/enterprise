@@ -42,4 +42,5 @@ target_link_libraries(enterprise-thin PRIVATE
     protocol
     frmclient
     wx::core wx::aui wx::stc wx::adv wx::base
+    wx::net   # wxSocketBase::Initialize in OnInit (the in-process debugger's sockets)
 )
