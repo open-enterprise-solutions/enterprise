@@ -452,7 +452,7 @@ namespace ibProtocol {
 			Schedule         = 16,   // ibSchedule
 			ApplyChange      = 17,   // ibApplyChange
 			FormType         = 18,   // ibFormType
-			DeclaredChoice   = 19,   // ibDeclaredChoice
+			PredefinedSelector = 19,   // ibPredefinedSelector
 		};
 
 		// Text, Caption, Style (wx's button flags) → Button (wx's code: 2 Yes, 8 No, 4 OK, 16 Cancel).
@@ -625,9 +625,9 @@ namespace ibProtocol {
 				              // (children as Fields') and their References
 				Choose = 2,   // a value of a type of the server's chosen (Type — its class id as text, Value — the one held,
 				              // Choice — the number the client asks it under, Declared — the cell's full type when known):
-				              // its quick choice, its choice form, or in the designer DeclaredChoice; what is chosen comes
-				              // back in the window's question as Chosen (Choice, and Value with its Presentation beside
-				              // {t, v}), whenever it is
+				              // its quick choice, its choice form, or in the designer PredefinedSelector; what is chosen
+				              // comes back in the window's question as Chosen (Choice, and Value with its Presentation
+				              // beside {t, v}), whenever it is
 			};
 
 		}
@@ -717,7 +717,7 @@ namespace ibProtocol {
 		// children Name, Guid (empty Guid is EmptyRef; nested children are folders). Primitives — Id, Caption, Type
 		// (class id as text) offered beside the technical declared-value entry → Type (a primitive settled) or
 		// MetaId, Guid, Written (the declaration); none — cancelled.
-		namespace ibDeclaredChoice {
+		namespace ibPredefinedSelector {
 
 			inline constexpr const char* Caption    = "Caption";
 			inline constexpr const char* Types      = "Types";       // children: Title, MetaId, and value children

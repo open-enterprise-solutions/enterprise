@@ -1,8 +1,8 @@
 ////////////////////////////////////////////////////////////////////////////
-//	Description : DeclaredChoice dialog — EmptyRef / predefined / enum for the thin designer
+//	Description : PredefinedSelector dialog — EmptyRef / predefined / enum for the thin designer
 ////////////////////////////////////////////////////////////////////////////
 
-#include "selectDeclared.h"
+#include "selectPredefined.h"
 
 #include <wx/choicdlg.h>
 #include <wx/dialog.h>
@@ -29,10 +29,10 @@ void FillValues(wxTreeCtrl* tree, const wxTreeItemId& parent, const ibProtocolNo
 	s32 metaId, const wxString& typeTitle)
 {
 	for (const ibProtocolNode& child : node.Children()) {
-		const wxString name = child.GetString(ibProtocol::ibRequest::ibDeclaredChoice::Name);
-		if (name.IsEmpty() && !child.Has(ibProtocol::ibRequest::ibDeclaredChoice::Guid))
+		const wxString name = child.GetString(ibProtocol::ibRequest::ibPredefinedSelector::Name);
+		if (name.IsEmpty() && !child.Has(ibProtocol::ibRequest::ibPredefinedSelector::Guid))
 			continue;
-		const wxString guid = child.GetString(ibProtocol::ibRequest::ibDeclaredChoice::Guid);
+		const wxString guid = child.GetString(ibProtocol::ibRequest::ibPredefinedSelector::Guid);
 		const wxTreeItemId at = tree->AppendItem(parent, name.IsEmpty() ? wxString(wxT("EmptyRef")) : name,
 			-1, -1, new ibDeclaredItem(metaId, guid, name.IsEmpty() ? wxString(wxT("EmptyRef")) : name, typeTitle));
 		FillValues(tree, at, child, metaId, typeTitle);
@@ -44,8 +44,8 @@ void FillTree(wxTreeCtrl* tree, const ibProtocolNode& types)
 	tree->DeleteAllItems();
 	const wxTreeItemId hidden = tree->AddRoot(wxT("*"));
 	for (const ibProtocolNode& branch : types.Children()) {
-		const wxString title = branch.GetString(ibProtocol::ibRequest::ibDeclaredChoice::Title);
-		const s32 metaId = static_cast<s32>(branch.GetInt(ibProtocol::ibRequest::ibDeclaredChoice::MetaId));
+		const wxString title = branch.GetString(ibProtocol::ibRequest::ibPredefinedSelector::Title);
+		const s32 metaId = static_cast<s32>(branch.GetInt(ibProtocol::ibRequest::ibPredefinedSelector::MetaId));
 		const wxTreeItemId at = tree->AppendItem(hidden, title);
 		FillValues(tree, at, branch, metaId, title);
 	}
@@ -64,11 +64,11 @@ constexpr int kDeclaredId = -1;
 
 } // namespace
 
-bool ibDialogSelectDeclared::ShowModal(const ibProtocolNode& request, ibProtocolNode& response)
+bool ibShowPredefinedSelector(const ibProtocolNode& request, ibProtocolNode& response)
 {
 	wxWindow* const parent = ibFrontendMainFrame::GetFrame();
-	const ibProtocolNode types = request.FindChild(ibProtocol::ibRequest::ibDeclaredChoice::Types);
-	const ibProtocolNode primitives = request.FindChild(ibProtocol::ibRequest::ibDeclaredChoice::Primitives);
+	const ibProtocolNode types = request.FindChild(ibProtocol::ibRequest::ibPredefinedSelector::Types);
+	const ibProtocolNode primitives = request.FindChild(ibProtocol::ibRequest::ibPredefinedSelector::Primitives);
 	if (!types.IsNode() || types.Children().empty())
 		return false;
 
@@ -79,23 +79,23 @@ bool ibDialogSelectDeclared::ShowModal(const ibProtocolNode& request, ibProtocol
 		std::vector<int> ids;
 		std::vector<wxString> typeIds;
 		for (const ibProtocolNode& item : primitives.Children()) {
-			captions.Add(item.GetString(ibProtocol::ibRequest::ibDeclaredChoice::Caption));
-			ids.push_back(static_cast<int>(item.GetInt(ibProtocol::ibRequest::ibDeclaredChoice::Id)));
-			typeIds.push_back(item.GetString(ibProtocol::ibRequest::ibDeclaredChoice::Type));
+			captions.Add(item.GetString(ibProtocol::ibRequest::ibPredefinedSelector::Caption));
+			ids.push_back(static_cast<int>(item.GetInt(ibProtocol::ibRequest::ibPredefinedSelector::Id)));
+			typeIds.push_back(item.GetString(ibProtocol::ibRequest::ibPredefinedSelector::Type));
 		}
 		captions.Add(_("Declared value"));
 		ids.push_back(kDeclaredId);
 		typeIds.push_back(wxString());
 
 		wxSingleChoiceDialog typeDlg(parent,
-			request.GetString(ibProtocol::ibRequest::ibDeclaredChoice::Caption),
-			request.GetString(ibProtocol::ibRequest::ibDeclaredChoice::Caption),
+			request.GetString(ibProtocol::ibRequest::ibPredefinedSelector::Caption),
+			request.GetString(ibProtocol::ibRequest::ibPredefinedSelector::Caption),
 			captions);
 		if (typeDlg.ShowModal() != wxID_OK || typeDlg.GetSelection() < 0)
 			return false;
 		const int sel = typeDlg.GetSelection();
 		if (ids[static_cast<size_t>(sel)] != kDeclaredId) {
-			response.SetValue(ibProtocol::ibRequest::ibDeclaredChoice::Type, typeIds[static_cast<size_t>(sel)]);
+			response.SetValue(ibProtocol::ibRequest::ibPredefinedSelector::Type, typeIds[static_cast<size_t>(sel)]);
 			return true;
 		}
 		pickDeclared = true;
@@ -106,9 +106,9 @@ bool ibDialogSelectDeclared::ShowModal(const ibProtocolNode& request, ibProtocol
 
 	// SECOND QUESTION — the tree of declared values.
 	wxDialog dlg(parent, wxID_ANY,
-		request.GetString(ibProtocol::ibRequest::ibDeclaredChoice::Caption).IsEmpty()
+		request.GetString(ibProtocol::ibRequest::ibPredefinedSelector::Caption).IsEmpty()
 			? wxString(_("Select a predefined value"))
-			: request.GetString(ibProtocol::ibRequest::ibDeclaredChoice::Caption),
+			: request.GetString(ibProtocol::ibRequest::ibPredefinedSelector::Caption),
 		wxDefaultPosition, parent != nullptr ? wxDLG_UNIT(parent, wxSize(170, 130)) : wxDefaultSize,
 		wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER);
 
@@ -134,10 +134,10 @@ bool ibDialogSelectDeclared::ShowModal(const ibProtocolNode& request, ibProtocol
 	if (chosen == nullptr)
 		return false;
 
-	response.SetValue(ibProtocol::ibRequest::ibDeclaredChoice::MetaId, static_cast<long long>(chosen->m_metaId));
-	response.SetValue(ibProtocol::ibRequest::ibDeclaredChoice::Guid, chosen->m_guid);
-	response.SetValue(ibProtocol::ibRequest::ibDeclaredChoice::Name, chosen->m_name);
-	response.SetValue(ibProtocol::ibRequest::ibDeclaredChoice::Written,
+	response.SetValue(ibProtocol::ibRequest::ibPredefinedSelector::MetaId, static_cast<long long>(chosen->m_metaId));
+	response.SetValue(ibProtocol::ibRequest::ibPredefinedSelector::Guid, chosen->m_guid);
+	response.SetValue(ibProtocol::ibRequest::ibPredefinedSelector::Name, chosen->m_name);
+	response.SetValue(ibProtocol::ibRequest::ibPredefinedSelector::Written,
 		chosen->m_typeTitle + wxT(".") + chosen->m_name);
 	return true;
 }

@@ -256,6 +256,9 @@
     <ClCompile Include="win\dlgs\applyChange.cpp">
       <Filter>win\dlgs</Filter>
     </ClCompile>
+    <ClCompile Include="win\dlgs\selectPredefined.cpp">
+      <Filter>win\dlgs</Filter>
+    </ClCompile>
     <ClCompile Include="win\dlgs\formEditor.cpp">
       <Filter>win\dlgs</Filter>
     </ClCompile>
@@ -710,6 +713,9 @@
       <Filter>visualView</Filter>
     </ClInclude>
     <ClInclude Include="win\dlgs\applyChange.h">
+      <Filter>win\dlgs</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\selectPredefined.h">
       <Filter>win\dlgs</Filter>
     </ClInclude>
     <ClInclude Include="win\dlgs\formEditor.h">

@@ -1,8 +1,8 @@
-#ifndef __SELECT_DECLARED_H__
-#define __SELECT_DECLARED_H__
+#ifndef __FRMCLIENT_SELECT_PREDEFINED_H__
+#define __FRMCLIENT_SELECT_PREDEFINED_H__
 
 ////////////////////////////////////////////////////////////////////////////
-// THE DESIGNER'S DECLARED-VALUE WINDOW — protocol DeclaredChoice
+// THE DESIGNER'S CHOICE OF A DECLARED VALUE — the desktop's selectPredefined, asked as PredefinedSelector
 ////////////////////////////////////////////////////////////////////////////
 //
 // Mirrors the desktop's ibShowPredefinedSelector: primitives (optional) plus one technical
@@ -14,11 +14,8 @@
 #include "protocol/protocolNode.h"
 #include "protocol/protocol.h"
 
-class FRMCLIENT_API ibDialogSelectDeclared {
-public:
-	// Shows the picker for `request` (Kind DeclaredChoice). True when the person chose a value
-	// and `response` holds Type or MetaId/Guid/Written; false when cancelled.
-	static bool ShowModal(const ibProtocolNode& request, ibProtocolNode& response);
-};
+// Shows the picker for `request` (Kind PredefinedSelector). True when the person chose a value
+// and `response` holds Type or MetaId/Guid/Written; false when cancelled.
+FRMCLIENT_API bool ibShowPredefinedSelector(const ibProtocolNode& request, ibProtocolNode& response);
 
-#endif // __SELECT_DECLARED_H__
+#endif // __FRMCLIENT_SELECT_PREDEFINED_H__

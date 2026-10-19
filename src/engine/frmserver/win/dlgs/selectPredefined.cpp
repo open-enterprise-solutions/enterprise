@@ -1,8 +1,8 @@
 ////////////////////////////////////////////////////////////////////////////
-//	Description : DeclaredChoice — the designer's declared-value picker over the protocol
+//	Description : PredefinedSelector — the designer's declared-value picker over the protocol
 ////////////////////////////////////////////////////////////////////////////
 
-#include "declaredChoice.h"
+#include "selectPredefined.h"
 
 #include <algorithm>
 #include <map>
@@ -33,16 +33,16 @@ void WriteOneTypeValues(ibDataNode& branch, const ibValueMetaObjectRecordDataRef
 		return;
 
 	ibDataNode& empty = branch.AddChild(0, 0);
-	empty.SetValue(ibProtocol::ibRequest::ibDeclaredChoice::Name, wxString(ibRefMember::EmptyRef));
-	empty.SetValue(ibProtocol::ibRequest::ibDeclaredChoice::Guid, wxString());
+	empty.SetValue(ibProtocol::ibRequest::ibPredefinedSelector::Name, wxString(ibRefMember::EmptyRef));
+	empty.SetValue(ibProtocol::ibRequest::ibPredefinedSelector::Guid, wxString());
 
 	if (const auto* enumeration = dynamic_cast<const ibValueMetaObjectRecordDataEnumRef*>(recordRef)) {
 		for (const ibValueMetaObjectEnum* member : enumeration->GetEnumObjectArray()) {
 			if (member == nullptr)
 				continue;
 			ibDataNode& leaf = branch.AddChild(0, 0);
-			leaf.SetValue(ibProtocol::ibRequest::ibDeclaredChoice::Name, member->GetName());
-			leaf.SetValue(ibProtocol::ibRequest::ibDeclaredChoice::Guid, ibGuid(member->GetGuid()).str());
+			leaf.SetValue(ibProtocol::ibRequest::ibPredefinedSelector::Name, member->GetName());
+			leaf.SetValue(ibProtocol::ibRequest::ibPredefinedSelector::Guid, ibGuid(member->GetGuid()).str());
 		}
 	}
 
@@ -78,8 +78,8 @@ void WriteOneTypeValues(ibDataNode& branch, const ibValueMetaObjectRecordDataRef
 				if (rows[static_cast<size_t>(i)].parent != parentIdx)
 					continue;
 				ibDataNode& leaf = parent.AddChild(0, 0);
-				leaf.SetValue(ibProtocol::ibRequest::ibDeclaredChoice::Name, rows[static_cast<size_t>(i)].name);
-				leaf.SetValue(ibProtocol::ibRequest::ibDeclaredChoice::Guid, rows[static_cast<size_t>(i)].guid);
+				leaf.SetValue(ibProtocol::ibRequest::ibPredefinedSelector::Name, rows[static_cast<size_t>(i)].name);
+				leaf.SetValue(ibProtocol::ibRequest::ibPredefinedSelector::Guid, rows[static_cast<size_t>(i)].guid);
 				self(self, leaf, i);
 			}
 		};
@@ -116,7 +116,7 @@ void CollectDeclared(const ibTypeDescription& declared, const ibMetaData* metaDa
 
 } // namespace
 
-bool ibShowDeclaredChoice(ibControlFrame* ownerValue, const ibTypeDescription& declared,
+bool ibShowPredefinedSelector(ibControlFrame* ownerValue, const ibTypeDescription& declared,
 	const ibMetaData* metaData)
 {
 	if (ownerValue == nullptr || metaData == nullptr || !appData->DesignerMode())
@@ -133,26 +133,26 @@ bool ibShowDeclaredChoice(ibControlFrame* ownerValue, const ibTypeDescription& d
 		return false;   // nothing referenceable — the ordinary roads answer alone
 
 	ibDataNode request;
-	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<s32>(ibProtocol::ibRequest::ibKind::DeclaredChoice));
-	request.SetValue(ibProtocol::ibRequest::ibDeclaredChoice::Caption, _("Select a predefined value"));
+	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<s32>(ibProtocol::ibRequest::ibKind::PredefinedSelector));
+	request.SetValue(ibProtocol::ibRequest::ibPredefinedSelector::Caption, _("Select a predefined value"));
 
-	ibDataNode& typesNode = request.Child(ibProtocol::ibRequest::ibDeclaredChoice::Types);
+	ibDataNode& typesNode = request.Child(ibProtocol::ibRequest::ibPredefinedSelector::Types);
 	for (const ibValueMetaObjectRecordDataRef* recordRef : types) {
 		ibDataNode& branch = typesNode.AddChild(0, 0);
-		branch.SetValue(ibProtocol::ibRequest::ibDeclaredChoice::Title, ibDeclaredTypeName(recordRef));
-		branch.SetValue(ibProtocol::ibRequest::ibDeclaredChoice::MetaId, static_cast<s32>(recordRef->GetMetaID()));
+		branch.SetValue(ibProtocol::ibRequest::ibPredefinedSelector::Title, ibDeclaredTypeName(recordRef));
+		branch.SetValue(ibProtocol::ibRequest::ibPredefinedSelector::MetaId, static_cast<s32>(recordRef->GetMetaID()));
 		WriteOneTypeValues(branch, recordRef);
 	}
 
 	s32 primId = 0;
-	ibDataNode& primsNode = request.Child(ibProtocol::ibRequest::ibDeclaredChoice::Primitives);
+	ibDataNode& primsNode = request.Child(ibProtocol::ibRequest::ibPredefinedSelector::Primitives);
 	for (const ibClassID& clsid : primitives.GetClsidList()) {
 		ibDataNode& item = primsNode.AddChild(0, 0);
-		item.SetValue(ibProtocol::ibRequest::ibDeclaredChoice::Id, primId++);
+		item.SetValue(ibProtocol::ibRequest::ibPredefinedSelector::Id, primId++);
 		const ibCtorAbstractType* ctor = metaData->GetAvailableCtor(clsid);
-		item.SetValue(ibProtocol::ibRequest::ibDeclaredChoice::Caption,
+		item.SetValue(ibProtocol::ibRequest::ibPredefinedSelector::Caption,
 			ctor != nullptr ? ctor->GetClassName() : wxString() << clsid);
-		item.SetValue(ibProtocol::ibRequest::ibDeclaredChoice::Type, wxString() << clsid);
+		item.SetValue(ibProtocol::ibRequest::ibPredefinedSelector::Type, wxString() << clsid);
 	}
 
 	ibDataNode response;
@@ -160,9 +160,9 @@ bool ibShowDeclaredChoice(ibControlFrame* ownerValue, const ibTypeDescription& d
 		return false;
 
 	// A primitive settled — empty value of that type, typed into on the next click.
-	if (response.FindField(ibProtocol::ibRequest::ibDeclaredChoice::Type) != nullptr) {
+	if (response.FindField(ibProtocol::ibRequest::ibPredefinedSelector::Type) != nullptr) {
 		unsigned long long parsed = 0;
-		if (!response.GetValue<wxString>(ibProtocol::ibRequest::ibDeclaredChoice::Type).ToULongLong(&parsed)
+		if (!response.GetValue<wxString>(ibProtocol::ibRequest::ibPredefinedSelector::Type).ToULongLong(&parsed)
 				|| parsed == 0 || !metaData->IsRegisterCtor(parsed))
 			return false;
 		ibValue settled = metaData->CreateObject(static_cast<ibClassID>(parsed));
@@ -171,12 +171,12 @@ bool ibShowDeclaredChoice(ibControlFrame* ownerValue, const ibTypeDescription& d
 	}
 
 	// A declared value — stored as CompositionPredefined, materialised at run time.
-	if (response.FindField(ibProtocol::ibRequest::ibDeclaredChoice::MetaId) == nullptr)
+	if (response.FindField(ibProtocol::ibRequest::ibPredefinedSelector::MetaId) == nullptr)
 		return false;   // cancelled
 
-	const ibMetaID metaId = static_cast<ibMetaID>(response.GetValue<s32>(ibProtocol::ibRequest::ibDeclaredChoice::MetaId));
-	const ibGuid guid(response.GetValue<wxString>(ibProtocol::ibRequest::ibDeclaredChoice::Guid));
-	wxString written = response.GetValue<wxString>(ibProtocol::ibRequest::ibDeclaredChoice::Written);
+	const ibMetaID metaId = static_cast<ibMetaID>(response.GetValue<s32>(ibProtocol::ibRequest::ibPredefinedSelector::MetaId));
+	const ibGuid guid(response.GetValue<wxString>(ibProtocol::ibRequest::ibPredefinedSelector::Guid));
+	wxString written = response.GetValue<wxString>(ibProtocol::ibRequest::ibPredefinedSelector::Written);
 	if (written.IsEmpty()) {
 		const ibValueMetaObjectRecordDataRef* recordRef = nullptr;
 		for (const ibValueMetaObjectRecordDataRef* candidate : types) {
@@ -187,7 +187,7 @@ bool ibShowDeclaredChoice(ibControlFrame* ownerValue, const ibTypeDescription& d
 		}
 		if (recordRef == nullptr)
 			return false;
-		const wxString leaf = response.GetValue<wxString>(ibProtocol::ibRequest::ibDeclaredChoice::Name);
+		const wxString leaf = response.GetValue<wxString>(ibProtocol::ibRequest::ibPredefinedSelector::Name);
 		written = ibDeclaredTypeName(recordRef) + wxT(".") +
 			(leaf.IsEmpty() ? wxString(ibRefMember::EmptyRef) : leaf);
 	}

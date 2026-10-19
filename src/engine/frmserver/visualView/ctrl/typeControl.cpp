@@ -14,7 +14,7 @@
 #include "backend/system/value/valueType.h"          // ibValueTypeDescription / g_valueTypeDescriptionCLSID
 #include "backend/choiceLinkResolver.h"               // what narrows this choice — type and conditions
 #include "backend/metaCollection/attribute/metaAttributeObject.h"   // the bound attribute holds both
-#include "frmserver/win/dlgs/declaredChoice.h"   // ibShowDeclaredChoice — designer EmptyRef / predefined / enum
+#include "frmserver/win/dlgs/selectPredefined.h"   // ibShowPredefinedSelector — designer EmptyRef / predefined / enum
 #include "backend/appData.h"                      // DesignerMode — the two roads part here
 
 bool ibTypeControlFactory::ChooseValue(ibControlFrame* ownerValue, const ibValueMetaObject* choiceForm)
@@ -31,10 +31,10 @@ bool ibTypeControlFactory::ChooseValue(ibControlFrame* ownerValue, const ibValue
 	// (a filter's left side is always a field). Settled, the cell stands on it, and the value of that type is
 	// chosen right after, in the same press.
 	if (current.GetType() == ibValueTypes::TYPE_EMPTY) {
-		// THE DESIGNER'S OWN ROAD — EmptyRef / predefined / enum through DeclaredChoice, before settling a
+		// THE DESIGNER'S OWN ROAD — EmptyRef / predefined / enum through PredefinedSelector, before settling a
 		// single type locally (desktop ibShowPredefinedSelector).
 		if (appData->DesignerMode()
-			&& ibShowDeclaredChoice(ownerValue, factory->GetTypeDesc(), factory->GetMetaData()))
+			&& ibShowPredefinedSelector(ownerValue, factory->GetTypeDesc(), factory->GetMetaData()))
 			return true;
 
 		const ibClassID clsid = factory->GetDataType();
@@ -56,10 +56,10 @@ bool ibTypeControlFactory::ChooseValue(ibControlFrame* ownerValue, const ibValue
 
 	const ibMetaData* metaData = factory->GetMetaData();
 
-	// IN THE DESIGNER EVERY REFERENCE WALKS DeclaredChoice — an enumeration included (Max, 2026-08-28).
+	// IN THE DESIGNER EVERY REFERENCE WALKS PredefinedSelector — an enumeration included (Max, 2026-08-28).
 	if (appData->DesignerMode()) {
 		const ibTypeDescription& declared = factory->GetTypeDesc();
-		if (ibShowDeclaredChoice(ownerValue,
+		if (ibShowPredefinedSelector(ownerValue,
 				declared.GetClsidList().empty() ? ibTypeDescription(clsid) : declared, metaData))
 			return true;
 	}
