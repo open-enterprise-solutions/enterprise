@@ -4,6 +4,9 @@
 
 #include "frmclient/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
 #include "frmclient/propertyManager/property/private/propertyRegistry.h"
+#include "frmclient/backend/propertyManager/property/propertySerializable.h"   // the row the configuration's pictures come with
+
+#include "protocol/protocol.h"   // ibProtocolName — the row's keys
 
 // -----------------------------------------------------------------------
 // wxPGPictureProperty
@@ -25,8 +28,16 @@ public:
 		ibPropertyRegistry::Register(wxT("ibPropertyPicture"), [](ibBackendProperty* property) -> wxPGProperty* {
 			ibPictureDescription pictureDesc;
 			ibPictureDescriptionMemory::ReadNode(property->GetNodeValue(), pictureDesc);
+			// …and the configuration's pictures it may be loaded from, by name (the row's Pictures, ibPropertyInspector).
+			const ibDataNode* pictures = nullptr;
+			if (const ibPropertySerializable* const row = dynamic_cast<const ibPropertySerializable*>(property)) {
+				if (const ibDataValue* const node = row->GetRow().FindProperty(ibProtocolName::Pictures)) {
+					if (node->Kind() == ibDataKind::Child)
+						pictures = node->AsChild().get();
+				}
+			}
 			return new wxPGPictureProperty(property->GetLabel(), property->GetName(),
-				wxVariant(new ibVariantDataPicture(property->GetPropertyObject(), pictureDesc)));
+				wxVariant(new ibVariantDataPicture(property->GetPropertyObject(), pictureDesc)), pictures);
 		},
 		[](const wxVariant& value) {
 			ibDataValue node;
@@ -53,7 +64,8 @@ static int s_indFilter = -1;
 
 wxPGPictureProperty::wxPGPictureProperty(const wxString& label,
 	const wxString& strName,
-	const wxVariant& value) : wxPGProperty(label, strName),
+	const wxVariant& value,
+	const ibDataNode* pictures) : wxPGProperty(label, strName),
 	m_propertySource(nullptr),
 	m_propertyBackend(nullptr), m_propertyConfiguration(nullptr), m_propertyFile(nullptr)
 {
@@ -87,9 +99,15 @@ wxPGPictureProperty::wxPGPictureProperty(const wxString& label,
 		wxPGChoiceEntry& entry = configurationChoices.AddAsSorted(wxEmptyString, system_config++);
 		m_confChoices.insert_or_assign(entry.GetValue(), wxNullGuid);
 
-		// (The configuration's pictures — the picture metaobjects of the owner's configuration, or of the one it
-		//  extends — are listed on the desktop from the configuration itself: the server's, and the row does not bring
-		//  them. None yet; a picture set from the configuration keeps its guid, unnamed.)
+		// The configuration's pictures — the picture metaobjects of the owner's configuration, or of the one it extends:
+		// the server's, brought by the row by name and guid. Drawn by name only — a picture named is fetched first.
+		if (pictures != nullptr) {
+			for (const ibDataNode& item : pictures->Children()) {
+				wxPGChoiceEntry& entry = configurationChoices.AddAsSorted(
+					item.GetValue<wxString>(ibProtocolName::Name), system_config++);
+				m_confChoices.insert_or_assign(entry.GetValue(), ibGuid(item.GetValue<wxString>(ibProtocolName::Guid)));
+			}
+		}
 
 		sourceChoices.Add(_("Load from configuration"), eFromConfiguration);
 	}

@@ -121,6 +121,10 @@ resource that may be the value), 2 (a dimension that may be the date) and 3 (a d
 fields of the calculation register that may answer for it), each with `Id` and `Title`. The edited description goes
 back through the row's `Set`, and the rows of the answer carry the lists for the register and date now bound. A client
 that reads no `Schedule` shows the row read-only; a server that writes none leaves it so.
+A picture's `ibPropertyPicture` row carries the configuration's pictures it may be loaded from (the picture
+metaobjects of the owner's configuration, or of the one it extends) as an optional node `Pictures`: children with
+`Name` and `Guid`. They are named by `Guid` rather than as a `Picture`, so the rows do not make the client fetch every
+configuration picture before it draws them. Picking one is the row's `Set` with the value `{Type 2, Guid}`.
 
 A picture is named by its id everywhere — in the view, a tab's `Icon`, a schema, a request, a list of choices: a
 backend picture's number, as a decimal (a class's own: its class id), or a configuration picture's guid. No answer
