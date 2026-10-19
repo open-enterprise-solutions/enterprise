@@ -69,6 +69,7 @@ enum dimensionFunc
 	eDimensionCount = 0,
 	eDimensionKind,
 	eDimensionClear,
+	eDimensionDelete,
 };
 
 } // namespace
@@ -78,6 +79,7 @@ void ibValueRecordSetObjectAccountingRegister::ibValueAccountDimensions::FillMem
 	helper.AppendFunc(wxT("Count"), wxT("Count()"));
 	helper.AppendFunc(wxT("Kind"), 1, wxT("Kind(number)"));
 	helper.AppendFunc(wxT("Clear"), wxT("Clear()"));
+	helper.AppendFunc(wxT("Delete"), 1, wxT("Delete(kind)"));
 }
 
 bool ibValueRecordSetObjectAccountingRegister::ibValueAccountDimensions::CallAsFunc(
@@ -106,6 +108,11 @@ bool ibValueRecordSetObjectAccountingRegister::ibValueAccountDimensions::CallAsF
 
 	case dimensionFunc::eDimensionClear:
 		Clear();
+		return true;
+
+	case dimensionFunc::eDimensionDelete:
+		if (lSizeArray > 0 && paParams[0] != nullptr)
+			Delete(*paParams[0]);
 		return true;
 	}
 
@@ -246,6 +253,80 @@ void ibValueRecordSetObjectAccountingRegister::ibValueAccountDimensions::Clear()
 		if (kindSlot != nullptr) m_recordSet->SetValueByMetaID(m_line, kindSlot->GetMetaID(), ibValue());
 		if (slot     != nullptr) m_recordSet->SetValueByMetaID(m_line, slot->GetMetaID(),     ibValue());
 	}
+}
+
+// Deleting a kind the line does not carry is a no-op, as Map.Delete of a missing key is.
+bool ibValueRecordSetObjectAccountingRegister::ibValueAccountDimensions::Delete(const ibValue& kind)
+{
+	const ibValueMetaObjectAccountingRegister* meta =
+		m_recordSet != nullptr ? m_recordSet->GetAccountingMetaObject() : nullptr;
+	if (meta == nullptr || kind.IsEmpty())
+		return false;
+
+	bool found = false;
+	for (unsigned int idx = 0; idx < meta->GetAccountDimensionCount(); idx++) {
+		const ibValueMetaObjectAttributeBase* kindSlot = meta->GetAccountDimensionKindSlot(m_creditSide, idx);
+		const ibValueMetaObjectAttributeBase* slot     = meta->GetAccountDimensionSlot(m_creditSide, idx);
+		if (kindSlot == nullptr)
+			continue;
+		ibValue current;
+		m_recordSet->GetValueByMetaID(m_line, kindSlot->GetMetaID(), current);
+		if (current.IsEmpty() || !(current == kind))
+			continue;
+		m_recordSet->SetValueByMetaID(m_line, kindSlot->GetMetaID(), ibValue());
+		if (slot != nullptr) m_recordSet->SetValueByMetaID(m_line, slot->GetMetaID(), ibValue());
+		found = true;
+	}
+	return found;
+}
+
+std::shared_ptr<ibValueIteratorState> ibValueRecordSetObjectAccountingRegister::ibValueAccountDimensions::CreateIterator()
+{
+	using Pairs = std::vector<std::pair<ibValue, ibValue>>;
+	Pairs pairs;
+	const ibValueMetaObjectAccountingRegister* meta =
+		m_recordSet != nullptr ? m_recordSet->GetAccountingMetaObject() : nullptr;
+	if (meta != nullptr) {
+		for (unsigned int idx = 0; idx < meta->GetAccountDimensionCount(); idx++) {
+			const ibValueMetaObjectAttributeBase* kindSlot = meta->GetAccountDimensionKindSlot(m_creditSide, idx);
+			const ibValueMetaObjectAttributeBase* slot     = meta->GetAccountDimensionSlot(m_creditSide, idx);
+			if (kindSlot == nullptr || slot == nullptr)
+				continue;
+			ibValue kind, value;
+			m_recordSet->GetValueByMetaID(m_line, kindSlot->GetMetaID(), kind);
+			if (kind.IsEmpty())
+				continue;
+			m_recordSet->GetValueByMetaID(m_line, slot->GetMetaID(), value);
+			pairs.emplace_back(kind, value);
+		}
+	}
+
+	class State : public ibValueIteratorState {
+	public:
+		explicit State(Pairs&& p) : m_pairs(std::move(p)) {}
+		bool MoveNext(ibValue& current) override {
+			if (m_started) ++m_pos; else m_started = true;
+			if (m_pos >= m_pairs.size()) return false;
+			ibValue valueCopy = m_pairs[m_pos].second;
+			current = ibValue(static_cast<ibValue*>(
+				new ibValueContainer::ibValueReturnContainer(m_pairs[m_pos].first, valueCopy)));
+			return true;
+		}
+		void Reset() override { m_pos = 0; m_started = false; }
+		long Remaining() const override {
+			const size_t next = m_started ? m_pos + 1 : 0;
+			return next >= m_pairs.size() ? 0 : static_cast<long>(m_pairs.size() - next);
+		}
+		bool PeekSample(ibValue& current) const override {
+			current = ibValue(static_cast<ibValue*>(new ibValueContainer::ibValueReturnContainer()));
+			return true;
+		}
+	private:
+		Pairs  m_pairs;
+		size_t m_pos = 0;
+		bool   m_started = false;
+	};
+	return std::make_shared<State>(std::move(pairs));
 }
 
 ibString ibValueRecordSetObjectAccountingRegister::ibValueAccountDimensions::GetString() const
