@@ -12,6 +12,9 @@
 #include "backend/metaCollection/partial/chartOfAccountsDimensionKindsTable.h"
 #include "backend/metaCollection/partial/chartOfCalculationTypesRelationTable.h"
 #include "backend/propertyManager/property/propertyType.h"   // ibPropertyType — a type description, and what it may hold
+#include "backend/propertyManager/property/propertyForm.h"          // ibPropertyForm — a form's own Form row
+#include "backend/propertyManager/property/propertySpreadsheet.h"   // …a template's, a module's: each opens its owner
+#include "backend/propertyManager/property/propertyModule.h"
 #include "core/serialize/dataBuilder.h"
 
 #include "clientFrame.h"   // ibClientFrame::SendPicture — a type's, a choice's picture, by its id
@@ -36,6 +39,13 @@ ibValueMetaObject* GetInnerModule(const ibBackendProperty* property)
 		return module->GetMetaObject();
 	if (const auto* module = dynamic_cast<const ibPropertyInnerModule<ibValueMetaObjectManagerModule>*>(property))
 		return module->GetMetaObject();
+	// …and the ROW THAT OPENS ITS OWN OBJECT — a form's Form, a template's Template, a common module's Module: the
+	// desktop draws the same link for them (advpropForm.cpp, advpropSpreadsheet.cpp, advpropModule.cpp), and what it
+	// opens is the metaobject the row belongs to.
+	if (dynamic_cast<const ibPropertyForm*>(property) != nullptr
+		|| dynamic_cast<const ibPropertySpreadsheet*>(property) != nullptr
+		|| dynamic_cast<const ibPropertyModule*>(property) != nullptr)
+		return dynamic_cast<ibValueMetaObject*>(property->GetPropertyObject());
 	return nullptr;
 }
 
