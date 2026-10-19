@@ -549,18 +549,7 @@ TEST_F(SessionFailover, AnotherConnectionDoesNotReadTheCachedAnswer)
 
 TEST_F(SessionFailover, StartModuleThatAsksDoesNotHangTheLogin)
 {
-	// The configuration is created by the first login. A filter that runs this test alone has not
-	// logged in yet, so the module is not there to write.
-	if (ibApplicationInstance::GetActiveMetaData(g_base->app) == nullptr) {
-		int opened = 0;
-		const Rpc primed = g_base->Call(Request(119, "login", PasswordLogin(false)), &opened);
-		ASSERT_TRUE(primed.ok) << primed.message;
-		ibProtocolNode bye;
-		bye.SetValue(ibProtocol::ibLogin::Client, primed.result.GetString(ibProtocol::ibLogin::Client));
-		const Rpc out = g_base->Call(Request(1191, "logout", bye), &opened);
-		EXPECT_TRUE(out.ok) << out.message;
-	}
-
+	// The configuration is up as the base opens, before anybody logs in.
 	ibMetaDataConfigurationBase* const meta = ibApplicationInstance::GetActiveMetaData(g_base->app);
 	ASSERT_NE(meta, nullptr);
 	ibValueMetaObjectConfiguration* const common = meta->GetCommonMetaObject();

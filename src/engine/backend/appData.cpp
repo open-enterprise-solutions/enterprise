@@ -339,39 +339,29 @@ ibApplicationInstance::ibApplicationInstance(ibApplicationHost* host, ibRunMode 
 		WireSessionEvents();
 }
 
-// Fabric — replaces ibMetaDataConfigurationBase::Initialize. Picks the subclass by the kind of the base's first
-// session and puts it in `m_activeMetaData`, for the sessions to come; each takes its own reference. On the
-// application data NAMED — the session listeners below pass their own rather than let the registry thread
-// resolve one.
-bool ibApplicationInstance::CreateActiveMetaData(ibApplicationInstance* applicationInstance, ibSessionKind kind, int flags)
+// Fabric — replaces ibMetaDataConfigurationBase::Initialize. The configuration the application runs, put in
+// `m_activeMetaData` for the sessions to come — each takes its own reference — loaded and run. On the application
+// data NAMED: the opening passes the base it opens rather than let the thread resolve one.
+bool ibApplicationInstance::CreateActiveMetaData(ibApplicationInstance* applicationInstance, int flags)
 {
 	if (applicationInstance == nullptr)
 		return false;
 	if (applicationInstance->m_activeMetaData)
 		return false;   // already initialised — caller passes a fresh appData
 
-	// WHAT THE BASE WAS STARTED AS — the kind of its first session: a file base's is what it was started as, a
-	// server's is the server itself. A designer's base holds the configuration to edit; anyone else's the one the application runs.
 	// The metadata subclass ctors are gated on ib::AppDataCtorToken — this TU is ibApplicationInstance's, so it can
-	// mint the token; nobody outside can. The launcher has no metadata at all — that's a successful no-op so
-	// callers can branch uniformly.
-	if (kind == ibSessionKind::Launcher)
-		return true;
-	const ib::AppDataCtorToken owner{ applicationInstance };
-	std::shared_ptr<ibMetaDataConfigurationBase> metaData;
-	if (IsDesignerSessionKind(kind))
-		metaData = ibMetaData::MakeShared<ibMetaDataConfigurationStorage>(owner);
-	else
-		metaData = ibMetaData::MakeShared<ibMetaDataConfiguration>(owner);
+	// mint the token; nobody outside can.
+	const std::shared_ptr<ibMetaDataConfigurationBase> metaData =
+		ibMetaData::MakeShared<ibMetaDataConfiguration>(ib::AppDataCtorToken{ applicationInstance });
 
-	// In place BEFORE it initialises — its loading asks for `activeMetaData`. The session being let in holds none
-	// yet (it takes its own right after, NotifyAuthenticated), so its thread works in it through a scope meanwhile.
+	// In place BEFORE it initialises — its loading asks for `activeMetaData`; the opening thread works in it through
+	// a scope meanwhile.
 	{
 		std::lock_guard<std::mutex> lk(ibApplicationHost::s_mutex);
 		applicationInstance->m_activeMetaData = metaData;
 	}
 	const ibApplicationInstanceScope initialising(applicationInstance);
-	return metaData->OnInitialize(flags);
+	return metaData->OnInitialize(flags) && metaData->RunDatabase();
 }
 
 ibMetaDataConfigurationBase* ibApplicationInstance::GetActiveMetaData(const ibApplicationInstance* applicationInstance)
@@ -413,23 +403,11 @@ void ibApplicationInstance::WireSessionEvents()
 	auto* registry = m_sessionRegistry.get();
 	if (registry == nullptr) return;
 
-	// First authenticated session in the process → load metadata skeleton
-	// only. CreateRoot / RunDatabase / CompileRoot live in OnAuthenticated
-	// (and the designer's manual RunDatabase after the window shows) — this
-	// listener is just the one-shot metadata bootstrap.
-	//
 	// ⚠ EVERY LISTENER HERE WORKS ON ITS OWN BASE — `this`, its members — and never through `appData`,
 	// `activeMetaData` or `ibLog`: those answer the base of the thread that fires the listener, and with
 	// several bases in the process the registry thread of one base must not be asked which base it is.
-	// The base's FIRST SESSION says what it was started as — a file base's is what it was started as, a server's
-	// the server itself — and so, by its kind, which configuration it holds. Its schedule starts with it, not before: nobody comes
-	// into a base ahead of the one who opened it, a job due at start included.
-	registry->OnFirstConnect([this](ibSession* s) {
-		if (m_created_metadata) return;
-		if (!CreateActiveMetaData(this, s != nullptr ? s->GetKind() : ibSessionKind::Unknown, m_loadMetadataFlags)) return;
-		m_created_metadata = true;
-		if (m_jobManager) m_jobManager->Start();
-	});
+	//
+	// (The configuration is up already — loaded and run as the base opened (Open), before anybody was let in.)
 
 	// Every authenticated session (including the first) gets per-session
 	// bring-up: thread binding, root mm allocation + compile, runtime start
@@ -478,19 +456,12 @@ void ibApplicationInstance::WireSessionEvents()
 		// session's own state instead of the legacy server-singleton.
 		if ((m_loadMetadataFlags & _app_start_create_debug_server_flag) != 0)
 			registry->EnableDebugForSession(s);
-		if (ibMetaDataConfigurationBase* const metaData = s->GetMetaData()) {
-			// Root mm is allocated by ibSession::EnsureRoot (called by the
-			// registry between OnFirstConnect and this listener) for runtime
-			// sessions; the Designer has no root mm (it uses the lightweight
-			// designer manager in the compile cache). Here we drive cross-process
-			// metadata bring-up (RunDatabase once per process — fires OnBefore/
-			// After RunMetaObject which populate ibCompileValueCache +
-			// ibModuleStorage) and per-session compile + runtime start. The
-			// session's own configuration — the active one when it came in;
-			// a replacement arrives already run (ReplaceActiveMetaData).
-			if (!m_run_metadata) {
-				m_run_metadata = metaData->RunDatabase();
-			}
+		if (s->GetMetaData() != nullptr) {
+			// Root mm is allocated by ibSession::EnsureRoot (called by the registry before this listener) for
+			// runtime sessions; the Designer has no root mm (it uses the lightweight designer manager in the
+			// compile cache). The session's configuration comes to it run: the active one ran as the base opened,
+			// a replacement arrives run (ReplaceActiveMetaData), a designer's own ran as it was made
+			// (ibSession::AcquireMetaData).
 			// CompileRoot folds compile + AttachRuntime + lambda runtime wire-up.
 			// No-op when there's no root mm (Designer). AttachRuntime self-gates by
 			// session kind, so no explicit runMode check needed here.
@@ -527,17 +498,9 @@ void ibApplicationInstance::WireSessionEvents()
 			registry->ClearFallback();
 	});
 
-	// Last authenticated session out — unload metadata so the process is
-	// back to a sessionless state (refcount = 0). Then request process
-	// exit; the keep-alive predicate (web tabs, etc.) can decline.
+	// Last authenticated session out — request process exit; the keep-alive predicate (web tabs, etc.) can
+	// decline. The configuration stays: it is the base's, up while the base is open, and closes with it (Close).
 	registry->OnLastDisconnect([this]() {
-		if (m_run_metadata) {
-			const bool isConfigOpen = m_activeMetaData != nullptr && m_activeMetaData->IsConfigOpen();
-			if (isConfigOpen)
-				m_activeMetaData->CloseDatabase(forceCloseFlag);
-		}
-		m_created_metadata = false;
-		m_run_metadata = false;
 		// EndJob and other "no more work" paths route here. ForceExit
 		// goes through ProcessExitHook (wes' main → svr->stop()) or
 		// wxTheApp->Exit (desktop), with ShouldKeepAlive declining when
@@ -593,9 +556,28 @@ void ibApplicationInstance::Close()
 	//    manager, not by the registry — and before the metadata goes.
 	if (m_sessionRegistry) m_sessionRegistry->Stop();
 
+	// ⚠ EACH FIELD NULL BEFORE IT DIES — reset(), not the default unwinding. The closing thread works for
+	// this base (ibApplicationHost::Close), and what a field's destructor asks — a connection holder its
+	// pool, the pool the current session, the session its registry — is answered down the chain through
+	// THESE pointers. A unique_ptr left to its own destructor keeps pointing at what it has deleted: the
+	// chain read the freed registry and every process crashed on exit (2026-10-01). Each field is emptied
+	// first, so a question asked after it is gone reads "none" — emptied UNDER THE PROCESS'S LOCK, which
+	// HasRegistry / HasPool read the fields under from any thread, and deleted outside it, where its own
+	// destructor may ask them.
+	const auto release = [](auto& field) {
+		std::remove_reference_t<decltype(field)> gone;
+		{
+			std::lock_guard<std::mutex> lk(ibApplicationHost::s_mutex);
+			gone = std::move(field);
+		}
+	};
+
 	// 2. activeMetaData — OnDestroy may save state, close compile
 	//    caches, run cascading detach; those paths still want db_query.
+	//    …and the base lets its reference go while the pool still stands: every session is gone by now, so the
+	//    base is its last holder, and it closes as every last holder's does (ibMetaData::MakeShared).
 	if (m_activeMetaData) m_activeMetaData->OnDestroy();
+	release(m_activeMetaData);
 
 	// (Plugins are the process's: they are unloaded by ibApplicationHost once
 	//  every base is gone, not by each base.)
@@ -605,27 +587,10 @@ void ibApplicationInstance::Close()
 	//    has already completed.
 	if (m_connectionPool) m_connectionPool->Shutdown();
 
-	// 4. The fields, in reverse declaration order: m_activeMetaData → m_tempStorage → m_settingsStorage →
+	// 4. The rest of the fields, in reverse declaration order: m_tempStorage → m_settingsStorage →
 	//    m_mcpServer → m_jobManager → m_sessionRegistry → m_logger → m_queryableFactory → m_lockManager →
-	//    m_connectionPool. (The job manager's own dtor calls Stop() again; it is idempotent, so the
-	//    explicit step above only fixes the ORDER.)
-	//
-	//    ⚠ EACH ONE NULL BEFORE IT DIES — reset(), not the default unwinding. The closing thread works for
-	//    this base (ibApplicationHost::Close), and what a field's destructor asks — a connection holder its
-	//    pool, the pool the current session, the session its registry — is answered down the chain through
-	//    THESE pointers. A unique_ptr left to its own destructor keeps pointing at what it has deleted: the
-	//    chain read the freed registry and every process crashed on exit (2026-10-01). Each field is emptied
-	//    first, so a question asked after it is gone reads "none" — emptied UNDER THE PROCESS'S LOCK, which
-	//    HasRegistry / HasPool read the fields under from any thread, and deleted outside it, where its own
-	//    destructor may ask them.
-	const auto release = [](auto& field) {
-		std::remove_reference_t<decltype(field)> gone;
-		{
-			std::lock_guard<std::mutex> lk(ibApplicationHost::s_mutex);
-			gone = std::move(field);
-		}
-	};
-	release(m_activeMetaData);
+	//    m_connectionPool (m_activeMetaData, declared last, went first). (The job manager's own dtor calls
+	//    Stop() again; it is idempotent, so the explicit step above only fixes the ORDER.)
 	release(m_tempStorage);
 	release(m_settingsStorage);
 	release(m_mcpServer);
@@ -909,6 +874,13 @@ ibApplicationInstance* ibApplicationInstance::Open(std::unique_ptr<ibApplication
 		MigrateTableJob();             // …and its settings columns
 		CreateTableSettings();         // sys_settings — what people saved on their forms and their lists
 		CreateTableFile();             // sys_file — the sessions' temporary files
+		// The configuration's own — what the database publishes, what a designer saves, its sequence: read at the
+		// end of this opening. A designer's first login used to make them, and it was the only one that read them.
+		if (!ibMetaDataConfigurationStorage::TableAlreadyCreated()) {
+			ibMetaDataConfigurationStorage::CreateConfigTable();
+			ibMetaDataConfigurationStorage::CreateConfigSaveTable();
+			ibMetaDataConfigurationStorage::CreateConfigSequence();
+		}
 
 		if (!SetLocaleAppDataEnv(request.m_locale))
 			return refuse();
@@ -935,6 +907,26 @@ ibApplicationInstance* ibApplicationInstance::Open(std::unique_ptr<ibApplication
 		// point either, so EVERY first run of enterprise.exe raised "Table unknown SYS_JOB" out
 		// of CreateAppDataEnv and never reached a window.
 		ibRegisterPlatformJobs(applicationInstance);
+
+		// ⭐ THE CONFIGURATION, UP BEFORE ANYBODY COMES IN (Max, 2026-10-20: *"first the metadata is loaded, then the
+		// users connect — not the first user, as before"*). The base's first session used to make it and the first
+		// to be let in ran it, so two first logins at once ran it twice (`!IsConfigOpen()` in RunDatabase, under
+		// the web server's load test). Now every session takes it ready, by its own reference; a designer's session
+		// works in one of its own (ibSession::AcquireMetaData). A configuration that does not come up refuses the base.
+		applicationInstance->m_loadMetadataFlags = request.m_loadMetadataFlags;
+		if (!CreateActiveMetaData(applicationInstance, request.m_loadMetadataFlags))
+			ibBackendCoreException::Error(_("The configuration of the base %s could not be loaded."),
+				applicationInstance->GetDatabaseDescription());
+
+		// …THEN THE DOOR THE SESSIONS COME IN BY — the registry, its policies and its thread. It too used to start with
+		// the base's first session, and two hundred first logins at once each started it (the web server's load test,
+		// 2026-10-20: the policy vector torn under a push_back).
+		applicationInstance->m_sessionRegistry->Start();
+
+		// …and ITS JOBS RUN WITH IT, from the moment it is up, whoever comes in or not (Max, 2026-10-20: *"with no
+		// users, a background job would never start"*): the tick runs the schedule and gives a finished background
+		// run its session back, and neither waits for a person. It used to start with the base's first session.
+		applicationInstance->m_jobManager->Start();
 
 		return applicationInstance;
 	}
@@ -1602,7 +1594,7 @@ bool ibApplicationInstance::SaveDatabase(wxOutputStream& out)
 
 bool ibApplicationInstance::ClearDatabase()
 {
-	if (!m_created_metadata)
+	if (activeMetaData == nullptr)
 		return false;
 
 	if (!activeMetaData->ReCreateDatabase())

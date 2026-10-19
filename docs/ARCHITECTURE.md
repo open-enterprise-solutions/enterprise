@@ -63,7 +63,7 @@ Each executable links against both DLLs and provides a `wxApp` subclass that sel
 | `appserver.exe` | `eSERVER_MODE` | `Service` | The application server: holds the bases of its server folder, headless; protocol clients are `ThinClient` / `ThinDesigner` |
 | `codeRunner.exe` | `eSANDBOX_MODE` | — | Executes a single script module |
 
-> The run mode says only how the process holds the base — serving it (`eSERVER_MODE`) or as a file base for the one who started it (`eFILE_MODE`). What a session works in is its kind: either mode hosts designers, runtimes and jobs alike, and `DesignerMode()` / `EnterpriseMode()` are answered by the current session's kind. The base's FIRST SESSION picks its configuration by its kind — editable for a designer kind, runtime otherwise; a server's first session is the server itself.
+> The run mode says only how the process holds the base — serving it (`eSERVER_MODE`) or as a file base for the one who started it (`eFILE_MODE`). What a session works in is its kind: either mode hosts designers, runtimes and jobs alike, and `DesignerMode()` / `EnterpriseMode()` are answered by the current session's kind. The base loads and runs its configuration as it opens, before any session is let in; every session takes a reference to it, and a designer's session works in an editable configuration of its own.
 
 ### Core Layer (`core.dll`)
 
@@ -172,7 +172,9 @@ A connection layer knows its pool (`ibDatabaseLayer::GetPool`), so a transaction
           └─ ibApplicationInstance::Open          ONE road for every kind of base:
                listed in the process, the opening thread working for it,
                pool (infobase.conf `Connections`), CanOpen (held by another process?),
-               system tables + migrations, locale, logger, platform jobs.
+               system tables + migrations (the configuration's too), locale, logger, platform jobs,
+               then the configuration — loaded and run before any session is let in — the session registry
+               and the job manager.
                Refused or thrown → closed again, alone; the other bases stay.
 ```
 
@@ -190,7 +192,7 @@ The init list is **the** ordering contract:
 | 6 | `m_mcpServer` | The designer's MCP listener — started by a designer session. |
 | 7 | `m_settingsStorage` | sys_settings — what people saved on their forms and lists. |
 
-`m_logger` is created by `Open` (`CreateLogger`) after the tables exist. `m_activeMetaData` is populated by `CreateActiveMetaData(applicationInstance, kind, flags)` at the base's first session, by its kind — `ibMetaDataConfigurationStorage` for a designer kind, `ibMetaDataConfiguration` otherwise; launcher and codeRunner have none. It is held for the sessions to come: a session takes its own reference when it is let in and lets it go when it leaves. A designer's apply replaces it with the configuration it published (`ReplaceActiveMetaData`); sessions already working finish on the old one, which closes with its last holder. Every metadata — a configuration, an external report or data processor, a configuration file — is made by `ibMetaData::MakeShared` and held by `shared_ptr` by whoever works in it. The plugins and the syntax-helper corpus (constructed in `InitLocale()` once the locale is settled — see `docs/syntax-helper-design.md`) are the process's.
+`m_logger` is created by `Open` (`CreateLogger`) after the tables exist. `m_activeMetaData` — the application's `ibMetaDataConfiguration` — is made, loaded and run by `Open` (`CreateActiveMetaData(applicationInstance, flags)`, the flags from the request: the debug server), before any session is let in; a configuration that does not come up refuses the base. Launcher and codeRunner have none. It is held for the sessions to come: a session takes its own reference when it is let in and lets it go when it leaves. A designer's session (`Designer`, `ThinDesigner`) takes none: it makes the configuration it edits, an `ibMetaDataConfigurationStorage`, and holds it alone (`ibSession::AcquireMetaData`). Its apply replaces the active one with the configuration it published (`ReplaceActiveMetaData`); sessions already working finish on the old one, which closes with its last holder. The job manager starts with the base, at the end of `Open` — jobs need no user. Every metadata — a configuration, an external report or data processor, a configuration file — is made by `ibMetaData::MakeShared` and held by `shared_ptr` by whoever works in it. The plugins and the syntax-helper corpus (constructed in `InitLocale()` once the locale is settled — see `docs/syntax-helper-design.md`) are the process's.
 
 ### Closing a base (`ibApplicationHost::Close` → `ibApplicationInstance::Close`)
 
@@ -203,6 +205,7 @@ ibApplicationInstance::Close() {
     m_sessionRegistry->Stop();          // drains this base's work off the shared pool, DELETEs sys_session
     m_activeMetaData->OnDestroy();
     m_connectionPool->Shutdown();
+    release(m_activeMetaData);          // the base's reference — its last holder closes it, while the pool stands
     // then every field is released in reverse declaration order, each emptied under the
     // process's lock first, so a question asked after it is gone reads "none"
 }
@@ -212,7 +215,7 @@ ibApplicationInstance::Close() {
 
 ### Token pattern for subsystem construction
 
-Every owned subsystem's ctor takes `ib::AppDataCtorToken` (`backend/appDataCtorToken.h`). Its ctor is private and only `ibApplicationInstance` and `ibApplicationHost` are friends, so external code that tries `new ibSessionRegistry(…)` gets a compile error. The token also says **whose**: a base mints `AppDataCtorToken{ this }` and the subsystem reads its owner off it (`GetApplicationInstance()`); the host mints a null one for the process's share (the plugins, the corpus).
+Every owned subsystem's ctor takes `ib::AppDataCtorToken` (`backend/appDataCtorToken.h`). Its ctor is private and only `ibApplicationInstance`, `ibApplicationHost` and `ibSession` are friends, so external code that tries `new ibSessionRegistry(…)` gets a compile error. The token also says **whose**: a base mints `AppDataCtorToken{ this }` and the subsystem reads its owner off it (`GetApplicationInstance()`); the host mints a null one for the process's share (the plugins, the corpus); a designer's session mints one with its base for the configuration it edits.
 
 Why a token instead of a friend declaration on each subsystem header? Friends scattered across seven headers mean refactoring the owner ripples into every owned class. One token type keeps the "who can build subsystems" decision in one place; subsystem headers declare their ctors public.
 
@@ -710,7 +713,7 @@ OES distinguishes between **metadata** (compile-time, process-wide, shared) and 
 - **Working date** — `m_workDate` per-session (replaces the legacy static `ibValueSystemFunction::ms_workDate` so two web sessions don't step on each other).
 - **Translate state** — `ibTranslateState`: explicit override, the user's language, the configuration's own, and the resolved code (`override || user || configuration`). Selects which metadata synonym / form-label translation is shown. Per-session, so concurrent web tabs each render their own user's language and two bases in one process each keep their own. Distinct from the platform's wxLocale (UI gettext, process-wide). Read through `ibBackendLocalization::GetUserLanguage()`.
 - **Compile state** — `ibCompileState`: the code style (CES / VES) the session's modules compile in, taken from its base's configuration. Like the interpreter's `ibProcUnitState`, a thread with no session (codeRunner, tests) has its own `thread_local` one.
-- **Root module manager** — `m_root : ibValuePtr<ibValueModuleManagerRuntimeConfiguration>`. Created via `EnsureRoot()` in `ibSessionRegistry::NotifyAuthenticated`'s middle phase (between `OnFirstConnect` and `OnAuthenticated` listener phases). Stays nullptr for sessions that never run scripts — **the Designer never creates a root** (`EnsureRoot` is gated on `DesignerMode()`; it uses the lightweight `ibValueModuleManagerDesigner` in the compile cache instead), and likewise WebServer technical / Launcher. Objects/records/modules reach the right manager through the `ibSession::GetEditModuleManager(metaData)` seam (Designer → compile-cache designer manager; runtime → `m_root`). See `module-manager-split.md`.
+- **Root module manager** — `m_root : ibValuePtr<ibValueModuleManagerRuntimeConfiguration>`. Created via `EnsureRoot()` in `ibSessionRegistry::NotifyAuthenticated`, right after `AcquireMetaData` and before the `OnAuthenticated` listeners. Stays nullptr for sessions that never run scripts — **the Designer never creates a root** (`EnsureRoot` is gated on `DesignerMode()`; it uses the lightweight `ibValueModuleManagerDesigner` in the compile cache instead), and likewise WebServer technical / Launcher. Objects/records/modules reach the right manager through the `ibSession::GetEditModuleManager(metaData)` seam (Designer → compile-cache designer manager; runtime → `m_root`). See `module-manager-split.md`.
 - **Frame** — `virtual ibBackendDocFrame* GetFrame() const { return nullptr; }` on base `ibSession`. Frame storage lives on derived sessions that have a GUI surface (e.g. `ibWebClientSession::SetFrame(ibWebFrame*)`; `ibGUISession` desktop variants). Base has no `m_frame` field — null means "no frame on this session" (codeRunner / wenterprise-server technical session). The frame belongs to the session that created it, not to a process-wide singleton.
 - **Per-session debug** — optional `ibDebugSession` (CV/mutex + per-session watch expressions + run context) so concurrent web sessions can each enter their own debug loop without blocking.
 - **Exclusive (monopoly) mode** — `m_exclusive`. At most one session in the registry holds it; while held, every other Connect parks until release.
@@ -968,12 +971,12 @@ launcher.exe (or direct enterprise.exe with CLI creds)
                            └─ ibApplicationInstance::AuthenticateUser
                                   (PBKDF2 preferred, MD5 silent-upgrade path)
                                 └─ InstallUser writes session->m_userInfo
-                                     └─ NotifyAuthenticated phases (registry-driven):
-                                          1. OnFirstConnect — metadataCreate (one-shot)
+                                     └─ NotifyAuthenticated phases (registry-driven; the configuration
+                                        ran as the base opened):
+                                          1. OnFirstConnect — on the first auth
                                           2. session->AcquireMetaData() — its own reference
                                              session->EnsureRoot() — CreateRoot(GetMetaData())
-                                          3. OnAuthenticated — RunDatabase (one-shot)
-                                                             + session->CompileRoot()
+                                          3. OnAuthenticated — session->CompileRoot()
                                                              + mm->AttachRuntime(s)
                                                                 — main ProcUnit + Execute top-level
                                                                 — StartMainModule: BeforeStart / OnStart
@@ -982,13 +985,14 @@ launcher.exe (or direct enterprise.exe with CLI creds)
 
 ### User Login (web — wenterprise-server)
 
+                                             (a designer's: a configuration of its own, loaded and run)
 ```
 HTTP: POST /w/<dbalias>/login  (body: user+pwd, cookie: tabSid UUID)
   └─ wfrontendCreateSessionWithId(tabSid)      # if unknown cookie, create new session
        └─ Sessions().Login(tabSid, user, pwd)
             └─ registry.Connect(req)           # same path as desktop
                  └─ ticket.Attach(user, pwd)   # AuthenticateUser on worker-side
-                      └─ NotifyAuthenticated phases (OnFirstConnect / EnsureRoot / OnAuthenticated)
+                      └─ NotifyAuthenticated phases (OnFirstConnect / AcquireMetaData + EnsureRoot / OnAuthenticated)
                            └─ session->EnsureRoot + CompileRoot + mm->AttachRuntime(s)
                                 └─ ibSessionScope(session) on HTTP handler thread
                                      └─ ibWebApplication::OnInit
