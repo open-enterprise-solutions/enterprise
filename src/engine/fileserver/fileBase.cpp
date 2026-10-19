@@ -96,29 +96,36 @@ ibFileBase* ibFileBaseOpen(const std::string& request, wxString& error)
 	return base.release();
 }
 
-bool ibFileBaseCall(ibFileBase* base, const std::string& request, std::string& answer, wxString& error)
+bool ibFileBaseCall(ibFileBase* base, const std::string& request, const void* connection,
+	const wxString& address, std::string& answer, wxString& error)
 {
 	if (base == nullptr || !base->host) {
 		error = wxT("no base is open");
 		return false;
 	}
-	// The port's door: the envelope read, the call made, the answer written — as a server's client is answered. The
-	// base is the connection its clients log in through: what the base says, it says to them (ibFileBaseListen).
-	answer = std::string(base->host->Call(wxString::FromUTF8(request.data(), request.size()), base).utf8_str());
+	// The port's door: the envelope read, the call made, the answer written — as a server's client is answered.
+	answer = std::string(base->host->Call(wxString::FromUTF8(request.data(), request.size()), connection, address).utf8_str());
 	return true;
 }
 
-void ibFileBaseListen(ibFileBase* base, std::function<void(const std::string& text)> notified)
+void ibFileBaseListen(ibFileBase* base, const void* connection, std::function<void(const std::string& text)> notified)
 {
 	if (base == nullptr || !base->host)
 		return;
 	if (!notified) {
-		base->host->SetNotifier(base, nullptr);
+		base->host->SetNotifier(connection, nullptr);
 		return;
 	}
-	base->host->SetNotifier(base, [notified = std::move(notified)](const wxString& text) {
+	base->host->SetNotifier(connection, [notified = std::move(notified)](const wxString& text) {
 		notified(std::string(text.utf8_str()));
 	});
+}
+
+void ibFileBaseDisconnect(ibFileBase* base, const void* connection)
+{
+	if (base == nullptr || !base->host)
+		return;
+	base->host->Disconnect(connection);
 }
 
 void ibFileBaseClose(ibFileBase* base)

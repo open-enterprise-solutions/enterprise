@@ -61,6 +61,7 @@ Each executable links against both DLLs and provides a `wxApp` subclass that sel
 | `enterprise.exe` | `eFILE_MODE` | `Enterprise` | Desktop thick-client runtime (GUI, single user session per process) |
 | `wenterprise-server.exe` | `eFILE_MODE` | `WebServer` | Web runtime host — HTTP server, N per-cookie `WebClient` sessions, browser client; given its DBMS on the command line |
 | `appserver.exe` | `eSERVER_MODE` | `Service` | The application server: holds the bases of its server folder, headless; protocol clients are `ThinClient` / `ThinDesigner` |
+| `webserver.exe` | `eFILE_MODE` (the file bases it opens) | — | The web gateway: browsers over HTTP(S) and WebSocket to file bases it opens and to application servers' bases |
 | `codeRunner.exe` | `eSANDBOX_MODE` | — | Executes a single script module |
 
 > The run mode says only how the process holds the base — serving it (`eSERVER_MODE`) or as a file base for the one who started it (`eFILE_MODE`). What a session works in is its kind: either mode hosts designers, runtimes and jobs alike, and `DesignerMode()` / `EnterpriseMode()` are answered by the current session's kind. The base loads and runs its configuration as it opens, before any session is let in; every session takes a reference to it, and a designer's session works in an editable configuration of its own.
@@ -204,8 +205,8 @@ ibApplicationInstance::Close() {
     m_mcpServer->Stop();
     m_sessionRegistry->Stop();          // drains this base's work off the shared pool, DELETEs sys_session
     m_activeMetaData->OnDestroy();
-    m_connectionPool->Shutdown();
     release(m_activeMetaData);          // the base's reference — its last holder closes it, while the pool stands
+    m_connectionPool->Shutdown();
     // then every field is released in reverse declaration order, each emptied under the
     // process's lock first, so a question asked after it is gone reads "none"
 }
@@ -240,6 +241,16 @@ A headless process that serves the bases of its **server folder** (`--dir`, by d
 - **Not yet:** a port and a protocol for clients (the host's protocol is the next stage), choosing which bases to start (`--base`, for a coordinator), running as a Windows service, creating a new base (only the designer creates the system tables).
 
 Unit tests build subsystems directly (no full appData) — the test CMake target defines `OES_TESTING`, which opens the token's default ctor inside test TUs only. Production builds (sln / CMake non-test) leave it undefined and the gate stays closed.
+
+### The web server (`webserver.exe`, `src/engine/webserver/`)
+
+A transport between browsers and bases: it holds no forms and runs no code of its own. Links `protocol` and `core`, not `backend`.
+
+- **Publications** — `web.conf` in the web folder (`--dir`, by default `web` beside the program), or one named on the command line (`--file` / `--server`). One group per publication: `Kind=firebird` + `Directory` — a file base opened in this process through `fileserver` and held as a server holds its bases (a connection per browser); `Kind=server` + `Address=oes://host:port/base` — a base of an application server, relayed.
+- **Routes:** `WS /<publication>/client` — a connection, each text message one JSON-RPC request of the [client protocol](public/client-protocol.md), the base's notifications pushed; `POST /<publication>/client` — one request; the site's files from `Root` (`www`) at `/`, with ETag/304.
+- **Transport:** Asio (standalone) + llhttp, TLS by Mbed TLS. HTTP serves loopback only; on any other interface plain HTTP only sends the browser on to HTTPS. Answers of 1 KB and more are deflated on `?compress=deflate`; a page of another site (`Origin` not in `Origins`) is refused.
+- **Stop:** Ctrl+C, Ctrl+Break or the console closing — the listeners stop, then every base it opened closes.
+- **Not yet:** the browser client (a scaffold), web services, running as a service.
 
 ### Entry-point helpers
 
@@ -975,6 +986,7 @@ launcher.exe (or direct enterprise.exe with CLI creds)
                                         ran as the base opened):
                                           1. OnFirstConnect — on the first auth
                                           2. session->AcquireMetaData() — its own reference
+                                             (a designer's: a configuration of its own, loaded and run)
                                              session->EnsureRoot() — CreateRoot(GetMetaData())
                                           3. OnAuthenticated — session->CompileRoot()
                                                              + mm->AttachRuntime(s)
@@ -985,7 +997,6 @@ launcher.exe (or direct enterprise.exe with CLI creds)
 
 ### User Login (web — wenterprise-server)
 
-                                             (a designer's: a configuration of its own, loaded and run)
 ```
 HTTP: POST /w/<dbalias>/login  (body: user+pwd, cookie: tabSid UUID)
   └─ wfrontendCreateSessionWithId(tabSid)      # if unknown cookie, create new session

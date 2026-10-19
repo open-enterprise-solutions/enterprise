@@ -29,7 +29,7 @@ wxDllType Library(wxString& path)
 
 } // namespace
 
-bool ibProtocolConnectionFile::Open(const std::string& request, wxString& error)
+bool ibProtocolFileBase::Open(const std::string& request, wxString& error)
 {
 	Close();
 
@@ -45,10 +45,12 @@ bool ibProtocolConnectionFile::Open(const std::string& request, wxString& error)
 		wxDynamicLibrary::RawGetSymbol(library, wxT("ibFileBaseCall")));
 	const auto listen = reinterpret_cast<decltype(&ibFileBaseListen)>(
 		wxDynamicLibrary::RawGetSymbol(library, wxT("ibFileBaseListen")));
+	const auto disconnect = reinterpret_cast<decltype(&ibFileBaseDisconnect)>(
+		wxDynamicLibrary::RawGetSymbol(library, wxT("ibFileBaseDisconnect")));
 	const auto close = reinterpret_cast<decltype(&ibFileBaseClose)>(
 		wxDynamicLibrary::RawGetSymbol(library, wxT("ibFileBaseClose")));
-	if (open == nullptr || call == nullptr || listen == nullptr || close == nullptr) {
-		error = wxString::Format(_("%s is not the file base library this client was built with."), path);
+	if (open == nullptr || call == nullptr || listen == nullptr || disconnect == nullptr || close == nullptr) {
+		error = wxString::Format(_("%s is not the file base library this program was built with."), path);
 		return false;
 	}
 
@@ -57,18 +59,57 @@ bool ibProtocolConnectionFile::Open(const std::string& request, wxString& error)
 		return false;
 	m_call = call;
 	m_listen = listen;
+	m_disconnect = disconnect;
 	m_close = close;
 	return true;
 }
 
-void ibProtocolConnectionFile::Close()
+void ibProtocolFileBase::Close()
 {
 	if (m_base != nullptr && m_close != nullptr)
 		m_close(m_base);
 	m_base = nullptr;
 	m_call = nullptr;
 	m_listen = nullptr;
+	m_disconnect = nullptr;
 	m_close = nullptr;
+}
+
+ibProtocolFileBase::~ibProtocolFileBase()
+{
+	Close();
+}
+
+bool ibProtocolFileBase::Call(const std::string& request, const void* connection, const wxString& address,
+	std::string& answer, wxString& error) const
+{
+	if (m_base == nullptr || m_call == nullptr) {
+		error = wxT("no base is open");
+		return false;
+	}
+	return m_call(m_base, request, connection, address, answer, error);
+}
+
+void ibProtocolFileBase::Listen(const void* connection, std::function<void(const std::string& text)> notified) const
+{
+	if (m_base != nullptr && m_listen != nullptr)
+		m_listen(m_base, connection, std::move(notified));
+}
+
+void ibProtocolFileBase::Disconnect(const void* connection) const
+{
+	if (m_base != nullptr && m_disconnect != nullptr)
+		m_disconnect(m_base, connection);
+}
+
+bool ibProtocolConnectionFile::Open(const std::string& request, wxString& error)
+{
+	return m_base.Open(request, error);
+}
+
+void ibProtocolConnectionFile::Close()
+{
+	m_base.Close();
 }
 
 ibProtocolConnectionFile::~ibProtocolConnectionFile()
@@ -79,7 +120,7 @@ ibProtocolConnectionFile::~ibProtocolConnectionFile()
 bool ibProtocolConnectionFile::Exchange(const std::string& request, std::string& answer,
 	ibProtocol::ibRefusal& refusal, wxString& error)
 {
-	if (m_base == nullptr || m_call == nullptr || !m_call(m_base, request, answer, error)) {
+	if (!m_base.Call(request, this, wxEmptyString, answer, error)) {
 		refusal = ibProtocol::ibRefusal::Failed;
 		if (error.IsEmpty())
 			error = wxT("no base is open");
@@ -90,6 +131,5 @@ bool ibProtocolConnectionFile::Exchange(const std::string& request, std::string&
 
 void ibProtocolConnectionFile::Listen(std::function<void(const std::string& text)> notified)
 {
-	if (m_base != nullptr && m_listen != nullptr)
-		m_listen(m_base, std::move(notified));
+	m_base.Listen(this, std::move(notified));
 }
