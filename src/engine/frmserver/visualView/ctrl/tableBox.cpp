@@ -692,13 +692,36 @@ void ibValueModelTableBox::OnUpdate(ibDataNode& state, ibVisualHost* host)
 	// End, Before, Pictures). The client that reads Rows here skips the opening fetch; one that does not still asks.
 	// Count matches the client's idle bootstrap default (viewport unknown → 100 + slack). Done before CurrentRow so
 	// the handles this page hands out are the ones CurrentRow names. A Version already sent with its Rows stays light.
+	//
+	// …AND A LATER VERSION'S ROWS ARE THE LEVEL AROUND THE CURRENT ROW: a Version moved by what the person did (a cell's
+	// Change, a row added, a refresh) is read anew by the client around its own cursor (its top row, its selection) —
+	// a row this side does not know. So the read is done around the current row (Anchor) with as many rows ahead as after
+	// it (Before; fewer — the top was reached). When that is the whole level — the top reached and End — the client
+	// answers its own read anew from it, whatever row it reads around; any other read it fetches. The first Version is
+	// read from the top, as the client's opening read asks for it; so is a later one whose current row has no handle yet.
 	if (m_rowsSentVersion != m_rowsVersion) {
+		s32 anchor = 0;
+		if (m_rowsSentVersion != -1 && m_tableCurrentLine != nullptr)
+			anchor = FindRowHandle(m_tableCurrentLine->GetLineItem());
+		const s32 count = 105;   // 100 + kBufferSlack — the client's first page when the viewport is unset
 		ibDataNode request, fetched;
 		request.SetValue(wxT("Direction"), 0);
-		request.SetValue(wxT("Anchor"), 0);
+		request.SetValue(wxT("Anchor"), anchor);
 		request.SetValue(wxT("Parent"), 0);
-		request.SetValue(wxT("Count"), 105);   // 100 + kBufferSlack — the client's first page when the viewport is unset
+		request.SetValue(wxT("Count"), count);
+		// A current row not handed out yet (a row just added) is not one to read around: the level is read from the top —
+		// no rows ahead of it (Before 0), so the client knows it for the top.
+		const bool fromTop = m_rowsSentVersion != -1 && anchor == 0;
+		if (anchor != 0)
+			request.SetValue(wxT("Before"), count);
+		if (fromTop)
+			m_fetchFromTop = true;
 		if (Fetch(request, fetched)) {
+			if (anchor != 0)
+				fetched.SetValue(wxT("Anchor"), anchor);
+			if (fromTop)
+				fetched.SetValue(wxT("Before"), 0);
+			fetched.SetValue(wxT("Count"), count);
 			state.Child(wxT("Rows")) = std::move(fetched);
 			m_rowsSentVersion = m_rowsVersion;
 		}
