@@ -1174,6 +1174,7 @@ namespace ibProtocol {
 				Complete   = 1,   // rows {Kind (ibContentType), Name, Help} — what may be written at the caret
 				CallTip    = 2,   // {Text} — the call form of what is being written at the caret; empty: none
 				Procedures = 3,   // rows {Name, Args} — the module's default procedures, its handlers (no Text)
+				Linq       = 4,   // ibLinq — what the LINQ constructor asks of the place it stands at, in one exchange
 			};
 
 			// A module tab's commands — event {Tab, Event: Command, Args: {Id}}.
@@ -1181,6 +1182,46 @@ namespace ibProtocol {
 				SyntaxControl = 1,   // the module checked: "no errors" to the messages, or the error
 				TestForm      = 2,   // {Form} — a form designer's: the form opened as the runtime shows it, a tab of its own
 			};
+
+			// WHAT THE LINQ CONSTRUCTOR ASKS — `fetch {Tab, Request: {Kind: Linq, Text, Position, …}}`: the desktop's
+			// window asked the compiler itself (ibOutlineScriptQueries, ibNamesAtCaret, ibValueAtCaret, a kind's class
+			// picture). Each part is asked by its field and answered beside the others, so one action is one exchange:
+			//   · Open (true) — the window opening at Position: Query {From} — the innermost query the caret stands in, as
+			//     the compiler bracketed it (none: none); Anchor — where the block will stand (the query's first word, or
+			//     the caret); Names — rows {Name}: the values visible there (declared or the object's own, not callable);
+			//     Values for the members of each of them and of `Data`; Kinds — rows {Name, Picture}: each of `Data`'s
+			//     sections and the picture of the class it holds.
+			//   · Probes — a list of probe texts, each asked at its end (what follows its dot) → Values; Deep — those of
+			//     them whose names are asked too, each as the probe's text with `<name>.` after it.
+			//   · Verdict (true) — Text is the module with the block in it, Position where the block starts: Read
+			//     {Bindings — rows {Name, Origin, Offers — how many fields it offers}, Columns — rows {Name}}, as the
+			//     compiler outlined the query that starts there; none: no query read there.
+			// Values — rows {Text — the probe, Resolved, Type — the class it resolved to, Names — rows {Name}: what may be
+			// written after its dot, the frame's own left out}.
+			namespace ibLinq {
+
+				inline constexpr const char* Open     = "Open";
+				inline constexpr const char* Probes   = "Probes";
+				inline constexpr const char* Deep     = "Deep";
+				inline constexpr const char* Verdict  = "Verdict";
+				inline constexpr const char* Query    = "Query";
+				inline constexpr const char* From     = "From";
+				inline constexpr const char* Anchor   = "Anchor";
+				inline constexpr const char* Names    = "Names";
+				inline constexpr const char* Values   = "Values";
+				inline constexpr const char* Kinds    = "Kinds";
+				inline constexpr const char* Text     = "Text";
+				inline constexpr const char* Name     = "Name";
+				inline constexpr const char* Resolved = "Resolved";
+				inline constexpr const char* Type     = "Type";
+				inline constexpr const char* Picture  = "Picture";
+				inline constexpr const char* Read     = "Read";
+				inline constexpr const char* Bindings = "Bindings";
+				inline constexpr const char* Origin   = "Origin";
+				inline constexpr const char* Offers   = "Offers";
+				inline constexpr const char* Columns  = "Columns";
+
+			}
 
 		}
 

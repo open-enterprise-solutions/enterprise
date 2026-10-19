@@ -185,6 +185,15 @@ of a `fetch` answer, so a client that does not look at them takes the page only 
 A designer's module tab (its `View` `State`: `Syntax`, `Module`, `Modified`, `ReadOnly`) carries the module's `Text`
 in the frame that opens the tab, once; the client draws it without a `fetch`. A server that puts no `Text` there is
 asked with `fetch`, as before. A form's tab reads its module's text as it did.
+A module tab's `fetch` with `Request {Kind: 4 Linq, Text, Position}` is what the LINQ constructor asks the compiler,
+each part by its field, answered together: `Open` (true) — the window opening at `Position`: `Query {From}` (the
+innermost query the caret stands in), `Anchor` (where the block will stand), `Names` (rows `Name`: the values visible
+there), `Values` for each of them and for `Data`, and `Kinds` (rows `Name`, `Picture`: each of `Data`'s sections and
+its class's picture); `Probes` (a list of probe texts, each asked at its end) and `Deep` (those of them whose names are
+asked too, as the probe's text followed by `<name>.`) → `Values`; `Verdict` (true) — `Text` is the module with the block
+in it and `Position` where the block starts → `Read {Bindings (rows Name, Origin, Offers), Columns (rows Name)}`, none
+when no query is read there. `Values` are rows `Text` (the probe), `Resolved`, `Type`, `Names` (rows `Name`). A server
+that does not know the kind answers nothing; the window then lists nothing and says so, as before.
 
 A table's column dragged in its header is `Move {Column, Holder, Position}`: `Holder` the group it now stands in, 0 the
 table. The client moves the column in its own copy of the form at once; the server's form follows.

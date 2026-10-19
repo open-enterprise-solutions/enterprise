@@ -1102,14 +1102,14 @@ void ibCodeEditor::OnContextMenu(wxContextMenuEvent& event)
 	// (the text, the CHARACTER position the compiler measures in, and the module). Standing in a query
 	// it opens that query and replaces it; anywhere else it writes a new block at the caret.
 	//
-	// ⚠ THE MODULE IS THE SERVER'S: the client's constructor is given the syntax it is written in (the tab's), and
-	// asks the compiler nothing yet (linqConstructor.h).
+	// ⚠ THE MODULE IS THE SERVER'S: the client's constructor is given its tab, which it asks what the compiler says,
+	// and the syntax it is written in (the tab's) — linqConstructor.h.
 	const int caretChars = GetRealPosition();
 	wxMenuItem* miLinq = menu.Append(wxID_ANY, _("LINQ query constructor"));
 	miLinq->SetBitmap(wxArtProvider::GetBitmap(wxART_LINQ_CONSTRUCTOR, wxART_FRONTEND, FromDIP(wxSize(16, 16))));
 	menu.Bind(wxEVT_MENU, [this, caret, caretChars](wxCommandEvent&) {
 		const wxString text = GetText();
-		ibDialogLinqConstructor dialog(this, text, (unsigned int)caretChars, GetCodeStyle(), !IsEditable());
+		ibDialogLinqConstructor dialog(this, text, (unsigned int)caretChars, m_document, GetCodeStyle(), !IsEditable());
 		if (dialog.ShowModal() != wxID_OK || !IsEditable())
 			return;
 		wxString refusal;
