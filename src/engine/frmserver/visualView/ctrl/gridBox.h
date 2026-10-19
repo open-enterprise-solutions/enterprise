@@ -109,7 +109,9 @@ class ibValueGridBox : public ibValueWindowComposite, public ibTypeControlFactor
 	// ⭐ WHAT THE BOX SHOWS NOW — the window's state, and the SHEET'S Version — a number that moves whenever the sheet
 	// on show is replaced, so a client knows the sheet it holds is stale — and what the sheet is to its report
 	// (ComposeState): being composed, which the window draws as its progress, or outdated by a setting changed since,
-	// which it draws as the word to compose again. The sheet itself is too much for a frame: a client asks for it (Fetch).
+	// which it draws as the word to compose again. When the sheet is composed, State may also carry Sheet (and ReadOnly)
+	// once for that Version — the same payload Fetch would give — so the frame that announces the new Version need not
+	// be followed by a fetch. A client that finds no Sheet still asks Fetch, as before.
 	virtual void OnUpdate(ibDataNode& state, ibVisualHost* host) override;
 
 	// The events this box has: Cell {Row, Col} — a cell clicked, the question "what is this figure made of"
@@ -210,6 +212,8 @@ private:
 	// …and its VERSION — moved each time the sheet on show is replaced (the model installed, a compose
 	// delivered). The model keeps no such number, so the box counts what it shows.
 	s32 m_documentVersion = 0;
+	// The Version whose Sheet was last written into State — so a composed sheet rides one frame, not every later one.
+	s32 m_sheetSentVersion = -1;
 
 	// Composes handed to the background and not yet delivered — the client's progress indicator. A count
 	// rather than a flag: a second Compose cancels the first, and the first is still delivered after it.
