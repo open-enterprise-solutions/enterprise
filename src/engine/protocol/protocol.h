@@ -102,6 +102,8 @@ namespace ibProtocolName {
 	inline constexpr const char* Help       = "Help";     // …a property row's: what it is for, as the inspector says it
 	inline constexpr const char* Class      = "Class";    // …a property row's: the server's property class by name
 	                                                      // (ibPropertyBoolean) — what the client's registry shows it by
+	inline constexpr const char* Sources    = "Sources";  // …a choice parameters row's: the fields beside it that may
+	                                                      // supply a value (Title, the holder they stand in)
 
 	// What the frame's parts carry: a menu item, a tab, a message, a question and its answer.
 	inline constexpr const char* Separator    = "Separator";

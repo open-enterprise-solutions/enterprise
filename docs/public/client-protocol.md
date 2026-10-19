@@ -136,6 +136,16 @@ A picture's `ibPropertyPicture` row carries the configuration's pictures it may 
 metaobjects of the owner's configuration, or of the one it extends) as an optional node `Pictures`: children with
 `Name` and `Guid`. They are named by `Guid` rather than as a `Picture`, so the rows do not make the client fetch every
 configuration picture before it draws them. Picking one is the row's `Set` with the value `{Type 2, Guid}`.
+A field's `ibPropertyChoiceLink` (link by type) and `ibPropertyChoiceParameters` rows carry what their windows ask of
+the configuration, as optional nodes. `Targets`, on both: the field's reference types, each `Id` (its metaobject),
+`Title`, `Type` (the class its reference is registered under, as a link keeps it) and `Picture`; on the parameters row
+each has as children the fields a parameter may fill (`Id`, `Title`, `Picture`). `Sources`, on the parameters row only:
+`Title` the object or tabular section the field stands in, and as children the fields beside it that may supply a
+value (`Id`, `Title`, `Picture`), each with as children (`Id`) the parameters it could fill, the likeliest first, and
+`Default` the one that is obvious (absent: a real choice). The edited description goes back through the row's `Set`. A
+client that reads none opens the link's window without the question of which type it decides and does not open the
+parameters' window. A description's `path` is read whether it arrives as a field (as written) or as a property (an
+object read from JSON).
 
 A picture is named by its id everywhere — in the view, a tab's `Icon`, a schema, a request, a list of choices: a
 backend picture's number, as a decimal (a class's own: its class id), or a configuration picture's guid. No answer

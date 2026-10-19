@@ -12,10 +12,18 @@ ibMetaID IdOf(const ibDataNode& node, const wxString& field)
 
 // The path is written and read by the mechanism that owns it — a link's path IS a source description,
 // so its serialiser is the one already in the tree rather than a second spelling of the same hops.
+//
+// ⚠ A FIELD AS WRITTEN, A PROPERTY AS IT CROSSED THE WIRE. WritePath adds the path as a field holding a node; the
+// protocol's JSON reader puts every member that is an object into the node's properties (jsonProvider.cpp), so a
+// link the thin designer sends back came with its path where a field was looked for — read as no path, the link
+// was cleared and a parameters row dropped as one whose source is gone. Both places are read.
 void ReadPath(const ibDataNode& node, ibSourceDescription& source)
 {
 	source.ClearSource();
-	if (const ibDataValue* path = node.FindField(wxT("path")))
+	const ibDataValue* path = node.FindField(wxT("path"));
+	if (path == nullptr)
+		path = node.FindProperty(wxT("path"));
+	if (path != nullptr)
 		ibSourceDescriptionMemory::ReadNode(*path, source);
 }
 

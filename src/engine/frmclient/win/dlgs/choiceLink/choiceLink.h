@@ -16,9 +16,8 @@
 // It edits a BUFFER and writes back only on OK, like every editor of a description here.
 //
 // The desktop's (frontend/win/dlgs/choiceLink), over the client's row: the candidates are the row's choices — what
-// the server's ibPropertyChoiceLink::GetValueList offered, pictures drawn — and the reference types of the field are
-// the server's answer the row does not bring yet (ibFieldReferenceTypes), so the question of which type a link
-// decides is not asked here.
+// the server's ibPropertyChoiceLink::GetValueList offered, pictures drawn — and the reference types of the field,
+// with the class each is registered under, are the row's Targets (ibFieldReferenceTypes).
 
 #include <wx/dialog.h>
 #include <wx/choice.h>

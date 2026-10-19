@@ -27,11 +27,11 @@ wxIcon FieldPicture(const wxIcon& own, const wxIcon& ordinary)
 // A type row names its metaobject by metaID; the link keeps the class of that object's REFERENCE — the id the
 // configuration registered it under, its metaclass included.
 //
-// ⚠ THE CONFIGURATION'S ANSWER (ibMetaData::GetIDObjectFromMetaID), and the client has no configuration to ask: none.
-// Reached only where a field holds two reference types, which the row does not bring yet (ibFieldReferenceTypes).
-static ibClassID ReferenceClassOf(const ibBackendProperty* WXUNUSED(property), ibMetaID WXUNUSED(id))
+// The configuration's answer (ibMetaData::GetIDObjectFromMetaID), which the client has no configuration to ask: the
+// server writes it beside each type on the row (ibFieldReferenceClass).
+static ibClassID ReferenceClassOf(const ibBackendProperty* property, ibMetaID id)
 {
-	return 0;
+	return ibFieldReferenceClass(property, id);
 }
 
 ibDialogChoiceLink::ibDialogChoiceLink(wxWindow* parent, ibBackendProperty* property,
@@ -77,7 +77,7 @@ void ibDialogChoiceLink::BuildCatalogue()
 		keep(m_fields, fields, idx);
 
 	ibPropertyChoiceList types;
-	ibFieldReferenceTypes(m_property->GetPropertyObject(), types);
+	ibFieldReferenceTypes(m_property, types);
 	for (unsigned int idx = 0; idx < types.GetCount(); idx++)
 		keep(m_types, types, idx);
 

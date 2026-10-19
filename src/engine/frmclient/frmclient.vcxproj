@@ -230,6 +230,7 @@
     <ClCompile Include="backend\propertyManager\propertyObject.cpp" />
     <ClCompile Include="backend\propertyManager\property\propertyBoolean.cpp" />
     <ClCompile Include="backend\propertyManager\property\propertySerializable.cpp" />
+    <ClCompile Include="backend\propertyManager\property\propertyChoiceLink.cpp" />
     <ClCompile Include="backend\metaCollection\metaObject.cpp" />
     <ClCompile Include="backend\metaCollection\metaObjectMetadata.cpp" />
     <ClCompile Include="backend\propertyManager\property\propertyString.cpp" />

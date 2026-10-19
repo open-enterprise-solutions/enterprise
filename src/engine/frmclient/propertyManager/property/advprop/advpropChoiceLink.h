@@ -53,7 +53,8 @@ protected:
 // for the same reason — a row that took text it cannot turn into rows would be answering a question it
 // does not understand.
 //
-// ⚠ ON THE CLIENT IT NAMES THE ROWS, IT DOES NOT EDIT THEM YET: the window's lists are the server's (see the .cpp).
+// The window's lists are the server's, brought on the row; a row without them names the rows and does not edit them
+// (see the .cpp).
 class ibPGChoiceParametersProperty : public wxPGProperty {
 	WX_PG_DECLARE_PROPERTY_CLASS(ibPGChoiceParametersProperty);
 public:
@@ -67,8 +68,7 @@ public:
 	virtual bool StringToValue(wxVariant& variant, const wxString& text,
 		wxPGPropValFormatFlags flags = wxPGPropValFormatFlags::Null) const override { return false; }
 
-	// The click on "…" — on the desktop the window edits a COPY and the value is posted only when it says
-	// something changed; here it says the window is not here yet.
+	// The click on "…" — the window edits a COPY and the value is posted only when it says something changed.
 	virtual bool OnEvent(wxPropertyGrid* propgrid, wxWindow* primary, wxEvent& event) override;
 
 protected:
