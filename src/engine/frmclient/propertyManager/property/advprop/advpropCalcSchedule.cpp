@@ -2,10 +2,23 @@
 
 #include "frmclient/backend/propertyManager/property/variant/variantCalcSchedule.h"
 
-#include "frmclient/mainFrame/objinspect/objinspect.h"                  // the rebuild another set of link rows needs
 #include "frmclient/propertyManager/property/private/prop.h"
 #include "frmclient/propertyManager/property/private/propertyRegistry.h"
 #include "frmclient/propertyManager/propertyEditor.h"
+#include "frmclient/backend/propertyManager/property/propertySerializable.h"   // the row the lists come with
+
+#include "protocol/protocol.h"   // ibProtocolName — the row's keys
+
+namespace {
+
+// The row's lists (`Schedule`): what each kind of sub-row chooses from.
+enum : s32 {
+	kListValue = 1,   // a resource of the register — the value
+	kListDate = 2,    // a dimension of the register — the date
+	kListLink = 3,    // a dimension to link; its children the fields that may answer for it
+};
+
+} // namespace
 
 // -----------------------------------------------------------------------
 // ibPGCalcScheduleProperty
@@ -36,21 +49,23 @@ public:
 	}
 } g_calcScheduleLoader;
 
-wxPGChoices ibPGCalcScheduleProperty::GetChoices(const ibPropertyChoiceList& list)
+wxPGChoices ibPGCalcScheduleProperty::GetChoices(const std::vector<const ibDataNode*>& items)
 {
 	wxPGChoices choices;
 	choices.Add(_("<not set>"), 0);
-	for (unsigned int idx = 0; idx < list.GetCount(); idx++)
-		choices.Add(list.GetName(idx), list.GetBitmap(idx), list.GetId(idx));   // names, as the type row names its types
+	for (const ibDataNode* item : items)
+		choices.Add(item->GetValue<wxString>(ibProtocolName::Title), item->GetValue<s32>(ibProtocolName::Id));   // names, as the type row names its types
 	return choices;
 }
 
-std::vector<ibMetaID> ibPGCalcScheduleProperty::GetLinkDimensions(const ibPropertyChoiceList& list) const
+std::vector<const ibDataNode*> ibPGCalcScheduleProperty::GetItems(s32 kind) const
 {
-	std::vector<ibMetaID> dimensions;
-	for (unsigned int idx = 0; idx < list.GetCount(); idx++)
-		dimensions.push_back(list.GetId(idx));
-	return dimensions;
+	std::vector<const ibDataNode*> items;
+	for (const ibDataNode& item : m_lists.Children()) {
+		if (item.GetValue<s32>(ibProtocolName::Kind) == kind)
+			items.push_back(&item);
+	}
+	return items;
 }
 
 ibPGCalcScheduleProperty::ibPGCalcScheduleProperty(ibBackendProperty* property, const wxString& label,
@@ -60,39 +75,55 @@ ibPGCalcScheduleProperty::ibPGCalcScheduleProperty(ibBackendProperty* property, 
 	ibPropertyChoiceList registers;
 	if (m_property != nullptr)
 		m_property->GetValueList(registers);
-	m_choices = GetChoices(registers);
+	m_choices.Add(_("<not set>"), 0);
+	for (unsigned int idx = 0; idx < registers.GetCount(); idx++)
+		m_choices.Add(registers.GetName(idx), registers.GetBitmap(idx), registers.GetId(idx));
 
-	m_scheduleValue = new wxEnumProperty(_("Schedule value"), wxT("value"), wxArrayString(), wxArrayInt(), 0);
+	// THE ROW'S LISTS — the server's property's answers for the register bound now (ibPropertyInspector,
+	// AppendCalcSchedule).
+	if (const ibPropertySerializable* const row = dynamic_cast<const ibPropertySerializable*>(m_property)) {
+		if (const ibDataValue* const node = row->GetRow().FindProperty(ibProtocolName::Schedule)) {
+			if (node->Kind() == ibDataKind::Child && node->AsChild() != nullptr) {
+				m_lists = *node->AsChild();
+				m_hasLists = true;
+			}
+		}
+	}
+
+	wxPGChoices valueChoices = GetChoices(GetItems(kListValue));
+	m_scheduleValue = new wxEnumProperty(_("Schedule value"), wxT("value"), valueChoices, 0);
 	AddPrivateChild(m_scheduleValue);
-	m_scheduleDate = new wxEnumProperty(_("Schedule date"), wxT("date"), wxArrayString(), wxArrayInt(), 0);
+	wxPGChoices dateChoices = GetChoices(GetItems(kListDate));
+	m_scheduleDate = new wxEnumProperty(_("Schedule date"), wxT("date"), dateChoices, 0);
 	AddPrivateChild(m_scheduleDate);
 
-	// the link rows of the register bound now — the dimensions to link are the server's property's answer
-	// (GetScheduleLinkList), which the row does not bring: none yet.
-	const ibVariantDataCalcSchedule* data = property_cast(value, ibVariantDataCalcSchedule);
-	if (m_property != nullptr && data != nullptr) {
-		ibPropertyChoiceList dimensions;
-		m_linkDimensions = GetLinkDimensions(dimensions);
-		for (unsigned int idx = 0; idx < dimensions.GetCount(); idx++) {
-			// …and the fields each may name, the server's too (GetScheduleFieldList).
-			ibPropertyChoiceList fields;
-			wxPGChoices choices = GetChoices(fields);
-			// Named as its neighbours are — what the row IS, not the field a configuration happens to link.
-			const wxString label = dimensions.GetCount() == 1 ? wxString(_("Schedule link"))
-				: wxString::Format(_("Schedule link %u"), idx + 1);
-			wxEnumProperty* row = new wxEnumProperty(label,
-				wxString::Format(wxT("link%li"), dimensions.GetId(idx)), choices, 0);
-			row->SetHelpString(wxString::Format(_("The field of the register that answers for the schedule's dimension '%s'."),
-				dimensions.GetName(idx)));
-			AddPrivateChild(row);
-			m_linkRows.push_back(row);
-		}
+	// the link rows of the register bound now — as many dimensions as the server listed, each with the fields that
+	// may answer for it (its children)
+	const std::vector<const ibDataNode*> links = GetItems(kListLink);
+	for (size_t idx = 0; idx < links.size(); idx++) {
+		const ibDataNode& link = *links[idx];
+		const ibMetaID dimension = link.GetValue<s32>(ibProtocolName::Id);
+		std::vector<const ibDataNode*> fields;
+		for (const ibDataNode& field : link.Children())
+			fields.push_back(&field);
+		// Named as its neighbours are — what the row IS, not the field a configuration happens to link.
+		const wxString rowLabel = links.size() == 1 ? wxString(_("Schedule link"))
+			: wxString::Format(_("Schedule link %u"), static_cast<unsigned>(idx + 1));
+		wxPGChoices fieldChoices = GetChoices(fields);
+		wxEnumProperty* row = new wxEnumProperty(rowLabel, wxString::Format(wxT("link%li"), static_cast<long>(dimension)),
+			fieldChoices, 0);
+		row->SetHelpString(wxString::Format(_("The field of the register that answers for the schedule's dimension '%s'."),
+			link.GetValue<wxString>(ibProtocolName::Title)));
+		AddPrivateChild(row);
+		m_linkRows.push_back(row);
+		m_linkDimensions.push_back(dimension);
 	}
 
 	SetValue(value);
 
-	// Read-only, the rows below as well (see the header).
-	wxPGProperty::SetFlagRecursively(wxPGFlags::ReadOnly, true);
+	// Read-only, the rows below as well, when the row brought no lists (see the header).
+	if (!m_hasLists)
+		wxPGProperty::SetFlagRecursively(wxPGFlags::ReadOnly, true);
 }
 
 wxString ibPGCalcScheduleProperty::ValueToString(wxVariant& value, wxPGPropValFormatFlags flags) const
@@ -152,34 +183,16 @@ wxVariant ibPGCalcScheduleProperty::ChildChanged(wxVariant& thisValue, int child
 void ibPGCalcScheduleProperty::RefreshChildren()
 {
 	ibVariantDataCalcSchedule* data = property_cast(m_value, ibVariantDataCalcSchedule);
-	if (m_property == nullptr || data == nullptr)
+	if (data == nullptr || m_scheduleValue == nullptr)
 		return;
 
+	// The lists are the row's, for the register it was written for: another register or date is the server's to
+	// answer — the row's Set comes back with the rows, and those carry their lists.
 	const ibCalcScheduleDescription& sd = data->GetScheduleDesc();
-
-	// Another set of dimensions to link (another register, or the date moved): the rows are made anew by a rebuild.
-	// The dimensions are the server's answer to the description (GetScheduleLinkList) — none yet.
-	ibPropertyChoiceList dimensions;
-	if (GetLinkDimensions(dimensions) != m_linkDimensions) {
-		if (ibObjectInspector* inspector = ibObjectInspector::GetObjectInspector())
-			inspector->SelectObject(inspector->GetSelectedObject(), true);
-		return;
-	}
-
-	// The resources that may be the value, the dimensions that may be the date — the server's answers too
-	// (GetScheduleValueList, GetScheduleDateList): none yet, so each row offers <not set> alone.
-	ibPropertyChoiceList values;
-	wxPGChoices valueChoices = GetChoices(values);
-	m_scheduleValue->SetChoices(valueChoices);
 	m_scheduleValue->SetValue(sd.GetValue());
 	m_scheduleValue->Enable(sd.IsOk());
-
-	ibPropertyChoiceList dates;
-	wxPGChoices dateChoices = GetChoices(dates);
-	m_scheduleDate->SetChoices(dateChoices);
 	m_scheduleDate->SetValue(sd.GetDate());
 	m_scheduleDate->Enable(sd.IsOk());
-
 	for (size_t idx = 0; idx < m_linkRows.size(); idx++)
 		m_linkRows[idx]->SetValue(sd.GetLinkedField(m_linkDimensions[idx]));
 }

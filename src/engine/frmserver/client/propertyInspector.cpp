@@ -21,6 +21,7 @@
 #include "backend/propertyManager/property/propertyOwner.h"        // ibPropertyOwner — a catalog's owners, by kind
 #include "backend/propertyManager/property/propertyRecord.h"       // ibPropertyRecord — a document's registers, sequences
 #include "backend/propertyManager/property/propertyGeneration.h"   // ibPropertyGeneration — what it is entered on
+#include "backend/propertyManager/property/propertyCalcSchedule.h"   // ibPropertyCalcSchedule — a register's schedule, and its lists
 #include "core/serialize/dataBuilder.h"
 
 #include "clientFrame.h"   // ibClientFrame::SendPicture — a type's, a choice's picture, by its id
@@ -53,6 +54,42 @@ ibValueMetaObject* GetInnerModule(const ibBackendProperty* property)
 		|| dynamic_cast<const ibPropertyModule*>(property) != nullptr)
 		return dynamic_cast<ibValueMetaObject*>(property->GetPropertyObject());
 	return nullptr;
+}
+
+// A CALCULATION REGISTER'S SCHEDULE — the lists its sub-rows choose from, for the register bound now, as the desktop's
+// cell asked them of the property (ibPGCalcScheduleProperty): Kind 1 the resources that may be the value, 2 the
+// dimensions that may be the date, 3 each dimension to link, its children the fields that may answer for it. Optional:
+// a client that reads none shows the register's choice alone.
+void AppendCalcSchedule(ibDataNode& row, const ibPropertyCalcSchedule* property)
+{
+	const ibCalcScheduleDescription& desc = property->GetValueAsScheduleDesc();
+	auto lists = std::make_shared<ibDataNode>();
+	const auto append = [](ibDataNode& parent, s32 kind, const ibPropertyChoiceList& list) {
+		for (unsigned int index = 0; index < list.GetCount(); ++index) {
+			ibDataNode& item = parent.AddChild(0, static_cast<ibMetaID>(parent.Children().size() + 1));
+			if (kind != 0)
+				item.SetValue(ibProtocolName::Kind, kind);
+			item.SetValue(ibProtocolName::Id, static_cast<s32>(list.GetId(index)));
+			item.SetValue(ibProtocolName::Title, list.GetName(index));   // names, as the desktop's cell named them
+		}
+	};
+
+	ibPropertyChoiceList values, dates, links;
+	property->GetScheduleValueList(desc, values);
+	append(*lists, 1, values);
+	property->GetScheduleDateList(desc, dates);
+	append(*lists, 2, dates);
+	property->GetScheduleLinkList(desc, links);
+	for (unsigned int index = 0; index < links.GetCount(); ++index) {
+		ibDataNode& link = lists->AddChild(0, static_cast<ibMetaID>(lists->Children().size() + 1));
+		link.SetValue(ibProtocolName::Kind, static_cast<s32>(3));
+		link.SetValue(ibProtocolName::Id, static_cast<s32>(links.GetId(index)));
+		link.SetValue(ibProtocolName::Title, links.GetName(index));
+		ibPropertyChoiceList fields;
+		property->GetScheduleFieldList(links.GetId(index), fields);
+		append(link, 0, fields);
+	}
+	row.SetProperty(ibProtocolName::Schedule, ibDataValue::Child(lists));
 }
 
 // WHAT A TYPE'S PROPERTY MAY HOLD — the desktop's picker's offer (ibShowTypeSelector): the types the configuration offers
@@ -138,6 +175,10 @@ void ibPropertyInspector::AppendProperty(ibDataNode& parent, ibBackendProperty* 
 	// A TYPE — what it may hold, as the desktop's picker offered it.
 	if (const ibPropertyType* const type = dynamic_cast<const ibPropertyType*>(property))
 		AppendTypes(row, type);
+
+	// A CALCULATION REGISTER'S SCHEDULE — the lists of its sub-rows.
+	if (const ibPropertyCalcSchedule* const schedule = dynamic_cast<const ibPropertyCalcSchedule*>(property))
+		AppendCalcSchedule(row, schedule);
 
 	// A DYNAMIC LIST'S SOURCE — the sources it may read, as the desktop's drop-down offered them.
 	if (const ibPropertyDynamicSource* const source = dynamic_cast<const ibPropertyDynamicSource*>(property))
