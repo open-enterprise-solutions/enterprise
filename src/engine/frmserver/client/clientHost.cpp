@@ -564,6 +564,8 @@ void ibClientHost::NotifyChanged(const ibClientInstance* instance)
 		for (const auto& [clientId, client] : m_clients) {
 			if (client->instance.get() != instance)
 				continue;
+			if (client->answering.load(std::memory_order_acquire))
+				break;   // the call being answered carries it
 			const auto found = m_notifiers.find(client->connection.load(std::memory_order_acquire));
 			if (found != m_notifiers.end()) {
 				id = clientId;
@@ -1229,6 +1231,7 @@ bool ibClientHost::Run(Client& client, std::function<void(ibClientFrame*)> work,
 	// THE CALL'S PARTS, timed — the work (the script, the handlers), the frame drawn, the patch taken: where a slow call
 	// spends its time, said beside the call's own line (a debug build's journal).
 	const std::int64_t began = NowMs();
+	client.answering.store(true, std::memory_order_release);
 
 	if (work) {
 		// ⭐ WHILE THE PERSON IS ASKED SOMETHING, a call still runs — inside the work that waits, which runs this
@@ -1248,7 +1251,8 @@ bool ibClientHost::Run(Client& client, std::function<void(ibClientFrame*)> work,
 	ibDataNode drawn, events;
 	bool drew = false;
 	try {
-		session->Submit([instance, &drawn, &events, &drew]() {
+		session->Submit([&client, instance, &drawn, &events, &drew]() {
+			client.answering.store(false, std::memory_order_release);
 			ibClientFrame* const frame = instance->GetFrame();
 			if (frame == nullptr)
 				return;
@@ -1258,6 +1262,7 @@ bool ibClientHost::Run(Client& client, std::function<void(ibClientFrame*)> work,
 		}).get();
 	}
 	catch (...) {
+		client.answering.store(false, std::memory_order_release);
 		refusal = ibProtocolRefusal::Failed;
 		error = wxT("the frame could not be drawn");
 		return false;

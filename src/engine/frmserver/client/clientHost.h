@@ -95,6 +95,10 @@ private:
 		// The work that has not settled yet — waiting for the person's response to a request. The next call
 		// that settles the client waits for it too: a response lets it go on.
 		std::shared_future<void>          unsettled;
+		// Set while a call is being answered and its frame is not drawn yet: the answer carries what changed, so the
+		// work's own changes are not told (NotifyChanged) as well — the client would ask for an empty frame. Cleared
+		// on the worker right before the frame is drawn, so a change made after the draw is still told.
+		std::atomic<bool>                 answering{ false };
 		// One call of a client at a time: a call that leaves its work waiting for a response has returned by
 		// then, so the call carrying the response gets in.
 		std::mutex                        lock;
