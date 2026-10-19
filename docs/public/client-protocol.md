@@ -199,11 +199,13 @@ A module tab's `fetch` with `Request {Kind: 4 Linq, Text, Position}` is what the
 each part by its field, answered together: `Open` (true) — the window opening at `Position`: `Query {From}` (the
 innermost query the caret stands in), `Anchor` (where the block will stand), `Names` (rows `Name`: the values visible
 there), `Values` for each of them and for `Data`, and `Kinds` (rows `Name`, `Picture`: each of `Data`'s sections and
-its class's picture); `Probes` (a list of probe texts, each asked at its end) and `Deep` (those of them whose names are
-asked too, as the probe's text followed by `<name>.`) → `Values`; `Verdict` (true) — `Text` is the module with the block
-in it and `Position` where the block starts → `Read {Bindings (rows Name, Origin, Offers), Columns (rows Name)}`, none
-when no query is read there. `Values` are rows `Text` (the probe), `Resolved`, `Type`, `Names` (rows `Name`). A server
-that does not know the kind answers nothing; the window then lists nothing and says so, as before.
+its class's picture); `Probes` (a list of statements, each asked at its end after `Text` up to the start of the line
+the block stands on — the opening's `Anchor`, else `Position`) and `Deep` (those of them whose names are asked too, as
+the probe followed by `<name>.`) → `Values`; `Verdict` (true) — `Text` is the module with the block in it and
+`Position` where the block starts → `Read {Bindings (rows Name, Origin, Offers), Columns (rows Name)}`, none when no
+query is read there. `Values` are rows `Text` (the probe as asked, without the module before it; the opening's are
+`linqProbe = <name>.`), `Resolved`, `Type`, `Names` (rows `Name`). A server that does not know the kind answers
+nothing; the window then lists nothing and says so, as before.
 
 A table's column dragged in its header is `Move {Column, Holder, Position}`: `Holder` the group it now stands in, 0 the
 table. The client moves the column in its own copy of the form at once; the server's form follows.

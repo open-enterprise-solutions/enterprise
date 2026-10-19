@@ -319,9 +319,19 @@ wxString LoadCallTip(const wxString& text, unsigned int caret, const ibValueMeta
 
 namespace linq = ibProtocol::ibView::ibModule::ibLinq;
 
+// The text a probe is appended to (the desktop's m_probeHead): the module up to the START of the anchor's line — the
+// statements above are finished, the one the block stands in may not be (`q = |`), and a probe glued onto half a
+// statement asks the walk about a sentence nobody wrote. Built here, so a probe crosses the wire without it.
+wxString LinqProbeHead(const wxString& text, unsigned int anchor)
+{
+	const int lineStart = text.Left(anchor).Find(wxT('\n'), /*fromEnd*/ true);
+	return lineStart == wxNOT_FOUND ? wxString() : text.Left(lineStart + 1);
+}
+
 // The desktop's ibDialogLinqConstructor::Ask — AS A COMPLETION, like the dropdown: answering compiles the text and walks
-// it, values are made on the way, and a name not written yet is ordinary here rather than an error. One Values row.
-std::vector<wxString> WriteLinqProbe(ibDataNode& values, const wxString& probe,
+// it, values are made on the way, and a name not written yet is ordinary here rather than an error. One Values row,
+// named by the probe as asked, without the head.
+std::vector<wxString> WriteLinqProbe(ibDataNode& values, const wxString& probeHead, const wxString& probe,
 	const ibValueMetaObjectModuleBase* moduleObject)
 {
 	bool resolved = false;
@@ -329,9 +339,10 @@ std::vector<wxString> WriteLinqProbe(ibDataNode& values, const wxString& probe,
 	std::vector<wxString> names;
 	{
 		const ibBackendException::ibEvalModeScope answering(eval_complete);
+		const wxString asked = probeHead + probe;
 		std::vector<ibCaretValue> found;
 		try {
-			if (ibValueAtCaret(probe, (unsigned int)probe.length(), moduleObject, found)) {
+			if (ibValueAtCaret(asked, (unsigned int)asked.length(), moduleObject, found)) {
 				resolved = !found.empty();
 				for (ibCaretValue& branch : found) {
 					ibValue& value = branch.m_value;
@@ -372,9 +383,9 @@ std::vector<wxString> WriteLinqProbe(ibDataNode& values, const wxString& probe,
 }
 
 // The probe the desktop's MembersOf builds — what follows `<expression>.` at the anchor's line.
-wxString LinqMembersProbe(const wxString& probeHead, const wxString& expression)
+wxString LinqMembersProbe(const wxString& expression)
 {
-	return probeHead + wxT("linqProbe = ") + expression + wxT(".");
+	return wxT("linqProbe = ") + expression + wxT(".");
 }
 
 // The desktop's KindIcon rule: `Data.Catalogs` holds catalogs, and a catalog is what the type registry calls "Catalog"
@@ -393,8 +404,8 @@ wxString LinqKindPicture(const wxString& section, const ibMetaData* metaData)
 }
 
 // Open — the desktop's constructor before its window is drawn: the query the caret stands in, where the block will
-// stand, what is visible there, and what each of those and `Data` hold.
-void WriteLinqOpen(ibDataNode& response, const wxString& text, unsigned int caret,
+// stand, what is visible there, and what each of those and `Data` hold. Returns where the block will stand.
+unsigned int WriteLinqOpen(ibDataNode& response, const wxString& text, unsigned int caret,
 	const ibValueMetaObjectModuleBase* moduleObject)
 {
 	const ibMetaData* const metaData = moduleObject->GetMetaData();
@@ -434,8 +445,7 @@ void WriteLinqOpen(ibDataNode& response, const wxString& text, unsigned int care
 	}
 	response.SetValue(linq::Anchor, static_cast<s32>(anchor));
 
-	const int lineStart = text.Left(anchor).Find(wxT('\n'), /*fromEnd*/ true);
-	const wxString probeHead = lineStart == wxNOT_FOUND ? wxString() : text.Left(lineStart + 1);
+	const wxString probeHead = LinqProbeHead(text, anchor);
 
 	// WHAT IS VISIBLE WHERE THE BLOCK STANDS — the module's variables, the procedure's locals and parameters, the
 	// object's own attributes and tabular sections.
@@ -464,8 +474,8 @@ void WriteLinqOpen(ibDataNode& response, const wxString& text, unsigned int care
 	// …and what each holds, and `Data`'s sections — asked once for every tree, as the desktop's did.
 	ibDataNode& values = response.Child(linq::Values);
 	for (const wxString& name : variables)
-		WriteLinqProbe(values, LinqMembersProbe(probeHead, name), moduleObject);
-	const std::vector<wxString> sections = WriteLinqProbe(values, LinqMembersProbe(probeHead, wxT("Data")), moduleObject);
+		WriteLinqProbe(values, probeHead, LinqMembersProbe(name), moduleObject);
+	const std::vector<wxString> sections = WriteLinqProbe(values, probeHead, LinqMembersProbe(wxT("Data")), moduleObject);
 
 	ibDataNode& kinds = response.Child(linq::Kinds);
 	for (const wxString& section : sections) {
@@ -475,11 +485,13 @@ void WriteLinqOpen(ibDataNode& response, const wxString& text, unsigned int care
 		if (!picture.IsEmpty())
 			kind.SetValue(linq::Picture, picture);
 	}
+	return anchor;
 }
 
-// Probes — each asked at its end; a Deep one's names asked too, its text with `<name>.` after it (the desktop's
-// MembersOf of `<expression>.<name>`, which AddPlace asked one by one).
-void WriteLinqProbes(ibDataNode& response, const ibDataNode& request, const ibValueMetaObjectModuleBase* moduleObject)
+// Probes — each asked at its end, after `probeHead`; a Deep one's names asked too, its text with `<name>.` after it
+// (the desktop's MembersOf of `<expression>.<name>`, which AddPlace asked one by one).
+void WriteLinqProbes(ibDataNode& response, const ibDataNode& request, const wxString& probeHead,
+	const ibValueMetaObjectModuleBase* moduleObject)
 {
 	const auto texts = [&request](const char* key) {
 		std::vector<wxString> out;
@@ -497,11 +509,11 @@ void WriteLinqProbes(ibDataNode& response, const ibDataNode& request, const ibVa
 
 	ibDataNode& values = response.Child(linq::Values);
 	for (const wxString& probe : probes) {
-		const std::vector<wxString> names = WriteLinqProbe(values, probe, moduleObject);
+		const std::vector<wxString> names = WriteLinqProbe(values, probeHead, probe, moduleObject);
 		if (std::find(deep.begin(), deep.end(), probe) == deep.end())
 			continue;
 		for (const wxString& name : names)
-			WriteLinqProbe(values, probe + name + wxT("."), moduleObject);
+			WriteLinqProbe(values, probeHead, probe + name + wxT("."), moduleObject);
 	}
 }
 
@@ -567,14 +579,17 @@ bool ibModuleTextView::Fetch(const ibDataNode& request, ibDataNode& response)
 	case ibProtocol::ibView::ibModule::ibRequest::CallTip:
 		response.SetValue(ibProtocol::ibView::ibModule::Text, LoadCallTip(text, caret, creator));
 		return true;
-	case ibProtocol::ibView::ibModule::ibRequest::Linq:
-		// Each part the request names, in one answer (ibLinq).
-		if (request.FindField(linq::Open) != nullptr && request.GetValue<bool>(linq::Open))
-			WriteLinqOpen(response, text, caret, creator);
-		WriteLinqProbes(response, request, creator);
-		if (request.FindField(linq::Verdict) != nullptr && request.GetValue<bool>(linq::Verdict))
+	case ibProtocol::ibView::ibModule::ibRequest::Linq: {
+		// Each part the request names, in one answer (ibLinq). The probes are asked where the block stands: the
+		// opening's answer, or Position.
+		unsigned int anchor = caret;
+		if (request.GetValue<bool>(linq::Open))
+			anchor = WriteLinqOpen(response, text, caret, creator);
+		WriteLinqProbes(response, request, LinqProbeHead(text, anchor), creator);
+		if (request.GetValue<bool>(linq::Verdict))
 			WriteLinqVerdict(response, text, caret, creator);
 		return true;
+	}
 	case ibProtocol::ibView::ibModule::ibRequest::Procedures:
 		// The handlers the module may have (the desktop's procedures dialog offered those not written yet) — their
 		// parameters as a template writes them.

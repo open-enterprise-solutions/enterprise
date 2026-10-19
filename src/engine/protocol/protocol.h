@@ -1265,13 +1265,16 @@ namespace ibProtocol {
 			//     the caret); Names — rows {Name}: the values visible there (declared or the object's own, not callable);
 			//     Values for the members of each of them and of `Data`; Kinds — rows {Name, Picture}: each of `Data`'s
 			//     sections and the picture of the class it holds.
-			//   · Probes — a list of probe texts, each asked at its end (what follows its dot) → Values; Deep — those of
-			//     them whose names are asked too, each as the probe's text with `<name>.` after it.
+			//   · Probes — a list of probes, each a statement asked at its end (what follows its dot) after the module's
+			//     Text up to the START of the line the block stands on (the opening's Anchor when Open is asked too,
+			//     else Position) → Values; Deep — those of them whose names are asked too, each as the probe with
+			//     `<name>.` after it.
 			//   · Verdict (true) — Text is the module with the block in it, Position where the block starts: Read
 			//     {Bindings — rows {Name, Origin, Offers — how many fields it offers}, Columns — rows {Name}}, as the
 			//     compiler outlined the query that starts there; none: no query read there.
-			// Values — rows {Text — the probe, Resolved, Type — the class it resolved to, Names — rows {Name}: what may be
-			// written after its dot, the frame's own left out}.
+			// Values — rows {Text — the probe as asked, without the module's text before it (Open's: `linqProbe = <name>.`),
+			// Resolved, Type — the class it resolved to, Names — rows {Name}: what may be written after its dot, the
+			// frame's own left out}.
 			namespace ibLinq {
 
 				inline constexpr const char* Open     = "Open";

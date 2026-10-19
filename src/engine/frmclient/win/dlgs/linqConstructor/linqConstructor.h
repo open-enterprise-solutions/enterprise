@@ -43,7 +43,6 @@
 #include <wx/textctrl.h>
 #include <wx/checkbox.h>
 #include <wx/stattext.h>
-#include <wx/timer.h>
 
 #include <functional>
 #include <map>
@@ -88,7 +87,7 @@ private:
 	ibProbe RowOf(const wxString& expression) const;
 
 	// ---- the module's tab, asked (the client's half of the desktop's three doors) ----
-	// The probe texts MembersOf and RowOf ask.
+	// The probes MembersOf and RowOf ask — the statement alone: the tab puts the module's text before it.
 	wxString MembersProbe(const wxString& expression) const;
 	wxString RowProbe(const wxString& expression) const;
 	// One question of the tab (Kind Linq, Text, Position, and the parts `request` names); its Values kept.
@@ -96,8 +95,8 @@ private:
 	void KeepValues(const ibProtocolNode& answer) const;
 	// The probes not known yet, in one question; those in `deep` with their names' probes too.
 	void AskAll(const std::vector<wxString>& probes, const std::vector<wxString>& deep) const;
-	// The compiler's reading of the block, asked once the typing has paused.
-	void AskVerdict();
+	// The compiler's reading of `text` — the module with the block in it — asked and shown under the block.
+	void AskVerdict(const wxString& text);
 
 	// A value that is only a value - a number, a string, a date, a flag: a leaf, which goes into a
 	// condition and is read as nothing. An expression the walk could not resolve is NOT one: it may be
@@ -145,7 +144,10 @@ private:
 	// Continuation lines of the block line up under where it starts.
 	wxString IndentAt(unsigned int position) const;
 
+	// The block as it stands and the compiler's reading of it; ShowBlock — the block alone, while "Group into" is typed
+	// (the module with the block in it, when the compiler has not read it yet; empty: nothing to ask).
 	void ShowResult();
+	wxString ShowBlock();
 	void OnOk(wxCommandEvent& event);
 
 	wxString                 m_text;
@@ -154,7 +156,6 @@ private:
 	bool                     m_replacing = false;
 	unsigned int             m_replaceFrom = 0;
 	unsigned int             m_replaceTo = 0;
-	wxString                 m_probeHead;      // the text up to the anchor's line — what a probe is appended to
 	ibTabDocument*           m_module = nullptr;   // the module's tab — what the compiler is asked through
 	short                    m_codeStyle;
 	std::vector<wxString>    m_variables;      // the names visible at the anchor that hold a value
@@ -200,7 +201,6 @@ private:
 	// and the block last read with what the compiler read of it.
 	mutable std::map<wxString, ibProbe> m_asked;
 	std::map<wxString, wxString>        m_kindPictures;
-	wxTimer                             m_verdictTimer;
 	wxString                            m_verdictText;   // the module with the block in, as last asked
 	wxString                            m_verdictLabel;  // …and the line it was answered with
 	bool                                m_verdictRead = false;
