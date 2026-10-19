@@ -21,7 +21,7 @@
 
 #include "output/outputWindow.h"
 #include "objinspect/objinspect.h"
-#include "settings/xmlutility.h"
+#include "settings/settingsxml.h"
 
 #include "frmclient/docView/docManager.h"
 #include "frmclient/docView/templates/docViewFile.h"

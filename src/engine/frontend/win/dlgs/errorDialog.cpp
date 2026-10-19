@@ -1,5 +1,5 @@
 ////////////////////////////////////////////////////////////////////////////
-//	Author		: Maxim Kornienko, wxFormBuilder community
+//	Author		: Maxim Kornienko
 //	Description : error dialog window
 ////////////////////////////////////////////////////////////////////////////
 
@@ -65,8 +65,11 @@ ibDialogError::ibDialogError(ibFrontendMainFrame* parent, wxWindowID id,
 	m_buttonGotoDesigner->Connect(wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler(ibDialogError::OnButtonGotoDesignerClick), nullptr, this);
 	m_buttonCloseWindow->Connect(wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler(ibDialogError::OnButtonCloseWindowClick), nullptr, this);
 
-	ibDialogError::SetEditorSettings(parent->GetEditorSettings());
-	ibDialogError::SetFontColorSettings(parent->GetFontColorSettings());
+	// The report in the code's font and colours, without line numbers.
+	parent->GetEditorSettings().Apply(*m_errorOutput);
+	parent->GetFontColorSettings().Apply(*m_errorOutput);
+	m_errorOutput->SetMarginType(DEF_LINENUMBER_ID, wxSTC_MARGIN_NUMBER);
+	m_errorOutput->SetMarginWidth(DEF_LINENUMBER_ID, 0);
 
 	/** Enumeration of commands and child windows. */
 	enum
@@ -92,112 +95,6 @@ ibDialogError::ibDialogError(ibFrontendMainFrame* parent, wxWindowID id,
 
 	wxDialog::SetIcon(dlg_icon);
 	wxDialog::SetFocus();
-}
-
-void ibDialogError::SetEditorSettings(const ibEditorSettings& settings)
-{
-	unsigned int m_bIndentationSize = settings.GetIndentSize();
-
-	m_errorOutput->SetIndent(m_bIndentationSize);
-	m_errorOutput->SetTabWidth(m_bIndentationSize);
-
-	bool useTabs = settings.GetUseTabs();
-	bool showWhiteSpace = settings.GetShowWhiteSpace();
-
-	m_errorOutput->SetUseTabs(useTabs);
-	m_errorOutput->SetTabIndents(useTabs);
-	m_errorOutput->SetBackSpaceUnIndents(useTabs);
-	m_errorOutput->SetViewWhiteSpace(showWhiteSpace);
-
-	m_errorOutput->SetMarginType(DEF_LINENUMBER_ID, wxSTC_MARGIN_NUMBER);
-	m_errorOutput->SetMarginWidth(DEF_LINENUMBER_ID, 0);
-}
-
-inline wxColour GetInverse(const wxColour& color)
-{
-	unsigned char r = color.Red();
-	unsigned char g = color.Green();
-	unsigned char b = color.Blue();
-
-	return wxColour(r ^ 0xFF, g ^ 0xFF, b ^ 0xFF);
-}
-
-void ibDialogError::SetFontColorSettings(const ibFontColorSettings& settings)
-{
-	// For some reason StyleSetFont takes a (non-const) reference, so we need to make
-	// a copy before passing it in.
-	wxFont font = settings.GetFont();
-
-	m_errorOutput->StyleClearAll();
-	m_errorOutput->StyleSetFont(wxSTC_STYLE_DEFAULT, font);
-
-	m_errorOutput->SetSelForeground(true, settings.GetColors(ibFontColorSettings::DisplayItem_Selection).foreColor);
-	m_errorOutput->SetSelBackground(true, settings.GetColors(ibFontColorSettings::DisplayItem_Selection).backColor);
-
-	font = settings.GetFont(ibFontColorSettings::DisplayItem_Default);
-
-	m_errorOutput->StyleSetFont(wxSTC_C_DEFAULT, font);
-	m_errorOutput->StyleSetFont(wxSTC_C_IDENTIFIER, font);
-
-	m_errorOutput->StyleSetForeground(wxSTC_C_DEFAULT, settings.GetColors(ibFontColorSettings::DisplayItem_Default).foreColor);
-	m_errorOutput->StyleSetBackground(wxSTC_C_DEFAULT, settings.GetColors(ibFontColorSettings::DisplayItem_Default).backColor);
-
-	m_errorOutput->StyleSetForeground(wxSTC_STYLE_DEFAULT, settings.GetColors(ibFontColorSettings::DisplayItem_Default).foreColor);
-	m_errorOutput->StyleSetBackground(wxSTC_STYLE_DEFAULT, settings.GetColors(ibFontColorSettings::DisplayItem_Default).backColor);
-
-	m_errorOutput->StyleSetForeground(wxSTC_C_IDENTIFIER, settings.GetColors(ibFontColorSettings::DisplayItem_Default).foreColor);
-	m_errorOutput->StyleSetBackground(wxSTC_C_IDENTIFIER, settings.GetColors(ibFontColorSettings::DisplayItem_Default).backColor);
-
-	font = settings.GetFont(ibFontColorSettings::DisplayItem_Comment);
-
-	m_errorOutput->StyleSetFont(wxSTC_C_COMMENT, font);
-	m_errorOutput->StyleSetFont(wxSTC_C_COMMENTLINE, font);
-	m_errorOutput->StyleSetFont(wxSTC_C_COMMENTDOC, font);
-
-	m_errorOutput->StyleSetForeground(wxSTC_C_COMMENT, settings.GetColors(ibFontColorSettings::DisplayItem_Comment).foreColor);
-	m_errorOutput->StyleSetBackground(wxSTC_C_COMMENT, settings.GetColors(ibFontColorSettings::DisplayItem_Comment).backColor);
-
-	m_errorOutput->StyleSetForeground(wxSTC_C_COMMENTLINE, settings.GetColors(ibFontColorSettings::DisplayItem_Comment).foreColor);
-	m_errorOutput->StyleSetBackground(wxSTC_C_COMMENTLINE, settings.GetColors(ibFontColorSettings::DisplayItem_Comment).backColor);
-
-	m_errorOutput->StyleSetForeground(wxSTC_C_COMMENTDOC, settings.GetColors(ibFontColorSettings::DisplayItem_Comment).foreColor);
-	m_errorOutput->StyleSetBackground(wxSTC_C_COMMENTDOC, settings.GetColors(ibFontColorSettings::DisplayItem_Comment).backColor);
-
-	font = settings.GetFont(ibFontColorSettings::DisplayItem_Keyword);
-
-	m_errorOutput->StyleSetFont(wxSTC_C_WORD, font);
-	m_errorOutput->StyleSetForeground(wxSTC_C_WORD, settings.GetColors(ibFontColorSettings::DisplayItem_Keyword).foreColor);
-	m_errorOutput->StyleSetBackground(wxSTC_C_WORD, settings.GetColors(ibFontColorSettings::DisplayItem_Keyword).backColor);
-
-	font = settings.GetFont(ibFontColorSettings::DisplayItem_Operator);
-	m_errorOutput->StyleSetFont(wxSTC_C_OPERATOR, font);
-	m_errorOutput->StyleSetForeground(wxSTC_C_OPERATOR, settings.GetColors(ibFontColorSettings::DisplayItem_Operator).foreColor);
-	m_errorOutput->StyleSetBackground(wxSTC_C_OPERATOR, settings.GetColors(ibFontColorSettings::DisplayItem_Operator).backColor);
-
-	font = settings.GetFont(ibFontColorSettings::DisplayItem_String);
-
-	m_errorOutput->StyleSetFont(wxSTC_C_STRING, font);
-	m_errorOutput->StyleSetForeground(wxSTC_C_STRING, settings.GetColors(ibFontColorSettings::DisplayItem_String).foreColor);
-	m_errorOutput->StyleSetBackground(wxSTC_C_STRING, settings.GetColors(ibFontColorSettings::DisplayItem_String).backColor);
-
-	m_errorOutput->StyleSetFont(wxSTC_C_STRINGEOL, font);
-	m_errorOutput->StyleSetForeground(wxSTC_C_STRINGEOL, settings.GetColors(ibFontColorSettings::DisplayItem_String).foreColor);
-	m_errorOutput->StyleSetBackground(wxSTC_C_STRINGEOL, settings.GetColors(ibFontColorSettings::DisplayItem_String).backColor);
-
-	m_errorOutput->StyleSetFont(wxSTC_C_CHARACTER, font);
-	m_errorOutput->StyleSetForeground(wxSTC_C_CHARACTER, settings.GetColors(ibFontColorSettings::DisplayItem_String).foreColor);
-	m_errorOutput->StyleSetBackground(wxSTC_C_CHARACTER, settings.GetColors(ibFontColorSettings::DisplayItem_String).backColor);
-
-	font = settings.GetFont(ibFontColorSettings::DisplayItem_Number);
-
-	m_errorOutput->StyleSetFont(wxSTC_C_NUMBER, font);
-	m_errorOutput->StyleSetForeground(wxSTC_C_NUMBER, settings.GetColors(ibFontColorSettings::DisplayItem_Number).foreColor);
-	m_errorOutput->StyleSetBackground(wxSTC_C_NUMBER, settings.GetColors(ibFontColorSettings::DisplayItem_Number).backColor);
-
-	m_errorOutput->StyleSetSize(wxSTC_STYLE_LINENUMBER, font.GetPointSize());
-
-	// Set the caret color as the inverse of the background color so it's always visible.
-	m_errorOutput->SetCaretForeground(GetInverse(settings.GetColors(ibFontColorSettings::DisplayItem_Default).backColor));
 }
 
 void ibDialogError::OnButtonCloseProgramClick(wxCommandEvent& event)

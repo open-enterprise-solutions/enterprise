@@ -1,87 +1,107 @@
-////////////////////////////////////////////////////////////////////////////
-//	Author		: Maxim Kornienko, unknownworlds team
-//	Description : watch window
-////////////////////////////////////////////////////////////////////////////
-
 #include "watchWindow.h"
-#include "watchdroptarget.h"
+
+#include <wx/dnd.h>
 
 #include "backend/debugger/debugClient.h"
-#include "core/fileSystem/fs.h"
+#include "mainFrame/mainFrameDesigner.h"
 
-#include <functional>
-
-BEGIN_EVENT_TABLE(ibWatchWindow, ibWatchCtrl)
-EVT_TREE_BEGIN_LABEL_EDIT(wxID_ANY, ibWatchWindow::OnBeginLabelEdit)
-EVT_TREE_END_LABEL_EDIT(wxID_ANY, ibWatchWindow::OnEndLabelEdit)
-EVT_TREE_ITEM_ACTIVATED(wxID_ANY, ibWatchWindow::OnItemSelected)
-EVT_TREE_DELETE_ITEM(wxID_ANY, ibWatchWindow::OnItemDeleted)
-EVT_TREE_KEY_DOWN(wxID_ANY, ibWatchWindow::OnKeyDown)
-EVT_TREE_ITEM_EXPANDING(wxID_ANY, ibWatchWindow::OnItemExpanding)
-END_EVENT_TABLE()
-
-//
-// Constructor
-//
-
-ibWatchWindow::ibWatchWindow(wxWindow* parent, wxWindowID winid)
-	: ibWatchCtrl(parent, winid, wxDefaultPosition, wxDefaultSize)
+enum
 {
-	// Light cream content surface — one tier lighter than the editor
-	// cream so debugger lists read as the lightest content tier (where
-	// the eye lands most often during debugging).
-	SetBackgroundColour(wxColour(253, 251, 245));  // #FDFBF5 light cream
+	kColumnName,
+	kColumnValue,
+	kColumnType,
+};
 
-	m_root = AddRoot(_T("Root"));
-	SetItemText(m_root, 1, _T("Root"));
+// A row with members shows this one child until it is opened and the debugger sends the real ones.
+static const wxString kMembersPlaceholder = wxT("...");
 
+// The row's id as the debugger protocol carries it.
+#if _USE_64_BIT_POINT_IN_DEBUGGER == 1
+static unsigned long long GetWatchId(const wxTreeItemId& item) { return reinterpret_cast<unsigned long long>(item.GetID()); }
+#else
+static unsigned int GetWatchId(const wxTreeItemId& item) { return reinterpret_cast<unsigned int>(item.GetID()); }
+#endif
+
+// Text dropped on the pane — a selection dragged from the code — becomes a watched expression.
+class ibWatchDropTarget : public wxTextDropTarget
+{
+public:
+
+	explicit ibWatchDropTarget(ibWatchWindow* window) : m_window(window) {}
+
+	virtual bool OnDropText(wxCoord, wxCoord, const wxString& text) override
+	{
+		m_window->AddWatch(text);
+		return false;   // copied, not moved: the code keeps its text
+	}
+
+private:
+
+	ibWatchWindow* m_window;
+};
+
+ibWatchWindow::ibWatchWindow(wxWindow* parent, wxWindowID id)
+	: ibTreeListCtrl(parent, id, wxDefaultPosition, wxDefaultSize,
+		wxTR_HIDE_ROOT | wxTR_FULL_ROW_HIGHLIGHT | wxTR_ROW_LINES | wxTR_HAS_BUTTONS,
+		wxDefaultValidator, wxT("watch"))   // the name given: the control's default one is not exported from its library
+{
+	// Light cream: one tier lighter than the editor, so the debugger's lists read as the lightest
+	// content, where the eye lands most while debugging.
+	SetBackgroundColour(wxColour(0xFD, 0xFB, 0xF5));
+
+	AddColumn(_("Name"), 0, wxALIGN_LEFT);
+	AddColumn(_("Value"), 0, wxALIGN_LEFT);
+	AddColumn(_("Type"), FromDIP(120), wxALIGN_LEFT);
+	SetColumnEditable(kColumnName, true);
+	SetColumnEditable(kColumnValue, false);
+	SetColumnEditable(kColumnType, false);
+
+	m_root = AddRoot(wxT("Root"));
+	CreateEmptySlotIfNeeded();
 	SetDropTarget(new ibWatchDropTarget(this));
 
-	CreateEmptySlotIfNeeded();
-
-	m_editing = false;
-	m_updating = false;
+	Bind(wxEVT_SIZE, &ibWatchWindow::OnSize, this);
+	Bind(wxEVT_LIST_COL_END_DRAG, &ibWatchWindow::OnColumnDragged, this);
+	Bind(wxEVT_TREE_KEY_DOWN, &ibWatchWindow::OnKeyDown, this);
+	Bind(wxEVT_TREE_BEGIN_LABEL_EDIT, &ibWatchWindow::OnBeginLabelEdit, this);
+	Bind(wxEVT_TREE_END_LABEL_EDIT, &ibWatchWindow::OnEndLabelEdit, this);
+	Bind(wxEVT_TREE_ITEM_ACTIVATED, &ibWatchWindow::OnItemActivated, this);
+	Bind(wxEVT_TREE_DELETE_ITEM, &ibWatchWindow::OnItemDeleted, this);
+	Bind(wxEVT_TREE_ITEM_EXPANDING, &ibWatchWindow::OnItemExpanding, this);
 }
 
-#include "mainFrame/mainFrameDesigner.h"
+ibWatchWindow::~ibWatchWindow()
+{
+	// The rows go with the window, deleted by the tree's own destructor after this one: no person removes them, and
+	// the debugger they would be removed from may be gone already.
+	Unbind(wxEVT_TREE_DELETE_ITEM, &ibWatchWindow::OnItemDeleted, this);
+}
 
 ibWatchWindow* ibWatchWindow::GetWatchWindow()
 {
-	if (ibFrontendMainFrameDesigner::GetFrame())
-		return mainFrame->GetWatchWindow();
-	return nullptr;
+	return ibFrontendMainFrameDesigner::GetFrame() != nullptr ? mainFrame->GetWatchWindow() : nullptr;
 }
 
 void ibWatchWindow::SetVariable(const ibWatchWindowData& watchData)
 {
 	m_updating = true;
 	Freeze();
-
-	for (unsigned int i = 0; i < watchData.GetWatchCount(); i++) {
-
+	for (unsigned int i = 0; i < watchData.GetWatchCount(); ++i) {
+		// The id is a row of THIS tree: the bridge lets through only the answers to its own
+		// questions (ibDebuggerClientBridgeDesigner::OnSetVariable).
 		const wxTreeItemId& item = watchData.GetItem(i);
-
-		// The id is a pointer into THIS window's tree, and it is safe to use because the answer
-		// reached us at all: a question now carries who asked it, and the bridge lets through only
-		// its own (ibDebuggerClientBridgeDesigner::OnSetVariable). An id from another listener no
-		// longer arrives here to be sorted out by resemblance.
 		if (!item.IsOk())
 			continue;
 
-		SetItemText(item, 1, watchData.GetValue(i));
-		SetItemText(item, 2, watchData.GetType(i));
+		SetItemText(item, kColumnValue, watchData.GetValue(i));
+		SetItemText(item, kColumnType, watchData.GetType(i));
 
-		//collapse childern items
+		// A new value, so the members shown for the old one go; opening the row asks again.
 		Collapse(item);
-
-		//delete children elements
 		DeleteChildren(item);
-
-		if (watchData.HasAttributes(i)) {
-			AppendItem(item, wxT("..."));
-		}
+		if (watchData.HasAttributes(i))
+			AppendItem(item, kMembersPlaceholder);
 	}
-
 	Thaw();
 	m_updating = false;
 }
@@ -89,262 +109,175 @@ void ibWatchWindow::SetVariable(const ibWatchWindowData& watchData)
 void ibWatchWindow::SetExpanded(const ibWatchWindowData& watchData)
 {
 	const wxTreeItemId& item = watchData.GetItem();
-
 	if (!item.IsOk())
 		return;
 
 	m_updating = true;
 	Freeze();
-
-	//delete children elements
 	DeleteChildren(item);
-
-	for (unsigned int i = 0; i < watchData.GetWatchCount(); i++) {
-
-		const wxTreeItemId& child = AppendItem(item, watchData.GetName(i));
-
-		SetItemText(child, 1, watchData.GetValue(i));
-		SetItemText(child, 2, watchData.GetType(i));
-
-		if (watchData.HasAttributes(i)) {
-			AppendItem(child, wxT("..."));
-		}
+	for (unsigned int i = 0; i < watchData.GetWatchCount(); ++i) {
+		const wxTreeItemId member = AppendItem(item, watchData.GetName(i));
+		SetItemText(member, kColumnValue, watchData.GetValue(i));
+		SetItemText(member, kColumnType, watchData.GetType(i));
+		if (watchData.HasAttributes(i))
+			AppendItem(member, kMembersPlaceholder);
 	}
-
 	Expand(item);
 	Thaw();
 	m_updating = false;
 }
 
-void ibWatchWindow::UpdateItem(const wxTreeItemId& item)
-{
-	const wxString& expression = GetItemText(item);
-
-#if _USE_64_BIT_POINT_IN_DEBUGGER == 1
-	if (!expression.IsEmpty())
-		debugClient->AddExpression(expression, reinterpret_cast<u64>(item.GetID()), debugClient->BridgeId());
-#else
-	if (!expression.IsEmpty())
-		debugClient->AddExpression(expression, reinterpret_cast<u32>(item.GetID()), debugClient->BridgeId());
-#endif
-
-	DeleteChildren(item);
-
-	SetItemFont(item, m_valueFont);
-
-	// Keep the previous value/type visible until the debugger replies with
-	// fresh data. Clearing them here caused the columns to blank out for the
-	// full round-trip, producing the "values disappear, then reappear" flicker.
-}
-
-void ibWatchWindow::UpdateItems()
-{
-	Freeze();
-
-	wxTreeItemIdValue cookie;
-	wxTreeItemId item = GetFirstChild(m_root, cookie);
-
-	while (item.IsOk()) {
-		UpdateItem(item);
-		item = GetNextSibling(item);
-	}
-
-	Thaw();
-}
-
 void ibWatchWindow::AddWatch(const wxString& expression)
 {
-	wxString temp = expression;
-	temp.Trim().Trim(false);
+	wxString text = expression;
+	text.Trim().Trim(false);
+	if (text.IsEmpty())
+		return;
 
-	if (!temp.empty())
-	{
-		wxTreeItemIdValue cookie;
-		wxTreeItemId lastItem = GetLastChild(m_root, cookie);
+	// Before the empty last row, which stays last.
+	wxTreeItemIdValue cookie;
+	const wxTreeItemId before = GetPrevSibling(GetLastChild(m_root, cookie));
+	const wxTreeItemId item = before.IsOk() ? InsertItem(m_root, before, text) : PrependItem(m_root, text);
+	UpdateItem(item);
+}
 
-		// The last item should be our blank item.
-		assert(lastItem.IsOk());
-		lastItem = GetPrevSibling(lastItem);
+void ibWatchWindow::UpdateItem(const wxTreeItemId& item)
+{
+	DeleteChildren(item);
 
-		wxTreeItemId item;
+	// The old value and type stay until the answer replaces them: blanking them here made every
+	// row flicker empty for the whole round trip.
+	const wxString expression = GetItemText(item);
+	if (!expression.IsEmpty())
+		debugClient->AddExpression(expression, GetWatchId(item), debugClient->BridgeId());
+}
 
-		if (lastItem.IsOk()) {
-			item = InsertItem(m_root, lastItem, temp);
-		}
-		else {
-			item = PrependItem(m_root, temp);
-		}
+void ibWatchWindow::CreateEmptySlotIfNeeded()
+{
+	wxTreeItemIdValue cookie;
+	const wxTreeItemId last = GetLastChild(m_root, cookie);
+	if (!last.IsOk() || !GetItemText(last).IsEmpty())
+		AppendItem(m_root, wxString());
+}
 
-		UpdateItem(item);
-	}
+void ibWatchWindow::SelectNext(const wxTreeItemId& next)
+{
+	wxTreeItemIdValue cookie;
+	SelectItem(next.IsOk() ? next : GetLastChild(m_root, cookie));
+}
+
+void ibWatchWindow::FitColumns()
+{
+	const int share = GetClientSize().GetWidth() - GetColumnWidth(kColumnType);
+	if (share <= 0)
+		return;
+
+	const int name = GetColumnWidth(kColumnName);
+	const int value = GetColumnWidth(kColumnValue);
+	const int nameWidth = name + value > 0 ? share * name / (name + value) : share / 2;
+	SetColumnWidth(kColumnName, nameWidth);
+	SetColumnWidth(kColumnValue, share - nameWidth);
+}
+
+void ibWatchWindow::OnSize(wxSizeEvent& event)
+{
+	FitColumns();
+	event.Skip();
+}
+
+void ibWatchWindow::OnColumnDragged(wxListEvent& event)
+{
+	FitColumns();
+	event.Skip();
 }
 
 void ibWatchWindow::OnKeyDown(wxTreeEvent& event)
 {
-	if (event.GetKeyCode() == WXK_DELETE ||
-		event.GetKeyCode() == WXK_BACK)
-	{
-		wxTreeItemId item = GetSelection();
+	const int code = event.GetKeyCode();
+	const wxTreeItemId item = GetSelection();
 
-		if (item.IsOk() && GetItemParent(item) == m_root)
-		{
-			wxTreeItemId next = GetNextSibling(item);
-
+	// Delete or Backspace on a watched row removes it; members of a row are not the person's to remove.
+	if (code == WXK_DELETE || code == WXK_BACK) {
+		if (item.IsOk() && GetItemParent(item) == m_root) {
+			const wxTreeItemId next = GetNextSibling(item);
 			Delete(item);
 			CreateEmptySlotIfNeeded();
-
-			// Select the next item.
-			if (!next.IsOk())
-			{
-				wxTreeItemIdValue cookie;
-				next = GetLastChild(GetRootItem(), cookie);
-			}
-
-			SelectItem(next);
+			SelectNext(next);
 		}
+		return;
 	}
-	else
-	{
-		// If we're not currently editing a field, begin editing. This
-		// eliminates the need to double click to begin editing.
-		int code = event.GetKeyCode();
 
-		if (!m_editing && code < 256 && (isgraph(code) || stringUtils::IsSpace(code)))
-		{
-			// Get the currently selected item in the list.
-			wxTreeItemId item = GetSelection();
-
-			if (item.IsOk())
-			{
-				if (stringUtils::IsSpace(code))
-				{
-					EditLabel(item);
-				}
-				else
-				{
-					EditLabel(item, code);
-				}
-
-				event.Skip(false);
-			}
-		}
-		else
-		{
-			event.Skip(true);
-		}
+	// Typing on a row starts editing it, without the double click first.
+	const bool printable = code >= WXK_SPACE && code < WXK_DELETE;
+	if (!m_editing && printable && item.IsOk()) {
+		EditLabel(item);
+		return;
 	}
+	event.Skip();
 }
 
 void ibWatchWindow::OnBeginLabelEdit(wxTreeEvent& event)
 {
-	if (GetItemParent(event.GetItem()) == m_root)
-	{
-		m_editing = true;
-	}
-	else
-	{
+	// Only a watched row's expression is a person's to write; a member's name is the debugger's.
+	if (GetItemParent(event.GetItem()) != m_root) {
 		event.Veto();
+		return;
 	}
+	m_editing = true;
 }
 
 void ibWatchWindow::OnEndLabelEdit(wxTreeEvent& event)
 {
-	if (!event.IsEditCancelled())
-	{
-		wxTreeItemId item = event.GetItem();
-		wxTreeItemId next = GetNextSibling(item);
+	m_editing = false;
+	if (event.IsEditCancelled())
+		return;
 
-		wxString expression = event.GetLabel();
-		expression.Trim().Trim(false);
+	const wxTreeItemId row = event.GetItem();
+	const wxTreeItemId following = GetNextSibling(row);
+	const wxString text = wxString(event.GetLabel()).Trim().Trim(false);
 
-		if (expression.empty())
-		{
-			Delete(item);
-			event.Veto();
-		}
-		else
-		{
-			SetItemText(item, expression);
-			UpdateItem(item);
-		}
-
-		CreateEmptySlotIfNeeded();
-
-		// Select the next item.
-		if (!next.IsOk())
-		{
-			wxTreeItemIdValue cookie;
-			next = GetLastChild(GetRootItem(), cookie);
-		}
-
-		SelectItem(next);
+	if (!text.IsEmpty()) {
+		SetItemText(row, text);
+		UpdateItem(row);
+	}
+	else {
+		// Emptied, so gone; vetoed, or the tree would write the label into the deleted row.
+		event.Veto();
+		Delete(row);
 	}
 
-	m_editing = false;
+	CreateEmptySlotIfNeeded();
+	SelectNext(following);
 }
 
-void ibWatchWindow::OnItemSelected(wxTreeEvent& event)
+void ibWatchWindow::OnItemActivated(wxTreeEvent& event)
 {
-	// Initiate the label editing.
 	EditLabel(event.GetItem());
 	event.Skip();
 }
 
 void ibWatchWindow::OnItemDeleted(wxTreeEvent& event)
 {
-	wxTreeItemId item = event.GetItem();
-#if _USE_64_BIT_POINT_IN_DEBUGGER == 1
-	if (!m_updating) {
-		debugClient->RemoveExpression(reinterpret_cast<u64>(item.GetID()));
-	}
-#else 
-	if (!m_updating) {
-		debugClient->RemoveExpression(reinterpret_cast<u32>(item.GetID()));
-	}
-#endif 
+	if (!m_updating)
+		debugClient->RemoveExpression(GetWatchId(event.GetItem()));
 	event.Skip();
 }
 
 void ibWatchWindow::OnItemExpanding(wxTreeEvent& event)
 {
-	wxTreeItemId item = event.GetItem();
-	wxString expression = GetItemText(item);
-
-	wxTreeItemId parent = item;
-	while ((parent = GetItemParent(parent)) != nullptr)
-	{
-		if (parent != GetRootItem()) {
-			expression = wxT(".") + expression;
-			expression = GetItemText(parent) + expression;
-		}
+	// Opened by the answer (SetExpanded): let it open.
+	if (m_updating) {
+		event.Skip();
+		return;
 	}
 
-#if _USE_64_BIT_POINT_IN_DEBUGGER == 1
-	if (!m_updating) {
-		debugClient->ExpandExpression(expression, reinterpret_cast<u64>(item.GetID()), debugClient->BridgeId());
-	}
-#else
-	if (!m_updating) {
-		debugClient->ExpandExpression(expression, reinterpret_cast<u32>(item.GetID()), debugClient->BridgeId());
-	}
-#endif
+	// Opened by a person: ask for the members by the row's full path, "object.field.field", and
+	// stay closed until they come.
+	const wxTreeItemId item = event.GetItem();
+	wxString path = GetItemText(item);
+	for (wxTreeItemId parent = GetItemParent(item); parent.IsOk() && parent != m_root; parent = GetItemParent(parent))
+		path = GetItemText(parent) + wxT(".") + path;
 
-	if (!m_updating)
-		event.Veto();
-	else event.Skip();
-}
-
-void ibWatchWindow::CreateEmptySlotIfNeeded()
-{
-	unsigned int numItems = GetChildrenCount(m_root, false); bool needsEmptySlot = true;
-
-	if (numItems > 0) {
-		wxTreeItemIdValue cookie;
-		wxTreeItemId lastItem = GetLastChild(m_root, cookie);
-		needsEmptySlot = !GetItemText(lastItem).IsEmpty();
-	}
-
-	if (needsEmptySlot) {
-		wxTreeItemId item = AppendItem(m_root, _T(""));
-	}
+	debugClient->ExpandExpression(path, GetWatchId(item), debugClient->BridgeId());
+	event.Veto();
 }

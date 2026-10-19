@@ -551,7 +551,7 @@ public:
 	//
 	// ⚠ IT ADDS NOTHING TO THE BYTECODE. The struct is a query, not a field: every answer is READ
 	// from what the compile already emitted, so the base object stays exactly what the runtime
-	// executes and what the AOT writer stores. `m_numString` is on every instruction (AddLineInfo)
+	// executes and what the AOT writer stores. `m_numString` is on every instruction (StampSource)
 	// and is an absolute text offset — the same unit the editor measures a caret in.
 	struct ibCaretPoint {
 
@@ -559,7 +559,7 @@ public:
 
 		// ⚠ WHICH DECLARATION THE CARET STANDS IN IS NOT ASKED HERE, and the attempt is instructive:
 		// it was answered by walking the tape and comparing the caret against the source position on
-		// each FUNC / ENDFUNC. That position was never a boundary — AddLineInfo stamps the token the
+		// each FUNC / ENDFUNC. That position was never a boundary — StampSource stamps the token the
 		// parser was standing on, which after a body is the token AFTER it, and for the last
 		// declaration in a module that is the end of the text. The body then claimed to close where
 		// the text ends and a caret on the last line read as inside it. The compile knows the answer

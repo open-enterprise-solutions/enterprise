@@ -1,5 +1,5 @@
 ////////////////////////////////////////////////////////////////////////////
-//	Author		: Maxim Kornienko, wxFormBuilder
+//	Author		: Maxim Kornienko
 //	Description : the form editor's create on a drop — the desktop editor's (designer/win/editor/visualEditor/
 //	              visualEditorCmdProc.cpp), on the form the client holds: a control bound to a dropped attribute row,
 //	              one running a dropped command (BoundControl, CommandControl)
@@ -422,16 +422,10 @@ void ibFormDesignView::InsertObject(ibValueFrame* object, ibValueFrame* parent, 
 
 int ibFormDesignView::CalcPositionOfInsertion(ibValueFrame* selected, ibValueFrame* parent)
 {
-	int pos = wxNOT_FOUND;
-	if (parent && selected) {
-		ibValueFrame* parentSelected = selected->GetParent();
-		while (parentSelected && parentSelected != parent) {
-			selected = parentSelected;
-			parentSelected = selected->GetParent();
-		}
-		if (parentSelected && parentSelected == parent) {
-			pos = parent->GetChildPosition(selected) + 1;
-		}
+	// Right after the parent's child that holds the selection; at the end when the selection is not inside the parent.
+	for (ibValueFrame* object = selected; parent != nullptr && object != nullptr; object = object->GetParent()) {
+		if (object->GetParent() == parent)
+			return parent->GetChildPosition(object) + 1;
 	}
-	return pos;
+	return wxNOT_FOUND;
 }

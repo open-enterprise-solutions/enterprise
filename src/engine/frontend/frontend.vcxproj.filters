@@ -206,25 +206,13 @@
     <ClCompile Include="mainFrame\settings\keybinder.cpp">
       <Filter>mainFrame\settings</Filter>
     </ClCompile>
-    <ClCompile Include="mainFrame\settings\keybinderdialog.cpp">
-      <Filter>mainFrame\settings</Filter>
-    </ClCompile>
-    <ClCompile Include="mainFrame\settings\keymonitortextctrl.cpp">
+    <ClCompile Include="mainFrame\settings\keybinderpanel.cpp">
       <Filter>mainFrame\settings</Filter>
     </ClCompile>
     <ClCompile Include="mainFrame\settings\settingsdialog.cpp">
       <Filter>mainFrame\settings</Filter>
     </ClCompile>
     <ClCompile Include="mainFrame\settings\showhelpevent.cpp">
-      <Filter>mainFrame\settings</Filter>
-    </ClCompile>
-    <ClCompile Include="mainFrame\settings\statictextex.cpp">
-      <Filter>mainFrame\settings</Filter>
-    </ClCompile>
-    <ClCompile Include="mainFrame\settings\stlutility.cpp">
-      <Filter>mainFrame\settings</Filter>
-    </ClCompile>
-    <ClCompile Include="mainFrame\settings\xmlutility.cpp">
       <Filter>mainFrame\settings</Filter>
     </ClCompile>
     <ClCompile Include="win\ctrls\charts\wxareachartdatasetoptions.cpp">
@@ -1325,25 +1313,16 @@
     <ClInclude Include="mainFrame\settings\keybinder.h">
       <Filter>mainFrame\settings</Filter>
     </ClInclude>
-    <ClInclude Include="mainFrame\settings\keybinderdialog.h">
-      <Filter>mainFrame\settings</Filter>
-    </ClInclude>
-    <ClInclude Include="mainFrame\settings\keymonitortextctrl.h">
+    <ClInclude Include="mainFrame\settings\keybinderpanel.h">
       <Filter>mainFrame\settings</Filter>
     </ClInclude>
     <ClInclude Include="mainFrame\settings\settingsdialog.h">
       <Filter>mainFrame\settings</Filter>
     </ClInclude>
+    <ClInclude Include="mainFrame\settings\settingsxml.h">
+      <Filter>mainFrame\settings</Filter>
+    </ClInclude>
     <ClInclude Include="mainFrame\settings\showhelpevent.h">
-      <Filter>mainFrame\settings</Filter>
-    </ClInclude>
-    <ClInclude Include="mainFrame\settings\statictextex.h">
-      <Filter>mainFrame\settings</Filter>
-    </ClInclude>
-    <ClInclude Include="mainFrame\settings\stlutility.h">
-      <Filter>mainFrame\settings</Filter>
-    </ClInclude>
-    <ClInclude Include="mainFrame\settings\xmlutility.h">
       <Filter>mainFrame\settings</Filter>
     </ClInclude>
     <ClInclude Include="win\ctrls\charts\wxareachartctrl.h">

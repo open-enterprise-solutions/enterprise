@@ -1,40 +1,36 @@
 ﻿////////////////////////////////////////////////////////////////////////////
-//	Author		: Maxim Kornienko, wxFormBuilder community
-//	Description : title window
+//	Author		: Maxim Kornienko
+//	Description : a caption over a tree of the form editor
 ////////////////////////////////////////////////////////////////////////////
 
 #include "titleFrame.h"
 
-ibPanelTitle::ibPanelTitle(wxWindow *parent, const wxString &title) : wxPanel(parent, wxID_ANY)
+#include <wx/sizer.h>
+#include <wx/stattext.h>
+
+ibPanelTitle::ibPanelTitle(wxWindow* parent, const wxString& title) : wxPanel(parent, wxID_ANY)
 {
-	wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
+	// Deep dusty blue #3F5C77 from the palette, not the system's caption blue that clashed with it; the
+	// label made after it inherits it.
+	SetBackgroundColour(wxColour(0x3F, 0x5C, 0x77));
 
-	wxStaticText *text = new wxStaticText(this, wxID_ANY, title);
-	// Interior palette caption — deep dusty blue + white text. Was
-	// system ACTIVECAPTION (Windows-blue) which clashed with palette.
-	SetBackgroundColour(wxColour(0x3F, 0x5C, 0x77));   // #3F5C77 deep dusty blue
-	text->SetBackgroundColour(wxColour(0x3F, 0x5C, 0x77));
-	text->SetForegroundColour(*wxWHITE);
-	text->SetFont(
-		wxFont(8, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_BOLD, false, wxString()));
+	wxStaticText* const label = new wxStaticText(this, wxID_ANY, title);
+	label->SetForegroundColour(*wxWHITE);
+	label->SetFont(wxFontInfo(8).Family(wxFONTFAMILY_SWISS).Bold());
 
-	sizer->Add(text, 0, wxALL | wxEXPAND, 2);
-	SetSizer(sizer);
-	Fit();
+	wxBoxSizer* const sizer = new wxBoxSizer(wxVERTICAL);
+	sizer->Add(label, wxSizerFlags().Expand().Border(wxALL, 2));
+	SetSizerAndFit(sizer);
 }
 
-wxWindow * ibPanelTitle::CreateTitle(wxWindow *inner, const wxString &title)
+wxWindow* ibPanelTitle::CreateTitle(wxWindow* inner, const wxString& title)
 {
-	wxWindow *parent = inner->GetParent();
+	wxPanel* const holder = new wxPanel(inner->GetParent(), wxID_ANY);
+	inner->Reparent(holder);
 
-	wxPanel *container = new wxPanel(parent, wxID_ANY);
-	ibPanelTitle *titleWin = new ibPanelTitle(container, title);
-	inner->Reparent(container);
-
-	wxBoxSizer *sizer = new wxBoxSizer(wxVERTICAL);
-	sizer->Add(titleWin, 0, wxEXPAND);
-	sizer->Add(inner, 1, wxEXPAND);
-	container->SetSizer(sizer);
-
-	return container;
+	wxBoxSizer* const column = new wxBoxSizer(wxVERTICAL);
+	column->Add(new ibPanelTitle(holder, title), wxSizerFlags().Expand());
+	column->Add(inner, wxSizerFlags(1).Expand());
+	holder->SetSizer(column);
+	return holder;
 }

@@ -1,6 +1,6 @@
 ////////////////////////////////////////////////////////////////////////////
-//	Author		: Maxim Kornienko, 2C-team
-//	Description : Processor unit 
+//	Author		: Maxim Kornienko
+//	Description : Processor unit
 ////////////////////////////////////////////////////////////////////////////
 
 #include "procUnit.h"
@@ -754,7 +754,7 @@ static inline void MakeBooleanValue(ibValue& dest, bool flag)
 #define NUMBERS_IN_PLACE_DIVISOR(op)                                                                   \
 	if (cValue2.m_typeClass == ibValueTypes::TYPE_NUMBER && cValue3.m_typeClass == ibValueTypes::TYPE_NUMBER) { \
 		if (cValue3.m_fData.IsZero())                                                                      \
-			Raise(ERROR_DIVIDE_BY_ZERO);                                                                   \
+			Raise(ibScriptError_DivideByZero);                                                                   \
 		MakeNumberValue(cValue1, cValue2.m_fData op cValue3.m_fData);                                      \
 		return;                                                                                            \
 	}
@@ -881,7 +881,7 @@ inline void DivValue(ibValue& cValue1, const ibValue& cValue2, const ibValue& cV
 	if (resultType == ibValueTypes::TYPE_NUMBER) {
 		const ibNumber flNumber3 = cValue3.GetNumber();
 		if (flNumber3.IsZero())
-			Raise(ERROR_DIVIDE_BY_ZERO);
+			Raise(ibScriptError_DivideByZero);
 		const ibNumber numResult = cValue2.GetNumber() / flNumber3;
 		MakeNumberValue(cValue1, numResult);
 	}
@@ -898,7 +898,7 @@ inline void ModValue(ibValue& cValue1, const ibValue& cValue2, const ibValue& cV
 	if (resultType == ibValueTypes::TYPE_NUMBER) {
 		const ibNumber num3 = cValue3.GetNumber();
 		if (num3.IsZero())
-			Raise(ERROR_DIVIDE_BY_ZERO);
+			Raise(ibScriptError_DivideByZero);
 		const ibNumber num2 = cValue2.GetNumber();
 		MakeNumberValue(cValue1, num2 % num3);
 	}
@@ -1013,7 +1013,7 @@ IB_NOINLINE void RaiseMemberNotFound(const ibValue& variable, const ibString& na
 	const ibValue::ibMemberTable* const globals =
 		ibValue::ibMemberTable::Shared<&ibValueSystemFunction_BindNames>();
 	if (globals != nullptr && globals->FindMethod(name) >= 0) {
-		Raise(ERROR_MEMBER_IS_GLOBAL_FUNCTION, name);
+		Raise(ibScriptError_MemberIsGlobalFunction, name);
 	}
 
 	// The receiver is deliberately NOT named — asking a value what it is means calling into
@@ -1022,7 +1022,7 @@ IB_NOINLINE void RaiseMemberNotFound(const ibValue& variable, const ibString& na
 
 	// Which of the two it is depends on the VALUE, not on the opcode — so the
 	// choice belongs here rather than at each of the three call sites.
-	Raise(variable.IsReference() ? ERROR_MEMBER_NOT_FOUND : ERROR_MEMBER_NOT_AGGREGATE, name);
+	Raise(variable.IsReference() ? ibScriptError_MemberNotFound : ibScriptError_MemberNotAggregate, name);
 }
 
 #define CheckAndError(variable, name) RaiseMemberNotFound(variable, name)
@@ -1527,7 +1527,7 @@ start_label:
 				const ibString& strPropName = m_pByteCode->m_listConst[index2].m_sData;
 				const long lPropNum = variable1.FindProp(strPropName);
 				if (lPropNum < 0) CheckAndError(variable1, strPropName);
-				if (!variable1.IsPropWritable(lPropNum)) Raise(ERROR_PROP_NOT_WRITABLE, strPropName);
+				if (!variable1.IsPropWritable(lPropNum)) Raise(ibScriptError_PropNotWritable, strPropName);
 				variable1.SetPropVal(lPropNum, GetValue(cvariable3));
 			} break;
 			case OPER_GET_A://get attribute
@@ -1537,7 +1537,7 @@ start_label:
 				const ibString& strPropName = m_pByteCode->m_listConst[index3].m_sData;
 				const long lPropNum = variable2.FindProp(strPropName);
 				if (lPropNum < 0) CheckAndError(variable2, strPropName);
-				if (!variable2.IsPropReadable(lPropNum)) Raise(ERROR_PROP_NOT_READABLE, strPropName);
+				if (!variable2.IsPropReadable(lPropNum)) Raise(ibScriptError_PropNotReadable, strPropName);
 				// Scope-local props (ThisObject / ThisForm / RegisterRecords)
 				// are bc-internal: host's own code reaches them through
 				// its own m_listVar (compile-time), not through chain
@@ -1546,7 +1546,7 @@ start_label:
 				// watch should not be able to walk into a foreign
 				// object's "self" handle.
 				if (m_pByteCode->m_bExpressionOnly && variable2.IsPropScoped(lPropNum))
-					Raise(ERROR_PROP_SCOPE_LOCAL, strPropName);
+					Raise(ibScriptError_PropScopeLocal, strPropName);
 				ibValue vRet; bool result = variable2.GetPropVal(lPropNum, vRet);
 				if (result && vRet.IsReference())
 					*pRetValue = vRet;
@@ -1662,9 +1662,9 @@ start_label:
 					// the clause below it, which is the one written for this case,
 					// could never be reached.
 					if (paramCount != wxNOT_FOUND && paramCount < cRunContext.m_lParamCount)
-						Raise(ERROR_MANY_PARAMS, funcName);
+						Raise(ibScriptError_ManyParams, funcName);
 					else if (paramCount == wxNOT_FOUND && cRunContext.m_lParamCount == 0)
-						Raise(ERROR_MANY_PARAMS, funcName);
+						Raise(ibScriptError_ManyParams, funcName);
 				}
 
 				//load parameters
@@ -1731,14 +1731,14 @@ start_label:
 						const ibValue* pNextVariable2 = &cvariable2;
 						lCodeLine--;
 						if (static_cast<const ibValue*>(pRetValue) == pNextVariable2)
-							Raise(ERROR_USE_PROCEDURE_AS_FUNCTION, funcName, funcName);
+							Raise(ibScriptError_UseProcedureAsFunction, funcName, funcName);
 					}
 					else if (m_pByteCode->m_listCode[lCodeLine + 1].m_numOper == OPER_RET) {
 						lCodeLine++;
 						const ibValue* pNextVariable1 = &cvariable1;
 						lCodeLine--;
 						if (static_cast<const ibValue*>(pRetValue) == pNextVariable1)
-							Raise(ERROR_USE_PROCEDURE_AS_FUNCTION, funcName, funcName);
+							Raise(ibScriptError_UseProcedureAsFunction, funcName, funcName);
 					}
 					pVariable2->CallAsProc(lMethodNum, cRunContext.m_pRefLocVars, realParamCount);
 				} break;
@@ -1964,7 +1964,7 @@ start_label:
 			case OPER_SET_ARRAY + TYPE_DELTA3:
 			case OPER_SET_ARRAY + TYPE_DELTA4:
 				if (!SetArrayValue(variable1, cvariable2, GetValue(cvariable3)))
-					Raise(ERROR_ARRAY_SET, cvariable3);
+					Raise(ibScriptError_ArraySet, cvariable3);
 				break; //setting the array value
 			case OPER_GET_ARRAY:
 			case OPER_GET_ARRAY + TYPE_DELTA1:
@@ -1972,7 +1972,7 @@ start_label:
 			case OPER_GET_ARRAY + TYPE_DELTA3:
 			case OPER_GET_ARRAY + TYPE_DELTA4:
 				if (!GetArrayValue(variable1, variable2, cvariable3))
-					Raise(ERROR_ARRAY_GET, cvariable3);
+					Raise(ibScriptError_ArrayGet, cvariable3);
 				break; //getting the array value
 			case OPER_GOTO: case OPER_ENDTRY:
 			{
@@ -2385,8 +2385,8 @@ start_label:
 			// making it a number (MakeNumberValue) resets a value that did not say so yet.
 			case OPER_ADD + TYPE_DELTA1: { const ibNumber r = cvariable2.m_fData + cvariable3.m_fData; MakeNumberValue(variable1, r); break; }
 			case OPER_SUB + TYPE_DELTA1: { const ibNumber r = cvariable2.m_fData - cvariable3.m_fData; MakeNumberValue(variable1, r); break; }
-			case OPER_DIV + TYPE_DELTA1: { if (cvariable3.m_fData.IsZero()) { Raise(ERROR_DIVIDE_BY_ZERO); } const ibNumber r = cvariable2.m_fData / cvariable3.m_fData; MakeNumberValue(variable1, r); break; }
-			case OPER_MOD + TYPE_DELTA1: { if (cvariable3.m_fData.IsZero()) { Raise(ERROR_DIVIDE_BY_ZERO); } const ibNumber r = cvariable2.m_fData.Round() % cvariable3.m_fData.Round(); MakeNumberValue(variable1, r); break; }
+			case OPER_DIV + TYPE_DELTA1: { if (cvariable3.m_fData.IsZero()) { Raise(ibScriptError_DivideByZero); } const ibNumber r = cvariable2.m_fData / cvariable3.m_fData; MakeNumberValue(variable1, r); break; }
+			case OPER_MOD + TYPE_DELTA1: { if (cvariable3.m_fData.IsZero()) { Raise(ibScriptError_DivideByZero); } const ibNumber r = cvariable2.m_fData.Round() % cvariable3.m_fData.Round(); MakeNumberValue(variable1, r); break; }
 			case OPER_MULT + TYPE_DELTA1: { const ibNumber r = cvariable2.m_fData * cvariable3.m_fData; MakeNumberValue(variable1, r); break; }
 			case OPER_LET + TYPE_DELTA1: { const ibNumber r = cvariable2.m_fData; MakeNumberValue(variable1, r); break; }
 			case OPER_INVERT + TYPE_DELTA1: { const ibNumber r = -cvariable2.m_fData; MakeNumberValue(variable1, r); break; }
@@ -3184,7 +3184,7 @@ bool ibProcUnit::CompileExpression(ibRunContext* pRunContext, ibValue& pvarRetVa
 	// CompileExpression's caller passes a fully-prepared eval module.
 
 	try {
-		if (!cModule.PrepareLexem()) {
+		if (!cModule.Translate()) {
 			return false;
 		}
 	}

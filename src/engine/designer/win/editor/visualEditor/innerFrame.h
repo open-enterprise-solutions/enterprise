@@ -1,62 +1,63 @@
 #ifndef __INNER_FRAME__
 #define __INNER_FRAME__
 
-#include <wx/aui/aui.h>
-#include <wx/wx.h>
+#include <wx/panel.h>
+#include <wx/bitmap.h>
 
+// The form's card in the visual editor: a caption over the panel the form is built in, resized by
+// dragging its right edge, its bottom edge or the corner between them.
 class ibInnerFrame : public wxPanel {
-	wxDECLARE_EVENT_TABLE();
-private:
-	enum {
-		NONE,
-		RIGHTBOTTOM,
-		RIGHT,
-		BOTTOM
-	} m_sizing;
+public:
 
-	int m_curX, m_curY, m_difX, m_difY;
-	int m_resizeBorder;
-	wxSize m_minSize;
-	wxSize m_baseMinSize;
+	ibInnerFrame(wxWindow* parent, wxWindowID id,
+		const wxPoint& pos = wxDefaultPosition,
+		const wxSize& size = wxDefaultSize,
+		long style = 0);
 
-	class TitleBar;
+	wxPanel* GetFrameContentPanel() const { return m_content; }
 
-	TitleBar *m_titleBar;
-	wxPanel *m_valueFrameContent;
+	void SetTitle(const wxString& title);
+	void SetTitleStyle(long style);
+	void ShowTitleBar(bool show);
 
 protected:
 
 	virtual wxSize DoGetBestSize() const override;
 
-public:
-	ibInnerFrame(wxWindow *parent, wxWindowID id,
-		const wxPoint &pos = wxDefaultPosition,
-		const wxSize &size = wxDefaultSize,
-		long style = 0);
+private:
 
-	wxPanel *GetFrameContentPanel() const {
-		return m_valueFrameContent; 
-	}
-	
-	void OnMouseMotion(wxMouseEvent& e);
-	void OnLeftDown(wxMouseEvent& e);
-	void OnLeftUp(wxMouseEvent& e);
+	// The edge the mouse holds while the card is resized.
+	enum class Edge { None, Right, Bottom, Corner };
 
-	void SetTitle(const wxString &title);
-	wxString GetTitle();
+	Edge GetEdgeAt(const wxPoint& point) const;
+	wxSize LimitSize(const wxSize& size) const;
+	void EndSizing();
 
-	void SetTitleStyle(long style);
+	void OnPaintTitleBar(wxPaintEvent& event);
+	void OnTitleBarLeftDown(wxMouseEvent& event);
 
-	void ShowTitleBar(bool show = true);
-	void SetToBaseSize();
-	bool IsTitleBarShown();
+	void OnMouseMotion(wxMouseEvent& event);
+	void OnLeftDown(wxMouseEvent& event);
+	void OnLeftUp(wxMouseEvent& event);
+	void OnMouseCaptureLost(wxMouseCaptureLostEvent& event);
+
+	wxPanel* m_titleBar;
+	wxPanel* m_content;
+
+	wxString m_title;
+	long m_titleStyle;
+	wxBitmap m_closeButton;
+	wxBitmap m_maximizeButton;
+	wxBitmap m_minimizeButton;
+
+	Edge m_sizing = Edge::None;
+	wxSize m_grabOffset;   // from the pointer to the card's bottom-right corner, as grabbed
 };
 
-BEGIN_DECLARE_EVENT_TYPES()
-DECLARE_LOCAL_EVENT_TYPE(wxEVT_INNER_FRAME_RESIZED, -1)
-END_DECLARE_EVENT_TYPES()
+// Sent when a person has resized the card.
+wxDECLARE_EVENT(wxEVT_INNER_FRAME_RESIZED, wxCommandEvent);
 
 #define EVT_INNER_FRAME_RESIZED(id, fn) \
-  wx__DECLARE_EVT1(wxEVT_INNER_FRAME_RESIZED,id,wxCommandEventHandler(fn))
+	wx__DECLARE_EVT1(wxEVT_INNER_FRAME_RESIZED, id, wxCommandEventHandler(fn))
 
 #endif //__INNER_FRAME__

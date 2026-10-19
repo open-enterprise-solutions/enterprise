@@ -40,7 +40,7 @@ TEST(LexerComments, ALongRunOfCommentLines_DoesNotOverflowTheStack)
 
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	cc.Load(source);
-	ASSERT_TRUE(cc.PrepareLexem());
+	ASSERT_TRUE(cc.Translate());
 	EXPECT_GE(cc.m_translateCode.GetLexCount(), 4u) << "the statement after the comments must still lex";
 }
 
@@ -51,7 +51,7 @@ TEST(LexerComments, CommentLinesWithCarriageReturnsAndIndent_AlsoSurvive)
 
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	cc.Load(source);
-	ASSERT_TRUE(cc.PrepareLexem());
+	ASSERT_TRUE(cc.Translate());
 	EXPECT_GE(cc.m_translateCode.GetLexCount(), 4u);
 }
 
@@ -60,7 +60,7 @@ TEST(LexerComments, ACommentOnTheLastLine_WithNoLineEnd_IsFine)
 {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	cc.Load(wxT("a = 1;\n// the end"));
-	ASSERT_TRUE(cc.PrepareLexem());
+	ASSERT_TRUE(cc.Translate());
 	EXPECT_GE(cc.m_translateCode.GetLexCount(), 4u);
 }
 
@@ -69,11 +69,11 @@ TEST(LexerComments, CommentsBetweenStatements_LeaveTheStatementsAlone)
 {
 	ibCompileCode with(wxT("test"), wxT("memory"), false);
 	with.Load(wxT("a = 1;\n// one\n// two\n\n   // three\nb = 2;"));
-	ASSERT_TRUE(with.PrepareLexem());
+	ASSERT_TRUE(with.Translate());
 
 	ibCompileCode without(wxT("test"), wxT("memory"), false);
 	without.Load(wxT("a = 1;\nb = 2;"));
-	ASSERT_TRUE(without.PrepareLexem());
+	ASSERT_TRUE(without.Translate());
 
 	EXPECT_EQ(with.m_translateCode.GetLexCount(), without.m_translateCode.GetLexCount());
 }
@@ -103,7 +103,7 @@ TEST(LexerComments, TheLineAfterSeveralComments_IsCountedRight)
 	// today), and a tab-indented comment
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	cc.Load(wxT("// one\n// two\n\t// three\n\nabc = 1;"));
-	ASSERT_TRUE(cc.PrepareLexem());
+	ASSERT_TRUE(cc.Translate());
 	const ibLexem* abc = FindIdentifier(cc, wxT("abc"));
 	ASSERT_NE(abc, nullptr);
 	EXPECT_EQ(abc->GetLine(), 5u) << "abc is on the fifth line";
@@ -114,7 +114,7 @@ TEST(LexerComments, TheOffsetsAfterAComment_PointAtTheStatement_InCharactersAndI
 	const wxString source = wxString::FromUTF8("// \xD1\x82\xD0\xB5\xD0\xBA\xD1\x81\xD1\x82\n// \xD0\xB5\xD1\x89\xD1\x91\nabc = 1;");   // two Cyrillic comment lines
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	cc.Load(source);
-	ASSERT_TRUE(cc.PrepareLexem());
+	ASSERT_TRUE(cc.Translate());
 	const ibLexem* abc = FindIdentifier(cc, wxT("abc"));
 	ASSERT_NE(abc, nullptr);
 

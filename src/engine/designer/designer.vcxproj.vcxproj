@@ -223,10 +223,7 @@
     <ClCompile Include="mainFrame\metatree\treeDataReport_impl.cpp" />
     <ClCompile Include="mainFrame\output\outputWindow.cpp" />
     <ClCompile Include="mainFrame\stack\stackWindow.cpp" />
-    <ClCompile Include="mainFrame\watch\watchctrl.cpp" />
-    <ClCompile Include="mainFrame\watch\watchdroptarget.cpp" />
     <ClCompile Include="mainFrame\watch\watchWindow.cpp" />
-    <ClCompile Include="win\ctrl\menuBar.cpp" />
     <ClCompile Include="win\dlg\debugItem\debugItem.cpp" />
     <ClCompile Include="win\dlg\homePageEditor.cpp" />
     <ClCompile Include="win\dlg\textEditor.cpp" />
@@ -273,11 +270,8 @@
     <ClInclude Include="mainFrame\metatree\treeDataReport.h" />
     <ClInclude Include="mainFrame\output\outputWindow.h" />
     <ClInclude Include="mainFrame\stack\stackWindow.h" />
-    <ClInclude Include="mainFrame\watch\watchctrl.h" />
-    <ClInclude Include="mainFrame\watch\watchdroptarget.h" />
     <ClInclude Include="mainFrame\watch\watchWindow.h" />
     <ClInclude Include="resource.h" />
-    <ClInclude Include="win\ctrl\menuBar.h" />
     <ClInclude Include="win\dlg\debugItem\debugItem.h" />
     <ClInclude Include="win\dlg\homePageEditor.h" />
     <ClInclude Include="win\dlg\textEditor.h" />

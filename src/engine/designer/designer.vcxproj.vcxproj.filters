@@ -39,9 +39,6 @@
     <ClCompile Include="mainFrame\debugger\debugClientImpl.cpp">
       <Filter>mainFrame\debugger</Filter>
     </ClCompile>
-    <ClCompile Include="win\ctrl\menuBar.cpp">
-      <Filter>win\ctrl</Filter>
-    </ClCompile>
     <ClCompile Include="win\dlg\debugItem\debugItem.cpp">
       <Filter>win\dlg\debugItem</Filter>
     </ClCompile>
@@ -111,13 +108,7 @@
     <ClCompile Include="mainFrame\stack\stackWindow.cpp">
       <Filter>mainFrame\stack</Filter>
     </ClCompile>
-    <ClCompile Include="mainFrame\watch\watchdroptarget.cpp">
-      <Filter>mainFrame\watch</Filter>
-    </ClCompile>
     <ClCompile Include="mainFrame\watch\watchWindow.cpp">
-      <Filter>mainFrame\watch</Filter>
-    </ClCompile>
-    <ClCompile Include="mainFrame\watch\watchctrl.cpp">
       <Filter>mainFrame\watch</Filter>
     </ClCompile>
     <ClCompile Include="docManager\templates\docViewDataProcessorFile.cpp">
@@ -201,9 +192,6 @@
     <ClInclude Include="mainFrame\debugger\debugClientImpl.h">
       <Filter>mainFrame\debugger</Filter>
     </ClInclude>
-    <ClInclude Include="win\ctrl\menuBar.h">
-      <Filter>win\ctrl</Filter>
-    </ClInclude>
     <ClInclude Include="win\dlg\debugItem\debugItem.h">
       <Filter>win\dlg\debugItem</Filter>
     </ClInclude>
@@ -254,12 +242,6 @@
     </ClInclude>
     <ClInclude Include="mainFrame\stack\stackWindow.h">
       <Filter>mainFrame\stack</Filter>
-    </ClInclude>
-    <ClInclude Include="mainFrame\watch\watchctrl.h">
-      <Filter>mainFrame\watch</Filter>
-    </ClInclude>
-    <ClInclude Include="mainFrame\watch\watchdroptarget.h">
-      <Filter>mainFrame\watch</Filter>
     </ClInclude>
     <ClInclude Include="mainFrame\watch\watchWindow.h">
       <Filter>mainFrame\watch</Filter>
@@ -340,9 +322,6 @@
     </Filter>
     <Filter Include="win\dlg\debugItem">
       <UniqueIdentifier>{5e0faed8-dfa4-403c-94e2-55fe546f844f}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="win\ctrl">
-      <UniqueIdentifier>{d32bbaf3-c1e8-4128-9185-2307edf5f3ca}</UniqueIdentifier>
     </Filter>
     <Filter Include="win\editor">
       <UniqueIdentifier>{391edced-75f0-4d25-8aaa-69e8d7e8337b}</UniqueIdentifier>

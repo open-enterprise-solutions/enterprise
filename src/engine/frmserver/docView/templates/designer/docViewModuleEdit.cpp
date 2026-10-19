@@ -205,7 +205,7 @@ void LoadAutoComplete(ibDataNode& response, const wxString& text, unsigned int c
 	stream.SetLexemMode(ibLexemMode::Editing);
 	stream.Load(text);
 	try {
-		stream.PrepareLexem();
+		stream.Translate();
 	}
 	catch (...) {
 	}
@@ -240,7 +240,7 @@ wxString LoadCallTip(const wxString& text, unsigned int caret, const ibValueMeta
 	stream.SetLexemMode(ibLexemMode::Editing);
 	stream.Load(text);
 	try {
-		stream.PrepareLexem();
+		stream.Translate();
 	}
 	catch (...) {
 	}

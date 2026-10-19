@@ -55,9 +55,6 @@ ibStackWindow::ibStackWindow(wxWindow* parent, int id) :
 	this->SetBackgroundColour(wxColour(184, 201, 212));   // #B8C9D4 powder-blue panel
 	m_treeCtrl->SetBackgroundColour(wxColour(253, 251, 245));  // #FDFBF5 light cream list
 
-	m_columnSize[0] = 0.09f;
-	m_columnSize[1] = -120;
-
 	SetSizer(new wxBoxSizer(wxHORIZONTAL));
 	ClearAndCreate();
 	m_treeCtrl->SetDoubleBuffered(true);
@@ -108,43 +105,13 @@ void ibStackWindow::SetStack(const ibStackData& stackData)
 #endif
 }
 
-void ibStackWindow::UpdateColumnSizes()
+void ibStackWindow::FitColumns()
 {
-	// We subtract two off of the size to avoid generating scroll bars on the window.
-	int totalSize = GetClientSize().x - 2;
-
-	int columnSize[2];
-	GetColumnSizes(totalSize, columnSize);
-
-	for (unsigned int i = 0; i < s_numColumns; ++i) {
-		m_treeCtrl->SetColumnWidth(i, columnSize[i]);
-	}
-}
-
-void ibStackWindow::GetColumnSizes(int totalSize, int columnSize[s_numColumns]) const
-{
-	int fixedSize = 0;
-
-	for (unsigned int i = 0; i < s_numColumns; ++i) {
-		if (m_columnSize[i] < 0.0f) {
-			columnSize[i] = static_cast<int>(-m_columnSize[i]);
-			fixedSize += columnSize[i];
-		}
-	}
-
-	// Set the size of the proportional columns.
-	for (unsigned int i = 0; i < s_numColumns; ++i) {
-		if (m_columnSize[i] >= 0.0f) {
-			columnSize[i] = static_cast<int>(m_columnSize[i] * (totalSize - fixedSize) + 0.5f);
-		}
-	}
-
-	// Make sure the total size is exactly correct by resizing the final column.
-	for (unsigned int i = 0; i < s_numColumns - 1; ++i) {
-		totalSize -= columnSize[i];
-	}
-
-	columnSize[s_numColumns - 1] = totalSize;
+	// Two pixels short of the client, or the list grows a scroll bar of its own.
+	const int width = GetClientSize().GetWidth() - 2;
+	const int line = width * 9 / 100;
+	m_treeCtrl->SetColumnWidth(0, line);
+	m_treeCtrl->SetColumnWidth(1, width - line);
 }
 
 void ibStackWindow::OnItemSelected(wxListEvent& event)
@@ -161,7 +128,7 @@ void ibStackWindow::OnItemSelected(wxListEvent& event)
 
 void ibStackWindow::OnSize(wxSizeEvent& event)
 {
-	UpdateColumnSizes();
+	FitColumns();
 	event.Skip();
 }
 
@@ -171,7 +138,7 @@ void ibStackWindow::ClearAndCreate()
 	m_treeCtrl->AppendColumn(_("Line"), wxLIST_FORMAT_LEFT, 100);
 	m_treeCtrl->AppendColumn(_("Module"), wxLIST_FORMAT_LEFT, 750);
 
-	UpdateColumnSizes();
+	FitColumns();
 }
 
 #include "mainFrame/mainFrameDesigner.h"

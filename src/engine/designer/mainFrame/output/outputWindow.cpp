@@ -76,20 +76,15 @@ ibOutputWindow* ibOutputWindow::GetOutputWindow()
 
 void ibOutputWindow::SetFontColorSettings(const ibFontColorSettings& settings)
 {
-	// For some reason StyleSetFont takes a (non-const) reference, so we need to make
-	// a copy before passing it in.
-	wxFont font = settings.GetFont();
-
+	// The messages in the code's font, selected in the selection's colours; the paper stays the window's own.
 	StyleClearAll();
-	StyleSetFont(wxSTC_STYLE_DEFAULT, font);
+	StyleSetFont(wxSTC_STYLE_DEFAULT, settings.GetFont());
+	StyleSetFont(wxSTC_C_DEFAULT, settings.GetFont(ibFontColorSettings::DisplayItem_Default));
+	StyleSetFont(wxSTC_C_IDENTIFIER, settings.GetFont(ibFontColorSettings::DisplayItem_Default));
 
-	SetSelForeground(true, settings.GetColors(ibFontColorSettings::DisplayItem_Selection).foreColor);
-	SetSelBackground(true, settings.GetColors(ibFontColorSettings::DisplayItem_Selection).backColor);
-
-	font = settings.GetFont(ibFontColorSettings::DisplayItem_Default);
-
-	StyleSetFont(wxSTC_C_DEFAULT, font);
-	StyleSetFont(wxSTC_C_IDENTIFIER, font);
+	const ibFontColorSettings::Colors& selection = settings.GetColors(ibFontColorSettings::DisplayItem_Selection);
+	SetSelForeground(true, selection.foreColor);
+	SetSelBackground(true, selection.backColor);
 
 	SetMarginType(DEF_LINENUMBER_ID, wxSTC_MARGIN_NUMBER);
 	SetMarginWidth(DEF_LINENUMBER_ID, 0);

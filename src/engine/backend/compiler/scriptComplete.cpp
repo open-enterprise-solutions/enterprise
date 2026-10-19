@@ -1549,7 +1549,7 @@ public:
 		m_compiler.SetCaret((long)m_at);
 
 		// ⚠ NO GUARD. A tolerant compile reports nothing and keeps reading — it does not raise
-		// (compileCode.cpp, DoSetError) — so catching here would be catching nothing.
+		// (compileCode.cpp, DoRefuse) — so catching here would be catching nothing.
 		m_compiler.Compile(upToCaret ? text.Left(m_at) : text);
 	}
 

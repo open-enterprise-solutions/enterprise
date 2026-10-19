@@ -238,7 +238,7 @@ struct ibTranslateRefusal {
 	{
 	}
 
-	int          m_codeError;            // ERROR_* (codeDef.h)
+	int          m_codeError;            // ibScriptError (codeDef.h)
 	unsigned int m_currPos;              // in the text of the translator that raised it
 	unsigned int m_currLine;             // 1-based
 	wxString     m_errorDesc;
@@ -249,11 +249,8 @@ struct ibTranslateRefusal {
 };
 
 /***************************************************
-ibTranslateCode-stage of source code parsing
-The entry point is the Load() and TranslateModule() procedures.
-The first procedure initializes variables and loads
-the text of the executable code, the second procedure performs translation
-(parsing the code). As a result, an array of "raw" bytecode in the cByteCode variable is filled in the class structure.
+ibTranslateCode — the stage that reads a source text into lexems.
+Load() takes the text, Translate() reads it into m_listLexem.
 ****************************************************/
 
 class CORE_API ibTranslateCode {
@@ -327,7 +324,7 @@ public:
 
 	virtual void Clear();
 	void ClearLexem() { m_listLexem.resize(0); } // resetting and free data to reuse an object
-	size_t GetLexCount() const { return m_listLexem.size(); } // token count after PrepareLexem
+	size_t GetLexCount() const { return m_listLexem.size(); } // token count after Translate
 	const ibLexem& GetLexAt(size_t index) const { return m_listLexem.at(index); } // out of range throws
 
 	// HAS IT BEEN LEXED. The question a caller actually asks — the editor asks it before patching,
@@ -345,7 +342,7 @@ public:
 	void SetCodeStyle(short codeStyle) { m_codeStyle = codeStyle; }
 	short GetCodeStyle() const { return m_codeStyle; }
 
-	bool PrepareLexem();
+	bool Translate();
 
 	// WHAT AN EDIT DID TO THE TEXT, in the terms the stream is stored in. One argument rather than
 	// three-or-four, and the `#ifdef` stops travelling to every call site: whether coordinates are
@@ -368,7 +365,7 @@ public:
 	//
 	// Why it exists at all: a full pass over a large module is fractions of a second, which per
 	// KEYSTROKE is not slow — it is unusable.
-	void PrepareLexem(const ibTextEdit& edit);
+	void Translate(const ibTextEdit& edit);
 
 	// ⭐⭐ WHAT THE CARET IS STANDING IN — the question that decides WHICH answer a completion
 	// wants, and the only one that has to be asked of the TOKENS rather than of a value.
@@ -411,7 +408,7 @@ public:
 
 protected:
 	// Notes a refusal at `currPos` and returns — the read goes on (see ibTranslateRefusal).
-	void SetError(int codeError, unsigned int currPos, const wxString& errorDesc = wxEmptyString) const;
+	void Refuse(int codeError, unsigned int currPos, const wxString& errorDesc = wxEmptyString) const;
 public:
 
 	inline void SkipSpaces() const;
@@ -487,7 +484,7 @@ public:
 	void SetFileName(const wxString& strFileName) { m_strFileName = strFileName; }
 	wxString GetFileName() const { return m_strFileName; }
 
-	// What the last full PrepareLexem could not read, in the order met — see ibTranslateRefusal. A module
+	// What the last full Translate could not read, in the order met — see ibTranslateRefusal. A module
 	// read as a part of this one (AppendModule) adds its own.
 	size_t GetRefusalCount() const { return m_listRefusal.size(); }
 	const ibTranslateRefusal& GetRefusalAt(size_t index) const { return m_listRefusal.at(index); } // out of range throws
@@ -600,7 +597,7 @@ protected:
 	//intermediate array with lexemes:
 	std::vector<ibLexem> m_listLexem;
 
-	// See GetRefusalCount. Mutable because SetError is const — the scanners that raise are const
+	// See GetRefusalCount. Mutable because Refuse is const — the scanners that raise are const
 	// over the text, and noting what they could not read does not change it.
 	mutable std::vector<ibTranslateRefusal> m_listRefusal;
 };

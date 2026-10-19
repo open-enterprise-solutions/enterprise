@@ -36,12 +36,6 @@ void ibFrontendMainFrame::UpdateFrameManager() {}
 bool ibFrontendMainFrame::EnsureRuntime() { return true; }
 
 // -----------------------------------------------------------------------------
-// ibKeyBinder — key-binding registry for the designer menus.
-// -----------------------------------------------------------------------------
-
-ibKeyBinder::~ibKeyBinder() {}
-
-// -----------------------------------------------------------------------------
 // ibDynamicStaticText — auto-sizing static text used by typeControl.
 // -----------------------------------------------------------------------------
 

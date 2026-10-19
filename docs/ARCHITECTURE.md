@@ -474,7 +474,7 @@ declaring the rule that guards it are the same statement, so they cannot drift a
 Source text (wxString)
         │
         ▼
- ibTranslateCode::Load() → PrepareLexem()
+ ibTranslateCode::Load() → Translate()
    Lexer: fills m_listLexem (vector<ibLexem>)
    Each ibLexem: { type, keyword/delimiter number, string data, ibValue, line, position }
         │

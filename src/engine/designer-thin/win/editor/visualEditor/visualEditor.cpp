@@ -1,5 +1,5 @@
 ﻿////////////////////////////////////////////////////////////////////////////
-//	Author		: Maxim Kornienko, wxFormBuilder
+//	Author		: Maxim Kornienko
 //	Description : visual editor
 ////////////////////////////////////////////////////////////////////////////
 
@@ -252,7 +252,7 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::SetObjectSelect
 	}
 
 	wxSizer* sizer = nullptr;
-	wxObject* item = nullptr;
+	wxWindow* item = nullptr;
 	wxWindow* selPanel = nullptr;
 
 	if (wxWindow* const window = drawn->GetWindow()) {
@@ -267,10 +267,7 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::SetObjectSelect
 		selPanel = sizer->GetContainingWindow();
 	}
 
-	m_back->SetSelectedSizer(sizer);
-	m_back->SetSelectedItem(item);
-	m_back->SetSelectedObject(drawn);
-	m_back->SetSelectedPanel(selPanel);
+	m_back->SetSelection(drawn, item, sizer, selPanel);
 
 	m_back->Refresh();
 	if (selPanel != nullptr)
@@ -323,55 +320,80 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::UpdateVirtualSi
 
 /////////////////////////////////////////////////////////////////////////////////
 
-wxIMPLEMENT_CLASS(ibDesignerWindow, ibInnerFrame);
-
-wxBEGIN_EVENT_TABLE(ibDesignerWindow, ibInnerFrame)
-EVT_PAINT(ibDesignerWindow::OnPaint)
-wxEND_EVENT_TABLE()
-
-ibDesignerWindow::ibDesignerWindow(wxWindow* parent, int id, const wxPoint& pos, const wxSize& size, long style, const wxString& /*name*/)
-	: ibInnerFrame(parent, id, pos, size, style)
+ibDesignerWindow::ibDesignerWindow(wxWindow* parent, wxWindowID id, const wxPoint& pos)
+	: ibInnerFrame(parent, id, pos, wxDefaultSize, 0)
 {
 	ShowTitleBar(false);
-	SetGrid(10, FromDIP(10));
-
-	m_selSizer = nullptr;
-	m_selItem = nullptr;
-	m_actPanel = nullptr;
-
 	SetBackgroundColour(wxColour(0xD8, 0xE2, 0xEB));  // #D8E2EB palest powder — light background so form card pops
+
+	Bind(wxEVT_PAINT, &ibDesignerWindow::OnPaint, this);
 }
 
-ibDesignerWindow::~ibDesignerWindow()
+void ibDesignerWindow::SetSelection(ibValueFrame* object, wxWindow* window, wxSizer* sizer, wxWindow* panel)
 {
-}
+	m_selectedObject = object;
+	m_selectedWindow = window;
+	m_selectedSizer = sizer;
+	m_selectedPanel = panel;
 
-void ibDesignerWindow::SetGrid(int x, int y)
-{
-	m_x = x;
-	m_y = y;
-}
-
-void ibDesignerWindow::SetSelectedPanel(wxWindow* actPanel)
-{
 	// Bound once: the same handler unbound first, so a panel selected again is not painted twice.
-	if (actPanel != nullptr && actPanel != this) {
-		actPanel->Unbind(wxEVT_PAINT, &ibDesignerWindow::OnPanelPaint, this);
-		actPanel->Bind(wxEVT_PAINT, &ibDesignerWindow::OnPanelPaint, this);
+	if (panel != nullptr && panel != this) {
+		panel->Unbind(wxEVT_PAINT, &ibDesignerWindow::OnPanelPaint, this);
+		panel->Bind(wxEVT_PAINT, &ibDesignerWindow::OnPanelPaint, this);
 	}
-	m_actPanel = actPanel;
+}
+
+bool ibDesignerWindow::GetSelectionRect(wxRect& rect) const
+{
+	if (m_selectedSizer != nullptr) {
+		// Where the scrolling of its window puts it.
+		wxPoint position = m_selectedSizer->GetPosition();
+		if (const wxScrollHelper* scrolled = dynamic_cast<const wxScrollHelper*>(m_selectedSizer->GetContainingWindow()))
+			position = scrolled->CalcScrolledPosition(position);
+		rect = wxRect(position, m_selectedSizer->GetSize());
+	}
+	else if (m_selectedWindow != nullptr && m_selectedPanel != nullptr && m_selectedWindow->IsShown()) {
+		// Through the screen: a window in a static box stands in the box, not in the panel.
+		rect = wxRect(m_selectedPanel->ScreenToClient(m_selectedWindow->GetScreenPosition()), m_selectedWindow->GetSize());
+	}
+	else {
+		return false;
+	}
+
+	// Out to the border the sizer item gives it (ibValueSizerItem::Update) on the sides it borders; elsewhere a pixel
+	// round a window and nothing round a sizer.
+	const wxSizerItem* const item = m_selectedObject != nullptr ? ibValueSizerItem::GetItem(m_selectedObject) : nullptr;
+	const int least = m_selectedObject != nullptr && m_selectedObject->GetComponentType() == COMPONENT_TYPE_SIZER ? 0 : 1;
+	const int border = item != nullptr && item->GetBorder() != 0 ? item->GetBorder() : least;
+	const auto side = [item, border, least](int direction) {
+		return item != nullptr && (item->GetFlag() & direction) != 0 ? border : least;
+	};
+
+	rect.x -= side(wxLEFT);
+	rect.y -= side(wxTOP);
+	rect.width += side(wxLEFT) + side(wxRIGHT);
+	rect.height += side(wxTOP) + side(wxBOTTOM);
+	return true;
+}
+
+void ibDesignerWindow::DrawSelection(wxDC& dc) const
+{
+	wxRect rect;
+	if (!GetSelectionRect(rect))
+		return;
+
+	dc.SetPen(wxPen(m_selectedSizer != nullptr ? *wxBLUE : *wxRED, 2, wxPENSTYLE_SHORT_DASH));
+	dc.SetBrush(*wxTRANSPARENT_BRUSH);
+	dc.DrawRectangle(rect);
 }
 
 void ibDesignerWindow::OnPaint(wxPaintEvent& event)
 {
-	// This paint event helps draw the selection boxes
-	// when they extend beyond the edges of the content panel
 	wxPaintDC dc(this);
-
-	if (m_actPanel == GetFrameContentPanel()) {
-		wxPoint origin = GetFrameContentPanel()->GetPosition();
+	if (m_selectedPanel != nullptr && m_selectedPanel == GetFrameContentPanel()) {
+		const wxPoint origin = m_selectedPanel->GetPosition();
 		dc.SetDeviceOrigin(origin.x, origin.y);
-		HighlightSelection(dc);
+		DrawSelection(dc);
 	}
 
 	event.Skip();
@@ -380,73 +402,10 @@ void ibDesignerWindow::OnPaint(wxPaintEvent& event)
 void ibDesignerWindow::OnPanelPaint(wxPaintEvent& event)
 {
 	wxWindow* const panel = wxDynamicCast(event.GetEventObject(), wxWindow);
-	if (panel != nullptr && panel == m_actPanel) {
+	if (panel != nullptr && panel == m_selectedPanel) {
 		wxPaintDC dc(panel);
-		HighlightSelection(dc);
+		DrawSelection(dc);
 	}
 
 	event.Skip();
-}
-
-void ibDesignerWindow::DrawRectangle(wxDC& dc, const wxPoint& point, const wxSize& size, ibValueFrame* object)
-{
-	int min = (object->GetComponentType() == COMPONENT_TYPE_SIZER ? 0 : 1);
-
-	int border = 0, flag = 0;
-
-	// Out to the border its sizer item lays it out with — the item the client's sizer item set (ibValueSizerItem::Update).
-	const wxSizerItem* const item = ibValueSizerItem::GetItem(object);
-	if (item != nullptr) {
-		border = item->GetBorder(); flag = item->GetFlag();
-	}
-
-	if (border == 0)
-		border = min;
-
-	int topBorder = (flag & wxTOP) == 0 ? min : border;
-	int bottomBorder = (flag & wxBOTTOM) == 0 ? min : border;
-	int rightBorder = (flag & wxRIGHT) == 0 ? min : border;
-	int leftBorder = (flag & wxLEFT) == 0 ? min : border;
-
-	dc.DrawRectangle(point.x - leftBorder,
-		point.y - topBorder,
-		size.x + leftBorder + rightBorder,
-		size.y + topBorder + bottomBorder);
-}
-
-void ibDesignerWindow::HighlightSelection(wxDC& dc)
-{
-	wxSize size;
-	ibValueFrame* object = m_selObj;
-
-	if (m_selSizer != nullptr) {
-		// A sizer is laid out where its window's scrolling puts it.
-		wxPoint point = m_selSizer->GetPosition();
-		if (const wxScrollHelper* scrolled = dynamic_cast<const wxScrollHelper*>(m_selSizer->GetContainingWindow()))
-			point = scrolled->CalcScrolledPosition(point);
-		size = m_selSizer->GetSize();
-		wxPen bluePen(*wxBLUE, 2, wxPENSTYLE_SHORT_DASH);
-		dc.SetPen(bluePen);
-		dc.SetBrush(*wxTRANSPARENT_BRUSH);
-		DrawRectangle(dc, point, size, object);
-	}
-	else if (m_selItem != nullptr) {
-		wxWindow* windowItem = wxDynamicCast(m_selItem, wxWindow);
-		if (windowItem == nullptr || m_actPanel == nullptr)
-			return;
-
-		// In case the windowItem is inside a wxStaticBoxSizer its position is relative to
-		// the wxStaticBox which is NOT m_actPanel in on which the highlight is painted,
-		// so get the screen coordinates of the item and convert them into client coordinates
-		// of the panel to get the correct relative coordinates.
-		const wxPoint point = m_actPanel->ScreenToClient(windowItem->GetScreenPosition());
-		size = windowItem->GetSize();
-
-		if (windowItem->IsShown()) {
-			wxPen redPen(*wxRED, 2, wxPENSTYLE_SHORT_DASH);
-			dc.SetPen(redPen);
-			dc.SetBrush(*wxTRANSPARENT_BRUSH);
-			DrawRectangle(dc, point, size, object);
-		}
-	}
 }

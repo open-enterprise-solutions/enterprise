@@ -239,8 +239,6 @@
     <ClCompile Include="mainFrame\metaTree\treeDataReport_impl.cpp" />
     <ClCompile Include="mainFrame\stack\stackWindow.cpp" />
     <ClCompile Include="mainFrame\vcs\gitPanel.cpp" />
-    <ClCompile Include="mainFrame\watch\watchctrl.cpp" />
-    <ClCompile Include="mainFrame\watch\watchdroptarget.cpp" />
     <ClCompile Include="mainFrame\watch\watchWindow.cpp" />
     <ClCompile Include="syntaxHelper\helpChooserDialog.cpp" />
     <ClCompile Include="syntaxHelper\helpDetailView.cpp" />
@@ -253,7 +251,6 @@
     <ClCompile Include="win\dlg\homePageEditor.cpp" />
     <ClCompile Include="win\dlg\predefinedEditor.cpp" />
     <ClCompile Include="win\dlg\textEditor.cpp" />
-    <ClCompile Include="win\ctrl\menuBar.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="mainApp.h" />
@@ -296,8 +293,6 @@
     <ClInclude Include="mainFrame\metaTree\treeDataReport.h" />
     <ClInclude Include="mainFrame\stack\stackWindow.h" />
     <ClInclude Include="mainFrame\vcs\gitPanel.h" />
-    <ClInclude Include="mainFrame\watch\watchctrl.h" />
-    <ClInclude Include="mainFrame\watch\watchdroptarget.h" />
     <ClInclude Include="mainFrame\watch\watchWindow.h" />
     <ClInclude Include="syntaxHelper\helpChooserDialog.h" />
     <ClInclude Include="syntaxHelper\helpDetailView.h" />
@@ -310,7 +305,6 @@
     <ClInclude Include="win\dlg\homePageEditor.h" />
     <ClInclude Include="win\dlg\predefinedEditor.h" />
     <ClInclude Include="win\dlg\textEditor.h" />
-    <ClInclude Include="win\ctrl\menuBar.h" />
     <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>

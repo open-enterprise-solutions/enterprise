@@ -1,600 +1,168 @@
-
-
 #include <wx/wx.h>
-#include <wx/xml/xml.h>
 
 #include "keybinder.h"
-#include "xmlutility.h"
-#include "stlutility.h"
+#include "settingsxml.h"
 
-ibKeyBinder::ibKeyBinder()
-{
-}
-
-ibKeyBinder::~ibKeyBinder()
-{
-    ClearCommands();   
-}
-
-void ibKeyBinder::ClearCommands()
-{
-    ClearVector(m_commands);
-}
+// Ctrl+Break arrives as WXK_CANCEL, which wx writes "Cancel"; a person pressed Break, and profiles say so.
+static const wxString kBreakName = wxT("Break");
+static const wxString kCancelName = wxT("Cancel");
 
 void ibKeyBinder::AddCommand(const Command& command)
 {
-    if (GetCommandForId(command.id) == nullptr)
-    {
-        m_commands.push_back(new Command(command));
-    }
-}
-
-void ibKeyBinder::AddCommand(int id, const wxString& group, const wxString& name, const wxString& help)
-{
-    if (GetCommandForId(id) == nullptr)
-    {
-
-        // Check that the command doesn't already exist.
-
-        Command* command = new Command;
-        
-        command->id     = id;
-        command->name   = name;
-        command->group  = group;
-        command->help   = help;
-
-        m_commands.push_back(command);
-
-    }
-}
-
-void ibKeyBinder::AddCommand(const wxString& group, wxMenuItem* menuItem)
-{
-    if (menuItem->GetKind() != wxITEM_SEPARATOR)
-    {
-        AddCommand(menuItem->GetId(), group, menuItem->GetItemLabelText(), menuItem->GetHelp());
-    }
+	if (GetCommandForId(command.id) == nullptr)
+		m_commands.push_back(command);
 }
 
 void ibKeyBinder::AddCommandsFromMenuBar(wxMenuBar* menuBar)
 {
-
-    int numMenus = menuBar->GetMenuCount();
-
-    for (int i = 0; i < numMenus; ++i)
-    {
-        AddCommandsFromMenu(menuBar->GetMenuLabel(i), menuBar->GetMenu(i));
-    }
-
+	for (size_t i = 0; i < menuBar->GetMenuCount(); ++i)
+		AddCommandsFromMenu(menuBar->GetMenuLabelText(i), menuBar->GetMenu(i));
 }
 
 void ibKeyBinder::AddCommandsFromMenu(const wxString& group, wxMenu* menu)
 {
-    const wxMenuItemList& list = menu->GetMenuItems();
-
-    for (auto node = list.GetFirst(); node != nullptr; node = node->GetNext())
-    {
-        wxMenuItem* item = node->GetData();
-
-        // Recurse into submenus so their items show up in the keybinder
-        // dialog. Without this only top-level menu items appear and
-        // anything nested (e.g. File → Recent → ...) is silently skipped.
-        // Sub-group label = parent + " / " + submenu's own label, so the
-        // dialog's tree groups them under their own folder.
-        if (item->IsSubMenu() && item->GetSubMenu() != nullptr) {
-            AddCommandsFromMenu(
-                group + wxT(" / ") + item->GetItemLabelText(),
-                item->GetSubMenu());
-            continue;
-        }
-
-        AddCommand(group, item);
-    }
+	for (wxMenuItem* item : menu->GetMenuItems()) {
+		if (item->IsSubMenu()) {
+			if (item->GetSubMenu() != nullptr)
+				AddCommandsFromMenu(group + wxT(" / ") + item->GetItemLabelText(), item->GetSubMenu());
+		}
+		else if (!item->IsSeparator()) {
+			Command command;
+			command.id = item->GetId();
+			command.name = item->GetItemLabelText();
+			command.group = group;
+			command.help = item->GetHelp();
+			AddCommand(command);
+		}
+	}
 }
 
-void ibKeyBinder::RemoveCommand(int id)
+void ibKeyBinder::SetShortcut(int id, const wxString& shortcut)
 {
+	Command* const command = GetCommandForId(id);
+	if (command == nullptr)
+		return;
 
-    for (unsigned int i = 0; i < m_commands.size(); ++i)
-    {
-        if (m_commands[i]->id == id)
-        {
-            delete m_commands[i];
-            m_commands.erase(m_commands.begin() + i);
-            break;
-        }
-    }
-
+	const Key key = GetTextAsKeyBinding(shortcut);
+	command->keys.push_back(key);
+	command->defaultKeys.push_back(key);
 }
 
 void ibKeyBinder::UpdateWindow(wxWindow* window)
 {
-    // Build an updated accelerator table for the commands.
-    std::vector<wxAcceleratorEntry> entries;
-    entries.reserve(m_commands.size());
+	std::vector<wxAcceleratorEntry> entries;
+	for (const Command& command : m_commands) {
+		for (const Key& key : command.keys)
+			entries.emplace_back(key.flags, key.code, command.id);
+	}
 
-    for (unsigned int i = 0; i < m_commands.size(); ++i)
-    {
-        for (unsigned int j = 0; j < m_commands[i]->keys.size(); ++j)
-        {
-
-            const Key& key = m_commands[i]->keys[j];
-
-            wxAcceleratorEntry entry;
-            entry.Set(key.flags, key.code, m_commands[i]->id);
-
-            entries.push_back(entry);
-
-        }
-    }
-
-    m_accel = wxAcceleratorTable(entries.size(), &entries.front());
-
-    window->SetAcceleratorTable(m_accel);
+	window->SetAcceleratorTable(entries.empty()
+		? wxNullAcceleratorTable : wxAcceleratorTable(static_cast<int>(entries.size()), entries.data()));
 }
 
 void ibKeyBinder::UpdateMenuBar(wxMenuBar* menuBar)
 {
-    int numMenus = menuBar->GetMenuCount();
-
-    for (int i = 0; i < numMenus; ++i)
-    {
-        UpdateMenu(menuBar->GetMenu(i));
-    }
-
-}
-
-bool ibKeyBinder::GetMenuItemText(wxMenuItem* item, wxString& label) const
-{
-    if (item->GetKind() != wxITEM_SEPARATOR)
-    {  
-        Command* command = GetCommandForId(item->GetId());
-
-        if (command != nullptr)
-        {
-            
-            if (label.IsEmpty())
-            {
-                label = command->name;
-            }
-            
-            if (!command->keys.empty())
-            {
-                label += "\t" + GetKeyBindingAsText(command->keys[0]);
-            }
-
-            return true;
-        }
-    }
-
-    return false;
+	for (size_t i = 0; i < menuBar->GetMenuCount(); ++i)
+		UpdateMenu(menuBar->GetMenu(i));
 }
 
 void ibKeyBinder::UpdateMenu(wxMenu* menu)
 {
-    const wxMenuItemList& list = menu->GetMenuItems();
+	for (wxMenuItem* item : menu->GetMenuItems()) {
+		if (item->IsSubMenu()) {
+			if (item->GetSubMenu() != nullptr)
+				UpdateMenu(item->GetSubMenu());
+			continue;
+		}
 
-    for (auto node = list.GetFirst(); node != nullptr; node = node->GetNext())
-    {
-        wxMenuItem* item = node->GetData();
+		const Command* const command = GetCommandForId(item->GetId());
+		if (command == nullptr || item->IsSeparator())
+			continue;
 
-        // Recurse into submenus — symmetric with AddCommandsFromMenu.
-        // Without this, hotkeys assigned to submenu commands in the
-        // settings dialog never appear in the actual menu (label-with-
-        // accelerator path bypasses the nested items).
-        if (item->IsSubMenu() && item->GetSubMenu() != nullptr) {
-            UpdateMenu(item->GetSubMenu());
-            continue;
-        }
-
-        wxString label;
-        if (GetMenuItemText(item, label)) {
-            item->SetItemLabel(label);
-        }
-    }
-}
-
-ibKeyBinder::Command* ibKeyBinder::GetCommandForId(int id) const
-{
-
-    for (unsigned int i = 0; i < m_commands.size(); ++i)
-    {
-        if (m_commands[i]->id == id)
-        {
-            return m_commands[i];
-        }
-    }
-
-    return nullptr;
-
-}
-
-void ibKeyBinder::SetShortcut(int id, int flags, int code)
-{
-
-    Command* command = GetCommandForId(id);
-
-    if (command != nullptr)
-    {
-
-        Key key;
-
-        key.flags = flags;
-        key.code  = code;
-
-        command->keys.push_back(key);
-        command->defaultKeys.push_back(key);
-
-    }
-
-}
-
-void ibKeyBinder::SetShortcut(int id, const wxString& text)
-{
-    Key key = GetTextAsKeyBinding(text);
-    SetShortcut(id, key.flags, key.code);
-}
-
-ibKeyBinder::Key ibKeyBinder::GetTextAsKeyBinding(const wxString& text)
-{
-    Key key;
-    key.flags = 0;
-
-	if (text.IsEmpty())
-		return key;
-
-    // this search must be case-insensitive
-    wxString str = text;
-    str.MakeUpper();
-
-    if (str.Contains(wxT("ALT")))
-        key.flags |= wxACCEL_ALT;
-
-    if (str.Contains(wxT("CTRL")))
-        key.flags |= wxACCEL_CTRL;
-
-    if (str.Contains(wxT("SHIFT")))
-        key.flags |= wxACCEL_SHIFT;
-
-    key.code = StringToKeyCode(str.AfterLast('+').AfterLast('-'));
-    
-    return key;
-
-}
-
-int ibKeyBinder::StringToKeyCode(const wxString &keyName)
-{
-    // a function key ?
-    if (keyName.StartsWith(wxT("F")) && keyName.Len() > 1) {
-
-        long n;
-        keyName.Right(keyName.Len()-1).ToLong(&n);
-        return WXK_F1+n-1;
-    }
-
-    // a special key ?
-    if (keyName == wxT("BACK")) return WXK_BACK;
-    if (keyName == wxT("ENTER")) return WXK_RETURN;
-    if (keyName == wxT("RETURN")) return WXK_RETURN;
-    if (keyName == wxT("TAB")) return WXK_TAB;
-    if (keyName == wxT("ESCAPE")) return WXK_ESCAPE;
-    if (keyName == wxT("SPACE")) return WXK_SPACE;
-    if (keyName == wxT("DEL") || keyName == wxT("DELETE")) return WXK_DELETE;
-    // Ctrl+Break arrives as WXK_CANCEL. Unknown here, "Ctrl+Break" fell to the line below and was
-    // bound as Ctrl+B.
-    if (keyName == wxT("BREAK") || keyName == wxT("CANCEL")) return WXK_CANCEL;
-
-    // it should be an ASCII key...
-    return (int)keyName.GetChar(0);
-}
-
-wxString ibKeyBinder::GetKeyBindingAsText(const Key& key)
-{
-
-    wxString res;
-
-    if (key.flags & wxACCEL_CTRL)
-    {
-        res += "Ctrl+";
-    }
-
-    if (key.flags & wxACCEL_SHIFT)
-    {
-        res += "Shift+";
-    }
-
-    if (key.flags & wxACCEL_ALT)
-    {
-        res += "Alt+";
-    }
-
-    switch (key.code)
-    {
-        // IGNORED KEYS
-        // ---------------------------
-    case WXK_START:
-    case WXK_LBUTTON:
-    case WXK_RBUTTON:
-    case WXK_MBUTTON:
-    case WXK_CLEAR:
-
-    case WXK_PAUSE:
-    case WXK_NUMLOCK:
-    case WXK_SCROLL :
-        return wxEmptyString;
-
-        // these must be ABSOLUTELY ignored: they are key modifiers
-        // we won't output any LOG message since these keys could be pressed
-        // for long time while the user choose its preferred keycombination:
-        // this would result into a long long queue of "ignored key" messages
-        // which would be useless even in debug builds...
-    case WXK_SHIFT:
-    case WXK_CONTROL:
-        return wxEmptyString;
-
-        // FUNCTION KEYS
-        // ---------------------------
-
-    case WXK_F1: case WXK_F2:
-    case WXK_F3: case WXK_F4:
-    case WXK_F5: case WXK_F6:
-    case WXK_F7: case WXK_F8:
-    case WXK_F9: case WXK_F10:
-    case WXK_F11: case WXK_F12:
-    case WXK_F13: case WXK_F14:
-    case WXK_F15: case WXK_F16:
-    case WXK_F17: case WXK_F18:
-    case WXK_F19: case WXK_F20:
-    case WXK_F21: case WXK_F22:
-    case WXK_F23: case WXK_F24:
-        res << wxT('F') << key.code - WXK_F1 + 1;
-        break;
-
-        // MISCELLANEOUS KEYS
-        // ---------------------------
-
-    case WXK_BACK:
-        res << wxT("Back"); break;
-    case WXK_TAB:
-        res << wxT("Tab"); break;
-    case WXK_RETURN:
-        res << wxT("Return"); break;
-    case WXK_ESCAPE:
-        res << wxT("Escape"); break;
-    case WXK_SPACE:
-        res << wxT("Space"); break;
-    case WXK_DELETE:
-        res << wxT("Del"); break;
-    case WXK_MULTIPLY:
-        res << wxT("*"); break;
-    case WXK_ADD:
-        res << wxT("+"); break;
-    case WXK_SEPARATOR:
-        res << wxT("Separator"); break;
-    case WXK_SUBTRACT:
-        res << wxT("-"); break;
-    case WXK_DECIMAL:
-        res << wxT("."); break;
-    case WXK_DIVIDE:
-        res << wxT("/"); break;
-    case WXK_PAGEUP:
-        res << wxT("PageUp"); break;
-    case WXK_PAGEDOWN:
-        res << wxT("PageDown"); break;
-    case WXK_LEFT:
-        res << wxT("Left"); break;
-    case WXK_UP:
-        res << wxT("Up"); break;
-    case WXK_RIGHT:
-        res << wxT("Right"); break;
-    case WXK_DOWN:
-        res << wxT("Down"); break;
-    case WXK_SELECT:
-        res << wxT("Select"); break;
-    case WXK_PRINT:
-        res << wxT("Print"); break;
-    case WXK_EXECUTE:
-        res << wxT("Execute"); break;
-    case WXK_SNAPSHOT:
-        res << wxT("Snapspot"); break;
-    case WXK_INSERT:
-        res << wxT("Insert"); break;
-    case WXK_HELP:
-        res << wxT("Help"); break;
-    case WXK_CANCEL:
-        res << wxT("Break"); break;   // the key a person presses - Ctrl+Break arrives as WXK_CANCEL
-    case WXK_MENU:
-        res << wxT("Menu"); break;
-    case WXK_CAPITAL:
-        res << wxT("Capital"); break;
-    case WXK_END:
-        res << wxT("End"); break;
-    case WXK_HOME:
-        res << wxT("Home"); break;
-    // NUMPAD KEYS
-    // ---------------------------
-
-    case WXK_NUMPAD0:
-    case WXK_NUMPAD1:
-    case WXK_NUMPAD2:
-    case WXK_NUMPAD3:
-    case WXK_NUMPAD4:
-    case WXK_NUMPAD5:
-    case WXK_NUMPAD6:
-    case WXK_NUMPAD7:
-    case WXK_NUMPAD8:
-    case WXK_NUMPAD9:
-        res << key.code - WXK_NUMPAD0;
-        break;
-
-    case WXK_NUMPAD_SPACE:
-        res << wxT("Space"); break;
-    case WXK_NUMPAD_TAB:
-        res << wxT("Tab"); break;
-    case WXK_NUMPAD_ENTER:
-        res << wxT("Enter"); break;
-
-    case WXK_NUMPAD_F1:
-    case WXK_NUMPAD_F2:
-    case WXK_NUMPAD_F3:
-    case WXK_NUMPAD_F4:
-        res << wxT("F") << key.code - WXK_NUMPAD_F1;
-        break;
-
-    case WXK_NUMPAD_LEFT:
-        res << wxT("Keft"); break;
-    case WXK_NUMPAD_UP:
-        res << wxT("Up"); break;
-    case WXK_NUMPAD_RIGHT:
-        res << wxT("Right"); break;
-    case WXK_NUMPAD_DOWN:
-        res << wxT("Down"); break;
-
-    case WXK_NUMPAD_HOME:
-        res << wxT("Home"); break;
-    case WXK_NUMPAD_PAGEUP:
-        res << wxT("PageUp"); break;
-    case WXK_NUMPAD_PAGEDOWN:
-        res << wxT("PageDown"); break;
-    case WXK_NUMPAD_END:
-        res << wxT("End"); break;
-    case WXK_NUMPAD_BEGIN:
-        res << wxT("Begin"); break;
-    case WXK_NUMPAD_INSERT:
-        res << wxT("Insert"); break;
-    case WXK_NUMPAD_DELETE:
-        res << wxT("Delete"); break;
-    case WXK_NUMPAD_EQUAL:
-        res << wxT("="); break;
-    case WXK_NUMPAD_MULTIPLY:
-        res << wxT("*"); break;
-    case WXK_NUMPAD_ADD:
-        res << wxT("+"); break;
-    case WXK_NUMPAD_SEPARATOR:
-        res << wxT("Separator"); break;
-    case WXK_NUMPAD_SUBTRACT:
-        res << wxT("-"); break;
-    case WXK_NUMPAD_DECIMAL:
-        res << wxT("."); break;
-    case WXK_NUMPAD_DIVIDE:
-        res << wxT("/"); break;
-    default:
-
-        // ASCII chars...
-        if (wxIsalnum(key.code))
-        {
-            res << (wxChar)key.code;
-            break;
-        } else {
-            // we couldn't create a description for the given keycode...
-            return wxEmptyString;
-        }
-    }
-
-    return res;
-}
-
-static bool SameKeys(const std::vector<ibKeyBinder::Key>& a, const std::vector<ibKeyBinder::Key>& b)
-{
-    if (a.size() != b.size())
-        return false;
-    for (unsigned int i = 0; i < a.size(); ++i)
-        if (a[i].flags != b[i].flags || a[i].code != b[i].code)
-            return false;
-    return true;
+		// The item's own label, its mnemonic kept; only what follows the tab is the binder's.
+		wxString label = item->GetItemLabel().BeforeFirst(wxT('\t'));
+		if (!command->keys.empty())
+			label << wxT('\t') << GetKeyBindingAsText(command->keys.front());
+		if (label != item->GetItemLabel())
+			item->SetItemLabel(label);
+	}
 }
 
 wxXmlNode* ibKeyBinder::Save(const wxString& tag) const
 {
+	wxXmlNode* const root = new wxXmlNode(wxXML_ELEMENT_NODE, tag);
+	for (const Command& command : m_commands) {
+		if (command.keys == command.defaultKeys)
+			continue;
 
-    wxXmlNode* root = new wxXmlNode(wxXML_ELEMENT_NODE, tag);
-
-    for (unsigned int i = 0; i < m_commands.size(); ++i)
-    {
-        // Only what the person changed (see the header) - a command with no keys at all is written too
-        // when it had a default, since "removed" is a choice.
-        if (!SameKeys(m_commands[i]->keys, m_commands[i]->defaultKeys))
-        {
-
-            wxXmlNode* node = new wxXmlNode(wxXML_ELEMENT_NODE, "command");    
-            node->AddChild( WriteXmlNode("id", m_commands[i]->id) );
-
-            for (unsigned int j = 0; j < m_commands[i]->keys.size(); ++j)
-            {
-                wxString key = GetKeyBindingAsText(m_commands[i]->keys[j]);
-                node->AddChild( WriteXmlNode("key", key) );
-            }
-
-            root->AddChild(node);
-
-        }
-    }
-
-    return root;
-
+		// Written with no key at all too, when the default was taken away: "removed" is a choice.
+		wxXmlNode* const node = new wxXmlNode(wxXML_ELEMENT_NODE, wxT("command"));
+		AddTextNode(node, wxT("id"), wxString::Format(wxT("%d"), command.id));
+		for (const Key& key : command.keys)
+			AddTextNode(node, wxT("key"), GetKeyBindingAsText(key));
+		root->AddChild(node);
+	}
+	return root;
 }
 
 void ibKeyBinder::Load(wxXmlNode* root)
 {
+	for (wxXmlNode* node = root->GetChildren(); node != nullptr; node = node->GetNext()) {
+		if (node->GetName() != wxT("command"))
+			continue;
 
-    // Over the defaults: a command the profile names takes its saved keys (LoadCommand), the rest keep theirs.
-    wxXmlNode* node = root->GetChildren();
-    while (node != nullptr)
-    {
+		long id = 0;
+		bool hasId = false;
+		std::vector<Key> keys;
+		for (wxXmlNode* field = node->GetChildren(); field != nullptr; field = field->GetNext()) {
+			if (field->GetName() == wxT("id"))
+				hasId = field->GetNodeContent().ToLong(&id);
+			else if (field->GetName() == wxT("key")) {
+				const Key key = GetTextAsKeyBinding(field->GetNodeContent());
+				if (key.code != 0)
+					keys.push_back(key);
+			}
+		}
 
-        if (node->GetName() == "command")
-        {
-            LoadCommand(node);
-        }
-
-        node = node->GetNext();
-
-    }
-
+		Command* const command = hasId ? GetCommandForId(static_cast<int>(id)) : nullptr;
+		if (command != nullptr)
+			command->keys = keys;
+	}
 }
 
-void ibKeyBinder::LoadCommand(wxXmlNode* root)
+wxString ibKeyBinder::GetKeyBindingAsText(const Key& key)
 {
+	if (key.code == 0)
+		return wxString();
 
-    unsigned int        id = 0;
-    std::vector<Key>    keys;
-
-    wxXmlNode* node = root->GetChildren();
-
-    while (node != nullptr)
-    {
-
-        wxString key;
-
-        if (ReadXmlNode(node, "key", key))
-        {
-            keys.push_back(GetTextAsKeyBinding(key));
-        }
-        else
-        {
-            ReadXmlNode(node, "id", id);
-        }
-
-        node = node->GetNext();
-
-    }
-
-    Command* command = GetCommandForId(id);
-
-    if (command != nullptr)
-    {
-        command->keys = keys;
-    }
-
+	// Untranslated, so the profile reads the same in every language and wx parses the menu label back.
+	wxString text = wxAcceleratorEntry(key.flags, key.code).ToRawString();
+	if (key.code == WXK_CANCEL && text.EndsWith(kCancelName))
+		text = text.Left(text.length() - kCancelName.length()) + kBreakName;
+	return text;
 }
 
-unsigned int ibKeyBinder::GetNumCommands() const
+ibKeyBinder::Key ibKeyBinder::GetTextAsKeyBinding(const wxString& text)
 {
-    return m_commands.size();
+	wxString shortcut = text;
+	shortcut.Trim().Trim(false);
+	if (shortcut.Lower().EndsWith(kBreakName.Lower()))
+		shortcut = shortcut.Left(shortcut.length() - kBreakName.length()) + kCancelName;
+
+	Key key;
+	wxAcceleratorEntry entry;
+	if (!shortcut.IsEmpty() && entry.FromString(shortcut)) {
+		key.flags = entry.GetFlags();
+		key.code = entry.GetKeyCode();
+	}
+	return key;
 }
 
-const ibKeyBinder::Command& ibKeyBinder::GetCommand(unsigned int i) const
+ibKeyBinder::Command* ibKeyBinder::GetCommandForId(int id)
 {
-    return *m_commands[i];
+	for (Command& command : m_commands) {
+		if (command.id == id)
+			return &command;
+	}
+	return nullptr;
 }
-

@@ -1,470 +1,224 @@
 ////////////////////////////////////////////////////////////////////////////
-//	Author		: Maxim Kornienko, wxFormBuilder
-//	Description : inner frame 
+//	Author		: Maxim Kornienko
+//	Description : the form's card in the visual editor
 ////////////////////////////////////////////////////////////////////////////
 
 #include "innerFrame.h"
 
+#include <algorithm>
+
+#include <wx/dcbuffer.h>
+#include <wx/settings.h>
+#include <wx/sizer.h>
+
 #include "backend/backend_picture.h"
-#include "res/visualResource.h"   // the title bar's buttons
+#include "res/visualResource.h"   // the caption's window buttons
+
+wxDEFINE_EVENT(wxEVT_INNER_FRAME_RESIZED, wxCommandEvent);
 
 static wxBitmap FrameButton(const wxString& png)
 {
 	return ibBackendPicture::GetBitmapFromBase64(png, wxSize(16, 16));
 }
 
-#include <wx/dcbuffer.h>
-
-DEFINE_EVENT_TYPE(wxEVT_INNER_FRAME_RESIZED)
-
-class ibInnerFrame::TitleBar : public wxPanel
-{
-	wxDECLARE_EVENT_TABLE();
-
-private:
-
-	void DrawTitleBar(wxDC &dc);
-
-	wxBitmap m_minimize;
-	wxBitmap m_minimizeDisabled;
-	wxBitmap m_maximize;
-	wxBitmap m_maximizeDisabled;
-	wxBitmap m_close;
-	wxBitmap m_closeDisabled;
-	wxColour m_colour1, m_colour2;
-	wxString m_titleText;
-	long m_style;
-
-protected:
-	wxSize DoGetBestSize() const override {
-		return wxSize(100, 19);
-	}
-
-public:
-	TitleBar(wxWindow *parent, wxWindowID id,
-		const wxPoint &pos = wxDefaultPosition,
-		const wxSize &size = wxDefaultSize,
-		long style = 0);
-
-	void OnPaint(wxPaintEvent &event);
-
-	void OnLeftClick(wxMouseEvent &event);
-	void SetTitle(const wxString &title) { m_titleText = title; }
-	wxString GetTitle() const { return m_titleText; }
-	void SetStyle(long style) { m_style = style; }
-};
-
-
-BEGIN_EVENT_TABLE(ibInnerFrame::TitleBar, wxPanel)
-EVT_LEFT_DOWN(ibInnerFrame::TitleBar::OnLeftClick)
-EVT_PAINT(ibInnerFrame::TitleBar::OnPaint)
-END_EVENT_TABLE()
-
-ibInnerFrame::TitleBar::TitleBar(wxWindow *parent, wxWindowID id, const wxPoint &pos, const wxSize &size, long style)
-	:
-	wxPanel(parent, id, pos, size, 0),
-	m_minimize(FrameButton(s_frameMinimize_png)),
-	m_minimizeDisabled(FrameButton(s_frameMinimizeDisabled_png)),
-	m_maximize(FrameButton(s_frameMaximize_png)),
-	m_maximizeDisabled(FrameButton(s_frameMaximizeDisabled_png)),
-	m_close(FrameButton(s_frameClose_png)),
-	m_closeDisabled(FrameButton(s_frameCloseDisabled_png)),
-	m_style(style)
-{
-	m_colour1 = wxSystemSettings::GetColour(wxSYS_COLOUR_ACTIVECAPTION);
-
-	int r, g, b;
-
-	r = wxMin(255, m_colour1.Red() + 30);
-	g = wxMin(255, m_colour1.Green() + 30);
-	b = wxMin(255, m_colour1.Blue() + 30);
-
-	m_colour2 = wxColour(r, g, b);
-	m_titleText = wxT("Enterprise rocks!");
-	SetMinSize(wxSize(100, 19));
-}
-
-void ibInnerFrame::TitleBar::OnLeftClick(wxMouseEvent &event)
-{
-	GetParent()->GetEventHandler()->ProcessEvent(event);
-}
-
-void ibInnerFrame::TitleBar::OnPaint(wxPaintEvent&)
-{
-	wxPaintDC dc(this);
-	wxBufferedDC bdc(&dc, GetClientSize());
-	DrawTitleBar(bdc);
-}
-
-
-void ibInnerFrame::TitleBar::DrawTitleBar(wxDC &dc)
-{
-	static const int margin = 2;
-
-	int tbPosX, tbPosY; // title bar
-	int tbWidth, tbHeight;
-
-	int wbPosX, wbPosY; // window buttons
-	int wbWidth /*, wbHeight*/;
-
-	int txtPosX, txtPosY; // title text position
-	int /*txtWidth,*/ txtHeight;
-
-	// setup all variables
-	wxSize clientSize(GetClientSize());
-
-	tbPosX = tbPosY = 0;
-	tbHeight = m_close.GetHeight() + margin * 2;
-	tbWidth = clientSize.GetWidth();
-
-	wbWidth = m_close.GetWidth();
-	wbPosX = tbPosX + tbWidth - wbWidth - 2 * margin;
-	wbPosY = tbPosX + margin;
-
-	txtPosY = tbPosY + margin;
-	txtPosX = tbPosX + 15 + 2 * margin;
-	txtHeight = tbHeight - 2 * margin + 1;
-
-	// Draw title background with vertical gradient.
-	float incR = (float)(m_colour2.Red() - m_colour1.Red()) / tbWidth;
-	float incG = (float)(m_colour2.Green() - m_colour1.Green()) / tbWidth;
-	float incB = (float)(m_colour2.Blue() - m_colour1.Blue()) / tbWidth;
-
-	float colourR = m_colour1.Red();
-	float colourG = m_colour1.Green();
-	float colourB = m_colour1.Blue();
-
-	wxColour colour;
-	wxPen pen;
-	for (int i = 0; i < tbWidth; i++)
-	{
-		colour.Set((unsigned char)colourR, (unsigned char)colourG, (unsigned char)colourB);
-		pen.SetColour(colour);
-		dc.SetPen(pen);
-		dc.DrawLine(tbPosX + i, tbPosY, tbPosX + i, tbPosY + tbHeight);
-
-		colourR += incR;
-		colourG += incG;
-		colourB += incB;
-	}
-
-	// Draw title text
-	wxFont font = dc.GetFont();
-	wxSize ppi = dc.GetPPI();
-
-	int fontSize = 72 * txtHeight / ppi.GetHeight();
-
-	font.SetWeight(wxFONTWEIGHT_BOLD);
-	dc.SetTextForeground(*wxWHITE);
-
-	// text vertical adjustment
-	wxCoord tw, th;
-	do
-	{
-		font.SetPointSize(fontSize--);
-		dc.SetFont(font);
-		dc.GetTextExtent(m_titleText, &tw, &th);
-	} while (th > txtHeight);
-
-	dc.DrawLabel(m_titleText, wxRect(txtPosX, txtPosY, tw, th));
-
-	// Draw Buttons
-	bool hasClose = (m_style & wxCLOSE_BOX) != 0;
-	bool hasMinimize = (m_style & wxMINIMIZE_BOX) != 0;
-	bool hasMaximize = (m_style & wxMAXIMIZE_BOX) != 0;
-
-#ifdef __WXMSW__
-	if ((m_style & wxSYSTEM_MENU) == 0)
-	{
-		// On Windows, no buttons are drawn without System Menu
-		return;
-	}
-
-	dc.DrawBitmap(hasClose ? m_close : m_closeDisabled, wbPosX, wbPosY, true);
-	wbPosX -= m_close.GetWidth();
-
-	if (hasMaximize)
-	{
-		dc.DrawBitmap(m_maximize, wbPosX, wbPosY, true);
-	}
-	else if (hasMinimize)
-	{
-		dc.DrawBitmap(m_maximizeDisabled, wbPosX, wbPosY, true);
-	}
-	wbPosX -= m_maximize.GetWidth();
-
-	if (hasMinimize)
-	{
-		dc.DrawBitmap(m_minimize, wbPosX, wbPosY, true);
-	}
-	else if (hasMaximize)
-	{
-		dc.DrawBitmap(m_minimizeDisabled, wbPosX, wbPosY, true);
-	}
-#else // GTK
-	if (hasClose)
-	{
-		dc.DrawBitmap(m_close, wbPosX, wbPosY, true);
-		wbPosX -= m_close.GetWidth();
-	}
-
-	bool hasResizeBorder = (m_style & wxRESIZE_BORDER) != 0;
-	if (hasMaximize && hasResizeBorder)
-	{
-		dc.DrawBitmap(m_maximize, wbPosX, wbPosY, true);
-		wbPosX -= m_maximize.GetWidth();
-	}
-
-	if (hasMinimize)
-	{
-		dc.DrawBitmap(m_minimize, wbPosX, wbPosY, true);
-	}
-#endif
-}
-
-//////////////////////////////////////////////////////////////////////////////
-
-BEGIN_EVENT_TABLE(ibInnerFrame, wxPanel)
-EVT_MOTION(ibInnerFrame::OnMouseMotion)
-EVT_LEFT_DOWN(ibInnerFrame::OnLeftDown)
-EVT_LEFT_UP(ibInnerFrame::OnLeftUp)
-END_EVENT_TABLE()
-
-ibInnerFrame::ibInnerFrame(wxWindow *parent, wxWindowID id,
-	const wxPoint &pos, const wxSize &size, long style)
+ibInnerFrame::ibInnerFrame(wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSize& size, long style)
 #ifdef __WXGTK__
-	: wxPanel(parent, id, pos, size, wxNO_BORDER | wxFULL_REPAINT_ON_RESIZE)
+	: wxPanel(parent, id, pos, size, wxBORDER_NONE | wxFULL_REPAINT_ON_RESIZE),
 #else
-	: wxPanel(parent, id, pos, size, wxRAISED_BORDER | wxFULL_REPAINT_ON_RESIZE)
+	: wxPanel(parent, id, pos, size, wxBORDER_RAISED | wxFULL_REPAINT_ON_RESIZE),
 #endif
+	m_titleBar(new wxPanel(this, wxID_ANY)),
+	m_content(new wxPanel(this, wxID_ANY)),
+	m_titleStyle(style),
+	m_closeButton(FrameButton(s_frameClose_png)),
+	m_maximizeButton(FrameButton(s_frameMaximize_png)),
+	m_minimizeButton(FrameButton(s_frameMinimize_png))
 {
-	m_sizing = NONE;
-	m_curX = m_curY = -1;
-	m_resizeBorder = 10;
+	m_titleBar->SetMinSize(wxSize(100, 19));
+	m_titleBar->SetBackgroundStyle(wxBG_STYLE_PAINT);
+	m_titleBar->Bind(wxEVT_PAINT, &ibInnerFrame::OnPaintTitleBar, this);
+	m_titleBar->Bind(wxEVT_LEFT_DOWN, &ibInnerFrame::OnTitleBarLeftDown, this);
 
-	m_titleBar = new TitleBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, style);
-	m_valueFrameContent = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxDefaultSize);
+	// The resize cursors are the card's own; its children keep the arrow, or they would show the card's.
+	m_titleBar->SetCursor(*wxSTANDARD_CURSOR);
+	m_content->SetCursor(*wxSTANDARD_CURSOR);
 
-	// Use spacers to create a 1 pixel border on left and top of content panel - this is for drawing the selection box
-	// Use borders to create a 2 pixel border on right and bottom - this is so the back panel can catch mouse events for resizing
-	wxBoxSizer *sizer = new wxBoxSizer(wxVERTICAL);
-	sizer->Add(m_titleBar, 0, wxGROW | wxRIGHT, 2);
-	sizer->AddSpacer(1);
-	wxBoxSizer *horiSizer = new wxBoxSizer(wxHORIZONTAL);
-	horiSizer->AddSpacer(1);
-	horiSizer->Add(m_valueFrameContent, 1, wxGROW);
-	sizer->Add(horiSizer, 1, wxGROW | wxBOTTOM | wxRIGHT, 2);
+	// The card's own strip two pixels wide right and below catches the mouse for resizing; the content
+	// keeps one pixel free left and above, where the selection box around it is drawn.
+	wxBoxSizer* const column = new wxBoxSizer(wxVERTICAL);
+	column->Add(m_titleBar, wxSizerFlags().Expand());
+	column->Add(m_content, wxSizerFlags(1).Expand().Border(wxLEFT | wxTOP, 1));
 
+	wxBoxSizer* const sizer = new wxBoxSizer(wxVERTICAL);
+	sizer->Add(column, wxSizerFlags(1).Expand().Border(wxRIGHT | wxBOTTOM, 2));
 	SetSizer(sizer);
-	SetAutoLayout(true);
-	Layout();
 
-	m_minSize = m_titleBar->GetMinSize();
-	m_minSize.x += 8;
-	m_minSize.y += 10;
-	m_baseMinSize = m_minSize;
+	Bind(wxEVT_MOTION, &ibInnerFrame::OnMouseMotion, this);
+	Bind(wxEVT_LEFT_DOWN, &ibInnerFrame::OnLeftDown, this);
+	Bind(wxEVT_LEFT_UP, &ibInnerFrame::OnLeftUp, this);
+	Bind(wxEVT_MOUSE_CAPTURE_LOST, &ibInnerFrame::OnMouseCaptureLost, this);
 
-	if (wxDefaultSize == size)
-	{
+	if (size == wxDefaultSize)
 		SetSize(GetBestSize());
-	}
 }
 
-wxSize ibInnerFrame::DoGetBestSize() const
+void ibInnerFrame::SetTitle(const wxString& title)
 {
-	wxSize best;
-	best = m_titleBar->GetBestSize();
-	wxSize content = m_valueFrameContent->GetBestSize();
-	best.IncBy(0, content.GetHeight());
-	int border = wxSystemSettings::GetMetric(wxSYS_BORDER_X);
-	best.SetWidth((content.GetWidth() + 1 > best.GetWidth() ? content.GetWidth() + 1 : best.GetWidth()) + 2 + 2 * (border > 0 ? border : 2));
-
-	// spacers and borders
-	best.IncBy(0, 3);
-
-	return best;
+	m_title = title;
+	m_titleBar->Refresh();
 }
 
-void ibInnerFrame::OnMouseMotion(wxMouseEvent& e)
+void ibInnerFrame::SetTitleStyle(long style)
 {
-	if (m_sizing != NONE)
-	{
-		wxScreenDC dc;
-		wxPen pen(*wxBLACK, 1, wxPENSTYLE_DOT);
-
-		dc.SetPen(pen);
-		dc.SetBrush(*wxTRANSPARENT_BRUSH);
-		dc.SetLogicalFunction(wxINVERT);
-
-		//wxPoint pos = ClientToScreen(wxPoint(0, 0));
-		wxPoint pos = GetParent()->ClientToScreen(GetPosition());
-
-		if (m_curX >= 0 && m_curY >= 0)
-			dc.DrawRectangle(pos.x, pos.y, m_curX, m_curY);
-
-		if (m_sizing == RIGHT || m_sizing == RIGHTBOTTOM)
-			m_curX = e.GetX() + m_difX;
-		else
-			m_curX = GetSize().x;
-
-		if (m_sizing == BOTTOM || m_sizing == RIGHTBOTTOM)
-			m_curY = e.GetY() + m_difY;
-		else
-			m_curY = GetSize().y;
-
-		// User min size
-		wxSize minSize = GetMinSize();
-		if (m_curX < minSize.x) m_curX = minSize.x;
-		if (m_curY < minSize.y) m_curY = minSize.y;
-
-		// Internal min size
-		if (m_curX < m_minSize.x) m_curX = m_minSize.x;
-		if (m_curY < m_minSize.y) m_curY = m_minSize.y;
-
-		wxSize maxSize = GetMaxSize();
-		if (m_curX > maxSize.x && maxSize.x != wxDefaultCoord) m_curX = maxSize.x;
-		if (m_curY > maxSize.y && maxSize.y != wxDefaultCoord) m_curY = maxSize.y;
-
-		dc.DrawRectangle(pos.x, pos.y, m_curX, m_curY);
-
-		dc.SetLogicalFunction(wxCOPY);
-		dc.SetPen(wxNullPen);
-		dc.SetBrush(wxNullBrush);
-	}
-
-	else
-	{
-		int x, y;
-		GetClientSize(&x, &y);
-
-		if ((e.GetX() >= x - m_resizeBorder && e.GetY() >= y - m_resizeBorder) ||
-			(e.GetX() < m_resizeBorder && e.GetY() < m_resizeBorder))
-		{
-			SetCursor(wxCursor(wxCURSOR_SIZENWSE));
-		}
-		else if ((e.GetX() < m_resizeBorder && e.GetY() >= y - m_resizeBorder) ||
-			(e.GetX() > x - m_resizeBorder && e.GetY() < m_resizeBorder))
-		{
-			SetCursor(wxCursor(wxCURSOR_SIZENESW));
-		}
-		else if (e.GetX() >= x - m_resizeBorder || e.GetX() < m_resizeBorder)
-		{
-			SetCursor(wxCursor(wxCURSOR_SIZEWE));
-		}
-		else if (e.GetY() >= y - m_resizeBorder || e.GetY() < m_resizeBorder)
-		{
-			SetCursor(wxCursor(wxCURSOR_SIZENS));
-		}
-		else
-		{
-			SetCursor(*wxSTANDARD_CURSOR);
-		}
-
-		m_titleBar->SetCursor(*wxSTANDARD_CURSOR);
-		m_valueFrameContent->SetCursor(*wxSTANDARD_CURSOR);
-	}
-}
-
-void ibInnerFrame::OnLeftDown(wxMouseEvent& e)
-{
-	if (m_sizing == NONE)
-	{
-		if (e.GetX() >= GetSize().x - m_resizeBorder && e.GetY() >= GetSize().y - m_resizeBorder)
-			m_sizing = RIGHTBOTTOM;
-		else if (e.GetX() >= GetSize().x - m_resizeBorder)
-			m_sizing = RIGHT;
-		else if (e.GetY() >= GetSize().y - m_resizeBorder)
-			m_sizing = BOTTOM;
-
-		if (m_sizing != NONE)
-		{
-			m_difX = GetSize().x - e.GetX();
-			m_difY = GetSize().y - e.GetY();
-			CaptureMouse();
-			OnMouseMotion(e);
-		}
-	}
-}
-
-void ibInnerFrame::OnLeftUp(wxMouseEvent&)
-{
-	if (m_sizing != NONE)
-	{
-		m_sizing = NONE;
-		ReleaseMouse();
-
-		wxScreenDC dc;
-		wxPen pen(*wxBLACK, 1, wxPENSTYLE_DOT);
-
-		dc.SetPen(pen);
-		dc.SetBrush(*wxTRANSPARENT_BRUSH);
-		dc.SetLogicalFunction(wxINVERT);
-
-		//wxPoint pos = ClientToScreen(wxPoint(0, 0));
-		wxPoint pos = GetParent()->ClientToScreen(GetPosition());
-
-		dc.DrawRectangle(pos.x, pos.y, m_curX, m_curY);
-
-		dc.SetLogicalFunction(wxCOPY);
-		dc.SetPen(wxNullPen);
-		dc.SetBrush(wxNullBrush);
-
-		wxScrolledCanvas* VEditor = static_cast<wxScrolledCanvas*>(GetParent());
-		int scrolledposX = 0;
-		int scrolledposY = 0;
-		VEditor->GetViewStart(&scrolledposX, &scrolledposY);
-		SetSize(m_curX, m_curY);
-		Freeze();
-		VEditor->FitInside();
-		VEditor->SetVirtualSize(GetSize().x + 20, GetSize().y + 20);
-
-		wxCommandEvent event(wxEVT_INNER_FRAME_RESIZED, GetId());
-		event.SetEventObject(this);
-		GetEventHandler()->AddPendingEvent(event);
-
-		VEditor->Scroll(scrolledposX, scrolledposY);
-		Thaw();
-		Update();
-
-		m_curX = m_curY = -1;
-	}
+	m_titleStyle = style;
+	m_titleBar->Refresh();
 }
 
 void ibInnerFrame::ShowTitleBar(bool show)
 {
 	m_titleBar->Show(show);
-	m_minSize = (show ? m_baseMinSize : wxSize(10, 10));
 	Layout();
 }
 
-void ibInnerFrame::SetToBaseSize()
+wxSize ibInnerFrame::DoGetBestSize() const
 {
-	if (m_titleBar->IsShown())
-	{
-		SetSize(m_baseMinSize);
+	// The caption over the content, each at its best size, and the strips the sizer keeps around the content: a pixel
+	// left and above, two right and below. The caption counts while still hidden: the card is sized before it is shown.
+	const wxSize caption = m_titleBar->GetBestSize();
+	const wxSize content = m_content->GetBestSize();
+	return wxSize(std::max(caption.x, content.x + 1) + 2, caption.y + content.y + 1 + 2) + GetWindowBorderSize();
+}
+
+ibInnerFrame::Edge ibInnerFrame::GetEdgeAt(const wxPoint& point) const
+{
+	const wxSize size = GetClientSize();
+	const int grip = FromDIP(10);
+	const bool right = point.x >= size.x - grip;
+	const bool bottom = point.y >= size.y - grip;
+	if (right && bottom)
+		return Edge::Corner;
+	if (right)
+		return Edge::Right;
+	return bottom ? Edge::Bottom : Edge::None;
+}
+
+wxSize ibInnerFrame::LimitSize(const wxSize& size) const
+{
+	// Never smaller than the caption needs, or a sliver when there is none, nor than the minimum set
+	// from outside; never larger than the maximum, when one is set.
+	wxSize limited = size;
+	limited.IncTo(m_titleBar->IsShown() ? m_titleBar->GetMinSize() + FromDIP(wxSize(8, 10)) : FromDIP(wxSize(10, 10)));
+	limited.IncTo(GetMinSize());
+	limited.DecToIfSpecified(GetMaxSize());
+	return limited;
+}
+
+void ibInnerFrame::EndSizing()
+{
+	m_sizing = Edge::None;
+
+	// The canvas scrolls over the card and the margin it stands at.
+	GetParent()->SetVirtualSize(GetSize() + wxSize(20, 20));
+
+	wxCommandEvent resized(wxEVT_INNER_FRAME_RESIZED, GetId());
+	resized.SetEventObject(this);
+	wxPostEvent(GetEventHandler(), resized);
+}
+
+void ibInnerFrame::OnPaintTitleBar(wxPaintEvent&)
+{
+	wxAutoBufferedPaintDC dc(m_titleBar);
+	const wxRect bar = m_titleBar->GetClientRect();
+	const int margin = FromDIP(2);
+
+	// The system's caption colour, lightening to the right.
+	const wxColour caption = wxSystemSettings::GetColour(wxSYS_COLOUR_ACTIVECAPTION);
+	dc.GradientFillLinear(bar, caption, caption.ChangeLightness(120), wxEAST);
+
+	// The window buttons the style asks for, from the right edge inwards.
+	int buttonsLeft = bar.GetRight() - margin;
+	const std::pair<long, const wxBitmap*> buttons[] = {
+		{ wxCLOSE_BOX, &m_closeButton },
+		{ wxMAXIMIZE_BOX, &m_maximizeButton },
+		{ wxMINIMIZE_BOX, &m_minimizeButton },
+	};
+	for (const auto& [box, bitmap] : buttons) {
+		if ((m_titleStyle & box) == 0)
+			continue;
+		buttonsLeft -= bitmap->GetWidth();
+		dc.DrawBitmap(*bitmap, buttonsLeft, bar.y + (bar.height - bitmap->GetHeight()) / 2, true);
 	}
-	else
-	{
-		SetSize(wxSize(10, 10));
+
+	// The title, white and bold, cut off where the buttons begin.
+	const int indent = FromDIP(19);
+	const wxRect text(bar.x + indent, bar.y, buttonsLeft - margin - indent, bar.height);
+	if (text.width <= 0)
+		return;
+
+	wxDCClipper clipper(dc, text);
+	dc.SetFont(m_titleBar->GetFont().Bold());
+	dc.SetTextForeground(*wxWHITE);
+	dc.DrawLabel(m_title, text, wxALIGN_LEFT | wxALIGN_CENTER_VERTICAL);
+}
+
+void ibInnerFrame::OnTitleBarLeftDown(wxMouseEvent& event)
+{
+	// A click on the caption is a click on the card: it selects the form, and the caption's right end
+	// is a grip like the card's edge.
+	wxMouseEvent click(event);
+	click.SetPosition(event.GetPosition() + m_titleBar->GetPosition());
+	click.SetEventObject(this);
+	GetEventHandler()->ProcessEvent(click);
+}
+
+void ibInnerFrame::OnMouseMotion(wxMouseEvent& event)
+{
+	if (m_sizing == Edge::None) {
+		switch (GetEdgeAt(event.GetPosition())) {
+		case Edge::Corner: SetCursor(wxCursor(wxCURSOR_SIZENWSE)); break;
+		case Edge::Right: SetCursor(wxCursor(wxCURSOR_SIZEWE)); break;
+		case Edge::Bottom: SetCursor(wxCursor(wxCURSOR_SIZENS)); break;
+		case Edge::None: SetCursor(*wxSTANDARD_CURSOR); break;
+		}
+		event.Skip();
+		return;
 	}
+
+	// The card follows the pointer: the held edge moves, the other one stays.
+	wxSize size = GetSize();
+	if (m_sizing != Edge::Bottom)
+		size.x = event.GetX() + m_grabOffset.x;
+	if (m_sizing != Edge::Right)
+		size.y = event.GetY() + m_grabOffset.y;
+	SetSize(LimitSize(size));
 }
 
-bool ibInnerFrame::IsTitleBarShown()
+void ibInnerFrame::OnLeftDown(wxMouseEvent& event)
 {
-	return m_titleBar->IsShown();
+	const Edge edge = GetEdgeAt(event.GetPosition());
+	if (m_sizing != Edge::None || edge == Edge::None) {
+		event.Skip();
+		return;
+	}
+
+	m_sizing = edge;
+	m_grabOffset = GetSize() - wxSize(event.GetX(), event.GetY());
+	CaptureMouse();
 }
 
-void ibInnerFrame::SetTitle(const wxString &title)
+void ibInnerFrame::OnLeftUp(wxMouseEvent& event)
 {
-	m_titleBar->SetTitle(title);
+	if (m_sizing == Edge::None) {
+		event.Skip();
+		return;
+	}
+
+	ReleaseMouse();
+	EndSizing();
 }
 
-wxString ibInnerFrame::GetTitle()
+void ibInnerFrame::OnMouseCaptureLost(wxMouseCaptureLostEvent&)
 {
-	return m_titleBar->GetTitle();
-}
-
-void ibInnerFrame::SetTitleStyle(long style)
-{
-	m_titleBar->SetStyle(style);
+	if (m_sizing != Edge::None)
+		EndSizing();
 }

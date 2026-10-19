@@ -97,38 +97,26 @@ bool ibFrontendMainFrameDesigner::IsModified() const
 
 void ibFrontendMainFrameDesigner::LoadOptions()
 {
-	// Disable logging since it's ok if the options file is not there.
+	// A missing file is the first start, not an error: nothing to say about it.
 	wxLogNull logNo;
-	wxXmlNode* keyBindingNode = nullptr;
 
-	wxString directory =
-		wxStandardPaths::Get().GetUserDir(wxStandardPaths::Dir::Dir_Cache) + wxT("\\OES");
+	// The person's directory; the thin client keeps its own file beside this one.
+	wxFileName fileName(wxStandardPaths::Get().GetUserDir(wxStandardPaths::Dir::Dir_Cache), wxT("options.xml"));
+	fileName.AppendDir(wxT("OES"));
 
-	// Make sure the directory exists.
-	wxFileName strFileName(directory, "options.xml");
-
+	// The keys go on after the menu's defaults, so their node is only found here.
 	wxXmlDocument document;
-
-	if (document.Load(strFileName.GetFullPath())) {
-		wxXmlNode* root = document.GetRoot();
-		if (root->GetName() == "options") {
-			wxXmlNode* node = root->GetChildren();
-			while (node != nullptr) {
-				wxString data;
-				if (node->GetName() == "editor") {
-					m_editorSettings.Load(node);
-				}
-				else if (node->GetName() == "fontcolor") {
-					m_fontColorSettings.Load(node);
-				}
-				// "shortcuts", not the old "keybindings": that one held EVERY binding under numbers that
-				// have since moved (see ibKeyBinder::Save), so it is left unread and dropped on the next save.
-				else if (node->GetName() == "shortcuts") {
-					// Save the node and we'll load when we're done.
-					keyBindingNode = node;
-				}
-				node = node->GetNext();
-			}
+	wxXmlNode* shortcuts = nullptr;
+	if (document.Load(fileName.GetFullPath()) && document.GetRoot()->GetName() == wxT("options")) {
+		for (wxXmlNode* node = document.GetRoot()->GetChildren(); node != nullptr; node = node->GetNext()) {
+			if (node->GetName() == wxT("editor"))
+				m_editorSettings.Load(node);
+			else if (node->GetName() == wxT("fontcolor"))
+				m_fontColorSettings.Load(node);
+			// "shortcuts", not the old "keybindings": that one held EVERY binding under numbers that
+			// have since moved (see ibKeyBinder::Save), so it is left unread and dropped on the next save.
+			else if (node->GetName() == wxT("shortcuts"))
+				shortcuts = node;
 		}
 	}
 
@@ -141,8 +129,8 @@ void ibFrontendMainFrameDesigner::LoadOptions()
 	// The defaults ALWAYS, then what the person changed over them. It used to be one or the other, so once
 	// a profile existed the code's defaults never applied again - a new command never got its key.
 	SetDefaultHotKeys();
-	if (keyBindingNode != nullptr)
-		m_keyBinder.Load(keyBindingNode);
+	if (shortcuts != nullptr)
+		m_keyBinder.Load(shortcuts);
 
 	m_keyBinder.UpdateWindow(this);
 	m_keyBinder.UpdateMenuBar(mb);
@@ -152,31 +140,22 @@ void ibFrontendMainFrameDesigner::LoadOptions()
 
 void ibFrontendMainFrameDesigner::SaveOptions()
 {
-	// Disable logging since it's ok if the options file saving isn't successful.
+	// Options that could not be written are lost for the next start only; the session goes on.
 	wxLogNull logNo;
 
 	wxXmlDocument document;
-
-	wxXmlNode* root = new wxXmlNode(wxXML_ELEMENT_NODE, "options");
+	wxXmlNode* const root = new wxXmlNode(wxXML_ELEMENT_NODE, wxT("options"));
 	document.SetRoot(root);
 
-	// Save the font and color settings.
-	root->AddChild(m_fontColorSettings.Save("fontcolor"));
+	root->AddChild(m_fontColorSettings.Save(wxT("fontcolor")));
+	root->AddChild(m_editorSettings.Save(wxT("editor")));
+	root->AddChild(m_keyBinder.Save(wxT("shortcuts")));
 
-	// Save the editor settins.
-	root->AddChild(m_editorSettings.Save("editor"));
-
-	// Save the key bindings.
-	root->AddChild(m_keyBinder.Save("shortcuts"));
-
-	wxString directory =
-		wxStandardPaths::Get().GetUserDir(wxStandardPaths::Dir::Dir_Cache) + wxT("\\OES");
-
-	// Make sure the directory exists.
-	wxFileName strFileName(directory, "options.xml");
-	strFileName.Mkdir(0777, wxPATH_MKDIR_FULL);
-
-	document.Save(strFileName.GetFullPath());
+	// The directory is made on the first save.
+	wxFileName fileName(wxStandardPaths::Get().GetUserDir(wxStandardPaths::Dir::Dir_Cache), wxT("options.xml"));
+	fileName.AppendDir(wxT("OES"));
+	fileName.Mkdir(wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
+	document.Save(fileName.GetFullPath());
 }
 
 #pragma region debugger

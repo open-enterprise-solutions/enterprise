@@ -1,189 +1,95 @@
 #ifndef KEY_BINDER_H
 #define KEY_BINDER_H
 
+/////////////////////////////////////////////////////////////////////////////
+// The keys of the menu's commands. The commands come from the menu bar
+// (AddCommandsFromMenuBar), their default keys from the code (SetShortcut),
+// and the person's changes from the options file over them (Load); the
+// binder then sets the window's accelerators and writes the keys into the
+// menu labels.
+//
+// ⚠ A COMMAND IS SAVED UNDER ITS NUMERIC ID, and ids move when a command is
+// added before another one. A profile that held every binding carried the
+// old numbering forward for good — F10 landed on "Attach for debugging" once
+// two start commands were added ahead of the steps (2026-09-11). So the
+// profile holds only what a person CHANGED; the defaults always come from
+// the code.
+/////////////////////////////////////////////////////////////////////////////
+
 #include <wx/accel.h>
 #include <vector>
 
 #include "frontend/frontend.h"
 
-//
-// Forward declarations.
-//
-
 class wxWindow;
+class wxMenu;
 class wxMenuBar;
 class wxXmlNode;
 
-/**
- * Binds keys to commands.
- */
 class FRONTEND_API ibKeyBinder
 {
-
 public:
 
-    struct Key
-    {
-        int                 flags;
-        int                 code;
-    };
+	// A key with its modifiers: wxACCEL_* flags and a WXK_* or character code.
+	struct Key
+	{
+		int flags = 0;
+		int code = 0;
 
-    struct Command
-    {
-        int                 id;
-        wxString            name;
-        wxString            group;
-        wxString            help;
-        std::vector<Key>    keys;
-        // What the code binds it to (SetShortcut). Kept beside `keys` so the saved profile holds only what
-        // the person CHANGED - see Save.
-        std::vector<Key>    defaultKeys;
-    };
+		bool operator==(const Key& other) const { return flags == other.flags && code == other.code; }
+		bool operator!=(const Key& other) const { return !(*this == other); }
+	};
 
-    /**
-     * Constructor.
-     */
-    ibKeyBinder();
+	struct Command
+	{
+		int id = 0;
+		wxString name;
+		wxString group;
+		wxString help;
+		std::vector<Key> keys;
+		// What the code binds it to (SetShortcut), beside `keys` so Save can tell what the person changed.
+		std::vector<Key> defaultKeys;
+	};
 
-    /**
-     * Destructor.
-     */
-    virtual ~ibKeyBinder();
+	void ClearCommands() { m_commands.clear(); }
 
-    /**
-     * Removes all of the commands from the key binder.
-     */
-    void ClearCommands();
+	// A command already known by its id is not added twice.
+	void AddCommand(const Command& command);
 
-    /**
-     * Finds the command that is bound to the specified id. If there is no such
-     * command the method returns nullptr.
-     */
-    Command* GetCommandForId(int id) const;
+	// Every item of every menu of the bar, submenus too — the group is the
+	// menu's label, a submenu's the path to it ("File / Recent").
+	void AddCommandsFromMenuBar(wxMenuBar* menuBar);
 
-    /**
-     * Adds a command that can be hot keyed.
-     */
-    void AddCommand(const Command& command);
+	// A DEFAULT key of the command, written as "Ctrl+F5"; a loaded profile may change it.
+	void SetShortcut(int id, const wxString& shortcut);
 
-    /**
-     * Adds a command that can be hot keyed.
-     */
-    void AddCommand(int id, const wxString& group, const wxString& name, const wxString& help);
+	unsigned int GetNumCommands() const { return static_cast<unsigned int>(m_commands.size()); }
+	const Command& GetCommand(unsigned int i) const { return m_commands[i]; }
 
-    /**
-     * Adds a command for the specified menu item.
-     */
-    void AddCommand(const wxString& group, wxMenuItem* menuItem);
+	// The keys as the window's accelerators.
+	void UpdateWindow(wxWindow* window);
 
-    /**
-     * Adds all of the commands on a menu bar to the key binder.
-     */
-    void AddCommandsFromMenuBar(wxMenuBar* menu);
+	// The first key of each command after its label, in every menu of the bar.
+	void UpdateMenuBar(wxMenuBar* menuBar);
 
-    /**
-     * Adds all of the commands on a menu to the key binder.
-     */
-    void AddCommandsFromMenu(const wxString& group, wxMenu* menu);
+	// The commands whose keys differ from their defaults, as a node named by
+	// the tag; Load puts them back over the defaults (a command named with no
+	// key has had its keys removed).
+	wxXmlNode* Save(const wxString& tag) const;
+	void Load(wxXmlNode* root);
 
-    /**
-     * Removes the command with the specified id.
-     */
-    void RemoveCommand(int id);
-
-    /**
-     * Updates the accelerator for a window with the key bindings.
-     */
-    void UpdateWindow(wxWindow* window);
-
-    /**
-     * Updates the text on all of the menus in the menu bar to reflect the
-     * current key bindings.
-     */
-    void UpdateMenuBar(wxMenuBar* menuBar);
-
-    /**
-     * Updates the text on the menu item to reflect the current key binding.
-     * If a name is supplied it's used as the label on the menu, otherwise
-     * the corresponding command name is used.
-     */
-    bool GetMenuItemText(wxMenuItem* item, wxString& label) const;
-
-    /**
-     * Sets the DEFAULT shortcut for the specified id - the binding the code
-     * gives the command, which a loaded profile may then change.
-     */
-    void SetShortcut(int id, int flags, int key);
-
-    /**
-     * Sets the default shortcut for the specified id. The shortcut should have
-     * a form like "Ctrl+F3".
-     */
-    void SetShortcut(int id, const wxString& shortcut);
-
-    /**
-     * Saves the key bindings in XML format. The tag is the name that is given
-     * to the root node.
-     *
-     * Only the commands whose keys differ from their defaults are written. A
-     * command is saved under its numeric id, and ids move whenever a command is
-     * added before another one; a profile that held EVERY binding carried the
-     * old numbering forward for good - F10 landed on "Attach for debugging"
-     * after two start commands were added ahead of the steps (2026-09-11). The
-     * defaults now always come from the code; the profile holds what a person
-     * chose, and nothing else.
-     */
-    wxXmlNode* Save(const wxString& tag) const;
-
-    /**
-     * Loads the key bindings from XML format, over the defaults: a command in
-     * the profile takes the keys saved for it (none, if the person removed
-     * them), every other command keeps its default.
-     */
-    void Load(wxXmlNode* root);
-
-    /**
-     * Returns the number of commands managed by the key binder.
-     */
-    unsigned int GetNumCommands() const;
-
-    /**
-     * Returns the ith command.
-     */
-    const Command& GetCommand(unsigned int i) const;
-
-    /**
-     * Returns the human readable string representing the key binding.
-     */
-    static wxString GetKeyBindingAsText(const Key& key);
-
-    /**
-     * Parses a human readable string into a key binding.
-     */
-    static Key GetTextAsKeyBinding(const wxString& text);
+	// The key as a person reads and the options file keeps it ("Ctrl+Shift+F5"), and back.
+	static wxString GetKeyBindingAsText(const Key& key);
+	static Key GetTextAsKeyBinding(const wxString& text);
 
 private:
 
-    /**
-     * Updates the text on the menu to reflect the current key bindings.
-     */
-    void UpdateMenu(wxMenu* menu);
+	Command* GetCommandForId(int id);
 
-    /**
-     */
-    static int StringToKeyCode(const wxString &keyName);
+	void AddCommandsFromMenu(const wxString& group, wxMenu* menu);
+	void UpdateMenu(wxMenu* menu);
 
-    /**
-     * Loads a command key binding in XML format. The root node passed in
-     * should be a"command" node.
-     */
-    void LoadCommand(wxXmlNode* root);
-
-private:
-
-    std::vector<Command*>   m_commands;
-    wxAcceleratorTable      m_accel;
-
+	std::vector<Command> m_commands;
 };
 
 #endif

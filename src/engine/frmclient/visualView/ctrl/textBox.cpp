@@ -12,8 +12,8 @@ void ibValueTextBox::Create(wxWindow* parent, const ibProtocolNode& /*node*/)
 {
 	// The desktop's text document view — its editor, with the window's settings; the text is the server's.
 	m_textEditor = new ibTextEditor(nullptr, parent, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBORDER_THEME);
-	m_textEditor->SetEditorSettings(mainFrame->GetEditorSettings());
-	m_textEditor->SetFontColorSettings(mainFrame->GetFontColorSettings());
+	mainFrame->GetEditorSettings().Apply(*m_textEditor);
+	mainFrame->GetFontColorSettings().Apply(*m_textEditor);
 
 	m_textEditor->Bind(wxEVT_KILL_FOCUS, &ibValueTextBox::OnKillFocus, this);
 }

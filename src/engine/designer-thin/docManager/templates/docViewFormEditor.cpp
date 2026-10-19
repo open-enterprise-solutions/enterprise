@@ -50,8 +50,10 @@ bool ibFormEditView::OnCreate(ibFrontendDocument* docBase, long flags)
 	m_visualNotebook->GetCodeEditor()->Bind(wxEVT_KILL_FOCUS, &ibFormEditView::OnKillFocus, this);
 
 	// ⭐ THE FRAME THAT OPENS THE TAB CARRIES IT (State Opening) — the form, its controls' rows, the classes and the module's
-	// text, as one fetch answers them; a server that put none there is asked, as before.
-	ibProtocolNode answer = doc->GetOpeningState().FindChild(ibProtocol::ibView::ibFormDesigner::Opening);
+	// text, as one fetch answers them; a server that put none there is asked, as before. A copy: the editor keeps it, and
+	// the frame changes under it with the next answer (closing the tested form's tab took Opening away, and the form
+	// tested again was sent as garbage — 2026-10-19).
+	ibProtocolNode answer = doc->GetOpeningState().FindChild(ibProtocol::ibView::ibFormDesigner::Opening).Clone();
 	if (!answer.IsNode() || !answer.Has(ibProtocol::ibView::ibFormDesigner::Form)) {
 		answer = ibProtocolNode();
 		if (!doc->Fetch(ibProtocolNode(), answer))

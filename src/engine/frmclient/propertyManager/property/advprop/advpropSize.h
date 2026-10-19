@@ -8,6 +8,7 @@
 // ibPGSizeProperty
 // -----------------------------------------------------------------------
 
+// The wxPropertyGrid sample's wxSizeProperty, as the desktop's (frontend advpropSize.h).
 class ibPGSizeProperty : public wxPGProperty {
 public:
 	

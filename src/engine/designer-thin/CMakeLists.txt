@@ -55,8 +55,6 @@ set(DESIGNER_THIN_SOURCES
     mainFrame/metaTree/treeDataReport_impl.cpp
     mainFrame/stack/stackWindow.cpp
     mainFrame/vcs/gitPanel.cpp
-    mainFrame/watch/watchctrl.cpp
-    mainFrame/watch/watchdroptarget.cpp
     mainFrame/watch/watchWindow.cpp
     syntaxHelper/helpChooserDialog.cpp
     syntaxHelper/helpDetailView.cpp
@@ -69,7 +67,6 @@ set(DESIGNER_THIN_SOURCES
     win/dlg/homePageEditor.cpp
     win/dlg/predefinedEditor.cpp
     win/dlg/textEditor.cpp
-    win/ctrl/menuBar.cpp
 )
 
 add_executable(designer-thin ${DESIGNER_THIN_SOURCES})

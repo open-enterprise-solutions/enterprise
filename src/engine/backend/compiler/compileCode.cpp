@@ -1,6 +1,6 @@
 ////////////////////////////////////////////////////////////////////////////
-//	Author		: Maxim Kornienko, 2C-team
-//	Description : compile module 
+//	Author		: Maxim Kornienko
+//	Description : compile module
 ////////////////////////////////////////////////////////////////////////////
 
 #include "compileCode.h"
@@ -247,14 +247,14 @@ void ibCompileCode::PrepareModuleData()
 }
 
 /**
- * SetError
+ * Refuse
  * Purpose:
  * Remember the translation error and throw an exception
  * Return value:
  * The method does not return control!
  */
 
-void ibCompileCode::SetError(int codeError, const wxString& errorDesc)
+void ibCompileCode::Refuse(int codeError, const wxString& errorDesc)
 {
 	wxString strFileName, strModuleName, strDocPath; int currPos = 0, currLine = 0;
 
@@ -278,7 +278,7 @@ void ibCompileCode::SetError(int codeError, const wxString& errorDesc)
 		}
 	}
 
-	DoSetError(codeError,
+	DoRefuse(codeError,
 		strFileName, strModuleName, strDocPath,
 		m_translateCode, currPos, currLine,
 		errorDesc);
@@ -288,20 +288,20 @@ void ibCompileCode::SetError(int codeError, const wxString& errorDesc)
  * another function option
  */
 
-void ibCompileCode::SetError(int nErr, const wxUniChar& c)
+void ibCompileCode::Refuse(int nErr, const wxUniChar& c)
 {
-	SetError(nErr, wxString::Format(wxT("%c"), c));
+	Refuse(nErr, wxString::Format(wxT("%c"), c));
 }
 
 /**
- * DoSetError
+ * DoRefuse
  * Purpose:
  * Remember the translation error and throw an exception
  * Return value:
  * The method does not return control!
  */
 
-void ibCompileCode::DoSetError(int codeError,
+void ibCompileCode::DoRefuse(int codeError,
 	const wxString& strFileName, const wxString& strModuleName, const wxString& strDocPath,
 	const ibTranslateCode& translateCode, unsigned int currPos, unsigned int currLine,
 	const wxString& strErrorDesc) const
@@ -316,9 +316,9 @@ void ibCompileCode::DoSetError(int codeError,
 	// ⭐⭐ A TOLERANT COMPILE STOPS FOR NOTHING. It is READING — working out what is at a caret — and
 	// a reader has nobody to raise to: no window, no subscriber, no exception. It does not raise,
 	// and then there is nothing to catch either; the ~50 refusal sites that already `return` after
-	// SetError ARE the recovery, exactly as they read.
+	// Refuse ARE the recovery, exactly as they read.
 	//
-	// That is how the precompiler has always worked — one SetError and zero throws in 2900 lines —
+	// That is how the precompiler has always worked — one refusal and zero throws in 2900 lines —
 	// and it is what lets somebody edit at line one thousand of a module broken at line three
 	// (Max, 2026-09-07: *"I do not want anything going into the exception when you are computing
 	// autocomplete — what are you going to say with it, and to whom?"*).
@@ -337,15 +337,15 @@ void ibCompileCode::DoSetError(int codeError,
 }
 
 // The translator reads on past what it could not read; here each refusal becomes the compile's.
-bool ibCompileCode::PrepareLexem()
+bool ibCompileCode::Translate()
 {
 	m_translateCode.SetCodeStyle(GetCodeStyle());
 
-	const bool prepared = m_translateCode.PrepareLexem();
+	const bool prepared = m_translateCode.Translate();
 	for (size_t i = 0; i < m_translateCode.GetRefusalCount(); ++i) {
 		const ibTranslateRefusal& refusal = m_translateCode.GetRefusalAt(i);
 		const ibTranslateCode& translateCode = *refusal.m_translateCode;
-		DoSetError(refusal.m_codeError,
+		DoRefuse(refusal.m_codeError,
 			translateCode.GetFileName(), translateCode.GetModuleName(), translateCode.GetDocPath(),
 			translateCode, refusal.m_currPos, refusal.m_currLine,
 			refusal.m_errorDesc);
@@ -361,7 +361,7 @@ bool ibCompileCode::PrepareLexem()
  *adding information about the current line to the byte code
  */
 
-void ibCompileCode::AddLineInfo(ibByteUnit& code)
+void ibCompileCode::StampSource(ibByteUnit& code)
 {
 	code.m_strModuleName = m_translateCode.GetModuleName();
 	code.m_strDocPath = m_translateCode.GetDocPath();
@@ -408,56 +408,56 @@ const ibLexem& ibCompileCode::PreviewGetLexem()
 }
 
 /**
- * GETLexem
+ * ExpectLexem
  * Purpose:
  * Get the next token from the list of byte codes and increment the current position counter by 1
  * Return value:
  * no (if failure occurs, an exception is thrown)
  */
 
-const ibLexem& ibCompileCode::GETLexem()
+const ibLexem& ibCompileCode::ExpectLexem()
 {
 	const ibLexem& lex = GetLexem();
 	if (lex.m_lexType == ERRORTYPE) {
 		m_numCurrentCompile--;
-		SetError(ERROR_CODE_DEFINE);
+		Refuse(ibScriptError_CodeDefine);
 		return gs_nullLexem;
 	}
 	return lex;
 }
 
 /**
- * GETDelimeter
+ * ExpectDelimiter
  * Purpose:
  * Get the next token as the given delimiter
  * Return value:
  * no (if failure occurs, an exception is thrown)
  */
 
-void ibCompileCode::GETDelimeter(const wxUniChar& c)
+void ibCompileCode::ExpectDelimiter(const wxUniChar& c)
 {
 	const ibLexem& lex = GetLexem();
 	if (lex.m_lexType == DELIMITER && c == lex.m_numData)
 		return;
 
-	// ⚠ AND IT DOES NOT GO HUNTING FOR THE TOKEN. The precompiler's twin (ExpectDelimeter) does
-	// search forward, and its own call sites document what that costs: *"whose miss-path skips
+	// ⚠ AND IT DOES NOT GO HUNTING FOR THE TOKEN. The precompiler's twin (ibParseCode::ExpectDelimiter)
+	// does search forward, and its own call sites document what that costs: *"whose miss-path skips
 	// lexems to EOF and would swallow the rest of the module"* — which is why that walker grew
 	// special cases for `++` / `--` / `;` / `{` / `}` rather than let the search run. It is an
 	// emergency exit there, not the mechanism, and copying it here would import the emergency.
 	m_numCurrentCompile--;
-	SetError(ERROR_DELIMETER, c);
+	Refuse(ibScriptError_Delimiter, c);
 }
 
 /**
- * IsKeyWord
+ * IsKeyword
  * Purpose:
  * Check if the current bytecode token is a given keyword
  * Return value:
  * true, false
  */
 
-bool ibCompileCode::IsKeyWord(int k)
+bool ibCompileCode::IsKeyword(int k)
 {
 	if (m_numCurrentCompile + 1 < m_translateCode.GetLexCount()) {
 		const ibLexem& lex = m_translateCode.GetLexAt(m_numCurrentCompile);
@@ -468,14 +468,14 @@ bool ibCompileCode::IsKeyWord(int k)
 }
 
 /**
- * IsNextKeyWord
+ * IsNextKeyword
  * Purpose:
  * Check if the next bytecode token is a given keyword
  * Return value:
  * true,false
  */
 
-bool ibCompileCode::IsNextKeyWord(int k)
+bool ibCompileCode::IsNextKeyword(int k)
 {
 	if (m_numCurrentCompile + 1 < m_translateCode.GetLexCount()) {
 		const ibLexem& lex = m_translateCode.GetLexAt(m_numCurrentCompile + 1);
@@ -486,14 +486,14 @@ bool ibCompileCode::IsNextKeyWord(int k)
 }
 
 /**
- * IsDelimeter
+ * IsDelimiter
  * Purpose:
  * Check if the current bytecode token is a given delimiter
  * Return value:
  * true,false
  */
 
-bool ibCompileCode::IsDelimeter(const wxUniChar& c)
+bool ibCompileCode::IsDelimiter(const wxUniChar& c)
 {
 	if (m_numCurrentCompile + 1 < m_translateCode.GetLexCount()) {
 		const ibLexem& lex = m_translateCode.GetLexAt(m_numCurrentCompile);
@@ -504,14 +504,14 @@ bool ibCompileCode::IsDelimeter(const wxUniChar& c)
 }
 
 /**
- * IsNextDelimeter
+ * IsNextDelimiter
  * Purpose:
  * Check if the next bytecode token is a given delimiter
  * Return value:
  * true,false
  */
 
-bool ibCompileCode::IsNextDelimeter(const wxUniChar& c)
+bool ibCompileCode::IsNextDelimiter(const wxUniChar& c)
 {
 	if (m_numCurrentCompile + 1 < m_translateCode.GetLexCount()) {
 		const ibLexem& lex = m_translateCode.GetLexAt(m_numCurrentCompile + 1);
@@ -522,33 +522,33 @@ bool ibCompileCode::IsNextDelimeter(const wxUniChar& c)
 }
 
 /**
- * GETKeyWord
+ * ExpectKeyword
  * Get the next token as the given keyword
  * Return value:
  * no (if failure occurs, an exception is thrown)
  */
 
-void ibCompileCode::GETKeyWord(int nKey)
+void ibCompileCode::ExpectKeyword(int nKey)
 {
 	const ibLexem& lex = GetLexem();
 	if (lex.m_lexType == KEYWORD && lex.m_numData == nKey)
 		return;
 
-	// See GETDelimeter on why this does not search forward either.
+	// See ExpectDelimiter on why this does not search forward either.
 	m_numCurrentCompile--;
-	SetError(ERROR_KEYWORD,
+	Refuse(ibScriptError_Keyword,
 		wxString::Format(wxT("%s"), s_listKeyWord[nKey].m_strKeyWord)
 	);
 }
 
 /**
- * GETIdentifier
+ * ExpectIdentifier
  * Get the next token as the given keyword
  * Return value:
  * identifier string
  */
 
-wxString ibCompileCode::GETIdentifier(bool strRealName, bool acceptKeyword)
+wxString ibCompileCode::ExpectIdentifier(bool strRealName, bool acceptKeyword)
 {
 	const ibLexem& lex = GetLexem();
 	if (lex.m_lexType != IDENTIFIER) {
@@ -564,12 +564,12 @@ wxString ibCompileCode::GETIdentifier(bool strRealName, bool acceptKeyword)
 		// ⚠ THE STEP BACK IS FOR THE MESSAGE — it puts the cursor on the offending lexem so the
 		// report points at it. A tolerant compile reports nothing and keeps reading, and handing
 		// the caller back the lexem it just refused is how a loop meets it forever; the
-		// precompiler's twin CONSUMES it for the same reason (ExpectIdentifier takes what is
-		// there and moves on).
+		// precompiler's twin CONSUMES it for the same reason (ibParseCode::ExpectIdentifier takes
+		// what is there and moves on).
 		if (m_compileMode != ibCompileMode::Tolerant)
 			m_numCurrentCompile--;
 
-		SetError(ERROR_IDENTIFIER_DEFINE);
+		Refuse(ibScriptError_IdentifierDefine);
 		return wxEmptyString;
 	}
 
@@ -581,27 +581,27 @@ wxString ibCompileCode::GETIdentifier(bool strRealName, bool acceptKeyword)
 }
 
 /**
- * GETConstant
+ * ExpectConstant
  * Get the next token as a constant
  * Return value:
  * constant
  */
 
-ibValue ibCompileCode::GETConstant()
+ibValue ibCompileCode::ExpectConstant()
 {
 	ibLexem lex;
 	int iNumRequire = 0;
-	if (IsNextDelimeter('-') || IsNextDelimeter('+')) {
+	if (IsNextDelimiter('-') || IsNextDelimiter('+')) {
 		iNumRequire = 1;
-		if (IsNextDelimeter('-'))
+		if (IsNextDelimiter('-'))
 			iNumRequire = -1;
-		lex = GETLexem();
+		lex = ExpectLexem();
 	}
 
 	lex = GetLexem();
 
 	if (lex.m_lexType != CONSTANT) {
-		SetError(ERROR_CONST_DEFINE);
+		Refuse(ibScriptError_ConstDefine);
 		return ibValue();
 	}
 
@@ -609,7 +609,7 @@ ibValue ibCompileCode::GETConstant()
 
 		// check that the constant is of numeric type
 		if (lex.m_valData.GetType() != ibValueTypes::TYPE_NUMBER) {
-			SetError(ERROR_CONST_DEFINE);
+			Refuse(ibScriptError_ConstDefine);
 			return ibValue();
 		}
 
@@ -763,7 +763,7 @@ bool ibCompileCode::Recompile()
 	Reset();
 
 	//prepare lexem 
-	if (!PrepareLexem()) {
+	if (!Translate()) {
 		return false;
 	}
 
@@ -793,7 +793,7 @@ bool ibCompileCode::Compile()
 	Reset();
 
 	//prepare lexem 
-	if (!PrepareLexem()) {
+	if (!Translate()) {
 		return false;
 	}
 
@@ -825,7 +825,7 @@ bool ibCompileCode::Compile(const wxString& strCode)
 	Load(strCode);
 
 	//prepare lexem
-	if (!PrepareLexem()) {
+	if (!Translate()) {
 		return false;
 	}
 
@@ -913,7 +913,7 @@ ibClassID ibCompileCode::GetTypeVar(const wxString& strType)
 	if (!strType.IsEmpty()) {
 		// Unknown to the registry — that, and only that, is a bad type name.
 		if (!ibValue::IsRegisterCtor(strType)) {
-			SetError(ERROR_TYPE_DEF, strType);
+			Refuse(ibScriptError_TypeDef, strType);
 			return 0;
 		}
 		return ibValue::GetIDObjectFromString(strType);
@@ -922,16 +922,16 @@ ibClassID ibCompileCode::GetTypeVar(const wxString& strType)
 	// The unnamed form follows IsTypeVar(), which already looked ahead and said
 	// yes — so the next lexem IS the type name. Re-deciding here would be the same
 	// question asked twice, and the two answers could drift.
-	const ibLexem& lex = GETLexem();
+	const ibLexem& lex = ExpectLexem();
 	if (lex.m_lexType != IDENTIFIER) {
-		SetError(ERROR_TYPE_DEF, lex.m_strData);
+		Refuse(ibScriptError_TypeDef, lex.m_strData);
 		return 0;
 	}
 	wxString name = lex.m_strData;
 	wxString written = lex.m_valData.GetString();   // as the person spelled it — m_strData is folded to upper case
-	if (IsNextDelimeter('.')) {   // the dotted form — see IsTypeVar
-		GETDelimeter('.');
-		const wxString member = GETIdentifier(true);
+	if (IsNextDelimiter('.')) {   // the dotted form — see IsTypeVar
+		ExpectDelimiter('.');
+		const wxString member = ExpectIdentifier(true);
 		name += wxT(".") + member;
 		written += wxT(".") + member;
 	}
@@ -940,7 +940,7 @@ ibClassID ibCompileCode::GetTypeVar(const wxString& strType)
 	// ibCompileCode — a header under commonObject.h, so a question for Max (ROADMAP). Its FAMILY is here
 	// (`CatalogRef`, `AnyRef`), and the refusal names what a declaration takes.
 	if (!ibValue::IsRegisterCtor(name)) {
-		SetError(ERROR_TYPE_DEF, written.IsEmpty() ? name : written);
+		Refuse(ibScriptError_TypeDef, written.IsEmpty() ? name : written);
 		return 0;
 	}
 	return ibValue::GetIDObjectFromString(name);
@@ -961,11 +961,11 @@ bool ibCompileCode::CompileDeclaration(ibCompileContext* context)
 		typeClsid = GetTypeVar(); // typed setting of variables
 	}
 	else {
-		GETKeyWord(KEY_VAR);
+		ExpectKeyword(KEY_VAR);
 	}
 
 	while (true) {
-		wxString strRealName = GETIdentifier(true);
+		wxString strRealName = ExpectIdentifier(true);
 		wxString strName = stringUtils::MakeUpper(strRealName);
 
 
@@ -991,7 +991,7 @@ bool ibCompileCode::CompileDeclaration(ibCompileContext* context)
 				const auto& currentVariable = *existing;
 				if (currentVariable->IsPublic() ||
 					pCurContext->m_compileModule == this) {
-					SetError(ERROR_DEF_VARIABLE, strRealName);
+					Refuse(ibScriptError_DefVariable, strRealName);
 					return false;
 				}
 			}
@@ -999,19 +999,19 @@ bool ibCompileCode::CompileDeclaration(ibCompileContext* context)
 		}
 
 		int nArrayCount = -1;
-		if (IsNextDelimeter('[')) { // this is an array declaration
+		if (IsNextDelimiter('[')) { // this is an array declaration
 			nArrayCount = 0;
-			GETDelimeter('[');
-			if (!IsNextDelimeter(']')) {
-				ibValue vConst = GETConstant();
+			ExpectDelimiter('[');
+			if (!IsNextDelimiter(']')) {
+				ibValue vConst = ExpectConstant();
 				if (vConst.GetType() != ibValueTypes::TYPE_NUMBER ||
 					vConst.GetNumber() < 0) {
-					SetError(ERROR_ARRAY_SIZE_CONST);
+					Refuse(ibScriptError_ArraySizeConst);
 					return false;
 				}
 				nArrayCount = vConst.GetInteger();
 			}
-			GETDelimeter(']');
+			ExpectDelimiter(']');
 		}
 
 		// Access modifier — exactly one of Public / Private / Protected, in
@@ -1020,11 +1020,11 @@ bool ibCompileCode::CompileDeclaration(ibCompileContext* context)
 		bool bExport = false;
 		int varAccess = ACCESS_PRIVATE;
 		int numModifiers = 0;
-		if (IsNextKeyWord(KEY_PUBLIC))    { GETKeyWord(KEY_PUBLIC);    bExport = true; varAccess = ACCESS_PUBLIC;    numModifiers++; }
-		if (IsNextKeyWord(KEY_PRIVATE))   { GETKeyWord(KEY_PRIVATE);                   varAccess = ACCESS_PRIVATE;   numModifiers++; }
-		if (IsNextKeyWord(KEY_PROTECTED)) { GETKeyWord(KEY_PROTECTED);                 varAccess = ACCESS_PROTECTED; numModifiers++; }
+		if (IsNextKeyword(KEY_PUBLIC))    { ExpectKeyword(KEY_PUBLIC);    bExport = true; varAccess = ACCESS_PUBLIC;    numModifiers++; }
+		if (IsNextKeyword(KEY_PRIVATE))   { ExpectKeyword(KEY_PRIVATE);                   varAccess = ACCESS_PRIVATE;   numModifiers++; }
+		if (IsNextKeyword(KEY_PROTECTED)) { ExpectKeyword(KEY_PROTECTED);                 varAccess = ACCESS_PROTECTED; numModifiers++; }
 		if (numModifiers > 1) {
-			SetError(ERROR_CODE); // only one access modifier (Public / Private / Protected) is allowed
+			Refuse(ibScriptError_Code); // only one access modifier (Public / Private / Protected) is allowed
 			return false;
 		}
 
@@ -1058,7 +1058,7 @@ bool ibCompileCode::CompileDeclaration(ibCompileContext* context)
 		// block-scope @context vars are not real frame slots.
 		if (context->m_numReturn != RETURN_BLOCK) {
 			ibByteUnit declLocal;
-			AddLineInfo(declLocal);
+			StampSource(declLocal);
 			declLocal.m_numOper = OPER_FUNC_LOCAL;
 			declLocal.m_param1.m_numIndex = (long)variable.m_numIndex;
 			declLocal.m_param1.m_numArray = bExport ? 1 : 0;
@@ -1067,7 +1067,7 @@ bool ibCompileCode::CompileDeclaration(ibCompileContext* context)
 
 		if (nArrayCount >= 0) { // write information about the arrays
 			ibByteUnit code;
-			AddLineInfo(code);
+			StampSource(code);
 			code.m_numOper = OPER_SET_ARRAY_SIZE;
 			code.m_param1 = variable;
 			code.m_param2.m_numArray = nArrayCount;//����� ��������� � �������
@@ -1076,24 +1076,24 @@ bool ibCompileCode::CompileDeclaration(ibCompileContext* context)
 
 		AddTypeSet(variable);
 
-		if (IsNextDelimeter('=')) { // initial initialization - works only inside the text of modules (but not re-declaring procedures and functions)
+		if (IsNextDelimiter('=')) { // initial initialization - works only inside the text of modules (but not re-declaring procedures and functions)
 
-			if (nArrayCount >= 0)  GETDelimeter(','); // error!
+			if (nArrayCount >= 0)  ExpectDelimiter(','); // error!
 
-			GETDelimeter('=');
+			ExpectDelimiter('=');
 
 			ibByteUnit code;
-			AddLineInfo(code);
+			StampSource(code);
 			code.m_numOper = OPER_LET;
 			code.m_param1 = variable;
 			code.m_param2 = GetExpression(context);
 			m_cByteCode.m_listCode.emplace_back(std::move(code));
 		}
 
-		if (!IsNextDelimeter(','))
+		if (!IsNextDelimiter(','))
 			break;
 
-		GETDelimeter(',');
+		ExpectDelimiter(',');
 	}
 
 	return true;
@@ -1130,14 +1130,14 @@ bool ibCompileCode::CompileModule()
 			}
 			else {
 				// ⚠ THE CURSOR IS STILL BEHIND THE WORD THAT IS WRONG. The lexem above came from
-				// PreviewGetLexem, which looks ahead WITHOUT advancing, so an unqualified SetError
+				// PreviewGetLexem, which looks ahead WITHOUT advancing, so an unqualified Refuse
 				// reports wherever the previous construct ended — and, when the module opens with
 				// the declaration, m_numCurrentCompile is still -1 and the message carries NO LINE
 				// AT ALL. Measured 2026-09-04 on a common module: `Var calls;` on line 1 was
 				// reported at line 5 (the end of the file), which reads as a broken last line and
 				// sends the reader to the wrong end of the module.
 				m_numCurrentCompile++;
-				SetError(ERROR_ONLY_FUNCTION);
+				Refuse(ibScriptError_OnlyFunction);
 				return false;
 			}
 		}
@@ -1146,7 +1146,7 @@ bool ibCompileCode::CompileModule()
 			// don't forget to restore the current module context (if necessary)...
 			//
 			// ⚠ NO GUARD HERE, AND THAT IS THE POINT. A tolerant compile does not raise
-			// (DoSetError), so there is nothing to catch and nothing to skip: a refusal is reported
+			// (DoRefuse), so there is nothing to catch and nothing to skip: a refusal is reported
 			// and the parse walks on by itself. A runtime compile raises and the caller ends.
 			CompileFunction(mainContext); // load function declaration
 		}
@@ -1168,7 +1168,7 @@ bool ibCompileCode::CompileModule()
 
 	// set the end of the program
 	ibByteUnit code;
-	AddLineInfo(code);
+	StampSource(code);
 	code.m_numOper = OPER_END;
 
 	m_cByteCode.m_listCode.emplace_back(std::move(code));
@@ -1210,7 +1210,7 @@ bool ibCompileCode::CompileModule()
 		{
 			// correcting labels
 			ibByteUnit gotoCode;
-			AddLineInfo(gotoCode);
+			StampSource(gotoCode);
 			gotoCode.m_numOper = OPER_GOTO;
 			gotoCode.m_numLine = callFunc->m_numLine;
 			gotoCode.m_numString = callFunc->m_numString;
@@ -1299,7 +1299,7 @@ bool ibCompileCode::CompileModule()
 	}
 
 	if (m_numCurrentCompile + 1 < m_translateCode.GetLexCount() - 1) {
-		SetError(ERROR_END_PROGRAM);
+		Refuse(ibScriptError_EndProgram);
 		return false;
 	}
 
@@ -1366,13 +1366,13 @@ bool ibCompileCode::PushCallFunction(const std::shared_ptr<ibCallFunction>& call
 
 	if (!GetFunction(callFunction->m_strName, foundedFunc, &numModule)) {
 		m_numCurrentCompile = callFunction->m_numError;
-		SetError(ERROR_CALL_FUNCTION, callFunction->m_strRealName);// there is no such function in the module
+		Refuse(ibScriptError_CallFunction, callFunction->m_strRealName);// there is no such function in the module
 		return false;
 	}
 
 	if (!callFunction->m_numIsSet && !foundedFunc->m_bCodeRet) {
 		m_numCurrentCompile = callFunction->m_numError;
-		SetError(ERROR_USE_PROCEDURE_AS_FUNCTION, foundedFunc->m_strRealName);
+		Refuse(ibScriptError_UseProcedureAsFunction, foundedFunc->m_strRealName);
 		return false;
 	}
 
@@ -1388,12 +1388,12 @@ bool ibCompileCode::PushCallFunction(const std::shared_ptr<ibCallFunction>& call
 	}
 	else if (numRealCount > numDefCount) {
 		m_numCurrentCompile = callFunction->m_numError;
-		SetError(ERROR_MANY_PARAMS, foundedFunc->m_strRealName);
+		Refuse(ibScriptError_ManyParams, foundedFunc->m_strRealName);
 		return false;
 	}
 
 	ibByteUnit code;
-	AddLineInfo(code);
+	StampSource(code);
 
 	code.m_numString = callFunction->m_numString;
 	code.m_numLine = callFunction->m_numLine;
@@ -1436,7 +1436,7 @@ bool ibCompileCode::PushCallFunction(const std::shared_ptr<ibCallFunction>& call
 
 	for (unsigned int i = 0; i < numDefCount; i++) {
 		ibByteUnit paramCode;
-		AddLineInfo(paramCode);
+		StampSource(paramCode);
 		paramCode.m_numOper = OPER_SET; // parameters are being passed
 		bool defaultValue = false;
 		if (i < numRealCount) {
@@ -1454,7 +1454,7 @@ bool ibCompileCode::PushCallFunction(const std::shared_ptr<ibCallFunction>& call
 		if (defaultValue) {
 			if (foundedFunc->m_listParam[i].m_puValue.m_numArray == DEF_VAR_SKIP) {
 				m_numCurrentCompile = callFunction->m_numError;
-				SetError(ERROR_FEW_PARAMS, foundedFunc->m_strRealName);
+				Refuse(ibScriptError_FewParams, foundedFunc->m_strRealName);
 				return false;
 			}
 			paramCode.m_numOper = OPER_SETCONST;	// default values
@@ -1510,7 +1510,7 @@ bool ibCompileCode::CompileFunction(ibCompileContext* context)
 		if (context->FindFunction(strFuncName, foundedFunc)) {
 			if (foundedFunc != createdFunction && foundedFunc->IsCrossBcVisible()) {
 				m_numCurrentCompile = errorPlace;
-				SetError(ERROR_DEF_FUNCTION, strFuncRealName);
+				Refuse(ibScriptError_DefFunction, strFuncRealName);
 				return false;
 			}
 		}
@@ -1547,20 +1547,20 @@ bool ibCompileCode::ParseFunctionSignature(ibCompileContext* context,
 	// Anonymity is determined by the NEXT TOKEN after the keyword:
 	// `Function (` is anonymous, `Function Name(` is named. No
 	// external gate — context (next token) is enough to tell.
-	if (IsNextKeyWord(KEY_FUNCTION)) {
-		GETKeyWord(KEY_FUNCTION);
-		const bool isAnon = IsNextDelimeter('(');
+	if (IsNextKeyword(KEY_FUNCTION)) {
+		ExpectKeyword(KEY_FUNCTION);
+		const bool isAnon = IsNextDelimiter('(');
 		outFunctionContext.reset(context->CreateContext(
 			isAnon ? RETURN_LAMBDA_FUNCTION : RETURN_FUNCTION));
 	}
-	else if (IsNextKeyWord(KEY_PROCEDURE)) {
-		GETKeyWord(KEY_PROCEDURE);
-		const bool isAnon = IsNextDelimeter('(');
+	else if (IsNextKeyword(KEY_PROCEDURE)) {
+		ExpectKeyword(KEY_PROCEDURE);
+		const bool isAnon = IsNextDelimiter('(');
 		outFunctionContext.reset(context->CreateContext(
 			isAnon ? RETURN_LAMBDA_PROCEDURE : RETURN_PROCEDURE));
 	}
 	else {
-		SetError(ERROR_FUNC_DEFINE);
+		Refuse(ibScriptError_FuncDefine);
 		return false;
 	}
 	ibCompileContext* functionContext = outFunctionContext.get();
@@ -1596,11 +1596,11 @@ bool ibCompileCode::ParseFunctionSignature(ibCompileContext* context,
 	// identifier (Variable or Function in any scope), and signals at a
 	// glance "synthetic — never look this up by name".
 	wxString strFuncRealName;
-	if (IsNextDelimeter('(')) {
+	if (IsNextDelimiter('(')) {
 		strFuncRealName = wxT("__lambda_") + wxNewUniqueGuid.str();
 	}
 	else {
-		strFuncRealName = GETIdentifier(true);
+		strFuncRealName = ExpectIdentifier(true);
 	}
 	// Original-cased name through both the ibFunction storage and the
 	// m_listFunction map key — lookups use stringUtils::CompareString
@@ -1622,24 +1622,24 @@ bool ibCompileCode::ParseFunctionSignature(ibCompileContext* context,
 	outFunction->m_bCodeRet = IsReturnFunction(functionContext->m_numReturn);
 
 	// compile the list of formal parameters + register them as local
-	GETDelimeter('(');
+	ExpectDelimiter('(');
 
-	while (!IsNextDelimeter(')')) {
+	while (!IsNextDelimiter(')')) {
 
 		// `[Val] [Type] name` — the passing mode first, then the type, then the name: `Val CatalogRef.Goods item`.
 		// The type was asked for first, and a type's look-ahead wants two identifiers, so with `Val` in front it
 		// never saw one, and with `Val` between it read the type as the parameter's name — neither order compiled
 		// (measured 2026-09-17, both refused with "Symbol expected ')'").
 		ibCompileContext::ibFunction::ibParamVariable cVariable;
-		if (IsNextKeyWord(KEY_VAL)) {
-			GETKeyWord(KEY_VAL);
+		if (IsNextKeyword(KEY_VAL)) {
+			ExpectKeyword(KEY_VAL);
 			cVariable.m_bByValue = true;
 		}
 
 		// check for typing
 		const ibClassID typeVar = IsTypeVar() ? GetTypeVar() : 0;
 
-		const wxString& strRealName = GETIdentifier(true);
+		const wxString& strRealName = ExpectIdentifier(true);
 
 		cVariable.m_strName = strRealName;
 		cVariable.m_clsid = typeVar;
@@ -1648,28 +1648,28 @@ bool ibCompileCode::ParseFunctionSignature(ibCompileContext* context,
 
 		// register this variable as local
 		if (functionContext->FindVariable(strRealName, foundedVar)) { // there was an announcement + repeated announcement = error
-			SetError(ERROR_IDENTIFIER_DUPLICATE, strRealName);
+			Refuse(ibScriptError_IdentifierDuplicate, strRealName);
 			return false;
 		}
 
-		if (IsNextDelimeter('[')) { // this is an array
-			GETDelimeter('[');
-			GETDelimeter(']');
+		if (IsNextDelimiter('[')) { // this is an array
+			ExpectDelimiter('[');
+			ExpectDelimiter(']');
 		}
-		else if (IsNextDelimeter('=')) {
-			GETDelimeter('=');
-			cVariable.m_puValue = FindConst(GETConstant());
+		else if (IsNextDelimiter('=')) {
+			ExpectDelimiter('=');
+			cVariable.m_puValue = FindConst(ExpectConstant());
 		}
 
 		functionContext->AddVariable(strRealName, typeVar);
 		outFunction->m_listParam.emplace_back(std::move(cVariable));
 
-		if (!IsNextDelimeter(',') || IsNextDelimeter(')'))
+		if (!IsNextDelimiter(',') || IsNextDelimiter(')'))
 			break;
 
-		GETDelimeter(',');
+		ExpectDelimiter(',');
 	}
-	GETDelimeter(')');
+	ExpectDelimiter(')');
 
 	// Trailing modifiers — TWO INDEPENDENT AXES, read in one pass so neither
 	// owns a position. Access (Public / Private / Protected) answers who sees
@@ -1679,13 +1679,13 @@ bool ibCompileCode::ParseFunctionSignature(ibCompileContext* context,
 	// twice.
 	int numModifiers = 0;
 	for (;;) {
-		if (IsNextKeyWord(KEY_PUBLIC))         { GETKeyWord(KEY_PUBLIC);    outFunction->m_access = ACCESS_PUBLIC;    numModifiers++; }
-		else if (IsNextKeyWord(KEY_PRIVATE))   { GETKeyWord(KEY_PRIVATE);   outFunction->m_access = ACCESS_PRIVATE;   numModifiers++; }
-		else if (IsNextKeyWord(KEY_PROTECTED)) { GETKeyWord(KEY_PROTECTED); outFunction->m_access = ACCESS_PROTECTED; numModifiers++; }
-		else if (IsNextKeyWord(KEY_CACHED)) {
-			GETKeyWord(KEY_CACHED);
+		if (IsNextKeyword(KEY_PUBLIC))         { ExpectKeyword(KEY_PUBLIC);    outFunction->m_access = ACCESS_PUBLIC;    numModifiers++; }
+		else if (IsNextKeyword(KEY_PRIVATE))   { ExpectKeyword(KEY_PRIVATE);   outFunction->m_access = ACCESS_PRIVATE;   numModifiers++; }
+		else if (IsNextKeyword(KEY_PROTECTED)) { ExpectKeyword(KEY_PROTECTED); outFunction->m_access = ACCESS_PROTECTED; numModifiers++; }
+		else if (IsNextKeyword(KEY_CACHED)) {
+			ExpectKeyword(KEY_CACHED);
 			if (outFunction->m_valueCached) {
-				SetError(ERROR_CODE); // `Cached` stated twice
+				Refuse(ibScriptError_Code); // `Cached` stated twice
 				return false;
 			}
 			outFunction->m_valueCached = true;
@@ -1694,14 +1694,14 @@ bool ibCompileCode::ParseFunctionSignature(ibCompileContext* context,
 			break;
 	}
 	if (numModifiers > 1) {
-		SetError(ERROR_CODE); // only one access modifier (Public / Private / Protected) is allowed
+		Refuse(ibScriptError_Code); // only one access modifier (Public / Private / Protected) is allowed
 		return false;
 	}
 	// A PROCEDURE has no result to keep, so the modifier has nothing to mean
 	// there — refused rather than ignored, because a silently-dropped Cached
 	// looks exactly like a cache that never helps.
 	if (outFunction->m_valueCached && !outFunction->m_bCodeRet) {
-		SetError(ERROR_CODE); // `Cached` applies to a Function, not a Procedure
+		Refuse(ibScriptError_Code); // `Cached` applies to a Function, not a Procedure
 		return false;
 	}
 	// Kind from the access modifier — user-declared functions only (a context
@@ -1729,7 +1729,7 @@ bool ibCompileCode::EmitFunctionBody(ibCompileContext* /*context*/,
 	// call sites. Both opcodes resolve through the same FindFunctionByEntry
 	// path (lookup is by entry IP, not by opcode kind).
 	ibByteUnit code0;
-	AddLineInfo(code0);
+	StampSource(code0);
 	code0.m_numOper = isLambda ? OPER_LFUNC : OPER_FUNC;
 	code0.m_param1.m_numArray = 0;
 	m_cByteCode.m_listCode.emplace_back(std::move(code0));
@@ -1751,7 +1751,7 @@ bool ibCompileCode::EmitFunctionBody(ibCompileContext* /*context*/,
 	// (next iteration).
 	for (unsigned int i = 0; i < createdFunction->m_listParam.size(); i++) {
 		ibByteUnit declParam;
-		AddLineInfo(declParam);
+		StampSource(declParam);
 		declParam.m_numOper = OPER_FUNC_PARAM;
 		declParam.m_param1.m_numIndex = (long)i;
 		declParam.m_param1.m_numArray = createdFunction->m_listParam[i].m_bByValue ? 1 : 0;
@@ -1785,14 +1785,14 @@ bool ibCompileCode::EmitFunctionBody(ibCompileContext* /*context*/,
 		// The whole clause expression is read — the join ON is one `s.k <op> a.k` Compare the
 		// decorator later splits, so nothing needs to stop early.
 		ibByteUnit ret;
-		AddLineInfo(ret);
+		StampSource(ret);
 		ret.m_numOper = OPER_RET;
 		ret.m_param1 = GetExpression(functionContext);
 		m_cByteCode.m_listCode.emplace_back(std::move(ret));
 	}
 	// ⭐⭐ A BODY THAT IS NOT FINISHED YET IS NOT A FAILED DECLARATION — it is a declaration somebody
 	// is in the middle of writing, and in a tolerant compile that is the ordinary state of the text.
-	// The refusal is still SAID (SetError publishes before it throws, so a check still lists it);
+	// The refusal is still SAID (Refuse publishes before it throws, so a check still lists it);
 	// what changes is that the declaration is still CLOSED and REGISTERED below. That matters
 	// because its name, its parameters and the locals it already has are exactly what a reader
 	// standing INSIDE it is asking about — and by this point they exist. Same rule as the dangling
@@ -1814,15 +1814,15 @@ bool ibCompileCode::EmitFunctionBody(ibCompileContext* /*context*/,
 		// the same way; the lambda enum split keeps function vs
 		// procedure visible without a side flag.
 		if (createdFunction->m_bCodeRet) {
-			GETKeyWord(KEY_ENDFUNCTION);
+			ExpectKeyword(KEY_ENDFUNCTION);
 		}
 		else {
-			GETKeyWord(KEY_ENDPROCEDURE);
+			ExpectKeyword(KEY_ENDPROCEDURE);
 		}
 	}
 
 	ibByteUnit code;
-	AddLineInfo(code);
+	StampSource(code);
 	code.m_numOper = isLambda ? OPER_ENDLFUNC : OPER_ENDFUNC;
 
 	m_cByteCode.m_listCode.emplace_back(std::move(code));
@@ -2054,7 +2054,7 @@ void ibCompileCode::AddTypeSet(const ibParamUnit& variable)
 {
 	if (variable.m_clsid != 0) {
 		ibByteUnit code;
-		AddLineInfo(code);
+		StampSource(code);
 		code.m_numOper = OPER_SET_TYPE;
 		code.m_param1 = variable;
 		code.m_param2.m_numArray = variable.m_clsid;
@@ -2077,11 +2077,11 @@ static inline bool HasTypedTier(const ibClassID& clsid)
 #define CheckTypeDef(var,typeClsid) if((typeClsid) != 0 && HasTypedTier(typeClsid))\
 	{\
 		if(var.m_clsid != (typeClsid)){\
-			if ((typeClsid) == g_valueBooleanCLSID) SetError(ERROR_BAD_TYPE_EXPRESSION_B);\
-			else if ((typeClsid) == g_valueNumberCLSID) SetError(ERROR_BAD_TYPE_EXPRESSION_N);\
-			else if ((typeClsid) == g_valueStringCLSID) SetError(ERROR_BAD_TYPE_EXPRESSION_S);\
-			else if ((typeClsid) == g_valueDateCLSID) SetError(ERROR_BAD_TYPE_EXPRESSION_D);\
-			else SetError(ERROR_BAD_TYPE_EXPRESSION);\
+			if ((typeClsid) == g_valueBooleanCLSID) Refuse(ibScriptError_BadTypeExpressionBoolean);\
+			else if ((typeClsid) == g_valueNumberCLSID) Refuse(ibScriptError_BadTypeExpressionNumber);\
+			else if ((typeClsid) == g_valueStringCLSID) Refuse(ibScriptError_BadTypeExpressionString);\
+			else if ((typeClsid) == g_valueDateCLSID) Refuse(ibScriptError_BadTypeExpressionDate);\
+			else Refuse(ibScriptError_BadTypeExpression);\
 		}\
 		if ((typeClsid) == g_valueNumberCLSID) code.m_numOper+=TYPE_DELTA1;\
 		else if ((typeClsid) == g_valueStringCLSID) code.m_numOper+=TYPE_DELTA2;\
@@ -2135,9 +2135,9 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 	//   * block body (RETURN_BLOCK): caller did m_numCurrentCompile-- on
 	//     the `{` it saw, so the brace is back in the stream — must consume.
 	//   * control-structure body without braces (`if (x) stmt;`) is also
-	//     RETURN_BLOCK with no `{` — guarded by IsNextDelimeter check below.
-	if (GetCodeStyle() == CODE_CES && context->m_numReturn != RETURN_NONE && IsNextDelimeter(wxT('{'))) {
-		GETDelimeter(wxT('{'));
+	//     RETURN_BLOCK with no `{` — guarded by IsNextDelimiter check below.
+	if (GetCodeStyle() == CODE_CES && context->m_numReturn != RETURN_NONE && IsNextDelimiter(wxT('{'))) {
+		ExpectDelimiter(wxT('{'));
 		bCompileBlock = true;
 
 		// CTX_BEGIN/END are emitted only for RETURN_BLOCK — actual
@@ -2149,7 +2149,7 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 			++m_compileScopeDepth;
 
 			ibByteUnit declCtx;
-			AddLineInfo(declCtx);
+			StampSource(declCtx);
 			declCtx.m_numOper = OPER_CTX_BEGIN;
 			m_cByteCode.m_listCode.emplace_back(std::move(declCtx));
 
@@ -2212,14 +2212,14 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 				break;
 			case KEY_RAISE:
 			{
-				GETKeyWord(KEY_RAISE);
+				ExpectKeyword(KEY_RAISE);
 				ibByteUnit code;
-				AddLineInfo(code);
-				if (IsNextDelimeter('(')) {
+				StampSource(code);
+				if (IsNextDelimiter('(')) {
 					code.m_numOper = OPER_RAISE_T;
-					GETDelimeter('(');
+					ExpectDelimiter('(');
 					code.m_param1 = GetExpression(context);
-					GETDelimeter(')');
+					ExpectDelimiter(')');
 				}
 				else {
 					code.m_numOper = OPER_RAISE;
@@ -2229,7 +2229,7 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 			}
 			case KEY_RETURN:
 			{
-				GETKeyWord(KEY_RETURN);
+				ExpectKeyword(KEY_RETURN);
 
 				// ⭐⭐ A FOLDED LAMBDA BODY ANSWERS WITH A CELL, NOT BY LEAVING A FRAME. When a
 				// chain's lambda became instructions inside the caller's own loop, this `return`
@@ -2237,13 +2237,13 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 				// procedure. See ibReturnCapture (compileContext.h): the value goes into the cell
 				// the fold is waiting on and the jump past the body is recorded for it to patch.
 				if (ibReturnCapture* capture = context->FindReturnCapture()) {
-					if (IsNextDelimeter(';')) {
-						SetError(ERROR_EXPRESSION_REQUIRE);
+					if (IsNextDelimiter(';')) {
+						Refuse(ibScriptError_ExpressionRequire);
 						return false;
 					}
 					const ibParamUnit value = GetExpression(context);
 					{
-						ibByteUnit let; AddLineInfo(let);
+						ibByteUnit let; StampSource(let);
 						let.m_numOper = OPER_LET;
 						let.m_param1  = capture->m_valueCell;
 						let.m_param2  = value;
@@ -2251,12 +2251,12 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 					}
 					// Close every block this `return` is standing inside — see ibReturnCapture.
 					for (int depth = m_compileScopeDepth; depth > capture->m_scopeDepth; --depth) {
-						ibByteUnit close; AddLineInfo(close);
+						ibByteUnit close; StampSource(close);
 						close.m_numOper = OPER_CTX_END;
 						m_cByteCode.m_listCode.emplace_back(std::move(close));
 					}
 					{
-						ibByteUnit jump; AddLineInfo(jump);
+						ibByteUnit jump; StampSource(jump);
 						jump.m_numOper = OPER_GOTO;   // target written when the body closes
 						m_cByteCode.m_listCode.emplace_back(std::move(jump));
 						capture->m_jumps.push_back((int)m_cByteCode.m_listCode.size() - 1);
@@ -2269,12 +2269,12 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 					currContext = currContext->m_parentContext;
 
 				if (currContext->m_numReturn == RETURN_NONE) {
-					SetError(ERROR_USE_RETURN); // return operator cannot be used outside a procedure or function
+					Refuse(ibScriptError_UseReturn); // return operator cannot be used outside a procedure or function
 					return false;
 				}
 
 				ibByteUnit code;
-				AddLineInfo(code);
+				StampSource(code);
 				code.m_numOper = OPER_RET;
 
 				// Decide if Return must carry an expression. Function
@@ -2283,8 +2283,8 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 				// both axes — IsReturnFunction handles RETURN_FUNCTION
 				// + RETURN_LAMBDA_FUNCTION uniformly.
 				if (IsReturnFunction(currContext->m_numReturn)) {
-					if (IsNextDelimeter(';')) {
-						SetError(ERROR_EXPRESSION_REQUIRE);
+					if (IsNextDelimiter(';')) {
+						Refuse(ibScriptError_ExpressionRequire);
 						return false;
 					}
 					code.m_param1 = GetExpression(context);
@@ -2299,12 +2299,12 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 			}
 			case KEY_CONTINUE:
 			{
-				GETKeyWord(KEY_CONTINUE);
+				ExpectKeyword(KEY_CONTINUE);
 				// THE LOOP MAY BE A CONTEXT ABOVE — see ibCompileContext::FindLoopContext.
 				ibCompileContext* loopContext = context->FindLoopContext();
 				if (loopContext != nullptr) {
 					ibByteUnit code;
-					AddLineInfo(code);
+					StampSource(code);
 					code.m_numOper = OPER_GOTO;
 					m_cByteCode.m_listCode.emplace_back(std::move(code));
 					const int addrLine = m_cByteCode.m_listCode.size() - 1;
@@ -2312,22 +2312,22 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 					pList->emplace_back(addrLine);
 				}
 				else {
-					SetError(ERROR_USE_CONTINUE); // continue statement can only be used inside a loop
+					Refuse(ibScriptError_UseContinue); // continue statement can only be used inside a loop
 					return false;
 				}
 				break;
 			}
 			case KEY_BREAK:
 			{
-				GETKeyWord(KEY_BREAK);
+				ExpectKeyword(KEY_BREAK);
 				ibCompileContext* loopContext = context->FindLoopContext();
 				if (loopContext == nullptr || !loopContext->m_listBreak[loopContext->m_numDoNumber]) {
-					SetError(ERROR_USE_BREAK); // break operator can only be used inside a loop
+					Refuse(ibScriptError_UseBreak); // break operator can only be used inside a loop
 					return false;
 				}
 				const auto& pList = loopContext->m_listBreak[loopContext->m_numDoNumber];
 				ibByteUnit code;
-				AddLineInfo(code);
+				StampSource(code);
 				code.m_numOper = OPER_GOTO;
 				m_cByteCode.m_listCode.emplace_back(std::move(code));
 				const int addrLine = m_cByteCode.m_listCode.size() - 1;
@@ -2338,7 +2338,7 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 			case KEY_PROCEDURE:
 			{
 				(void)GetLexem();
-				SetError(ERROR_USE_BLOCK);
+				Refuse(ibScriptError_UseBlock);
 				return false;
 				break;
 			}
@@ -2366,21 +2366,21 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 				if (GetCodeStyle() == CODE_VES)
 					context->m_numTempVar = 0;
 
-				if (IsNextDelimeter(':')) {// this is a label task encountered
+				if (IsNextDelimiter(':')) {// this is a label task encountered
 					// PRESENCE, NOT VALUE — the same trap as in CreateLabels. Address
 					// 0 is legitimate (a label as the first statement of a body), so
 					// `> 0` would miss a genuine duplicate there, and operator[] would
 					// insert the key while asking. Ask whether it is declared.
 					if (context->m_listLabelDef.find(nextLexem.m_strData) != context->m_listLabelDef.end()) {
-						SetError(ERROR_IDENTIFIER_DUPLICATE, nextLexem.m_strData);// duplicate label definitions occurred
+						Refuse(ibScriptError_IdentifierDuplicate, nextLexem.m_strData);// duplicate label definitions occurred
 						return false;
 					}
 					// write the address of the label:
 					context->m_listLabelDef[nextLexem.m_strData] = m_cByteCode.m_listCode.size() - 1;
-					GETDelimeter(':');
+					ExpectDelimiter(':');
 				}
-				else if (IsNextDelimeter(wxT('+')) || IsNextDelimeter(wxT('-'))
-				      || IsNextDelimeter(wxT('*')) || IsNextDelimeter(wxT('/')) || IsNextDelimeter(wxT('%'))) {
+				else if (IsNextDelimiter(wxT('+')) || IsNextDelimiter(wxT('-'))
+				      || IsNextDelimiter(wxT('*')) || IsNextDelimiter(wxT('/')) || IsNextDelimiter(wxT('%'))) {
 					// Compound assignment / increment on a BARE variable. Reached only when the
 					// identifier is IMMEDIATELY followed by an arithmetic op (no '.' / '[' / '('
 					// between), so a member/array GET-temp can never be silently mutated:
@@ -2388,29 +2388,29 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 					//   x += e / x -= e / x *= e / x /= e / x %= e  -> x = x <op> e
 					// At statement level the result is unused, so postfix == prefix store. All emit
 					// the in-place shape (param1 == param2 == variable) the `x = x <op> e` fold makes.
-					const wxUniChar op = IsNextDelimeter(wxT('+')) ? wxT('+')
-					                   : IsNextDelimeter(wxT('-')) ? wxT('-')
-					                   : IsNextDelimeter(wxT('*')) ? wxT('*')
-					                   : IsNextDelimeter(wxT('/')) ? wxT('/') : wxT('%');
+					const wxUniChar op = IsNextDelimiter(wxT('+')) ? wxT('+')
+					                   : IsNextDelimiter(wxT('-')) ? wxT('-')
+					                   : IsNextDelimiter(wxT('*')) ? wxT('*')
+					                   : IsNextDelimiter(wxT('/')) ? wxT('/') : wxT('%');
 					const wxString strRealName = nextLexem.m_valData.GetString();
-					GETDelimeter(op); // consume the operator
+					ExpectDelimiter(op); // consume the operator
 
 					ibParamUnit variable = context->GetVariable(strRealName, true, true); // must already exist
 					ibByteUnit code;
-					AddLineInfo(code);
+					StampSource(code);
 					code.m_param1 = variable; // dest in place
 					code.m_param2 = variable; // left operand
 
-					if ((op == wxT('+') || op == wxT('-')) && IsNextDelimeter(op)) {
+					if ((op == wxT('+') || op == wxT('-')) && IsNextDelimiter(op)) {
 						// ++ / -- : right operand = 1
-						GETDelimeter(op);
+						ExpectDelimiter(op);
 						code.m_numOper = (op == wxT('+')) ? OPER_ADD : OPER_SUB;
 						ibValue oneVal; oneVal.SetNumber(wxT("1"));
 						code.m_param3 = FindConst(oneVal);
 					}
-					else if (IsNextDelimeter(wxT('='))) {
+					else if (IsNextDelimiter(wxT('='))) {
 						// += / -= / *= / /= / %= : right operand = expression
-						GETDelimeter(wxT('='));
+						ExpectDelimiter(wxT('='));
 						code.m_param3 = GetExpression(context);
 						code.m_numOper = (op == wxT('+')) ? OPER_ADD
 						               : (op == wxT('-')) ? OPER_SUB
@@ -2418,7 +2418,7 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 						               : (op == wxT('/')) ? OPER_DIV : OPER_MOD;
 					}
 					else { // a lone +/-/*// after a bare identifier — not valid here
-						SetError(ERROR_CODE);
+						Refuse(ibScriptError_Code);
 						return false;
 					}
 					m_cByteCode.m_listCode.emplace_back(std::move(code));
@@ -2429,17 +2429,17 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 
 					int numSet = 1;
 					if (m_onlyFunction && context == GetContext()) {
-						SetError(ERROR_ONLY_FUNCTION);
+						Refuse(ibScriptError_OnlyFunction);
 						return false;
 					}
 
 					ibParamUnit variable = GetCurrentIdentifier(context, numSet);//get the left side of the expression (before the '=' sign)
 					if (numSet) { //if there is a right side, i.e. the '=' sign
-						GETDelimeter('=');//this is an assignment of some expression to a variable
+						ExpectDelimiter('=');//this is an assignment of some expression to a variable
 						ibParamUnit expression = GetExpression(context);
 						ibByteUnit code;
 						code.m_numOper = OPER_LET;
-						AddLineInfo(code);
+						StampSource(code);
 
 						CheckTypeDef(expression, variable.m_clsid);
 						// A declared type with no typed tier is checked where the value arrives — see HasTypedTier.
@@ -2511,15 +2511,15 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 				// require it doubled, then a bare variable. Value is unused at
 				// statement level, so this is identical to the postfix store.
 				const wxUniChar incOp = nextLexem.m_numData;
-				if (!IsNextDelimeter(incOp)) { // a lone leading +/- — syntax error, as before
-					SetError(ERROR_CODE);
+				if (!IsNextDelimiter(incOp)) { // a lone leading +/- — syntax error, as before
+					Refuse(ibScriptError_Code);
 					return false;
 				}
-				GETDelimeter(incOp); // consume the second +/-
-				const wxString strRealName = GETIdentifier(true); // target variable
+				ExpectDelimiter(incOp); // consume the second +/-
+				const wxString strRealName = ExpectIdentifier(true); // target variable
 				ibParamUnit variable = context->GetVariable(strRealName, true, true); // must already exist
 				ibByteUnit code;
-				AddLineInfo(code);
+				StampSource(code);
 				code.m_numOper = (incOp == wxT('+')) ? OPER_ADD : OPER_SUB;
 				ibValue oneVal; oneVal.SetNumber(wxT("1"));
 				code.m_param1 = variable;
@@ -2549,10 +2549,10 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 				// was no opening `{` to match. Without this branch we'd
 				// step-back and re-read the same `}` forever. Function /
 				// lambda / block bodies step back so the caller's
-				// GETDelimeter('}') consumes the brace, then break out of
+				// ExpectDelimiter('}') consumes the brace, then break out of
 				// the body loop.
 				if (context->m_numReturn == RETURN_NONE) {
-					SetError(ERROR_CODE);
+					Refuse(ibScriptError_Code);
 					return false;
 				}
 
@@ -2565,7 +2565,7 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 				break;
 			}
 			else {
-				SetError(ERROR_CODE);
+				Refuse(ibScriptError_Code);
 				return false;
 			}
 		}
@@ -2578,14 +2578,14 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 		PreviewGetLexem();
 
 	if (GetCodeStyle() == CODE_CES && bCompileBlock) {
-		GETDelimeter(wxT('}'));
+		ExpectDelimiter(wxT('}'));
 
 		// Pair with CTX_BEGIN — emit only for RETURN_BLOCK.
 		if (context->m_numReturn == RETURN_BLOCK) {
 			if (m_compileScopeDepth > 0) --m_compileScopeDepth;
 
 			ibByteUnit declCtxEnd;
-			AddLineInfo(declCtxEnd);
+			StampSource(declCtxEnd);
 			declCtxEnd.m_numOper = OPER_CTX_END;
 			m_cByteCode.m_listCode.emplace_back(std::move(declCtxEnd));
 
@@ -2599,17 +2599,17 @@ bool ibCompileCode::CompileBlock(ibCompileContext* context)
 
 bool ibCompileCode::CompileNewObject(ibCompileContext* context)
 {
-	GETKeyWord(KEY_NEW);
+	ExpectKeyword(KEY_NEW);
 
-	wxString strClassName = GETIdentifier(true);
+	wxString strClassName = ExpectIdentifier(true);
 	const int numConst = GetConstString(strClassName);
 
 	std::vector <ibParamUnit> listParam;
 
-	if (IsNextDelimeter('(')) { // this is a method call
-		GETDelimeter('(');
-		while (!IsNextDelimeter(')')) {
-			if (IsNextDelimeter(',')) {
+	if (IsNextDelimiter('(')) { // this is a method call
+		ExpectDelimiter('(');
+		while (!IsNextDelimiter(')')) {
+			if (IsNextDelimiter(',')) {
 				ibParamUnit data;
 				data.m_numArray = DEF_VAR_SKIP;// missing parameter
 				data.m_numIndex = DEF_VAR_SKIP;
@@ -2617,21 +2617,21 @@ bool ibCompileCode::CompileNewObject(ibCompileContext* context)
 			}
 			else {
 				listParam.emplace_back(GetExpression(context));
-				if (!IsNextDelimeter(',') || IsNextDelimeter(')'))
+				if (!IsNextDelimiter(',') || IsNextDelimiter(')'))
 					break;
 			}
-			GETDelimeter(',');
+			ExpectDelimiter(',');
 		}
-		GETDelimeter(')');
+		ExpectDelimiter(')');
 	}
 
 	if (!ibValue::IsRegisterCtor(strClassName, ibCtorObjectType::ibCtorObjectType_object_value)) {
-		SetError(ERROR_CALL_CONSTRUCTOR, strClassName);
+		Refuse(ibScriptError_CallConstructor, strClassName);
 		return false;
 	}
 
 	ibByteUnit code;
-	AddLineInfo(code);
+	StampSource(code);
 
 	code.m_numOper = OPER_NEW;
 	code.m_param2.m_numIndex = numConst;//number of the called method from the list of encountered methods
@@ -2654,7 +2654,7 @@ bool ibCompileCode::CompileNewObject(ibCompileContext* context)
 	for (unsigned int arg = 0; arg < listParam.size(); arg++) {
 
 		ibByteUnit argCode;
-		AddLineInfo(argCode);
+		StampSource(argCode);
 		argCode.m_numOper = OPER_SET;
 		argCode.m_param1 = listParam[arg];
 
@@ -2678,18 +2678,18 @@ bool ibCompileCode::CompileNewObject(ibCompileContext* context)
 
 bool ibCompileCode::CompileGoto(ibCompileContext* context)
 {
-	GETKeyWord(KEY_GOTO);
+	ExpectKeyword(KEY_GOTO);
 
 	std::shared_ptr<ibCompileContext::ibLabel> data(new ibCompileContext::ibLabel);
 
-	data->m_strName = GETIdentifier();
+	data->m_strName = ExpectIdentifier();
 	data->m_numLine = m_cByteCode.m_listCode.size();//remember those transitions that will need to be processed later
 	data->m_numError = m_numCurrentCompile;
 
 	context->m_listLabel.emplace_back(std::move(data));
 
 	ibByteUnit code;
-	AddLineInfo(code);
+	StampSource(code);
 	code.m_numOper = OPER_GOTO;
 	m_cByteCode.m_listCode.emplace_back(std::move(code));
 
@@ -2710,17 +2710,17 @@ ibParamUnit ibCompileCode::GetCurrentIdentifier(ibCompileContext* context, int& 
 {
 	ibParamUnit variable; int numPrevSet = numIsSet;
 
-	const wxString& strRealName = GETIdentifier(true);
+	const wxString& strRealName = ExpectIdentifier(true);
 	const wxString& strName = stringUtils::MakeUpper(strRealName);
 
-	if (IsNextDelimeter('(')) { // this is a function call
+	if (IsNextDelimiter('(')) { // this is a function call
 		std::shared_ptr<ibCompileContext::ibFunction> foundedFunc = nullptr;
 		if (m_rootContext->FindFunction(strName, foundedFunc, true)) {
 			const int numConst = GetConstString(strRealName);
 			std::vector <ibParamUnit> listParam;
-			GETDelimeter('(');
-			while (!IsNextDelimeter(')')) {
-				if (IsNextDelimeter(',')) {
+			ExpectDelimiter('(');
+			while (!IsNextDelimiter(')')) {
+				if (IsNextDelimiter(',')) {
 					ibParamUnit data;
 					data.m_numArray = DEF_VAR_SKIP; // missing parameter
 					data.m_numIndex = DEF_VAR_SKIP;
@@ -2728,26 +2728,26 @@ ibParamUnit ibCompileCode::GetCurrentIdentifier(ibCompileContext* context, int& 
 				}
 				else {
 					listParam.emplace_back(GetExpression(context));
-					if (!IsNextDelimeter(',') || IsNextDelimeter(')'))
+					if (!IsNextDelimiter(',') || IsNextDelimiter(')'))
 						break;
 				}
-				GETDelimeter(',');
+				ExpectDelimiter(',');
 			}
-			GETDelimeter(')');
+			ExpectDelimiter(')');
 			if (!numIsSet && foundedFunc != nullptr && !foundedFunc->m_bCodeRet) {
-				SetError(ERROR_USE_PROCEDURE_AS_FUNCTION, foundedFunc->m_strRealName);
+				Refuse(ibScriptError_UseProcedureAsFunction, foundedFunc->m_strRealName);
 				return ibParamUnit();
 			}
 			// A variadic built-in (negative declared arity) has an empty declared
 			// list, so this bound would reject its first argument. See
 			// ibFunction::m_valueVariadic.
 			if (!foundedFunc->m_valueVariadic && listParam.size() > foundedFunc->m_listParam.size()) {
-				SetError(ERROR_MANY_PARAMS, foundedFunc->m_strRealName);
+				Refuse(ibScriptError_ManyParams, foundedFunc->m_strRealName);
 				return ibParamUnit();
 			}
 
 			ibByteUnit code;
-			AddLineInfo(code);
+			StampSource(code);
 			code.m_numOper = OPER_CALL_METHOD;
 
 			// variable on which the method is called
@@ -2760,7 +2760,7 @@ ibParamUnit ibCompileCode::GetCurrentIdentifier(ibCompileContext* context, int& 
 
 			for (unsigned int i = 0; i < listParam.size(); i++) {
 				ibByteUnit argCode;
-				AddLineInfo(argCode);
+				StampSource(argCode);
 				argCode.m_numOper = OPER_SET;
 				argCode.m_param1 = listParam[i];
 				m_cByteCode.m_listCode.emplace_back(std::move(argCode));
@@ -2814,9 +2814,9 @@ ibParamUnit ibCompileCode::GetCurrentIdentifier(ibCompileContext* context, int& 
 
 			if (isCallableVar) {
 				std::vector<ibParamUnit> listParam;
-				GETDelimeter('(');
-				while (!IsNextDelimeter(')')) {
-					if (IsNextDelimeter(',')) {
+				ExpectDelimiter('(');
+				while (!IsNextDelimiter(')')) {
+					if (IsNextDelimiter(',')) {
 						ibParamUnit data;
 						data.m_numArray = DEF_VAR_SKIP; // missing parameter
 						data.m_numIndex = DEF_VAR_SKIP;
@@ -2824,15 +2824,15 @@ ibParamUnit ibCompileCode::GetCurrentIdentifier(ibCompileContext* context, int& 
 					}
 					else {
 						listParam.emplace_back(GetExpression(context));
-						if (!IsNextDelimeter(',') || IsNextDelimeter(')'))
+						if (!IsNextDelimiter(',') || IsNextDelimiter(')'))
 							break;
 					}
-					GETDelimeter(',');
+					ExpectDelimiter(',');
 				}
-				GETDelimeter(')');
+				ExpectDelimiter(')');
 
 				ibByteUnit code;
-				AddLineInfo(code);
+				StampSource(code);
 				code.m_numOper = OPER_CALL_LAMBDA;
 				variable = context->CreateVariable();
 				code.m_param1 = variable;                                  // return-value dest
@@ -2849,7 +2849,7 @@ ibParamUnit ibCompileCode::GetCurrentIdentifier(ibCompileContext* context, int& 
 				// lCodeLine++ inside its OPER_CALL_LAMBDA handler.
 				for (unsigned int i = 0; i < listParam.size(); i++) {
 					ibByteUnit argCode;
-					AddLineInfo(argCode);
+					StampSource(argCode);
 					argCode.m_numOper = OPER_SET;
 					argCode.m_param1 = listParam[i];
 					m_cByteCode.m_listCode.emplace_back(std::move(argCode));
@@ -2883,10 +2883,10 @@ ibParamUnit ibCompileCode::GetCurrentIdentifier(ibCompileContext* context, int& 
 
 		if (isScope) {
 			ibByteUnit code;
-			AddLineInfo(code);
+			StampSource(code);
 			const int numConst = GetConstString(strRealName);
-			if (IsNextDelimeter('=') && numPrevSet == 1) {
-				GETDelimeter('='); numIsSet = 0;
+			if (IsNextDelimiter('=') && numPrevSet == 1) {
+				ExpectDelimiter('='); numIsSet = 0;
 				code.m_numOper = OPER_SET_SCOPE;
 				code.m_param1 = context->GetVariable(foundedVar->m_strContext, true, false, true);//scope-provider binding
 				code.m_param2.m_numIndex = numConst;//member name const index
@@ -2905,11 +2905,11 @@ ibParamUnit ibCompileCode::GetCurrentIdentifier(ibCompileContext* context, int& 
 		}
 		else if (isExtern || isContext) {
 			ibByteUnit code;
-			AddLineInfo(code);
+			StampSource(code);
 			const long getOp = isExtern ? OPER_GET_EXTERN : OPER_GET_CONTEXT;
 			const long setOp = isExtern ? OPER_SET_EXTERN : OPER_SET_CONTEXT;
-			if (IsNextDelimeter('=') && numPrevSet == 1) {
-				GETDelimeter('='); numIsSet = 0;
+			if (IsNextDelimiter('=') && numPrevSet == 1) {
+				ExpectDelimiter('='); numIsSet = 0;
 				code.m_numOper = setOp;
 				code.m_param1 = context->GetVariable(strRealName, true, false);//handle slot
 				code.m_param3 = GetExpression(context);
@@ -2926,7 +2926,7 @@ ibParamUnit ibCompileCode::GetCurrentIdentifier(ibCompileContext* context, int& 
 		}
 		else {
 			bool bCheckError = !numPrevSet;
-			if (IsNextDelimeter('.') || IsNextDelimeter('[')) //this variable contains a method call or array
+			if (IsNextDelimiter('.') || IsNextDelimiter('[')) //this variable contains a method call or array
 				bCheckError = true;
 			variable = context->GetVariable(strRealName, true, bCheckError);
 		}
@@ -2934,28 +2934,28 @@ ibParamUnit ibCompileCode::GetCurrentIdentifier(ibCompileContext* context, int& 
 
 loopLabel:
 
-	if (IsNextDelimeter('[')) { // this is an array
-		GETDelimeter('[');
+	if (IsNextDelimiter('[')) { // this is an array
+		ExpectDelimiter('[');
 		ibParamUnit variableKey = GetExpression(context);
-		GETDelimeter(']');
+		ExpectDelimiter(']');
 		//determine the call type (i.e. is it setting or getting an array value)
 		//Example:
 		//Arr[10]=12; - Set
 		//�=Arr[10]; - Get
 		//Arr[10][2]=12; - Get,Set
 		numIsSet = 0;
-		if (IsNextDelimeter('[')) { //check the array variable type (multidimensional array support)
+		if (IsNextDelimiter('[')) { //check the array variable type (multidimensional array support)
 			ibByteUnit code;
-			AddLineInfo(code);
+			StampSource(code);
 			code.m_numOper = OPER_CHECK_ARRAY;
 			code.m_param1 = variable;//variable is an array
 			code.m_param2 = variableKey;//array index
 			m_cByteCode.m_listCode.emplace_back(std::move(code));
 		}
-		if (IsNextDelimeter('=') && numPrevSet == 1) {
-			GETDelimeter('=');
+		if (IsNextDelimiter('=') && numPrevSet == 1) {
+			ExpectDelimiter('=');
 			ibByteUnit code;
-			AddLineInfo(code);
+			StampSource(code);
 			code.m_numOper = OPER_SET_ARRAY;
 			code.m_param1 = variable;//variable is an array
 			code.m_param2 = variableKey;//array index (more precisely, key since an associative array is used)
@@ -2968,7 +2968,7 @@ loopLabel:
 		}
 		else {
 			ibByteUnit code;
-			AddLineInfo(code);
+			StampSource(code);
 			code.m_numOper = OPER_GET_ARRAY;
 			code.m_param2 = variable;//variable - array
 			code.m_param3 = variableKey;//array index (more precisely key since associative array is used)
@@ -2980,7 +2980,7 @@ loopLabel:
 		goto loopLabel;
 	}
 
-	if (IsNextDelimeter('.')) { // this is a method call ��� �������� ����������� �������
+	if (IsNextDelimiter('.')) { // this is a method call ��� �������� ����������� �������
 
 		// ⭐⭐ A PIPELINE WRITTEN AND CONSUMED IN ONE EXPRESSION IS A LOOP, AND COMPILES AS ONE.
 		// Asked BEFORE the dot is consumed, because the answer needs the whole chain and the
@@ -2998,7 +2998,7 @@ loopLabel:
 				goto loopLabel;
 		}
 
-		GETDelimeter('.');
+		ExpectDelimiter('.');
 
 		// ⭐⭐ THE TEXT ENDED ON THE DOT, and refusing here would throw away the one thing that was
 		// asked about. The compiler has the RECEIVER resolved and in hand; what is missing is a name
@@ -3012,12 +3012,12 @@ loopLabel:
 		// executed — a tolerant compile produces no runtime artefact.
 		if (m_compileMode == ibCompileMode::Tolerant && IsEndOfProgram()) {
 
-			// The refusal is still SAID — in this mode SetError reports and returns, so a check
+			// The refusal is still SAID — in this mode Refuse reports and returns, so a check
 			// asked about a finished text still hears about the dangling dot.
-			SetError(ERROR_IDENTIFIER_DEFINE);
+			Refuse(ibScriptError_IdentifierDefine);
 
 			ibByteUnit code;
-			AddLineInfo(code);
+			StampSource(code);
 			code.m_numOper = OPER_GET_A;
 			code.m_param2 = variable;                                 // the receiver, still in hand
 			code.m_param3.m_numIndex = GetConstString(wxEmptyString);  // the name nobody typed yet
@@ -3044,13 +3044,13 @@ loopLabel:
 
 		// acceptKeyword=true: contextual LINQ keywords (Where/Select/...)
 		// must work as method names in property-access positions.
-		wxString strIdentifier = GETIdentifier(true, /*acceptKeyword*/true);
+		wxString strIdentifier = ExpectIdentifier(true, /*acceptKeyword*/true);
 		const int numConst = GetConstString(strIdentifier);
-		if (IsNextDelimeter('(')) { // this is a method call
+		if (IsNextDelimiter('(')) { // this is a method call
 			std::vector <ibParamUnit> listParam;
-			GETDelimeter('(');
-			while (!IsNextDelimeter(')')) {
-				if (IsNextDelimeter(',')) {
+			ExpectDelimiter('(');
+			while (!IsNextDelimiter(')')) {
+				if (IsNextDelimiter(',')) {
 					ibParamUnit data;
 					data.m_numArray = DEF_VAR_SKIP;// missing parameter
 					data.m_numIndex = DEF_VAR_SKIP;
@@ -3058,15 +3058,15 @@ loopLabel:
 				}
 				else {
 					listParam.emplace_back(GetExpression(context));
-					if (!IsNextDelimeter(',') || IsNextDelimeter(')'))
+					if (!IsNextDelimiter(',') || IsNextDelimiter(')'))
 						break;
 				}
-				GETDelimeter(',');
+				ExpectDelimiter(',');
 			}
-			GETDelimeter(')');
+			ExpectDelimiter(')');
 
 			ibByteUnit code;
-			AddLineInfo(code);
+			StampSource(code);
 
 			// LINQ pipeline ops (Where / Select / OrderBy / ... ) detected
 			// by name at emit time → OPER_CALL_LINQ carries the ibLinqMethod
@@ -3091,7 +3091,7 @@ loopLabel:
 			m_cByteCode.m_listCode.emplace_back(std::move(code));
 			for (unsigned int i = 0; i < listParam.size(); i++) {
 				ibByteUnit argCode;
-				AddLineInfo(argCode);
+				StampSource(argCode);
 				argCode.m_numOper = OPER_SET;
 				argCode.m_param1 = listParam[i];
 				m_cByteCode.m_listCode.emplace_back(std::move(argCode));
@@ -3106,9 +3106,9 @@ loopLabel:
 			//Cat.Product=0; - Set
 			//Cat.Product.Code=0; - Get,Set
 			ibByteUnit code;
-			AddLineInfo(code);
-			if (IsNextDelimeter('=') && numPrevSet == 1) {
-				GETDelimeter('='); 	numIsSet = 0;
+			StampSource(code);
+			if (IsNextDelimiter('=') && numPrevSet == 1) {
+				ExpectDelimiter('='); 	numIsSet = 0;
 				code.m_numOper = OPER_SET_A;
 				code.m_param1 = variable;//variable for which the attribute is called
 				code.m_param2.m_numIndex = numConst;//number of the called method from the list of encountered attributes and methods
@@ -3135,14 +3135,14 @@ bool ibCompileCode::CompileIf(ibCompileContext* context)
 {
 	std::vector <int> listAddrLine;
 
-	GETKeyWord(KEY_IF);
+	ExpectKeyword(KEY_IF);
 
 	ibByteUnit code;
-	AddLineInfo(code);
+	StampSource(code);
 	code.m_numOper = OPER_IF;
 
 	if (GetCodeStyle() == CODE_CES)
-		GETDelimeter(wxT('('));
+		ExpectDelimiter(wxT('('));
 
 	ibParamUnit variable = GetExpression(context);
 	code.m_param1 = variable;
@@ -3153,21 +3153,21 @@ bool ibCompileCode::CompileIf(ibCompileContext* context)
 	int nLastIFLine = m_cByteCode.m_listCode.size() - 1;
 
 	if (GetCodeStyle() == CODE_VES)
-		GETKeyWord(KEY_THEN);
+		ExpectKeyword(KEY_THEN);
 	else
-		GETDelimeter(wxT(')'));
+		ExpectDelimiter(wxT(')'));
 
 	if (GetCodeStyle() == CODE_CES)
 		CompileBlock(CreateLocalContext(context));
 	else
 		CompileBlock(context);
 
-	while (IsNextKeyWord(KEY_ELSEIF)) {
+	while (IsNextKeyword(KEY_ELSEIF)) {
 
 		ibByteUnit code1;
 
 		// write the output from all checks for the previous block
-		AddLineInfo(code1);
+		StampSource(code1);
 
 		code1.m_numOper = OPER_GOTO;
 		m_cByteCode.m_listCode.emplace_back(std::move(code1));
@@ -3178,14 +3178,14 @@ bool ibCompileCode::CompileIf(ibCompileContext* context)
 		m_cByteCode.m_listCode[nLastIFLine].m_param2.m_numIndex = m_cByteCode.m_listCode.size();
 
 		ibByteUnit code2;
-		AddLineInfo(code2);
+		StampSource(code2);
 
-		GETKeyWord(KEY_ELSEIF);
-		AddLineInfo(code2);
+		ExpectKeyword(KEY_ELSEIF);
+		StampSource(code2);
 		code2.m_numOper = OPER_IF;
 
 		if (GetCodeStyle() == CODE_CES)
-			GETDelimeter(wxT('('));
+			ExpectDelimiter(wxT('('));
 
 		variable = GetExpression(context);
 		code2.m_param1 = variable;
@@ -3195,9 +3195,9 @@ bool ibCompileCode::CompileIf(ibCompileContext* context)
 		nLastIFLine = m_cByteCode.m_listCode.size() - 1;
 
 		if (GetCodeStyle() == CODE_VES)
-			GETKeyWord(KEY_THEN);
+			ExpectKeyword(KEY_THEN);
 		else
-			GETDelimeter(wxT(')'));
+			ExpectDelimiter(wxT(')'));
 
 		if (GetCodeStyle() == CODE_CES)
 			CompileBlock(CreateLocalContext(context));
@@ -3205,12 +3205,12 @@ bool ibCompileCode::CompileIf(ibCompileContext* context)
 			CompileBlock(context);
 	}
 
-	if (IsNextKeyWord(KEY_ELSE)) {
+	if (IsNextKeyword(KEY_ELSE)) {
 
 		ibByteUnit code1;
 
 		// write the output from all checks for the previous block
-		AddLineInfo(code1);
+		StampSource(code1);
 
 		code1.m_numOper = OPER_GOTO;
 		m_cByteCode.m_listCode.emplace_back(std::move(code1));
@@ -3234,7 +3234,7 @@ bool ibCompileCode::CompileIf(ibCompileContext* context)
 		// to matter, the corruption did nothing at all and waited.
 		nLastIFLine = wxNOT_FOUND;
 
-		GETKeyWord(KEY_ELSE);
+		ExpectKeyword(KEY_ELSE);
 
 		if (GetCodeStyle() == CODE_CES)
 			CompileBlock(CreateLocalContext(context));
@@ -3243,7 +3243,7 @@ bool ibCompileCode::CompileIf(ibCompileContext* context)
 	}
 
 	if (GetCodeStyle() == CODE_VES)
-		GETKeyWord(KEY_ENDIF);
+		ExpectKeyword(KEY_ENDIF);
 
 	const int numCurCompile = m_cByteCode.m_listCode.size();
 
@@ -3267,13 +3267,13 @@ bool ibCompileCode::CompileWhile(ibCompileContext* context)
 
 	const int nStartWhile = m_cByteCode.m_listCode.size();
 
-	GETKeyWord(KEY_WHILE);
+	ExpectKeyword(KEY_WHILE);
 	ibByteUnit code;
-	AddLineInfo(code);
+	StampSource(code);
 	code.m_numOper = OPER_IF;
 
 	if (GetCodeStyle() == CODE_CES)
-		GETDelimeter(wxT('('));
+		ExpectDelimiter(wxT('('));
 
 	ibParamUnit variable = GetExpression(context);
 	code.m_param1 = variable;
@@ -3284,9 +3284,9 @@ bool ibCompileCode::CompileWhile(ibCompileContext* context)
 	m_cByteCode.m_listCode.emplace_back(std::move(code));
 
 	if (GetCodeStyle() == CODE_VES)
-		GETKeyWord(KEY_DO);
+		ExpectKeyword(KEY_DO);
 	else
-		GETDelimeter(wxT(')'));
+		ExpectDelimiter(wxT(')'));
 
 	if (GetCodeStyle() == CODE_CES)
 		CompileBlock(CreateLocalContext(context));
@@ -3294,10 +3294,10 @@ bool ibCompileCode::CompileWhile(ibCompileContext* context)
 		CompileBlock(context);
 
 	if (GetCodeStyle() == CODE_VES)
-		GETKeyWord(KEY_ENDDO);
+		ExpectKeyword(KEY_ENDDO);
 
 	ibByteUnit code2;
-	AddLineInfo(code2);
+	StampSource(code2);
 	code2.m_numOper = OPER_GOTO;
 	code2.m_param1.m_numIndex = nStartWhile;
 	m_cByteCode.m_listCode.emplace_back(std::move(code2));
@@ -3314,12 +3314,12 @@ bool ibCompileCode::CompileFor(ibCompileContext* context)
 {
 	context->StartLoopList();
 
-	GETKeyWord(KEY_FOR);
+	ExpectKeyword(KEY_FOR);
 
 	if (GetCodeStyle() == CODE_CES)
-		GETDelimeter(wxT('('));
+		ExpectDelimiter(wxT('('));
 
-	const wxString& strRealName = GETIdentifier(true);
+	const wxString& strRealName = ExpectIdentifier(true);
 	const wxString& strName = stringUtils::MakeUpper(strRealName);
 
 	ibParamUnit variable = context->GetVariable(strRealName);
@@ -3327,16 +3327,16 @@ bool ibCompileCode::CompileFor(ibCompileContext* context)
 	// check variable type
 	if (variable.m_clsid != 0) {
 		if (variable.m_clsid != g_valueNumberCLSID) {
-			SetError(ERROR_NUMBER_TYPE);
+			Refuse(ibScriptError_NumberType);
 			return false;
 		}
 	}
 
-	GETDelimeter('=');
+	ExpectDelimiter('=');
 	ibParamUnit variable2 = GetExpression(context);
 
 	ibByteUnit code0;
-	AddLineInfo(code0);
+	StampSource(code0);
 	code0.m_numOper = OPER_LET;
 	code0.m_param1 = variable;
 	code0.m_param2 = variable2;
@@ -3345,25 +3345,25 @@ bool ibCompileCode::CompileFor(ibCompileContext* context)
 	// check value type
 	if (variable.m_clsid != 0) {
 		if (variable2.m_clsid != g_valueNumberCLSID) {
-			SetError(ERROR_BAD_TYPE_EXPRESSION);
+			Refuse(ibScriptError_BadTypeExpression);
 			return false;
 		}
 	}
 
-	GETKeyWord(KEY_TO);
+	ExpectKeyword(KEY_TO);
 
 	ibParamUnit variableTo =
 		context->GetVariable(strName + wxT("@to"), true, false, false, true); //loop variable
 
 	ibByteUnit code1;
-	AddLineInfo(code1);
+	StampSource(code1);
 	code1.m_numOper = OPER_LET;
 	code1.m_param1 = variableTo;
 	code1.m_param2 = GetExpression(context);
 	m_cByteCode.m_listCode.emplace_back(std::move(code1));
 
 	ibByteUnit code;
-	AddLineInfo(code);
+	StampSource(code);
 	code.m_numOper = OPER_FOR;
 	code.m_param1 = variable;
 	code.m_param2 = variableTo;
@@ -3372,9 +3372,9 @@ bool ibCompileCode::CompileFor(ibCompileContext* context)
 	const int nStartFOR = m_cByteCode.m_listCode.size() - 1;
 
 	if (GetCodeStyle() == CODE_VES)
-		GETKeyWord(KEY_DO);
+		ExpectKeyword(KEY_DO);
 	else
-		GETDelimeter(wxT(')'));
+		ExpectDelimiter(wxT(')'));
 
 	if (GetCodeStyle() == CODE_CES)
 		CompileBlock(CreateLocalContext(context));
@@ -3382,10 +3382,10 @@ bool ibCompileCode::CompileFor(ibCompileContext* context)
 		CompileBlock(context);
 
 	if (GetCodeStyle() == CODE_VES)
-		GETKeyWord(KEY_ENDDO);
+		ExpectKeyword(KEY_ENDDO);
 
 	ibByteUnit code2;
-	AddLineInfo(code2);
+	StampSource(code2);
 	code2.m_numOper = OPER_NEXT;
 	code2.m_param1 = variable;
 	code2.m_param2.m_numIndex = nStartFOR;
@@ -3440,23 +3440,23 @@ bool ibCompileCode::CompileForeach(ibCompileContext* context)
 {
 	context->StartLoopList();
 
-	GETKeyWord(KEY_FOREACH);
+	ExpectKeyword(KEY_FOREACH);
 
 	if (GetCodeStyle() == CODE_CES)
-		GETDelimeter(wxT('('));
+		ExpectDelimiter(wxT('('));
 
-	const wxString& strRealName = GETIdentifier(true);
+	const wxString& strRealName = ExpectIdentifier(true);
 	const wxString& strName = stringUtils::MakeUpper(strRealName);
 
 	ibParamUnit variable = context->GetVariable(strRealName);
 
-	GETKeyWord(KEY_IN);
+	ExpectKeyword(KEY_IN);
 
 	ibParamUnit variableIn =
 		context->GetVariable(strName + wxT("@in_"), true, false, false, true); //loop variable
 
 	ibByteUnit code1;
-	AddLineInfo(code1);
+	StampSource(code1);
 	code1.m_numOper = OPER_LET;
 	code1.m_param1 = variableIn;
 	// ⭐ `foreach (r in src.Where(λ))` — the verbs are recognised WHILE the source is read and parked
@@ -3476,7 +3476,7 @@ bool ibCompileCode::CompileForeach(ibCompileContext* context)
 		context->GetVariable(strName + wxT("@it_"), true, false, false, true);  //storage iterpos;
 
 	ibByteUnit code;
-	AddLineInfo(code);
+	StampSource(code);
 	code.m_numOper = OPER_FOREACH;
 	code.m_param1 = variable;
 	code.m_param2 = variableIn;
@@ -3493,9 +3493,9 @@ bool ibCompileCode::CompileForeach(ibCompileContext* context)
 	EmitLinqChainClauses(context, variable, chainSkipIps);
 
 	if (GetCodeStyle() == CODE_VES)
-		GETKeyWord(KEY_DO);
+		ExpectKeyword(KEY_DO);
 	else
-		GETDelimeter(wxT(')'));
+		ExpectDelimiter(wxT(')'));
 
 	if (GetCodeStyle() == CODE_CES)
 		CompileBlock(CreateLocalContext(context));
@@ -3503,11 +3503,11 @@ bool ibCompileCode::CompileForeach(ibCompileContext* context)
 		CompileBlock(context);
 
 	if (GetCodeStyle() == CODE_VES)
-		GETKeyWord(KEY_ENDDO);
+		ExpectKeyword(KEY_ENDDO);
 
 	const int nextIterIp = (int)m_cByteCode.m_listCode.size();
 	ibByteUnit code2;
-	AddLineInfo(code2);
+	StampSource(code2);
 	code2.m_numOper = OPER_NEXT_ITER;
 	code2.m_param1 = variableIt; // for storage iterpos;
 	code2.m_param2.m_numIndex = numStartFOREACH;
@@ -3529,20 +3529,20 @@ bool ibCompileCode::CompileException(ibCompileContext* context)
 	// A Try inside a Try is another compile frame. The same ceiling an
 	// expression already has: the text is refused, the stack is not.
 	if (ibFiber::StackLow()) {
-		SetError(ERROR_EXPRESSION,
+		Refuse(ibScriptError_Expression,
 			_("it is nested deeper than the stack allows - split it into steps"));
 		return false;
 	}
-	GETKeyWord(KEY_TRY);
+	ExpectKeyword(KEY_TRY);
 	ibByteUnit code1;
-	AddLineInfo(code1);
+	StampSource(code1);
 	code1.m_numOper = OPER_TRY;
 	m_cByteCode.m_listCode.emplace_back(std::move(code1));
 
 	const int lineTry = m_cByteCode.m_listCode.size() - 1;
 
 	ibByteUnit code2;
-	AddLineInfo(code2);
+	StampSource(code2);
 
 	if (GetCodeStyle() == CODE_CES)
 		CompileBlock(CreateLocalContext(context));
@@ -3556,7 +3556,7 @@ bool ibCompileCode::CompileException(ibCompileContext* context)
 
 	m_cByteCode.m_listCode[lineTry].m_param1.m_numIndex = m_cByteCode.m_listCode.size();
 
-	GETKeyWord(KEY_EXCEPT);
+	ExpectKeyword(KEY_EXCEPT);
 
 	if (GetCodeStyle() == CODE_CES)
 		CompileBlock(CreateLocalContext(context));
@@ -3564,7 +3564,7 @@ bool ibCompileCode::CompileException(ibCompileContext* context)
 		CompileBlock(context);
 
 	if (GetCodeStyle() == CODE_VES)
-		GETKeyWord(KEY_ENDTRY);
+		ExpectKeyword(KEY_ENDTRY);
 
 	m_cByteCode.m_listCode[addrLine].m_param1.m_numIndex = m_cByteCode.m_listCode.size();
 	return true;
@@ -3582,10 +3582,10 @@ ibParamUnit ibCompileCode::GetCallFunction(ibCompileContext* context, const wxSt
 	callFunc->m_strRealName = strRealName;
 	callFunc->m_numError = m_numCurrentCompile;// to display messages when errors occur
 
-	GETDelimeter('(');
+	ExpectDelimiter('(');
 
-	while (!IsNextDelimeter(')')) {
-		if (IsNextDelimeter(',')) {
+	while (!IsNextDelimiter(')')) {
+		if (IsNextDelimiter(',')) {
 			ibParamUnit data;
 			data.m_numArray = DEF_VAR_SKIP;// missing parameter
 			data.m_numIndex = DEF_VAR_SKIP;
@@ -3593,16 +3593,16 @@ ibParamUnit ibCompileCode::GetCallFunction(ibCompileContext* context, const wxSt
 		}
 		else {
 			callFunc->m_listParam.emplace_back(GetExpression(context));
-			if (!IsNextDelimeter(',') || IsNextDelimeter(')'))
+			if (!IsNextDelimiter(',') || IsNextDelimiter(')'))
 				break;
 		}
-		GETDelimeter(',');
+		ExpectDelimiter(',');
 	}
 
-	GETDelimeter(')');
+	ExpectDelimiter(')');
 
 	ibByteUnit code;
-	AddLineInfo(code);
+	StampSource(code);
 
 	callFunc->m_numString = code.m_numString;
 	callFunc->m_numLine = code.m_numLine;
@@ -3632,7 +3632,7 @@ ibParamUnit ibCompileCode::GetCallFunction(ibCompileContext* context, const wxSt
 	}
 
 	if (IsExpressionOnly()) {
-		SetError(ERROR_CALL_FUNCTION, strRealName);
+		Refuse(ibScriptError_CallFunction, strRealName);
 		return ibParamUnit();
 	}
 
@@ -3701,19 +3701,19 @@ ibParamUnit ibCompileCode::GetExpression(ibCompileContext* context, int nPriorit
 		~ibExpressionDepthGuard() { --ts_expressionDepth; }
 	} depthGuard;
 	if (ts_expressionDepth > gs_maxExpressionDepth) {
-		SetError(ERROR_EXPRESSION, wxString::Format(
+		Refuse(ibScriptError_Expression, wxString::Format(
 			_("it is nested deeper than %d levels - split it into steps"), gs_maxExpressionDepth));
 		return ibParamUnit();
 	}
 	// The ceiling above is what a module sees. This is the overflow past
 	// it: the frame is already on the stack, and another level would not fit.
 	if (ibFiber::StackLow()) {
-		SetError(ERROR_EXPRESSION,
+		Refuse(ibScriptError_Expression,
 			_("it is nested deeper than the stack allows - split it into steps"));
 		return ibParamUnit();
 	}
 
-	const ibLexem& lex = GETLexem();
+	const ibLexem& lex = ExpectLexem();
 
 	// create variable 
 	ibParamUnit variable;
@@ -3743,7 +3743,7 @@ ibParamUnit ibCompileCode::GetExpression(ibCompileContext* context, int nPriorit
 
 		ibByteUnit code;
 		code.m_numOper = OPER_NOT;
-		AddLineInfo(code);
+		StampSource(code);
 
 		if (variable2.m_clsid != 0) {
 			CheckTypeDef(variable2, g_valueBooleanCLSID);
@@ -3756,15 +3756,15 @@ ibParamUnit ibCompileCode::GetExpression(ibCompileContext* context, int nPriorit
 	}
 	else if ((lex.m_lexType == KEYWORD && lex.m_numData == KEY_NEW)) {
 
-		const wxString strObjectName = GETIdentifier(true);
+		const wxString strObjectName = ExpectIdentifier(true);
 		const int numConst = GetConstString(strObjectName);
 
 		std::vector <ibParamUnit> listParam;
 
-		if (IsNextDelimeter('(')) { // this is a method call
-			GETDelimeter('(');
-			while (!IsNextDelimeter(')')) {
-				if (IsNextDelimeter(',')) {
+		if (IsNextDelimiter('(')) { // this is a method call
+			ExpectDelimiter('(');
+			while (!IsNextDelimiter(')')) {
+				if (IsNextDelimiter(',')) {
 					ibParamUnit data;
 					data.m_numArray = DEF_VAR_SKIP;// missing parameter
 					data.m_numIndex = DEF_VAR_SKIP;
@@ -3772,21 +3772,21 @@ ibParamUnit ibCompileCode::GetExpression(ibCompileContext* context, int nPriorit
 				}
 				else {
 					listParam.emplace_back(GetExpression(context));
-					if (!IsNextDelimeter(',') || IsNextDelimeter(')'))
+					if (!IsNextDelimiter(',') || IsNextDelimiter(')'))
 						break;
 				}
-				GETDelimeter(',');
+				ExpectDelimiter(',');
 			}
-			GETDelimeter(')');
+			ExpectDelimiter(')');
 		}
 
 		if (lex.m_numData == KEY_NEW && !ibValue::IsRegisterCtor(strObjectName, ibCtorObjectType::ibCtorObjectType_object_value)) {
-			SetError(ERROR_CALL_CONSTRUCTOR, strObjectName);
+			Refuse(ibScriptError_CallConstructor, strObjectName);
 			return ibParamUnit();
 		}
 
 		ibByteUnit code;
-		AddLineInfo(code);
+		StampSource(code);
 		code.m_numOper = OPER_NEW;
 
 		code.m_param2.m_numIndex = numConst;//number of the called method from the list of encountered methods
@@ -3800,7 +3800,7 @@ ibParamUnit ibCompileCode::GetExpression(ibCompileContext* context, int nPriorit
 
 		for (unsigned int arg = 0; arg < listParam.size(); arg++) {
 			ibByteUnit argCode;
-			AddLineInfo(argCode);
+			StampSource(argCode);
 			argCode.m_numOper = OPER_SET;
 			argCode.m_param1 = listParam[arg];
 			m_cByteCode.m_listCode.emplace_back(std::move(argCode));
@@ -3808,7 +3808,7 @@ ibParamUnit ibCompileCode::GetExpression(ibCompileContext* context, int nPriorit
 	}
 	else if (lex.m_lexType == KEYWORD && lex.m_numData == KEY_FROM) {
 		// LINQ block expression — `from <id> in <expr> ... select <expr>`.
-		// Step back so CompileLinqExpression's own GETKeyWord(KEY_FROM)
+		// Step back so CompileLinqExpression's own ExpectKeyword(KEY_FROM)
 		// can re-consume the keyword via its standard path; mirrors the
 		// CompileLambdaExpression idiom below. Returns the slot of the
 		// materialised result array (eager Phase 1: inline foreach +
@@ -3818,7 +3818,7 @@ ibParamUnit ibCompileCode::GetExpression(ibCompileContext* context, int nPriorit
 	}
 	else if (lex.m_lexType == KEYWORD && lex.m_numData == KEY_RESTRICT) {
 		// Access-policy restriction — `restrict <id> in <src> [join ...] [where ...]`.
-		// Step back so CompileRestrictExpression's own GETKeyWord(KEY_RESTRICT)
+		// Step back so CompileRestrictExpression's own ExpectKeyword(KEY_RESTRICT)
 		// re-consumes the keyword via its standard path (mirrors the KEY_FROM ->
 		// CompileLinqExpression idiom above).
 		m_numCurrentCompile--;
@@ -3829,14 +3829,14 @@ ibParamUnit ibCompileCode::GetExpression(ibCompileContext* context, int nPriorit
 		// Anonymous Function/Procedure as expression — Phase A lambda.
 		// Step back so CompileLambdaExpression's ParseFunctionSignature
 		// can re-consume the keyword via its standard
-		// IsNextKeyWord/GETKeyWord path; mirrors the IDENTIFIER-branch
+		// IsNextKeyword/ExpectKeyword path; mirrors the IDENTIFIER-branch
 		// step-back idiom below.
 		m_numCurrentCompile--;
 		variable = CompileLambdaExpression(context);
 	}
 	else if (lex.m_lexType == DELIMITER && lex.m_numData == '(') {
 		variable = GetExpression(context);
-		GETDelimeter(')');
+		ExpectDelimiter(')');
 	}
 	else if (lex.m_lexType == DELIMITER && lex.m_numData == '?') {
 		// ?(cond, whenTrue, whenFalse) — an If that answers with a value.
@@ -3849,10 +3849,10 @@ ibParamUnit ibCompileCode::GetExpression(ibCompileContext* context, int nPriorit
 		// other branch. The branch not taken is in the tape and is not executed.
 		variable = context->CreateVariable();
 
-		GETDelimeter('(');
+		ExpectDelimiter('(');
 
 		ibByteUnit code;
-		AddLineInfo(code);
+		StampSource(code);
 		code.m_numOper = OPER_IF;
 		ibParamUnit condition = GetExpression(context);
 		code.m_param1 = condition;
@@ -3860,10 +3860,10 @@ ibParamUnit ibCompileCode::GetExpression(ibCompileContext* context, int nPriorit
 		m_cByteCode.m_listCode.emplace_back(std::move(code));
 		const int ifLine = m_cByteCode.m_listCode.size() - 1;
 
-		GETDelimeter(',');
+		ExpectDelimiter(',');
 		{
 			ibByteUnit letTrue;
-			AddLineInfo(letTrue);
+			StampSource(letTrue);
 			letTrue.m_numOper = OPER_LET;
 			letTrue.m_param1 = variable;
 			letTrue.m_param2 = GetExpression(context);
@@ -3871,7 +3871,7 @@ ibParamUnit ibCompileCode::GetExpression(ibCompileContext* context, int nPriorit
 		}
 
 		ibByteUnit jumpOver;
-		AddLineInfo(jumpOver);
+		StampSource(jumpOver);
 		jumpOver.m_numOper = OPER_GOTO;
 		m_cByteCode.m_listCode.emplace_back(std::move(jumpOver));
 		const int gotoLine = m_cByteCode.m_listCode.size() - 1;
@@ -3879,16 +3879,16 @@ ibParamUnit ibCompileCode::GetExpression(ibCompileContext* context, int nPriorit
 		// Where If sends a condition that does not hold: the other branch.
 		m_cByteCode.m_listCode[ifLine].m_param2.m_numIndex = m_cByteCode.m_listCode.size();
 
-		GETDelimeter(',');
+		ExpectDelimiter(',');
 		{
 			ibByteUnit letFalse;
-			AddLineInfo(letFalse);
+			StampSource(letFalse);
 			letFalse.m_numOper = OPER_LET;
 			letFalse.m_param1 = variable;
 			letFalse.m_param2 = GetExpression(context);
 			m_cByteCode.m_listCode.emplace_back(std::move(letFalse));
 		}
-		GETDelimeter(')');
+		ExpectDelimiter(')');
 
 		m_cByteCode.m_listCode[gotoLine].m_param1.m_numIndex = m_cByteCode.m_listCode.size();
 	}
@@ -3909,20 +3909,20 @@ ibParamUnit ibCompileCode::GetExpression(ibCompileContext* context, int nPriorit
 
 		if (incOp != 0) {
 			const wxString strRealName = lex.m_valData.GetString();
-			GETDelimeter(incOp);
-			GETDelimeter(incOp);
+			ExpectDelimiter(incOp);
+			ExpectDelimiter(incOp);
 			ibParamUnit target = context->GetVariable(strRealName, true, true); // lvalue, must exist
 			// expression value = a temp holding the OLD value (captured before the store)
 			variable = context->CreateVariable();
 			ibByteUnit getOld;
-			AddLineInfo(getOld);
+			StampSource(getOld);
 			getOld.m_numOper = OPER_LET;
 			getOld.m_param1 = variable;
 			getOld.m_param2 = target;
 			m_cByteCode.m_listCode.emplace_back(std::move(getOld));
 			// store target = target +/- 1
 			ibByteUnit incCode;
-			AddLineInfo(incCode);
+			StampSource(incCode);
 			incCode.m_numOper = (incOp == '+') ? OPER_ADD : OPER_SUB;
 			ibValue oneVal; oneVal.SetNumber(wxT("1"));
 			incCode.m_param1 = target;
@@ -3951,11 +3951,11 @@ ibParamUnit ibCompileCode::GetExpression(ibCompileContext* context, int nPriorit
 			&& m_translateCode.GetLexAt(m_numCurrentCompile + 1).m_numData == lex.m_numData
 			&& m_translateCode.GetLexAt(m_numCurrentCompile + 1).m_numString == m_translateCode.GetLexAt(m_numCurrentCompile).m_numString + 1) {
 			const wxUniChar incOp = lex.m_numData;
-			GETDelimeter(incOp); // consume the second +/-
-			const wxString strRealName = GETIdentifier(true); // target — a bare variable
+			ExpectDelimiter(incOp); // consume the second +/-
+			const wxString strRealName = ExpectIdentifier(true); // target — a bare variable
 			ibParamUnit target = context->GetVariable(strRealName, true, true); // must already exist
 			ibByteUnit incCode;
-			AddLineInfo(incCode);
+			StampSource(incCode);
 			incCode.m_numOper = (incOp == '+') ? OPER_ADD : OPER_SUB;
 			ibValue oneVal; oneVal.SetNumber(wxT("1"));
 			incCode.m_param1 = target;
@@ -3990,7 +3990,7 @@ ibParamUnit ibCompileCode::GetExpression(ibCompileContext* context, int nPriorit
 		else {
 			variable = GetExpression(context, 100);//super high priority!
 			ibByteUnit code;
-			AddLineInfo(code);
+			StampSource(code);
 			code.m_numOper = OPER_INVERT;
 
 			if (variable.m_clsid != 0) {
@@ -4009,7 +4009,7 @@ ibParamUnit ibCompileCode::GetExpression(ibCompileContext* context, int nPriorit
 		m_numCurrentCompile--;
 		// …and the same here: the token that could not start an expression, named. An identifier
 		// carries its own text; a delimiter is the character itself.
-		SetError(ERROR_EXPRESSION, lex.m_strData.IsEmpty()
+		Refuse(ibScriptError_Expression, lex.m_strData.IsEmpty()
 			? wxString::Format(wxT("%c"), wxUniChar(lex.m_numData)) : lex.m_strData);
 		return ibParamUnit();
 	}
@@ -4039,7 +4039,7 @@ delimOperation:
 			if (nPriority < numCurPriority) { // �ompare the priorities of the left (previous operation) and the currently running operation
 
 				ibByteUnit code;
-				AddLineInfo(code);
+				StampSource(code);
 				const ibLexem& next_lex = GetLexem();
 
 				// ⭐⭐ `x in (a, b, c)` — the one operator whose right side is a LIST, so it is read
@@ -4048,20 +4048,20 @@ delimOperation:
 				// understands `=` and `or` understands this without being taught a third thing.
 				if (next_lex.m_lexType == KEYWORD && next_lex.m_numData == KEY_IN) {
 
-					GETDelimeter('(');
+					ExpectDelimiter('(');
 
 					ibParamUnit answer;
 					bool any = false;
-					while (!IsNextDelimeter(')')) {
+					while (!IsNextDelimiter(')')) {
 						if (any)
-							GETDelimeter(',');
+							ExpectDelimiter(',');
 
 						const ibParamUnit item = GetExpression(context, numCurPriority);
 
 						ibParamUnit same = context->CreateVariable();
 						same.m_clsid = g_valueBooleanCLSID;
 						{
-							ibByteUnit c; AddLineInfo(c);
+							ibByteUnit c; StampSource(c);
 							c.m_numOper = OPER_EQ;
 							c.m_param1  = same;
 							c.m_param2  = variable;
@@ -4078,7 +4078,7 @@ delimOperation:
 						ibParamUnit either = context->CreateVariable();
 						either.m_clsid = g_valueBooleanCLSID;
 						{
-							ibByteUnit c; AddLineInfo(c);
+							ibByteUnit c; StampSource(c);
 							c.m_numOper = OPER_OR;
 							c.m_param1  = either;
 							c.m_param2  = answer;
@@ -4087,13 +4087,13 @@ delimOperation:
 						}
 						answer = either;
 					}
-					GETDelimeter(')');
+					ExpectDelimiter(')');
 
 					// ⚠ AN EMPTY LIST IS A QUESTION WITH NO ANSWER, not `false` by default: `x in ()`
 					// is far more likely a hand slipping than an intention, and a silent `false`
 					// filters every row away without saying why.
 					if (!any) {
-						SetError(ERROR_EXPRESSION, wxString(
+						Refuse(ibScriptError_Expression, wxString(
 							_("'in' needs something to look in - the list is empty")));
 						return ibParamUnit();
 					}
@@ -4143,7 +4143,7 @@ delimOperation:
 					const ibValue decisive(isOr);
 					{
 						ibByteUnit letDef;
-						AddLineInfo(letDef);
+						StampSource(letDef);
 						letDef.m_numOper = OPER_LET;
 						letDef.m_param1 = rhsSlot;
 						letDef.m_param2 = FindConst(decisive);
@@ -4169,7 +4169,7 @@ delimOperation:
 					if (isOr) {
 						// A true left never enters the right side. A false left jumps to it.
 						ibByteUnit jumpOver;
-						AddLineInfo(jumpOver);
+						StampSource(jumpOver);
 						jumpOver.m_numOper = OPER_GOTO;
 						m_cByteCode.m_listCode.emplace_back(std::move(jumpOver));
 						gotoLine = (int)m_cByteCode.m_listCode.size() - 1;
@@ -4180,12 +4180,12 @@ delimOperation:
 					const ibParamUnit right = GetExpression(context, numCurPriority);
 					if (right.m_numArray != DEF_VAR_TEMP && right.m_numArray != DEF_VAR_CONST
 						&& variable.m_clsid == g_valueStringCLSID) {
-						SetError(ERROR_TYPE_OPERATION);
+						Refuse(ibScriptError_TypeOperation);
 						return ibParamUnit();
 					}
 					{
 						ibByteUnit letRhs;
-						AddLineInfo(letRhs);
+						StampSource(letRhs);
 						letRhs.m_numOper = OPER_LET;
 						letRhs.m_param1 = rhsSlot;
 						letRhs.m_param2 = right;
@@ -4200,7 +4200,7 @@ delimOperation:
 							(long)m_cByteCode.m_listCode.size();
 
 					ibByteUnit join;
-					AddLineInfo(join);
+					StampSource(join);
 					join.m_numOper = isOr ? OPER_OR : OPER_AND;
 					join.m_param1 = result;
 					join.m_param2 = variable;
@@ -4212,19 +4212,19 @@ delimOperation:
 				}
 				else if (next_lex.m_numData == '>') {
 					SetOper(OPER_GT);
-					if (IsNextDelimeter('=')) {
-						GETDelimeter('=');
+					if (IsNextDelimiter('=')) {
+						ExpectDelimiter('=');
 						SetOper(OPER_GE);
 					}
 				}
 				else if (next_lex.m_numData == '<') {
 					SetOper(OPER_LS);
-					if (IsNextDelimeter('=')) {
-						GETDelimeter('=');
+					if (IsNextDelimiter('=')) {
+						ExpectDelimiter('=');
 						SetOper(OPER_LE);
 					}
-					else if (IsNextDelimeter('>')) {
-						GETDelimeter('>');
+					else if (IsNextDelimiter('>')) {
+						ExpectDelimiter('>');
 						SetOper(OPER_NE);
 					}
 				}
@@ -4243,8 +4243,8 @@ delimOperation:
 					// language compares with a single `=`. Say WHICH spelling is meant, not merely that
 					// something is wrong (measured over MCP, 2026-09-02 — it cost a full round of
 					// bisecting a five-line block to find).
-					if (IsNextDelimeter('=')) {
-						SetError(ERROR_EXPRESSION, wxString(
+					if (IsNextDelimiter('=')) {
+						Refuse(ibScriptError_Expression, wxString(
 							_("'==' is not an operator here - comparison is written with a single '='")));
 						return ibParamUnit();
 					}
@@ -4256,7 +4256,7 @@ delimOperation:
 					// answer: `a == b` reaches this branch because comparison in this language is a
 					// single `=`, and a caller who writes the other spelling gets a compile error
 					// that names no operator, no token and nothing to change (measured 2026-09-02).
-					SetError(ERROR_EXPRESSION, wxUniChar(next_lex.m_numData));
+					Refuse(ibScriptError_Expression, wxUniChar(next_lex.m_numData));
 					return ibParamUnit();
 				}
 
@@ -4271,7 +4271,7 @@ delimOperation:
 							|| OPER_MULT == code.m_numOper
 							|| OPER_AND == code.m_numOper
 							|| OPER_OR == code.m_numOper) {
-							SetError(ERROR_TYPE_OPERATION);
+							Refuse(ibScriptError_TypeOperation);
 							return ibParamUnit();
 						}
 					}

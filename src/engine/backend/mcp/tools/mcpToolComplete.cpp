@@ -400,7 +400,7 @@ public:
 		ibTranslateCode lexem(ibCompileCode::GetCodeStyle());
 		lexem.SetLexemMode(ibLexemMode::Editing);
 		lexem.Load(text);
-		lexem.PrepareLexem();
+		lexem.Translate();
 
 		const ibTranslateCode::ibCaretText at = lexem.CaretAt((unsigned int)position);
 

@@ -23,11 +23,6 @@
 class FRONTEND_API ibDialogError : public wxDialog {
 public:
 
-	//Editor setting 
-	void SetEditorSettings(const ibEditorSettings& settings);
-	//Font setting 
-	void SetFontColorSettings(const ibFontColorSettings& settings);
-
 	ibDialogError(class ibFrontendMainFrame* parent, wxWindowID id = wxID_ANY,
 		const wxString& title = _("Critical failure"), const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxDefaultSize, long style = wxCAPTION | wxSYSTEM_MENU | wxCLOSE_BOX | wxSTAY_ON_TOP);
 

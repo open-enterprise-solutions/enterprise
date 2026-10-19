@@ -30,9 +30,6 @@ private:
 	wxStyledTextCtrl* m_codeEditor;
 };
 
-#include "frontend/mainFrame/settings/editorsettings.h"
-#include "frontend/mainFrame/settings/fontcolorsettings.h"
-
 class ibTextEditor : public wxStyledTextCtrl {
 public:
 
@@ -40,12 +37,6 @@ public:
 		const wxPoint& pos = wxDefaultPosition,
 		const wxSize& size = wxDefaultSize, long style = 0,
 		const wxString& name = wxSTCNameStr);
-
-	//Editor setting
-	void SetEditorSettings(const ibEditorSettings& settings);
-
-	//Font setting
-	void SetFontColorSettings(const ibFontColorSettings& settings);
 
 private:
 

@@ -17,8 +17,8 @@ bool ibFrontendHelpEditView::OnCreate(ibFrontendDocument* doc, long flags)
 {
 	m_textEditor = new ibTextEditor(doc, m_viewFrame, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBORDER_THEME);
 
-	m_textEditor->SetEditorSettings(mainFrame->GetEditorSettings());
-	m_textEditor->SetFontColorSettings(mainFrame->GetFontColorSettings());
+	mainFrame->GetEditorSettings().Apply(*m_textEditor);
+	mainFrame->GetFontColorSettings().Apply(*m_textEditor);
 
 	m_textEditor->SetReadOnly(flags == ibDOC_READONLY);
 

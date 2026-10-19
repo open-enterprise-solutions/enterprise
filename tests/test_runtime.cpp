@@ -129,8 +129,8 @@ public:
 			if (parent != nullptr)
 				SetParent(parent);
 			Load(src);
-			if (!PrepareLexem())
-				return ::testing::AssertionFailure() << "PrepareLexem() failed";
+			if (!Translate())
+				return ::testing::AssertionFailure() << "Translate() failed";
 			PrepareModuleData();
 			if (!CompileModule())
 				return ::testing::AssertionFailure() << "CompileModule() returned false without raising";
@@ -2575,11 +2575,11 @@ TEST(RuntimeTest, ACorrelatedJoinPairsEachKeyWithItsOwnRowsMeta) {
 // THE EVAL PATH HAS A CURSOR OF ITS OWN
 //
 // `ibProcUnit::CompileExpression` — the one door behind the debugger's watch
-// panel, `Evaluate(...)` and `Execute(...)` — goes PrepareLexem → GetExpression
+// panel, `Evaluate(...)` and `Execute(...)` — goes Translate → GetExpression
 // and never runs CompileModule(), which is where a module compile parks the
 // lexem cursor at -1. The field carried no initialiser, so the eval walk began
-// at whatever the heap held: the first GETLexem read past the end of the token
-// array and raised ERROR_CODE_DEFINE ("Module code expected") for EVERY watch
+// at whatever the heap held: the first ExpectLexem read past the end of the token
+// array and raised ibScriptError_CodeDefine ("Module code expected") for EVERY watch
 // expression — `q.Execute()` and the literal `4` alike.
 //
 // Nothing caught it because nothing in tests/ had ever gone through eval: the

@@ -1,5 +1,5 @@
 ﻿////////////////////////////////////////////////////////////////////////////
-//	Author		: Maxim Kornienko, wxFormBuilder
+//	Author		: Maxim Kornienko
 //	Description : visual editor
 ////////////////////////////////////////////////////////////////////////////
 
@@ -56,6 +56,13 @@ bool CanDeleteControl(const ibValueFrame* obj)
 	return true;
 }
 
+// The size of a picture in the tree.
+const wxSize kPictureSize(16, 16);
+
+// The popup menu's first id of the classes a control adds in itself; the clipboard, delete, move and properties go by
+// wx's own ids.
+constexpr int kCreateControlId = wxID_HIGHEST + 2050;
+
 } // namespace
 
 void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::RebuildTree()
@@ -64,40 +71,29 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::RebuildTr
 	// BLOCK the tree's events for the churn: DeleteAllItems / SelectItem otherwise fire native selection + focus
 	// events, and the app's OnSetFocus follows that focus and switches the active MDI tab — a background rebuild
 	// would yank the tab from the editor the user is in. Re-enabled before Thaw, after the row is restored.
-	m_tcObjects->SetEvtHandlerEnabled(false);
-
-	Disconnect(wxID_ANY, wxEVT_COMMAND_TREE_ITEM_EXPANDED, wxTreeEventHandler(ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnExpansionChange));
-	Disconnect(wxID_ANY, wxEVT_COMMAND_TREE_ITEM_COLLAPSED, wxTreeEventHandler(ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnExpansionChange));
-
-	ibValueFrame* valueForm =
-		m_formHandler->GetValueForm();
+	m_tree->SetEvtHandlerEnabled(false);
+	m_expanding = true;
 
 	// Remember the selected LAYER by identity (a command bar / a command — its holder outlives the rebuild): without
 	// this the DeleteAllItems below drops the highlight onto the root form. A control is lit again by the selection the
 	// command left (OnObjectSelected).
-	const ibValueLayerObject* keepLayer = nullptr;
-	if (const wxTreeItemId sel = m_tcObjects->GetSelection(); sel.IsOk())
-		if (auto* keepData = (ibVisualEditorObjectTreeItemData*)m_tcObjects->GetItemData(sel))
-			keepLayer = keepData->GetLayerObject();
+	const ibVisualEditorObjectTreeItemData* const selected = GetItemData(m_tree->GetSelection());
+	const ibValueLayerObject* const keepLayer = selected != nullptr ? selected->GetLayerObject() : nullptr;
 
-	// Clear the old tree and map
-	m_tcObjects->DeleteAllItems();
-	m_listItem.clear();
+	m_tree->DeleteAllItems();
+	m_controlItems.clear();
 	m_layerItemMap.clear();
 
-	if (valueForm != nullptr) {
-		wxTreeItemId dummy;
-		AddChildren(valueForm, dummy, true);
-		// Expand items that were previously expanded
-		RestoreItemStatus(valueForm);
+	if (ibValueFrame* const valueForm = m_formHandler->GetValueForm()) {
+		AddControl(valueForm, wxTreeItemId());
 
-		// Restore the row highlight by identity — under m_notifySelecting so SelectItem sets the bold mark WITHOUT
-		// re-pushing the inspector (OnSelChanged bolds before the guard early-out), matching OnObjectSelected.
+		// Restore the row highlight by identity — under m_selecting so SelectItem sets the bold mark WITHOUT re-pushing
+		// the inspector (OnSelChanged bolds before the guard early-out), matching OnObjectSelected.
 		const auto kept = keepLayer != nullptr ? m_layerItemMap.find(keepLayer) : m_layerItemMap.end();
 		if (kept != m_layerItemMap.end()) {
-			m_notifySelecting = true;
-			m_tcObjects->SelectItem(kept->second);
-			m_notifySelecting = false;
+			m_selecting = true;
+			m_tree->SelectItem(kept->second);
+			m_selecting = false;
 		}
 	}
 
@@ -114,10 +110,8 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::RebuildTr
 	for (auto it = m_commandBarItems.begin(); it != m_commandBarItems.end(); )
 		it = gone(it->second.get()) ? m_commandBarItems.erase(it) : std::next(it);
 
-	m_tcObjects->SetEvtHandlerEnabled(true);   // churn done — resume normal event handling
-
-	Connect(wxID_ANY, wxEVT_COMMAND_TREE_ITEM_COLLAPSED, wxTreeEventHandler(ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnExpansionChange));
-	Connect(wxID_ANY, wxEVT_COMMAND_TREE_ITEM_EXPANDED, wxTreeEventHandler(ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnExpansionChange));
+	m_expanding = false;
+	m_tree->SetEvtHandlerEnabled(true);   // churn done — resume normal event handling
 
 	wxWindow::Thaw();
 
@@ -125,56 +119,39 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::RebuildTr
 	wxWindow::Update();
 }
 
-void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::AddChildren(ibValueFrame* obj, const wxTreeItemId& parent, bool is_root)
+void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::AddControl(ibValueFrame* control, const wxTreeItemId& parent)
 {
-	if (obj->GetComponentType() == COMPONENT_TYPE_SIZERITEM) {
-		if (obj->GetChildCount() > 0)
-			AddChildren(obj->GetChild(0), parent);
-		else {
-			// If we reached here it is because the tree is malformed and how it was built needs to be reviewed.
-			ibValueFrame* const itemParent = obj->GetParent();
-			ibJournalError(wxT("designer"), wxString::Format(wxT("Item without object as child of '%s:%s'"),
-				itemParent != nullptr ? itemParent->GetControlName() : wxString(),
-				itemParent != nullptr ? itemParent->GetClassName() : wxString()));
+	if (control->GetComponentType() == COMPONENT_TYPE_SIZERITEM) {
+		if (control->GetChildCount() > 0) {
+			AddControl(control->GetChild(0), parent);
+			return;
 		}
+		// An item holds its control, always: an empty one is a form built wrong — said, and skipped.
+		ibValueFrame* const holder = control->GetParent();
+		ibJournalError(wxT("designer"), wxString::Format(wxT("A sizer item of '%s:%s' holds no control"),
+			holder != nullptr ? holder->GetControlName() : wxString(),
+			holder != nullptr ? holder->GetClassName() : wxString()));
 		return;
 	}
 
-	wxTreeItemId new_parent;
-	ibVisualEditorObjectTreeItemData* item_data = new ibVisualEditorObjectTreeItemData(obj);
-	if (is_root) {
-		new_parent = m_tcObjects->AddRoot(wxT(""), wxNOT_FOUND, wxNOT_FOUND, item_data);
-	}
-	else {
-		new_parent = m_tcObjects->AppendItem(parent, wxT(""), wxNOT_FOUND, wxNOT_FOUND, item_data);
-	}
-
-	// Add the item to the map
-	m_listItem.insert(
-		std::map< ibValueFrame*, wxTreeItemId>::value_type(obj, new_parent)
-	);
-
-	// Set the image
-	int image_idx = GetImageIndex(obj->GetClassName());
-
-	if (image_idx != wxNOT_FOUND) {
-		m_tcObjects->SetItemImage(new_parent, image_idx);
-	}
-
-	// Set the name
-	UpdateItem(new_parent, obj);
+	const int picture = GetPictureIndex(control->GetClassName());
+	ibVisualEditorObjectTreeItemData* const data = new ibVisualEditorObjectTreeItemData(control);
+	const wxTreeItemId row = parent.IsOk()
+		? m_tree->AppendItem(parent, wxEmptyString, picture, wxNOT_FOUND, data)
+		: m_tree->AddRoot(wxEmptyString, picture, wxNOT_FOUND, data);
+	m_controlItems[control] = row;
+	UpdateItem(row, control);
 
 	// Command interface (a chrome LAYER the frame carries): a static sub-node added FIRST, so it sits above the content
 	// like the rendered toolbar.
-	AddCommandBar(obj, new_parent);
+	AddCommandBar(control, row);
 
-	// Add the rest of the children
-	unsigned int count = obj->GetChildCount();
+	for (unsigned int i = 0; i < control->GetChildCount(); i++)
+		AddControl(control->GetChild(i), row);
 
-	for (unsigned int i = 0; i < count; i++) {
-		ibValueFrame* child = obj->GetChild(i);
-		AddChildren(child, new_parent);
-	}
+	// Open as the form keeps it — once the rows under it are there to show.
+	if (control->GetExpanded())
+		m_tree->Expand(row);
 }
 
 void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::AddCommandBar(ibValueFrame* obj, const wxTreeItemId& parent)
@@ -189,8 +166,8 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::AddComman
 	std::unique_ptr<ibValueCommandBar>& bar = m_commandBars[controlId];
 	if (bar == nullptr)
 		bar.reset(new ibValueCommandBar(m_formHandler, controlId));
-	const wxTreeItemId barNode = m_tcObjects->AppendItem(parent, _("Command interface"),
-		GetImageIndex(ibProtocol::ibView::ibFormDesigner::CommandBar), wxNOT_FOUND, new ibVisualEditorObjectTreeItemData(bar.get()));
+	const wxTreeItemId barNode = m_tree->AppendItem(parent, _("Command interface"),
+		GetPictureIndex(ibProtocol::ibView::ibFormDesigner::CommandBar), wxNOT_FOUND, new ibVisualEditorObjectTreeItemData(bar.get()));
 	m_layerItemMap[bar.get()] = barNode;   // the bar node — re-selectable by identity after a rebuild
 
 	// Its commands as sub-nodes — remembered too, so a just-added / moved command can be re-selected after the rebuild.
@@ -199,83 +176,76 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::AddComman
 		std::unique_ptr<ibValueCommandBarItem>& item = m_commandBarItems[{ controlId, idx }];
 		if (item == nullptr)
 			item.reset(new ibValueCommandBarItem(m_formHandler, controlId, idx));
-		const wxTreeItemId itemNode = m_tcObjects->AppendItem(barNode, items[idx].GetString(ibProtocol::ibView::ibFormDesigner::Name),
-			GetImageIndex(ibProtocol::ibView::ibFormDesigner::CommandBarItem), wxNOT_FOUND, new ibVisualEditorObjectTreeItemData(item.get()));
+		const wxTreeItemId itemNode = m_tree->AppendItem(barNode, items[idx].GetString(ibProtocol::ibView::ibFormDesigner::Name),
+			GetPictureIndex(ibProtocol::ibView::ibFormDesigner::CommandBarItem), wxNOT_FOUND, new ibVisualEditorObjectTreeItemData(item.get()));
 		m_layerItemMap[item.get()] = itemNode;
 	}
 
 	// Open, so a freshly added command is visible without a manual expand (the desktop's default) — unless it was closed.
 	if (!items.empty() && bar->IsTreeExpanded())
-		m_tcObjects->Expand(barNode);
+		m_tree->Expand(barNode);
 }
 
-#define ICON_SIZE 16
+void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::UpdateItem(const wxTreeItemId& row, ibValueFrame* control)
+{
+	m_tree->SetItemText(row, control->GetControlName() + wxT(" : ") + control->GetClassName());
+
+	// The editor's selection — shown, not told back to the editor.
+	if (m_formHandler == nullptr || control != m_formHandler->GetSelectedObject())
+		return;
+	m_selecting = true;
+	m_tree->EnsureVisible(row);
+	m_tree->SelectItem(row);
+	m_tree->SetItemBold(row);
+	m_selecting = false;
+}
 
 void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::CreateTree(const ibProtocolNode& classes)
 {
-	if (m_iconList != nullptr)
-		m_tcObjects->SetImageList(nullptr);
-	m_iconIdx.clear();
+	wxImageList* const pictures = new wxImageList(kPictureSize.x, kPictureSize.y);
+	m_pictureIndex.clear();
 
-	m_iconList = new wxImageList(ICON_SIZE, ICON_SIZE);
-
-	auto addIcon = [this](const wxString& name, wxBitmap controlIcon) {
-		if (!controlIcon.IsOk())
+	const auto add = [this, pictures](const wxString& name, wxBitmap picture) {
+		if (!picture.IsOk())
 			return;
-		if (controlIcon.GetSize() != wxSize(ICON_SIZE, ICON_SIZE))
-			controlIcon = wxBitmap(controlIcon.ConvertToImage().Rescale(ICON_SIZE, ICON_SIZE, wxIMAGE_QUALITY_HIGH));
-		const int retIndex = m_iconList->Add(controlIcon);
-		if (retIndex != wxNOT_FOUND) {
-			m_iconIdx.insert(
-				std::map<wxString, int>::value_type(name, retIndex)
-			);
-		}
+		if (picture.GetSize() != kPictureSize)
+			picture = wxBitmap(picture.ConvertToImage().Rescale(kPictureSize.x, kPictureSize.y, wxIMAGE_QUALITY_HIGH));
+		const int index = pictures->Add(picture);
+		if (index != wxNOT_FOUND)
+			m_pictureIndex.emplace(name, index);
 	};
 
 	for (const ibProtocolNode& described : classes.Children())
-		addIcon(described.GetString(ibProtocol::ibView::ibFormDesigner::Name), ibProtocolPicture(described.GetString(ibProtocol::ibView::ibFormDesigner::Picture)));
+		add(described.GetString(ibProtocol::ibView::ibFormDesigner::Name), ibProtocolPicture(described.GetString(ibProtocol::ibView::ibFormDesigner::Picture)));
 
 	// The command bar and its command — the engine's pictures, not a class the server describes (the desktop's were its
 	// toolbar's and tool's).
-	addIcon(ibProtocol::ibView::ibFormDesigner::CommandBar, ibBackendPicture::GetPicture(g_picCommandBarCLSID));
-	addIcon(ibProtocol::ibView::ibFormDesigner::CommandBarItem, ibBackendPicture::GetPicture(g_picCommandBarItemCLSID));
+	add(ibProtocol::ibView::ibFormDesigner::CommandBar, ibBackendPicture::GetPicture(g_picCommandBarCLSID));
+	add(ibProtocol::ibView::ibFormDesigner::CommandBarItem, ibBackendPicture::GetPicture(g_picCommandBarItemCLSID));
 
-	m_tcObjects->AssignImageList(m_iconList);
+	// The tree owns the list, and lets go of the one it had.
+	m_tree->AssignImageList(pictures);
 }
 
-void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::RestoreItemStatus(ibValueFrame* obj)
+int ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::GetPictureIndex(const wxString& className) const
 {
-	std::map< ibValueFrame*, wxTreeItemId>::iterator item_it = m_listItem.find(obj);
-	if (item_it != m_listItem.end()) {
-		wxTreeItemId id = item_it->second;
-
-		if (obj->GetExpanded()) {
-			m_tcObjects->Expand(id);
-		}
-	}
-
-	unsigned int i, count = obj->GetChildCount();
-
-	for (i = 0; i < count; i++) {
-		RestoreItemStatus(obj->GetChild(i));
-	}
+	const auto found = m_pictureIndex.find(className);
+	return found != m_pictureIndex.end() ? found->second : wxNOT_FOUND;
 }
 
-ibValueFrame* ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::GetObjectFromTreeItem(const wxTreeItemId& item)
+ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTreeItemData* ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::GetItemData(const wxTreeItemId& row) const
 {
-	if (item.IsOk()) {
-		wxTreeItemData* item_data = m_tcObjects->GetItemData(item);
-		if (item_data) {
-			ibValueFrame* obj(((ibVisualEditorObjectTreeItemData*)item_data)->GetObject());
-			return obj;
-		}
-	}
+	return row.IsOk() ? static_cast<ibVisualEditorObjectTreeItemData*>(m_tree->GetItemData(row)) : nullptr;
+}
 
-	return nullptr;
+ibValueFrame* ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::GetControl(const wxTreeItemId& row) const
+{
+	const ibVisualEditorObjectTreeItemData* const data = GetItemData(row);
+	return data != nullptr ? data->GetObject() : nullptr;
 }
 
 /////////////////////////////////////////////////////////////////////////////
-// Enterprise ibEvent Handlers
+// The editor's notifications
 /////////////////////////////////////////////////////////////////////////////
 
 void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnEditorLoaded()
@@ -293,14 +263,12 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnEditorR
 		ShapeOf(valueForm, shape);
 	ShapeOf(m_formHandler->m_formNode, m_formHandler->m_rows, shape);
 
-	if (shape == m_shape && !m_listItem.empty()) {
+	if (shape == m_shape && !m_controlItems.empty()) {
 		// …open or closed as the form has it now — an expansion undone or redone leaves the shape as it was.
-		Disconnect(wxID_ANY, wxEVT_COMMAND_TREE_ITEM_EXPANDED, wxTreeEventHandler(ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnExpansionChange));
-		Disconnect(wxID_ANY, wxEVT_COMMAND_TREE_ITEM_COLLAPSED, wxTreeEventHandler(ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnExpansionChange));
-		for (const auto& listed : m_listItem)
+		m_expanding = true;
+		for (const auto& listed : m_controlItems)
 			OnObjectExpanded(listed.first);
-		Connect(wxID_ANY, wxEVT_COMMAND_TREE_ITEM_EXPANDED, wxTreeEventHandler(ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnExpansionChange));
-		Connect(wxID_ANY, wxEVT_COMMAND_TREE_ITEM_COLLAPSED, wxTreeEventHandler(ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnExpansionChange));
+		m_expanding = false;
 		return;
 	}
 
@@ -310,51 +278,35 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnEditorR
 
 void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnObjectSelected(ibValueFrame* obj)
 {
-	// Find the tree item associated with the object and select it
-	std::map< ibValueFrame*, wxTreeItemId>::iterator it = m_listItem.find(obj);
-	if (it != m_listItem.end()) {
+	// The editor's selection, shown: its row selected and scrolled to — opening the rows above it is no expansion of the form.
+	const auto found = m_controlItems.find(obj);
+	if (found == m_controlItems.end())
+		return;
 
-		m_notifySelecting = true;
-
-		// Ignore expand/collapse events
-		Disconnect(wxID_ANY, wxEVT_COMMAND_TREE_ITEM_EXPANDED, wxTreeEventHandler(ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnExpansionChange));
-		Disconnect(wxID_ANY, wxEVT_COMMAND_TREE_ITEM_COLLAPSED, wxTreeEventHandler(ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnExpansionChange));
-
-		m_tcObjects->EnsureVisible(it->second);
-		m_tcObjects->SelectItem(it->second);
-
-		// Restore event handling
-		Connect(wxID_ANY, wxEVT_COMMAND_TREE_ITEM_EXPANDED, wxTreeEventHandler(ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnExpansionChange));
-		Connect(wxID_ANY, wxEVT_COMMAND_TREE_ITEM_COLLAPSED, wxTreeEventHandler(ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnExpansionChange));
-
-		m_notifySelecting = false;
-	}
+	m_selecting = m_expanding = true;
+	m_tree->EnsureVisible(found->second);
+	m_tree->SelectItem(found->second);
+	m_selecting = m_expanding = false;
 }
 
 void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnObjectExpanded(ibValueFrame* obj)
 {
-	std::map< ibValueFrame*, wxTreeItemId>::iterator it = m_listItem.find(obj);
-	if (it != m_listItem.end())
-	{
-		if (m_tcObjects->IsExpanded(it->second) != obj->GetExpanded())
-		{
-			if (obj->GetExpanded()) {
-				m_tcObjects->Expand(it->second);
-			}
-			else {
-				m_tcObjects->Collapse(it->second);
-			}
-		}
-	}
+	const auto found = m_controlItems.find(obj);
+	if (found == m_controlItems.end() || m_tree->IsExpanded(found->second) == obj->GetExpanded())
+		return;
+
+	if (obj->GetExpanded())
+		m_tree->Expand(found->second);
+	else
+		m_tree->Collapse(found->second);
 }
 
 void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnPropertyModified(ibProperty* prop)
 {
-	std::map< ibValueFrame*, wxTreeItemId>::iterator it =
-		m_listItem.find(dynamic_cast<ibValueFrame*>(prop->GetPropertyObject()));
-	if (it != m_listItem.end()) {
-		UpdateItem(it->second, it->first);
-	}
+	ibValueFrame* const control = dynamic_cast<ibValueFrame*>(prop->GetPropertyObject());
+	const auto found = m_controlItems.find(control);
+	if (found != m_controlItems.end())
+		UpdateItem(found->second, control);
 }
 
 ibValueLayerObject* ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::FindEntry(const ibPropertyObject* owner) const
@@ -382,13 +334,13 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::SelectCom
 	if (found == m_layerItemMap.end() || !found->second.IsOk())
 		return;
 
-	m_notifySelecting = true;
-	m_tcObjects->EnsureVisible(found->second);   // expands ancestor nodes so the item shows
-	m_tcObjects->SelectItem(found->second);
-	m_notifySelecting = false;
+	m_selecting = true;
+	m_tree->EnsureVisible(found->second);   // expands ancestor nodes so the item shows
+	m_tree->SelectItem(found->second);
+	m_selecting = false;
 
 	// …and the inspector shows it — also when it was the selected node already.
-	SelectItemData(m_tcObjects->GetItemData(found->second));
+	SelectItemData(GetItemData(found->second));
 }
 
 void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::SelectCommandItem(long long controlId, unsigned int index)
@@ -398,68 +350,62 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::SelectCom
 		SelectCommandItem(found->second.get());
 }
 
-wxBEGIN_EVENT_TABLE(ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree, wxPanel)
-EVT_TREE_SEL_CHANGED(wxID_ANY, ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnSelChanged)
-EVT_TREE_ITEM_RIGHT_CLICK(wxID_ANY, ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnRightClick)
-EVT_TREE_BEGIN_DRAG(wxID_ANY, ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnBeginDrag)
-EVT_TREE_END_DRAG(wxID_ANY, ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnEndDrag)
-EVT_TREE_KEY_DOWN(wxID_ANY, ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnKeyDown)
-wxEND_EVENT_TABLE()
-
 ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::ibVisualEditorObjectTree(ibVisualEditor* handler, wxWindow* parent, int id) :
 	wxPanel(parent, id),
 	m_formHandler(handler)
 {
-	m_tcObjects = new ibDesignerTreeCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTR_HAS_BUTTONS | wxTR_NO_LINES | wxSIMPLE_BORDER | wxTR_TWIST_BUTTONS);
+	m_tree = new ibDesignerTreeCtrl(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTR_HAS_BUTTONS | wxTR_NO_LINES | wxSIMPLE_BORDER | wxTR_TWIST_BUTTONS);
+	m_tree->SetDoubleBuffered(true);
 
-	wxBoxSizer* sizerMain = new wxBoxSizer(wxVERTICAL);
-	sizerMain->Add(m_tcObjects, 1, wxEXPAND, 0);
-	wxPanel::SetAutoLayout(true);
-	wxPanel::SetSizer(sizerMain);
-	sizerMain->Fit(this);
-	sizerMain->SetSizeHints(this);
-
-	m_tcObjects->SetDoubleBuffered(true);
+	wxBoxSizer* const sizer = new wxBoxSizer(wxVERTICAL);
+	sizer->Add(m_tree, 1, wxEXPAND);
+	SetSizerAndFit(sizer);
 
 	// Accept any registered drag KIND dropped ONTO a tree node: a source path → a bound control under that node
 	// (its container), a command → a command button on the nearest bar up from it. ONE resolver for every kind:
 	// hit-test the drop point to the tree item → its owning frame (a layer node resolves to its owner frame; an
 	// empty area → null, which the source's CreateBoundControl falls back to the form root).
-	m_tcObjects->SetDropTarget(
+	m_tree->SetDropTarget(
 		new ibSourceDragDropTarget(
 			[this](wxCoord x, wxCoord y) -> ibValueFrame* {
 				m_formHandler->SetPendingDropBar(0);   // no command-bar toolbar in the object tree — clear the
 				                                       // per-drop channel so a command drop here can't read a stale bar
 				int flags = 0;
-				const wxTreeItemId item = m_tcObjects->HitTest(wxPoint(x, y), flags);
-				ibValueFrame* target = GetObjectFromTreeItem(item);
+				const ibVisualEditorObjectTreeItemData* const data = GetItemData(m_tree->HitTest(wxPoint(x, y), flags));
+				if (data == nullptr)
+					return nullptr;
+				ibValueFrame* target = data->GetObject();
 				ibValueForm* const valueForm = m_formHandler->GetValueForm();
-				if (target == nullptr && item.IsOk() && valueForm != nullptr)
-					if (wxTreeItemData* itemData = m_tcObjects->GetItemData(item))
-						if (ibValueLayerObject* layer = ((ibVisualEditorObjectTreeItemData*)itemData)->GetLayerObject())
-							target = layer->GetControlID() == valueForm->GetControlID() ?
-								valueForm : valueForm->FindControlByID(layer->GetControlID());
+				if (target == nullptr && valueForm != nullptr)
+					if (ibValueLayerObject* const layer = data->GetLayerObject())
+						target = layer->GetControlID() == valueForm->GetControlID() ?
+							valueForm : valueForm->FindControlByID(layer->GetControlID());
 				return target;
 			},
 			[this](const ibFormDragItem& item, ibValueFrame* target) { item.ApplyDrop(m_formHandler, target); }));
 
-	Connect(wxID_ANY, wxEVT_COMMAND_TREE_ITEM_EXPANDED, wxTreeEventHandler(ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnExpansionChange));
-	Connect(wxID_ANY, wxEVT_COMMAND_TREE_ITEM_COLLAPSED, wxTreeEventHandler(ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnExpansionChange));
+	// The tree's events, as they come up to the panel.
+	Bind(wxEVT_TREE_SEL_CHANGED, &ibVisualEditorObjectTree::OnSelChanged, this);
+	Bind(wxEVT_TREE_ITEM_RIGHT_CLICK, &ibVisualEditorObjectTree::OnRightClick, this);
+	Bind(wxEVT_TREE_KEY_DOWN, &ibVisualEditorObjectTree::OnKeyDown, this);
+	Bind(wxEVT_TREE_BEGIN_DRAG, &ibVisualEditorObjectTree::OnBeginDrag, this);
+	Bind(wxEVT_TREE_END_DRAG, &ibVisualEditorObjectTree::OnEndDrag, this);
+	Bind(wxEVT_TREE_ITEM_EXPANDED, &ibVisualEditorObjectTree::OnExpansionChange, this);
+	Bind(wxEVT_TREE_ITEM_COLLAPSED, &ibVisualEditorObjectTree::OnExpansionChange, this);
 
 	auto reselectOnClick = [this](wxMouseEvent& event) {
-		const wxTreeItemId& id = m_tcObjects->HitTest(event.GetPosition());
-		if (id.IsOk() && id == m_tcObjects->GetSelection())
-			SelectItemData(m_tcObjects->GetItemData(id));
+		const wxTreeItemId row = m_tree->HitTest(event.GetPosition());
+		if (row.IsOk() && row == m_tree->GetSelection())
+			SelectItemData(GetItemData(row));
 		event.Skip();
 	};
-	m_tcObjects->Bind(wxEVT_LEFT_DOWN, reselectOnClick);
-	m_tcObjects->Bind(wxEVT_RIGHT_DOWN, reselectOnClick);
+	m_tree->Bind(wxEVT_LEFT_DOWN, reselectOnClick);
+	m_tree->Bind(wxEVT_RIGHT_DOWN, reselectOnClick);
 	// ACTIVATING the tree (it gains focus) reveals its SELECTED node too — not only a click. So switching to the object
 	// tree re-surfaces the current control / layer in the inspector (SelectObject early-outs if it is already current).
-	m_tcObjects->Bind(wxEVT_SET_FOCUS, [this](wxFocusEvent& event) {
+	m_tree->Bind(wxEVT_SET_FOCUS, [this](wxFocusEvent& event) {
 		event.Skip();
-		if (const wxTreeItemId sel = m_tcObjects->GetSelection(); sel.IsOk())
-			SelectItemData(m_tcObjects->GetItemData(sel));
+		SelectItemData(GetItemData(m_tree->GetSelection()));
 	});
 }
 
@@ -479,16 +425,15 @@ ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::~ibVisualEdito
 // Decode a tree item's payload and select it — one place for the click-reselect and the
 // selection-changed handlers. A layer node (bar/command) goes to the inspector; a control node
 // goes to the visual editor (which also scrolls to it).
-void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::SelectItemData(wxTreeItemData* item_data)
+void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::SelectItemData(ibVisualEditorObjectTreeItemData* data)
 {
-	if (item_data == nullptr)
+	if (data == nullptr)
 		return;
-	auto* data = (ibVisualEditorObjectTreeItemData*)item_data;
 	if (ibValueLayerObject* const layer = data->GetLayerObject()) {
 		m_formHandler->SetCurrentElement(layer);   // a tree click is SOFT — revealed in an open inspector, not popped open
 		return;
 	}
-	ibValueFrame* obj(data->GetObject());
+	ibValueFrame* const obj = data->GetObject();
 	assert(obj);
 	m_formHandler->SelectObject(obj, false, false);
 	m_formHandler->ScrollToObject(obj);
@@ -496,119 +441,95 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::SelectIte
 
 void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnSelChanged(wxTreeEvent& event)
 {
-	// Make selected items bold
-	wxTreeItemId oldId = event.GetOldItem();
-	if (oldId.IsOk()) m_tcObjects->SetItemBold(oldId, false);
-
-	const wxTreeItemId& id = event.GetItem();
-	if (!id.IsOk())
+	// The selected row in bold — and its control or layer selected in the editor, unless the tree follows the editor.
+	if (event.GetOldItem().IsOk())
+		m_tree->SetItemBold(event.GetOldItem(), false);
+	if (!event.GetItem().IsOk())
 		return;
-	m_tcObjects->SetItemBold(id);
+	m_tree->SetItemBold(event.GetItem());
 
-	wxTreeItemData* item_data = m_tcObjects->GetItemData(id);
-
-	if (m_notifySelecting)
-		return;
-
-	SelectItemData(item_data);
+	if (!m_selecting)
+		SelectItemData(GetItemData(event.GetItem()));
 }
 
 void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnRightClick(wxTreeEvent& event)
 {
-	wxTreeItemId id = event.GetItem();
-	wxTreeItemData* item_data = id.IsOk() ? m_tcObjects->GetItemData(id) : nullptr;
-	if (item_data == nullptr)
+	ibVisualEditorObjectTreeItemData* const data = GetItemData(event.GetItem());
+	if (data == nullptr)
 		return;
-	if (ibValueLayerObject* const layer = ((ibVisualEditorObjectTreeItemData*)item_data)->GetLayerObject()) {
-		// Layer node (bar OR command) — the object fills its own menu and runs the choice; the tree never branches per
-		// kind.
+
+	// Layer node (bar OR command) — the object fills its own menu and runs the choice; the tree never branches per kind.
+	if (ibValueLayerObject* const layer = data->GetLayerObject()) {
 		wxMenu menu;
 		layer->PrepareDefaultMenu(&menu);
-		const int sel = GetPopupMenuSelectionFromUser(menu, event.GetPoint());
-		if (sel != wxID_NONE)
-			layer->ExecuteMenu(sel);
+		const int chosen = GetPopupMenuSelectionFromUser(menu, event.GetPoint());
+		if (chosen != wxID_NONE)
+			layer->ExecuteMenu(chosen);
 		return;
 	}
-	ibValueFrame* obj = GetObjectFromTreeItem(id);
-	if (obj != nullptr) {
-		m_formHandler->SelectObject(obj);
-		// On the stack — PopupMenu does not take ownership and blocks until dismissed.
-		ibVisualEditorItemPopupMenu menu(m_formHandler, this, obj);
-		wxPoint pos = event.GetPoint();
+
+	// A control's node — selected, and its menu over it: on the stack, PopupMenu takes no ownership and blocks until the
+	// menu is dismissed.
+	if (ibValueFrame* const control = data->GetObject()) {
+		m_formHandler->SelectObject(control);
+		ibVisualEditorItemPopupMenu menu(m_formHandler, this, control);
 		menu.UpdateUI(&menu);
-		PopupMenu(&menu, pos.x, pos.y);
+		PopupMenu(&menu, event.GetPoint());
 	}
 }
 
 void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnKeyDown(wxTreeEvent& event)
 {
 	// Alt+Up / Alt+Down reorder the selected control among its siblings (GTK only — on MSVC the tree drives this
-	// itself). Guard the selection: a layer node (command bar) or empty selection resolves to null, which must NOT
-	// be passed to MovePosition. Alt+Left/Right (move a control IN / OUT of a container) has no editor primitive yet
-	// — it would be a real cross-platform reparent command with undo, not a keystroke — so it falls through to default.
-	if (event.GetKeyEvent().AltDown() && event.GetKeyCode() != WXK_ALT)
-	{
+	// itself); not on a view-only form, the same gate as the MOVE menu and the drag. A layer node (command bar) or no
+	// selection resolves to no control and moves nothing. Alt+Left/Right (move a control IN / OUT of a container) has no
+	// editor primitive yet — it would be a real cross-platform reparent command with undo, not a keystroke.
 #ifdef __WXGTK__
-		if (m_formHandler->IsEditable()) {   // view-only: no keyboard reorder, same gate as the MOVE menu / drag
-			if (ibValueFrame* obj = GetObjectFromTreeItem(m_tcObjects->GetSelection())) {
-				if (event.GetKeyCode() == WXK_UP)   { m_formHandler->MovePosition(obj, false); return; }
-				if (event.GetKeyCode() == WXK_DOWN) { m_formHandler->MovePosition(obj, true);  return; }
-			}
+	const int key = event.GetKeyCode();
+	if (event.GetKeyEvent().AltDown() && (key == WXK_UP || key == WXK_DOWN) && m_formHandler->IsEditable()) {
+		if (ibValueFrame* const control = GetControl(m_tree->GetSelection())) {
+			m_formHandler->MovePosition(control, key == WXK_DOWN);
+			return;
 		}
+	}
 #endif
-		event.Skip();
-	}
-	else
-	{
-		event.Skip();
-	}
+	event.Skip();
 }
 
 void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnBeginDrag(wxTreeEvent& event)
 {
-	// need to explicitly allow drag
-	if (event.GetItem() == m_tcObjects->GetRootItem())
+	// A drag is cancelled unless allowed: not of the form itself, and not on a view-only form, whose layout is frozen —
+	// the same gate as the menu's MOVE items.
+	if (event.GetItem() == m_tree->GetRootItem() || !m_formHandler->IsEditable())
 		return;
 
-	// A view-only form's layout is frozen — drag reorders/reparents controls, so gate it exactly like the
-	// menu MOVE items (leaving event unallowed cancels the drag).
-	if (!m_formHandler->IsEditable())
-		return;
-
-	m_draggedItem = event.GetItem();
+	m_dragged = event.GetItem();
 	event.Allow();
 }
 
 void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnEndDrag(wxTreeEvent& event)
 {
-	bool copy = ::wxGetKeyState(WXK_CONTROL);
-	wxTreeItemId itemSrc = m_draggedItem, itemDst = event.GetItem();
-	m_draggedItem = (wxTreeItemId)0l;
+	const wxTreeItemId source = m_dragged;
+	m_dragged = wxTreeItemId();
 
-	// ensure that itemDst is not itemSrc or a child of itemSrc
-	wxTreeItemId item = itemDst;
-	while (item.IsOk()) {
-		if (item == itemSrc)
+	// Never into itself, nor into a row under it.
+	for (wxTreeItemId row = event.GetItem(); row.IsOk(); row = m_tree->GetItemParent(row)) {
+		if (row == source)
 			return;
-		item = m_tcObjects->GetItemParent(item);
 	}
 
-	ibValueFrame* objSrc =
-		GetObjectFromTreeItem(itemSrc);
-	if (!objSrc)
-		return;
-
-	ibValueFrame* objDst =
-		GetObjectFromTreeItem(itemDst);
-
-	if (!objDst)
+	const ibValueFrame* const from = GetControl(source);
+	const ibValueFrame* const to = GetControl(event.GetItem());
+	if (from == nullptr || to == nullptr)
 		return;
 
 	// Done once the drag is over — and each step on the controls as the one before left them: a command draws the
-	// form anew, the controls with it, so the target is found again by its id.
+	// form anew, the controls with it, so the target is found again by its id. Ctrl held copies; else the control
+	// moves, and a paste refused puts the cut back.
 	ibVisualEditor* const handler = m_formHandler;
-	const long long srcId = objSrc->GetControlID(), dstId = objDst->GetControlID();
-	handler->CallAfter([handler, copy, srcId, dstId]() {
+	const bool copy = wxGetKeyState(WXK_CONTROL);
+	const long long fromId = from->GetControlID(), toId = to->GetControlID();
+	handler->CallAfter([handler, copy, fromId, toId]() {
 		const auto find = [handler](long long id) -> ibValueFrame* {
 			ibValueForm* const form = handler->GetValueForm();
 			if (form == nullptr)
@@ -616,69 +537,43 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnEndDrag
 			return form->GetControlID() == id ? form : form->FindControlByID(id);
 		};
 
-		// set object to clipboard
 		if (copy) {
-			handler->CopyObject(find(srcId));
+			handler->CopyObject(find(fromId));
+			handler->PasteObject(find(toId));
 		}
 		else {
-			handler->CutObject(find(srcId));
-		}
-
-		if (!copy && !handler->PasteObject(find(dstId))) {
-			handler->Undo();
+			handler->CutObject(find(fromId));
+			if (!handler->PasteObject(find(toId)))
+				handler->Undo();
 		}
 	});
 }
 
 void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnExpansionChange(wxTreeEvent& event)
 {
-	wxTreeItemId id = event.GetItem();
-	wxTreeItemData* item_data = m_tcObjects->GetItemData(id);
+	// Opened or closed by the person: a control's the form keeps (a command), a layer's its holder, so a rebuild opens
+	// it again (a leaf: nothing to keep).
+	const ibVisualEditorObjectTreeItemData* const data = GetItemData(event.GetItem());
+	if (m_expanding || data == nullptr)
+		return;
 
-	if (item_data != nullptr) {
-		auto* data = (ibVisualEditorObjectTreeItemData*)item_data;
-		ibValueFrame* obj(data->GetObject());
-		if (obj == nullptr) {
-			// layer node — keep its open-state on the object so RebuildTree restores it (leaf = no-op).
-			if (ibValueLayerObject* layer = data->GetLayerObject())
-				layer->SetTreeExpanded(m_tcObjects->IsExpanded(id));
-			return;
-		}
-		Disconnect(wxID_ANY, wxEVT_COMMAND_TREE_ITEM_EXPANDED, wxTreeEventHandler(ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnExpansionChange));
-		m_formHandler->ExpandObject(obj, m_tcObjects->IsExpanded(id));
-		Connect(wxID_ANY, wxEVT_COMMAND_TREE_ITEM_EXPANDED, wxTreeEventHandler(ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnExpansionChange));
+	const bool expanded = m_tree->IsExpanded(event.GetItem());
+	if (ibValueFrame* const control = data->GetObject()) {
+		m_expanding = true;
+		m_formHandler->ExpandObject(control, expanded);
+		m_expanding = false;
+	}
+	else if (ibValueLayerObject* const layer = data->GetLayerObject()) {
+		layer->SetTreeExpanded(expanded);
 	}
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 
-enum {
-	MENU_MOVE_UP = wxID_HIGHEST + 2000,
-	MENU_MOVE_DOWN,
-	MENU_CUT,
-	MENU_PASTE,
-	MENU_EDIT_MENUS,
-	MENU_COPY,
-	MENU_MOVE_NEW_BOXSIZER,
-	MENU_DELETE,
-	MENU_PROPERTIES,
-
-	MENU_CREATE_OBJECT = wxID_HIGHEST + 2050,   // …and the classes the control adds in itself, by their place
-};
-
-wxBEGIN_EVENT_TABLE(ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorItemPopupMenu, wxMenu)
-EVT_MENU(wxID_ANY, ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorItemPopupMenu::OnMenuEvent)
-EVT_UPDATE_UI(wxID_ANY, ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorItemPopupMenu::OnUpdateEvent)
-wxEND_EVENT_TABLE()
-
-bool ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorItemPopupMenu::HasDeleteObject() {
-	return m_selID == MENU_DELETE;
-}
-
 // The control's own items first (a table's "Add column", a notebook's "Add page" — the desktop's PrepareDefaultMenu):
 // its class's Menu in the tab's answer, each the class it adds and its title.
 ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorItemPopupMenu::ibVisualEditorItemPopupMenu(ibVisualEditor* handler, wxWindow* WXUNUSED(parent), ibValueFrame* obj)
-	: wxMenu(), m_object(obj), m_formHandler(handler), m_selID(wxNOT_FOUND)
+	: wxMenu(), m_object(obj), m_formHandler(handler)
 {
 	wxMenuItem* item = nullptr;
 
@@ -687,7 +582,7 @@ ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorItemPopupMenu::ibVisualEdi
 			continue;
 		for (const ibProtocolNode& added : described.FindChild(ibProtocol::ibView::ibFormDesigner::Menu).Children()) {
 			const wxString className = added.GetString(ibProtocol::ibView::ibFormDesigner::Name);
-			item = Append(MENU_CREATE_OBJECT + static_cast<int>(m_classNames.size()), added.GetString(ibProtocol::ibView::ibFormDesigner::Title));
+			item = Append(kCreateControlId + static_cast<int>(m_classNames.size()), added.GetString(ibProtocol::ibView::ibFormDesigner::Title));
 			for (const ibProtocolNode& made : handler->m_classes.Children()) {
 				if (made.GetString(ibProtocol::ibView::ibFormDesigner::Name) != className)
 					continue;
@@ -703,72 +598,69 @@ ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorItemPopupMenu::ibVisualEdi
 	if (!m_classNames.empty())
 		AppendSeparator();
 
-	item = Append(MENU_CUT, _("Cut\tCtrl+X"));
+	item = Append(wxID_CUT, _("Cut\tCtrl+X"));
 	item->SetBitmap(wxArtProvider::GetBitmapBundle(wxART_CUT, wxART_MENU));
-	item = Append(MENU_COPY, _("Copy\tCtrl+C"));
+	item = Append(wxID_COPY, _("Copy\tCtrl+C"));
 	item->SetBitmap(wxArtProvider::GetBitmapBundle(wxART_COPY, wxART_MENU));
-	item = Append(MENU_PASTE, _("Paste\tCtrl+V"));
+	item = Append(wxID_PASTE, _("Paste\tCtrl+V"));
 	item->SetBitmap(wxArtProvider::GetBitmapBundle(wxART_PASTE, wxART_MENU));
 	AppendSeparator();
-	item = Append(MENU_DELETE, _("Delete\tCtrl+D"));
+	item = Append(wxID_DELETE, _("Delete\tCtrl+D"));
 	item->SetBitmap(wxArtProvider::GetBitmapBundle(wxART_DELETE, wxART_MENU));
 	AppendSeparator();
-	item = Append(MENU_MOVE_UP, _("Move Up\tAlt+Up"));
+	item = Append(wxID_UP, _("Move Up\tAlt+Up"));
 	item->SetBitmap(wxArtProvider::GetBitmapBundle(wxART_GO_UP, wxART_MENU));
-	item = Append(MENU_MOVE_DOWN, _("Move Down\tAlt+Down"));
+	item = Append(wxID_DOWN, _("Move Down\tAlt+Down"));
 	item->SetBitmap(wxArtProvider::GetBitmapBundle(wxART_GO_DOWN, wxART_MENU));
 	AppendSeparator();
-	item = Append(MENU_PROPERTIES, _("Properties"));
+	item = Append(wxID_PROPERTIES, _("Properties"));
 	item->SetBitmap(wxArtProvider::GetBitmapBundle(wxART_PROPERTY, wxART_SERVICE));
+
+	Bind(wxEVT_MENU, &ibVisualEditorItemPopupMenu::OnMenuEvent, this);
+	Bind(wxEVT_UPDATE_UI, &ibVisualEditorItemPopupMenu::OnUpdateEvent, this);
 }
 
 void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorItemPopupMenu::OnMenuEvent(wxCommandEvent& event)
 {
-	m_selID = event.GetId();
-
 	// Done once the menu is gone: a command draws the form anew, and the control's window the menu stands on with it —
 	// the control is the selected one then (the click selected it).
 	ibVisualEditor* const handler = m_formHandler;
 
-	switch (m_selID)
+	switch (event.GetId())
 	{
-	case MENU_CUT: handler->CallAfter([handler]() { handler->CutObject(handler->GetSelectedObject()); }); break;
-	case MENU_COPY: handler->CallAfter([handler]() { handler->CopyObject(handler->GetSelectedObject()); }); break;
-	case MENU_PASTE: handler->CallAfter([handler]() { handler->PasteObject(handler->GetSelectedObject()); }); break;
-	case MENU_DELETE: handler->CallAfter([handler]() { handler->RemoveObject(handler->GetSelectedObject()); }); break;
-	case MENU_MOVE_UP: handler->CallAfter([handler]() { handler->MovePosition(handler->GetSelectedObject(), false); }); break;
-	case MENU_MOVE_DOWN: handler->CallAfter([handler]() { handler->MovePosition(handler->GetSelectedObject(), true); }); break;
+	case wxID_CUT: handler->CallAfter([handler]() { handler->CutObject(handler->GetSelectedObject()); }); break;
+	case wxID_COPY: handler->CallAfter([handler]() { handler->CopyObject(handler->GetSelectedObject()); }); break;
+	case wxID_PASTE: handler->CallAfter([handler]() { handler->PasteObject(handler->GetSelectedObject()); }); break;
+	case wxID_DELETE: handler->CallAfter([handler]() { handler->RemoveObject(handler->GetSelectedObject()); }); break;
+	case wxID_UP: handler->CallAfter([handler]() { handler->MovePosition(handler->GetSelectedObject(), false); }); break;
+	case wxID_DOWN: handler->CallAfter([handler]() { handler->MovePosition(handler->GetSelectedObject(), true); }); break;
 
-	case MENU_PROPERTIES:
+	case wxID_PROPERTIES:
 		// Explicit "Properties" — select the control (canvas highlight + scroll) then FORCE-open the inspector on it.
 		m_formHandler->SelectObject(m_object, true);
 		m_formHandler->ShowCurrentElement(true);
 		break;
 
 	default:
-		if (m_selID >= MENU_CREATE_OBJECT && m_selID < MENU_CREATE_OBJECT + static_cast<int>(m_classNames.size())) {
-			const wxString className = m_classNames[m_selID - MENU_CREATE_OBJECT];
+		if (event.GetId() >= kCreateControlId && event.GetId() < kCreateControlId + static_cast<int>(m_classNames.size())) {
+			const wxString className = m_classNames[event.GetId() - kCreateControlId];
 			handler->CallAfter([handler, className]() { handler->CreateObject(className); });
 		}
 		break;
 	}
 }
 
-void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorItemPopupMenu::OnUpdateEvent(wxUpdateUIEvent& e)
+void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorItemPopupMenu::OnUpdateEvent(wxUpdateUIEvent& event)
 {
-	switch (e.GetId())
-	{
-	case MENU_CUT:
-	case MENU_COPY:
-	case MENU_MOVE_UP:
-	case MENU_MOVE_DOWN:
-	case MENU_MOVE_NEW_BOXSIZER: e.Enable(m_formHandler->CanCopyObject() && m_formHandler->IsEditable()); break;
-	case MENU_DELETE: e.Enable(m_formHandler->CanCopyObject() && m_formHandler->IsEditable() &&
-		CanDeleteControl(m_formHandler->GetSelectedObject())); break;
-	case MENU_PASTE: e.Enable(m_formHandler->CanPasteObject() && m_formHandler->IsEditable()); break;
-	default:
-		if (e.GetId() >= MENU_CREATE_OBJECT && e.GetId() < MENU_CREATE_OBJECT + static_cast<int>(m_classNames.size()))
-			e.Enable(m_formHandler->IsEditable());
-		break;
-	}
+	// Nothing changes a view-only form; Properties only shows.
+	const bool editable = m_formHandler->IsEditable();
+	const int id = event.GetId();
+	if (id == wxID_CUT || id == wxID_COPY || id == wxID_UP || id == wxID_DOWN)
+		event.Enable(editable && m_formHandler->CanCopyObject());
+	else if (id == wxID_DELETE)
+		event.Enable(editable && m_formHandler->CanCopyObject() && CanDeleteControl(m_formHandler->GetSelectedObject()));
+	else if (id == wxID_PASTE)
+		event.Enable(editable && m_formHandler->CanPasteObject());
+	else if (id >= kCreateControlId && id < kCreateControlId + static_cast<int>(m_classNames.size()))
+		event.Enable(editable);
 }

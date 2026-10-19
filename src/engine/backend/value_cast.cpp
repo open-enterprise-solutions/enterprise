@@ -19,7 +19,7 @@ void ThrowErrorTypeOperation(const wxString& fromType, const std::type_info& typ
 			}
 		}
 
-		ibBackendCoreException::Error(ERROR_TYPE_OPERATION, fromType, className);
+		ibBackendCoreException::Error(ibScriptError_TypeOperation, fromType, className);
 	}
 }
 #endif

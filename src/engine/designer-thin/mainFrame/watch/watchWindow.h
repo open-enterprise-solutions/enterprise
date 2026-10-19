@@ -1,112 +1,66 @@
 #ifndef WATCH_WINDOW_H
 #define WATCH_WINDOW_H
 
-#include <wx/wx.h>
-#include "watchctrl.h"
+/////////////////////////////////////////////////////////////////////////////
+// The debugger's Watch pane: the expressions a person typed or dropped, one
+// row each, with the value and type the debugger answers. A row's tree id IS
+// the expression's id on the wire — the debugger answers into it
+// (SetVariable), and a row with members asks for them only when opened
+// (SetExpanded). The last row is always empty: typing into it adds one.
+/////////////////////////////////////////////////////////////////////////////
 
-#include "frmclient/frmclient.h"
+#include "frmclient/win/ctrls/treelistctrl.h"
 #include "designer-thin/backend/debugger/debugDefs.h"
-
-//
-// Forward declarations.
-//
 
 #define watchWindow	ibWatchWindow::GetWatchWindow()
 
-/**
- * Window window class.
- */
-class ibWatchWindow : public ibWatchCtrl
+class ibWatchWindow : public ibTreeListCtrl
 {
-	/**
-	* Constructor.
-	*/
-	ibWatchWindow(wxWindow* window, wxWindowID winid);
+	// Made by the frame, once.
+	friend class ibFrontendMainFrameDesigner;
+	ibWatchWindow(wxWindow* parent, wxWindowID id);
 
 public:
 
+	virtual ~ibWatchWindow() override;
+
 	static ibWatchWindow* GetWatchWindow();
 
-	/**
-	* Called when the debugger receive an item.
-	*/
+	// The debugger's answers: the values of watched rows, and the members of an opened one.
 	void SetVariable(const ibWatchWindowData& watchData);
-
-	/**
-	* Called when the debugger receive expanded item.
-	*/
 	void SetExpanded(const ibWatchWindowData& watchData);
 
-	/**
-	* Is this row one of ours? The watch protocol carries the requester's own
-	* wxTreeItemId as the watch id, so an answer meant for somebody else attached
-	* to the same debugger arrives here as an address this window never created.
-	* Walked rather than remembered: the tree is a handful of rows, and a second
-	* set kept in step would be one more thing to keep in step.
-	*/
-
-	/**
-	* Updates the value for the express in the index spot in the list.
-	*/
-	void UpdateItem(const wxTreeItemId& item);
-
-	/**
-	 * Updates the values of all the expressions being watched.
-	 */
-	void UpdateItems();
-
-	/**
-	 * Adds a new expression to the watch window.
-	 */
+	// A new row before the empty one, its value asked of the debugger.
 	void AddWatch(const wxString& expression);
 
-	/**
-	 * Called when the user presses a key.
-	 */
-	void OnKeyDown(wxTreeEvent& event);
-
-	/**
-	 * Called when the user begins editing a label.
-	 */
-	void OnBeginLabelEdit(wxTreeEvent& event);
-
-	/**
-	 * Called when the user finishes editing a label.
-	 */
-	void OnEndLabelEdit(wxTreeEvent& event);
-
-	/**
-	 * Called when the user selects an item.
-	 */
-	void OnItemSelected(wxTreeEvent& event);
-
-	/**
-	* Called when the user delete an item.
-	*/
-	void OnItemDeleted(wxTreeEvent& event);
-
-	/**
-	* Called when the user expanding an item.
-	*/
-	void OnItemExpanding(wxTreeEvent& event);
-
 private:
 
-	friend class ibFrontendMainFrameDesigner;
+	// Sends the row's expression to the debugger; the value comes back by SetVariable.
+	void UpdateItem(const wxTreeItemId& item);
 
-	/**
-	 * Creates a blank entry at the end of the list (for easily adding new items)
-	 * if there isn't one there already.
-	 */
 	void CreateEmptySlotIfNeeded();
 
-private:
+	// After a row is removed or edited: the row that followed it, or the empty one.
+	void SelectNext(const wxTreeItemId& next);
 
-	bool            m_editing;
-	bool            m_updating;
-	wxTreeItemId    m_root;
+	// Name and value share what the type column leaves, in the proportion a person dragged them to.
+	void FitColumns();
 
-	wxDECLARE_EVENT_TABLE();
+	void OnSize(wxSizeEvent& event);
+	void OnColumnDragged(wxListEvent& event);
+	void OnKeyDown(wxTreeEvent& event);
+	void OnBeginLabelEdit(wxTreeEvent& event);
+	void OnEndLabelEdit(wxTreeEvent& event);
+	void OnItemActivated(wxTreeEvent& event);
+	void OnItemDeleted(wxTreeEvent& event);
+	void OnItemExpanding(wxTreeEvent& event);
+
+	wxTreeItemId m_root;
+	bool m_editing = false;
+
+	// The rows are being changed by the debugger's answer, not by a person: a row deleted then
+	// removes no expression, and a row expanded asks for nothing.
+	bool m_updating = false;
 };
 
 #endif

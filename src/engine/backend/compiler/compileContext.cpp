@@ -43,7 +43,7 @@ ibParamUnit ibCompileContext::AddVariable(const wxString& strVarName,
 	auto existing = std::find_if(m_listVariable.begin(), m_listVariable.end(),
 		[&strVarName](const auto& v) { return v && stringUtils::CompareString(strVarName, v->m_strRealName); });
 	if (existing != m_listVariable.end()) {
-		m_compileModule->SetError(ERROR_IDENTIFIER_DUPLICATE, strVarName);
+		m_compileModule->Refuse(ibScriptError_IdentifierDuplicate, strVarName);
 		return ibParamUnit();
 	}
 
@@ -309,7 +309,7 @@ ibParamUnit ibCompileContext::GetVariable(const wxString& strVarName, bool bFind
 		}
 
 		if (bCheckError) {
-			m_compileModule->SetError(ERROR_VAR_NOT_FOUND, strVarName); //display an error message
+			m_compileModule->Refuse(ibScriptError_VarNotFound, strVarName); //display an error message
 			return ibParamUnit();
 		}
 
@@ -403,7 +403,7 @@ void ibCompileContext::PushFunction(const wxString& strFuncName, const wxString&
 	// m_bCodeRet defaults false and context methods have no compile finalize to run
 	// IsReturnFunction(m_numReturn) — set it straight from hasRetVal, otherwise every built-in
 	// function (TrimAll, Left, Right, ...) resolves as a procedure and using its result throws
-	// ERROR_USE_PROCEDURE_AS_FUNCTION.
+	// ibScriptError_UseProcedureAsFunction.
 	contextFunction->m_bCodeRet = hasRetVal;
 
 	contextFunction->m_strContext = strContextVar; //variable for which the attribute is called
@@ -554,7 +554,7 @@ void ibCompileContext::CreateLabels()
 		const auto itLabel = m_listLabelDef.find(strName);
 		if (itLabel == m_listLabelDef.end()) {
 			m_compileModule->m_numCurrentCompile = m_listLabel[i]->m_numError;
-			m_compileModule->SetError(ERROR_LABEL_DEFINE, strName); // the label was never declared
+			m_compileModule->Refuse(ibScriptError_LabelDefine, strName); // the label was never declared
 			continue;
 		}
 

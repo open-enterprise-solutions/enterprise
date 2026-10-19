@@ -509,7 +509,7 @@ bool ibLinqBlock::Parse(const wxString& text, ibLinqBlock& block, wxString& refu
 	lexer.SetLexemMode(ibLexemMode::Editing);
 	lexer.Load(source);
 	try {
-		lexer.PrepareLexem();
+		lexer.Translate();
 	}
 	catch (...) {
 		refusal = _("The query's text could not be read.");

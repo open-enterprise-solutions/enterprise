@@ -26,20 +26,10 @@ public:
 
 protected:
 
-	static const unsigned int s_numColumns = 2;
+	// The line a narrow column, the module the rest of the width.
+	void FitColumns();
 
-	/**
-	 * Updates the variable that stores the proprotion of the first column
-	 * relative to the width of the control.
-	 */
-	void UpdateColumnSizes();
-
-	/**
-	* Gets the size of each of the columns in pixels.
-	*/
-	void GetColumnSizes(int totalSize, int columnSize[s_numColumns]) const;
-
-	//events 
+	//events
 	void OnItemSelected(wxListEvent& event);
 
 	/**
@@ -48,7 +38,6 @@ protected:
 	void OnSize(wxSizeEvent& event);
 
 private:
-	float m_columnSize[s_numColumns];
 	wxDECLARE_EVENT_TABLE();
 };
 

@@ -79,9 +79,6 @@
     <Filter Include="mainFrame\vcs">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f7a1e}</UniqueIdentifier>
     </Filter>
-    <Filter Include="win\ctrl">
-      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f7a1f}</UniqueIdentifier>
-    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="mainApp.cpp" />
@@ -200,12 +197,6 @@
     <ClCompile Include="mainFrame\configCompare\configCompareModel.cpp">
       <Filter>mainFrame\configCompare</Filter>
     </ClCompile>
-    <ClCompile Include="mainFrame\watch\watchctrl.cpp">
-      <Filter>mainFrame\watch</Filter>
-    </ClCompile>
-    <ClCompile Include="mainFrame\watch\watchdroptarget.cpp">
-      <Filter>mainFrame\watch</Filter>
-    </ClCompile>
     <ClCompile Include="mainFrame\watch\watchWindow.cpp">
       <Filter>mainFrame\watch</Filter>
     </ClCompile>
@@ -277,9 +268,6 @@
     </ClCompile>
     <ClCompile Include="win\dlg\textEditor.cpp">
       <Filter>win\dlg</Filter>
-    </ClCompile>
-    <ClCompile Include="win\ctrl\menuBar.cpp">
-      <Filter>win\ctrl</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -365,12 +353,6 @@
     <ClInclude Include="mainFrame\configCompare\configCompareModel.h">
       <Filter>mainFrame\configCompare</Filter>
     </ClInclude>
-    <ClInclude Include="mainFrame\watch\watchctrl.h">
-      <Filter>mainFrame\watch</Filter>
-    </ClInclude>
-    <ClInclude Include="mainFrame\watch\watchdroptarget.h">
-      <Filter>mainFrame\watch</Filter>
-    </ClInclude>
     <ClInclude Include="mainFrame\watch\watchWindow.h">
       <Filter>mainFrame\watch</Filter>
     </ClInclude>
@@ -442,9 +424,6 @@
     </ClInclude>
     <ClInclude Include="win\dlg\textEditor.h">
       <Filter>win\dlg</Filter>
-    </ClInclude>
-    <ClInclude Include="win\ctrl\menuBar.h">
-      <Filter>win\ctrl</Filter>
     </ClInclude>
     <ClInclude Include="resource.h" />
   </ItemGroup>

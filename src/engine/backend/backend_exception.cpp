@@ -125,90 +125,90 @@ static wxString gs_listErrorString[] =
 	_("Constant number expected:\n%s"),
 	_("Constant string expected:\n%s"),
 	_("Constant date expected:\n%s"),
-	_("Duplicate identifier %s"),//ERROR_IDENTIFIER_DUPLICATE
+	_("Duplicate identifier %s"),//ibScriptError_IdentifierDuplicate
 	_("Label '%s' not defined"),
 	_("One of the keywords is expected!"),
 	_("Module code expected"),
-	_("Identifier expected"),//ERROR_IDENTIFIER_DEFINE
-	_("Region name expected"),//ERROR_IDENTIFIER_REGION
-	_("Keyword or identifier expected"),//ERROR_CODE
-	_("Symbol expected '%s'"),//ERROR_DELIMETER
-	_("Closing parenthesis or comma expected"),//ERROR_FUNC_DELIMETER
-	_("Function or procedure declaration keyword expected"),//ERROR_FUNC_DEFINE
-	_("Module cannot have a return statement"),//ERROR_RETURN
-	_("Expected constant"),//ERROR_CONST_DEFINE
-	_("An operator is expected to complete a procedure or function!"),//ERROR_ENDFUNC_DEFINE
-	_("Error writing file: %s"),//ERROR_FILE_WRITE
-	_("Error in expression:\n%s"),//ERROR_EXPRESSION
-	_("Keyword expected %s"),//ERROR_KEYWORD
-	_("Identifier '%s' not found"),//ERROR_IDENTIFIER_NOT_FOUND
-	_("Operator Break can be used only inside the cycle"),//ERROR_USE_BREAK
-	_("Operator Continue can be used only inside the cycle"),//ERROR_USE_CONTINUE
-	_("Operator Return cannot be used outside the procedure or function"),//ERROR_USE_RETURN
-	_("Expected program operators"),//ERROR_USE_BLOCK
-	_("Expected expression"),//ERROR_EXPRESSION_REQUIRE
-	_("Procedure or function not detected (%s)"),//ERROR_CALL_FUNCTION
-	_("Variable with the specified name is already defined (%s)"),//ERROR_DEF_VARIABLE
-	_("A procedure or function with the specified name is already defined (%s)"),//ERROR_DEF_FUNCTION
+	_("Identifier expected"),//ibScriptError_IdentifierDefine
+	_("Region name expected"),//ibScriptError_IdentifierRegion
+	_("Keyword or identifier expected"),//ibScriptError_Code
+	_("Symbol expected '%s'"),//ibScriptError_Delimiter
+	_("Closing parenthesis or comma expected"),//ibScriptError_FuncDelimiter
+	_("Function or procedure declaration keyword expected"),//ibScriptError_FuncDefine
+	_("Module cannot have a return statement"),//ibScriptError_Return
+	_("Expected constant"),//ibScriptError_ConstDefine
+	_("An operator is expected to complete a procedure or function!"),//ibScriptError_EndFuncDefine
+	_("Error writing file: %s"),//ibScriptError_FileWrite
+	_("Error in expression:\n%s"),//ibScriptError_Expression
+	_("Keyword expected %s"),//ibScriptError_Keyword
+	_("Identifier '%s' not found"),//ibScriptError_IdentifierNotFound
+	_("Operator Break can be used only inside the cycle"),//ibScriptError_UseBreak
+	_("Operator Continue can be used only inside the cycle"),//ibScriptError_UseContinue
+	_("Operator Return cannot be used outside the procedure or function"),//ibScriptError_UseReturn
+	_("Expected program operators"),//ibScriptError_UseBlock
+	_("Expected expression"),//ibScriptError_ExpressionRequire
+	_("Procedure or function not detected (%s)"),//ibScriptError_CallFunction
+	_("Variable with the specified name is already defined (%s)"),//ibScriptError_DefVariable
+	_("A procedure or function with the specified name is already defined (%s)"),//ibScriptError_DefFunction
 	// ⭐ NAME THE CALL. Both of these used to say only that a count was wrong, in a module with a
 	// hundred calls in it — and the runtime callsite was ALREADY handing over the function's name,
 	// which the message then threw away because it had nowhere to put it. An author reading "Too
 	// many parameters" has to find the call themselves; measured on a live session, the first guess
 	// was the wrong construct entirely (2026-09-02).
-	_("Too many parameters passed to '%s'"),//ERROR_MANY_PARAMS
-	_("Not enough parameters passed to '%s'"),//ERROR_FEW_PARAMS
-	_("Var is not found (%s)"),//ERROR_VAR_NOT_FOUND
-	_("Unexpected program code termination"),//ERROR_END_PROGRAM
-	_("This module may contain only definitions of procedures and functions"), //ERROR_ONLY_FUNCTION
-	_("Use procedure as function (%s)"), //ERROR_USE_PROCEDURE_AS_FUNCTION
-	_("Expected integer positive sign constant"),//ERROR_ARRAY_SIZE_CONST
-	_("Re-import the parent module"),//ERROR_DUBLICATE_IMPORT
-	_("Module not found"),//ERROR_MODULE_NOT_FOUND
-	_("The import statement must be at the beginning of the module"),//ERROR_USE_IMPORT
-	_("Final conditional compilation statement expected"),//ERROR_USE_ENDDEF
-	_("A pending region statement is expected"),//ERROR_USE_ENDREGION
+	_("Too many parameters passed to '%s'"),//ibScriptError_ManyParams
+	_("Not enough parameters passed to '%s'"),//ibScriptError_FewParams
+	_("Var is not found (%s)"),//ibScriptError_VarNotFound
+	_("Unexpected program code termination"),//ibScriptError_EndProgram
+	_("This module may contain only definitions of procedures and functions"), //ibScriptError_OnlyFunction
+	_("Use procedure as function (%s)"), //ibScriptError_UseProcedureAsFunction
+	_("Expected integer positive sign constant"),//ibScriptError_ArraySizeConst
+	_("Re-import the parent module"),//ibScriptError_DuplicateImport
+	_("Module not found"),//ibScriptError_ModuleNotFound
+	_("The import statement must be at the beginning of the module"),//ibScriptError_UseImport
+	_("Final conditional compilation statement expected"),//ibScriptError_UseEndDef
+	_("A pending region statement is expected"),//ibScriptError_UseEndRegion
 
-	_("Constructor not found (%s)"),//ERROR_CALL_CONSTRUCTOR
+	_("Constructor not found (%s)"),//ibScriptError_CallConstructor
 
-	_("'%s' is not a type a declaration can name - it takes a primitive (Number), a value class (Array) or a family of references (CatalogRef, AnyRef)"),//ERROR_TYPE_DEF
-	_("Bad variable type"),//ERROR_BAD_TYPE
-	_("Bad value type"),//ERROR_BAD_TYPE_EXPRESSION
-	_("Variable must be a numeric type"),//ERROR_NUMBER_TYPE
+	_("'%s' is not a type a declaration can name - it takes a primitive (Number), a value class (Array) or a family of references (CatalogRef, AnyRef)"),//ibScriptError_TypeDef
+	_("Bad variable type"),//ibScriptError_BadType
+	_("Bad value type"),//ibScriptError_BadTypeExpression
+	_("Variable must be a numeric type"),//ibScriptError_NumberType
 
-	_("Boolean value expected"),//ERROR_BAD_TYPE_EXPRESSION_B
-	_("Numeric value expected"),//ERROR_BAD_TYPE_EXPRESSION_N
-	_("String value expected"),//ERROR_BAD_TYPE_EXPRESSION_S
-	_("Date value expected"),//ERROR_BAD_TYPE_EXPRESSION_D
+	_("Boolean value expected"),//ibScriptError_BadTypeExpressionBoolean
+	_("Numeric value expected"),//ibScriptError_BadTypeExpressionNumber
+	_("String value expected"),//ibScriptError_BadTypeExpressionString
+	_("Date value expected"),//ibScriptError_BadTypeExpressionDate
 
-	_("Variable type does not support this operation"),//ERROR_TYPE_OPERATION
+	_("Variable type does not support this operation"),//ibScriptError_TypeOperation
 
 	// --- runtime (the interpreting loop) — lock-step with the enum ----------
-	_("Divide by zero"),//ERROR_DIVIDE_BY_ZERO
-	_("Cannot set array value '%s'"),//ERROR_ARRAY_SET
-	_("Cannot get array value '%s'"),//ERROR_ARRAY_GET
-	_("Object field not writable (%s)"),//ERROR_PROP_NOT_WRITABLE
-	_("Object field not readable (%s)"),//ERROR_PROP_NOT_READABLE
-	_("Object field is scope-local (%s)"),//ERROR_PROP_SCOPE_LOCAL
+	_("Divide by zero"),//ibScriptError_DivideByZero
+	_("Cannot set array value '%s'"),//ibScriptError_ArraySet
+	_("Cannot get array value '%s'"),//ibScriptError_ArrayGet
+	_("Object field not writable (%s)"),//ibScriptError_PropNotWritable
+	_("Object field not readable (%s)"),//ibScriptError_PropNotReadable
+	_("Object field is scope-local (%s)"),//ibScriptError_PropScopeLocal
 	// NAMING THE RECEIVER'S TYPE HERE WAS TRIED AND TAKEN BACK OUT. The type would be the
 	// interesting half, but the only honest way to ask for it is the value itself
 	// (GetClassName is virtual — a reference, a manager, a record each answer their own way),
 	// and a reference answers it by READING: ReadData walks reference fields and can recurse
 	// (see reference.cpp's cycle guard) or raise. A diagnostic that reads is a diagnostic
 	// that can fail while explaining a failure, so the receiver stays unnamed (Max, 2026-09-04).
-	_("No attribute or method found '%s' - a variable is not an aggregate object"),//ERROR_MEMBER_NOT_AGGREGATE
-	_("Aggregate object field not found '%s'"),//ERROR_MEMBER_NOT_FOUND
+	_("No attribute or method found '%s' - a variable is not an aggregate object"),//ibScriptError_MemberNotAggregate
+	_("Aggregate object field not found '%s'"),//ibScriptError_MemberNotFound
 	// STATES THE FACT, ADVISES NOTHING. It first read "call it directly, without the dot",
 	// which was written for `x.ValueIsFilled()` — and then it met a CORRECT call,
 	// `ValueIsFilled(Warehouse)`, that failed for a different reason, and told the person to
 	// remove a dot they had not written (Max, 2026-09-04). A diagnostic may say what it knows;
 	// it may not guess what was meant.
-	_("'%s' is a global function - it is not a member of this value"),//ERROR_MEMBER_IS_GLOBAL_FUNCTION
+	_("'%s' is a global function - it is not a member of this value"),//ibScriptError_MemberIsGlobalFunction
 
 	// --- compiler, appended after the runtime block — lock-step with the enum ----
 	// A GROUP WITHOUT A NAME IS THE ANSWER, and a clause written after it was met as "a ';' expected"
 	// on its first word - true, and no help: the author wrote a Select and was told about a semicolon.
 	_("Nothing can follow a group without a name: its answer is the groups themselves, each with Key and Values. "
-	  "To go on - Select, Where, OrderBy - name the group: '%s <name>'."),//ERROR_LINQ_AFTER_UNNAMED_GROUP
+	  "To go on - Select, Where, OrderBy - name the group: '%s <name>'."),//ibScriptError_LinqAfterUnnamedGroup
 };
 
 //////////////////////////////////////////////////////////////////////
@@ -352,7 +352,7 @@ void ibBackendException::ProcessError(const wxString& strFileName,
 	const wxString& strCodeError, const int codeError, const wxString& strErrorDesc)
 {
 	//throw this exception
-	// COMPILE side: the only caller is ibCompileCode::DoSetError, i.e. the text
+	// COMPILE side: the only caller is ibCompileCode::DoRefuse, i.e. the text
 	// was refused before it ever ran.
 	//
 	// 🛑 THE ASSEMBLED MESSAGE IS DATA, AND IT WAS BEING PASSED AS A FORMAT. It embeds the offending
@@ -479,9 +479,9 @@ wxString ibBackendException::ProcessExceptionError(const wxString& strFileName,
 
 const wxString& ibBackendException::GetErrorDesc(int codeError)
 {
-	if (0 <= codeError && codeError < LastError)
+	if (0 <= codeError && codeError < ibScriptError_Count)
 		return gs_listErrorString[codeError];
-	return gs_listErrorString[ERROR_SYS1];
+	return gs_listErrorString[ibScriptError_Sys1];
 }
 
 ////////////////////////////////////////////////////////////////////

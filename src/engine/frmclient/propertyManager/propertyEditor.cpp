@@ -5,7 +5,6 @@
 
 #include "frmclient/propertyManager/property/private/prop.h"
 
-#include <wx/slider.h>
 #include <wx/odcombo.h>
 #include <wx/stattext.h>
 
@@ -129,113 +128,6 @@ wxPGComboBoxAndButtonEditor::~wxPGComboBoxAndButtonEditor()
 	wxPG_EDITOR(ComboBoxAndButton) = nullptr;
 }
 
-// -----------------------------------------------------------------------
-// wxSlider-based property editor
-// -----------------------------------------------------------------------
-#ifdef wxUSE_SLIDER
-
-WX_PG_IMPLEMENT_INTERNAL_EDITOR_CLASS(Slider,
-	wxPGSliderEditor,
-	wxPGEditor)
-
-	wxPGSliderEditor::~wxPGSliderEditor()
-{
-}
-
-// Create controls and initialize event handling.
-wxPGWindowList wxPGSliderEditor::CreateControls(wxPropertyGrid* propgrid,
-	wxPGProperty* property,
-	const wxPoint& pos,
-	const wxSize& sz) const
-{
-	wxCHECK_MSG(property->IsKindOf(wxCLASSINFO(wxFloatProperty)),
-		nullptr,
-		wxT("Slider editor can only be used with wxFloatProperty or derivative."));
-
-	// Use two stage creation to allow cleaner display on wxMSW
-	wxSlider* ctrl = new wxSlider();
-#ifdef __WXMSW__
-	ctrl->Hide();
-#endif
-	wxString s = property->GetValueAsString();
-	double v_d = 0;
-	if (s.ToDouble(&v_d))
-	{
-		if (v_d < 0)
-			v_d = 0;
-		else if (v_d > 1)
-			v_d = 1;
-	}
-
-	ctrl->Create(propgrid->GetPanel(),
-		wxID_ANY,
-		(int)(v_d * m_max),
-		0,
-		m_max,
-		pos,
-		sz,
-		wxSL_HORIZONTAL);
-
-	// Connect all required events to grid's OnCustomEditorEvent
-	// (all relevenat wxTextCtrl, wxComboBox and wxButton events are
-	// already connected)
-
-#ifdef __WXMSW__
-	ctrl->Show();
-#endif
-
-	return ctrl;
-}
-
-// Copies value from property to control
-void wxPGSliderEditor::UpdateControl(wxPGProperty* property, wxWindow* wnd) const
-{
-	wxSlider* ctrl = (wxSlider*)wnd;
-	assert(ctrl && ctrl->IsKindOf(CLASSINFO(wxSlider)));
-
-	double val = property->GetValue().GetDouble();
-	if (val < 0)
-		val = 0;
-	else if (val > 1)
-		val = 1;
-
-	ctrl->SetValue((int)(val * m_max));
-}
-
-// Control's events are redirected here
-bool wxPGSliderEditor::OnEvent(wxPropertyGrid* WXUNUSED(propgrid),
-	wxPGProperty* property, wxWindow* wnd, wxEvent& event) const
-{
-	if (event.GetEventType() == wxEVT_SCROLL_THUMBTRACK)
-	{
-		wxSlider* ctrl = wxDynamicCast(wnd, wxSlider);
-		if (ctrl)
-		{
-			double val = (double)(ctrl->GetValue()) / (double)(m_max);
-			property->SetValue(WXVARIANT(val));
-			return true;
-		}
-	}
-
-	return false;
-}
-
-bool wxPGSliderEditor::GetValueFromControl(wxVariant& variant, wxPGProperty* WXUNUSED(property), wxWindow* wnd) const
-{
-	wxSlider* ctrl = (wxSlider*)wnd;
-	assert(ctrl && ctrl->IsKindOf(CLASSINFO(wxSlider)));
-
-	variant = WXVARIANT((double)ctrl->GetValue() / (double)(m_max));
-
-	return true;
-}
-
-void wxPGSliderEditor::SetValueToUnspecified(wxPGProperty* WXUNUSED(property), wxWindow* WXUNUSED(ctrl)) const
-{
-}
-
-#endif //wxUSE_SLIDER
-
 WX_PG_IMPLEMENT_INTERNAL_EDITOR_CLASS(HyperLink,
 	wxPGHyperLinkEditor,
 	wxPGEditor)
@@ -340,7 +232,6 @@ public:
 	virtual bool OnInit() {
 		//register new editor 
 		wxPGRegisterEditorClass(ComboBoxAndButton);
-		wxPGRegisterEditorClass(Slider);
 		wxPGRegisterEditorClass(HyperLink);
 		return true;
 	}

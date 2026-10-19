@@ -8,7 +8,6 @@
 
 #include "frontend/mainFrame/mainFrame.h"
 #include "frontend/mainFrame/objinspect/objinspect.h"
-#include "frontend/win/typeconv.h"   // _STDSTR — a class name as the factory takes it
 
 #include "backend/backend_exception.h"   // ibBackendException — caught explicitly; it is NOT a std::exception
 #include "backend/propertyManager/propertyManager.h"
@@ -883,7 +882,7 @@ ibValueFrame* ibVisualEditorNotebook::ibVisualEditor::CreateObject(const wxStrin
 			while (parent && !created)
 			{
 				// the object is inserted right after the selected object
-				obj = m_valueForm->CreateObject(_STDSTR(name), parent);
+				obj = m_valueForm->CreateObject(name, parent);
 
 				if (obj)
 				{
@@ -1121,7 +1120,7 @@ ibValueFrame* ibVisualEditorNotebook::ibVisualEditor::CreateBoundControl(
 		}
 
 		const wxString colClass = wxT("TableboxColumn");
-		ibValueFrame* column = m_valueForm->CreateObject(_STDSTR(colClass), box);
+		ibValueFrame* column = m_valueForm->CreateObject(colClass, box);
 		if (column == nullptr)
 			break;
 		SetBoundSource(column, desc);                                    // bind BEFORE build -> renders visible
@@ -1154,7 +1153,7 @@ ibValueFrame* ibVisualEditorNotebook::ibVisualEditor::CreateControlOfClass(
 	ibValueFrame* parent = (parentHint != nullptr) ? parentHint : m_valueForm;
 	ibValueFrame* obj = nullptr;
 	while (parent != nullptr && obj == nullptr) {
-		obj = m_valueForm->CreateObject(_STDSTR(className), parent);
+		obj = m_valueForm->CreateObject(className, parent);
 		if (obj == nullptr) {
 			parent = parent->GetParent();
 			while (parent != nullptr && parent->GetComponentType() == COMPONENT_TYPE_SIZERITEM)
@@ -1283,7 +1282,7 @@ bool ibVisualEditorNotebook::ibVisualEditor::PasteObject(ibValueFrame* dstObject
 		ibValueFrame* obj = nullptr;
 		ibValuePtr<ibValueFrame> objKeep; // anchor obj across its detach below (owning children)
 		while (obj == nullptr) {
-			obj = m_valueForm->CreateObject(_STDSTR(clipboard->GetClassName()), parentObject);
+			obj = m_valueForm->CreateObject(clipboard->GetClassName(), parentObject);
 			if (obj != nullptr) {
 				objKeep = obj; // own before RemoveChild drops parentObject's handle
 				if (parentObject) {
@@ -1665,16 +1664,10 @@ bool ibVisualEditorNotebook::ibVisualEditor::CanCopyObject() const
 
 int ibVisualEditorNotebook::ibVisualEditor::CalcPositionOfInsertion(ibValueFrame* selected, ibValueFrame* parent)
 {
-	int pos = wxNOT_FOUND;
-	if (parent && selected) {
-		ibValueFrame* parentSelected = selected->GetParent();
-		while (parentSelected && parentSelected != parent) {
-			selected = parentSelected;
-			parentSelected = selected->GetParent();
-		}
-		if (parentSelected && parentSelected == parent) {
-			pos = parent->GetChildPosition(selected) + 1;
-		}
+	// Right after the parent's child that holds the selection; at the end when the selection is not inside the parent.
+	for (ibValueFrame* object = selected; parent != nullptr && object != nullptr; object = object->GetParent()) {
+		if (object->GetParent() == parent)
+			return parent->GetChildPosition(object) + 1;
 	}
-	return pos;
+	return wxNOT_FOUND;
 }

@@ -73,9 +73,9 @@ public:
 	// compile does not reach for its translator.
 	void Load(const wxString& strCode) { m_translateCode.Load(strCode); }
 
-	// Reads the text in the session's syntax, and puts what could not be read through DoSetError — a
+	// Reads the text in the session's syntax, and puts what could not be read through DoRefuse — a
 	// runtime compile raises on the first refusal, a tolerant one notes them all.
-	bool PrepareLexem();
+	bool Translate();
 	void ClearLexem() { m_translateCode.ClearLexem(); }
 
 	// A module read as a part of this one — the global modules under the configuration's module.
@@ -167,8 +167,8 @@ public:
 	// INITIALISER is the only thing that says so on the eval path. A module
 	// compile is set up by CompileModule(), which opens by parking the cursor;
 	// ibProcUnit::CompileExpression (watch / Evaluate / Execute) never calls it
-	// — it goes PrepareLexem → GetExpression directly. With the field left
-	// uninitialised that walk started from heap garbage, so the first GETLexem
+	// — it goes Translate → GetExpression directly. With the field left
+	// uninitialised that walk started from heap garbage, so the first ExpectLexem
 	// read past the end of the token array and every watch expression, `4`
 	// included, came back as "Module code expected".
 	int				m_numCurrentCompile = wxNOT_FOUND;	// current position in the token array
@@ -191,7 +191,7 @@ public:
 	// Tolerant is the same compiler READING. It is answering "what is at this caret" for an editor,
 	// and a reader has nobody to tell and nowhere to stop: it says nothing at all and never
 	// unwinds. That is not a weaker demand, it is a different act — and it is exactly how the
-	// precompiler this replaces has always worked (one SetError and zero throws in 2900 lines),
+	// precompiler this replaces has always worked (one refusal and zero throws in 2900 lines),
 	// which is what lets somebody edit at line one thousand of a module broken at line three.
 	//
 	// ⚠ SILENCE IS THE POINT, NOT A SIDE EFFECT. A raise leaves the loop that has to keep going, so
@@ -226,7 +226,7 @@ public:
 
 	ibCompileMode m_compileMode = ibCompileMode::Runtime;   // see SetCompileMode
 
-	// See GetRefusal. Mutable because DoSetError is const — reporting a refusal does not change
+	// See GetRefusal. Mutable because DoRefuse is const — reporting a refusal does not change
 	// what the compile IS, and the const there predates this by years.
 	mutable wxString m_strRefusal;
 
@@ -277,7 +277,7 @@ public:
 	//
 	// ⚠ THIS IS THE MECHANISM THE PRECOMPILER USED, and it is here because the alternative was
 	// worse: reading the answer back off the tape means the tape has to carry it, and the position
-	// on a closing instruction was never a boundary — it is what AddLineInfo stamped, the token
+	// on a closing instruction was never a boundary — it is what StampSource stamped, the token
 	// AFTER the body, which for the last declaration in a module is the end of the text. Every
 	// patch to make that field mean something else is a patch to a field somebody else owns.
 	void SetCaret(long position) { m_caretPos = position; m_caretOwner = kCaretNowhere; }
@@ -303,27 +303,27 @@ public:
 
 protected:
 
-	// THE ONE DOOR EVERY REFUSAL OF A COMPILE GOES THROUGH — the compiler's own (SetError) and the
-	// translator's (PrepareLexem). `translateCode` holds the text the position points into — a module
+	// THE ONE DOOR EVERY REFUSAL OF A COMPILE GOES THROUGH — the compiler's own (Refuse) and the
+	// translator's (Translate). `translateCode` holds the text the position points into — a module
 	// read as a part of this one (AppendModule) refuses in its own.
-	void DoSetError(int codeError,
+	void DoRefuse(int codeError,
 		const wxString& strFileName, const wxString& strModuleName, const wxString& strDocPath,
 		const ibTranslateCode& translateCode, unsigned int currPos, unsigned int currLine,
 		const wxString& strErrorDesc) const;
 
 	const ibLexem& PreviewGetLexem();
 	const ibLexem& GetLexem();
-	const ibLexem& GETLexem();
+	const ibLexem& ExpectLexem();
 
-	void GETDelimeter(const wxUniChar& c);
+	void ExpectDelimiter(const wxUniChar& c);
 
-	bool IsDelimeter(const wxUniChar& c);
-	bool IsKeyWord(int nKey);
+	bool IsDelimiter(const wxUniChar& c);
+	bool IsKeyword(int nKey);
 
-	bool IsNextDelimeter(const wxUniChar& c);
-	bool IsNextKeyWord(int nKey);
+	bool IsNextDelimiter(const wxUniChar& c);
+	bool IsNextKeyword(int nKey);
 
-	void GETKeyWord(int nKey);
+	void ExpectKeyword(int nKey);
 
 	// strRealName — return source-case string from m_valData (via GetString())
 	//   (otherwise the uppercase m_strData is returned).
@@ -331,10 +331,10 @@ protected:
 	//   used in property-access positions (`obj.<X>`) where contextual
 	//   LINQ keywords (`Where`/`Select`/...) clash with valid method
 	//   names. Returns m_strData for keywords (their lexer-emitted form).
-	wxString GETIdentifier(bool strRealName = false, bool acceptKeyword = false);
-	ibValue GETConstant();
+	wxString ExpectIdentifier(bool strRealName = false, bool acceptKeyword = false);
+	ibValue ExpectConstant();
 
-	void AddLineInfo(ibByteUnit& code);
+	void StampSource(ibByteUnit& code);
 
 	// ⭐⭐ THE FIVE VERBS THIS COMPILER NAMES ITS METHODS WITH, and what each one PROMISES. Written
 	// down because it had drifted twice: a `Compile…` that emitted nothing, and an `Emit…` beside a
@@ -354,7 +354,7 @@ protected:
 	//               EmitFunctionBody · EmitLambdaBody · EmitRestrictBody · EmitLinqChainClauses.
 	//
 	//   Get<X>      the EXPRESSION GRAMMAR: the product is an OPERAND for the caller to use.
-	//               GetExpression · GetCurrentIdentifier · GetCallFunction · GETIdentifier.
+	//               GetExpression · GetCurrentIdentifier · GetCallFunction.
 	//
 	//   Try<X>      a GATE: looks at what follows, and true means THIS ROAD TOOK IT — the tokens are
 	//               consumed and the caller is done. Nothing is put on the tape here; the road that
@@ -372,7 +372,7 @@ protected:
 	//               ParseFunctionSignature.
 	//
 	//   Add<X>      one instruction, from data already in hand. Reads no tokens.
-	//               AddTypeSet · AddLineInfo.
+	//               AddTypeSet.
 	//
 	// ⚠ The test is mechanical and worth applying to a new name: does the body contain a single
 	// `m_listCode.emplace_back`? Every `Compile…` in this class does — the one that did not was
@@ -608,8 +608,8 @@ private:
 	unsigned int FindQueryTextEnd() const;
 
 	// methods for displaying errors during compilation::
-	void SetError(int nErr, const wxString& strError = wxEmptyString);
-	void SetError(int nErr, const wxUniChar& c);
+	void Refuse(int nErr, const wxString& strError = wxEmptyString);
+	void Refuse(int nErr, const wxUniChar& c);
 
 	wxString m_strCurFuncName;//name of the current compiled function (for processing the recursive function call option)
 

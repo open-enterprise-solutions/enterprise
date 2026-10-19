@@ -153,13 +153,13 @@ size_t CountOpcodeAnyType(const ibByteCode& bc, short baseOper) {
 } // namespace
 
 // ===========================================================================
-// Lexer (ibTranslateCode::PrepareLexem)
+// Lexer (ibTranslateCode::Translate)
 // ===========================================================================
 
 TEST(LexerTest, EmptySourceProducesEndProgramOnly) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	cc.Load(wxT(""));
-	ASSERT_TRUE(cc.PrepareLexem());
+	ASSERT_TRUE(cc.Translate());
 	// At least the ENDPROGRAM sentinel — exact number depends on lexer
 	// implementation, but it must be non-empty.
 	EXPECT_GE(cc.m_translateCode.GetLexCount(), 1u);
@@ -168,7 +168,7 @@ TEST(LexerTest, EmptySourceProducesEndProgramOnly) {
 TEST(LexerTest, SimpleAssignmentTokenizes) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	cc.Load(wxT("a = 1;"));
-	ASSERT_TRUE(cc.PrepareLexem());
+	ASSERT_TRUE(cc.Translate());
 	// Identifier 'a', '=', number '1', ';', ENDPROGRAM — at least 5.
 	EXPECT_GE(cc.m_translateCode.GetLexCount(), 4u);
 }
@@ -176,7 +176,7 @@ TEST(LexerTest, SimpleAssignmentTokenizes) {
 TEST(LexerTest, StringLiteralLexes) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	cc.Load(wxT("s = \"hello\";"));
-	ASSERT_TRUE(cc.PrepareLexem());
+	ASSERT_TRUE(cc.Translate());
 	EXPECT_GE(cc.m_translateCode.GetLexCount(), 4u);
 }
 
@@ -381,7 +381,7 @@ TEST(CompilerAOT, RealCompileOutputRoundTrips) {
 //
 // Verifies:
 //   * Lambda body references outer-fn local — compile succeeds (was
-//     ERROR_VAR_NOT_FOUND pre-Phase-A).
+//     ibScriptError_VarNotFound pre-Phase-A).
 //   * Outer fn's ibByteFunction.m_needsHeapFrame = true after lambda
 //     captures one of its locals.
 //   * Bytecode dump shows OPER_GET inside lambda body reading at

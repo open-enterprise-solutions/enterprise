@@ -78,7 +78,7 @@ std::vector<ibDiagnostic> ibCheckScript(const wxString& text, const wxString& mo
 		// ⚠ AND IT COMPILES THE ORDINARY WAY — the first refusal ends it, exactly as the designer's
 		// own Syntax button behaves. The tolerant mode is NOT for this: it exists so a reader
 		// working out what is at a caret can go on reading, and it says nothing to anybody
-		// (compileCode.cpp, DoSetError). A check that used it would come back silent.
+		// (compileCode.cpp, DoRefuse). A check that used it would come back silent.
 		//
 		// So one refusal is what a check answers with. Listing every one of them would mean a
 		// compile that both reports AND continues, and continuing is precisely what a raise cannot

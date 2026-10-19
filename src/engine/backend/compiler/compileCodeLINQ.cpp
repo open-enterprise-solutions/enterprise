@@ -96,7 +96,7 @@ unsigned int ibCompileCode::FindQueryTextEnd() const
 // function owns the KEY_FROM consumption uniformly.
 ibParamUnit ibCompileCode::CompileLinqExpression(ibCompileContext* context)
 {
-	GETKeyWord(KEY_FROM);
+	ExpectKeyword(KEY_FROM);
 
 	// Allocate the fake LINQ context — child of caller, RETURN_BLOCK
 	// kind so bindings register in this child's m_listVariable but
@@ -139,19 +139,19 @@ ibParamUnit ibCompileCode::CompileLinqExpression(ibCompileContext* context)
 	data.m_takeCounter = context->CreateVariable();
 	data.m_constOne    = context->CreateVariable();
 	{
-		ibByteUnit c; AddLineInfo(c);
+		ibByteUnit c; StampSource(c);
 		c.m_numOper = OPER_CONSTN; c.m_param1 = data.m_skipCounter;
 		c.m_param2.m_numIndex = 0;
 		m_cByteCode.m_listCode.emplace_back(std::move(c));
 	}
 	{
-		ibByteUnit c; AddLineInfo(c);
+		ibByteUnit c; StampSource(c);
 		c.m_numOper = OPER_CONSTN; c.m_param1 = data.m_takeCounter;
 		c.m_param2.m_numIndex = 0;
 		m_cByteCode.m_listCode.emplace_back(std::move(c));
 	}
 	{
-		ibByteUnit c; AddLineInfo(c);
+		ibByteUnit c; StampSource(c);
 		c.m_numOper = OPER_CONSTN; c.m_param1 = data.m_constOne;
 		c.m_param2.m_numIndex = 1;
 		m_cByteCode.m_listCode.emplace_back(std::move(c));
@@ -190,7 +190,7 @@ ibParamUnit ibCompileCode::CompileLinqExpression(ibCompileContext* context)
 			// the order the keys first appeared. So the loop below binds `g` to a group directly:
 			// there is nothing to take apart and nothing to build back up.
 			{
-				ibByteUnit c; AddLineInfo(c);
+				ibByteUnit c; StampSource(c);
 				c.m_numOper = OPER_LINQ_RESULT;
 				c.m_param1 = expIn;
 				c.m_param2 = data.m_groupsContainer;
@@ -208,7 +208,7 @@ ibParamUnit ibCompileCode::CompileLinqExpression(ibCompileContext* context)
 			// The loop variable IS `g` — a group, straight from the collection.
 			const int expForeachIp = (int)m_cByteCode.m_listCode.size();
 			{
-				ibByteUnit c; AddLineInfo(c);
+				ibByteUnit c; StampSource(c);
 				c.m_numOper = OPER_FOREACH;
 				c.m_param1 = bg.valueSlot;
 				c.m_param2 = expIn;
@@ -245,7 +245,7 @@ ibParamUnit ibCompileCode::CompileLinqExpression(ibCompileContext* context)
 			// The groups land in the RESULT slot, so the instruction that ends every query (just
 			// below) is what turns them into the Array the person receives — the same single place
 			// every other shape of query passes through, not a second exit of its own.
-			ibByteUnit c; AddLineInfo(c);
+			ibByteUnit c; StampSource(c);
 			c.m_numOper = OPER_LINQ_RESULT;
 			c.m_param1 = data.m_resultArray;
 			c.m_param2 = data.m_groupsContainer;
@@ -260,7 +260,7 @@ ibParamUnit ibCompileCode::CompileLinqExpression(ibCompileContext* context)
 	// the rows and their keys, so it does it in one step. This is also the single place where what it
 	// holds becomes a value the language can hold.
 	{
-		ibByteUnit c; AddLineInfo(c);
+		ibByteUnit c; StampSource(c);
 		c.m_numOper = OPER_LINQ_RESULT;
 		c.m_param1 = data.m_resultArray;
 		c.m_param2 = data.m_resultArray;
@@ -297,9 +297,9 @@ ibParamUnit ibCompileCode::CompileRestrictExpression(ibCompileContext* context)
 	if (m_numCurrentCompile >= 0 && (size_t)m_numCurrentCompile < m_translateCode.GetLexCount())
 		data.m_textFrom = m_translateCode.GetLexAt((size_t)m_numCurrentCompile).m_numString;
 
-	GETKeyWord(KEY_RESTRICT);
-	const wxString srcAlias = GETIdentifier(true);   // the source row alias (`s`)
-	GETKeyWord(KEY_IN);
+	ExpectKeyword(KEY_RESTRICT);
+	const wxString srcAlias = ExpectIdentifier(true);   // the source row alias (`s`)
+	ExpectKeyword(KEY_IN);
 	ibParamUnit receiver = GetExpression(context);    // the source query — a decorator to patch
 
 	{
@@ -317,7 +317,7 @@ ibParamUnit ibCompileCode::CompileRestrictExpression(ibCompileContext* context)
 	const auto emitLinqCall = [&](ibParamUnit target, const wxString& method,
 	                              const std::vector<ibParamUnit>& args) -> ibParamUnit {
 		ibByteUnit code;
-		AddLineInfo(code);
+		StampSource(code);
 		code.m_numOper = OPER_CALL_LINQ;
 		code.m_param2 = target;
 		code.m_param3.m_numIndex = ibValue::FindLinqMethodByName(method);
@@ -327,7 +327,7 @@ ibParamUnit ibCompileCode::CompileRestrictExpression(ibCompileContext* context)
 		m_cByteCode.m_listCode.emplace_back(std::move(code));
 		for (const ibParamUnit& arg : args) {
 			ibByteUnit set;
-			AddLineInfo(set);
+			StampSource(set);
 			set.m_numOper = OPER_SET;
 			set.m_param1 = arg;
 			m_cByteCode.m_listCode.emplace_back(std::move(set));
@@ -339,12 +339,12 @@ ibParamUnit ibCompileCode::CompileRestrictExpression(ibCompileContext* context)
 	// folding the join into the query. The ON is ONE predicate — the operator comes from the shared
 	// expression grammar (no hand-read), and the decorator's Join splits the Compare into the
 	// left / right key column + op. The inner `<T>` may be a Data source OR a computed value table.
-	while (IsNextKeyWord(KEY_JOIN)) {
-		GETKeyWord(KEY_JOIN);
-		const wxString joinAlias = GETIdentifier(true);          // the joined-table alias (`a`)
-		GETKeyWord(KEY_IN);
+	while (IsNextKeyword(KEY_JOIN)) {
+		ExpectKeyword(KEY_JOIN);
+		const wxString joinAlias = ExpectIdentifier(true);          // the joined-table alias (`a`)
+		ExpectKeyword(KEY_IN);
 		const ibParamUnit inner = GetExpression(context);        // the joined table
-		GETKeyWord(KEY_ON);
+		ExpectKeyword(KEY_ON);
 		const ibParamUnit onCond = EmitRestrictBody(context, srcAlias, joinAlias);   // (s, a) => s.k <op> a.k
 
 		{
@@ -359,8 +359,8 @@ ibParamUnit ibCompileCode::CompileRestrictExpression(ibCompileContext* context)
 	}
 
 	// where: `where <cond>` -> receiver.Where(s => cond), folding the filter into the query.
-	if (IsNextKeyWord(KEY_WHERE)) {
-		GETKeyWord(KEY_WHERE);
+	if (IsNextKeyword(KEY_WHERE)) {
+		ExpectKeyword(KEY_WHERE);
 		const ibParamUnit pred = EmitRestrictBody(context, srcAlias, wxEmptyString);   // s => cond
 		std::vector<ibParamUnit> args{ pred };
 		receiver = emitLinqCall(receiver, wxT("Where"), args);
@@ -975,11 +975,11 @@ ibParamUnit ibCompileCode::EmitLambdaBody(ibCompileContext* context, bool* outSi
 		*outSingleReturn = singleReturn || !foldable;
 
 	if (!foldable || singleReturn) {
-		GETDelimeter('{');
-		GETKeyWord(KEY_RETURN);
+		ExpectDelimiter('{');
+		ExpectKeyword(KEY_RETURN);
 		const ibParamUnit value = GetExpression(context);
-		if (IsNextDelimeter(';')) GETDelimeter(';');
-		GETDelimeter('}');
+		if (IsNextDelimiter(';')) ExpectDelimiter(';');
+		ExpectDelimiter('}');
 		return value;
 	}
 
@@ -1096,7 +1096,7 @@ void ibCompileCode::EmitLinqChainClauses(ibCompileContext* context, const ibPara
 		const wxString paramName = m_translateCode.GetLexAt(a + 2).m_valData.GetString();
 		const ibParamUnit bound  = BindParamToOwnCell(foldCtx, paramName);
 		{
-			ibByteUnit c; AddLineInfo(c);
+			ibByteUnit c; StampSource(c);
 			c.m_numOper = OPER_LET;
 			c.m_param1  = bound;
 			c.m_param2  = current;
@@ -1107,7 +1107,7 @@ void ibCompileCode::EmitLinqChainClauses(ibCompileContext* context, const ibPara
 		const ibParamUnit value = EmitLambdaBody(foldCtx);  // the parameter's name lives in here
 
 		if (link.m_numVerb == (long)ibValue::ibLinqMethod::Where) {
-			ibByteUnit c; AddLineInfo(c);
+			ibByteUnit c; StampSource(c);
 			c.m_numOper = OPER_IF;                // false -> the next row, the branch `if` uses
 			c.m_param1  = value;
 			c.m_param2.m_numIndex = 0;            // back-patched by the caller to the NEXT_ITER
@@ -1118,7 +1118,7 @@ void ibCompileCode::EmitLinqChainClauses(ibCompileContext* context, const ibPara
 			// A projection is written back into the LOOP VARIABLE, so the body the person wrote
 			// sees the projected value under the name they gave the row. The iterator refills that
 			// slot at every NEXT_ITER, so overwriting it inside the body costs nothing.
-			ibByteUnit c; AddLineInfo(c);
+			ibByteUnit c; StampSource(c);
 			c.m_numOper = OPER_LET;
 			c.m_param1  = rowSlot;
 			c.m_param2  = value;
@@ -1346,7 +1346,7 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 		m_numCurrentCompile = (int)tail.m_numLexArg - 1;   // the next token read is the argument
 		terminalArg = GetExpression(loopCtx);
 		if (terminalFold) {
-			GETDelimeter(',');
+			ExpectDelimiter(',');
 			foldBodyAt = m_numCurrentCompile;   // …and the body starts at the next token
 		}
 		m_numCurrentCompile = resumeArg;
@@ -1355,14 +1355,14 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 	// The result the chain answers with, allocated in the CALLER's context so it outlives the scope.
 	outResult = context->CreateVariable();
 	if (terminalCounts || terminalSum) {
-		ibByteUnit c; AddLineInfo(c);
+		ibByteUnit c; StampSource(c);
 		c.m_numOper = OPER_CONSTN;                    // an accumulator starts at nothing
 		c.m_param1  = outResult;
 		c.m_param2.m_numIndex = 0;
 		m_cByteCode.m_listCode.emplace_back(std::move(c));
 	}
 	else if (terminalContains) {
-		ibByteUnit c; AddLineInfo(c);
+		ibByteUnit c; StampSource(c);
 		c.m_numOper = OPER_LET;                       // false until a row equals it
 		c.m_param1  = outResult;
 		c.m_param2  = FindConst(ibValue(false));
@@ -1370,7 +1370,7 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 	}
 	else if (terminalFold) {
 		// The seed IS the answer until a row changes it — one assignment, before anything runs.
-		ibByteUnit c; AddLineInfo(c);
+		ibByteUnit c; StampSource(c);
 		c.m_numOper = OPER_LET;
 		c.m_param1  = outResult;
 		c.m_param2  = terminalArg;
@@ -1379,7 +1379,7 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 	// terminalArray: the Array is built ONCE at the end, out of what was kept (OPER_LINQ_RESULT) —
 	// not created here by name and grown a row at a time through a script method call.
 	else if (terminalAny) {
-		ibByteUnit c; AddLineInfo(c);
+		ibByteUnit c; StampSource(c);
 		c.m_numOper = OPER_LET;                       // false until a row says otherwise
 		c.m_param1  = outResult;
 		c.m_param2  = FindConst(ibValue(false));
@@ -1387,7 +1387,7 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 	}
 	else if (terminalAvg) {
 		// An average is a total and a count, and the division happens once, after the loop.
-		ibByteUnit c; AddLineInfo(c);
+		ibByteUnit c; StampSource(c);
 		c.m_numOper = OPER_CONSTN;
 		c.m_param1  = outResult;
 		c.m_param2.m_numIndex = 0;
@@ -1412,7 +1412,7 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 	ibParamUnit skippingFlag;
 	if (hasSkipWhile) {
 		skippingFlag = context->CreateVariable();
-		ibByteUnit c; AddLineInfo(c);
+		ibByteUnit c; StampSource(c);
 		c.m_numOper = OPER_LET;
 		c.m_param1  = skippingFlag;
 		c.m_param2  = FindConst(ibValue(true));
@@ -1424,11 +1424,11 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 		avgCount = context->CreateVariable();
 		avgOne   = context->CreateVariable();
 		{
-			ibByteUnit c; AddLineInfo(c);
+			ibByteUnit c; StampSource(c);
 			c.m_numOper = OPER_CONSTN; c.m_param1 = avgCount; c.m_param2.m_numIndex = 0;
 			m_cByteCode.m_listCode.emplace_back(std::move(c));
 		}
-		ibByteUnit c; AddLineInfo(c);
+		ibByteUnit c; StampSource(c);
 		c.m_numOper = OPER_CONSTN; c.m_param1 = avgOne; c.m_param2.m_numIndex = 1;
 		m_cByteCode.m_listCode.emplace_back(std::move(c));
 	}
@@ -1439,11 +1439,11 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 		onlyCount = context->CreateVariable();
 		onlyOne   = context->CreateVariable();
 		{
-			ibByteUnit c; AddLineInfo(c);
+			ibByteUnit c; StampSource(c);
 			c.m_numOper = OPER_CONSTN; c.m_param1 = onlyCount; c.m_param2.m_numIndex = 0;
 			m_cByteCode.m_listCode.emplace_back(std::move(c));
 		}
-		ibByteUnit c; AddLineInfo(c);
+		ibByteUnit c; StampSource(c);
 		c.m_numOper = OPER_CONSTN; c.m_param1 = onlyOne; c.m_param2.m_numIndex = 1;
 		m_cByteCode.m_listCode.emplace_back(std::move(c));
 	}
@@ -1455,11 +1455,11 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 		atCounter = context->CreateVariable();
 		atOne     = context->CreateVariable();
 		{
-			ibByteUnit c; AddLineInfo(c);
+			ibByteUnit c; StampSource(c);
 			c.m_numOper = OPER_CONSTN; c.m_param1 = atCounter; c.m_param2.m_numIndex = 0;
 			m_cByteCode.m_listCode.emplace_back(std::move(c));
 		}
-		ibByteUnit c; AddLineInfo(c);
+		ibByteUnit c; StampSource(c);
 		c.m_numOper = OPER_CONSTN; c.m_param1 = atOne; c.m_param2.m_numIndex = 1;
 		m_cByteCode.m_listCode.emplace_back(std::move(c));
 	}
@@ -1474,7 +1474,7 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 			continue;
 		hasIndexed = true;
 		indexCounters[i] = context->CreateVariable();
-		ibByteUnit c; AddLineInfo(c);
+		ibByteUnit c; StampSource(c);
 		c.m_numOper = OPER_CONSTN;
 		c.m_param1  = indexCounters[i];
 		c.m_param2.m_numIndex = 0;
@@ -1484,7 +1484,7 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 	ibParamUnit skipCounter, takeCounter, constOne;
 	if (hasSkip || hasTake || hasIndexed) {
 		constOne = context->CreateVariable();
-		ibByteUnit c; AddLineInfo(c);
+		ibByteUnit c; StampSource(c);
 		c.m_numOper = OPER_CONSTN;
 		c.m_param1  = constOne;
 		c.m_param2.m_numIndex = 1;
@@ -1492,7 +1492,7 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 	}
 	if (hasSkip) {
 		skipCounter = context->CreateVariable();
-		ibByteUnit c; AddLineInfo(c);
+		ibByteUnit c; StampSource(c);
 		c.m_numOper = OPER_CONSTN;
 		c.m_param1  = skipCounter;
 		c.m_param2.m_numIndex = 0;
@@ -1500,7 +1500,7 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 	}
 	if (hasTake) {
 		takeCounter = context->CreateVariable();
-		ibByteUnit c; AddLineInfo(c);
+		ibByteUnit c; StampSource(c);
 		c.m_numOper = OPER_CONSTN;
 		c.m_param1  = takeCounter;
 		c.m_param2.m_numIndex = 0;
@@ -1531,7 +1531,7 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 		// not be the thing a loop is still reading from.
 		setSource[i] = context->CreateVariable();
 		{
-			ibByteUnit c; AddLineInfo(c);
+			ibByteUnit c; StampSource(c);
 			c.m_numOper = OPER_LET;
 			c.m_param1  = setSource[i];
 			c.m_param2  = read;
@@ -1549,7 +1549,7 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 		const ibParamUnit sideRow = context->CreateVariable();
 		const ibParamUnit sideIt  = context->CreateVariable();
 		{
-			ibByteUnit c; AddLineInfo(c);
+			ibByteUnit c; StampSource(c);
 			c.m_numOper = OPER_LET;
 			c.m_param1  = sideIn;
 			c.m_param2  = setSource[i];
@@ -1557,7 +1557,7 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 		}
 		int sideForeachIp = 0;
 		{
-			ibByteUnit c; AddLineInfo(c);
+			ibByteUnit c; StampSource(c);
 			c.m_numOper = OPER_FOREACH;
 			c.m_param1  = sideRow;
 			c.m_param2  = sideIn;
@@ -1566,7 +1566,7 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 			sideForeachIp = (int)m_cByteCode.m_listCode.size() - 1;
 		}
 		{
-			ibByteUnit c; AddLineInfo(c);
+			ibByteUnit c; StampSource(c);
 			c.m_numOper = OPER_LINQ_BUCKET;
 			c.m_param1  = setLookup[i];
 			c.m_param2  = sideRow;                 // the key IS the value
@@ -1574,7 +1574,7 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 			m_cByteCode.m_listCode.emplace_back(std::move(c));
 		}
 		{
-			ibByteUnit c; AddLineInfo(c);
+			ibByteUnit c; StampSource(c);
 			c.m_numOper = OPER_NEXT_ITER;
 			c.m_param1  = sideIt;
 			c.m_param2.m_numIndex = sideForeachIp;
@@ -1588,7 +1588,7 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 	// block road emits, and for the same reason: a temporary receiver must not die mid-loop.
 	const ibParamUnit inSlot = context->CreateVariable();
 	{
-		ibByteUnit c; AddLineInfo(c);
+		ibByteUnit c; StampSource(c);
 		c.m_numOper = OPER_LET;
 		c.m_param1  = inSlot;
 		c.m_param2  = receiver;
@@ -1596,7 +1596,7 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 	}
 
 	// The first verb's parameter IS the loop variable — no binding step, no argument, no frame.
-	// The name is taken the way GETIdentifier takes it (m_valData holds the source casing), so the
+	// The name is taken the way ExpectIdentifier takes it (m_valData holds the source casing), so the
 	// binding is registered under the name the person wrote.
 	const wxString firstRowName = m_translateCode.GetLexAt(links[0].m_numLexArg + 2).m_valData.GetString();
 	// A CELL OF ITS OWN, with the written name bound to it in this loop's scope: the row is an
@@ -1611,7 +1611,7 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 	// it would have. This is what makes "a chain is a loop" cost no push-down — see OPER_LINQ_NARROW.
 	int narrowIp = -1;
 	{
-		ibByteUnit c; AddLineInfo(c);
+		ibByteUnit c; StampSource(c);
 		c.m_numOper = OPER_LINQ_NARROW;
 		c.m_param1  = inSlot;
 		c.m_param4  = rowSlot;
@@ -1621,7 +1621,7 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 
 	int foreachIp = 0;
 	{
-		ibByteUnit c; AddLineInfo(c);
+		ibByteUnit c; StampSource(c);
 		c.m_numOper = OPER_FOREACH;
 		c.m_param1  = rowSlot;
 		c.m_param2  = inSlot;
@@ -1663,14 +1663,14 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 	const auto emitSeenGuard = [&](const ibParamUnit& scratch, const ibParamUnit& row) -> int {
 		const ibParamUnit fresh = context->CreateVariable();
 		{
-			ibByteUnit c; AddLineInfo(c);
+			ibByteUnit c; StampSource(c);
 			c.m_numOper = OPER_LINQ_SEEN;
 			c.m_param1  = fresh;
 			c.m_param2  = scratch;
 			c.m_param3  = row;
 			m_cByteCode.m_listCode.emplace_back(std::move(c));
 		}
-		ibByteUnit c; AddLineInfo(c);
+		ibByteUnit c; StampSource(c);
 		c.m_numOper = OPER_IF;                 // already seen -> the next row
 		c.m_param1  = fresh;
 		c.m_param2.m_numIndex = 0;             // the caller patches it
@@ -1681,12 +1681,12 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 	for (size_t i = 0; i + 1 < links.size(); ++i) {
 		const long verb = links[i].m_numVerb;
 
-		GETDelimeter('.');
-		GETIdentifier(true, /*acceptKeyword*/true);
-		GETDelimeter('(');
+		ExpectDelimiter('.');
+		ExpectIdentifier(true, /*acceptKeyword*/true);
+		ExpectDelimiter('(');
 
 		if (verb == (long)ibValue::ibLinqMethod::Reverse) {
-			GETDelimeter(')');
+			ExpectDelimiter(')');
 			continue;                            // the collection reverses itself at the end
 		}
 
@@ -1710,7 +1710,7 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 
 				const ibParamUnit found = context->CreateVariable();
 				{
-					ibByteUnit c; AddLineInfo(c);
+					ibByteUnit c; StampSource(c);
 					c.m_numOper = OPER_LINQ_BUCKET_GET;  // empty when this row is not in the set
 					c.m_param1  = found;
 					c.m_param2  = setLookup[i];
@@ -1721,7 +1721,7 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 				if (verb == (long)ibValue::ibLinqMethod::Intersect) {
 					// Not in it -> the next row. OPER_IF jumps when its condition is FALSE, and an
 					// empty bucket IS false — which is why the lookup needs no second test.
-					ibByteUnit c; AddLineInfo(c);
+					ibByteUnit c; StampSource(c);
 					c.m_numOper = OPER_IF;
 					c.m_param1  = found;
 					c.m_param2.m_numIndex = 0;
@@ -1731,13 +1731,13 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 				else {
 					// EXCEPT — the other way round, so the jump is over the leaving.
 					{
-						ibByteUnit c; AddLineInfo(c);
+						ibByteUnit c; StampSource(c);
 						c.m_numOper = OPER_IF;       // not in it -> past the GOTO, i.e. keep it
 						c.m_param1  = found;
 						c.m_param2.m_numIndex = (long)m_cByteCode.m_listCode.size() + 2;
 						m_cByteCode.m_listCode.emplace_back(std::move(c));
 					}
-					ibByteUnit c; AddLineInfo(c);
+					ibByteUnit c; StampSource(c);
 					c.m_numOper = OPER_GOTO;         // in it -> drop this row
 					m_cByteCode.m_listCode.emplace_back(std::move(c));
 					skipGotoIpsAt.back().push_back((int)m_cByteCode.m_listCode.size() - 1);
@@ -1751,7 +1751,7 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 		}
 
 		if (verb == (long)ibValue::ibLinqMethod::Distinct) {
-			GETDelimeter(')');
+			ExpectDelimiter(')');
 			// ⭐ SEEN BEFORE? — answered by an ordered set in log n. The shape it replaces walked
 			// everything kept so far, comparing values, for every row.
 			skipIpsAt.back().push_back(emitSeenGuard(linqKept, current));
@@ -1761,11 +1761,11 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 		if (!IsLinqVerbLambda(verb)) {
 			// `Take(n)` / `Skip(n)` — a count, not a lambda.
 			const ibParamUnit howMany = GetExpression(loopCtx);
-			GETDelimeter(')');
+			ExpectDelimiter(')');
 
 			if (verb == (long)ibValue::ibLinqMethod::Skip) {
 				{
-					ibByteUnit c; AddLineInfo(c);
+					ibByteUnit c; StampSource(c);
 					c.m_numOper = OPER_ADD;
 					c.m_param1  = skipCounter;
 					c.m_param2  = skipCounter;
@@ -1774,7 +1774,7 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 				}
 				const ibParamUnit within = context->CreateVariable();
 				{
-					ibByteUnit c; AddLineInfo(c);
+					ibByteUnit c; StampSource(c);
 					c.m_numOper = OPER_LE;
 					c.m_param1  = within;
 					c.m_param2  = skipCounter;
@@ -1784,13 +1784,13 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 				// Still inside the skipped prefix -> take the next row.
 				const ibParamUnit past = context->CreateVariable();
 				{
-					ibByteUnit c; AddLineInfo(c);
+					ibByteUnit c; StampSource(c);
 					c.m_numOper = OPER_NOT;
 					c.m_param1  = past;
 					c.m_param2  = within;
 					m_cByteCode.m_listCode.emplace_back(std::move(c));
 				}
-				ibByteUnit c; AddLineInfo(c);
+				ibByteUnit c; StampSource(c);
 				c.m_numOper = OPER_IF;
 				c.m_param1  = past;
 				c.m_param2.m_numIndex = 0;
@@ -1802,7 +1802,7 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 				// `break` does.
 				const ibParamUnit enough = context->CreateVariable();
 				{
-					ibByteUnit c; AddLineInfo(c);
+					ibByteUnit c; StampSource(c);
 					c.m_numOper = OPER_GE;
 					c.m_param1  = enough;
 					c.m_param2  = takeCounter;
@@ -1810,20 +1810,20 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 					m_cByteCode.m_listCode.emplace_back(std::move(c));
 				}
 				{
-					ibByteUnit c; AddLineInfo(c);
+					ibByteUnit c; StampSource(c);
 					c.m_numOper = OPER_IF;          // not enough yet -> carry on past the GOTO
 					c.m_param1  = enough;
 					c.m_param2.m_numIndex = (long)m_cByteCode.m_listCode.size() + 2;
 					m_cByteCode.m_listCode.emplace_back(std::move(c));
 				}
 				{
-					ibByteUnit c; AddLineInfo(c);
+					ibByteUnit c; StampSource(c);
 					c.m_numOper = OPER_GOTO;
 					m_cByteCode.m_listCode.emplace_back(std::move(c));
 					breakIps.push_back((int)m_cByteCode.m_listCode.size() - 1);
 				}
 				{
-					ibByteUnit c; AddLineInfo(c);
+					ibByteUnit c; StampSource(c);
 					c.m_numOper = OPER_ADD;
 					c.m_param1  = takeCounter;
 					c.m_param2  = takeCounter;
@@ -1837,22 +1837,22 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 		// Where / Select / OrderBy — a lambda written here. The indexed pair names a second thing:
 		// the position of this row among the ones that reached this verb.
 		const bool indexed = IsLinqVerbIndexed(verb);
-		GETKeyWord(KEY_FUNCTION);
-		GETDelimeter('(');
-		const wxString paramName = GETIdentifier(true);
+		ExpectKeyword(KEY_FUNCTION);
+		ExpectDelimiter('(');
+		const wxString paramName = ExpectIdentifier(true);
 		wxString indexName;
 		if (indexed) {
-			GETDelimeter(',');
-			indexName = GETIdentifier(true);
+			ExpectDelimiter(',');
+			indexName = ExpectIdentifier(true);
 		}
-		GETDelimeter(')');
+		ExpectDelimiter(')');
 
 		// The index is a cell of the loop, bound under the name the body uses — the same binding the
 		// row gets, and for the same reason: nothing of the name reaches run time.
 		if (indexed) {
 			const ibParamUnit indexCell = BindParamToOwnCell(loopCtx, indexName);
 			{
-				ibByteUnit c; AddLineInfo(c);
+				ibByteUnit c; StampSource(c);
 				c.m_numOper = OPER_LET;
 				c.m_param1  = indexCell;
 				c.m_param2  = indexCounters[i];
@@ -1863,7 +1863,7 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 			// run for a rejected row and the index would count what SURVIVED rather than what
 			// arrived. The body reads the copy taken above, so bumping it here changes nothing it
 			// sees.
-			ibByteUnit c; AddLineInfo(c);
+			ibByteUnit c; StampSource(c);
 			c.m_numOper = OPER_ADD;
 			c.m_param1  = indexCounters[i];
 			c.m_param2  = indexCounters[i];
@@ -1876,7 +1876,7 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 		if (i > 0) {
 			const ibParamUnit bound = BindParamToOwnCell(loopCtx, paramName);
 			if (bound.m_numArray != current.m_numArray || bound.m_numIndex != current.m_numIndex) {
-				ibByteUnit c; AddLineInfo(c);
+				ibByteUnit c; StampSource(c);
 				c.m_numOper = OPER_LET;
 				c.m_param1  = bound;
 				c.m_param2  = current;
@@ -1915,7 +1915,7 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 				narrow.m_param2.m_numArray = (long)m_cByteCode.m_listCode.size();    // one past last
 				narrow.m_param3 = value;                                             // where it lands
 			}
-			ibByteUnit c; AddLineInfo(c);
+			ibByteUnit c; StampSource(c);
 			c.m_numOper = OPER_IF;                 // false -> next row, the same branch `if` uses
 			c.m_param1  = value;
 			c.m_param2.m_numIndex = 0;             // back-patched to the NEXT_ITER below
@@ -1938,14 +1938,14 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 			const ibParamUnit innerRow = context->CreateVariable();
 			const ibParamUnit innerIt  = context->CreateVariable();
 			{
-				ibByteUnit c; AddLineInfo(c);
+				ibByteUnit c; StampSource(c);
 				c.m_numOper = OPER_LET;
 				c.m_param1  = innerIn;
 				c.m_param2  = value;
 				m_cByteCode.m_listCode.emplace_back(std::move(c));
 			}
 			{
-				ibByteUnit c; AddLineInfo(c);
+				ibByteUnit c; StampSource(c);
 				c.m_numOper = OPER_FOREACH;
 				c.m_param1  = innerRow;
 				c.m_param2  = innerIn;
@@ -1962,27 +1962,27 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 			// again after the first row that fails it, which is what makes it SkipWhile and not
 			// Where: a later row that would have matched is kept.
 			{
-				ibByteUnit c; AddLineInfo(c);
+				ibByteUnit c; StampSource(c);
 				c.m_numOper = OPER_IF;             // already past the prefix -> keep this row
 				c.m_param1  = skippingFlag;
 				c.m_param2.m_numIndex = (long)m_cByteCode.m_listCode.size() + 3;
 				m_cByteCode.m_listCode.emplace_back(std::move(c));
 			}
 			{
-				ibByteUnit c; AddLineInfo(c);
+				ibByteUnit c; StampSource(c);
 				c.m_numOper = OPER_IF;             // the prefix ended here
 				c.m_param1  = value;
 				c.m_param2.m_numIndex = (long)m_cByteCode.m_listCode.size() + 2;
 				m_cByteCode.m_listCode.emplace_back(std::move(c));
 			}
 			{
-				ibByteUnit c; AddLineInfo(c);
+				ibByteUnit c; StampSource(c);
 				c.m_numOper = OPER_GOTO;           // still in the prefix -> next row
 				m_cByteCode.m_listCode.emplace_back(std::move(c));
 				skipGotoIpsAt.back().push_back((int)m_cByteCode.m_listCode.size() - 1);
 			}
 			{
-				ibByteUnit c; AddLineInfo(c);
+				ibByteUnit c; StampSource(c);
 				c.m_numOper = OPER_LET;            // the flag falls, once
 				c.m_param1  = skippingFlag;
 				c.m_param2  = FindConst(ibValue(false));
@@ -1992,14 +1992,14 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 		else if (verb == (long)ibValue::ibLinqMethod::TakeWhile) {
 			// ⭐ TAKE WHILE — the first row that fails ends the loop, the way `break` does.
 			{
-				ibByteUnit c; AddLineInfo(c);
+				ibByteUnit c; StampSource(c);
 				c.m_numOper = OPER_IF;             // still true -> carry on past the GOTO
 				c.m_param1  = value;
 				c.m_param2.m_numIndex = (long)m_cByteCode.m_listCode.size() + 2;
 				m_cByteCode.m_listCode.emplace_back(std::move(c));
 			}
 			{
-				ibByteUnit c; AddLineInfo(c);
+				ibByteUnit c; StampSource(c);
 				c.m_numOper = OPER_GOTO;
 				m_cByteCode.m_listCode.emplace_back(std::move(c));
 				breakIps.push_back((int)m_cByteCode.m_listCode.size() - 1);
@@ -2013,18 +2013,18 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 			hasOrderKey   = true;
 		}
 
-		GETDelimeter(')');       // the body's own braces were consumed with it
+		ExpectDelimiter(')');       // the body's own braces were consumed with it
 	}
 
 	// The terminal, consumed and then emitted as ordinary work inside the loop. Its argument, where
 	// there is one, was read before the loop opened and is only skipped over here.
-	GETDelimeter('.');
-	GETIdentifier(true, /*acceptKeyword*/true);
+	ExpectDelimiter('.');
+	ExpectIdentifier(true, /*acceptKeyword*/true);
 	if (takesOneArgument || terminalFold || terminalGroup)
 		m_numCurrentCompile = (int)tail.m_numLexClose;
 	else {
-		GETDelimeter('(');
-		GETDelimeter(')');
+		ExpectDelimiter('(');
+		ExpectDelimiter(')');
 	}
 
 	std::vector<int> exitGotoIps;   // early terminals leave the way `break` does
@@ -2036,15 +2036,15 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 		// the cell the row is already in.
 		const int resumeGroup = m_numCurrentCompile;
 		m_numCurrentCompile = (int)tail.m_numLexArg - 1;
-		GETKeyWord(KEY_FUNCTION);
-		GETDelimeter('(');
-		const wxString keyRowName = GETIdentifier(true);
-		GETDelimeter(')');
+		ExpectKeyword(KEY_FUNCTION);
+		ExpectDelimiter('(');
+		const wxString keyRowName = ExpectIdentifier(true);
+		ExpectDelimiter(')');
 		BindParamToCell(loopCtx, keyRowName, current);
 		const ibParamUnit key = EmitLambdaBody(loopCtx);
 		m_numCurrentCompile = resumeGroup;
 
-		ibByteUnit c; AddLineInfo(c);
+		ibByteUnit c; StampSource(c);
 		c.m_numOper = OPER_LINQ_BUCKET;      // one instruction; the collection keeps the order of keys
 		c.m_param1  = linqKept;
 		c.m_param2  = key;
@@ -2056,13 +2056,13 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 		ibParamUnit addend;
 		if (terminalCounts) {
 			addend = context->CreateVariable();
-			ibByteUnit c; AddLineInfo(c);
+			ibByteUnit c; StampSource(c);
 			c.m_numOper = OPER_CONSTN;
 			c.m_param1  = addend;
 			c.m_param2.m_numIndex = 1;
 			m_cByteCode.m_listCode.emplace_back(std::move(c));
 		}
-		ibByteUnit c; AddLineInfo(c);
+		ibByteUnit c; StampSource(c);
 		c.m_numOper = OPER_ADD;
 		c.m_param1  = outResult;
 		c.m_param2  = outResult;
@@ -2072,7 +2072,7 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 	else if (terminalLast) {
 		// LAST — every row overwrites the answer, so the one left standing is the last that got here.
 		// No collection, no index, and nothing kept but the row itself.
-		ibByteUnit c; AddLineInfo(c);
+		ibByteUnit c; StampSource(c);
 		c.m_numOper = OPER_LET;
 		c.m_param1  = outResult;
 		c.m_param2  = current;
@@ -2084,7 +2084,7 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 		// first.
 		const ibParamUnit beats = context->CreateVariable();
 		{
-			ibByteUnit c; AddLineInfo(c);
+			ibByteUnit c; StampSource(c);
 			c.m_numOper = terminalMin ? OPER_LS : OPER_GT;
 			c.m_param1  = beats;
 			c.m_param2  = current;
@@ -2093,7 +2093,7 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 		}
 		const ibParamUnit nothingYet = context->CreateVariable();
 		{
-			ibByteUnit c; AddLineInfo(c);
+			ibByteUnit c; StampSource(c);
 			c.m_numOper = OPER_NOT;               // nothing kept yet reads as empty, i.e. false
 			c.m_param1  = nothingYet;
 			c.m_param2  = outResult;
@@ -2101,7 +2101,7 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 		}
 		const ibParamUnit keepIt = context->CreateVariable();
 		{
-			ibByteUnit c; AddLineInfo(c);
+			ibByteUnit c; StampSource(c);
 			c.m_numOper = OPER_OR;
 			c.m_param1  = keepIt;
 			c.m_param2  = beats;
@@ -2110,7 +2110,7 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 		}
 		int keepIfIp = 0;
 		{
-			ibByteUnit c; AddLineInfo(c);
+			ibByteUnit c; StampSource(c);
 			c.m_numOper = OPER_IF;
 			c.m_param1  = keepIt;
 			c.m_param2.m_numIndex = 0;
@@ -2118,7 +2118,7 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 			keepIfIp = (int)m_cByteCode.m_listCode.size() - 1;
 		}
 		{
-			ibByteUnit c; AddLineInfo(c);
+			ibByteUnit c; StampSource(c);
 			c.m_numOper = OPER_LET;
 			c.m_param1  = outResult;
 			c.m_param2  = current;
@@ -2134,28 +2134,28 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 		// through into the assignment, false jumps past it. The same shape Min and Max use.
 		const ibParamUnit nothingYet = context->CreateVariable();
 		{
-			ibByteUnit c; AddLineInfo(c);
+			ibByteUnit c; StampSource(c);
 			c.m_numOper = OPER_NOT;
 			c.m_param1  = nothingYet;
 			c.m_param2  = onlyCount;
 			m_cByteCode.m_listCode.emplace_back(std::move(c));
 		}
 		{
-			ibByteUnit c; AddLineInfo(c);
+			ibByteUnit c; StampSource(c);
 			c.m_numOper = OPER_IF;
 			c.m_param1  = nothingYet;
 			c.m_param2.m_numIndex = (long)m_cByteCode.m_listCode.size() + 2;   // past the assignment
 			m_cByteCode.m_listCode.emplace_back(std::move(c));
 		}
 		{
-			ibByteUnit c; AddLineInfo(c);
+			ibByteUnit c; StampSource(c);
 			c.m_numOper = OPER_LET;
 			c.m_param1  = outResult;
 			c.m_param2  = current;
 			m_cByteCode.m_listCode.emplace_back(std::move(c));
 		}
 		{
-			ibByteUnit c; AddLineInfo(c);
+			ibByteUnit c; StampSource(c);
 			c.m_numOper = OPER_ADD;
 			c.m_param1  = onlyCount;
 			c.m_param2  = onlyCount;
@@ -2170,19 +2170,19 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 		// becomes the answer, and the next row sees it.
 		const int resumeFold = m_numCurrentCompile;
 		m_numCurrentCompile = foldBodyAt;
-		GETKeyWord(KEY_FUNCTION);
-		GETDelimeter('(');
-		const wxString accName  = GETIdentifier(true);
-		GETDelimeter(',');
-		const wxString rowName  = GETIdentifier(true);
-		GETDelimeter(')');
+		ExpectKeyword(KEY_FUNCTION);
+		ExpectDelimiter('(');
+		const wxString accName  = ExpectIdentifier(true);
+		ExpectDelimiter(',');
+		const wxString rowName  = ExpectIdentifier(true);
+		ExpectDelimiter(')');
 
 		BindParamToCell(loopCtx, accName, outResult);
 		BindParamToCell(loopCtx, rowName, current);
 
 		const ibParamUnit folded = EmitLambdaBody(loopCtx);
 		{
-			ibByteUnit c; AddLineInfo(c);
+			ibByteUnit c; StampSource(c);
 			c.m_numOper = OPER_LET;
 			c.m_param1  = outResult;
 			c.m_param2  = folded;
@@ -2195,7 +2195,7 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 		// against was worked out before the loop opened, so this is an equality and a branch.
 		const ibParamUnit same = context->CreateVariable();
 		{
-			ibByteUnit c; AddLineInfo(c);
+			ibByteUnit c; StampSource(c);
 			c.m_numOper = OPER_EQ;
 			c.m_param1  = same;
 			c.m_param2  = current;
@@ -2204,7 +2204,7 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 		}
 		int missIfIp = 0;
 		{
-			ibByteUnit c; AddLineInfo(c);
+			ibByteUnit c; StampSource(c);
 			c.m_numOper = OPER_IF;                // not this row → carry on
 			c.m_param1  = same;
 			c.m_param2.m_numIndex = 0;
@@ -2212,14 +2212,14 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 			missIfIp = (int)m_cByteCode.m_listCode.size() - 1;
 		}
 		{
-			ibByteUnit c; AddLineInfo(c);
+			ibByteUnit c; StampSource(c);
 			c.m_numOper = OPER_LET;
 			c.m_param1  = outResult;
 			c.m_param2  = FindConst(ibValue(true));
 			m_cByteCode.m_listCode.emplace_back(std::move(c));
 		}
 		{
-			ibByteUnit c; AddLineInfo(c);
+			ibByteUnit c; StampSource(c);
 			c.m_numOper = OPER_GOTO;              // found — leave the way `break` does
 			m_cByteCode.m_listCode.emplace_back(std::move(c));
 			exitGotoIps.push_back((int)m_cByteCode.m_listCode.size() - 1);
@@ -2231,7 +2231,7 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 		// many rows have gone past", so the row wanted is the one where it equals the argument.
 		const ibParamUnit atIt = context->CreateVariable();
 		{
-			ibByteUnit c; AddLineInfo(c);
+			ibByteUnit c; StampSource(c);
 			c.m_numOper = OPER_EQ;
 			c.m_param1  = atIt;
 			c.m_param2  = atCounter;
@@ -2240,7 +2240,7 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 		}
 		int notYetIp = 0;
 		{
-			ibByteUnit c; AddLineInfo(c);
+			ibByteUnit c; StampSource(c);
 			c.m_numOper = OPER_IF;
 			c.m_param1  = atIt;
 			c.m_param2.m_numIndex = 0;
@@ -2248,21 +2248,21 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 			notYetIp = (int)m_cByteCode.m_listCode.size() - 1;
 		}
 		{
-			ibByteUnit c; AddLineInfo(c);
+			ibByteUnit c; StampSource(c);
 			c.m_numOper = OPER_LET;
 			c.m_param1  = outResult;
 			c.m_param2  = current;
 			m_cByteCode.m_listCode.emplace_back(std::move(c));
 		}
 		{
-			ibByteUnit c; AddLineInfo(c);
+			ibByteUnit c; StampSource(c);
 			c.m_numOper = OPER_GOTO;
 			m_cByteCode.m_listCode.emplace_back(std::move(c));
 			exitGotoIps.push_back((int)m_cByteCode.m_listCode.size() - 1);
 		}
 		m_cByteCode.m_listCode[notYetIp].m_param2.m_numIndex = (long)m_cByteCode.m_listCode.size();
 		{
-			ibByteUnit c; AddLineInfo(c);
+			ibByteUnit c; StampSource(c);
 			c.m_numOper = OPER_ADD;               // one more row has gone past
 			c.m_param1  = atCounter;
 			c.m_param2  = atCounter;
@@ -2272,14 +2272,14 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 	}
 	else if (terminalAvg) {
 		{
-			ibByteUnit c; AddLineInfo(c);
+			ibByteUnit c; StampSource(c);
 			c.m_numOper = OPER_ADD;
 			c.m_param1  = outResult;
 			c.m_param2  = outResult;
 			c.m_param3  = current;
 			m_cByteCode.m_listCode.emplace_back(std::move(c));
 		}
-		ibByteUnit c; AddLineInfo(c);
+		ibByteUnit c; StampSource(c);
 		c.m_numOper = OPER_ADD;
 		c.m_param1  = avgCount;
 		c.m_param2  = avgCount;
@@ -2290,7 +2290,7 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 		// Kept, in row order, together with the key it will be ordered by — one instruction, into
 		// LINQ's own collection. `Distinct` did not keep it: that only asked whether it had been
 		// seen, which is a different question from whether it is being returned.
-		ibByteUnit c; AddLineInfo(c);
+		ibByteUnit c; StampSource(c);
 		c.m_numOper = OPER_LINQ_KEEP;
 		c.m_param1  = linqKept;
 		c.m_param2  = current;
@@ -2308,14 +2308,14 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 		// end (CompileBlock, KEY_BREAK), which is what makes an early terminal cost one row rather
 		// than all of them.
 		{
-			ibByteUnit c; AddLineInfo(c);
+			ibByteUnit c; StampSource(c);
 			c.m_numOper = OPER_LET;
 			c.m_param1  = outResult;
 			c.m_param2  = terminalAny ? FindConst(ibValue(true)) : current;
 			m_cByteCode.m_listCode.emplace_back(std::move(c));
 		}
 		if (earlyExitOk) {
-			ibByteUnit c; AddLineInfo(c);
+			ibByteUnit c; StampSource(c);
 			c.m_numOper = OPER_GOTO;
 			m_cByteCode.m_listCode.emplace_back(std::move(c));
 			exitGotoIps.push_back((int)m_cByteCode.m_listCode.size() - 1);
@@ -2332,7 +2332,7 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 		const ibChainLoop& loop = innerLoops[level - 1];
 		const int innerNextIp = (int)m_cByteCode.m_listCode.size();
 		{
-			ibByteUnit c; AddLineInfo(c);
+			ibByteUnit c; StampSource(c);
 			c.m_numOper = OPER_NEXT_ITER;
 			c.m_param1  = loop.itSlot;
 			c.m_param2.m_numIndex = loop.foreachIp;
@@ -2352,7 +2352,7 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 	// fourth operand pointing past it, and every failed `Where` landing on the NEXT_ITER.
 	const int nextIterIp = (int)m_cByteCode.m_listCode.size();
 	{
-		ibByteUnit c; AddLineInfo(c);
+		ibByteUnit c; StampSource(c);
 		c.m_numOper = OPER_NEXT_ITER;
 		c.m_param1  = itSlot;
 		c.m_param2.m_numIndex = foreachIp;
@@ -2393,7 +2393,7 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 		const ibParamUnit moreRow = context->CreateVariable();
 		const ibParamUnit moreIt  = context->CreateVariable();
 		{
-			ibByteUnit c; AddLineInfo(c);
+			ibByteUnit c; StampSource(c);
 			c.m_numOper = OPER_LET;
 			c.m_param1  = moreIn;
 			c.m_param2  = setSource[i];
@@ -2401,7 +2401,7 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 		}
 		int moreForeachIp = 0;
 		{
-			ibByteUnit c; AddLineInfo(c);
+			ibByteUnit c; StampSource(c);
 			c.m_numOper = OPER_FOREACH;
 			c.m_param1  = moreRow;
 			c.m_param2  = moreIn;
@@ -2413,7 +2413,7 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 		// The same two instructions the first source's rows go through — one shape, one place.
 		const int seenIfIp = dedup ? emitSeenGuard(linqKept, moreRow) : -1;
 		{
-			ibByteUnit c; AddLineInfo(c);
+			ibByteUnit c; StampSource(c);
 			c.m_numOper = OPER_LINQ_KEEP;
 			c.m_param1  = linqKept;
 			c.m_param2  = moreRow;
@@ -2422,7 +2422,7 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 		}
 		const int moreNextIp = (int)m_cByteCode.m_listCode.size();
 		{
-			ibByteUnit c; AddLineInfo(c);
+			ibByteUnit c; StampSource(c);
 			c.m_numOper = OPER_NEXT_ITER;
 			c.m_param1  = moreIt;
 			c.m_param2.m_numIndex = moreForeachIp;
@@ -2442,7 +2442,7 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 	// GROUPING IS THE SAME LAST INSTRUCTION, asked for the buckets instead of the rows — one light
 	// group per key, in the order the keys first appeared, exactly as `group … by` answers.
 	if (terminalGroup) {
-		ibByteUnit c; AddLineInfo(c);
+		ibByteUnit c; StampSource(c);
 		c.m_numOper = OPER_LINQ_RESULT;
 		c.m_param1  = outResult;
 		c.m_param2  = linqKept;
@@ -2450,7 +2450,7 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 		m_cByteCode.m_listCode.emplace_back(std::move(c));
 	}
 	else if (collectsRows) {
-		ibByteUnit c; AddLineInfo(c);
+		ibByteUnit c; StampSource(c);
 		c.m_numOper = OPER_LINQ_RESULT;
 		c.m_param1  = outResult;
 		c.m_param2  = linqKept;
@@ -2468,7 +2468,7 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 	if (terminalAvg) {
 		int emptyIfIp = 0;
 		{
-			ibByteUnit c; AddLineInfo(c);
+			ibByteUnit c; StampSource(c);
 			c.m_numOper = OPER_IF;
 			c.m_param1  = avgCount;
 			c.m_param2.m_numIndex = 0;
@@ -2476,7 +2476,7 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 			emptyIfIp = (int)m_cByteCode.m_listCode.size() - 1;
 		}
 		{
-			ibByteUnit c; AddLineInfo(c);
+			ibByteUnit c; StampSource(c);
 			c.m_numOper = OPER_DIV;
 			c.m_param1  = outResult;
 			c.m_param2  = outResult;
@@ -2494,7 +2494,7 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 		const auto refuse = [&](const ibParamUnit& when, const wxString& why) {
 			int okIp = 0;
 			{
-				ibByteUnit c; AddLineInfo(c);
+				ibByteUnit c; StampSource(c);
 				c.m_numOper = OPER_IF;            // jumps when FALSE — i.e. when there is nothing wrong
 				c.m_param1  = when;
 				c.m_param2.m_numIndex = 0;
@@ -2502,7 +2502,7 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 				okIp = (int)m_cByteCode.m_listCode.size() - 1;
 			}
 			{
-				ibByteUnit c; AddLineInfo(c);
+				ibByteUnit c; StampSource(c);
 				c.m_numOper = OPER_RAISE_T;
 				c.m_param1  = FindConst(ibValue(why));
 				m_cByteCode.m_listCode.emplace_back(std::move(c));
@@ -2513,7 +2513,7 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 		// More than one — wrong for both spellings of the verb.
 		const ibParamUnit tooMany = context->CreateVariable();
 		{
-			ibByteUnit c; AddLineInfo(c);
+			ibByteUnit c; StampSource(c);
 			c.m_numOper = OPER_GT;
 			c.m_param1  = tooMany;
 			c.m_param2  = onlyCount;
@@ -2527,7 +2527,7 @@ bool ibCompileCode::CompileLinqChain(ibCompileContext* context,
 		if (terminalOnlyStrict) {
 			const ibParamUnit none = context->CreateVariable();
 			{
-				ibByteUnit c; AddLineInfo(c);
+				ibByteUnit c; StampSource(c);
 				c.m_numOper = OPER_NOT;
 				c.m_param1  = none;
 				c.m_param2  = onlyCount;
@@ -2564,7 +2564,7 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx)
 {
 	// Nested `from` recurses here. The expression ceiling does not see it.
 	if (ibFiber::StackLow()) {
-		SetError(ERROR_EXPRESSION,
+		Refuse(ibScriptError_Expression,
 			_("it is nested deeper than the stack allows - split it into steps"));
 		return;
 	}
@@ -2579,9 +2579,9 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx)
 	// CompileLinqExpression added.
 	ibCompileContext* const context = linqCtx;
 
-	const wxString bindRealName = GETIdentifier(true);
+	const wxString bindRealName = ExpectIdentifier(true);
 	const wxString bindUpper    = stringUtils::MakeUpper(bindRealName);
-	GETKeyWord(KEY_IN);
+	ExpectKeyword(KEY_IN);
 
 	ibLinqBinding b;
 	b.name       = bindRealName;
@@ -2593,7 +2593,7 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx)
 	// OPER_LET @in_ := source-expression
 	{
 		const ibParamUnit srcSlot = GetExpression(context);
-		ibByteUnit c; AddLineInfo(c);
+		ibByteUnit c; StampSource(c);
 		c.m_numOper = OPER_LET;
 		c.m_param1 = b.iterInSlot;
 		c.m_param2 = srcSlot;
@@ -2602,7 +2602,7 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx)
 
 	// OPER_FOREACH header
 	{
-		ibByteUnit c; AddLineInfo(c);
+		ibByteUnit c; StampSource(c);
 		c.m_numOper = OPER_FOREACH;
 		c.m_param1 = b.valueSlot;
 		c.m_param2 = b.iterInSlot;
@@ -2623,7 +2623,7 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx)
 void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBinding& preBound)
 {
 	if (ibFiber::StackLow()) {
-		SetError(ERROR_EXPRESSION,
+		Refuse(ibScriptError_Expression,
 			_("it is nested deeper than the stack allows - split it into steps"));
 		return;
 	}
@@ -2668,14 +2668,14 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 	// build) emitted after outer NEXT_ITER. Multiple joins at the same
 	// level are allowed; their bucket loops nest in clause order and are
 	// closed innermost-first in the close section.
-	while (IsNextKeyWord(KEY_JOIN)) {
-		GETKeyWord(KEY_JOIN);
+	while (IsNextKeyword(KEY_JOIN)) {
+		ExpectKeyword(KEY_JOIN);
 		CompileLinqJoin(context, pendingJoins);
 	}
 
-	if (IsNextKeyWord(KEY_FROM)) {
+	if (IsNextKeyword(KEY_FROM)) {
 		// === Recurse — nested `from` adds another foreach depth ===
-		GETKeyWord(KEY_FROM);
+		ExpectKeyword(KEY_FROM);
 		CompileLinqBlock(context);
 	}
 	else {
@@ -2686,12 +2686,12 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 		// order, matching C# LINQ grammar.
 		while (true) {
 			// WHERE clause
-			if (IsNextKeyWord(KEY_WHERE)) {
-				GETKeyWord(KEY_WHERE);
+			if (IsNextKeyword(KEY_WHERE)) {
+				ExpectKeyword(KEY_WHERE);
 				const int whereFrom = (int)m_cByteCode.m_listCode.size();
 				const ibParamUnit whereExpr = GetExpression(context);
 				MarkThreeValuedNull(m_cByteCode, whereFrom, (int)m_cByteCode.m_listCode.size());
-				ibByteUnit c; AddLineInfo(c);
+				ibByteUnit c; StampSource(c);
 				c.m_numOper = OPER_IF;
 				c.m_param1 = whereExpr;
 				c.m_param2.m_numIndex = 0;  // back-patched below
@@ -2706,8 +2706,8 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 			// `o * -1`) which can interact badly with subsequent
 			// OPER_SET arg loads. Copy into a stable regular slot via
 			// OPER_LET so __keys.Add reads it as a normal variable.
-			if (IsNextKeyWord(KEY_ORDERBY)) {
-				GETKeyWord(KEY_ORDERBY);
+			if (IsNextKeyword(KEY_ORDERBY)) {
+				ExpectKeyword(KEY_ORDERBY);
 
 				// ⭐⭐ AS MANY KEYS AS THE CLAUSE NAMES, separated by commas — `orderby Warehouse,
 				// Item` is how an ordering is actually written, and until 2026-09-08 the comma was
@@ -2725,7 +2725,7 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 
 					const ibParamUnit keySlot = context->CreateVariable();
 					{
-						ibByteUnit c; AddLineInfo(c);
+						ibByteUnit c; StampSource(c);
 						c.m_numOper = OPER_LET;
 						c.m_param1 = keySlot;
 						c.m_param2 = rawKey;
@@ -2733,17 +2733,17 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 					}
 
 					bool descending = false;
-					if (IsNextKeyWord(KEY_DESCENDING)) {
-						GETKeyWord(KEY_DESCENDING);
+					if (IsNextKeyword(KEY_DESCENDING)) {
+						ExpectKeyword(KEY_DESCENDING);
 						descending = true;
-					} else if (IsNextKeyWord(KEY_ASCENDING)) {
-						GETKeyWord(KEY_ASCENDING);
+					} else if (IsNextKeyword(KEY_ASCENDING)) {
+						ExpectKeyword(KEY_ASCENDING);
 					}
 					data.m_orderByKeys.push_back({ keySlot, descending });
 
-					if (!IsNextDelimeter(','))
+					if (!IsNextDelimiter(','))
 						break;
-					GETDelimeter(',');
+					ExpectDelimiter(',');
 				} while (true);
 
 				data.m_hasOrderBy = true;
@@ -2753,8 +2753,8 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 			// Let-clause — `var alias = <expr>` or implicit `alias = <expr>`.
 			// Both emit OPER_LET + push FromLet binding so subsequent
 			// clauses see `alias` via standard context lookup.
-			if (IsNextKeyWord(KEY_VAR)) {
-				GETKeyWord(KEY_VAR);
+			if (IsNextKeyword(KEY_VAR)) {
+				ExpectKeyword(KEY_VAR);
 			}
 			else {
 				// Implicit — 2-token peek <IDENTIFIER> '='. Identifier
@@ -2773,11 +2773,11 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 				if (l1.m_lexType != DELIMITER || l1.m_numData != '=') break;
 			}
 
-			const wxString aliasReal = GETIdentifier(true);
-			GETDelimeter('=');
+			const wxString aliasReal = ExpectIdentifier(true);
+			ExpectDelimiter('=');
 			const ibParamUnit aliasSlot = context->GetVariable(aliasReal);
 			{
-				ibByteUnit c; AddLineInfo(c);
+				ibByteUnit c; StampSource(c);
 				c.m_numOper = OPER_LET;
 				c.m_param1 = aliasSlot;
 				c.m_param2 = GetExpression(context);
@@ -2791,16 +2791,16 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 		}
 
 		// SKIP — counter++, if (counter <= N) goto next-iter.
-		if (IsNextKeyWord(KEY_SKIP)) {
-			GETKeyWord(KEY_SKIP);
+		if (IsNextKeyword(KEY_SKIP)) {
+			ExpectKeyword(KEY_SKIP);
 			const ibParamUnit skipExpr = GetExpression(context);
 			// A NUMBER OF ROWS IS A NUMBER. `Skip "5"` compared a counter with a string on every row and
 			// answered whatever that comparison said; an expression whose type the compiler knows - a
 			// constant, a typed variable - is checked here, the way `For` checks its bound.
 			if (skipExpr.m_clsid != 0 && skipExpr.m_clsid != g_valueNumberCLSID)
-				SetError(ERROR_NUMBER_TYPE);
+				Refuse(ibScriptError_NumberType);
 			{
-				ibByteUnit c; AddLineInfo(c);
+				ibByteUnit c; StampSource(c);
 				c.m_numOper = OPER_ADD;
 				c.m_param1 = data.m_skipCounter;
 				c.m_param2 = data.m_skipCounter;
@@ -2809,7 +2809,7 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 			}
 			const ibParamUnit tmpLE = context->CreateVariable();
 			{
-				ibByteUnit c; AddLineInfo(c);
+				ibByteUnit c; StampSource(c);
 				c.m_numOper = OPER_LE;
 				c.m_param1 = tmpLE;
 				c.m_param2 = data.m_skipCounter;
@@ -2817,7 +2817,7 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 				m_cByteCode.m_listCode.emplace_back(std::move(c));
 			}
 			{
-				ibByteUnit c; AddLineInfo(c);
+				ibByteUnit c; StampSource(c);
 				c.m_numOper = OPER_IF;
 				c.m_param1 = tmpLE;
 				c.m_param2.m_numIndex = 0;
@@ -2825,7 +2825,7 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 			}
 			const int skipIfIp = (int)m_cByteCode.m_listCode.size() - 1;
 			{
-				ibByteUnit c; AddLineInfo(c);
+				ibByteUnit c; StampSource(c);
 				c.m_numOper = OPER_GOTO;
 				m_cByteCode.m_listCode.emplace_back(std::move(c));
 				const int gotoIp = (int)m_cByteCode.m_listCode.size() - 1;
@@ -2844,14 +2844,14 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 		}
 
 		// TAKE — if (counter >= N) goto break-out; else counter++.
-		if (IsNextKeyWord(KEY_TAKE)) {
-			GETKeyWord(KEY_TAKE);
+		if (IsNextKeyword(KEY_TAKE)) {
+			ExpectKeyword(KEY_TAKE);
 			const ibParamUnit takeExpr = GetExpression(context);
 			if (takeExpr.m_clsid != 0 && takeExpr.m_clsid != g_valueNumberCLSID)
-				SetError(ERROR_NUMBER_TYPE);   // as `Skip` above
+				Refuse(ibScriptError_NumberType);   // as `Skip` above
 			const ibParamUnit tmpGE = context->CreateVariable();
 			{
-				ibByteUnit c; AddLineInfo(c);
+				ibByteUnit c; StampSource(c);
 				c.m_numOper = OPER_GE;
 				c.m_param1 = tmpGE;
 				c.m_param2 = data.m_takeCounter;
@@ -2859,7 +2859,7 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 				m_cByteCode.m_listCode.emplace_back(std::move(c));
 			}
 			{
-				ibByteUnit c; AddLineInfo(c);
+				ibByteUnit c; StampSource(c);
 				c.m_numOper = OPER_IF;
 				c.m_param1 = tmpGE;
 				c.m_param2.m_numIndex = 0;
@@ -2867,7 +2867,7 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 			}
 			const int takeIfIp = (int)m_cByteCode.m_listCode.size() - 1;
 			{
-				ibByteUnit c; AddLineInfo(c);
+				ibByteUnit c; StampSource(c);
 				c.m_numOper = OPER_GOTO;
 				m_cByteCode.m_listCode.emplace_back(std::move(c));
 				const int gotoIp = (int)m_cByteCode.m_listCode.size() - 1;
@@ -2877,7 +2877,7 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 			m_cByteCode.m_listCode[takeIfIp].m_param2.m_numIndex =
 				(long)m_cByteCode.m_listCode.size();
 			{
-				ibByteUnit c; AddLineInfo(c);
+				ibByteUnit c; StampSource(c);
 				c.m_numOper = OPER_ADD;
 				c.m_param1 = data.m_takeCounter;
 				c.m_param2 = data.m_takeCounter;
@@ -2892,8 +2892,8 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 		// `Values` by ordinal, in the order the keys first appeared. WHERE / ORDERBY before group
 		// operate on raw rows (filter / sort before grouping). `into <g>` continues the query with
 		// the groups as its rows.
-		if (IsNextKeyWord(KEY_GROUP)) {
-			GETKeyWord(KEY_GROUP);
+		if (IsNextKeyword(KEY_GROUP)) {
+			ExpectKeyword(KEY_GROUP);
 			data.m_hasGroup = true;
 			data.m_grouped  = true;          // the FACT; the flag above is parse state and gets cleared
 
@@ -2910,7 +2910,7 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 			// Parse X (value to group) — eval inline per iter.
 			const ibParamUnit groupValueSlot = GetExpression(context);
 
-			GETKeyWord(KEY_BY);
+			ExpectKeyword(KEY_BY);
 
 			// Parse K (group key) — eval inline per iter.
 			const ibParamUnit groupKeySlot = GetExpression(context);
@@ -2926,7 +2926,7 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 			// made when it is first needed, and the order the keys first appeared in is remembered —
 			// because that is the order the answer comes out in.
 			{
-				ibByteUnit c; AddLineInfo(c);
+				ibByteUnit c; StampSource(c);
 				c.m_numOper = OPER_LINQ_BUCKET;
 				c.m_param1 = data.m_groupsContainer;
 				c.m_param2 = groupKeySlot;
@@ -2942,9 +2942,9 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 			// — outer level's leaf parser falls through (hasGroup=true
 			// suppresses SELECT/Add); cursor stays at the continuation's
 			// first token, where post-block picks it up.
-			if (IsNextKeyWord(KEY_INTO)) {
-				GETKeyWord(KEY_INTO);
-				data.m_groupIntoName = GETIdentifier(true);
+			if (IsNextKeyword(KEY_INTO)) {
+				ExpectKeyword(KEY_INTO);
+				data.m_groupIntoName = ExpectIdentifier(true);
 				data.m_hasGroupInto  = true;
 			}
 			// ⭐ WITHOUT A NAME THE GROUP IS THE ANSWER, and a clause after it has nothing to read. It was
@@ -2953,8 +2953,8 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 			// the answer's columns shown as `Field1`. Said here, as what it is, with the way out.
 			else {
 				for (const int clause : { KEY_SELECT, KEY_WHERE, KEY_ORDERBY, KEY_SKIP, KEY_TAKE, KEY_DISTINCT, KEY_GROUP, KEY_JOIN, KEY_FROM })
-					if (IsNextKeyWord(clause)) {
-						SetError(ERROR_LINQ_AFTER_UNNAMED_GROUP, ibTranslateCode::GetKeyWord(KEY_INTO));
+					if (IsNextKeyword(clause)) {
+						Refuse(ibScriptError_LinqAfterUnnamedGroup, ibTranslateCode::GetKeyWord(KEY_INTO));
 						break;
 					}
 			}
@@ -2997,7 +2997,7 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 			const ibParamUnit shapeSlot = context->CreateVariable();
 			const int rowIp = (int)m_cByteCode.m_listCode.size();
 			{
-				ibByteUnit c; AddLineInfo(c);
+				ibByteUnit c; StampSource(c);
 				c.m_numOper = OPER_LINQ_ROW;
 				c.m_param1 = rowSlot;
 				c.m_param2 = shapeSlot;
@@ -3008,7 +3008,7 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 			// name reaches run time.
 			std::vector<wxString> columnNames;
 			const auto keepColumn = [&](const wxString& proposed, const ibParamUnit& value) {
-				ibByteUnit c; AddLineInfo(c);
+				ibByteUnit c; StampSource(c);
 				c.m_numOper = OPER_LINQ_FIELD;
 				c.m_param1 = rowSlot;
 				c.m_param2 = value;
@@ -3017,13 +3017,13 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 				columnNames.push_back(UniqueColumnName(columnNames, proposed));
 			};
 
-			if (IsNextKeyWord(KEY_SELECT)) {
-				GETKeyWord(KEY_SELECT);
+			if (IsNextKeyword(KEY_SELECT)) {
+				ExpectKeyword(KEY_SELECT);
 
-				if (IsNextDelimeter('{')) {
-					GETDelimeter('{');
+				if (IsNextDelimiter('{')) {
+					ExpectDelimiter('{');
 					// `name = expr` pairs — the author names every column.
-					while (!IsNextDelimeter('}')) {
+					while (!IsNextDelimiter('}')) {
 
 						// 🛑 A CLAUSE LOOP HAS TO BE ABLE TO STOP WITHOUT A RAISE, and this one could
 						// not. In the TOLERANT mode the editor compiles in, nothing throws and nothing
@@ -3042,15 +3042,15 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 							break;
 						const int beforeTurn = m_numCurrentCompile;
 
-						const wxString fieldName = GETIdentifier(true);
-						GETDelimeter('=');
+						const wxString fieldName = ExpectIdentifier(true);
+						ExpectDelimiter('=');
 						keepColumn(fieldName, GetExpression(context));
-						if (IsNextDelimeter(',')) GETDelimeter(',');
+						if (IsNextDelimiter(',')) ExpectDelimiter(',');
 
 						if (m_numCurrentCompile <= beforeTurn)
 							break;
 					}
-					GETDelimeter('}');
+					ExpectDelimiter('}');
 				}
 				else {
 					// One column, and its name is whatever the INSTRUCTIONS say the value is: a member
@@ -3098,12 +3098,12 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 		// The light collection keeps an ordered set beside its rows — ordered because `ibValue` has a
 		// total order and no hash at all — and answers the question directly.
 		int distinctSkipIp = -1;
-		if (IsNextKeyWord(KEY_DISTINCT)) {
-			GETKeyWord(KEY_DISTINCT);
+		if (IsNextKeyword(KEY_DISTINCT)) {
+			ExpectKeyword(KEY_DISTINCT);
 
 			const ibParamUnit fresh = context->CreateVariable();
 			{
-				ibByteUnit c; AddLineInfo(c);
+				ibByteUnit c; StampSource(c);
 				c.m_numOper = OPER_LINQ_SEEN;
 				c.m_param1 = fresh;
 				c.m_param2 = data.m_resultArray;
@@ -3111,7 +3111,7 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 				m_cByteCode.m_listCode.emplace_back(std::move(c));
 			}
 			{
-				ibByteUnit c; AddLineInfo(c);
+				ibByteUnit c; StampSource(c);
 				c.m_numOper = OPER_IF;              // already seen -> past the keep
 				c.m_param1 = fresh;
 				c.m_param2.m_numIndex = 0;          // back-patch below
@@ -3138,7 +3138,7 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 			// it runs - its array field, 1 for descending.
 			const size_t keys = data.m_hasOrderBy ? data.m_orderByKeys.size() : 0;
 
-			ibByteUnit c; AddLineInfo(c);
+			ibByteUnit c; StampSource(c);
 			c.m_numOper = OPER_LINQ_KEEP;
 			c.m_param1 = data.m_resultArray;
 			c.m_param2 = addValue;
@@ -3152,7 +3152,7 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 			m_cByteCode.m_listCode.emplace_back(std::move(c));
 
 			for (size_t k = 1; k < keys; k++) {
-				ibByteUnit more; AddLineInfo(more);
+				ibByteUnit more; StampSource(more);
 				more.m_numOper = OPER_LINQ_KEEP;
 				more.m_param1 = data.m_resultArray;
 				more.m_param2.m_numArray = DEF_VAR_SKIP;   // the row is already kept
@@ -3189,7 +3189,7 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 		const ibLinqPendingJoin& pj = pendingJoins[k];
 		bucketCloseIp[k] = (long)m_cByteCode.m_listCode.size();
 		{
-			ibByteUnit c; AddLineInfo(c);
+			ibByteUnit c; StampSource(c);
 			c.m_numOper = OPER_NEXT_ITER;
 			c.m_param1 = pj.bucketItSlot;
 			c.m_param2.m_numIndex = pj.bucketForeachIp;
@@ -3222,7 +3222,7 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 
 	// === Close this level's loop ===
 	{
-		ibByteUnit c; AddLineInfo(c);
+		ibByteUnit c; StampSource(c);
 		c.m_numOper = OPER_NEXT_ITER;
 		c.m_param1 = b.iterItSlot;
 		c.m_param2.m_numIndex = b.foreachStartIp;
@@ -3264,7 +3264,7 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 			linqCtx->GetVariable(wxString::Format(wxT("@join_it_%d"),
 				(int)pendingJoins.size()), true, false, false, true);
 		{
-			ibByteUnit c; AddLineInfo(c);
+			ibByteUnit c; StampSource(c);
 			c.m_numOper = OPER_LET;
 			c.m_param1 = innerInSlot;
 			c.m_param2 = innerSrcSlot;
@@ -3272,7 +3272,7 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 		}
 		const int innerForeachIp = (int)m_cByteCode.m_listCode.size();
 		{
-			ibByteUnit c; AddLineInfo(c);
+			ibByteUnit c; StampSource(c);
 			c.m_numOper = OPER_FOREACH;
 			c.m_param1 = pj.bindSlot;
 			c.m_param2 = innerInSlot;
@@ -3322,7 +3322,7 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 		// The light collection holds the buckets itself: the key is found in log n and the bucket is
 		// made when it is first needed.
 		{
-			ibByteUnit c; AddLineInfo(c);
+			ibByteUnit c; StampSource(c);
 			c.m_numOper = OPER_LINQ_BUCKET;
 			c.m_param1 = pj.hashSlot;
 			c.m_param2 = k2Slot;
@@ -3332,7 +3332,7 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 
 		// Close inner foreach.
 		{
-			ibByteUnit c; AddLineInfo(c);
+			ibByteUnit c; StampSource(c);
 			c.m_numOper = OPER_NEXT_ITER;
 			c.m_param1 = innerItSlot;
 			c.m_param2.m_numIndex = innerForeachIp;
@@ -3344,7 +3344,7 @@ void ibCompileCode::CompileLinqBlock(ibCompileContext* linqCtx, const ibLinqBind
 		// GOTO back to the per-iter lookup's skip_label (return into
 		// outer body after first-iter build).
 		{
-			ibByteUnit c; AddLineInfo(c);
+			ibByteUnit c; StampSource(c);
 			c.m_numOper = OPER_GOTO;
 			c.m_param1.m_numIndex = pj.skipLabelIp;
 			m_cByteCode.m_listCode.emplace_back(std::move(c));
@@ -3387,8 +3387,8 @@ void ibCompileCode::CompileLinqJoin(ibCompileContext* linqCtx,
 	// the iter var).
 	ibLinqQuery& data = *linqCtx->m_linqQuery;
 
-	const wxString joinName = GETIdentifier(true);
-	GETKeyWord(KEY_IN);
+	const wxString joinName = ExpectIdentifier(true);
+	ExpectKeyword(KEY_IN);
 
 	ibLinqPendingJoin pj;
 
@@ -3409,7 +3409,7 @@ void ibCompileCode::CompileLinqJoin(ibCompileContext* linqCtx,
 	}
 	pj.tLexEnd = m_numCurrentCompile;
 
-	GETKeyWord(KEY_ON);
+	ExpectKeyword(KEY_ON);
 
 	// Bind b in the linq scope. Slot persists across iterations; the
 	// bucket FOREACH writes the current matching inner row into it (and
@@ -3420,7 +3420,7 @@ void ibCompileCode::CompileLinqJoin(ibCompileContext* linqCtx,
 	// K1 reads `o` (already bound by the enclosing FROM).
 	const ibParamUnit k1Slot = GetExpression(linqCtx);
 
-	GETKeyWord(KEY_EQUALS);
+	ExpectKeyword(KEY_EQUALS);
 
 	// Save K2's lex range — same parse-and-discard pattern. K2
 	// references bindSlot which is bound NOW (above), so the parse
@@ -3451,7 +3451,7 @@ void ibCompileCode::CompileLinqJoin(ibCompileContext* linqCtx,
 		// but simpler is to leverage the IsEmpty path: assign a
 		// known-empty constant. Use a const-pool empty ibValue.
 		const ibParamUnit emptyConst = FindConst(ibValue());
-		ibByteUnit c; AddLineInfo(c);
+		ibByteUnit c; StampSource(c);
 		c.m_numOper = OPER_LET;
 		c.m_param1 = pj.hashSlot;
 		c.m_param2 = emptyConst;
@@ -3464,7 +3464,7 @@ void ibCompileCode::CompileLinqJoin(ibCompileContext* linqCtx,
 	// inference fires (kept on the untyped IsEmpty path).
 	const ibParamUnit tmpIsEmpty = linqCtx->CreateVariable();
 	{
-		ibByteUnit c; AddLineInfo(c);
+		ibByteUnit c; StampSource(c);
 		c.m_numOper = OPER_NOT;
 		c.m_param1 = tmpIsEmpty;
 		c.m_param2 = pj.hashSlot;
@@ -3478,7 +3478,7 @@ void ibCompileCode::CompileLinqJoin(ibCompileContext* linqCtx,
 	// skipLabel past the trampoline GOTO.
 	const int condIfIp = (int)m_cByteCode.m_listCode.size();
 	{
-		ibByteUnit c; AddLineInfo(c);
+		ibByteUnit c; StampSource(c);
 		c.m_numOper = OPER_IF;
 		c.m_param1 = tmpIsEmpty;
 		c.m_param2.m_numIndex = 0;  // back-patched after the GOTO emit
@@ -3489,7 +3489,7 @@ void ibCompileCode::CompileLinqJoin(ibCompileContext* linqCtx,
 	// after outer NEXT_ITER patches param1 with its ip).
 	pj.placeholderGotoIp = (int)m_cByteCode.m_listCode.size();
 	{
-		ibByteUnit c; AddLineInfo(c);
+		ibByteUnit c; StampSource(c);
 		c.m_numOper = OPER_GOTO;
 		c.m_param1.m_numIndex = 0;   // back-patched in trampoline emit loop
 		m_cByteCode.m_listCode.emplace_back(std::move(c));
@@ -3510,7 +3510,7 @@ void ibCompileCode::CompileLinqJoin(ibCompileContext* linqCtx,
 	// join. It hands back the bucket itself, not a copy of it: building an Array here would
 	// construct one object and copy every match, for every outer row.
 	{
-		ibByteUnit c; AddLineInfo(c);
+		ibByteUnit c; StampSource(c);
 		c.m_numOper = OPER_LINQ_BUCKET_GET;
 		c.m_param1 = pj.bucketSlot;
 		c.m_param2 = pj.hashSlot;
@@ -3519,14 +3519,14 @@ void ibCompileCode::CompileLinqJoin(ibCompileContext* linqCtx,
 	}
 	{
 		// Found is "the bucket is not empty" — one test, no second lookup.
-		ibByteUnit c; AddLineInfo(c);
+		ibByteUnit c; StampSource(c);
 		c.m_numOper = OPER_LET;
 		c.m_param1 = foundSlot;
 		c.m_param2 = pj.bucketSlot;
 		m_cByteCode.m_listCode.emplace_back(std::move(c));
 	}
 	{
-		ibByteUnit c; AddLineInfo(c);
+		ibByteUnit c; StampSource(c);
 		c.m_numOper = OPER_SET;
 		c.m_param1 = pj.bucketSlot;
 		m_cByteCode.m_listCode.emplace_back(std::move(c));
@@ -3541,7 +3541,7 @@ void ibCompileCode::CompileLinqJoin(ibCompileContext* linqCtx,
 	// bucket iterator this row never opened.
 	pj.missIfIp = (int)m_cByteCode.m_listCode.size();
 	{
-		ibByteUnit c; AddLineInfo(c);
+		ibByteUnit c; StampSource(c);
 		c.m_numOper = OPER_IF;
 		c.m_param1 = foundSlot;
 		c.m_param2.m_numIndex = 0;   // back-patched in the close section
@@ -3562,7 +3562,7 @@ void ibCompileCode::CompileLinqJoin(ibCompileContext* linqCtx,
 			wxString::Format(wxT("@jbkt_it_%d"), unique), true, false, false, true);
 	}
 	{
-		ibByteUnit c; AddLineInfo(c);
+		ibByteUnit c; StampSource(c);
 		c.m_numOper = OPER_LET;
 		c.m_param1 = pj.bucketInSlot;
 		c.m_param2 = pj.bucketSlot;
@@ -3570,7 +3570,7 @@ void ibCompileCode::CompileLinqJoin(ibCompileContext* linqCtx,
 	}
 	pj.bucketForeachIp = (int)m_cByteCode.m_listCode.size();
 	{
-		ibByteUnit c; AddLineInfo(c);
+		ibByteUnit c; StampSource(c);
 		c.m_numOper = OPER_FOREACH;
 		c.m_param1 = pj.bindSlot;
 		c.m_param2 = pj.bucketInSlot;
@@ -3595,7 +3595,7 @@ void ibCompileCode::CompileLinqJoin(ibCompileContext* linqCtx,
 
 		const ibParamUnit eqSlot = linqCtx->CreateVariable();
 		{
-			ibByteUnit c; AddLineInfo(c);
+			ibByteUnit c; StampSource(c);
 			c.m_numOper = OPER_EQ;
 			c.m_param1 = eqSlot;
 			c.m_param2 = k1Slot;
@@ -3604,7 +3604,7 @@ void ibCompileCode::CompileLinqJoin(ibCompileContext* linqCtx,
 		}
 		pj.recheckIfIp = (int)m_cByteCode.m_listCode.size();
 		{
-			ibByteUnit c; AddLineInfo(c);
+			ibByteUnit c; StampSource(c);
 			c.m_numOper = OPER_IF;   // jumps on false → this bucket's continue (patched at close)
 			c.m_param1 = eqSlot;
 			c.m_param2.m_numIndex = 0;

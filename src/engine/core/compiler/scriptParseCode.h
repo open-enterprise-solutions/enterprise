@@ -119,10 +119,10 @@ protected:
 	const ibLexem& PreviewGetLexem();
 	const ibLexem& GetLexem();
 	const ibLexem& ExpectLexem();
-	void           ExpectDelimeter(const wxUniChar& c);
+	void           ExpectDelimiter(const wxUniChar& c);
 
-	bool           IsNextDelimeter(const wxUniChar& c);
-	bool           IsNextKeyWord(int keyword);
+	bool           IsNextDelimiter(const wxUniChar& c);
+	bool           IsNextKeyword(int keyword);
 	void           ExpectKeyword(int keyword);
 	wxString       ExpectIdentifier(bool strRealName = false);
 	ibLexValue     ExpectConstant();

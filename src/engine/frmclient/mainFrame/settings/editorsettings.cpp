@@ -1,126 +1,59 @@
-
 #include "editorsettings.h"
-#include "xmlutility.h"
+#include "settingsxml.h"
 
-#include <wx/wx.h>
-#include <wx/xml/xml.h>
-
-ibEditorSettings::ibEditorSettings()
-{
-    m_indentSize                    = 4;
-    m_useTabs                       = false;
-    m_removeTabsOnLoad              = false;
-    m_showLineNumbers               = true;
-    m_mostRecentlyUsedTabSwitching  = false;
-    m_enableAutoComplete            = true;
-    m_showWhiteSpaces               = false;
-}
+#include <wx/stc/stc.h>
 
 void ibEditorSettings::SetIndentSize(unsigned int indentSize)
 {
-    m_indentSize = wxMin(indentSize, 32);
+	m_indentSize = indentSize > 32 ? 32 : indentSize;
 }
 
-void ibEditorSettings::SetUseTabs(bool useTabs)
+void ibEditorSettings::Apply(wxStyledTextCtrl& text) const
 {
-    m_useTabs = useTabs;
-}
+	text.SetIndent(m_indentSize);
+	text.SetTabWidth(m_indentSize);
 
-void ibEditorSettings::SetRemoveTabsOnLoad(bool removeTabsOnLoad)
-{
-    m_removeTabsOnLoad = removeTabsOnLoad;
-}
+	// Indenting with tabs, Tab and Backspace move a whole indent.
+	text.SetUseTabs(m_useTabs);
+	text.SetTabIndents(m_useTabs);
+	text.SetBackSpaceUnIndents(m_useTabs);
 
-unsigned int ibEditorSettings::GetIndentSize() const
-{
-    return m_indentSize;
-}
-
-bool ibEditorSettings::GetUseTabs() const
-{
-    return m_useTabs;
-}
-
-bool ibEditorSettings::GetRemoveTabsOnLoad() const
-{
-    return m_removeTabsOnLoad;
-}
-
-bool ibEditorSettings::GetShowLineNumbers() const
-{
-    return m_showLineNumbers;
-}
-
-void ibEditorSettings::SetShowLineNumbers(bool showLineNumbers)
-{
-    m_showLineNumbers = showLineNumbers;
-}
-
-bool ibEditorSettings::GetMostRecentlyUsedTabSwitching() const
-{
-    return m_mostRecentlyUsedTabSwitching;
-};
-
-void ibEditorSettings::SetMostRecentlyUsedTabSwitching(bool mostRecentlyUsedTabSwitching)
-{
-    m_mostRecentlyUsedTabSwitching = mostRecentlyUsedTabSwitching;
-}
-
-bool ibEditorSettings::GetEnableAutoComplete() const
-{
-    return m_enableAutoComplete;
-}
-
-void ibEditorSettings::SetEnableAutoComplete(bool enableAutoComplete)
-{
-    m_enableAutoComplete = enableAutoComplete;
-}
-
-bool ibEditorSettings::GetShowWhiteSpace() const 
-{
-    return m_showWhiteSpaces;
-}
-
-void ibEditorSettings::SetShowWhiteSpace(bool showWhiteSpace)
-{
-    m_showWhiteSpaces = showWhiteSpace; 
+	text.SetViewWhiteSpace(m_showWhiteSpace ? wxSTC_WS_VISIBLEALWAYS : wxSTC_WS_INVISIBLE);
 }
 
 wxXmlNode* ibEditorSettings::Save(const wxString& tag) const
 {
-
-    wxXmlNode* root = new wxXmlNode(wxXML_ELEMENT_NODE, tag);    
-
-    root->AddChild( WriteXmlNode("indentsize", m_indentSize) );
-    root->AddChild( WriteXmlNodeBool("usetabs", m_useTabs) );
-    root->AddChild( WriteXmlNodeBool("removetabsonload", m_removeTabsOnLoad) );
-    root->AddChild( WriteXmlNodeBool("showlinenumbers", m_showLineNumbers) );
-    root->AddChild( WriteXmlNodeBool("mostrecentlyusedtabswitching", m_mostRecentlyUsedTabSwitching) );
-    root->AddChild( WriteXmlNodeBool("enableautocomplete", m_enableAutoComplete) );
-    root->AddChild( WriteXmlNodeBool("showwhitespace", m_showWhiteSpaces) );
-
-    return root;
-
+	wxXmlNode* const root = new wxXmlNode(wxXML_ELEMENT_NODE, tag);
+	AddTextNode(root, wxT("indentsize"), wxString::Format(wxT("%u"), m_indentSize));
+	AddTextNode(root, wxT("usetabs"), m_useTabs);
+	AddTextNode(root, wxT("removetabsonload"), m_removeTabsOnLoad);
+	AddTextNode(root, wxT("showlinenumbers"), m_showLineNumbers);
+	AddTextNode(root, wxT("mostrecentlyusedtabswitching"), m_mostRecentlyUsedTabSwitching);
+	AddTextNode(root, wxT("enableautocomplete"), m_enableAutoComplete);
+	AddTextNode(root, wxT("showwhitespace"), m_showWhiteSpace);
+	return root;
 }
 
 void ibEditorSettings::Load(wxXmlNode* root)
 {
-
-    wxXmlNode* node = root->GetChildren();
-
-    while (node != nullptr)
-    {
-
-        ReadXmlNode(node, "indentsize", m_indentSize)                                       ||
-        ReadXmlNode(node, "usetabs", m_useTabs)                                             ||
-        ReadXmlNode(node, "removetabsonload", m_removeTabsOnLoad)                           ||
-        ReadXmlNode(node, "showlinenumbers", m_showLineNumbers)                             ||
-        ReadXmlNode(node, "mostrecentlyusedtabswitching", m_mostRecentlyUsedTabSwitching)   ||
-        ReadXmlNode(node, "enableautocomplete", m_enableAutoComplete);
-        ReadXmlNode(node, "showwhitespace", m_showWhiteSpaces);
-
-        node = node->GetNext();
-
-    }
-
+	for (wxXmlNode* node = root->GetChildren(); node != nullptr; node = node->GetNext()) {
+		const wxString& name = node->GetName();
+		if (name == wxT("indentsize")) {
+			unsigned int indentSize = 0;
+			if (node->GetNodeContent().ToUInt(&indentSize))
+				SetIndentSize(indentSize);
+		}
+		else if (name == wxT("usetabs"))
+			m_useTabs = IsTrueNode(node);
+		else if (name == wxT("removetabsonload"))
+			m_removeTabsOnLoad = IsTrueNode(node);
+		else if (name == wxT("showlinenumbers"))
+			m_showLineNumbers = IsTrueNode(node);
+		else if (name == wxT("mostrecentlyusedtabswitching"))
+			m_mostRecentlyUsedTabSwitching = IsTrueNode(node);
+		else if (name == wxT("enableautocomplete"))
+			m_enableAutoComplete = IsTrueNode(node);
+		else if (name == wxT("showwhitespace"))
+			m_showWhiteSpace = IsTrueNode(node);
+	}
 }

@@ -21,7 +21,7 @@ ibEventDispatcher* ibEventControl::GetDispatcher() const
 
 	// A named event set in the designer: materialise it ONCE from the stored name, cached in m_dispatcherValue.
 	// A non-throwing probe (dynamic_cast on the resolved ref), NOT ConvertToType — the controlled cast THROWS
-	// ERROR_TYPE_OPERATION on the empty first-fire value; "not built yet" must read as nullptr, not an exception.
+	// ibScriptError_TypeOperation on the empty first-fire value; "not built yet" must read as nullptr, not an exception.
 	ibValueEvent* ev = dynamic_cast<ibValueEvent*>(m_dispatcherValue.GetRef());
 	if (ev == nullptr) {   // not built yet (or the name changed) -> materialise the named event, kept alive here
 		m_dispatcherValue = ibValue::CreateObjectValue<ibValueEvent>(m_propValue.GetString());

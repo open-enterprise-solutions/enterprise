@@ -21,7 +21,7 @@ bool ibParseCode::ParseModule(const wxString& sModule)
 	Load(sModule);
 
 	try {
-		PrepareLexem();
+		Translate();
 	}
 	catch (const ibCoreException&)
 	{
@@ -71,16 +71,16 @@ bool ibParseCode::ParseModule(const wxString& sModule)
 			while (m_cursor + 1 < m_listLexem.size()) {
 				wxString name = ExpectIdentifier(true);
 				int nArrayCount = -1;
-				if (IsNextDelimeter('[')) { // this is an array declaration
+				if (IsNextDelimiter('[')) { // this is an array declaration
 					nArrayCount = 0;
-					ExpectDelimeter('[');
-					if (!IsNextDelimeter(']')) {
+					ExpectDelimiter('[');
+					if (!IsNextDelimiter(']')) {
 						const ibLexValue vConst = ExpectConstant();
 						if (vConst.GetType() != ibValueTypes::TYPE_NUMBER || vConst.GetNumber() < 0)
 							continue;
 						nArrayCount = vConst.GetNumber().ToInt();
 					}
-					ExpectDelimeter(']');
+					ExpectDelimiter(']');
 				}
 
 				// Trailing modifiers, read the way the compiler reads them
@@ -92,17 +92,17 @@ bool ibParseCode::ParseModule(const wxString& sModule)
 				// about what a declaration says.
 				bool isExport = false;
 				for (;;) {
-					if (IsNextKeyWord(KEY_PUBLIC))         { ExpectKeyword(KEY_PUBLIC); isExport = true; }
-					else if (IsNextKeyWord(KEY_PRIVATE))   { ExpectKeyword(KEY_PRIVATE); }
-					else if (IsNextKeyWord(KEY_PROTECTED)) { ExpectKeyword(KEY_PROTECTED); }
-					else if (IsNextKeyWord(KEY_CACHED))    { ExpectKeyword(KEY_CACHED); }
+					if (IsNextKeyword(KEY_PUBLIC))         { ExpectKeyword(KEY_PUBLIC); isExport = true; }
+					else if (IsNextKeyword(KEY_PRIVATE))   { ExpectKeyword(KEY_PRIVATE); }
+					else if (IsNextKeyword(KEY_PROTECTED)) { ExpectKeyword(KEY_PROTECTED); }
+					else if (IsNextKeyword(KEY_CACHED))    { ExpectKeyword(KEY_CACHED); }
 					else break;
 				}
 
-				if (IsNextDelimeter('='))// initial initialization - works only inside the text of modules (but not re-declaring procedures and functions)
+				if (IsNextDelimiter('='))// initial initialization - works only inside the text of modules (but not re-declaring procedures and functions)
 				{
-					if (nArrayCount >= 0) ExpectDelimeter(',');//Error!
-					ExpectDelimeter('=');
+					if (nArrayCount >= 0) ExpectDelimiter(',');//Error!
+					ExpectDelimiter('=');
 				}
 
 				ibModuleElement data;
@@ -117,8 +117,8 @@ bool ibParseCode::ParseModule(const wxString& sModule)
 
 				m_content.push_back(data);
 
-				if (!IsNextDelimeter(',')) break;
-				ExpectDelimeter(',');
+				if (!IsNextDelimiter(',')) break;
+				ExpectDelimiter(',');
 			}
 		}
 
@@ -134,7 +134,7 @@ bool ibParseCode::ParseModule(const wxString& sModule)
 			// nested anonymous bodies (lambda inside lambda) — every
 			// KEY_FUNCTION / KEY_PROCEDURE bumps depth, every
 			// KEY_ENDFUNCTION / KEY_ENDPROCEDURE drops it.
-			if (IsNextDelimeter('(')) {
+			if (IsNextDelimiter('(')) {
 
 				// ⚠ BOTH BODY FORMS, for the reason written at the named walk below: a CES lambda
 				// closes with `}` and has no EndFunction to find, so the keyword-only walk ran to
@@ -204,14 +204,14 @@ bool ibParseCode::ParseModule(const wxString& sModule)
 			// own methods offered no call form anywhere a caller could see one.
 			std::vector<ibModuleParam> params;
 
-			ExpectDelimeter('(');
-			if (!IsNextDelimeter(')'))
+			ExpectDelimiter('(');
+			if (!IsNextDelimiter(')'))
 			{
 				while (m_cursor + 1 < m_listLexem.size())
 				{
 					ibModuleParam param;
 
-					if (IsNextKeyWord(KEY_VAL))
+					if (IsNextKeyword(KEY_VAL))
 					{
 						ExpectKeyword(KEY_VAL);
 						param.m_byValue = true;
@@ -219,36 +219,36 @@ bool ibParseCode::ParseModule(const wxString& sModule)
 
 					param.m_name = ExpectIdentifier(true);
 
-					if (IsNextDelimeter('['))// this is an array
+					if (IsNextDelimiter('['))// this is an array
 					{
-						ExpectDelimeter('[');
-						ExpectDelimeter(']');
+						ExpectDelimiter('[');
+						ExpectDelimiter(']');
 					}
-					else if (IsNextDelimeter('='))
+					else if (IsNextDelimiter('='))
 					{
-						ExpectDelimeter('=');
+						ExpectDelimiter('=');
 						ExpectConstant();
 						param.m_optional = true;
 					}
 
 					params.push_back(param);
 
-					if (IsNextDelimeter(')')) break;
+					if (IsNextDelimiter(')')) break;
 
-					ExpectDelimeter(',');
+					ExpectDelimiter(',');
 				}
 			}
 
-			ExpectDelimeter(')');
+			ExpectDelimiter(')');
 
 			// Same two axes as on a variable, and the same reason to read them
 			// in a loop rather than one apiece — see the note there.
 			bool isExport = false;
 			for (;;) {
-				if (IsNextKeyWord(KEY_PUBLIC))         { ExpectKeyword(KEY_PUBLIC); isExport = true; }
-				else if (IsNextKeyWord(KEY_PRIVATE))   { ExpectKeyword(KEY_PRIVATE); }
-				else if (IsNextKeyWord(KEY_PROTECTED)) { ExpectKeyword(KEY_PROTECTED); }
-				else if (IsNextKeyWord(KEY_CACHED))    { ExpectKeyword(KEY_CACHED); }
+				if (IsNextKeyword(KEY_PUBLIC))         { ExpectKeyword(KEY_PUBLIC); isExport = true; }
+				else if (IsNextKeyword(KEY_PRIVATE))   { ExpectKeyword(KEY_PRIVATE); }
+				else if (IsNextKeyword(KEY_PROTECTED)) { ExpectKeyword(KEY_PROTECTED); }
+				else if (IsNextKeyword(KEY_CACHED))    { ExpectKeyword(KEY_CACHED); }
 				else break;
 			}
 
@@ -291,7 +291,7 @@ bool ibParseCode::ParseModule(const wxString& sModule)
 			// module (found 2026-09-01, through module_outline: two procedures in, one out).
 			//
 			// The two forms are told apart by what follows the header, which is where they differ.
-			if (IsNextDelimeter('{')) {
+			if (IsNextDelimiter('{')) {
 
 				int braces = 0;
 				while (m_cursor < (m_listLexem.size() - 1)) {
@@ -318,7 +318,7 @@ bool ibParseCode::ParseModule(const wxString& sModule)
 			int depth = 1;
 			while (m_cursor < (m_listLexem.size() - 1)) {
 
-				if (IsNextKeyWord(KEY_ENDFUNCTION)) {
+				if (IsNextKeyword(KEY_ENDFUNCTION)) {
 					if (--depth == 0) {
 						data.m_lineEnd = m_listLexem[m_cursor + 1].m_numLine;
 						ExpectKeyword(KEY_ENDFUNCTION); break;
@@ -326,7 +326,7 @@ bool ibParseCode::ParseModule(const wxString& sModule)
 					ExpectKeyword(KEY_ENDFUNCTION);
 					continue;
 				}
-				else if (IsNextKeyWord(KEY_ENDPROCEDURE)) {
+				else if (IsNextKeyword(KEY_ENDPROCEDURE)) {
 					if (--depth == 0) {
 						data.m_lineEnd = m_listLexem[m_cursor + 1].m_numLine;
 						ExpectKeyword(KEY_ENDPROCEDURE); break;
@@ -334,7 +334,7 @@ bool ibParseCode::ParseModule(const wxString& sModule)
 					ExpectKeyword(KEY_ENDPROCEDURE);
 					continue;
 				}
-				else if (IsNextKeyWord(KEY_FUNCTION) || IsNextKeyWord(KEY_PROCEDURE)) {
+				else if (IsNextKeyword(KEY_FUNCTION) || IsNextKeyword(KEY_PROCEDURE)) {
 					depth++;
 				}
 
@@ -392,11 +392,11 @@ const ibLexem& ibParseCode::ExpectLexem()
 }
 
 /**
- * ExpectDelimeter
+ * ExpectDelimiter
  *   Consume lexems until the matching delimiter is found, or the lexem
  *   list is exhausted.
  */
-void ibParseCode::ExpectDelimeter(const wxUniChar& c)
+void ibParseCode::ExpectDelimiter(const wxUniChar& c)
 {
 	while (m_cursor + 1 < m_listLexem.size()) {
 		const ibLexem& lex = ExpectLexem();
@@ -405,10 +405,10 @@ void ibParseCode::ExpectDelimeter(const wxUniChar& c)
 	}
 }
 /**
- * IsNextDelimeter
+ * IsNextDelimiter
  *   Predicate: is the next lexem the given delimiter? Does not advance.
  */
-bool ibParseCode::IsNextDelimeter(const wxUniChar& c)
+bool ibParseCode::IsNextDelimiter(const wxUniChar& c)
 {
 	if (m_cursor + 1 < m_listLexem.size()) {
 		const ibLexem& lex = m_listLexem[m_cursor + 1];
@@ -419,10 +419,10 @@ bool ibParseCode::IsNextDelimeter(const wxUniChar& c)
 }
 
 /**
- * IsNextKeyWord
+ * IsNextKeyword
  *   Predicate: is the next lexem the given keyword? Does not advance.
  */
-bool ibParseCode::IsNextKeyWord(int nKey)
+bool ibParseCode::IsNextKeyword(int nKey)
 {
 	if (m_cursor + 1 < m_listLexem.size()) {
 		const ibLexem& lex = m_listLexem[m_cursor + 1];
@@ -478,9 +478,9 @@ ibLexValue ibParseCode::ExpectConstant()
 {
 	ibLexem lex;
 	int sign = 0;
-	if (IsNextDelimeter('-') || IsNextDelimeter('+')) {
+	if (IsNextDelimiter('-') || IsNextDelimiter('+')) {
 		sign = 1;
-		if (IsNextDelimeter('-'))
+		if (IsNextDelimiter('-'))
 			sign = -1;
 		lex = ExpectLexem();
 	}

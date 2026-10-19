@@ -1,6 +1,9 @@
 ﻿#ifndef __VISUAL_EDITOR_H__
 #define __VISUAL_EDITOR_H__
 
+#include <wx/wx.h>
+#include <wx/aui/aui.h>
+
 #include "innerFrame.h"
 #include "win/editor/codeEditor/codeEditorDesigner.h"
 

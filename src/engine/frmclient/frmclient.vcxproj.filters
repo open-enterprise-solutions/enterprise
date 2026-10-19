@@ -115,10 +115,7 @@
     <ClCompile Include="mainFrame\settings\fontcolorsettingspanel.cpp">
       <Filter>mainFrame\settings</Filter>
     </ClCompile>
-    <ClCompile Include="mainFrame\settings\keybinderdialog.cpp">
-      <Filter>mainFrame\settings</Filter>
-    </ClCompile>
-    <ClCompile Include="mainFrame\settings\keymonitortextctrl.cpp">
+    <ClCompile Include="mainFrame\settings\keybinderpanel.cpp">
       <Filter>mainFrame\settings</Filter>
     </ClCompile>
     <ClCompile Include="mainFrame\settings\mcpsettingspanel.cpp">
@@ -130,9 +127,6 @@
     <ClCompile Include="mainFrame\settings\showhelpevent.cpp">
       <Filter>mainFrame\settings</Filter>
     </ClCompile>
-    <ClCompile Include="mainFrame\settings\statictextex.cpp">
-      <Filter>mainFrame\settings</Filter>
-    </ClCompile>
     <ClCompile Include="backend\appData.cpp">
       <Filter>backend</Filter>
     </ClCompile>
@@ -141,12 +135,6 @@
     </ClCompile>
     <ClCompile Include="backend\userInfo.cpp">
       <Filter>backend</Filter>
-    </ClCompile>
-    <ClCompile Include="mainFrame\settings\stlutility.cpp">
-      <Filter>mainFrame\settings</Filter>
-    </ClCompile>
-    <ClCompile Include="mainFrame\settings\xmlutility.cpp">
-      <Filter>mainFrame\settings</Filter>
     </ClCompile>
     <ClCompile Include="win\editor\textEditor\textEditor.cpp">
       <Filter>win\editor\textEditor</Filter>
@@ -464,10 +452,7 @@
     <ClInclude Include="mainFrame\settings\fontcolorsettingspanel.h">
       <Filter>mainFrame\settings</Filter>
     </ClInclude>
-    <ClInclude Include="mainFrame\settings\keybinderdialog.h">
-      <Filter>mainFrame\settings</Filter>
-    </ClInclude>
-    <ClInclude Include="mainFrame\settings\keymonitortextctrl.h">
+    <ClInclude Include="mainFrame\settings\keybinderpanel.h">
       <Filter>mainFrame\settings</Filter>
     </ClInclude>
     <ClInclude Include="mainFrame\settings\mcpsettingspanel.h">
@@ -479,7 +464,7 @@
     <ClInclude Include="mainFrame\settings\showhelpevent.h">
       <Filter>mainFrame\settings</Filter>
     </ClInclude>
-    <ClInclude Include="mainFrame\settings\statictextex.h">
+    <ClInclude Include="mainFrame\settings\settingsxml.h">
       <Filter>mainFrame\settings</Filter>
     </ClInclude>
     <ClInclude Include="backend\mcp\mcpServer.h">
@@ -487,12 +472,6 @@
     </ClInclude>
     <ClInclude Include="backend\userInfo.h">
       <Filter>backend</Filter>
-    </ClInclude>
-    <ClInclude Include="mainFrame\settings\stlutility.h">
-      <Filter>mainFrame\settings</Filter>
-    </ClInclude>
-    <ClInclude Include="mainFrame\settings\xmlutility.h">
-      <Filter>mainFrame\settings</Filter>
     </ClInclude>
     <ClInclude Include="win\picture.h">
       <Filter>win</Filter>
@@ -628,9 +607,6 @@
     </ClInclude>
     <ClInclude Include="win\ctrls\treelistctrl.h">
       <Filter>win\ctrls</Filter>
-    </ClInclude>
-    <ClInclude Include="win\fontcontainer.h">
-      <Filter>win</Filter>
     </ClInclude>
     <ClInclude Include="win\typeconv.h">
       <Filter>win</Filter>

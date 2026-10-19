@@ -275,17 +275,7 @@ void ibCodeEditor::SetCurrentLine(int lineBreakpoint, bool setBreakLine)
 void ibCodeEditor::SetEditorSettings(const ibEditorSettings& settings)
 {
 	m_indentationSize = settings.GetIndentSize();
-
-	SetIndent(m_indentationSize);
-	SetTabWidth(m_indentationSize);
-
-	bool useTabs = settings.GetUseTabs();
-	bool showWhiteSpace = settings.GetShowWhiteSpace();
-
-	SetUseTabs(useTabs);
-	SetTabIndents(useTabs);
-	SetBackSpaceUnIndents(useTabs);
-	SetViewWhiteSpace(showWhiteSpace);
+	settings.Apply(*this);
 
 	SetMarginType(DEF_LINENUMBER_ID, wxSTC_MARGIN_NUMBER);
 	SetMarginWidth(DEF_LINENUMBER_ID, 0);
@@ -330,109 +320,10 @@ void ibCodeEditor::SetEditorSettings(const ibEditorSettings& settings)
 	m_enableAutoComplete = settings.GetEnableAutoComplete();
 }
 
-inline wxColour GetInverse(const wxColour& color)
-{
-	unsigned char r = color.Red();
-	unsigned char g = color.Green();
-	unsigned char b = color.Blue();
-
-	return wxColour(r ^ 0xFF, g ^ 0xFF, b ^ 0xFF);
-}
-
 void ibCodeEditor::SetFontColorSettings(const ibFontColorSettings& settings)
 {
-	// For some reason StyleSetFont takes a (non-const) reference, so we need to make
-	// a copy before passing it in.
-	wxFont font = settings.GetFont();
+	settings.Apply(*this);
 
-	// Set STYLE_DEFAULT font + colors BEFORE StyleClearAll so the cascade
-	// propagates the user's font (and point size) to every style index —
-	// otherwise styles we don't touch later (annotations, indent guides,
-	// callTip, etc.) keep the OS-default font and zoom adds +1pt to a
-	// different base, looking out of proportion with the rest of the text.
-	StyleSetFont(wxSTC_STYLE_DEFAULT, font);
-	StyleSetForeground(wxSTC_STYLE_DEFAULT, settings.GetColors(ibFontColorSettings::DisplayItem_Default).foreColor);
-	StyleSetBackground(wxSTC_STYLE_DEFAULT, settings.GetColors(ibFontColorSettings::DisplayItem_Default).backColor);
-	StyleClearAll();
-
-	SetSelForeground(true, settings.GetColors(ibFontColorSettings::DisplayItem_Selection).foreColor);
-	SetSelBackground(true, settings.GetColors(ibFontColorSettings::DisplayItem_Selection).backColor);
-
-	font = settings.GetFont(ibFontColorSettings::DisplayItem_Default);
-
-	StyleSetFont(wxSTC_C_DEFAULT, font);
-	StyleSetFont(wxSTC_C_IDENTIFIER, font);
-
-	StyleSetForeground(wxSTC_C_DEFAULT, settings.GetColors(ibFontColorSettings::DisplayItem_Default).foreColor);
-	StyleSetBackground(wxSTC_C_DEFAULT, settings.GetColors(ibFontColorSettings::DisplayItem_Default).backColor);
-
-	StyleSetForeground(wxSTC_STYLE_DEFAULT, settings.GetColors(ibFontColorSettings::DisplayItem_Default).foreColor);
-	StyleSetBackground(wxSTC_STYLE_DEFAULT, settings.GetColors(ibFontColorSettings::DisplayItem_Default).backColor);
-
-	StyleSetForeground(wxSTC_C_IDENTIFIER, settings.GetColors(ibFontColorSettings::DisplayItem_Default).foreColor);
-	StyleSetBackground(wxSTC_C_IDENTIFIER, settings.GetColors(ibFontColorSettings::DisplayItem_Default).backColor);
-
-	font = settings.GetFont(ibFontColorSettings::DisplayItem_Comment);
-
-	StyleSetFont(wxSTC_C_COMMENT, font);
-	StyleSetFont(wxSTC_C_COMMENTLINE, font);
-	StyleSetFont(wxSTC_C_COMMENTDOC, font);
-
-	StyleSetForeground(wxSTC_C_COMMENT, settings.GetColors(ibFontColorSettings::DisplayItem_Comment).foreColor);
-	StyleSetBackground(wxSTC_C_COMMENT, settings.GetColors(ibFontColorSettings::DisplayItem_Comment).backColor);
-
-	StyleSetForeground(wxSTC_C_COMMENTLINE, settings.GetColors(ibFontColorSettings::DisplayItem_Comment).foreColor);
-	StyleSetBackground(wxSTC_C_COMMENTLINE, settings.GetColors(ibFontColorSettings::DisplayItem_Comment).backColor);
-
-	StyleSetForeground(wxSTC_C_COMMENTDOC, settings.GetColors(ibFontColorSettings::DisplayItem_Comment).foreColor);
-	StyleSetBackground(wxSTC_C_COMMENTDOC, settings.GetColors(ibFontColorSettings::DisplayItem_Comment).backColor);
-
-	font = settings.GetFont(ibFontColorSettings::DisplayItem_Preprocessor);
-
-	StyleSetFont(wxSTC_C_PREPROCESSOR, font);
-	StyleSetForeground(wxSTC_C_PREPROCESSOR, settings.GetColors(ibFontColorSettings::DisplayItem_Preprocessor).foreColor);
-	StyleSetBackground(wxSTC_C_PREPROCESSOR, settings.GetColors(ibFontColorSettings::DisplayItem_Preprocessor).backColor);
-
-	font = settings.GetFont(ibFontColorSettings::DisplayItem_Keyword);
-
-	StyleSetFont(wxSTC_C_WORD, font);
-	StyleSetForeground(wxSTC_C_WORD, settings.GetColors(ibFontColorSettings::DisplayItem_Keyword).foreColor);
-	StyleSetBackground(wxSTC_C_WORD, settings.GetColors(ibFontColorSettings::DisplayItem_Keyword).backColor);
-
-	font = settings.GetFont(ibFontColorSettings::DisplayItem_Operator);
-	StyleSetFont(wxSTC_C_OPERATOR, font);
-	StyleSetForeground(wxSTC_C_OPERATOR, settings.GetColors(ibFontColorSettings::DisplayItem_Operator).foreColor);
-	StyleSetBackground(wxSTC_C_OPERATOR, settings.GetColors(ibFontColorSettings::DisplayItem_Operator).backColor);
-
-	font = settings.GetFont(ibFontColorSettings::DisplayItem_String);
-
-	StyleSetFont(wxSTC_C_STRING, font);
-	StyleSetForeground(wxSTC_C_STRING, settings.GetColors(ibFontColorSettings::DisplayItem_String).foreColor);
-	StyleSetBackground(wxSTC_C_STRING, settings.GetColors(ibFontColorSettings::DisplayItem_String).backColor);
-
-	StyleSetFont(wxSTC_C_STRINGEOL, font);
-	StyleSetForeground(wxSTC_C_STRINGEOL, settings.GetColors(ibFontColorSettings::DisplayItem_String).foreColor);
-	StyleSetBackground(wxSTC_C_STRINGEOL, settings.GetColors(ibFontColorSettings::DisplayItem_String).backColor);
-
-	StyleSetFont(wxSTC_C_CHARACTER, font);
-	StyleSetForeground(wxSTC_C_CHARACTER, settings.GetColors(ibFontColorSettings::DisplayItem_String).foreColor);
-	StyleSetBackground(wxSTC_C_CHARACTER, settings.GetColors(ibFontColorSettings::DisplayItem_String).backColor);
-
-	StyleSetFont(wxSTC_C_CHARACTER, font);
-	StyleSetForeground(wxSTC_C_CHARACTER, settings.GetColors(ibFontColorSettings::DisplayItem_Selection).foreColor);
-	StyleSetBackground(wxSTC_C_CHARACTER, settings.GetColors(ibFontColorSettings::DisplayItem_Selection).backColor);
-
-	font = settings.GetFont(ibFontColorSettings::DisplayItem_Number);
-
-	StyleSetFont(wxSTC_C_NUMBER, font);
-	StyleSetForeground(wxSTC_C_NUMBER, settings.GetColors(ibFontColorSettings::DisplayItem_Number).foreColor);
-	StyleSetBackground(wxSTC_C_NUMBER, settings.GetColors(ibFontColorSettings::DisplayItem_Number).backColor);
-
-	// Apply the full font to the line-m_number margin, not just its size — otherwise
-	// the margin keeps the default monospace face until a style cascade refresh
-	// (e.g. user opens Settings and saves) happens to pull it through.
-	StyleSetFont(wxSTC_STYLE_LINENUMBER, font);
-	StyleSetSize(wxSTC_STYLE_LINENUMBER, font.GetPointSize());
 	// Soften the gutter — muted gray digits on the darkest gradient step
 	// (line-number margin is leftmost; breakpoint + fold margins step
 	// progressively lighter, see the SetMarginBackground calls in
@@ -440,16 +331,8 @@ void ibCodeEditor::SetFontColorSettings(const ibFontColorSettings& settings)
 	StyleSetForeground(wxSTC_STYLE_LINENUMBER, wxColour(0xA0, 0xA0, 0xA0));
 	StyleSetBackground(wxSTC_STYLE_LINENUMBER, wxColour(0xE8, 0xE8, 0xE8));
 
-	// Set the caret color as the inverse of the background color so it's always visible.
-	SetCaretForeground(GetInverse(settings.GetColors(ibFontColorSettings::DisplayItem_Default).backColor));
-
-	// Reapply brace-highlight styles — StyleClearAll above resets every
-	// style index (incl. BRACELIGHT/BRACEBAD) to the OS default. Without
-	// also pushing the user's font here the brace would visibly shift
-	// (different glyph metrics) when the highlight kicks in.
-	StyleSetFont(wxSTC_STYLE_BRACELIGHT, font);
+	// Matching braces red; their font is the chosen one already, StyleClearAll copied it in.
 	StyleSetForeground(wxSTC_STYLE_BRACELIGHT, *wxRED);
-	StyleSetFont(wxSTC_STYLE_BRACEBAD, font);
 	StyleSetForeground(wxSTC_STYLE_BRACEBAD, *wxRED);
 }
 
@@ -489,7 +372,7 @@ bool ibCodeEditor::LoadModule(const ibProtocolNode& answer)
 	m_tc.Load(m_moduleText);
 
 	try {
-		m_tc.PrepareLexem();
+		m_tc.Translate();
 	}
 	catch (...) {
 	}
@@ -532,7 +415,7 @@ void ibCodeEditor::SetCodeStyle(short codeStyle)
 	m_tc.SetCodeStyle(codeStyle);
 	m_tc.Load(GetText());
 	try {
-		m_tc.PrepareLexem();
+		m_tc.Translate();
 	}
 	catch (...) {
 	}
@@ -844,7 +727,7 @@ void ibCodeEditor::OnTextChange(wxStyledTextEvent& event)
 		// LoadModule) — a patch has no baseline to work from, so bootstrap with a full pass and
 		// let subsequent edits patch it.
 		if (!m_tc.HasLexem()) {
-			m_tc.PrepareLexem();
+			m_tc.Translate();
 		}
 		else if ((modFlags & (wxSTC_MOD_INSERTTEXT | wxSTC_MOD_DELETETEXT)) != 0) {
 
@@ -858,10 +741,10 @@ void ibCodeEditor::OnTextChange(wxStyledTextEvent& event)
 #ifdef UTF8_LEXEM_TRANSLATE
 			edit.m_posOffsetUtf8 = sign * event.GetLength();
 #endif
-			m_tc.PrepareLexem(edit);
+			m_tc.Translate(edit);
 		}
 #else
-		m_tc.PrepareLexem();
+		m_tc.Translate();
 #endif
 	}
 	catch (...)
@@ -997,7 +880,7 @@ ibCodeEditor::StringLiteralSpan ibCodeEditor::GetStringLiteralUnderCursor()
 	stream.SetLexemMode(ibLexemMode::Editing);
 	stream.Load(GetText());
 	try {
-		stream.PrepareLexem();
+		stream.Translate();
 	}
 	catch (...) {
 		return span;

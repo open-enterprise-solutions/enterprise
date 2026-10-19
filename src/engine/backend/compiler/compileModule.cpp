@@ -86,7 +86,7 @@ bool ibCompileModule::Compile()
 	}
 
 	//prepare lexem
-	if (!PrepareLexem()) {
+	if (!Translate()) {
 		return false;
 	}
 
@@ -150,7 +150,7 @@ bool ibCompileModule::Recompile()
 	}
 
 	//prepare lexem 
-	if (!PrepareLexem()) {
+	if (!Translate()) {
 		return false;
 	}
 
