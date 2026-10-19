@@ -79,9 +79,32 @@ bool ibJobScheduleDescriptionMemory::ReadNode(const ibDataValue& value, ibJobSch
 	readInt(wxT("EveryNWeeks"),        s.m_everyNWeeks);
 	readInt(wxT("EveryNMonths"),       s.m_everyNMonths);
 
-	root->GetValue<ibDateTime>(wxT("PeriodAnchor"), s.m_periodAnchor);
-	root->GetValue<ibDateTime>(wxT("ActiveFrom"),   s.m_activeFrom);
-	root->GetValue<ibDateTime>(wxT("ActiveTo"),     s.m_activeTo);
+	// A DATE READS AS EITHER KIND: a node kept by the engine holds a Date, a node that crossed the wire as JSON holds
+	// its ISO text (jsonProvider.h — a Date reads back as a String, "" the empty one). The thin designer's schedule
+	// cell reads the second and writes it back the same way, so both readers meet it.
+	const auto readDate = [&root](const wxString& name, ibDateTime& target) {
+		const ibDataValue* const v = root->FindField(name);
+		if (v == nullptr)
+			return;
+		if (v->Kind() == ibDataKind::Date) {
+			target = v->AsDate();
+			return;
+		}
+		if (v->Kind() != ibDataKind::String)
+			return;
+		const wxString text = v->AsString();
+		if (text.IsEmpty()) {
+			target = ibDateTime();
+			return;
+		}
+		ibDateTime parsed;
+		if (parsed.FromString(text))   // the one door for "this text as a date" (fdatetime.h) — refused, left alone
+			target = parsed;
+	};
+
+	readDate(wxT("PeriodAnchor"), s.m_periodAnchor);
+	readDate(wxT("ActiveFrom"),   s.m_activeFrom);
+	readDate(wxT("ActiveTo"),     s.m_activeTo);
 	return true;
 }
 

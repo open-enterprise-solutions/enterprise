@@ -296,6 +296,27 @@ TEST(JobSchedule, Serialization_AbsentFieldsKeepTheirDefaults)
 	EXPECT_TRUE(ibJobScheduleRules::IsAllowed(s, At(2026, wxDateTime::Aug, 3, 14, 0)));   // "any" really means any
 }
 
+TEST(JobSchedule, Serialization_ReadsDatesThatCrossedTheWireAsText)
+{
+	// A NODE THAT CROSSED THE WIRE: JSON writes a Date as its ISO text and reads it back as a String
+	// (jsonProvider.h), the empty date as "". The thin designer's schedule cell reads such a node and
+	// writes one back, so the reader takes either kind; a text that names no date leaves the default.
+	auto root = std::make_shared<ibDataNode>();
+	root->SetValue(wxT("IntervalSeconds"), (s32)7200);
+	root->SetValue(wxT("PeriodAnchor"), wxString(wxT("2026-01-05 12:00:00")));
+	root->SetValue(wxT("ActiveFrom"),   wxString());
+	root->SetValue(wxT("ActiveTo"),     wxString(wxT("not a date")));
+	const ibDataValue value = ibDataValue::Child(root);
+
+	ibJobScheduleDescription s;
+	ASSERT_TRUE(ibJobScheduleDescriptionMemory::ReadNode(value, s));
+
+	EXPECT_EQ(s.m_intervalSeconds, 7200);
+	EXPECT_EQ(s.m_periodAnchor, At(2026, wxDateTime::Jan, 5, 12, 0));
+	EXPECT_TRUE(s.m_activeFrom.IsEmpty());
+	EXPECT_TRUE(s.m_activeTo.IsEmpty());
+}
+
 // ---------------------------------------------------------------------------
 // The BUFFER door — the same description as opaque bytes.
 //

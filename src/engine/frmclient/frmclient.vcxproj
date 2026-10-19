@@ -252,6 +252,7 @@
     <ClCompile Include="propertyManager\property\advprop\advpropSize.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropList.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropChartBinding.cpp" />
+    <ClCompile Include="propertyManager\property\advprop\advpropSchedule.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropEvent.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropEventTool.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropType.cpp" />
@@ -268,7 +269,6 @@
     <ClCompile Include="propertyManager\property\advprop\advpropPicture.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropPoint.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropRecord.cpp" />
-    <ClCompile Include="propertyManager\property\advprop\advpropSchedule.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropSource.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropSpreadsheet.cpp" />
     <ClCompile Include="propertyManager\propertyEditor.cpp" />
@@ -486,6 +486,7 @@
     <ClInclude Include="propertyManager\property\advprop\advpropEventTool.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropList.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropChartBinding.h" />
+    <ClInclude Include="propertyManager\property\advprop\advpropSchedule.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropType.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropValuePicture.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropHyperLink.h" />
@@ -498,7 +499,6 @@
     <ClInclude Include="propertyManager\property\advprop\advpropPicture.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropPoint.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropRecord.h" />
-    <ClInclude Include="propertyManager\property\advprop\advpropSchedule.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropSource.h" />
     <ClInclude Include="propertyManager\propertyEditor.h" />
     <ClInclude Include="settings\formSettings.h" />

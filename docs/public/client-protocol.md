@@ -115,6 +115,12 @@ those its query text adds (`Text`, optional), answered as `Kind` 21 answers (`Fi
 reference opened is `Kind` 22. Its `ibPropertyDynamicSource` row carries the sources the configuration registers as
 choices (`Id` the table id, `Title` namespace.name); picking one is the row's `Set`, after which the list is rebuilt over
 that table. A list with no source keeps no settings in the form, as in the desktop designer.
+A scheduled job's `ibPropertySchedule` row carries the schedule node as its `Value` (`IntervalSeconds`,
+`StartMinute`, `EndMinute`, `StopAfterMinute`, `DaysOfWeek`, `DaysOfMonth`, `DaysOfMonthFromEnd`, `Months`,
+`WeekdayOrdinal`, `EveryNWeeks`, `EveryNMonths`, `PeriodAnchor`, `ActiveFrom`, `ActiveTo`) and the sentence as its
+`Presentation`. The client opens the schedule window over it and sends the edited node back through the row's `Set`;
+a cancelled window sends nothing. The dates travel as JSON writes a date, `yyyy-mm-dd hh:mm:ss`, the empty date as
+`""`, and either side reads them as text or as a date.
 
 A picture is named by its id everywhere — in the view, a tab's `Icon`, a schema, a request, a list of choices: a
 backend picture's number, as a decimal (a class's own: its class id), or a configuration picture's guid. No answer
