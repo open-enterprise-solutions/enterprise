@@ -55,27 +55,7 @@ bool ibComposerCompositionView::Fetch(const ibDataNode& request, ibDataNode& res
 {
 	const ibValueMetaObjectComposer* const metaComposer =
 		GetDocument()->ConvertMetaObjectToType<ibValueMetaObjectComposer>();
-	if (metaComposer == nullptr)
-		return false;
-
-	switch (static_cast<ibProtocolComposerRequest>(request.GetValue<s32>(ibProtocolName::Kind))) {
-	case ibProtocolComposerRequest::Fields:
-		WriteQueryFields(response, request.GetValue<wxString>(ibProtocolName::Text), metaComposer->GetMetaData());
-		return true;
-	case ibProtocolComposerRequest::Expand: {
-		std::vector<ibMetaID> targets;
-		if (const ibDataValue* const listed = request.FindField(ibProtocolName::Targets)) {
-			if (listed->Kind() == ibDataKind::Array)
-				for (const ibDataValue& id : listed->AsArray())
-					targets.push_back(static_cast<ibMetaID>(id.AsInt()));
-		}
-		ibWriteSettingsTargetFields(response.Child(ibProtocolName::Expanded), response.Child(ibProtocolName::References),
-			targets, metaComposer->GetMetaData());
-		return true;
-	}
-	default:
-		return false;
-	}
+	return metaComposer != nullptr && ibFetchComposerRequest(request, response, metaComposer->GetMetaData());
 }
 
 bool ibComposerCompositionView::OnClientEvent(ibProtocolEvent event, const ibDataNode& args)
@@ -110,3 +90,29 @@ bool ibComposerCompositionView::OnClientEvent(ibProtocolEvent event, const ibDat
 // ----------------------------------------------------------------------------
 
 wxIMPLEMENT_DYNAMIC_CLASS(ibComposerCompositionDocument, ibMetaDocument);
+
+// ----------------------------------------------------------------------------
+// ibFetchComposerRequest
+// ----------------------------------------------------------------------------
+
+bool ibFetchComposerRequest(const ibDataNode& request, ibDataNode& response, const ibMetaData* metaData)
+{
+	switch (static_cast<ibProtocolComposerRequest>(request.GetValue<s32>(ibProtocolName::Kind))) {
+	case ibProtocolComposerRequest::Fields:
+		WriteQueryFields(response, request.GetValue<wxString>(ibProtocolName::Text), metaData);
+		return true;
+	case ibProtocolComposerRequest::Expand: {
+		std::vector<ibMetaID> targets;
+		if (const ibDataValue* const listed = request.FindField(ibProtocolName::Targets)) {
+			if (listed->Kind() == ibDataKind::Array)
+				for (const ibDataValue& id : listed->AsArray())
+					targets.push_back(static_cast<ibMetaID>(id.AsInt()));
+		}
+		ibWriteSettingsTargetFields(response.Child(ibProtocolName::Expanded), response.Child(ibProtocolName::References),
+			targets, metaData);
+		return true;
+	}
+	default:
+		return false;
+	}
+}

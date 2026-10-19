@@ -1,0 +1,111 @@
+#include "advpropDataComposition.h"
+
+#include "core/description/compositionDescription.h"                         // the composition, as the row holds it
+#include "core/serialize/dataBuilder.h"
+
+#include "frmclient/backend/metaData.h"                                       // the owner's configuration — its tab
+#include "frmclient/backend/propertyManager/property/variant/variantComposition.h"
+#include "frmclient/backend/query/queryConstructorModel.h"                   // ibQueryFieldsForget — the window's fields
+#include "frmclient/propertyManager/property/private/prop.h"                 // wxPGPropertyFlags_* — the grid flags
+#include "frmclient/propertyManager/property/private/propertyRegistry.h"
+#include "frmclient/propertyManager/propertyEditor.h"
+#include "frmclient/win/dlgs/settings/composer/composerSettings.h"           // the window it opens
+
+// -----------------------------------------------------------------------
+// ibPGDataCompositionProperty
+// -----------------------------------------------------------------------
+
+wxPG_IMPLEMENT_PROPERTY_CLASS(ibPGDataCompositionProperty, wxPGProperty, HyperLink)
+
+// register frontend property — by the class the server names the row with
+class ibPropertyDataCompositionLoader
+{
+public:
+	ibPropertyDataCompositionLoader()
+	{
+		// A COMPOSITION on a form attribute opens the composer's window — outputs, resources, parameters, the query —
+		// on the author's road: the description itself is edited and written back.
+		//
+		// (The desktop registers the dynamic list's Settings on this cell too, with the list's window. Not here: the
+		// thin list window has no source to describe its fields from — no query page, no main table read — so the row
+		// stays read-only until it has.)
+		ibPropertyRegistry::Register(wxT("ibPropertyDataComposition"),
+			[](ibBackendProperty* property) -> wxPGProperty* {
+				ibCompositionDescription desc;
+				ibCompositionDescriptionMemory::ReadNode(property->GetNodeValue(), desc);
+				return new ibPGDataCompositionProperty(property->GetPropertyObject(), property->GetLabel(),
+					property->GetName(), wxVariant(new ibVariantDataComposition(property->GetPropertyObject(), desc)),
+					[](ibCompositionDescription& edited, const ibMetaData* metaData) {
+						return ibDialogComposerSettings::ShowComposerSettings(nullptr, edited, metaData);
+					});
+			},
+			[](const wxVariant& value) {
+				ibDataValue node;
+				if (ibVariantDataComposition* const composition = property_cast(value, ibVariantDataComposition))
+					ibCompositionDescriptionMemory::WriteNode(node, composition->GetCompositionDesc());
+				return node;
+			});
+	}
+} g_dataCompositionLoader;
+
+ibPGDataCompositionProperty::ibPGDataCompositionProperty(const ibPropertyObject* property, const wxString& label,
+	const wxString& name, const wxVariant& value, ibSettingsDoor door)
+	: wxPGProperty(label, name), m_property(property), m_door(std::move(door))
+{
+	wxPGProperty::SetFlagRecursively(wxPGFlags::ReadOnly, true);
+	wxPGProperty::SetFlagRecursively(wxPGFlags::NoEditor, true);
+
+	// The cell's value is the variant it was given — the composition the row brought.
+	wxPGProperty::SetValue(value);
+}
+
+ibPGDataCompositionProperty::~ibPGDataCompositionProperty()
+{
+}
+
+wxString ibPGDataCompositionProperty::ValueToString(wxVariant& WXUNUSED(value), wxPGPropValFormatFlags WXUNUSED(flags)) const
+{
+	return _("Setup...");
+}
+
+bool ibPGDataCompositionProperty::StringToValue(wxVariant& WXUNUSED(variant), const wxString& WXUNUSED(text),
+	wxPGPropValFormatFlags WXUNUSED(flags)) const
+{
+	return false;
+}
+
+void ibPGDataCompositionProperty::OnSetValue()
+{
+	// THE NAME IS THE CLICK (propertyEditor.cpp) — taken, so ended: a name left standing turns one click into every
+	// later refresh.
+	if (wxT("hyperLink_clicked") != m_value.GetName())
+		return;
+	m_value.SetName(wxEmptyString);
+
+	ibVariantDataComposition* composer = property_cast(m_value, ibVariantDataComposition);
+	if (composer == nullptr)
+		return;
+
+	// HERE, NOT DEFERRED — inside the editor's event is where a pending value is collected (the desktop's, see there).
+	ibVariantDataComposition* clone = composer->Clone();
+	const wxVariant held(clone);
+
+	const ibMetaData* const metaData = m_property != nullptr ? m_property->GetMetaData() : nullptr;
+	const bool accepted = m_door && m_door(clone->GetCompositionDesc(), metaData);
+
+	// The fields the window asked of the owner's tab were the window's — the next one asks again.
+	if (metaData != nullptr && metaData->GetTabId() != 0)
+		ibQueryFieldsForget(metaData->GetTabId());
+
+	if (!accepted)
+		return;
+
+	// Posted as the pending value: the grid validates and announces it, the inspector sends it — the row's node, by the
+	// writer registered for the class.
+	SetValueInEvent(held);
+}
+
+void ibPGDataCompositionProperty::RefreshChildren()
+{
+	wxPGProperty::Enable(true);
+}
