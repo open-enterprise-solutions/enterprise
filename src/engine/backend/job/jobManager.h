@@ -43,7 +43,7 @@
 #include "backend/appDataCtorToken.h"
 #include "backend/session/sessionHolder.h"
 #include "backend/compiler/value.h"        // ibValue — the argument-array gate
-#include "backend/job/jobSchedule.h"       // ibJobScheduleDescription — when a job is due
+#include "core/job/jobSchedule.h"          // ibJobScheduleDescription — when a job is due
 #include "backend/lock/lockHandle.h"       // ibLockHandle held per running job
 #include "backend/lock/lockHolder.h"       // ibLockHolder — base for the job's claim identity
 #include "backend/system/systemEnum.h"     // ibStatusMessage — the level of what a run's code said

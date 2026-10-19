@@ -21,7 +21,8 @@
 #include <wx/datectrl.h>
 #include <wx/timectrl.h>
 
-#include "backend/job/jobSchedule.h"
+#include "backend/backend.h"   // BACKEND_API — the property the dialog edits is the engine's
+#include "core/job/jobSchedule.h"
 
 class BACKEND_API ibPropertySchedule;
 

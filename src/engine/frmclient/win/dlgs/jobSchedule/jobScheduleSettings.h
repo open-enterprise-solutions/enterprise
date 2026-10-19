@@ -21,7 +21,8 @@
 #include <wx/datectrl.h>
 #include <wx/timectrl.h>
 
-#include "frmclient/backend/job/jobSchedule.h"
+#include "frmclient/frmclient.h"   // FRMCLIENT_API
+#include "core/job/jobSchedule.h"
 
 // The desktop's (frontend/win/dlgs/jobSchedule), asked by the server (ibProtocolRequestKind::Schedule): the schedule
 // comes in the question, the edited one is the answer.

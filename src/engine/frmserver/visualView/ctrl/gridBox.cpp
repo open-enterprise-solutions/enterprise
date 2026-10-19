@@ -48,8 +48,8 @@ bool ibValueGridBox::GetControlValue(ibValue& pvarControlVal) const
 
 ibValueGridBox::ibValueGridBox() : ibValueWindowComposite(),
 m_spreadsheetModel(new ibValueSpreadsheetDocument()),   // nothing bound yet — a sheet of its own IS a model
-m_gridDocument(new ibSpreadsheetGridBoxDocument()),
-m_gridView(new ibSpreadsheetGridBoxView())
+m_gridDocument(new ibSheetGridBoxDocument()),
+m_gridView(new ibSheetGridBoxView())
 {
 	m_gridView->SetDocument(m_gridDocument);
 	m_gridDocument->SetSpreadsheetDocument(m_spreadsheetModel->GetSpreadsheetDocument());
@@ -113,6 +113,21 @@ void ibValueGridBox::OnUpdate(ibDataNode& state, ibVisualHost* host)
 		&& !(*m_composedSettings == m_spreadsheetModel->GetModelComposer().GetCurrentSettingsDesc()))
 		composeState = ibProtocolComposeState::Outdated;
 	state.SetValue(wxT("ComposeState"), static_cast<s32>(composeState));
+
+	// A COMPOSED SHEET RIDES THE FRAME THAT NAMES ITS VERSION — once. The client that reads Sheet here skips Fetch;
+	// one that does not still asks. While composing, or after the Version was already sent with its Sheet, State stays
+	// light: only Version and ComposeState, as before.
+	if (composeState == ibProtocolComposeState::Composed && m_gridDocument != nullptr
+		&& m_sheetSentVersion != m_documentVersion) {
+		ibDataNode fetched;
+		if (ibFetchSpreadsheet(m_gridDocument->GetSpreadsheet(), fetched)) {
+			if (const ibDataValue* sheet = fetched.FindField(wxT("Sheet")))
+				state.SetField(wxT("Sheet"), *sheet);
+			if (fetched.FindField(wxT("ReadOnly")) != nullptr)
+				state.SetValue(wxT("ReadOnly"), fetched.GetValue<bool>(wxT("ReadOnly")));
+			m_sheetSentVersion = m_documentVersion;
+		}
+	}
 }
 
 void ibValueGridBox::OnCreated(ibVisualHost* host, bool firstCreated)

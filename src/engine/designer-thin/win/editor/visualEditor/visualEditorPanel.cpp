@@ -76,6 +76,7 @@ void ibVisualEditorNotebook::ibVisualEditor::CreateWideGui()
 		if (sz.GetWidth() < 480 || sz.GetHeight() < 320)   // wait for the first genuine layout pass
 			return;
 		m_layoutBalanced = true;
+		Layout();   // the size event comes before the sizer pass: size the splitters first, or the sashes clamp to their old size
 		m_splitter->SetSashPosition(sz.GetHeight() - 260);   // canvas on top; a ~260px navigator strip below
 		m_treeSplitter->SetSashPosition(sz.GetWidth() / 3);  // object tree = LEFT third
 		m_rightSplitter->SetSashPosition(sz.GetWidth() / 3); // attributes = MIDDLE third, commands = RIGHT third
@@ -240,9 +241,11 @@ bool ibVisualEditorNotebook::ibVisualEditor::SaveForm()
 	if (m_cmdProc.IsAtSavePoint() || !m_formNode.IsNode())
 		return true;
 
+	// HELD, not a call of its own — as a module's text is: what reads the form on the server (Save, the next request of
+	// the tab, a close) is a call, and carries it (Pending) ahead of its work; an edit asks the server nothing more.
 	ibProtocolNode args;
 	args.SetValue(ibProtocolName::Form, m_formNode);
-	m_document->Post(ibProtocolEvent::Change, args);
+	m_document->Hold(ibProtocolEvent::Change, args);
 	m_cmdProc.SetSavePoint();
 	return true;
 }

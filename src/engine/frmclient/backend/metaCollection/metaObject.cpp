@@ -1,5 +1,7 @@
 #include "metaObject.h"
 
+#include <map>
+
 #include "core/serialize/dataBuilder.h"
 #include "frmclient/backend/serialize/dataProtocol.h"   // ibReadProtocolNode, ibWriteProtocolNode — the rows, the edit
 #include "frmclient/mainFrame/mainFrame.h"              // the door to the server
@@ -99,19 +101,66 @@ bool ibValueMetaObject::Send(const wxString& name, const ibDataValue& value) con
 	return frame->Call(ibProtocolMethod::Schema, params, answer);
 }
 
+namespace {
+
+	// The rows received, and the frame they are true at: another frame drops them all.
+	struct ibReceivedRows {
+		long long frame = 0;
+		std::map<std::pair<long long, ibMetaID>, ibProtocolNode> rows;
+	};
+
+	ibReceivedRows& ReceivedRows()
+	{
+		static ibReceivedRows received;
+		return received;
+	}
+
+	// The rows of the object received at this frame, or none.
+	const ibProtocolNode* FindReceivedRows(long long tabId, ibMetaID metaId, long long frame)
+	{
+		ibReceivedRows& received = ReceivedRows();
+		if (received.frame != frame)
+			return nullptr;
+		const auto found = received.rows.find({ tabId, metaId });
+		return found != received.rows.end() ? &found->second : nullptr;
+	}
+}
+
+void ibValueMetaObject::Receive(long long tabId, ibMetaID metaId, const ibProtocolNode& rows)
+{
+	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
+	if (frame == nullptr || !rows.IsNode())
+		return;
+	ibReceivedRows& received = ReceivedRows();
+	if (received.frame != frame->GetFrameNumber()) {
+		received.rows.clear();
+		received.frame = frame->GetFrameNumber();
+	}
+	received.rows[{ tabId, metaId }] = rows;
+}
+
 bool ibValueMetaObject::Receive()
 {
 	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
 	if (frame == nullptr)
 		return false;
 
+	// The rows read before or shown beside an answer — those, while the frame stays.
+	if (const ibProtocolNode* const found = FindReceivedRows(m_metaData.GetTabId(), m_metaId, frame->GetFrameNumber())) {
+		const ibProtocolNode rows = *found;   // taking them in may receive others
+		return ibPropertyObject::Receive(rows);
+	}
+
 	ibProtocolNode params, answer;
 	params.SetValue(ibProtocolName::Schema, static_cast<long long>(ibProtocolSchema::Properties));
 	ibProtocolNode args = params.Child(ibProtocolName::Args);
 	args.SetValue(ibProtocolName::Id, static_cast<long long>(m_metaId));
 	args.SetValue(ibProtocolName::Tab, m_metaData.GetTabId());
-	return frame->Call(ibProtocolMethod::Schema, params, answer) &&
-		ibPropertyObject::Receive(answer.FindChild(ibProtocolName::Properties));
+	if (!frame->Call(ibProtocolMethod::Schema, params, answer))
+		return false;
+	const ibProtocolNode rows = answer.FindChild(ibProtocolName::Properties);
+	Receive(m_metaData.GetTabId(), m_metaId, rows);
+	return ibPropertyObject::Receive(rows);
 }
 
 bool ibValueMetaObject::OnPropertyChanging(ibProperty* property, const wxVariant& WXUNUSED(newValue))

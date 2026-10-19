@@ -226,7 +226,7 @@ void ibQueryUnionFieldModel::GetValueByRow(wxVariant& variant, unsigned row, uns
 
 		// AND ITS PICTURE, like every other field list in this window. These rows ARE fields — the
 		// output of the union — so a plain text column made them read as something else than the
-		// same fields three tabs away. The icon is asked of the column (GetColumnIcon) through the
+		// same fields three tabs away. The icon is asked of the column (GetColumnPicture) through the
 		// host's resolver; unresolved (a free expression, a name nothing answers to) falls back to
 		// the plain field picture, which is what such a row is.
 		// ⚠ ALWAYS AN ICON-TEXT VALUE, even with no icon. The column is drawn by an icon-text

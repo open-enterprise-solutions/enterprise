@@ -70,7 +70,7 @@ public:
 	// dimensions, resources, plain attributes and free expressions side by side; one picture for
 	// the whole column drew them as if they were interchangeable, while the tree three inches to
 	// the left told them apart. Asked per row, and answered by whoever knows the row — the same
-	// column that answered in the tree (ibBackendSourceColumn::GetColumnIcon).
+	// column that answered in the tree (ibBackendSourceColumn::GetColumnPicture).
 	// Unset, or answering an invalid icon, falls back to the column-wide one.
 	using IconReader = std::function<wxIcon(unsigned int row)>;
 	void SetIconReader(IconReader reader) { m_iconReader = std::move(reader); }

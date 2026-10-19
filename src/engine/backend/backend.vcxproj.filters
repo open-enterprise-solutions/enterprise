@@ -902,9 +902,6 @@
     <ClInclude Include="job\platformJobs.h">
       <Filter>job</Filter>
     </ClInclude>
-    <ClInclude Include="job\jobSchedule.h">
-      <Filter>job</Filter>
-    </ClInclude>
     <ClInclude Include="settings\settingsStorage.h">
       <Filter>settings</Filter>
     </ClInclude>
@@ -2306,9 +2303,6 @@
       <Filter>job</Filter>
     </ClCompile>
     <ClCompile Include="job\platformJobs.cpp">
-      <Filter>job</Filter>
-    </ClCompile>
-    <ClCompile Include="job\jobScheduleRules.cpp">
       <Filter>job</Filter>
     </ClCompile>
     <ClCompile Include="settings\settingsStorage.cpp">

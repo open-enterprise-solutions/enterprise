@@ -42,6 +42,7 @@
 #include "frmclient/win/dlgs/settings/list/listSettings.h"
 #include "frmclient/win/dlgs/settings/composer/composerSettings.h"
 #include "frmclient/backend/serialize/dataProtocol.h"   // a value as the server's question carries it
+#include "frmclient/backend/metaCollection/metaObject.h"  // the inspector's rows an answer brought, kept for their object
 #include "frmclient/backend/backend_localization.h"     // the session's language — the frame says it
 #include "frmclient/visualView/ctrl/typeControl.h"      // ibTypeControlFactory::SimpleChoice — the calculator, the calendar
 #include "frmclient/visualView/ctrl/frame.h"            // ibControlFrame — what they are drawn over
@@ -724,7 +725,7 @@ bool ibFrontendMainFrame::Show(bool show)
 	ibProtocolNode answer;
 	ibProtocolRefusal refusal = ibProtocolRefusal::None;
 	wxString error;
-	bool loggedIn = m_communicator->Login(m_user, m_password, m_mode, answer, refusal, error);
+	bool loggedIn = m_communicator->Login(m_user, m_password, m_mode, answer, refusal, error, GetStartSchemas());
 
 	// A REFUSED NAME OR PASSWORD ASKS THE PERSON — the desktop's login window, with the names the server offers, asked
 	// again until the login goes through or the person cancels it. A list the server could not read offers none: the
@@ -748,7 +749,7 @@ bool ibFrontendMainFrame::Show(bool show)
 		}
 		m_user = dlg.GetLogin();
 		m_password = dlg.GetPassword();
-		loggedIn = m_communicator->Login(m_user, m_password, m_mode, answer, refusal, error);
+		loggedIn = m_communicator->Login(m_user, m_password, m_mode, answer, refusal, error, GetStartSchemas());
 	}
 	m_password.clear();
 	if (!loggedIn) {
@@ -783,6 +784,10 @@ bool ibFrontendMainFrame::Show(bool show)
 		return false;
 	SetFocus();
 	Raise();
+
+	// …and what the login read beside the frame (GetStartSchemas), each shown as a call of its own would have been.
+	for (const ibProtocolNode& read : answer.FindChild(ibProtocolName::Read).Children())
+		ShowSchema(static_cast<ibProtocolSchema>(read.GetInt(ibProtocolName::Schema)), read);
 	return true;
 }
 
@@ -922,6 +927,11 @@ void ibFrontendMainFrame::Draw(const ibProtocolNode& answer)
 	// asked it (Synonym's "..." → its languages) — the grid's rows freed under the button still dispatching (2026-10-14).
 	if (!answer.Has(ibProtocolName::Frame))
 		return;
+
+	// THE INSPECTOR'S ROWS OF WHAT A DOOR ACTED ON (an edit, a new object, a tab opened over one) — received for the
+	// object before anything is drawn: the tree drawn below may select it, and its object takes them in instead of asking.
+	for (const ibProtocolNode& rows : answer.FindChild(ibProtocolName::Properties).Children())
+		ibValueMetaObject::Receive(rows.GetInt(ibProtocolName::Tab), static_cast<ibMetaID>(rows.GetId()), rows);
 
 	const ibProtocolNode& frame = m_communicator->GetFrame();
 
@@ -1152,8 +1162,13 @@ void ibFrontendMainFrame::DrawTabs(const ibProtocolNode& tabs)
 		else
 			m_docManager->AddDocument(opened);
 
-		// Not made — its view was not.
-		if (!opened->OnCreate(wxEmptyString, ibDOC_NEW)) {
+		// Not made — its view was not. Made with the State the frame drew it in, when it is the tab the frame shows.
+		const ibProtocolNode& frame = m_communicator->GetFrame();
+		if (id == frame.GetInt(ibProtocolName::ActiveTab))
+			opened->SetOpeningState(frame.FindChild(ibProtocolName::View).FindChild(ibProtocolName::State));
+		const bool made = opened->OnCreate(wxEmptyString, ibDOC_NEW);
+		opened->SetOpeningState(ibProtocolNode());
+		if (!made) {
 			m_documents.erase(id);
 			opened->DeleteAllViews();
 			continue;
@@ -1226,6 +1241,9 @@ void ibFrontendMainFrame::Settle(const ibProtocolNode& answer)
 {
 	// The client's part of a call, beside its exchange (the communicator's line): the window drawn from the answer.
 	const wxLongLong began = wxGetUTCTimeMillis();
+	// The pictures it names asked for at once, before a part of the window asks for its own: the designer's start was two
+	// picture exchanges, the templates' and the tree's.
+	ibProtocolPictureReceive(answer);
 	Draw(answer);
 	ibJournalInfo(wxT("call"), wxT("  drawn in %lld ms"), (wxGetUTCTimeMillis() - began).GetValue());
 	Ask();
@@ -1689,6 +1707,11 @@ ibProtocolNode ibFrontendMainFrame::FindTab(long long tabId) const
 long long ibFrontendMainFrame::GetActiveTab() const
 {
 	return m_communicator->GetFrame().GetInt(ibProtocolName::ActiveTab);
+}
+
+long long ibFrontendMainFrame::GetFrameNumber() const
+{
+	return m_communicator->GetFrameNumber();
 }
 
 ibTabDocument* ibFrontendMainFrame::FindDocument(long long tabId) const

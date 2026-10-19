@@ -46,6 +46,8 @@ namespace ibProtocolName {
 	inline constexpr const char* Features = "Features";
 	inline constexpr const char* FeatureResume = "resume";   // the same-process window only. A client names it in
 	                                                          // login's Features to opt into the idempotency slot.
+	inline constexpr const char* Read     = "Read";      // login: the schemas the client reads at its start ({Schema}),
+	                                                   // answered beside the frame, each with its Schema
 	inline constexpr const char* Client   = "Client";
 	inline constexpr const char* Since    = "Since";
 	inline constexpr const char* Pending  = "Pending";   // (protocol 3) the state events held since the last call, in
@@ -78,6 +80,8 @@ namespace ibProtocolName {
 	inline constexpr const char* ConfigSave = "ConfigSave";
 	inline constexpr const char* Syntax     = "Syntax";
 	inline constexpr const char* Synonym   = "Synonym";    // …a row's: its object's synonym, when it has one
+	// …the root row's: the kinds whose objects open an editor (MetaData Open) — children Type; none: ask Open for any
+	inline constexpr const char* Editors   = "Editors";
 	inline constexpr const char* FormType  = "FormType";   // …a form's row: its kind (the owner's form type)
 	inline constexpr const char* Comment   = "Comment";    // …an external file's root row: its comment
 	inline constexpr const char* DefaultFormObject = "DefaultFormObject";   // …the default form's id (none: wxNOT_FOUND)
@@ -91,7 +95,9 @@ namespace ibProtocolName {
 	// The designer's inspector: the object it shows (NodeId, Tab — an edit goes back by schema Properties), its categories
 	// (Name, Title) and property rows — Name, Title, Help, Class, Value, Presentation, ReadOnly, and what a property may
 	// be set to (its children Id, Title, Picture; Multiple — several at once). What its object's state hides is not sent.
-	// …and an external file's root row's: the header above its tree — its object's rows, as the inspector's.
+	// …and an external file's root row's: the header above its tree — its object's rows, as the inspector's. And an event
+	// of the frame's answer: the rows of each object a door acted on (an edit, a new object, the one the tree selects
+	// after a removal, a form editor's own), each by its NodeId and Tab — the client shows them without reading them.
 	inline constexpr const char* Properties = "Properties";
 	inline constexpr const char* Help       = "Help";     // …a property row's: what it is for, as the inspector says it
 	inline constexpr const char* Class      = "Class";    // …a property row's: the server's property class by name
@@ -119,6 +125,8 @@ namespace ibProtocolName {
 	inline constexpr const char* Button    = "Button";
 	inline constexpr const char* Response  = "Response";
 	inline constexpr const char* Selected  = "Selected";
+	inline constexpr const char* Select    = "Select";    // MetaData Remove: the object the tree selects after it — its
+	                                                    // Properties shown with the answer
 	inline constexpr const char* Multiple  = "Multiple";   // a choice's: several may be chosen — answered with Ids
 	inline constexpr const char* Ids       = "Ids";
 	inline constexpr const char* Act       = "Act";       // a saved settings' answer: what was done to the shelf
@@ -260,6 +268,8 @@ namespace ibProtocolName {
 	// State, what the server reads it as now; and what the person did with one, back by its id.
 	inline constexpr const char* ControlId        = "ControlId";
 	inline constexpr const char* State            = "State";
+	inline constexpr const char* Opening          = "Opening";   // a form editor's State, once, in the frame that opens
+	                                                               // its tab: what its Text fetch answers
 	inline constexpr const char* Subscribed       = "Subscribed";   // a State's: the state events the server is subscribed
 	                                                                // to on it — sent at once, by number
 	inline constexpr const char* Control          = "Control";
@@ -285,7 +295,8 @@ namespace ibProtocolName {
 	inline constexpr const char* BorderTop        = "BorderTop";
 	inline constexpr const char* BorderBottom     = "BorderBottom";
 	inline constexpr const char* Stretch          = "Stretch";
-	inline constexpr const char* Rows             = "Rows";
+	inline constexpr const char* Rows             = "Rows";   // a sizer's: how many; (protocol 5) a table State's: the first page
+	                                                            // — same shape as fetch (rows as children, End, Before, Pictures)
 	inline constexpr const char* Cols             = "Cols";
 	inline constexpr const char* TitleLocation    = "TitleLocation";
 	inline constexpr const char* PasswordMode     = "PasswordMode";
@@ -341,6 +352,8 @@ namespace ibProtocolName {
 	inline constexpr const char* Anchor           = "Anchor";
 	inline constexpr const char* Parent           = "Parent";
 	inline constexpr const char* Count            = "Count";
+	inline constexpr const char* Before           = "Before";   // (protocol 4) a reset fetch's: the rows wanted ahead of
+	                                                            // the page — answered with how many stand first
 	inline constexpr const char* End              = "End";
 	inline constexpr const char* Container        = "Container";
 	inline constexpr const char* Group            = "Group";
@@ -421,7 +434,13 @@ namespace ibProtocolType {
 //   3  …and a state event (ibProtocolIsStateEvent) its control's State does not list in Subscribed is held by the client,
 //      the latest of each kind per control, and carried by its next call, whatever it is, as Pending — which the
 //      server applies, in order, before the call itself.
-constexpr int ibProtocolVersion = 3;
+//   4  …and a reset fetch (Direction 0) may name Before: the server reads up to that many rows ahead of the page too,
+//      puts them first, and answers Before — how many of the rows stand ahead of it. An answer without Before is a
+//      server below 4: the client reads them itself, a second fetch.
+//   5  …and a table's State may carry Rows with the Version: the first page, as fetch would give it (rows as children,
+//      End, Before, Pictures), so the frame that opens the tab need not be followed by a fetch. A server below 5, or
+//      one that omits Rows, is answered with fetch, as before.
+constexpr int ibProtocolVersion = 5;
 
 // WHAT A CLIENT ASKS THE SERVER. On the wire a method is a name, as JSON-RPC has it; in code it is a type: the server
 // reads the name once (ibProtocolMethodFromName) and nothing past it compares strings. A name is never changed; a new
@@ -552,7 +571,7 @@ enum class ibProtocolSchema : int {
 	MetaData     = 9,   // the designer's configuration tree — shows nothing: its rows ride the frame (MetaData, each
 	                    // row NodeId — its object's id, or below 0 a group row's place among its siblings; Title,
 	                    // Picture, Group — what New makes under it, Type, Synonym, Position, Guid — its object's; a
-	                    // language's Code, a role's Mode). Its commands are its own (ibProtocolMetaDataCommand), each
+	                    // language's Code, a role's Mode; the root's Editors — the kinds Open opens an editor of). Its commands are its own (ibProtocolMetaDataCommand), each
 	                    // with Tab in that tab's tree — an external file's (ViewKind DataProcessor, Report)
 	Properties   = 10,  // the designer's inspector: `Args: {Id, Tab}` — the metaobject of that id in the tab's tree (Tab:
 	                    // an external file's; none: the configuration's), its Properties (NodeId, Tab; categories Name,
@@ -799,6 +818,22 @@ enum class ibProtocolViewKind : int {
 	                         // {Waiting — what the person sent has no answer yet, Pending — the messages no assistant has
 	                         // collected}, View.Rows — the transcript, an entry a row (Text); what the person writes —
 	                         // event {Tab, Event: Change, Args: {Text}}
+	Composer         = 14,   // the designer's editor of a report's composer — the composition panel: View.State
+	                         // {ReadOnly}, View.Composition — the composer's description in its node form, View.Fields
+	                         // and View.References — what its query offers, as the settings questions have them
+	                         // (View.Error — why it offers none); the fields of a text being edited, or of a reference's targets — fetch {Tab,
+	                         // Request: {Kind (ibProtocolComposerRequest), Text}}; an edit — event {Tab, Event: Input},
+	                         // what the panel holds — event {Tab, Event: Change, Args: {Composition}}
+};
+
+// WHAT A COMPOSER'S TAB IS ASKED — `fetch {Tab, Request: {Kind, …}}`, numbered past the form's
+// (ibProtocolFormDesignerRequest).
+enum class ibProtocolComposerRequest : int {
+	Fields = 21,   // {Text} — the fields that query text offers: Fields, References, Error — as the tab's view has them
+	Expand = 22,   // {Targets} — a reference field opened: the fields of those targets, Expanded and their References —
+	               // as a settings window's Act Expand has them asked again
+	Source = 23,   // {Id, Text} — a dynamic list's fields: those of its main table (Id, optional) and what its query (Text,
+	               // optional) adds — Fields, References, Error — as the desktop's list settings window reads them
 };
 
 // WHAT A FORM'S TAB IS ASKED besides its module's — `fetch {Tab, Request: {Kind, …}}`, numbered past the module's

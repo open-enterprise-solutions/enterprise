@@ -37,16 +37,22 @@ wxEND_EVENT_TABLE()
 
 bool ibModuleEditView::OnCreate(ibFrontendDocument* docBase, long flags)
 {
+	ibModuleEditDocument* const doc = dynamic_cast<ibModuleEditDocument*>(docBase);
+	wxASSERT(doc);
+
 	// The desktop's designer editor — the debugger's margin, its patches, its values (ibCodeEditorDesigner).
-	m_codeEditor = new ibCodeEditorDesigner(dynamic_cast<ibModuleEditDocument*>(docBase), m_viewFrame, wxID_ANY,
+	m_codeEditor = new ibCodeEditorDesigner(doc, m_viewFrame, wxID_ANY,
 		wxDefaultPosition, wxDefaultSize, wxBORDER_THEME);
 
 	m_codeEditor->SetReadOnly(flags == ibDOC_READONLY);
 	m_codeEditor->SetSTCFocus(true);
 	m_codeEditor->Bind(wxEVT_KILL_FOCUS, &ibModuleEditView::OnKillFocus, this);
 
+	// ⭐ THE FRAME THAT OPENS THE TAB CARRIES ITS TEXT (State Text), as the form editor's carries its form (Opening); a
+	// server that put none there is fetched, as before.
+	const ibProtocolNode& state = doc->GetOpeningState();
 	return ibFrontendView::OnCreate(docBase, flags)
-		&& m_codeEditor->LoadModule();
+		&& (state.Has(ibProtocolName::Text) ? m_codeEditor->LoadModule(state) : m_codeEditor->LoadModule());
 }
 
 void ibModuleEditView::OnActivateView(bool activate, ibFrontendView* activeView, ibFrontendView* deactiveView)

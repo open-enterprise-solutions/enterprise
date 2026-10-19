@@ -65,6 +65,15 @@ public:
 	// posted as the person's acts are.
 	bool Fetch(const ibProtocolNode& request, ibProtocolNode& answer) const;
 	void Post(ibProtocolEvent event, const ibProtocolNode& args = ibProtocolNode()) const;
+	// …or left for the next call to carry (Pending), the latest of its kind in place of the one before: what the view
+	// hands back without the person asking for anything yet (a module's text as the focus leaves it). Posted where the
+	// server takes none held.
+	void Hold(ibProtocolEvent event, const ibProtocolNode& args = ibProtocolNode()) const;
+
+	// The State of the view in the frame that opened the tab — set while its views are made (OnCreate), empty after:
+	// what a view reads as it is made may ride there.
+	void SetOpeningState(const ibProtocolNode& state) { m_openingState = state; }
+	const ibProtocolNode& GetOpeningState() const { return m_openingState; }
 
 protected:
 
@@ -73,6 +82,7 @@ protected:
 private:
 
 	const long long m_tabId;
+	ibProtocolNode m_openingState;
 };
 
 #endif

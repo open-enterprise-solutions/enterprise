@@ -38,6 +38,7 @@
 #include "backend/query/queryLowering.h"   // CheckNames — the engine resolves the names, we only ask
 #include "backend/query/queryable.h"       // ibSourceMetaDataScope — WHICH config the names resolve against
 #include "core/query/queryKeywords.h"      // the ACTIVE keyword table — the one spelling of a keyword, and the highlighter's word set
+#include "core/query/queryAggregates.h"    // ibQueryAggregatesFor — the folds a field's type admits, as CheckNames reads them
 #include "backend/backend_exception.h"
 #include "backend/metaData.h"
 #include "artProvider/artProvider.h"    // wxART_FRONTEND — the product's own pictures, asked for first
@@ -173,7 +174,7 @@ inline ibDataViewColumn* IconColumn(const wxString& title, unsigned int col, int
 // the fact, it is a choice that should never have been offered — and which choices fit depends on
 // the field THIS row aggregates, so the list cannot be fixed when the column is made.
 //
-// The words come from the ENGINE (ibQueryLowering::AggregatesFor), which is the same answer
+// The words come from the ENGINE (ibQueryAggregatesFor), which is the same answer
 // CheckNames reads as a refusal. Offering what the engine would reject is how a window teaches
 // people to distrust it.
 class ibRowChoiceRenderer : public ibDataViewChoiceRenderer

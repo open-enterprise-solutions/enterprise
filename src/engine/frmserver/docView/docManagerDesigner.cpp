@@ -22,6 +22,7 @@
 #include "frmserver/docView/templates/designer/docViewInterfaceEdit.h"
 #include "frmserver/docView/templates/designer/docViewModuleEdit.h"
 #include "frmserver/docView/templates/designer/docViewRoleEdit.h"
+#include "frmserver/docView/templates/designer/docViewComposerEdit.h"
 #include "frmserver/docView/templates/designer/docViewSpreadsheetEdit.h"
 
 //tools
@@ -56,6 +57,8 @@ ibDocManagerDesigner::ibDocManagerDesigner()
 	AddDocTemplate(g_metaCommonAttributeCLSID, CLASSINFO(ibCommonAttributeCompositionDocument), CLASSINFO(ibCommonAttributeCompositionView));
 	AddDocTemplate(g_metaFunctionalOptionCLSID, CLASSINFO(ibFunctionalOptionMembersDocument), CLASSINFO(ibFunctionalOptionMembersView));
 	AddDocTemplate(g_metaRoleCLSID, CLASSINFO(ibRoleRightsDocument), CLASSINFO(ibRoleRightsView));
+	// …and a report's composer — the composition panel over its description, as the desktop's designer opened it.
+	AddDocTemplate(g_metaComposerCLSID, CLASSINFO(ibComposerCompositionDocument), CLASSINFO(ibComposerCompositionView));
 
 	// The assistant window — no metaobject, the registration journal's shape: an invisible template reached through
 	// CreateDocument<ibAssistantTranscriptDocument>() from its schema's Open.

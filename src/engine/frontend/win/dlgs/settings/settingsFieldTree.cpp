@@ -8,6 +8,7 @@
 #include "backend/metadataConfiguration.h"
 #include "backend/query/columnLayout.h"                         // ibIsComparableType — a whole-value blob has nothing to compare
 #include "backend/srcDataObject.h"                              // ibSourceDataObject::ibSourceExplorer
+#include "backend/backend_picture.h"                            // ibBackendPicture::GetPictureAsIcon — a column's picture made an icon
 #include "backend/metaCollection/partial/reference/reference.h" // ibValueReferenceDataObject — reference-as-source
 #include "backend/metaCollection/resource/metaResourceObject.h"   // the RESOURCE metatype — its own class icon
 #include "backend/query/queryConstructorModel.h"   // WalkPath — where a written path starts, and its hops by type
@@ -108,7 +109,7 @@ static wxTreeItemId AppendFieldNode(wxTreeCtrl* tree, const wxTreeItemId& parent
 	// registers.
 	const bool resource = isResource && isResource(data->m_path);
 	const int icon = resource ? ibSettingsResourceIcon(tree)
-	                          : ibSettingsFieldIcon(tree, col->GetSourceIcon());
+	                          : ibSettingsFieldIcon(tree, ibBackendPicture::GetPictureAsIcon(col->GetSourcePicture()));
 	const wxTreeItemId item = tree->AppendItem(parent, label, icon, icon, data);
 	if (!data->m_refTypes.empty())
 		tree->AppendItem(item, wxEmptyString);   // dummy -> [+] (a reference expands into its target's fields)

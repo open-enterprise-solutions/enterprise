@@ -48,12 +48,19 @@ public:
 	virtual const ibMetaData* GetMetaData() const override { return &m_metaData; }
 	virtual ibMetaData* GetMetaData() override { return &m_metaData; }
 
-	// Its properties as the server has them now — one batch (schema Properties: Id, Tab), in place of the ones it holds.
-	// False: the server answered none.
+	// Its properties as the server has them now — those received for it at this frame (below), else one batch (schema
+	// Properties: Id, Tab), in place of the ones it holds. False: the server answered none.
 	virtual bool Receive() override;
 
 	// …the value an edit gave a property of it, sent (Send). Refused: vetoed — the value stays.
 	virtual bool OnPropertyChanging(ibProperty* property, const wxVariant& newValue) override;
+
+	// ⭐ THE ROWS OF THE OBJECT OF THAT TAB AND ID, RECEIVED WITHOUT ASKING — shown beside an answer (an edit's, a new
+	// object's: the frame's Properties), or read before: true while the frame stays (ibFrontendMainFrame::GetFrameNumber),
+	// so an object shown again — clicked again, walked back to — takes them in instead of asking. By the tab and the id: a
+	// row of the tree makes its object anew each time it is selected. Taken in by its next Receive, not at once: an edit is
+	// sent from inside the grid's change, and taking rows in remakes the properties the grid is still editing.
+	static void Receive(long long tabId, ibMetaID metaId, const ibProtocolNode& rows);
 
 private:
 

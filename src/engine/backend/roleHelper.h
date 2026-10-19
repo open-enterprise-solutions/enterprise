@@ -2,42 +2,13 @@
 #define __ROLE_HELPER_H__
 
 #include "backend_core.h"
+#include "core/roleCompositionMode.h"   // ibRoleCompositionMode — how a role combines; folded here (ibRoleUserInfo, AccessRight)
 
 //********************************************************************************************
 //*                                     Defines                                              *
 //********************************************************************************************
 
 class BACKEND_API ibAccessObject;
-
-//********************************************************************************************
-//*                                  Role composition                                        *
-//********************************************************************************************
-
-// How a role COMBINES with the user's other roles. It lives HERE, at the top of the role layer,
-// because both users of it are below the metadata: the runtime role list (ibRoleUserInfo) and the
-// rights fold (ibAccessObject::AccessRight). The Role METAOBJECT only carries it as a property.
-//
-// Named after the SET operation rather than the boolean one, because that is what the fold does:
-//
-//   Union        - the role ADDS to what is permitted; one of them granting is enough. An ordinary
-//                  right, and the DEFAULT — anything that does not say otherwise is one, so an
-//                  existing configuration behaves exactly as it did.
-//   Intersection - the role GRANTS NOTHING and SUBTRACTS: what it denies stays denied whatever the
-//                  union roles granted, and no further role can widen past it. This is what a data
-//                  SEPARATOR is (organisation / division / clearance): declared once instead of
-//                  copied into every role, so rights and separators ADD (N+M) instead of
-//                  multiplying (N×M).
-//
-// The verdict is (union1 OR union2 …) AND intersection1 AND intersection2 …, so the ORDER roles are
-// assigned in never changes the answer — unlike an ACL with DENY, where it decides the outcome. A
-// third "deny" mode would add no expressive power: it is an intersection with a negated condition.
-//
-// A role that says NOTHING participates in neither fold. Without that neutrality a separator would
-// strip every right / hide every table it was never told about.
-enum ibRoleCompositionMode {
-	ibRoleCompositionMode_Union,
-	ibRoleCompositionMode_Intersection
-};
 
 //********************************************************************************************
 //*										 Role												 *

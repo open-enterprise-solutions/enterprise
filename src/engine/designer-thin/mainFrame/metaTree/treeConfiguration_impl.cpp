@@ -367,8 +367,9 @@ void ibMetaTreeBase::CreateItem()
 	if (!GetPlace(m_metaTreeCtrl->GetSelection(), type, parent))
 		return;
 
-	// ASK — the new object's row comes back with the frame and is selected, the inspector showing it; then its editor is
-	// opened, as the desktop's click did (NewItem, then OpenObjectForm): made while the row is shown, it shows its own.
+	// ASK — the new object's row comes back with the frame and is selected, the inspector showing it — its rows came
+	// with the same answer (the frame's Properties), nothing is read; then its editor is opened, as the desktop's click
+	// did (NewItem, then OpenObjectForm): made while the row is shown, it shows its own.
 	ibProtocolNode args;
 	args.SetValue(ibProtocolName::Type, type);
 	args.SetValue(ibProtocolName::Parent, parent);
@@ -378,10 +379,26 @@ void ibMetaTreeBase::CreateItem()
 		EditItem();
 }
 
+// WHETHER OPEN OPENS ANYTHING — the root says which kinds have an editor (Editors). A catalog's or a document's Edit
+// opened nothing and cost an exchange; a server that does not say is asked, as before.
+static bool ibOpensEditor(const ibProtocolNode& root, const ibProtocolNode& row)
+{
+	const ibProtocolNode editors = root.FindChild(ibProtocolName::Editors);
+	if (!editors.IsNode())
+		return true;
+	const wxString type = row.GetString(ibProtocolName::Type);
+	for (const ibProtocolNode& editor : editors.Children()) {
+		if (editor.GetString(ibProtocolName::Type) == type)
+			return true;
+	}
+	return false;
+}
+
 void ibMetaTreeBase::EditItem()
 {
-	const long long id = GetObject(m_metaTreeCtrl->GetSelection());
-	if (id == 0)
+	const wxTreeItemId selection = m_metaTreeCtrl->GetSelection();
+	const long long id = GetObject(selection);
+	if (id == 0 || !ibOpensEditor(m_root, GetRow(selection)->m_row))
 		return;
 
 	ibProtocolNode args;
@@ -414,9 +431,30 @@ void ibMetaTreeBase::RemoveItem()
 		return;
 
 	// ASK, then let the answer come back — the row goes with the frame, the editors over it with the server's Removed.
+	// ⭐ …and the row the tree goes to — the next one, else the one before, else the parent: its rows shown with the same
+	// answer (Select, the frame's Properties), so it is selected without reading them.
+	wxTreeItemId next = m_metaTreeCtrl->GetNextSibling(selection);
+	if (!next.IsOk())
+		next = m_metaTreeCtrl->GetPrevSibling(selection);
+	if (!next.IsOk())
+		next = m_metaTreeCtrl->GetItemParent(selection);
+	const long long select = next.IsOk() ? GetObject(next) : 0;
+	const ibTreeRow* const nextRow = next.IsOk() ? GetRow(next) : nullptr;
+	const wxString nextPath = nextRow != nullptr ? nextRow->m_path : wxString();
 	ibProtocolNode args;
 	args.SetValue(ibProtocolName::Id, id);
-	Command(ibProtocolMetaDataCommand::Remove, args);
+	if (select != 0)
+		args.SetValue(ibProtocolName::Select, select);
+	if (!Command(ibProtocolMetaDataCommand::Remove, args) || nextPath.IsEmpty())
+		return;
+
+	// The frame drew the tree anew without the old row, the parent selected in its place: the row it goes to selected
+	// again; else, the tree selected it as the old one went — shown again.
+	const wxTreeItemId item = FindItem(m_metaTreeCtrl->GetRootItem(), nextPath);
+	if (item.IsOk() && item != m_metaTreeCtrl->GetSelection())
+		m_metaTreeCtrl->SelectItem(item);
+	else
+		ActivateTree();
 }
 
 void ibMetaTreeBase::PropertyItem()
@@ -447,10 +485,14 @@ void ibMetaTreeBase::SelectItem()
 
 void ibMetaTreeBase::ActivateTree()
 {
-	// Hidden, the inspector holds it all the same — Properties shows what it holds.
-	ibObjectInspector* const inspector = objectInspector;
-	if (inspector != nullptr)
-		inspector->SelectObject(m_object.get());
+	// ⭐ SHOWN ONCE THE EVENT THAT ACTIVATED IT IS DONE, the object held by then: a click on another row as the focus
+	// comes to the tree selects it on the way, and the inspector is asked once, for that row — it skips the one it shows.
+	CallAfter([this]() {
+		// Hidden, the inspector holds it all the same — Properties shows what it holds.
+		ibObjectInspector* const inspector = objectInspector;
+		if (inspector != nullptr)
+			inspector->SelectObject(m_object.get());
+	});
 }
 
 void ibMetaTreeBase::UpItem()

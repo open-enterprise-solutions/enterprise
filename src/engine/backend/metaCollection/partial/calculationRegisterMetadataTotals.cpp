@@ -417,9 +417,9 @@ const ibBackendQueryable* ibValueMetaObjectCalculationRegister::GetFactSurface()
 		const ibTypeDescription& day = GetActionPeriodStart()->GetTypeDesc();
 		const ibMetaID dayId = GetActionPeriodStart()->GetMetaID();
 		columns.push_back(ibTempColumn(ibCalcFactColumn::PositionStart, ibCalcPositionFirst, day, ibRegDerivedColumnId(dayId, 1),
-			_("Position start"), ibBackendQueryColumn::Kind::Computed, GetActionPeriodStart()->GetColumnIcon()));
+			_("Position start"), ibBackendQueryColumn::Kind::Computed, GetActionPeriodStart()->GetColumnPicture()));
 		columns.push_back(ibTempColumn(ibCalcFactColumn::PositionEnd, ibCalcPositionLast, day, ibRegDerivedColumnId(dayId, 2),
-			_("Position end"), ibBackendQueryColumn::Kind::Computed, GetActionPeriodStart()->GetColumnIcon()));
+			_("Position end"), ibBackendQueryColumn::Kind::Computed, GetActionPeriodStart()->GetColumnPicture()));
 	});
 }
 
@@ -1244,7 +1244,7 @@ const ibBackendQueryable* ibValueMetaObjectCalculationRegister::GetScheduleDataS
 				const wxString name = resource->GetName() + ibCalcSchedulePeriodName(period);
 				columns.push_back(ibTempColumn(name, name, resource->GetTypeDesc(), ibRegDerivedColumnId(resource->GetMetaID(), period),
 					ibRegColumnCaptionOf(resource->GetSynonym(), ibCalcSchedulePeriodCaption(period)),
-					ibBackendQueryColumn::Kind::Computed, resource->GetColumnIcon()).StandsFor(resource));
+					ibBackendQueryColumn::Kind::Computed, resource->GetColumnPicture()).StandsFor(resource));
 			}
 		}
 	});

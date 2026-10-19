@@ -223,6 +223,22 @@ TEST(SpreadsheetDocument, FillTypeTemplate_ReplacesBracketedTokens)
 		ibSpreadsheetFillType::ibSpreadsheetFillType_StrTemplate, wxT("uk")));
 }
 
+// #485: the scan for the next [Hole] used to resume at an index computed against the
+// PRE-replacement text. A value much shorter than its own bracketed name ("Alpha LLC", 9
+// characters, for "[OrganizationDescription]", 25) left that index pointing past the real second
+// hole - sometimes into the middle of it - so the second hole was read as literal text instead of
+// being substituted, though nothing about it (on its own) was unusual.
+TEST(SpreadsheetDocument, FillTypeTemplate_AMuchShorterFirstValue_StillLetsTheSecondHoleSubstitute)
+{
+	auto doc = MakeDocument();
+	doc->SetParameter(wxT("OrganizationDescription"), ibValue(wxT("Alpha LLC")).ToAnyValue());
+	doc->SetParameter(wxT("OrganizationINN"), ibValue(wxT("7809876543")).ToAnyValue());
+
+	EXPECT_EQ(wxT("Supplier: Alpha LLC, Tax ID 7809876543"), doc->ComputeStringValueFromParameters(
+		wxT("Supplier: [OrganizationDescription], Tax ID [OrganizationINN]"),
+		ibSpreadsheetFillType::ibSpreadsheetFillType_StrTemplate));
+}
+
 // ⭐ A CAPTION IS READ IN THE LANGUAGE ASKED FOR, and a language it was not written in reads as the
 // first one written — not as the stored form, and not as nothing. This is the answer the printout
 // gets: before 2026-09-21 a caption came back exactly as written and was printed so.

@@ -24,7 +24,8 @@ ibDataNode SettingsRequest(const ibCompositionDescription& composition, const ib
 	std::vector<ibTypeDescription> types;
 	for (const ibQueryConstructorField& field : ibQueryFieldsOfText(composition.m_query, metaData)) {
 		// NO metaID — a field of a parsed text stands behind no metaobject attribute (the desktop's BindFieldSource).
-		ibWriteSettingsField(fields, field.m_name, field.m_caption, wxNOT_FOUND, field.m_type, field.m_available, metaData);
+		ibWriteSettingsField(fields, field.m_name, field.m_caption, wxNOT_FOUND, field.m_type, field.m_available,
+			ibPictureDescription(), metaData);
 		types.push_back(field.m_type);
 	}
 	ibWriteSettingsReferences(request.Child(ibProtocolName::References), types, metaData);

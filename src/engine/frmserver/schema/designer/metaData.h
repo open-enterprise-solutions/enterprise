@@ -21,14 +21,15 @@ public:
 	virtual void Build(const ibSession& session, const ibDataNode& args, ibDataNode& result) const override;
 
 	// Open {Id} — the object's editor; Create {Type, Parent} — a new one of that class under that object (0: the
-	// configuration's own), and its editor opened, as a click on New did; Remove {Id}; Move {Id, Position} — put at that
-	// place among its parent's children; Copy {Id, File} — written into that file, uploaded empty, done in the asking;
-	// Paste {Type, Parent, File} — read from that one. The configuration's own, by the right to its base (data
-	// administration): Rollback, Apply — its ledger put to the person (ibDialogApplyChange), Load {File} — read from that
-	// uploaded file, Unload {File} — written into that one, uploaded empty, done in the asking; how each went is said to
-	// the person by the server. Refused, nothing done: no such object, a class its parent does not take, no such file, no
-	// such right. Each with Tab — in that tab's tree, an external file's (ibMetaDataDocument), not the configuration's:
-	// the configuration's own refused there.
+	// configuration's own), its rows shown with the answer (ibClientFrame::ShowProperties) — the tree selects it and
+	// opens its editor, as a click on New did; Remove {Id, Select} — and the rows of the object the tree selects after it
+	// shown; Move {Id, Position} — put at that place among its parent's children; Copy {Id, File} — written into that
+	// file, uploaded empty, done in the asking; Paste {Type, Parent, File} — read from that one. The configuration's
+	// own, by the right to its base (data administration): Rollback, Apply — its ledger put to the person
+	// (ibDialogApplyChange), Load {File} — read from that uploaded file, Unload {File} — written into that one, uploaded
+	// empty, done in the asking; how each went is said to the person by the server. Refused, nothing done: no such
+	// object, a class its parent does not take, no such file, no such right. Each with Tab — in that tab's tree, an
+	// external file's (ibMetaDataDocument), not the configuration's: the configuration's own refused there.
 	virtual std::function<void()> Command(const ibSession& session, s32 command,
 		const ibDataNode& args, ibProtocolRefusal& refusal, wxString& error) const override;
 

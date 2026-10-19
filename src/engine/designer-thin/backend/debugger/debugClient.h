@@ -328,6 +328,8 @@ class ibDebuggerClient {
 	// each initialized as the desktop's configuration did as it loaded (ibValueMetaObjectModuleBase::OnBeforeRunMetaObject)
 	// — asked of schema Debugger here, once.
 	ibDebuggerClient();
+	// …or over its store as the login read it (the designer's GetStartSchemas): nothing asked.
+	explicit ibDebuggerClient(const class ibProtocolNode& store);
 	friend class ibFrontendMainFrameDesigner;
 
 public:
@@ -618,6 +620,7 @@ protected:
 
 	//db support
 	void LoadModuleCollection();
+	void LoadModuleCollection(const class ibProtocolNode& store);
 	void LoadBreakpointCollection(const wxString& strModuleName);
 
 	bool ToggleBreakpointInDB(const wxString& strModuleName, unsigned int line, const wxString& condition);

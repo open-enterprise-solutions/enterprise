@@ -10,7 +10,7 @@
 
 #include "frmserver/docView/docView.h"   // docManager — the client's, where its editors open
 #include "frmserver/client/clientChildFrame.h"
-#include "frmserver/client/clientFrame.h"   // the tab an external file's tree is in
+#include "frmserver/client/clientFrame.h"   // the tab an external file's tree is in; the rows the tree shows next
 #include "frmserver/win/dlgs/applyChange.h"   // the restructure's ledger, put to the person — Apply
 
 namespace {
@@ -103,15 +103,32 @@ std::function<void()> ibSchemaMetaData::Command(const ibSession& session, s32 co
 		ibClassID clsid = 0;
 		if (!FindPlace(metaData, args, parent, clsid, refusal, error))
 			return nullptr;
-		// Made, and no more: its editor is the click's to open once its row is selected (the client's CreateItem, the
-		// desktop's ibConfigurationTree::CreateItem — NewItem, then OpenObjectForm).
-		return [metaData, clsid, parent]() { metaData->CreateMetaObject(clsid, parent); };
+		// Made, and its rows shown with the answer: the tree selects its row without reading them, then opens its editor
+		// (the client's CreateItem, the desktop's ibConfigurationTree::CreateItem — NewItem, then OpenObjectForm) — made
+		// while the row is shown, the editor shows its own.
+		const s32 tabId = args.GetValue<s32>(wxT("Tab"));
+		return [metaData, clsid, parent, tabId]() {
+			ibValueMetaObject* const created = metaData->CreateMetaObject(clsid, parent);
+			ibClientFrame* const frame = ibClientFrame::GetFrame();
+			if (created != nullptr && frame != nullptr)
+				frame->ShowProperties(created, tabId);
+		};
 	}
 	case ibProtocolMetaDataCommand::Remove: {
 		ibValueMetaObject* const object = FindObject(metaData, args, wxT("Id"), refusal, error);
 		if (object == nullptr)
 			return nullptr;
-		return [metaData, object]() { metaData->RemoveMetaObject(object); };
+		// …and the rows of the object the tree goes to after it (Select — the next row, else the one before, else the
+		// parent: the client's RemoveItem), shown with the answer.
+		const s32 tabId = args.GetValue<s32>(wxT("Tab"));
+		const ibMetaID select = args.GetValue<s32>(wxT("Select"));
+		return [metaData, object, tabId, select]() {
+			metaData->RemoveMetaObject(object);
+			ibValueMetaObject* const selected = select > 0 ? ibFindMetaObjectById(metaData, select) : nullptr;
+			ibClientFrame* const frame = ibClientFrame::GetFrame();
+			if (selected != nullptr && !selected->IsDeleted() && frame != nullptr)
+				frame->ShowProperties(selected, tabId);
+		};
 	}
 	case ibProtocolMetaDataCommand::Move: {
 		ibValueMetaObject* const object = FindObject(metaData, args, wxT("Id"), refusal, error);

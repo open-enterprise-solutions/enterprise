@@ -87,7 +87,7 @@ public:
 	// The column face: what this "field" of the report holds — a composition, always.
 	virtual ibTypeDescription& GetTypeDesc() const override { return m_typeDesc; }
 	// A metaobject column wears its own picture, like an attribute does.
-	virtual wxIcon GetColumnIcon() const override { return GetIcon(); }
+	virtual ibPictureDescription GetColumnPicture() const override { return GetClassType(); }
 
 	//support icons
 	virtual wxIcon GetIcon() const;

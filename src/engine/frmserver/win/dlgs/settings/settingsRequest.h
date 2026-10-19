@@ -18,17 +18,25 @@
 class ibDataNode;
 class ibMetaData;
 struct ibTypeDescription;
+struct ibPictureDescription;
 struct ibSettingsDescription;
 
 // ONE FIELD, DESCRIBED — what the window's field tree puts up: its name, how it reads, its column, its type, whether the
-// options leave it.
+// options leave it, and its picture — the column's (GetSourcePicture) where the desktop's tree walks a source's explorer;
+// none on a flat list, which the tree draws with the attribute picture.
 FRMSERVER_API void ibWriteSettingsField(ibDataNode& fields, const wxString& name, const wxString& presentation, ibMetaID id,
-	const ibTypeDescription& type, bool available, const ibMetaData* metaData);
+	const ibTypeDescription& type, bool available, const ibPictureDescription& picture, const ibMetaData* metaData);
 
 // WHICH OF THESE TYPES ARE REFERENCES, AND TO WHAT — the answer the desktop's field tree asks the configuration for
 // (ibValueReferenceDataObject::ConvertToMetaIds) before it gives a field its [+]; the client has no configuration to ask.
 FRMSERVER_API void ibWriteSettingsReferences(ibDataNode& references, const std::vector<ibTypeDescription>& types,
 	const ibMetaData* metaData);
+
+// THE FIELDS OF A REFERENCE'S TARGETS — a settings window's Act Expand, answered: `expanded` one field per name (its type
+// the union of the targets'), `references` which of their types are references. For a door that asks no window (a
+// composer's tab, ibProtocolComposerRequest::Expand).
+FRMSERVER_API void ibWriteSettingsTargetFields(ibDataNode& expanded, ibDataNode& references,
+	const std::vector<ibMetaID>& targets, const ibMetaData* metaData);
 
 // The window, asked with `question` (its Kind, and what the door tells it) and `edited` — the setting it edits. True: OK,
 // with `edited` the setting given back, read and taken by the schema. False: cancelled, or nobody to ask — `edited` as

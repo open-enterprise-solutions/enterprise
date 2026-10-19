@@ -10,6 +10,7 @@
 #include "frmclient/backend/compiler/value.h"      // ibValue — what a factory makes and adjusts; FRMCLIENT_API
 #include "core/description/typeDescription.h"
 #include "core/description/sourceDescription.h"    // ibSourceDescription — control's bound source path (GetSourceDesc)
+#include "core/selectorDataType.h"                 // ibSelectorDataType — the shape a type is picked in (GetFilterDataType)
 
 class FRMCLIENT_API ibMetaData;
 class ibBackendSourceColumn;
@@ -36,21 +37,9 @@ public:
 	bool IsEmptyTypeDesc() const { return !GetTypeDesc().IsOk(); }
 };
 
-enum ibSelectorDataType {
-	ibSelectorDataType_any,
-	ibSelectorDataType_boolean,
-	ibSelectorDataType_reference,
-	ibSelectorDataType_table,
-	ibSelectorDataType_resource,
-	ibSelectorDataType_eventSource,
-};
-
 class FRMCLIENT_API ibBackendTypeConfigFactory :
 	public ibBackendTypeFactory {
 public:
-
-	// The type a field of the shape holds when nothing was chosen — the engine's, by the shape alone.
-	static ibClassID GetDefaultTypeByFilter(ibSelectorDataType filterDataType);
 
 	virtual ibSelectorDataType GetFilterDataType() const {
 		return ibSelectorDataType::ibSelectorDataType_reference;

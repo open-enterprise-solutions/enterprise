@@ -61,19 +61,24 @@ long ibApplicationData::RunApplication(const wxString& strAppName, bool searchDe
 	return wxExecute(executeCmd);
 }
 
+namespace {
+
+// THE PERSON'S ASSISTANT ACCESS, as its schema showed it last — a page open over it reads that, not the server again.
+ibMcpServer s_mcpServer;
+
+}
+
 ibMcpServer* ibApplicationInstance::GetMcpServer()
 {
 	// The schema says whether the person may switch it here (Allowed): not on the application server, nor where the
-	// mode has no such schema (the runtime) — refused, and said to nobody.
-	static ibMcpServer server;
-	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
-	if (frame == nullptr)
-		return nullptr;
+	// mode has no such schema (the runtime) — refused, and said to nobody. Allowed already — what was received stands.
+	if (!s_mcpServer.IsAllowed())
+		s_mcpServer.Receive();
+	return s_mcpServer.IsAllowed() ? &s_mcpServer : nullptr;
+}
 
-	ibProtocolNode params, shown;
-	params.SetValue(ibProtocolName::Schema, static_cast<long long>(ibProtocolSchema::McpServer));
-	ibProtocolRefusal refusal = ibProtocolRefusal::None;
-	wxString error;
-	return frame->Call(ibProtocolMethod::Schema, params, shown, refusal, error) && shown.GetBool(ibProtocolName::Allowed)
-		? &server : nullptr;
+ibMcpServer* ibApplicationInstance::GetMcpServer(const ibProtocolNode& shown)
+{
+	s_mcpServer.Receive(shown);
+	return s_mcpServer.IsAllowed() ? &s_mcpServer : nullptr;
 }

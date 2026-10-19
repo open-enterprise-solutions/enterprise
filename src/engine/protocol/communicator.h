@@ -32,8 +32,10 @@ public:
 	// login {User, Password, Mode, Protocol} — the client's id and the protocol both speak taken, the token when the
 	// server offers one, and the first frame; the answer given back as it came, for its events (a start may say
 	// something, or ask).
+	// `schemas` — those the client would read right after it (Read): answered beside the frame, each with its Schema; one
+	// the person may not read is left out, and the client asks for it.
 	bool Login(const wxString& user, const wxString& password, ibProtocolMode mode, ibProtocolNode& result,
-		ibProtocolRefusal& refusal, wxString& error);
+		ibProtocolRefusal& refusal, wxString& error, const std::vector<ibProtocolSchema>& schemas = {});
 	// users {} — the names the login window offers, asked before the login.
 	bool Users(std::vector<wxString>& names, ibProtocolRefusal& refusal, wxString& error);
 	void Logout();

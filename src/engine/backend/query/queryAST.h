@@ -21,12 +21,10 @@
 #include "core/query/queryKeywords.h"     // ibQueryKeyword (aggregate func tag)
 #include "core/query/queryUnfold.h"       // ibQueryDimUnfold — the three unfold words, shared with L3
 #include "core/query/queryBalanceRole.h"  // ibBalanceRole — what a projected field is in a balance (ROLE)
+#include "core/query/queryAstExpr.h"      // ibQueryAstExprPtr — the expression's name, which every side hands about
 
 #include <vector>
 #include <memory>
-
-struct ibQueryAstExpr;
-using ibQueryAstExprPtr = std::shared_ptr<ibQueryAstExpr>;
 
 struct ibQuerySelect;   // an Expr may hold a nested SELECT (IN (subquery)); defined in full below
 

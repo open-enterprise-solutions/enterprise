@@ -20,7 +20,7 @@
 #include <set>
 
 void ibWriteSettingsField(ibDataNode& fields, const wxString& name, const wxString& presentation, ibMetaID id,
-	const ibTypeDescription& type, bool available, const ibMetaData* metaData)
+	const ibTypeDescription& type, bool available, const ibPictureDescription& picture, const ibMetaData* metaData)
 {
 	ibDataNode& field = fields.AddChild(0, 0);
 	field.SetValue(ibProtocolName::Name, name);
@@ -28,6 +28,8 @@ void ibWriteSettingsField(ibDataNode& fields, const wxString& name, const wxStri
 		field.SetValue(ibProtocolName::Presentation, presentation);
 	field.SetValue(ibProtocolName::Id, static_cast<s32>(id));
 	field.SetValue(ibProtocolName::Available, available);
+	if (!picture.IsEmptyPicture())
+		field.SetValue(ibProtocolName::Picture, ibClientFrame::SendPicture(picture));
 	ibDataValue written;
 	ibTypeDescriptionMemory::WriteNode(written, type);
 	field.SetProperty(ibProtocolName::Type, written);
@@ -112,7 +114,7 @@ void WriteTargetFields(ibDataNode& expanded, ibDataNode& references, const std::
 			const ibTypeDescription& type = united[col->GetSourceName()];
 			ibWriteSettingsField(expanded, col->GetSourceName(),
 				col->GetSourceSynonym().IsEmpty() ? col->GetSourceName() : col->GetSourceSynonym(),
-				static_cast<ibMetaID>(col->GetSourceId()), type, true, metaData);
+				static_cast<ibMetaID>(col->GetSourceId()), type, true, col->GetSourcePicture(), metaData);
 			types.push_back(type);
 		}
 	ibWriteSettingsReferences(references, types, metaData);
@@ -233,6 +235,12 @@ ibDataNode SettingsRequest(const ibDataNode& question, const ibSettingsDescripti
 }
 
 } // namespace
+
+void ibWriteSettingsTargetFields(ibDataNode& expanded, ibDataNode& references, const std::vector<ibMetaID>& targets,
+	const ibMetaData* metaData)
+{
+	WriteTargetFields(expanded, references, targets, metaData);
+}
 
 bool ibRequestSettings(const ibDataNode& question, ibSettingsDescription& edited, const ibMetaData* metaData)
 {

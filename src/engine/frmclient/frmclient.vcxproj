@@ -253,6 +253,7 @@
     <ClCompile Include="propertyManager\property\advprop\advpropEventTool.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropType.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropHyperLink.cpp" />
+    <ClCompile Include="propertyManager\property\advprop\advpropDataComposition.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropModule.cpp" />
     <ClCompile Include="propertyManager\propertyEditor.cpp" />
     <ClCompile Include="mainFrame\objinspect\objinspect.cpp" />
@@ -291,7 +292,6 @@
     <ClCompile Include="backend\metaCollection\partial\reference\reference.cpp" />
     <ClCompile Include="backend\metaCollection\resource\metaResourceObject_res.cpp" />
     <ClCompile Include="backend\logger\loggerReader.cpp" />
-    <ClCompile Include="backend\job\jobScheduleRules.cpp" />
     <ClCompile Include="backend\backend_type.cpp" />
     <ClCompile Include="backend\backend_composition.cpp" />
     <ClCompile Include="backend\system\value\valueColour.cpp" />
@@ -363,7 +363,6 @@
     <ClInclude Include="mainFrame\settings\showhelpevent.h" />
     <ClInclude Include="mainFrame\settings\statictextex.h" />
     <ClInclude Include="backend\mcp\mcpServer.h" />
-    <ClInclude Include="backend\roleHelper.h" />
     <ClInclude Include="backend\userInfo.h" />
     <ClInclude Include="mainFrame\settings\stlutility.h" />
     <ClInclude Include="mainFrame\settings\xmlutility.h" />
@@ -434,7 +433,6 @@
     <ClInclude Include="backend\metaCollection\metaComposerObject.h" />
     <ClInclude Include="backend\metaCollection\resource\metaResourceObject.h" />
     <ClInclude Include="backend\logger\loggerReader.h" />
-    <ClInclude Include="backend\job\jobSchedule.h" />
     <ClInclude Include="backend\metaCollection\metaObject.h" />
     <ClInclude Include="backend\metaCollection\metaObjectMetadata.h" />
     <ClInclude Include="backend\metaData.h" />
@@ -455,6 +453,7 @@
     <ClInclude Include="propertyManager\property\advprop\advpropType.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropValuePicture.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropHyperLink.h" />
+    <ClInclude Include="propertyManager\property\advprop\advpropDataComposition.h" />
     <ClInclude Include="propertyManager\propertyEditor.h" />
     <ClInclude Include="settings\formSettings.h" />
     <ClInclude Include="backend\system\value\valueColour.h" />
@@ -497,9 +496,6 @@
     <ClInclude Include="backend\backend_localization.h" />
     <ClInclude Include="backend\composition\dataComposer.h" />
     <ClInclude Include="backend\settings\settingsComposer.h" />
-    <ClInclude Include="backend\query\queryAST.h" />
-    <ClInclude Include="backend\query\queryable.h" />
-    <ClInclude Include="backend\query\queryLowering.h" />
     <ClInclude Include="backend\query\queryConstructorModel.h" />
     <ClInclude Include="backend\compiler\value.h" />
     <ClInclude Include="backend\serialize\dataProtocol.h" />

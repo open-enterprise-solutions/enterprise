@@ -4,6 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "queryConstructorInternal.h"
+#include "backend/backend_picture.h"   // ibBackendPicture::GetPictureAsIcon — a field's picture made an icon of this tree's
 
 using namespace queryctor;
 
@@ -437,7 +438,7 @@ wxIcon ibDialogQueryConstructor::IconOfExpr(const ibQueryAstExprPtr& expr) const
 	const ibSourceMetaDataScope resolveAgainst(m_metaData);
 	const ibQueryConstructorField field =
 		m_model.FieldOfPath(*select, expr->m_path, m_package, m_statement);
-	return field.m_icon;
+	return ibBackendPicture::GetPictureAsIcon(field.m_picture, m_metaData);
 }
 
 
@@ -836,21 +837,24 @@ void queryctor::ibQueryDropSourceReferences(ibQuerySelect& select, const wxStrin
 // found a week later, on the numbers.
 
 // THE PICTURE FOR ONE FIELD. The column already answered what it looks like
-// (ibBackendSourceColumn::GetColumnIcon — an attribute by default, a dimension / a resource when
+// (ibBackendSourceColumn::GetColumnPicture — an attribute by default, a dimension / a resource when
 // the metaobject says so), so this only has to put that picture in THIS tree's list and remember
 // where. Nothing here knows a metatype name, and nothing switches over a kind: a new kind of
-// column arrives dressed on the day it overrides the icon, with this file untouched.
+// column arrives dressed on the day it answers with its own picture, with this file untouched.
 int ibDialogQueryConstructor::FieldIcon(TreeIcons& icons, const ibQueryConstructorField& field) const
 {
-	if (icons.m_images == nullptr || !field.m_icon.IsOk())
+	if (icons.m_images == nullptr || field.m_picture.IsEmptyPicture())
 		return icons.m_field;
 
-	for (const std::pair<wxIcon, int>& known : icons.m_byIcon)
-		if (known.first.IsSameAs(field.m_icon))
+	for (const std::pair<ibPictureDescription, int>& known : icons.m_byPicture)
+		if (known.first == field.m_picture)
 			return known.second;
 
-	const int index = icons.m_images->Add(field.m_icon);
-	icons.m_byIcon.emplace_back(field.m_icon, index);
+	const wxIcon icon = ibBackendPicture::GetPictureAsIcon(field.m_picture, m_metaData);
+	if (!icon.IsOk())
+		return icons.m_field;
+	const int index = icons.m_images->Add(icon);
+	icons.m_byPicture.emplace_back(field.m_picture, index);
 	return index;
 }
 
@@ -1235,7 +1239,7 @@ void ibDialogQueryConstructor::FillFieldSources()
 								field.m_reference       = source.m_reference;
 								field.m_referenceClsid  = source.m_referenceClsid;
 								field.m_type            = source.m_type;
-								field.m_icon            = source.m_icon;
+								field.m_picture         = source.m_picture;
 								break;
 							}
 					ibQueryAddFieldNode(tree, root, field, FieldIcon(icons, field), 0, wxEmptyString);

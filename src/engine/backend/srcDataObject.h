@@ -119,8 +119,8 @@ public:
 		// THE NODE'S PICTURE, asked of the column it was built from — so a dimension and a resource
 		// are drawn apart without the drawer knowing either word. Null when the node stands behind
 		// no column (a plain-value node); the reader then draws its own default.
-		wxIcon GetSourceIcon() const {
-			return m_sourceInfo.m_col != nullptr ? m_sourceInfo.m_col->GetColumnIcon() : wxNullIcon;
+		ibPictureDescription GetSourcePicture() const {
+			return m_sourceInfo.m_col != nullptr ? m_sourceInfo.m_col->GetColumnPicture() : ibPictureDescription();
 		}
 
 

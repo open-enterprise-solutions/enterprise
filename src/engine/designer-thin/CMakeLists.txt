@@ -32,6 +32,7 @@ set(DESIGNER_THIN_SOURCES
     docManager/templates/docViewAssistant.cpp
     docManager/templates/docViewCommonAttribute.cpp
     docManager/templates/docViewFunctionalOption.cpp
+    docManager/templates/docViewComposer.cpp
     docManager/templates/docViewInterface.cpp
     docManager/templates/docViewRole.cpp
     mainFrame/local/localWindow.cpp

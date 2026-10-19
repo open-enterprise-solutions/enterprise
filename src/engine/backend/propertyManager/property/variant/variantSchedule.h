@@ -10,7 +10,7 @@
 // semantics — two schedules are equal when every field is.
 
 #include "backend/backend.h"
-#include "backend/job/jobSchedule.h"
+#include "core/job/jobSchedule.h"
 
 #include <wx/variant.h>
 

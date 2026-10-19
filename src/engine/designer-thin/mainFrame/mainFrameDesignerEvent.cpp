@@ -270,6 +270,13 @@ void ibFrontendMainFrameDesigner::OnUpdateDebugCommand(wxUpdateUIEvent& event)
 
 void ibFrontendMainFrameDesigner::ShowSchema(ibProtocolSchema schema, const ibProtocolNode& shown)
 {
+	// The debugger's store, read in the login (GetStartSchemas) — the debugger made over it, nothing asked again.
+	if (schema == ibProtocolSchema::Debugger) {
+		if (m_debugClient == nullptr)
+			m_debugClient.reset(new ibDebuggerClient(shown));
+		return;
+	}
+
 	// Administration → Users — the server's menu item (its UserList schema); the desktop's OnUsers as it is, the list
 	// asked of the schema again by the dialog.
 	if (schema == ibProtocolSchema::UserList) {
@@ -303,8 +310,10 @@ void ibFrontendMainFrameDesigner::ShowSchema(ibProtocolSchema schema, const ibPr
 	// ASSISTANT ACCESS. Unlike the pages above, this one is not the frame's own
 	// state kept in an options file — it belongs to the PERSON in this base, so
 	// it is read from and written back to the server that owns it.
+	// The menu item's answer is this schema's (McpServer): Allowed, the settings, Running, the Endpoint — the page reads
+	// them from it, and asks the server nothing more to open.
 	ibPanelMcpSettings* mcpSettings = dialog.GetMcpSettingsPanel();
-	ibMcpServer* mcpServer = ibApplicationInstance::GetMcpServer();
+	ibMcpServer* mcpServer = ibApplicationInstance::GetMcpServer(shown);
 	if (mcpServer != nullptr) {
 		mcpSettings->SetSettings(mcpServer->GetSettings());
 		mcpSettings->SetEndpoint(mcpServer->GetEndpoint());

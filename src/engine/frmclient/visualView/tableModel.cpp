@@ -168,6 +168,13 @@ unsigned int ibViewTableModel::GetPrevFetch(const ibDataViewItem& parent, const 
 	return Fetch(-1, parent, anchor, count, out);
 }
 
+unsigned int ibViewTableModel::GetAroundFetch(const ibDataViewItem& parent, const ibDataViewItem& anchor, int count,
+	int before, ibDataViewItemArray& out, unsigned int& above) const
+{
+	const unsigned int read = Fetch(0, parent, anchor, count, before, out, above);
+	return read - above;
+}
+
 ibPictureID ibViewTableModel::GetRowPicture(const ibDataViewItem& item) const
 {
 	const ibViewTableRow* const row = RowOf(item);
@@ -177,6 +184,15 @@ ibPictureID ibViewTableModel::GetRowPicture(const ibDataViewItem& item) const
 unsigned int ibViewTableModel::Fetch(int direction, const ibDataViewItem& parent, const ibDataViewItem& anchor,
 	int count, ibDataViewItemArray& out) const
 {
+	unsigned int above = 0;
+	return Fetch(direction, parent, anchor, count, 0, out, above);
+}
+
+unsigned int ibViewTableModel::Fetch(int direction, const ibDataViewItem& parent, const ibDataViewItem& anchor,
+	int count, int before, ibDataViewItemArray& out, unsigned int& above) const
+{
+	above = 0;
+
 	// The level read: a row opened or entered — none at the top, the flat list's marker included (the server knows
 	// its own view mode).
 	const ibDataViewItem level = parent == s_constIgnoreParent ? ibDataViewItem() : parent;
@@ -187,6 +203,8 @@ unsigned int ibViewTableModel::Fetch(int direction, const ibDataViewItem& parent
 		.SetValue(ibProtocolName::Anchor, HandleOf(anchor))
 		.SetValue(ibProtocolName::Parent, HandleOf(level))
 		.SetValue(ibProtocolName::Count, asked);
+	if (before > 0)
+		request.SetValue(ibProtocolName::Before, std::min(before, kMaxFetchCount));
 	if (!m_fetcher(request, answer))
 		return 0;
 
@@ -197,6 +215,7 @@ unsigned int ibViewTableModel::Fetch(int direction, const ibDataViewItem& parent
 		out.Add(ibDataViewItem(row));
 		++read;
 	}
+	above = std::min(static_cast<unsigned int>(answer.GetInt(ibProtocolName::Before)), read);
 
 	// What the UI does with it — after the read, on its own thread. Handles only: a row's count of owners is no
 	// atomic, and the rows are the data view's to hand to the UI.

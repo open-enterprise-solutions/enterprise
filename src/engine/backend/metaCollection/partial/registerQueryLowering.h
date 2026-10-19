@@ -97,7 +97,7 @@ inline ibRegBound ibReadRegisterBound(const ibValue& given)
 // Shared rather than accumulation-only: an accounting register reports turnovers by month by the
 // same words, and a second copy is how two registers come to disagree about what "Quarter" means.
 // ⭐ THE TABLE MOVED, THE NAMES STAYED. It lives beside the expression that truncates by these
-// units now (ibPeriodUnits, query/queryable.h), because a TOTALS level says a periodicity too —
+// units now (ibPeriodUnits, core/query/queryPeriodUnits.h), because a TOTALS level says a periodicity too —
 // `BY Period PERIODS(Month, …)` — and the register was never the only one asking. These two remain
 // as the register's own spelling of the same question.
 inline const std::vector<std::pair<ibTotalsPeriod, wxString>>& ibRegisterUnits() { return ibPeriodUnits(); }
@@ -1503,10 +1503,10 @@ inline ibTempColumn ibRegAttributeColumn(const ibValueMetaObjectAttributeBase* a
 	return spreads
 		? ibTempColumn(name, attribute->GetPhysicalName(),
 		               stored, id, synonym,
-		               ibBackendQueryColumn::Kind::Composite, attribute->GetColumnIcon()).StandsFor(attribute)
+		               ibBackendQueryColumn::Kind::Composite, attribute->GetColumnPicture()).StandsFor(attribute)
 		: ibTempColumn(name, ibRegValueField(attribute),
 		               stored, id, synonym,
-		               ibBackendQueryColumn::Kind::Computed, attribute->GetColumnIcon()).StandsFor(attribute);
+		               ibBackendQueryColumn::Kind::Computed, attribute->GetColumnPicture()).StandsFor(attribute);
 }
 
 // ============================================================================

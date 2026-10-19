@@ -31,7 +31,7 @@
 //
 // ⭐ THE SCHEMA STORES; IT DECIDES NOTHING (Max, 2026-10-12: every schema lives in the core, and a schema keeps
 // structure, not checks). What the fields MEAN — is a moment allowed, when is the next one, the sentence, and
-// whether the fields are well formed at all — is ibJobScheduleRules, on each side (backend/job/jobSchedule.h).
+// whether the fields are well formed at all — is ibJobScheduleRules (core/job/jobSchedule.h).
 //
 // Clocks: the calendar reads local wall-clock time (a user says "02:00" and
 // means their 02:00). The interval is measured on a STEADY clock by the manager,

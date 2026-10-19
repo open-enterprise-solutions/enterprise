@@ -68,7 +68,7 @@ static ibQueryConstructorField FieldOfExplorer(const ibSourceDataObject::ibSourc
 	field.m_referenceClsid = SingleReferenceOf(held.GetClsidList());
 	field.m_reference      = HasReference(held.GetClsidList());
 	field.m_type           = held;
-	field.m_icon           = node.GetSourceIcon();   // the column's own picture, asked not deduced
+	field.m_picture        = node.GetSourcePicture();   // the column's own picture, asked not deduced
 	field.m_available      = node.GetColumn() == nullptr || node.GetColumn()->IsAvailable();
 	// …what a person calls it, and what it is in a balance — for the hosts that fill a field in from them.
 	field.m_caption        = node.GetSourceSynonym();
@@ -332,8 +332,8 @@ std::vector<ibQueryConstructorField> ibQueryConstructorModel::FieldsOfSelect(
 			field.m_referenceClsid = of.m_referenceClsid;
 			field.m_reference      = of.m_reference;   // a composite stays walkable across the projection
 			field.m_type           = of.m_type;
-			if (of.m_icon.IsOk())
-				field.m_icon = of.m_icon;   // the column's own picture, when it has one
+			if (!of.m_picture.IsEmptyPicture())
+				field.m_picture = of.m_picture;   // the column's own picture, when it has one
 			field.m_available = of.m_available;
 			// …and what it is in a balance travels with a plain reading, renamed or not:
 			// `T.AmountClosingBalance AS Amount` is still a closing balance. What the source CALLS it travels

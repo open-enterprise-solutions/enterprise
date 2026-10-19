@@ -36,8 +36,8 @@ public:
 	// The tree's tab — 0: the configuration's (the frame's MetaData), else an external file's.
 	long long GetTab() const { return m_tab; }
 
-	// Its tab became the active one, or the tree the focus — the object it holds is sent to the inspector, received anew
-	// only where another was shown (the desktop's ibMetaTreeView::OnActivateView).
+	// Its tab became the active one, or the tree the focus — the object it holds is sent to the inspector once the event
+	// is done, received anew only where another was shown (the desktop's ibMetaTreeView::OnActivateView).
 	void ActivateTree();
 
 	// THE MODULE, SHOWN — the desktop's (ibConfigurationTree::EditModule), by the address a runtime stopped or failed

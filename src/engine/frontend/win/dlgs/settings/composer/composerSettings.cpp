@@ -16,7 +16,7 @@
 #include "frontend/win/dlgs/typeSelector.h"              // the product.s type picker — a parameter declares its type
 #include "frontend/win/dlgs/translateConstructor/translateConstructor.h"   // a field's title, every language of it
 #include "frontend/win/dlgs/queryConstructor/queryConstructorInternal.h" // ibExpressionCellRenderer — the Totals tab's own cell
-#include "backend/query/queryable.h"                        // ibPeriodUnits — the engine's own list of period words
+#include "core/query/queryPeriodUnits.h"                     // ibPeriodUnits — the engine's own list of period words
 #include "frontend/win/editor/codeEditor/codeEditor.h"  // the script editor behind a parameter expression
 #include "frontend/mainFrame/mainFrame.h"                // the shared editor / font-colour settings
 #include "frontend/docView/docView.h"                    // ibMetaDocument — the composer editor's document mode
@@ -99,7 +99,7 @@ enum {
 
 // WHICH AGGREGATES FIT THIS FIELD — asked of the ENGINE, never listed here.
 //
-// `ibQueryLowering::AggregatesFor` is the one door: `CheckNames` reads it as a REFUSAL ("SUM
+// `ibQueryAggregatesFor` is the one door: `CheckNames` reads it as a REFUSAL ("SUM
 // cannot be taken over 'Description'") and a window reads it as WHAT TO OFFER. A hand-written
 // list beside it drifts, and the drift is a dropdown offering something the query then refuses —
 // which is exactly what a fixed { SUM, COUNT, MIN, MAX, AVG } did to every string field.
@@ -744,7 +744,7 @@ namespace {
 wxArrayString ibAggregatesForField(const ibQueryConstructorField& field)
 {
 	wxArrayString words;
-	for (const ibQueryKeyword keyword : ibQueryLowering::AggregatesFor(field.m_type))
+	for (const ibQueryKeyword keyword : ibQueryAggregatesFor(field.m_type))
 		words.Add(ibQueryKeywordText(keyword));
 	return words;
 }
@@ -1448,7 +1448,7 @@ public:
 			m_byPeriods = new wxCheckBox(m_periodPane, wxID_ANY, _("By periods"));
 			strip->Add(m_byPeriods, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, FromDIP(6));
 
-			// THE UNITS ARE THE ENGINE'S OWN LIST — `ibPeriodUnits()` (query/queryable.h), the same
+			// THE UNITS ARE THE ENGINE'S OWN LIST — `ibPeriodUnits()` (core/query/queryPeriodUnits.h), the same
 			// vocabulary the lowering reads and the query constructor offers. A list typed out here
 			// would be a second copy of the words, and it would be right until one of them changed.
 			m_periodUnit = new wxChoice(m_periodPane, wxID_ANY);
@@ -3538,7 +3538,7 @@ wxWindow* ibComposerSettingsPanel::BuildResourcePage(wxWindow* parent)
 	// side, and neither takes the other away.
 	//
 	// It is the SAME class, not a lookalike: which aggregates fit a type is one answer
-	// (`ibQueryLowering::AggregatesFor`), and a second cell over it would drift from this one.
+	// (`ibQueryAggregatesFor`), and a second cell over it would drift from this one.
 	m_resourceView->GetRootColumnGroup()->AppendColumn(new ibDataViewColumn(_("Expression"),
 		new queryctor::ibExpressionCellRenderer(
 			[this]() -> wxArrayString { return ResourceChoices(); },
@@ -5184,7 +5184,7 @@ wxArrayString ibComposerSettingsPanel::ResourceChoices() const
 		// THE ENGINE COMPOSES THE OFFERS: the calls this type admits over this field, DISTINCT twin
 		// included where it asks a different question. One door, so the constructor and this window
 		// never offer different things about the same field.
-		for (const wxString& call : ibQueryLowering::AggregateCallsFor(field.m_type, path))
+		for (const wxString& call : ibQueryAggregateCallsFor(field.m_type, path))
 			words.Add(call);
 		break;
 	}

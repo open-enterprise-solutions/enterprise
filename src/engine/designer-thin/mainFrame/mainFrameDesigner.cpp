@@ -133,6 +133,7 @@ void ibFrontendMainFrameDesigner::Debugger_OnStateChanged()
 #include "designer-thin/docManager/templates/docViewCommonAttribute.h"
 #include "designer-thin/docManager/templates/docViewFunctionalOption.h"
 #include "designer-thin/docManager/templates/docViewRole.h"
+#include "designer-thin/docManager/templates/docViewComposer.h"
 #include "designer-thin/docManager/templates/docViewAssistant.h"
 
 ibTabDocument* ibFrontendMainFrameDesigner::CreateDocument(ibProtocolViewKind kind, long long tabId)
@@ -153,9 +154,16 @@ ibTabDocument* ibFrontendMainFrameDesigner::CreateDocument(ibProtocolViewKind ki
 		return new ibFunctionalOptionEditDocument(tabId);
 	if (kind == ibProtocolViewKind::Role)
 		return new ibRoleEditDocument(tabId);
+	if (kind == ibProtocolViewKind::Composer)
+		return new ibComposerEditDocument(tabId);
 	if (kind == ibProtocolViewKind::Assistant)
 		return new ibAssistantDocument(tabId);
 	return ibFrontendMainFrame::CreateDocument(kind, tabId);
+}
+
+std::vector<ibProtocolSchema> ibFrontendMainFrameDesigner::GetStartSchemas() const
+{
+	return { ibProtocolSchema::Debugger };
 }
 
 bool ibFrontendMainFrameDesigner::Show(bool show)
@@ -163,7 +171,8 @@ bool ibFrontendMainFrameDesigner::Show(bool show)
 	bool ret = ibFrontendMainFrame::Show(show);
 	if (ret && show) {
 		// The debugger, over the configuration now logged in to — the desktop's was made with its configuration
-		// (ibMetaDataConfigurationStorage::OnInitialize).
+		// (ibMetaDataConfigurationStorage::OnInitialize): made over its store as the login read it (ShowSchema), else
+		// asked for it.
 		if (m_debugClient == nullptr)
 			m_debugClient.reset(new ibDebuggerClient);
 

@@ -165,6 +165,9 @@ public:
 	ibProtocolNode FindTab(long long tabId) const;
 	// The tab the frame has active now — 0: none.
 	long long GetActiveTab() const;
+	// …and the frame's number (ibCommunicator::GetFrameNumber): moved by every call the server answers with a frame —
+	// whatever may change something goes that way. What was read at this number is still true.
+	long long GetFrameNumber() const;
 	// The document of that tab — none: no such tab drawn.
 	ibTabDocument* FindDocument(long long tabId) const;
 
@@ -201,8 +204,12 @@ protected:
 	// the person kept keeps the window.
 	virtual bool AllowClose();
 
-	// A schema of the menu, asked for and answered, shown. The base shows what both modes have (Active users, About); a
-	// mode's window shows its own (the runtime's All functions) and leaves the rest to the base.
+	// The schemas the window shows at its start — read in the login (its Read), each answered beside the frame and shown
+	// (ShowSchema) once the window is up, as a call of its own would have been. Default: none.
+	virtual std::vector<ibProtocolSchema> GetStartSchemas() const { return {}; }
+	// A schema of the menu, asked for and answered, shown — or one of the start's (GetStartSchemas). The base shows what
+	// both modes have (Active users, About); a mode's window shows its own (the runtime's All functions, the designer's
+	// debugger store) and leaves the rest to the base.
 	virtual void ShowSchema(ibProtocolSchema schema, const ibProtocolNode& shown);
 	// A question, put to the person; what they answered in `response` (nothing — cancelled). The base asks what both
 	// modes are asked; a mode's window asks its own (the designer's restructure ledger) and leaves the rest to the base.

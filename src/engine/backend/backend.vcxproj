@@ -60,7 +60,6 @@
     <ClInclude Include="mcp\mcpDebugBridge.h" />
     <ClInclude Include="mcp\mcpTool.h" />
     <ClInclude Include="job\platformJobs.h" />
-    <ClInclude Include="job\jobSchedule.h" />
     <ClInclude Include="settings\settingsStorage.h" />
     <ClInclude Include="settings\settingsComposer.h" />
     <ClInclude Include="temp\tempStorage.h" />
@@ -491,7 +490,6 @@
     <ClCompile Include="job\jobRunByteCode.cpp" />
     <ClCompile Include="job\jobRegister.cpp" />
     <ClCompile Include="job\platformJobs.cpp" />
-    <ClCompile Include="job\jobScheduleRules.cpp" />
     <ClCompile Include="query\queryable.cpp" />
     <ClCompile Include="settings\settingsStorage.cpp" />
     <ClCompile Include="settings\settingsComposer.cpp" />

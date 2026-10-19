@@ -6,7 +6,7 @@
 #include "backend/metaCollection/genericData.h"            // ibValueMetaObjectGenericData — the report a detail is named after
 #include "frontend/visualView/ctrl/form.h"                 // ibValueForm::GetMetaObject — …reached through the grid's form
 #include "backend/backend_localization.h"                  // a title read in the reader's language
-#include "backend/query/queryable.h"                       // ibReadPeriodUnit — the word a period grouping says
+#include "core/query/queryPeriodUnits.h"                   // ibReadPeriodUnit — the word a period grouping says
 #include "backend/backend_composition.h"                   // ibStoreValue — a context value packed into its condition
 
 #include <algorithm>

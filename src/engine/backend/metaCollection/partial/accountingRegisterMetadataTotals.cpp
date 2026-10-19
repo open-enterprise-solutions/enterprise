@@ -2072,7 +2072,7 @@ const ibBackendQueryable* ibValueMetaObjectAccountingRegister::GetShapeQueryable
 		columns.push_back(ibTempColumn(FigureName(resource, suffix), FigureField(resource, suffix),
 		                               resource->GetTypeDesc(), ibRegDerivedColumnId(resource->GetMetaID(), ++figureNo),
 		                               ibRegColumnCaptionOf(resource->GetSynonym(), ibRegSidedCaption(figure, credit)),
-		                               ibBackendQueryColumn::Kind::Computed, resource->GetColumnIcon()).StandsFor(resource)
+		                               ibBackendQueryColumn::Kind::Computed, resource->GetColumnPicture()).StandsFor(resource)
 		                  .PlaysInBalance(ibRegFigureBalanceRole(figure)));   // the figure's word, not the sided spelling
 	};
 
@@ -2082,7 +2082,7 @@ const ibBackendQueryable* ibValueMetaObjectAccountingRegister::GetShapeQueryable
 		columns.push_back(ibTempColumn(FigureName(resource, figure), FigureField(resource, figure),
 		                               resource->GetTypeDesc(), ibRegDerivedColumnId(resource->GetMetaID(), ++figureNo),
 		                               ibRegColumnCaptionOf(resource->GetSynonym(), ibRegFigureCaption(figure)),
-		                               ibBackendQueryColumn::Kind::Computed, resource->GetColumnIcon()).StandsFor(resource)
+		                               ibBackendQueryColumn::Kind::Computed, resource->GetColumnPicture()).StandsFor(resource)
 		                  .PlaysInBalance(ibRegFigureBalanceRole(figure)));
 	};
 

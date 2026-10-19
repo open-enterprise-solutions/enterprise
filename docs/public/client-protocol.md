@@ -32,7 +32,7 @@ deflate (RFC 1951 — a browser's `DecompressionStream("deflate-raw")`). A text 
 
 | Method | Parameters | Answer |
 |---|---|---|
-| `login` | `User`, `Password`, `Mode` (1 runtime — the default, 2 designer), `Protocol` (the newest version the client speaks, 1 if absent), `Features` (what this client accepts; `resume` opts into the slot below) | `Client`, `Protocol` (the version both speak), `Features` (what the server offers; `resume` when a dropped thin runtime is kept), `Token` (that runtime only, once), and the frame |
+| `login` | `User`, `Password`, `Mode` (1 runtime — the default, 2 designer), `Protocol` (the newest version the client speaks, 1 if absent), `Features` (what this client accepts; `resume` opts into the slot below), `Read` (the schemas the client reads right after its start, each `{Schema}`) | `Client`, `Protocol` (the version both speak), `Features` (what the server offers; `resume` when a dropped thin runtime is kept), `Token` (that runtime only, once), `Read` (each schema of the login's `Read` the server built, as `schema` answers it, with its `Schema`), and the frame |
 | `login` | `Token` and no `User`, only while that client is detached | the same `Client`, `Protocol`, `Features`, and no frame and no new `Token`. The next `frame` `{Since}` is the patch |
 | `users` | — (before the login, no `Client`) | `Users` — the names the login window offers |
 | `logout` | `Client` | — |
@@ -50,6 +50,11 @@ deflate (RFC 1951 — a browser's `DecompressionStream("deflate-raw")`). A text 
 | `command` | `Client`, `Command` | the frame — the command done on the active tab's document |
 | `presentation` | `Client`, `Value`, `Format` | `Text` — the value as a person reads it, formatted by the server (`Format`: the codes `Format()` takes) |
 | `picture` | `Client`, `Pictures` — the ids | `Pictures` — each `Id`, `Picture` (PNG, base64; empty when there is none of that id) |
+
+`login`'s `Read` saves the start's own reads: the designer names the debugger's store (`Schema` 15), which was a
+call of its own at every start. A schema the server does not know, the person has no right to, or that could not be
+built is left out of the answer, and so is everything while the start waits on a question; an older server answers no
+`Read` at all. Either way the client reads what is missing with `schema`, as before — no protocol version is needed.
 
 A method name is never changed; a new method takes a new name. Every number below is the protocol's: never
 renumbered, a new one takes the next. A field a side does not know is skipped; an absent field is its default — so
@@ -89,7 +94,27 @@ stored in — `cells` (`row`, `col` from 0, `value` as shown), `rows` and `cols`
 the default. A sheet edited on the client goes back whole, in the same form: event `Change {Sheet}`. A report's gridbox
 says in `ComposeState` what its sheet is to the report: 0 composed (or nothing composed yet), 1 composing — the sheet
 on show stays until the new one is delivered, 2 outdated — the setting changed since the sheet was built, and it is
-composed again when the person says so (Compose).
+composed again when the person says so (Compose). When a composed sheet's `Version` is new, that frame's `State` may
+also carry `Sheet` (and `ReadOnly`) — the same as `fetch` would give — so the client need not fetch; a server that
+does not put `Sheet` in the state is answered with `fetch`, as before.
+
+In the designer a report's composer is a tab of `Kind` 14. Its `View` holds `State` (`ReadOnly`), `Composition` —
+the composer's description in its node form — and `Fields`, `References`, `Error` — what its query offers, as the
+ComposerSettings question has them. The client edits the description itself and sends it back whole: event
+`Change {Composition}`; the configuration is modified, and the answer's `View` carries the fields of the query the
+composition now has. The fields of another text are fetched by the tab: `fetch {Tab, Request: {Kind: 21, Text}}` —
+`Fields`, `References`, `Error`; the fields of a reference's targets — `fetch {Tab, Request: {Kind: 22, Targets}}` —
+`Expanded` and `References`, as a ListSettings window asked again has them.
+A form designer tab answers the same two requests for an attribute of type DataComposition: its inspector row
+`ibPropertyDataComposition` carries the composition as its `Value`, the client opens the settings window over it,
+asks the form's tab for the fields (`Kind` 21, 22) and sends the edited composition back through the attribute's `Set`.
+An attribute of type DynamicList is edited the same way: its `ibPropertyDynamicList` row opens the list settings
+window (filter, sort, grouping, conditional appearance, its query) over the list's composition. The window asks the
+form's tab `Kind` 23 (Source) `{Id, Text}`: the fields of the list's main table (`Id`, its table id; omitted: none) and
+those its query text adds (`Text`, optional), answered as `Kind` 21 answers (`Fields`, `References`, `Error`); a
+reference opened is `Kind` 22. Its `ibPropertyDynamicSource` row carries the sources the configuration registers as
+choices (`Id` the table id, `Title` namespace.name); picking one is the row's `Set`, after which the list is rebuilt over
+that table. A list with no source keeps no settings in the form, as in the desktop designer.
 
 A picture is named by its id everywhere — in the view, a tab's `Icon`, a schema, a request, a list of choices: a
 backend picture's number, as a decimal (a class's own: its class id), or a configuration picture's guid. No answer
@@ -97,7 +122,9 @@ carries the picture itself:
 
 - the platform's own pictures are compiled into the client — it never asks for them;
 - any other it asks for with `picture`, the ids of a whole list in one call, and keeps for the session — an id there
-  is none of too, so it is not asked again;
+  is none of too, so it is not asked again. Before it draws an answer, the client asks for every picture the answer
+  names at once (its `Picture`, `Icon` and `…Picture` fields): the designer's start is one `picture` call, not one for
+  the templates and another for the tree;
 - only a picture with no id (one held as a file's bytes) comes as itself, a PNG in base64.
 
 A field's `State` carries `Text`, as shown, and `Value`, the value with its type: `{"t": <type id>, "type": <name>,
@@ -109,6 +136,24 @@ by column id: `Text`, `Checked` for a flag, `Number`, `Value` when the cell take
 model set one — `TextColour`, `BackgroundColour` (a colour's text, `r,g,b`, as a form's colours), `Bold`, `Italic`,
 `Strikethrough`, `Underlined`, `Face`, `Size`, `Align` (`Left`, `Center`, `Right`). In the designer (`login` `Mode` 2)
 a table reads no rows — its `fetch` is refused, and a designer's client does not ask.
+
+From protocol 4 a fetch from the start (`Direction` 0) may name `Before`, the rows wanted ahead of the row it starts
+at; the answer gives those rows first and says in `Before` how many came. A server before protocol 4 gives none: the
+page comes alone.
+
+From protocol 5 a table's `State` may carry `Rows` with a new `Version` — the first page, the same shape as `fetch`
+(rows as children, `End`, `Before`, `Pictures`) — so the client need not fetch to draw the tab; a server that does
+not put `Rows` in the state is answered with `fetch`, as before.
+
+A later `Version` (a cell's `Change`, a row added, a refresh) may carry `Rows` too, read around the server's current row:
+`Anchor` that row, `Count` the rows from it, `Before` how many came ahead of it (fewer than `Count`: the top was
+reached). A page read from the top says `Before` 0 and no `Anchor`. The client answers its own read anew from it when
+the read names the same `Anchor` and asks no more, or — when the page is the whole level, the top reached and `End` —
+around any row of it, cut out as the server would read it. Any other read is a `fetch`, as before. The fields are those
+of a `fetch` answer, so a client that does not look at them takes the page only for a read that matches it.
+A designer's module tab (its `View` `State`: `Syntax`, `Module`, `Modified`, `ReadOnly`) carries the module's `Text`
+in the frame that opens the tab, once; the client draws it without a `fetch`. A server that puts no `Text` there is
+asked with `fetch`, as before. A form's tab reads its module's text as it did.
 
 A table's column dragged in its header is `Move {Column, Holder, Position}`: `Holder` the group it now stands in, 0 the
 table. The client moves the column in its own copy of the form at once; the server's form follows.
@@ -128,8 +173,14 @@ drawn empty.
 | `Tabs`, `ActiveTab` | the tabs, each by its id (`NodeId`, given when it opens, never another tab's): `Title` (a modified document's ends with `*`), `Icon`, `Locked` (the start page — first, never closed), `Commands` (the commands its document takes now), `Formats` (what its document saves as: `Title`, `Mask`), `File` (its document's file, once it has one), `Parent` (the tab whose document owns this one's — raised under it, closed with it); the active one by its id |
 | `Messages`, `Clear` | messages to the person since the last answer — events, never in a patch |
 | `Exit` | the client is to go: Exit done, every tab closed — an event, never in a patch |
+| `Properties` | the inspector's rows (as `Schema` 10 shows them) of each object a door acted on since the last answer, each by its `NodeId` and `Tab` (the tab whose tree holds it; absent: the configuration's) — an event, never in a patch |
 | `Request` | a question to the person, while one is pending |
 | `View` | the active tab drawn: a form — its `Key` and its controls as the designer saved them, each with a `State` of what it shows now; or the start page |
+
+A designer's form editor tab is opened by the frame that opens it: its view's `State` carries `Opening` once —
+what the tab's `fetch` with `Request {Kind: Text}` answers (the form, the classes, the module's text). The client
+makes the editor from it without a `fetch`; a frame without `Opening` (an older server, a tab opened before) is read
+with `fetch`, as before.
 
 ## Events held until the next call
 
@@ -140,6 +191,11 @@ From protocol 3. A **state event** says where the person is: `Focus` (1), `Input
   something there runs on them. These go at once.
 - Any other state event is held by the client: the latest per control and event (`Move` and `Resize` per column), in
   the order last done.
+- A table subscribes to `Input` on a cell only as it does to `Row` — when a selection handler is hung on it. Without
+  one, a cell's `Input` is held and rides with the `Change` that commits the edit.
+- A tab's text handed back — a module's `Change {Text}`, as the focus leaves the editor or before Save, a syntax
+  check, a close — is held too, the latest per tab: what reads the text on the server is a call, and carries it.
+- A form designer's form handed back (`Change {Form}`) is held the same way, apart from the text of the same tab.
 - Every call but `login` and `logout` carries what is held as `Pending`, a list of `{Control, Event, Args, Form | Tab}`,
   and the client clears it. The server applies `Pending` in order before the call itself.
 
@@ -168,6 +224,19 @@ A schema is a dialog of the desktop held as data: the client shows it however it
 
 A schema the client's application does not have, or the person has no right to, is refused.
 
+What a schema shows is read once for what the person does: a dialog opened by a schema's menu item is drawn from that
+item's answer, and the client asks again only after one of the schema's commands changed what it shows (assistant
+access: Options is one exchange; Start now is the command and one read of the token and endpoint it settled on).
+The inspector's rows of an object a door acted on come as the event `Properties` (above), and the client takes them in
+for that object instead of reading them with `schema`: after the inspector's Save (`Schema` 10, `Command` 4 — an edit
+is one exchange), after the configuration tree's Create (`Schema` 9, `Command` 2 — the new object) and Remove
+(`Command` 3, which takes `Select`: the id the tree selects after it), and when a form editor tab opens over a form of
+the configuration. When the work waits on a question (a form's type), they ride the answer to the `respond` that lets
+it finish. A server that sends none is read with `schema`, as before.
+
+A schema read changes nothing and moves no frame number, so the client keeps the inspector's rows it received or read
+while the number stays: clicking an object again, or walking back to it, before anything else was done is not a call.
+
 ## Questions to the person
 
 | Kind | Asks | `respond` with |
@@ -181,7 +250,7 @@ A schema the client's application does not have, or the person has no right to, 
 | 9 Menu | items: `Id`, `Caption`, `Checked`, `Enabled` (false — greyed) and their own items — a submenu; a popup menu where the mouse is | `Id` — the item picked; none — dismissed |
 | 8 SavedSettings | `Mode` (0 save, 1 restore), `Key`, `Default` and items: `Id`, `Caption` — the person's saved settings | `Act` (1 save, 2 restore, 3 default, 4 rename, 5 remove), `Id`, `Name`; none — closed |
 | 10 FormEditor | the active tab's form, as the frame has it: `Picture`, `HasSetting`, `Result` (the act before's: 0 done, 1 no storage, 2 no address, 3 refused), `Classes` (`Name`, `Picture`) | `Act` (1 apply — with `Controls`: each `Control`, its `Position`, the properties a person may arrange; 2 save; 3 reset); none — closed |
-| 11 ListSettings | a table's settings: `Settings` (the setting in force, in the node form the settings schema writes), `Fields` (`Name`, `Presentation`, `Id`, `Type`, `Available`), `References` (`Type` — a class id as text, `Targets` — the metaobjects it points at), `Error` | `Settings` — the setting edited; none — cancelled |
+| 11 ListSettings | a table's settings: `Settings` (the setting in force, in the node form the settings schema writes), `Fields` (`Name`, `Presentation`, `Id`, `Type`, `Available`, `Picture` — the column's, by its id, where the source describes itself; none — the attribute picture), `References` (`Type` — a class id as text, `Targets` — the metaobjects it points at), `Error` | `Settings` — the setting edited; none — cancelled |
 | 12 SimpleChoice | `Value` — a field's number or date, with its type | `Value` — the one chosen; none — dismissed |
 | 13 ComposerSettings | a report's settings: `Settings` (the setting in force), `Composition` (what the report arranges, in its node form), `Fields` and `References` as ListSettings has them — the fields its query offers, no `Id`; `Error` | `Settings` — the setting edited; none — cancelled |
 | 14 Error | a script's failure: `Picture`, `Text` — the error with its call stack | `Act`: 1 close the window, 2 and send it to the designer debugging the base, 3 and close the client — each does the one before it too; none — 1 |
@@ -222,6 +291,10 @@ notification — no id, no answer:
 
 A connection that stays open (a WebSocket, a file base in the client's process) is told; an HTTP request is not — it
 asks.
+
+What a call's own work changes is not told: its answer carries it. A question the work asks while the call is
+answered — a confirmation answered No — comes in that answer, with no `changed` and no empty frame after it; a change
+made after the answer's frame was drawn (a report composed in the background) is told as before.
 
 ## Files
 

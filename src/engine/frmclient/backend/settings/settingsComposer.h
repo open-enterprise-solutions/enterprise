@@ -7,6 +7,7 @@
 
 #include "frmclient/frmclient.h"
 #include "core/guid.h"
+#include "core/settings/settingsShelf.h"   // ibSettingsCategory, ibComposerSettingsEntry — what the shelf is kept under and shows
 
 class ibDataComposer;
 class ibMetaData;
@@ -15,21 +16,6 @@ class ibMetaData;
 // (ibDialogSavedSettings) calls it. The shelf is the server's: what is listed is the question the server waits on
 // (ibProtocolRequestKind::SavedSettings), and an act is its answer — done there, and the shelf asked again with how
 // it went. Whose shelf it is, the server knows: the category and the key are not read here.
-
-// What the shelf is kept under — the engine's (backend/settings/settingsStorage.h).
-enum class ibSettingsCategory : int {
-	Custom = 0,
-	Form,
-	Composer,
-	List,
-	Default,
-	Mcp,
-};
-
-struct FRMCLIENT_API ibComposerSettingsEntry {
-	ibGuid   m_id;
-	wxString m_name;
-};
 
 FRMCLIENT_API ibGuid ibSaveComposerSettings(ibSettingsCategory category, const ibGuid& objectKey,
                                            const ibGuid& id, const wxString& name,

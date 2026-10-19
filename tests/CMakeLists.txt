@@ -129,6 +129,7 @@ add_executable(oes_tests
     test_sequenceBorder.cpp
     test_typeChangeLedger.cpp
     test_acceptanceCatalogs.cpp
+    test_tabularEnumPersist.cpp
     test_acceptanceAccumulation.cpp
     test_sqliteBlobLifetime.cpp
     test_calcDisplacement.cpp
@@ -593,6 +594,7 @@ add_executable(oes_frontend_runtime_test
     test_frontendForm.cpp
     test_frontendDocView.cpp
     test_frontendVisualHost.cpp
+    test_spreadsheetPreviewZoom.cpp
     test_frontendControls.cpp
     test_frontendQueryConstructor.cpp
     test_frontendTranslateConstructor.cpp

@@ -506,12 +506,14 @@ bool ibCodeEditor::SaveModule()
 	if (m_document != nullptr) {
 
 		// Where the desktop's wrote the metaobject's text — the tab's, as a field hands its text back (Change {Text}); a
-		// text the server already holds is not sent again.
+		// text the server already holds is not sent again. HELD, not a call of its own: what reads the text on the
+		// server — Save, the syntax check, a close, the debugger — is a call, and carries it (Pending) ahead of its work;
+		// the focus leaving the editor asks the server nothing.
 		const wxString text = GetText();
 		if (text != m_moduleText) {
 			ibProtocolNode args;
 			args.SetValue(ibProtocolName::Text, text);
-			m_document->Post(ibProtocolEvent::Change, args);
+			m_document->Hold(ibProtocolEvent::Change, args);
 			m_moduleText = text;
 		}
 		return true;

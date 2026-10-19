@@ -46,6 +46,23 @@ wxBitmap EnginePicture(const wxString& id)
 	return image.IsOk() ? wxBitmap(image.Scale(16, 16, wxIMAGE_QUALITY_HIGH)) : wxBitmap();
 }
 
+// The picture ids a node names, wherever they are: a field that holds one by its name (Picture, Icon, OwnerPicture…).
+void PicturesOf(const ibProtocolNode& node, std::vector<wxString>& ids)
+{
+	for (const auto& [name, value] : node.Entries()) {
+		if (value.IsString()) {
+			if (name == "Icon" || (name.size() >= 7 && name.compare(name.size() - 7, 7, "Picture") == 0))
+				ids.push_back(value.AsString());
+		}
+		else if (value.IsNode())
+			PicturesOf(value, ids);
+		else if (value.IsList()) {
+			for (const ibProtocolNode& item : node.GetList(name.c_str()))
+				PicturesOf(item, ids);
+		}
+	}
+}
+
 } // namespace
 
 wxBitmap ibProtocolPicture(const wxString& value)
@@ -109,6 +126,13 @@ void ibProtocolPictureReceive(const std::vector<wxString>& ids)
 		std::lock_guard<std::mutex> lock(s_picturesLock);
 		Pictures()[picture.GetString(ibProtocolName::Id)] = image.IsOk() ? wxBitmap(image) : wxBitmap();
 	}
+}
+
+void ibProtocolPictureReceive(const ibProtocolNode& answer)
+{
+	std::vector<wxString> ids;
+	PicturesOf(answer, ids);
+	ibProtocolPictureReceive(ids);
 }
 
 wxImage ibProtocolImage(const wxString& base64)

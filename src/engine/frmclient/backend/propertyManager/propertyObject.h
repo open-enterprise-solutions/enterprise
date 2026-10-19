@@ -29,6 +29,7 @@ template <class T> class ibValuePtr;
 
 #include "core/fileSystem/fs.h"
 #include "frmclient/backend/backend_exception.h"   // ibBackendCoreException — a cell that is not what it is asked for raises
+#include "core/propertyChoiceMode.h"               // ibPropertyChoiceMode — how many of the choices are held
 
 #include <memory>   // enable_shared_from_this — a reference to the one shown, kept by an editor
 
@@ -127,16 +128,6 @@ private:
 // seam does not allow (wxObject* is the most derived type backend may name — §4 of
 // docs/private/property-system.md) and which dragged propgrid into every backend TU. The data
 // was already ours; only the conversion sat on the wrong side.
-// HOW MANY OF THE CHOICES MAY BE HELD AT ONCE. Today this is folklore: the chart-of-characteristic-
-// types property states "exactly one" in a comment while its editor is a multi-select tree, and a
-// caller has no way to find out which is true. Said as a value, it is checkable — and a gate that
-// knows it no longer needs per-call flags telling it whether to replace or to add.
-enum class ibPropertyChoiceMode {
-	None,     // not chosen from a list at all — a string, a number, a date. The default.
-	Single,   // exactly one of them
-	Mult,     // any number of them, the value being the set
-};
-
 class FRMCLIENT_API ibPropertyChoiceList {
 
 	// ⭐ FOUR THINGS, AND EACH ANSWERS A DIFFERENT QUESTION.

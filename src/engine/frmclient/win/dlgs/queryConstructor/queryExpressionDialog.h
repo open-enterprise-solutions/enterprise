@@ -7,7 +7,8 @@
 
 #include <wx/dialog.h>
 
-#include "frmclient/backend/query/queryConstructorModel.h"   // ibQueryConstructorField, ibQueryAstExprPtr, ibBalanceRole
+#include "frmclient/backend/query/queryConstructorModel.h"   // ibQueryConstructorField, ibBalanceRole
+#include "core/query/queryAstExpr.h"                         // ibQueryAstExprPtr — what the editor is handed and gives back
 
 #include <vector>
 

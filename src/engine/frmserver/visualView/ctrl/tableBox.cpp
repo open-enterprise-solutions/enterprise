@@ -688,6 +688,45 @@ void ibValueModelTableBox::OnUpdate(ibDataNode& state, ibVisualHost* host)
 	}
 	state.SetValue(wxT("Version"), m_rowsVersion);
 
+	// THE FIRST PAGE RIDES THE FRAME THAT NAMES ITS VERSION — once. Same shape as Fetch (rows as children,
+	// End, Before, Pictures). The client that reads Rows here skips the opening fetch; one that does not still asks.
+	// Count matches the client's idle bootstrap default (viewport unknown → 100 + slack). Done before CurrentRow so
+	// the handles this page hands out are the ones CurrentRow names. A Version already sent with its Rows stays light.
+	//
+	// …AND A LATER VERSION'S ROWS ARE THE LEVEL AROUND THE CURRENT ROW: a Version moved by what the person did (a cell's
+	// Change, a row added, a refresh) is read anew by the client around its own cursor (its top row, its selection) —
+	// a row this side does not know. So the read is done around the current row (Anchor) with as many rows ahead as after
+	// it (Before; fewer — the top was reached). When that is the whole level — the top reached and End — the client
+	// answers its own read anew from it, whatever row it reads around; any other read it fetches. The first Version is
+	// read from the top, as the client's opening read asks for it; so is a later one whose current row has no handle yet.
+	if (m_rowsSentVersion != m_rowsVersion) {
+		s32 anchor = 0;
+		if (m_rowsSentVersion != -1 && m_tableCurrentLine != nullptr)
+			anchor = FindRowHandle(m_tableCurrentLine->GetLineItem());
+		const s32 count = 105;   // 100 + kBufferSlack — the client's first page when the viewport is unset
+		ibDataNode request, fetched;
+		request.SetValue(wxT("Direction"), 0);
+		request.SetValue(wxT("Anchor"), anchor);
+		request.SetValue(wxT("Parent"), 0);
+		request.SetValue(wxT("Count"), count);
+		// A current row not handed out yet (a row just added) is not one to read around: the level is read from the top —
+		// no rows ahead of it (Before 0), so the client knows it for the top.
+		const bool fromTop = m_rowsSentVersion != -1 && anchor == 0;
+		if (anchor != 0)
+			request.SetValue(wxT("Before"), count);
+		if (fromTop)
+			m_fetchFromTop = true;
+		if (Fetch(request, fetched)) {
+			if (anchor != 0)
+				fetched.SetValue(wxT("Anchor"), anchor);
+			if (fromTop)
+				fetched.SetValue(wxT("Before"), 0);
+			fetched.SetValue(wxT("Count"), count);
+			state.Child(wxT("Rows")) = std::move(fetched);
+			m_rowsSentVersion = m_rowsVersion;
+		}
+	}
+
 	// The current row as the handle the client was given — HANDED OUT HERE when it was not yet (a choice form opened on
 	// a value, a created row not read yet): the client reads around the row it names, the rows above it too. A client
 	// that knew no row read "around the current one" as the top of the table, and never read above it.
@@ -902,7 +941,7 @@ bool ibValueModelTableBox::Fetch(const ibDataNode& request, ibDataNode& response
 	// (A read that fails throws, and the throw is the caller's to put in front of the person — the rows
 	// already handed out stay as they were.)
 	ibDataViewItemArray items;
-	unsigned int fetched = 0;
+	unsigned int fetched = 0, ahead = 0;   // ahead — the rows read before the page (Before), first in `items`
 
 	// THE ROWS HANDED OUT BEFORE A READ ANEW — kept alive through it, so no object freed meanwhile comes back at the
 	// same address as another row: one read again as the SAME object (a table in memory hands out its own rows) keeps
@@ -947,6 +986,21 @@ bool ibValueModelTableBox::Fetch(const ibDataNode& request, ibDataNode& response
 			items.Clear();
 			fetched = m_tableModel->GetFirstFetch(scope, ibDataViewItem(), count, items);
 		}
+		// (protocol 4) …AND THE ROWS AHEAD OF THE PAGE, when the client asks for them (Before) — in the same answer, first,
+		// so a row kept mid-view costs no second fetch.
+		const int before = std::clamp<int>(request.GetValue<s32>(wxT("Before")), 0, s_maxFetchCount);
+		if (before > 0) {
+			unsigned int above = 0;
+			if (fetched > 0) {
+				ibDataViewItemArray rows;
+				above = m_tableModel->GetPrevFetch(scope, items[0], before, rows);
+				for (unsigned int idx = 0; idx < items.GetCount(); idx++)
+					rows.Add(items[idx]);
+				items = rows;
+				ahead = above;
+			}
+			response.SetValue(wxT("Before"), static_cast<s32>(above));
+		}
 		break;
 	}
 	}
@@ -984,8 +1038,8 @@ bool ibValueModelTableBox::Fetch(const ibDataNode& request, ibDataNode& response
 		const s32 handle = HandRow(item, parentHandle, added, &handlesBefore);
 		if (added && parentHandle == 0)
 			newTopRows.push_back(handle);
-		if (firstHandle == 0)
-			firstHandle = handle;
+		if (firstHandle == 0 && idx >= ahead)
+			firstHandle = handle;   // the page's first, not a row read ahead of it
 
 		// The current row handed out. Known only by its key (a restore stub) or by an older object, it
 		// becomes this row — the current line reads what was just read.
@@ -1120,7 +1174,9 @@ bool ibValueModelTableBox::OnClientEvent(ibProtocolEvent event, const ibDataNode
 bool ibValueModelTableBox::IsSubscribed(ibProtocolEvent event) const
 {
 	switch (event) {
-	case ibProtocolEvent::Input: return true;
+	// A cell's Input moves the current line as Row does, and only the selection handler runs on it: the client knows
+	// which cells take an editor (the frame's editable cells), so held, it rides with the Change it comes before.
+	case ibProtocolEvent::Input:
 	case ibProtocolEvent::Row:   return HasHandler(m_eventSelection);
 	default:                     return ibValueWindowComposite::IsSubscribed(event);
 	}

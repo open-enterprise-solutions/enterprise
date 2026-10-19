@@ -1,13 +1,15 @@
-#ifndef _FRMCLIENT_JOB_SCHEDULE_H__
-#define _FRMCLIENT_JOB_SCHEDULE_H__
+#ifndef __IB_JOB_SCHEDULE_H__
+#define __IB_JOB_SCHEDULE_H__
 
-// THE ENGINE'S SCHEDULE RULES (backend/job/jobSchedule.h), copied for its editor: the server asks the client to edit
-// one (ibProtocolRequestKind::Schedule), and the editor reads its sentence from the same rules as it is typed.
+// WHAT A SCHEDULE MEANS — read by every side: the server's manager asks when a job is due, an editor (the desktop's,
+// the client's) reads its sentence and whether it is well formed as it is typed.
 //
-// The description itself — the fields and how they are written down — is the core's
+// The description itself — the fields and how they are written down — is its schema
 // (core/description/jobScheduleDescription.h): a schema keeps structure and decides nothing (Max, 2026-10-12).
+// Reading those fields as "may this job run now", "when next", "what does it say" and "is it well formed at all"
+// is here: everything a pure function of (schedule, moment), with no manager, no session and no clock of its own.
 
-#include "frmclient/backend/backend_core.h"           // FRMCLIENT_API
+#include "core/core.h"                                // CORE_API
 #include "core/description/jobScheduleDescription.h"  // ibJobScheduleDescription — the data these rules read
 
 ////////////////////////////////////////////////////////////////////////////
@@ -19,7 +21,7 @@
 // IsDue). Static and pure, so they stay testable without standing a manager up: a schedule and a
 // moment in, an answer out.
 ////////////////////////////////////////////////////////////////////////////
-class FRMCLIENT_API ibJobScheduleRules {
+class CORE_API ibJobScheduleRules {
 public:
 	// Is the description WELL FORMED? A non-positive interval, a half-declared window, an ordinal
 	// with no single weekday to count. A statement about the fields themselves, the kind an editor
@@ -50,4 +52,4 @@ public:
 	static wxString Describe(const ibJobScheduleDescription& schedule);
 };
 
-#endif // !_FRMCLIENT_JOB_SCHEDULE_H__
+#endif // !__IB_JOB_SCHEDULE_H__

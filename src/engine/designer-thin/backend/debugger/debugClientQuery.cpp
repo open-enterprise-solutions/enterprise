@@ -56,6 +56,17 @@ ibDebuggerClient::ibDebuggerClient() :
 	LoadModuleCollection();
 }
 
+ibDebuggerClient::ibDebuggerClient(const ibProtocolNode& store) :
+	m_activeSocket(nullptr),
+	m_adapter(new ibDebuggerClientAdapter),
+	m_enterLoop(false), m_connectionSuccess(false), m_numberOfConnectionAttempts(numberOfConnectionAttempts)
+{
+	ibDebuggerClient::CreateBreakpointDatabase();
+	ms_debugClient = this;
+
+	LoadModuleCollection(store);
+}
+
 // The table is the server's, made by its own client with the configuration (CreateBreakpointDatabase there).
 bool ibDebuggerClient::TableAlreadyCreated()
 {
@@ -77,13 +88,19 @@ bool ibDebuggerClient::CreateBreakpointDatabase()
 void ibDebuggerClient::LoadModuleCollection()
 {
 	ibProtocolNode answer;
-	if (!AskStore(ibProtocolNode(), answer))
-		return;
-	m_configGuid = ibGuid(answer.GetString(ibProtocolName::Guid));
+	if (AskStore(ibProtocolNode(), answer))
+		LoadModuleCollection(answer);
+}
+
+// …from the store's answer, asked or read in the login already (the designer's GetStartSchemas) — empty when the
+// configuration has no debugger: a start was a call of its own for an empty answer.
+void ibDebuggerClient::LoadModuleCollection(const ibProtocolNode& store)
+{
+	m_configGuid = ibGuid(store.GetString(ibProtocolName::Guid));
 	// InitializeModule over the one answer: each row brings its module's breakpoints, where InitializeModule would ask
 	// the store for them a module at a time — a call each, 71 at a designer's start: ten seconds 130 ms from the
 	// server (2026-10-15).
-	for (const ibProtocolNode& module : answer.FindChild(ibProtocolName::Rows).Children()) {
+	for (const ibProtocolNode& module : store.FindChild(ibProtocolName::Rows).Children()) {
 		const wxString strModuleName = module.GetString(ibProtocolName::Module);
 		std::map<unsigned int, int>& list_module_offset = m_listOffsetBreakpoint[strModuleName];
 		list_module_offset.clear();

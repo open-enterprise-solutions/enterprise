@@ -44,16 +44,6 @@ class ibMetaData;
 //  So the ADDRESS is the caller's, computed where the metadata already is — a control knows its own
 //  binding, its own form and its own configuration.)
 
-// ONE SAVED SETTING as a shelf shows it — the identity, the caption, and when it
-// was written. The caption comes out of the NODE, which is why this lives here
-// and not on the storage: reading what is inside a node is not the storage's
-// business.
-struct BACKEND_API ibComposerSettingsEntry {
-	ibGuid     m_id;
-	wxString   m_name;
-	ibDateTime m_changed;
-};
-
 // THE ADDRESS. `userKey` empty = THE CURRENT SESSION'S user, which is what every
 // desktop caller means and none of them should have to say.
 //

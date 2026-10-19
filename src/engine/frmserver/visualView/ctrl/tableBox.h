@@ -237,8 +237,11 @@ public:
 	// current row as a handle the client was given (CurrentRow, absent while that row has not been
 	// handed out), the column the cursor stands on (CurrentColumn), the cell whose editor is open
 	// (Edit {Row, Column} — the client opens its editor there, and closes one the table did not take),
-	// ChoiceMode and ViewMode. The model's view is attached here, and a value just created from this
-	// list is looked for among the rows — what the window used to do whenever it was redrawn.
+	// ChoiceMode and ViewMode. When the Version is new, State may also carry Rows once — the first page,
+	// as Fetch would give it — so the frame that names that Version need not be followed by a fetch. A
+	// client that finds no Rows still asks Fetch, as before. The model's view is attached here, and a
+	// value just created from this list is looked for among the rows — what the window used to do
+	// whenever it was redrawn.
 	virtual void OnUpdate(ibDataNode& state, ibVisualHost* host) override;
 
 	// The table's own: Row — the cursor moved (Row: a handle; Column — across to it); Open without a
@@ -492,6 +495,8 @@ private:
 	// row added or deleted), written in the State: a client reads its rows again when it is another than it
 	// read them at. A fetch's own reads leave it as it is (m_fetching).
 	s32 m_rowsVersion = 1;
+	// The Version whose Rows were last written into State — so the first page rides one frame, not every later one.
+	s32 m_rowsSentVersion = -1;
 	bool m_fetching = false;
 	unsigned int m_formUpdates = 0;   // the form's updates this table has had its rows read again for
 

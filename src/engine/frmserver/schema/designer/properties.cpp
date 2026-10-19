@@ -6,6 +6,7 @@
 #include "core/serialize/dataBuilder.h"
 
 #include "core/exception.h"   // ibCoreException — no such object to read
+#include "frmserver/client/clientFrame.h"         // the rows after an edit, shown with its answer
 #include "frmserver/client/propertyInspector.h"   // the rows, as the inspector writes them
 #include "frmserver/schema/designer/metaData.h"     // the tab's tree, and its object by id — as its doors find them
 
@@ -80,10 +81,13 @@ std::function<void()> ibSchemaProperties::Command(const ibSession& session, s32 
 		return nullptr;
 	}
 
-	return [object, name, value]() {
+	const s32 tabId = args.GetValue<s32>(wxT("Tab"));
+	return [object, name, value, tabId]() {
 		if (ibProperty* const property = object->GetProperty(name))
 			ibPropertyGate::SetValue(object, property, value);
 		else if (ibEvent* const event = object->GetEvent(name))
 			ibPropertyGate::SetEvent(object, event, value);
+		if (ibClientFrame* const frame = ibClientFrame::GetFrame())
+			frame->ShowProperties(object, tabId);
 	};
 }

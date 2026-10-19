@@ -1,7 +1,11 @@
 #include "docViewFormEdit.h"
+#include "docViewComposerEdit.h"   // ibFetchComposerRequest — what a composition's panel asks
+#include "backend/propertyManager/property/propertyDynamicSource.h"   // a list's Source, picked (SetProperty)
 
 #include "backend/metaCollection/metaFormObject.h"
 #include "backend/metaData.h"   // GetCompileCache — the form the configuration compiled, when it has one
+#include "backend/metadataConfiguration.h"   // the session's configuration — the form's object is in it
+#include "backend/session/session.h"
 #include "core/diagnostics/journal.h"
 #include "core/serialize/dataBuilder.h"
 #include "frmserver/client/clientFrame.h"         // ibClientFrame::SendPicture — a class's picture, by its id
@@ -47,8 +51,27 @@ void ibFormDesignView::OnDraw(ibDataNode& frame)
 		else if (metaFormObject != nullptr)
 			caption = metaFormObject->GetSynonym();
 	}
-	if (ibDataNode* const state = frame.FindChild(ibProtocolName::State))
-		state->SetValue(ibProtocolName::Caption, caption);
+	ibDataNode* const state = frame.FindChild(ibProtocolName::State);
+	if (state == nullptr)
+		return;
+	state->SetValue(ibProtocolName::Caption, caption);
+
+	// ⭐ WHAT THE TAB IS OPENED WITH RIDES THE FRAME THAT OPENS IT — once (Opening): the form, the classes and the module's
+	// text, as its Text fetch answers them. The client makes the editor without asking.
+	if (m_openingDrawn)
+		return;
+	m_openingDrawn = true;
+	ibDataNode request;
+	request.SetValue(ibProtocolName::Kind, static_cast<s32>(ibProtocolModuleRequest::Text));
+	Fetch(request, state->Child(ibProtocolName::Opening));
+
+	// …and the form's object's rows, which its Code page shows in the inspector (the tree's row it was opened from): the
+	// configuration's tree names it by tab 0; an external file's tree is a tab of its own, and its page reads them.
+	ibValueMetaObject* const metaObject = GetDocument()->GetMetaObject();
+	ibClientFrame* const clientFrame = ibClientFrame::GetFrame();
+	if (metaObject != nullptr && clientFrame != nullptr
+		&& metaObject->GetMetaData() == clientFrame->GetSession()->GetMetaData())
+		clientFrame->ShowProperties(metaObject, 0);
 }
 
 bool ibFormDesignView::Fetch(const ibDataNode& request, ibDataNode& response)
@@ -70,6 +93,21 @@ bool ibFormDesignView::Fetch(const ibDataNode& request, ibDataNode& response)
 	case ibProtocolFormDesignerRequest::FormCommand:    return FetchFormCommand(request, response);
 	case ibProtocolFormDesignerRequest::Properties:     return FetchProperties(request, response);
 	case ibProtocolFormDesignerRequest::Form:           WriteForm(response); return true;
+	default:
+		break;
+	}
+
+	// …AND A COMPOSITION AN ATTRIBUTE HOLDS, as its cell's window asks the configuration (ibPropertyDataComposition): the
+	// fields of its query, of a reference's targets, of a dynamic list — the composer tab's own requests, over the form's
+	// configuration.
+	switch (static_cast<ibProtocolComposerRequest>(kind)) {
+	case ibProtocolComposerRequest::Fields:
+	case ibProtocolComposerRequest::Expand:
+	case ibProtocolComposerRequest::Source: {
+		const ibMetaDocument* const document = GetDocument();
+		const ibValueMetaObject* const metaObject = document != nullptr ? document->GetMetaObject() : nullptr;
+		return ibFetchComposerRequest(request, response, metaObject != nullptr ? metaObject->GetMetaData() : nullptr);
+	}
 	default:
 		break;
 	}
@@ -157,6 +195,11 @@ bool ibFormDesignView::SetProperty(ibPropertyObject* object, const ibDataNode& r
 	if (!property->SetNodeValue(*value))
 		return false;
 	owner->OnPropertyChanged(property, oldValue, property->GetValue());
+	// A LIST'S SOURCE picked: the list is made anew over it — its main table, its columns (ibValueDynamicList::
+	// OnChildChanged, as the desktop's cell's SetSource rebuilds it); the main table lands in its description, which is
+	// what the form keeps.
+	if (dynamic_cast<const ibPropertyDynamicSource*>(property) != nullptr)
+		owner->OnChildChanged();
 	return true;
 }
 
