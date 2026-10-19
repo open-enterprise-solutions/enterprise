@@ -41,4 +41,9 @@ public:
 	wxDECLARE_DYNAMIC_CLASS(ibComposerCompositionDocument);
 };
 
+// WHAT A COMPOSITION'S PANEL ASKS OF THE CONFIGURATION, on whichever designer tab it is — a composer's own, or a form's
+// whose attribute holds a composition (ibPropertyDataComposition): the fields of a query text (Kind Fields {Text}) and
+// of a reference's targets (Kind Expand {Targets}). False: not one of these.
+FRMSERVER_API bool ibFetchComposerRequest(const ibDataNode& request, ibDataNode& response, const ibMetaData* metaData);
+
 #endif

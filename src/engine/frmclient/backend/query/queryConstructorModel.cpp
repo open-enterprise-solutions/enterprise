@@ -65,6 +65,9 @@ std::vector<ibQueryConstructorField> ibQueryFieldsOfText(const wxString& text, c
 	// are the tab's answer for it (fetch {Tab, Request: {Kind: Fields, Text}}); the text the tab's view was drawn with
 	// was said with the view, and asks nothing.
 	if (metaData != nullptr && metaData->GetTabId() != 0) {
+		// An empty text has no fields — a new composition's window opens without asking.
+		if (wxString(text).Trim(true).Trim(false).IsEmpty())
+			return {};
 		const long long tabId = metaData->GetTabId();
 		ibProtocolNode answer;
 		const auto known = KnownQueryFields().find(tabId);

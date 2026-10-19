@@ -1,4 +1,5 @@
 #include "docViewFormEdit.h"
+#include "docViewComposerEdit.h"   // ibFetchComposerRequest — what a composition's panel asks
 
 #include "backend/metaCollection/metaFormObject.h"
 #include "backend/metaData.h"   // GetCompileCache — the form the configuration compiled, when it has one
@@ -70,6 +71,19 @@ bool ibFormDesignView::Fetch(const ibDataNode& request, ibDataNode& response)
 	case ibProtocolFormDesignerRequest::FormCommand:    return FetchFormCommand(request, response);
 	case ibProtocolFormDesignerRequest::Properties:     return FetchProperties(request, response);
 	case ibProtocolFormDesignerRequest::Form:           WriteForm(response); return true;
+	default:
+		break;
+	}
+
+	// …AND A COMPOSITION AN ATTRIBUTE HOLDS, as its cell's window asks the configuration (ibPropertyDataComposition): the
+	// fields of its query, of a reference's targets — the composer tab's own requests, over the form's configuration.
+	switch (static_cast<ibProtocolComposerRequest>(kind)) {
+	case ibProtocolComposerRequest::Fields:
+	case ibProtocolComposerRequest::Expand: {
+		const ibMetaDocument* const document = GetDocument();
+		const ibValueMetaObject* const metaObject = document != nullptr ? document->GetMetaObject() : nullptr;
+		return ibFetchComposerRequest(request, response, metaObject != nullptr ? metaObject->GetMetaData() : nullptr);
+	}
 	default:
 		break;
 	}

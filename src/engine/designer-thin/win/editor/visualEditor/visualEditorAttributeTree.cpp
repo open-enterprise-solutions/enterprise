@@ -75,7 +75,8 @@ ibProtocolNode FindMenuItem(const ibProtocolNode& menu, const char* name)
 
 ibFormAttributeValue::ibFormAttributeValue(ibVisualEditorNotebook::ibVisualEditor* formHandler, long long id,
 	long long column)
-	: m_formHandler(formHandler), m_attributeId(id), m_columnId(column)
+	: m_formHandler(formHandler), m_attributeId(id), m_columnId(column),
+	  m_metaData(formHandler->GetEditorDocument() != nullptr ? formHandler->GetEditorDocument()->GetMetaData() : ibMetaData())
 {
 }
 

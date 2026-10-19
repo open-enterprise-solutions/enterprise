@@ -253,6 +253,7 @@
     <ClCompile Include="propertyManager\property\advprop\advpropEventTool.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropType.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropHyperLink.cpp" />
+    <ClCompile Include="propertyManager\property\advprop\advpropDataComposition.cpp" />
     <ClCompile Include="propertyManager\property\advprop\advpropModule.cpp" />
     <ClCompile Include="propertyManager\propertyEditor.cpp" />
     <ClCompile Include="mainFrame\objinspect\objinspect.cpp" />
@@ -455,6 +456,7 @@
     <ClInclude Include="propertyManager\property\advprop\advpropType.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropValuePicture.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropHyperLink.h" />
+    <ClInclude Include="propertyManager\property\advprop\advpropDataComposition.h" />
     <ClInclude Include="propertyManager\propertyEditor.h" />
     <ClInclude Include="settings\formSettings.h" />
     <ClInclude Include="backend\system\value\valueColour.h" />

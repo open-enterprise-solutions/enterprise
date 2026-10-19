@@ -1,6 +1,7 @@
 ﻿#ifndef __VISUAL_EDITOR_H__
 #define __VISUAL_EDITOR_H__
 
+#include "frmclient/backend/metaData.h"   // ibFormAttributeValue — its form's tab
 #include "innerFrame.h"
 #include "designer-thin/win/editor/codeEditor/codeEditorDesigner.h"
 
@@ -1022,6 +1023,10 @@ public:
 	virtual wxString GetObjectTypeName() const override { return m_name; }
 	virtual bool IsEditable() const override;
 
+	// ITS CONFIGURATION IS ITS FORM'S TAB — what a window its rows open asks the configuration (a composition's fields:
+	// fetch {Tab, Request: {Kind: Fields, Text}}) the form's tab answers.
+	virtual const ibMetaData* GetMetaData() const override { return &m_metaData; }
+
 	// What the server says of it, asked as it is shown — the server's editor's Properties, with the form as it stands: the
 	// attribute's rows, or its column's.
 	virtual bool Receive() override;
@@ -1042,6 +1047,7 @@ private:
 	ibVisualEditorNotebook::ibVisualEditor* m_formHandler;
 	const long long m_attributeId;
 	const long long m_columnId;
+	const ibMetaData m_metaData;   // the form's tab
 	wxString m_name;
 	bool m_main = false;
 	ibProtocolNode m_menu;

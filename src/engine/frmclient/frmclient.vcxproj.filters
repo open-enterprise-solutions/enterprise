@@ -1104,6 +1104,12 @@
     <ClInclude Include="propertyManager\property\advprop\advpropHyperLink.h">
       <Filter>propertyManager\property\advprop</Filter>
     </ClInclude>
+    <ClCompile Include="propertyManager\property\advprop\advpropDataComposition.cpp">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClCompile>
+    <ClInclude Include="propertyManager\property\advprop\advpropDataComposition.h">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClInclude>
     <ClCompile Include="propertyManager\property\advprop\advpropModule.cpp">
       <Filter>propertyManager\property\advprop</Filter>
     </ClCompile>

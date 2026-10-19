@@ -100,6 +100,9 @@ ComposerSettings question has them. The client edits the description itself and 
 composition now has. The fields of another text are fetched by the tab: `fetch {Tab, Request: {Kind: 21, Text}}` —
 `Fields`, `References`, `Error`; the fields of a reference's targets — `fetch {Tab, Request: {Kind: 22, Targets}}` —
 `Expanded` and `References`, as a ListSettings window asked again has them.
+A form designer tab answers the same two requests for an attribute of type DataComposition: its inspector row
+`ibPropertyDataComposition` carries the composition as its `Value`, the client opens the settings window over it,
+asks the form's tab for the fields (`Kind` 21, 22) and sends the edited composition back through the attribute's `Set`.
 
 A picture is named by its id everywhere — in the view, a tab's `Icon`, a schema, a request, a list of choices: a
 backend picture's number, as a decimal (a class's own: its class id), or a configuration picture's guid. No answer
