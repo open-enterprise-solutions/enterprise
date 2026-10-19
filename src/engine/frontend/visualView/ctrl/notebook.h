@@ -67,6 +67,8 @@ private:
 
 	ibValueNotebookPage* m_activePage;
 	std::vector< ibValueNotebookPage*> m_pageArray;
+	// Guards the one-time initial-selection fix in OnUpdated — see notebook.cpp.
+	bool m_selectionSettled = false;
 
 	ibPropertyCategory* m_categoryNotebook = ibPropertyObject::CreatePropertyCategory(wxT("Notebook"), _("Notebook"));
 	ibPropertyEnum<ibValueEnumOrientNotebookPage>* m_propertyOrient = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumOrientNotebookPage>>(m_categoryNotebook, wxT("OrientPage"), _("Orient page"),
