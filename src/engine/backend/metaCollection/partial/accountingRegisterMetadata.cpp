@@ -534,7 +534,7 @@ void ibValueMetaObjectAccountingRegister::SyncFieldSides(const ibValueMetaObject
 			if (side->GetName() != name)
 				side->SetName(name);
 			side->SetOwnerSynonym(ibRegColumnCaptionOf(field->GetSynonym(), ibRegSideCaption(credit)));
-			side->SetOwnerIcon(field->GetColumnIcon());   // drawn as the dimension or the figure it is a side of
+			side->SetOwnerPicture(field->GetColumnPicture());   // drawn as the dimension or the figure it is a side of
 			side->GetTypeDesc().SetDefaultMetaType(field->GetTypeDesc());
 			if (perSide) side->ClearFlag(metaDisableFlag);
 			else         side->SetFlag(metaDisableFlag);

@@ -21,7 +21,8 @@ void WriteQueryFields(ibDataNode& into, const wxString& text, const ibMetaData* 
 	ibDataNode& fields = into.Child(ibProtocolName::Fields);
 	std::vector<ibTypeDescription> types;
 	for (const ibQueryConstructorField& field : ibQueryFieldsOfText(text, metaData, &error)) {
-		ibWriteSettingsField(fields, field.m_name, field.m_caption, wxNOT_FOUND, field.m_type, field.m_available, metaData);
+		ibWriteSettingsField(fields, field.m_name, field.m_caption, wxNOT_FOUND, field.m_type, field.m_available,
+			ibPictureDescription(), metaData);
 		types.push_back(field.m_type);
 	}
 	ibWriteSettingsReferences(into.Child(ibProtocolName::References), types, metaData);
@@ -49,7 +50,7 @@ void WriteListSourceFields(ibDataNode& into, ibMetaID mainTable, const wxString&
 				continue;
 			ibWriteSettingsField(fields, node->GetSourceName(), node->GetSourceSynonym(),
 				static_cast<ibMetaID>(node->GetSourceId()), node->GetTypeValueDesc(),
-				node->GetColumn() == nullptr || node->GetColumn()->IsAvailable(), metaData);
+				node->GetColumn() == nullptr || node->GetColumn()->IsAvailable(), node->GetSourcePicture(), metaData);
 			types.push_back(node->GetTypeValueDesc());
 			names.push_back(node->GetSourceName());
 		}
@@ -63,7 +64,8 @@ void WriteListSourceFields(ibDataNode& into, ibMetaID mainTable, const wxString&
 				already = already || name.IsSameAs(field.m_name, false);
 			if (already)
 				continue;
-			ibWriteSettingsField(fields, field.m_name, field.m_caption, wxNOT_FOUND, field.m_type, field.m_available, metaData);
+			ibWriteSettingsField(fields, field.m_name, field.m_caption, wxNOT_FOUND, field.m_type, field.m_available,
+				ibPictureDescription(), metaData);
 			types.push_back(field.m_type);
 		}
 	}

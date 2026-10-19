@@ -479,9 +479,6 @@
     <ClInclude Include="backend\mcp\mcpServer.h">
       <Filter>backend\mcp</Filter>
     </ClInclude>
-    <ClInclude Include="backend\roleHelper.h">
-      <Filter>backend</Filter>
-    </ClInclude>
     <ClInclude Include="backend\userInfo.h">
       <Filter>backend</Filter>
     </ClInclude>
@@ -685,9 +682,6 @@
     <Filter Include="backend\logger">
       <UniqueIdentifier>{6a1f8b3d-2c4e-4f70-9bac-1d2e3f405164}</UniqueIdentifier>
     </Filter>
-    <Filter Include="backend\job">
-      <UniqueIdentifier>{6a1f8b3d-2c4e-4f70-9bac-1d2e3f405165}</UniqueIdentifier>
-    </Filter>
     <Filter Include="backend\mcp">
       <UniqueIdentifier>{6a1f8b3d-2c4e-4f70-9bac-1d2e3f405167}</UniqueIdentifier>
     </Filter>
@@ -867,12 +861,6 @@
     <ClCompile Include="backend\logger\loggerReader.cpp">
       <Filter>backend\logger</Filter>
     </ClCompile>
-    <ClInclude Include="backend\job\jobSchedule.h">
-      <Filter>backend\job</Filter>
-    </ClInclude>
-    <ClCompile Include="backend\job\jobScheduleRules.cpp">
-      <Filter>backend\job</Filter>
-    </ClCompile>
     <ClCompile Include="backend\metaCollection\partial\commonObject.cpp">
       <Filter>backend\metaCollection\partial</Filter>
     </ClCompile>
@@ -974,15 +962,6 @@
     </ClInclude>
     <ClInclude Include="backend\propertyManager\property\variant\variantComposition.h">
       <Filter>backend\propertyManager\property\variant</Filter>
-    </ClInclude>
-    <ClInclude Include="backend\query\queryAST.h">
-      <Filter>backend\query</Filter>
-    </ClInclude>
-    <ClInclude Include="backend\query\queryable.h">
-      <Filter>backend\query</Filter>
-    </ClInclude>
-    <ClInclude Include="backend\query\queryLowering.h">
-      <Filter>backend\query</Filter>
     </ClInclude>
     <ClInclude Include="backend\query\queryConstructorModel.h">
       <Filter>backend\query</Filter>

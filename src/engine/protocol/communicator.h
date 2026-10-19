@@ -32,10 +32,10 @@ public:
 	// login {User, Password, Mode, Protocol} — the client's id and the protocol both speak taken, the token when the
 	// server offers one, and the first frame; the answer given back as it came, for its events (a start may say
 	// something, or ask).
-	// `reads` — the schemas the client would read right after it (Read): a server that knows them answers them beside
-	// the frame, each with its Schema; one that does not answers none, and the client asks for them as before.
+	// `schemas` — those the client would read right after it (Read): answered beside the frame, each with its Schema; one
+	// the person may not read is left out, and the client asks for it.
 	bool Login(const wxString& user, const wxString& password, ibProtocolMode mode, ibProtocolNode& result,
-		ibProtocolRefusal& refusal, wxString& error, const std::vector<int>& reads = {});
+		ibProtocolRefusal& refusal, wxString& error, const std::vector<ibProtocolSchema>& schemas = {});
 	// users {} — the names the login window offers, asked before the login.
 	bool Users(std::vector<wxString>& names, ibProtocolRefusal& refusal, wxString& error);
 	void Logout();
@@ -61,11 +61,6 @@ public:
 	// The frame drawn now, and its number — the last answer's.
 	const ibProtocolNode& GetFrame() const { return m_frame; }
 	long long             GetFrameNumber() const { return m_number; }
-
-	// WHAT HAS BEEN DONE SINCE — moved by every call that may change something on the server (any but a schema read, a
-	// picture, the frame, the users; a call carrying held events always), and by the server's own `changed`. A read
-	// answered at one count is still true while the count stays: shown again, it is not asked again.
-	unsigned long long    Generation() const { return m_generation.load(std::memory_order_acquire); }
 
 private:
 
@@ -100,10 +95,6 @@ private:
 	// window's, and must not wait for a fetch's exchange.
 	std::mutex                  m_pendingMutex;
 	std::vector<ibProtocolNode> m_pending;
-
-	// Generation — shared with the notification's thread.
-	std::shared_ptr<std::atomic<unsigned long long>> m_generationOwner = std::make_shared<std::atomic<unsigned long long>>(0);
-	std::atomic<unsigned long long>& m_generation = *m_generationOwner;
 };
 
 #endif

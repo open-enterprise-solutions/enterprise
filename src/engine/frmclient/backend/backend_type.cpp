@@ -22,16 +22,3 @@ ibValue ibBackendTypeFactory::AdjustValue(const ibValue& varValue, const ibTypeD
 {
 	return ibValueTypeDescription::AdjustValue(limit, varValue);
 }
-
-/////////////////////////////////////////////////////////////////////////////////////
-
-ibClassID ibBackendTypeConfigFactory::GetDefaultTypeByFilter(ibSelectorDataType filterDataType)
-{
-	switch (filterDataType) {
-	case ibSelectorDataType::ibSelectorDataType_boolean:  return g_valueBooleanCLSID;
-	case ibSelectorDataType::ibSelectorDataType_resource: return g_valueNumberCLSID;
-	case ibSelectorDataType::ibSelectorDataType_table:    return g_valueTableCLSID;
-	case ibSelectorDataType::ibSelectorDataType_reference:
-	default:                                              return g_valueStringCLSID;
-	}
-}

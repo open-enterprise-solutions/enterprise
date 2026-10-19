@@ -4,11 +4,12 @@
 
 // Pure and static, with no manager behind them: a rule can be asked about any moment,
 // which is what lets a row evaluate its own schedule without a second scheduler.
-#include "jobSchedule.h"
-#include "frmclient/backend/compiler/value.h"   // ibValue — a bound printed through the engine's format
+#include "core/job/jobSchedule.h"
+#include "core/compiler/lexValue.h"   // ibLexValue — a bound as a value, printed through the engine's format
 #include "core/formatString.h"     // ibFormatString — the date format a script's Format uses
 
-#include <wx/datetime.h>   // the weekday and month NAMES Describe prints
+#include <wx/datetime.h>      // the weekday and month NAMES Describe prints
+#include <wx/translation.h>   // _() — the sentence Describe says, in the language in force
 
 // ⭐ THE CALENDAR IS THE DATE'S (fdatetime.h). A moment is read into its parts ONCE and the parts are asked
 // the day's place - its month, its day and how far the month's end is, which of its weekday it is, the minute
@@ -250,9 +251,9 @@ wxString ibJobScheduleRules::Describe(const ibJobScheduleDescription& self)
 	if (self.m_months != 0)
 		out += wxT(", ") + FormatMonths(self.m_months);
 	if (!self.m_activeFrom.IsEmpty())
-		out += wxString::Format(_(", from %s"), asDay.Apply(ibValue(self.m_activeFrom)));
+		out += wxString::Format(_(", from %s"), asDay.Apply(ibLexValue(self.m_activeFrom)));
 	if (!self.m_activeTo.IsEmpty())
-		out += wxString::Format(_(", until %s"), asDay.Apply(ibValue(self.m_activeTo)));
+		out += wxString::Format(_(", until %s"), asDay.Apply(ibLexValue(self.m_activeTo)));
 
 	return out;
 }

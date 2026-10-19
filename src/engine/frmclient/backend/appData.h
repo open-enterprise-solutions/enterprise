@@ -51,9 +51,10 @@ private:
 // schemas.
 class FRMCLIENT_API ibApplicationInstance {
 public:
-	// The person's assistant access (frmclient/backend/mcp/mcpServer.h) — none when they may not ask for it. `shown` —
-	// its schema's answer already at hand (a menu item's), taken instead of asking again.
-	static class ibMcpServer* GetMcpServer(const class ibProtocolNode* shown = nullptr);
+	// The person's assistant access (frmclient/backend/mcp/mcpServer.h) — none when they may not ask for it.
+	static class ibMcpServer* GetMcpServer();
+	// …as its schema's answer already at hand shows it (a menu item's) — received from it, not asked again.
+	static class ibMcpServer* GetMcpServer(const class ibProtocolNode& shown);
 };
 
 inline ibApplicationData s_appData;

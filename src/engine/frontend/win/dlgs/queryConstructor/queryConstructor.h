@@ -540,10 +540,10 @@ private:
 		int                m_field  = wxNOT_FOUND;   // the plain attribute picture
 		std::map<wxString, int> m_byKind;             // metatype name -> index in THIS list
 		// A COLUMN'S OWN PICTURE, keyed by the picture itself. There is no name to key on here —
-		// the column hands over an icon, not a kind — and the icons are shared statics, so the
-		// same dimension picture arrives as the same object every time and a handful of entries
+		// the column hands over a picture, not a kind — and the picture is its class's number, so
+		// the same dimension picture arrives as the same number every time and a handful of entries
 		// covers a tree of any size.
-		std::vector<std::pair<wxIcon, int>> m_byIcon;
+		std::vector<std::pair<ibPictureDescription, int>> m_byPicture;
 	};
 	// NOTHING IS EVER REMOVED behind the author's back — not a table with no link (that is a
 	// PRODUCT, and it reads exactly like one somebody forgot about), and not a name that no longer
@@ -553,7 +553,7 @@ private:
 	TreeIcons PrepareIcons(wxTreeCtrl* tree) const;
 	int KindIcon(TreeIcons& icons, const wxString& kind) const;
 	// THE PICTURE FOR ONE FIELD — its own if the column gave one, the plain field picture if not.
-	// Nothing here reads a metatype: the column already answered (ibBackendSourceColumn::GetColumnIcon).
+	// Nothing here reads a metatype: the column already answered (ibBackendSourceColumn::GetColumnPicture).
 	int FieldIcon(TreeIcons& icons, const ibQueryConstructorField& field) const;
 	// The same question for a row of ANY grid in this window: a column answers with its own
 	// picture, a dot-walk with the picture of the field it ends on, an expression with none (the

@@ -4,7 +4,7 @@
 #include "metaModuleObject.h"   // ibPropertyInnerModule + ibValueMetaObjectManagerModule — the role's policy module
 #include "backend/propertyManager/property/propertyEnum.h"
 
-// The MODE itself lives in the role layer (`backend/roleHelper.h`, ibRoleCompositionMode) — it is
+// The MODE itself lives in the core (`core/roleCompositionMode.h`, ibRoleCompositionMode) — it is
 // read by the runtime role list and by the rights fold, both of which sit below the metadata. What
 // belongs here is only the metaobject's side of it: the enumeration value class (so the mode is a
 // script value and an inspector dropdown) and the property that stores it.

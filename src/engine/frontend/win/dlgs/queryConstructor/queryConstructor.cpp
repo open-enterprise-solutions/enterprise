@@ -1280,7 +1280,7 @@ wxWindow* ibDialogQueryConstructor::BuildGroupingPage(wxWindow* parent)
 			// get the twin is the keyword table's answer (ibDistinctMattersFor), so MIN and MAX do
 			// not: their result is the same value however often it occurs, and a padded list is a
 			// list people stop reading.
-			for (ibQueryKeyword keyword : ibQueryLowering::AggregatesFor(type)) {
+			for (ibQueryKeyword keyword : ibQueryAggregatesFor(type)) {
 				words.Add(ibQueryKeywordText(keyword));
 				if (ibDistinctMattersFor(keyword))
 					words.Add(ibQueryKeywordText(keyword) + wxT(" (")
@@ -2256,9 +2256,9 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 				const ibSourceMetaDataScope resolveAgainst(m_metaData);
 				type = m_model.TypeOfPath(*select, argument->m_path, m_package, m_statement);
 			}
-			// THE ENGINE COMPOSES THE OFFERS (AggregateCallsFor) — the ready calls over this field,
+			// THE ENGINE COMPOSES THE OFFERS (ibQueryAggregateCallsFor) — the ready calls over this field,
 			// including the DISTINCT twin where it asks a different question.
-			for (const wxString& call : ibQueryLowering::AggregateCallsFor(type, field))
+			for (const wxString& call : ibQueryAggregateCallsFor(type, field))
 				words.Add(call);
 			return words;
 		},

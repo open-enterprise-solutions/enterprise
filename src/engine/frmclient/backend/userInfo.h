@@ -7,7 +7,7 @@
 // a record read says whether there is one (IsSetPassword), and one saved carries a new one only when it was typed.
 
 #include "frmclient/backend/backend_core.h"
-#include "frmclient/backend/roleHelper.h"   // ibRoleCompositionMode — how a role combines
+#include "core/roleCompositionMode.h"   // ibRoleCompositionMode — how a role combines
 
 #include <vector>
 

@@ -37,6 +37,8 @@ public:
 	static bool IsRegisterPicture(const ibPictureID& id);
 	static wxBitmap GetPicture(const ibPictureID& id);
 	static wxIcon GetPictureAsIcon(const ibPictureID& id);
+	// …and by its description: a backend one by its number, as above; a configuration's and a file's made from what they keep.
+	static wxIcon GetPictureAsIcon(const ibPictureDescription& pictureDesc, const class ibMetaData* metaData = nullptr);
 	static std::vector<ibBackendPictureEntry> GetArrayPicture();
 #pragma endregion 
 

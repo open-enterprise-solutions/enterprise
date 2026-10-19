@@ -25,6 +25,15 @@
     <Filter Include="graphics">
       <UniqueIdentifier>{1c39467f-583e-4ee5-9fda-86472983e336}</UniqueIdentifier>
     </Filter>
+    <Filter Include="job">
+      <UniqueIdentifier>{8826834c-f717-4ebb-bcc7-5673b403a7b3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="logger">
+      <UniqueIdentifier>{fff455ab-3c8d-40ac-96c6-886fc7e01630}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="mcp">
+      <UniqueIdentifier>{9047548b-5914-4dc5-9f68-0cb257b06510}</UniqueIdentifier>
+    </Filter>
     <Filter Include="query">
       <UniqueIdentifier>{a4a3bd23-8265-4eae-9b38-c123e23b3d1c}</UniqueIdentifier>
     </Filter>
@@ -33,6 +42,9 @@
     </Filter>
     <Filter Include="serialize">
       <UniqueIdentifier>{8708f6ac-1c30-4368-8d4f-7555b0b5d7bf}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="settings">
+      <UniqueIdentifier>{10784ba1-c126-4a67-b3e5-95e44376c8a6}</UniqueIdentifier>
     </Filter>
     <Filter Include="spreadsheet">
       <UniqueIdentifier>{e4a19d36-82c7-4f5b-a0d3-6f2b7c8e91a5}</UniqueIdentifier>
@@ -130,11 +142,17 @@
       <Filter>graphics</Filter>
     </ClCompile>
     <ClCompile Include="guid.cpp" />
+    <ClCompile Include="job\jobScheduleRules.cpp">
+      <Filter>job</Filter>
+    </ClCompile>
     <ClCompile Include="localization.cpp" />
     <ClCompile Include="picturePredefined.cpp" />
     <ClCompile Include="pictureRegistry.cpp" />
     <ClCompile Include="programFolder.cpp" />
     <ClCompile Include="typeName.cpp" />
+    <ClCompile Include="query\queryAggregates.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
     <ClCompile Include="query\queryKeywords.cpp">
       <Filter>query</Filter>
     </ClCompile>
@@ -268,15 +286,39 @@
     </ClInclude>
     <ClInclude Include="guid.h" />
     <ClInclude Include="fileKind.h" />
+    <ClInclude Include="job\jobSchedule.h">
+      <Filter>job</Filter>
+    </ClInclude>
     <ClInclude Include="localization.h" />
+    <ClInclude Include="logger\loggerQuery.h">
+      <Filter>logger</Filter>
+    </ClInclude>
+    <ClInclude Include="mcp\mcpSettings.h">
+      <Filter>mcp</Filter>
+    </ClInclude>
     <ClInclude Include="picturePredefined.h" />
     <ClInclude Include="pictureRegistry.h" />
     <ClInclude Include="programFolder.h" />
+    <ClInclude Include="propertyChoiceMode.h" />
+    <ClInclude Include="roleCompositionMode.h" />
+    <ClInclude Include="selectorDataType.h" />
     <ClInclude Include="typeName.h" />
+    <ClInclude Include="query\queryAggregates.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\queryAstExpr.h">
+      <Filter>query</Filter>
+    </ClInclude>
     <ClInclude Include="query\queryBalanceRole.h">
       <Filter>query</Filter>
     </ClInclude>
+    <ClInclude Include="query\queryConstructorField.h">
+      <Filter>query</Filter>
+    </ClInclude>
     <ClInclude Include="query\queryKeywords.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\queryPeriodUnits.h">
       <Filter>query</Filter>
     </ClInclude>
     <ClInclude Include="query\queryUnfold.h">
@@ -293,6 +335,9 @@
     </ClInclude>
     <ClInclude Include="serialize\jsonText.h">
       <Filter>serialize</Filter>
+    </ClInclude>
+    <ClInclude Include="settings\settingsShelf.h">
+      <Filter>settings</Filter>
     </ClInclude>
     <ClInclude Include="spreadsheet\sheetFormat.h">
       <Filter>spreadsheet</Filter>

@@ -19,15 +19,10 @@ public:
 	virtual void Build(const ibSession& session, const ibDataNode& args, ibDataNode& result) const override;
 
 	// Save {Id, Tab, Name, Value} — that metaobject's property or event of that name given that value, as its node holds
-	// it. Refused, nothing done: no such object, no such property, no value.
+	// it, and its rows as they are after it shown with the answer (ibClientFrame::ShowProperties): the inspector draws
+	// them without a read. Refused, nothing done: no such object, no such property, no value.
 	virtual std::function<void()> Command(const ibSession& session, s32 command,
 		const ibDataNode& args, ibProtocolRefusal& refusal, wxString& error) const override;
-
-	// …and Save is answered with the object's Properties as they are after it: the inspector draws them without a read.
-	virtual bool AnswersWithBuild(s32 command) const override
-	{
-		return static_cast<ibProtocolSchemaCommand>(command) == ibProtocolSchemaCommand::Save;
-	}
 };
 
 #endif

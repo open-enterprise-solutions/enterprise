@@ -327,9 +327,9 @@ class ibDebuggerClient {
 	// THE CONFIGURATION IS THE SERVER'S: its guid, which a connection's thread checks a runtime against, and its modules,
 	// each initialized as the desktop's configuration did as it loaded (ibValueMetaObjectModuleBase::OnBeforeRunMetaObject)
 	// — asked of schema Debugger here, once.
-	// `store` — the debugger's store as the login answered it (login's Read): what the constructor would ask, read
-	// already; an empty one is a configuration with no debugger. Null: asked, as before.
-	explicit ibDebuggerClient(const class ibProtocolNode* store = nullptr);
+	ibDebuggerClient();
+	// …or over its store as the login read it (the designer's GetStartSchemas): nothing asked.
+	explicit ibDebuggerClient(const class ibProtocolNode& store);
 	friend class ibFrontendMainFrameDesigner;
 
 public:
@@ -619,7 +619,8 @@ protected:
 		std::map<unsigned int, int>& list_module_offset, unsigned int line) const;
 
 	//db support
-	void LoadModuleCollection(const class ibProtocolNode* store = nullptr);
+	void LoadModuleCollection();
+	void LoadModuleCollection(const class ibProtocolNode& store);
 	void LoadBreakpointCollection(const wxString& strModuleName);
 
 	bool ToggleBreakpointInDB(const wxString& strModuleName, unsigned int line, const wxString& condition);

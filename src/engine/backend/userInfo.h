@@ -12,7 +12,7 @@
 
 #include "backend/backend.h"
 #include "backend/backend_core.h"
-#include "backend/roleHelper.h"   // ibRoleCompositionMode — how a role combines (the role layer owns it)
+#include "backend/roleHelper.h"   // ibRoleCompositionMode — how a role combines (core/roleCompositionMode.h)
 
 #include <vector>
 

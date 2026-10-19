@@ -23,7 +23,7 @@
 #include <wx/choice.h>
 
 #include "frmclient/backend/backend_core.h"
-#include "frmclient/backend/roleHelper.h"   // ibRoleCompositionMode — the membership carries how the role combines
+#include "core/roleCompositionMode.h"   // ibRoleCompositionMode — the membership carries how the role combines
 
 #include "frmclient/win/ctrls/checktree.h"
 #include "frmclient/win/theme/luna_tabart.h"

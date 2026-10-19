@@ -14,6 +14,7 @@
 #include "frmclient/backend/metaData.h"                                      // a tab's configuration — its tab
 #include "frmclient/docView/tabDocument.h"                                   // a tab's fetch — a composer's, its targets' fields
 #include "frmclient/mainFrame/mainFrame.h"                                  // ibFrontendMainFrame::Respond — a target's fields asked
+#include "frmclient/win/picture.h"                                          // ibProtocolPicture — a field's picture, by its id
 #include "protocol/protocol.h"
 
 #include <wx/dialog.h>
@@ -61,6 +62,17 @@ static int ibSettingsFieldIcon(wxTreeCtrl* tree, const wxIcon& icon)
 		if (images->GetIcon(i).IsSameAs(icon))
 			return i;
 	return images->Add(icon);
+}
+
+// …the picture a field is described with — the column's, as the server names it (the desktop's GetSourcePicture); none
+// answers 0.
+static int ibSettingsFieldIcon(wxTreeCtrl* tree, const wxString& picture)
+{
+	wxIcon icon;
+	const wxBitmap bitmap = ibProtocolPicture(picture);
+	if (bitmap.IsOk())
+		icon.CopyFromBitmap(bitmap);
+	return ibSettingsFieldIcon(tree, icon);
 }
 
 // ⭐ THE RESOURCE PICTURE — THE METAOBJECT'S OWN (Max, 2026-08-22: take the resource from the
@@ -131,7 +143,7 @@ static void ExpandSourceFieldNode(wxTreeCtrl* tree, const wxTreeItemId& item, co
 		child->m_type = col.m_type;
 		child->m_refTypes = ibValueReferenceDataObject::ConvertToMetaIds(col.m_type.GetClsidList(), metaData);
 		const bool resource = isResource && isResource(child->m_path);
-		const int icon = resource ? ibSettingsResourceIcon(tree) : 0;
+		const int icon = resource ? ibSettingsResourceIcon(tree) : ibSettingsFieldIcon(tree, col.m_picture);
 		const wxTreeItemId added = tree->AppendItem(item, label, icon, icon, child);
 		if (!child->m_refTypes.empty())
 			tree->AppendItem(added, wxEmptyString);   // dummy -> [+] (a reference expands into its target's fields)
@@ -150,6 +162,7 @@ static void ExpandSourceFieldNode(wxTreeCtrl* tree, const wxTreeItemId& item, co
 
 std::vector<ibSettingsPlainField> ibReadSettingsFields(const ibProtocolNode& fields)
 {
+	ibProtocolPictureReceive(fields);   // at once, not a call per field
 	std::vector<ibSettingsPlainField> read;
 	for (const ibProtocolNode& described : fields.Children()) {
 		ibSettingsPlainField field;
@@ -160,6 +173,7 @@ std::vector<ibSettingsPlainField> ibReadSettingsFields(const ibProtocolNode& fie
 		ibReadProtocolNode(described.FindChild(ibProtocolName::Type), *type);
 		ibTypeDescriptionMemory::ReadNode(ibDataValue::Child(type), field.m_type);
 		field.m_available = described.GetBool(ibProtocolName::Available, true);
+		field.m_picture = described.GetString(ibProtocolName::Picture);
 		read.push_back(std::move(field));
 	}
 	return read;
@@ -197,7 +211,7 @@ void ibSettingsFieldTree::Populate(wxTreeCtrl* tree) const
 	else
 		root = tree->AddRoot(wxEmptyString);
 
-	// Attribute icon (index 0) on every field — same icon the source-explorer picker uses.
+	// Attribute icon (index 0) on every field described with no picture — same icon the source-explorer picker uses.
 	wxImageList* imgs = new wxImageList(16, 16);
 	imgs->Add(ibValue::GetIconGroup());
 	tree->AssignImageList(imgs);
@@ -218,7 +232,7 @@ void ibSettingsFieldTree::Populate(wxTreeCtrl* tree) const
 		// on every report standing on author's text a resource looked like a plain field (Max,
 		// 2026-08-29: "I do not see even minimally that it is a resource").
 		const int icon = (m_isResource && m_isResource(data->m_path))
-			? ibSettingsResourceIcon(tree) : 0;
+			? ibSettingsResourceIcon(tree) : ibSettingsFieldIcon(tree, field.m_picture);
 		// THE TITLE IS WHAT A USER READS, as the synonym is on the explorer road above; the name is what
 		// the path is built from and what a pick stores.
 		const wxString label = field.m_presentation.IsEmpty() ? field.m_name : field.m_presentation;

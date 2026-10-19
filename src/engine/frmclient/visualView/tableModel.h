@@ -86,7 +86,7 @@ public:
 		ibDataViewItemArray& out) const override;
 	virtual unsigned int GetPrevFetch(const ibDataViewItem& parent, const ibDataViewItem& anchor, int count,
 		ibDataViewItemArray& out) const override;
-	// One fetch answering both sides of the anchor (Before); from a server below 4, the two.
+	// One fetch answering both sides of the anchor (Before).
 	virtual unsigned int GetAroundFetch(const ibDataViewItem& parent, const ibDataViewItem& anchor, int count, int before,
 		ibDataViewItemArray& out, unsigned int& above) const override;
 
@@ -101,10 +101,12 @@ private:
 	// model's GetViewData).
 	static const ibViewTableRow* RowOf(const ibDataViewItem& item);
 
-	// A portion read — Direction 0 reset, 1 forward, -1 backward; the rows in `out`, how many read. A reset may ask
-	// for `before` rows ahead of it too: `above` is how many came first, -1 when the answer did not say (below 4).
+	// A portion read — Direction 0 reset, 1 forward, -1 backward; the rows in `out`, how many read.
 	unsigned int Fetch(int direction, const ibDataViewItem& parent, const ibDataViewItem& anchor, int count,
-		ibDataViewItemArray& out, int before = 0, int* above = nullptr) const;
+		ibDataViewItemArray& out) const;
+	// …with up to `before` rows ahead of it, first in `out`: `above` — how many came (the answer's Before).
+	unsigned int Fetch(int direction, const ibDataViewItem& parent, const ibDataViewItem& anchor, int count, int before,
+		ibDataViewItemArray& out, unsigned int& above) const;
 
 	const ibViewFetcher m_fetcher;
 	const ibAnswered    m_answered;

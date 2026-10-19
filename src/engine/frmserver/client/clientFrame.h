@@ -33,6 +33,7 @@
 #include "clientMenu.h"
 
 class ibValueForm;
+class ibValueMetaObject;
 class ibMetaData;
 class ibClientChildFrame;
 class ibClientInstance;
@@ -176,6 +177,12 @@ public:
 	// kick: OnClose): nothing is asked, and a client at rest is called for it (RefreshFrame) — it hears Exit in the next
 	// answer, or in the answer of the call it is in, and goes as from its own Exit: its logout takes the session.
 	bool                        ExitClient(bool force);
+	// THE INSPECTOR'S ROWS OF AN OBJECT A DOOR ACTED ON — an edit's, a new object's, the one the tree goes to after a
+	// removal, a form editor's own: written now, as the inspector's read writes them (ibSchemaProperties::Build), and told
+	// with the next answer (Properties) — the client shows them without reading them again. `tabId` — the tab whose tree
+	// the client holds the object of (0: the configuration's).
+	void                        ShowProperties(ibValueMetaObject* object, s32 tabId);
+	std::vector<ibDataNode>     TakeShownProperties();
 
 	struct PendingRequest {
 		std::string id;
@@ -288,6 +295,7 @@ private:
 	std::vector<PendingMessage> m_pendingMessages;
 	bool                        m_clearPending = false;
 	bool                        m_exitPending = false;
+	std::vector<ibDataNode>     m_shownProperties;
 
 	// The requests waiting, oldest first. A response is a slot of its own, shared with the waiting script —
 	// responded to, the script reads the slot and not the frame.

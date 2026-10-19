@@ -6,6 +6,7 @@
 #include "core/description/typeDescription.h"
 #include "backend/query/queryColumn.h"     // ibBackendAbstractColumn (name/synonym/comment) + ibBackendSourceColumn
 #include "core/description/sourceDescription.h"     // ibSourceDescription — control's bound source path (GetSourceDesc / SetDefaultSourceType)
+#include "core/selectorDataType.h"                  // ibSelectorDataType — the shape a type is picked in (GetFilterDataType)
 
 //////////////////////////////////////////////////////////////
 
@@ -90,19 +91,6 @@ public:
 	// prevent (and, being inline on a BACKEND_API class, it would demand an out-of-line definition
 	// every DLL that sees the header must link against).
 	bool IsEmptyTypeDesc() const { return !GetTypeDesc().IsOk(); }
-};
-
-//////////////////////////////////////////////////////////////
-
-enum ibSelectorDataType {
-	ibSelectorDataType_any,
-	ibSelectorDataType_boolean,
-	ibSelectorDataType_reference,
-	ibSelectorDataType_table,
-	ibSelectorDataType_resource,
-	// WHAT RAISES AN EVENT — an object, a manager, a record set, of one metaobject or of every one of a
-	// metatype: what an event handler names as its source.
-	ibSelectorDataType_eventSource,
 };
 
 //////////////////////////////////////////////////////////////

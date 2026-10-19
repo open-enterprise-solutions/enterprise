@@ -42,6 +42,7 @@
 #include "frmclient/win/dlgs/settings/list/listSettings.h"
 #include "frmclient/win/dlgs/settings/composer/composerSettings.h"
 #include "frmclient/backend/serialize/dataProtocol.h"   // a value as the server's question carries it
+#include "frmclient/backend/metaCollection/metaObject.h"  // the inspector's rows an answer brought, kept for their object
 #include "frmclient/backend/backend_localization.h"     // the session's language — the frame says it
 #include "frmclient/visualView/ctrl/typeControl.h"      // ibTypeControlFactory::SimpleChoice — the calculator, the calendar
 #include "frmclient/visualView/ctrl/frame.h"            // ibControlFrame — what they are drawn over
@@ -708,11 +709,6 @@ void ibFrontendMainFrame::UpdateHotKeys()
 	m_keyBinder.UpdateMenuBar(bar);
 }
 
-unsigned long long ibFrontendMainFrame::GetGeneration() const
-{
-	return m_communicator->Generation();
-}
-
 bool ibFrontendMainFrame::Show(bool show)
 {
 	if (!show)
@@ -729,7 +725,7 @@ bool ibFrontendMainFrame::Show(bool show)
 	ibProtocolNode answer;
 	ibProtocolRefusal refusal = ibProtocolRefusal::None;
 	wxString error;
-	bool loggedIn = m_communicator->Login(m_user, m_password, m_mode, answer, refusal, error, ReadsAtLogin());
+	bool loggedIn = m_communicator->Login(m_user, m_password, m_mode, answer, refusal, error, GetStartSchemas());
 
 	// A REFUSED NAME OR PASSWORD ASKS THE PERSON — the desktop's login window, with the names the server offers, asked
 	// again until the login goes through or the person cancels it. A list the server could not read offers none: the
@@ -753,7 +749,7 @@ bool ibFrontendMainFrame::Show(bool show)
 		}
 		m_user = dlg.GetLogin();
 		m_password = dlg.GetPassword();
-		loggedIn = m_communicator->Login(m_user, m_password, m_mode, answer, refusal, error, ReadsAtLogin());
+		loggedIn = m_communicator->Login(m_user, m_password, m_mode, answer, refusal, error, GetStartSchemas());
 	}
 	m_password.clear();
 	if (!loggedIn) {
@@ -771,7 +767,6 @@ bool ibFrontendMainFrame::Show(bool show)
 		CallAfter([this]() { Post(ibProtocolMethod::Frame, ibProtocolNode()); });
 	});
 
-	TakeLogin(answer);
 	SetClientSize(FromDIP(wxSize(800, 600)));
 	Center();
 	Settle(answer);
@@ -789,6 +784,10 @@ bool ibFrontendMainFrame::Show(bool show)
 		return false;
 	SetFocus();
 	Raise();
+
+	// …and what the login read beside the frame (GetStartSchemas), each shown as a call of its own would have been.
+	for (const ibProtocolNode& read : answer.FindChild(ibProtocolName::Read).Children())
+		ShowSchema(static_cast<ibProtocolSchema>(read.GetInt(ibProtocolName::Schema)), read);
 	return true;
 }
 
@@ -818,10 +817,8 @@ bool ibFrontendMainFrame::Call(ibProtocolMethod method, const ibProtocolNode& pa
 	ibProtocolRefusal refusal = ibProtocolRefusal::None;
 	wxString error;
 	const bool called = m_communicator->Call(method, params, answer, refusal, error);
-	if (called) {
-		m_settledAnswer = answer;
+	if (called)
 		Settle(answer);
-	}
 	else
 		Refused(refusal, error);
 	--m_calling;
@@ -835,10 +832,8 @@ bool ibFrontendMainFrame::Call(ibProtocolMethod method, const ibProtocolNode& pa
 {
 	++m_calling;
 	const bool called = m_communicator->Call(method, params, answer, refusal, error);
-	if (called) {
-		m_settledAnswer = answer;
+	if (called)
 		Settle(answer);
-	}
 	else if (refusal == ibProtocolRefusal::NoSession)
 		Refused(refusal, error);
 	--m_calling;
@@ -933,6 +928,11 @@ void ibFrontendMainFrame::Draw(const ibProtocolNode& answer)
 	if (!answer.Has(ibProtocolName::Frame))
 		return;
 
+	// THE INSPECTOR'S ROWS OF WHAT A DOOR ACTED ON (an edit, a new object, a tab opened over one) — received for the
+	// object before anything is drawn: the tree drawn below may select it, and its object takes them in instead of asking.
+	for (const ibProtocolNode& rows : answer.FindChild(ibProtocolName::Properties).Children())
+		ibValueMetaObject::Receive(rows.GetInt(ibProtocolName::Tab), static_cast<ibMetaID>(rows.GetId()), rows);
+
 	const ibProtocolNode& frame = m_communicator->GetFrame();
 
 	// ⭐ WHAT THE ANSWER CHANGED IS DRAWN — its patch names it, and a part it does not name is as it was; a frame sent
@@ -966,14 +966,7 @@ void ibFrontendMainFrame::Draw(const ibProtocolNode& answer)
 	if (whole || patch.Has(ibProtocolName::Templates))
 		DrawTemplates(frame.FindChild(ibProtocolName::Templates));
 	if (whole || patch.Has(ibProtocolName::Tabs))
-	{
-		// The view the frame carries, for the tab it makes active — a tab opened by it may read what it needs there.
-		m_openingView = frame.FindChild(ibProtocolName::View);
-		m_openingTab = frame.GetInt(ibProtocolName::ActiveTab);
 		DrawTabs(frame.FindChild(ibProtocolName::Tabs));
-		m_openingView = ibProtocolNode();
-		m_openingTab = 0;
-	}
 	DrawFrame(frame, patch);
 	DrawView(frame.GetInt(ibProtocolName::ActiveTab), frame.FindChild(ibProtocolName::View), patch);
 
@@ -1170,8 +1163,9 @@ void ibFrontendMainFrame::DrawTabs(const ibProtocolNode& tabs)
 			m_docManager->AddDocument(opened);
 
 		// Not made — its view was not. Made with the State the frame drew it in, when it is the tab the frame shows.
-		if (id == m_openingTab && m_openingView.IsNode())
-			opened->SetOpeningState(m_openingView.FindChild(ibProtocolName::State));
+		const ibProtocolNode& frame = m_communicator->GetFrame();
+		if (id == frame.GetInt(ibProtocolName::ActiveTab))
+			opened->SetOpeningState(frame.FindChild(ibProtocolName::View).FindChild(ibProtocolName::State));
 		const bool made = opened->OnCreate(wxEmptyString, ibDOC_NEW);
 		opened->SetOpeningState(ibProtocolNode());
 		if (!made) {
@@ -1249,7 +1243,7 @@ void ibFrontendMainFrame::Settle(const ibProtocolNode& answer)
 	const wxLongLong began = wxGetUTCTimeMillis();
 	// The pictures it names asked for at once, before a part of the window asks for its own: the designer's start was two
 	// picture exchanges, the templates' and the tree's.
-	ibProtocolPictureReceiveAll(answer);
+	ibProtocolPictureReceive(answer);
 	Draw(answer);
 	ibJournalInfo(wxT("call"), wxT("  drawn in %lld ms"), (wxGetUTCTimeMillis() - began).GetValue());
 	Ask();
@@ -1358,7 +1352,6 @@ bool ibFrontendMainFrame::Respond(const ibProtocolNode& response)
 		Refused(refusal, error);
 		return false;
 	}
-	m_settledAnswer = next;
 	Draw(next);
 
 	// …a window up answering along the way is asked again: the question pending now is its own.
@@ -1714,6 +1707,11 @@ ibProtocolNode ibFrontendMainFrame::FindTab(long long tabId) const
 long long ibFrontendMainFrame::GetActiveTab() const
 {
 	return m_communicator->GetFrame().GetInt(ibProtocolName::ActiveTab);
+}
+
+long long ibFrontendMainFrame::GetFrameNumber() const
+{
+	return m_communicator->GetFrameNumber();
 }
 
 ibTabDocument* ibFrontendMainFrame::FindDocument(long long tabId) const

@@ -4,6 +4,8 @@
 
 #include "backend/metaCollection/metaFormObject.h"
 #include "backend/metaData.h"   // GetCompileCache — the form the configuration compiled, when it has one
+#include "backend/metadataConfiguration.h"   // the session's configuration — the form's object is in it
+#include "backend/session/session.h"
 #include "core/diagnostics/journal.h"
 #include "core/serialize/dataBuilder.h"
 #include "frmserver/client/clientFrame.h"         // ibClientFrame::SendPicture — a class's picture, by its id
@@ -62,6 +64,14 @@ void ibFormDesignView::OnDraw(ibDataNode& frame)
 	ibDataNode request;
 	request.SetValue(ibProtocolName::Kind, static_cast<s32>(ibProtocolModuleRequest::Text));
 	Fetch(request, state->Child(ibProtocolName::Opening));
+
+	// …and the form's object's rows, which its Code page shows in the inspector (the tree's row it was opened from): the
+	// configuration's tree names it by tab 0; an external file's tree is a tab of its own, and its page reads them.
+	ibValueMetaObject* const metaObject = GetDocument()->GetMetaObject();
+	ibClientFrame* const clientFrame = ibClientFrame::GetFrame();
+	if (metaObject != nullptr && clientFrame != nullptr
+		&& metaObject->GetMetaData() == clientFrame->GetSession()->GetMetaData())
+		clientFrame->ShowProperties(metaObject, 0);
 }
 
 bool ibFormDesignView::Fetch(const ibDataNode& request, ibDataNode& response)

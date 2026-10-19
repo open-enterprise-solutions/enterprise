@@ -120,7 +120,7 @@ ibCommunicator::~ibCommunicator()
 }
 
 bool ibCommunicator::Login(const wxString& user, const wxString& password, ibProtocolMode mode, ibProtocolNode& result,
-	ibProtocolRefusal& refusal, wxString& error, const std::vector<int>& reads)
+	ibProtocolRefusal& refusal, wxString& error, const std::vector<ibProtocolSchema>& schemas)
 {
 	std::lock_guard<std::mutex> lock(m_mutex);
 	Forget();
@@ -132,7 +132,7 @@ bool ibCommunicator::Login(const wxString& user, const wxString& password, ibPro
 		.SetValue(ibProtocolName::Protocol, ibProtocolVersion);
 	// Opt into the slot. A server that does not offer `resume` ignores it.
 	params.AddItem(ibProtocolName::Features, wxString::FromUTF8(ibProtocolName::FeatureResume));
-	for (const int schema : reads)
+	for (const ibProtocolSchema schema : schemas)
 		params.AddItem(ibProtocolName::Read).SetValue(ibProtocolName::Schema, static_cast<long long>(schema));
 	if (!CallLocked(ibProtocolMethod::Login, params, result, refusal, error))
 		return false;
@@ -188,13 +188,12 @@ void ibCommunicator::Listen(std::function<void()> changed)
 
 	// Of this client, as logged in now — a connection may carry more than one, and each is told of its own.
 	const wxString client = GetClient();
-	m_connection->Listen([client, generation = m_generationOwner, changed = std::move(changed)](const std::string& text) {
+	m_connection->Listen([client, changed = std::move(changed)](const std::string& text) {
 		ibProtocolNode node;
 		if (!ibProtocolNode::Read(text, node) || node.GetString(ibProtocolName::RpcMethod) != ibProtocolName::Changed)
 			return;
 		if (node.FindChild(ibProtocolName::RpcParams).GetString(ibProtocolName::Client) != client)
 			return;
-		generation->fetch_add(1, std::memory_order_acq_rel);   // what was read before it may have changed
 		changed();
 	});
 }
@@ -255,10 +254,18 @@ bool ibCommunicator::CallLocked(ibProtocolMethod method, const ibProtocolNode& p
 		return false;
 	}
 
+	// ⭐ NO CLIENT, NO CALL — logged out (the window closing, its tree shown again as the tabs go) or not logged in yet:
+	// refused here as the server would refuse it, without the exchange.
+	const bool beforeLogin = method == ibProtocolMethod::Login || method == ibProtocolMethod::Users;
+	if (!beforeLogin && m_client.IsEmpty()) {
+		refusal = ibProtocolRefusal::NoSession;
+		error = wxT("not logged in");
+		return false;
+	}
+
 	// The client, and the frame it holds — a frame answer is then the patch from it. A field a method does not
 	// read is skipped by the server.
 	ibProtocolNode named = params.IsNode() ? params.Clone() : ibProtocolNode();
-	const bool beforeLogin = method == ibProtocolMethod::Login || method == ibProtocolMethod::Users;
 	if (!beforeLogin) {
 		named.SetValue(ibProtocolName::Client, m_client);
 		if (m_number != 0)
@@ -275,16 +282,7 @@ bool ibCommunicator::CallLocked(ibProtocolMethod method, const ibProtocolNode& p
 		}
 		for (const ibProtocolNode& event : pending)
 			(*named.Json())[ibProtocolName::Pending].push_back(*event.Json());
-		if (!pending.empty())
-			m_generation.fetch_add(1, std::memory_order_acq_rel);
 	}
-	// …and a call that may change something moves the count before it goes (Generation): a read answered after it is
-	// read at the new count.
-	const bool reads = method == ibProtocolMethod::Picture || method == ibProtocolMethod::Frame
-		|| method == ibProtocolMethod::Users
-		|| (method == ibProtocolMethod::Schema && !params.Has(ibProtocolName::Command));
-	if (!reads)
-		m_generation.fetch_add(1, std::memory_order_acq_rel);
 	const long long id = ++m_lastId;
 	ibProtocolNode request;
 	request.SetValue(ibProtocolName::RpcVersion, "2.0")

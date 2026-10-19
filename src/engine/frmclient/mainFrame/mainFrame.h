@@ -68,12 +68,6 @@ public:
 	// The client goes with the window: logged out, and its session torn down by the server.
 	virtual bool Destroy() override;
 
-	// What has been done since (ibCommunicator::Generation): a read answered at this count is still true.
-	unsigned long long GetGeneration() const;
-
-	// The answer the last call settled with — its own, or the respond's that let its work finish.
-	const ibProtocolNode& GetSettledAnswer() const { return m_settledAnswer; }
-
 	// The process's main window.
 	static ibFrontendMainFrame* GetFrame() { return s_instance; }
 
@@ -171,6 +165,9 @@ public:
 	ibProtocolNode FindTab(long long tabId) const;
 	// The tab the frame has active now — 0: none.
 	long long GetActiveTab() const;
+	// …and the frame's number (ibCommunicator::GetFrameNumber): moved by every call the server answers with a frame —
+	// whatever may change something goes that way. What was read at this number is still true.
+	long long GetFrameNumber() const;
 	// The document of that tab — none: no such tab drawn.
 	ibTabDocument* FindDocument(long long tabId) const;
 
@@ -202,17 +199,17 @@ protected:
 	// server, which answers only once no question of the start is pending. Default: nothing; the runtime builds its
 	// section panel.
 	virtual void CreateStartupPage() {}
-	// The schemas read right after the login, asked in it (login's Read), and the answer they came in: a server that
-	// answers them puts each beside the frame, with its Schema.
-	virtual std::vector<int> ReadsAtLogin() const { return {}; }
-	virtual void TakeLogin(const ibProtocolNode& WXUNUSED(answer)) {}
 
 	// May the window go down? The server's Exit closes each tab but the start page, asking about what is unsaved; a tab
 	// the person kept keeps the window.
 	virtual bool AllowClose();
 
-	// A schema of the menu, asked for and answered, shown. The base shows what both modes have (Active users, About); a
-	// mode's window shows its own (the runtime's All functions) and leaves the rest to the base.
+	// The schemas the window shows at its start — read in the login (its Read), each answered beside the frame and shown
+	// (ShowSchema) once the window is up, as a call of its own would have been. Default: none.
+	virtual std::vector<ibProtocolSchema> GetStartSchemas() const { return {}; }
+	// A schema of the menu, asked for and answered, shown — or one of the start's (GetStartSchemas). The base shows what
+	// both modes have (Active users, About); a mode's window shows its own (the runtime's All functions, the designer's
+	// debugger store) and leaves the rest to the base.
 	virtual void ShowSchema(ibProtocolSchema schema, const ibProtocolNode& shown);
 	// A question, put to the person; what they answered in `response` (nothing — cancelled). The base asks what both
 	// modes are asked; a mode's window asks its own (the designer's restructure ledger) and leaves the rest to the base.
@@ -341,10 +338,6 @@ private:
 	static ibFrontendMainFrame* s_instance;
 
 	std::unique_ptr<ibCommunicator> m_communicator;
-	// While the tabs are drawn: the frame's View and the tab it is of (DrawTabs hands it to a tab it opens).
-	ibProtocolNode m_openingView;
-	long long m_openingTab = 0;
-	ibProtocolNode m_settledAnswer;
 	const ibProtocolMode            m_mode;
 	wxString                        m_user;       // the login's — the one the login window was told, when refused
 	wxString                        m_password;   // until the login — cleared by it

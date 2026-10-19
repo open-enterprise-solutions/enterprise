@@ -1,24 +1,27 @@
-#ifndef _FRMCLIENT_BACKEND_QUERYABLE_H__
-#define _FRMCLIENT_BACKEND_QUERYABLE_H__
+#ifndef __QUERY_PERIOD_UNITS_H__
+#define __QUERY_PERIOD_UNITS_H__
 
-// THE DATA-NAVIGATION INTERFACE — the engine's ibBackendQueryable (backend/query/queryable.h): the server's, which reads
-// a metaobject through it. What the client's windows take of it is the vocabulary beside it — the period units a
-// totals level and a register's turnovers are said in — and that is copied here whole.
-
-#include "frmclient/backend/backend_core.h"   // ibTotalsPeriod (core/fdatetime.h)
-
-#include <vector>
-
-// ⭐⭐ THE PERIOD UNITS, AS WORDS — one table, beside the expression that truncates by them.
+////////////////////////////////////////////////////////////////////////////
+//	Description : THE PERIOD UNITS, AS WORDS - one table for every side that says a periodicity
+////////////////////////////////////////////////////////////////////////////
 //
 // Two places in the language say a periodicity: a register's `Turnovers(&From, &To, Month)` and a
 // totals level's `BY Period PERIODS(Month, …)`. They are the same question, so they read the same
 // vocabulary; a second copy is how two parts of a program come to disagree about what "Quarter"
-// means. (It lived under the registers while they were the only ones asking. They are not.)
+// means. (It lived under the registers while they were the only ones asking. They are not — and
+// the windows that offer a unit, the server's and the client's, read this one table too.)
 //
 // ⚠ The ORDER matters and is not alphabetical: it is coarseness, ascending. A totals schema offers
 // only the projections COARSER than what it stores (an hour cannot be recovered from a day already
 // summed), and that comparison is on the enum — so the enum's order IS the meaning.
+
+#include "core/fdatetime.h"   // ibTotalsPeriod
+
+#include <wx/string.h>
+
+#include <utility>
+#include <vector>
+
 inline const std::vector<std::pair<ibTotalsPeriod, wxString>>& ibPeriodUnits()
 {
 	static const std::vector<std::pair<ibTotalsPeriod, wxString>> s_units = {
@@ -49,4 +52,4 @@ inline bool ibReadPeriodUnit(const wxString& word, ibTotalsPeriod& unit)
 	return false;
 }
 
-#endif
+#endif // __QUERY_PERIOD_UNITS_H__

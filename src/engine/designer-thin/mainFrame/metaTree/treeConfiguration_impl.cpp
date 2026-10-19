@@ -15,7 +15,6 @@
 #include "clipboardLock.h"   // the Open/Close pair, taken as a guard — the desktop's
 #include "designer-thin/docManager/templates/docViewModuleEditor.h"   // a module's tab — the line a stop shows
 #include "frmclient/artProvider/artProvider.h"
-#include "frmclient/backend/metaCollection/metaObject.h"   // rows an answer brought, kept for the row shown next
 #include "frmclient/backend/metaCollection/metaObjectMetadata.h"      // the objects a modal editor of its menu is over
 #include "frmclient/backend/metaCollection/partial/commonObject.h"
 #include "frmclient/mainFrame/mainFrame.h"
@@ -368,26 +367,15 @@ void ibMetaTreeBase::CreateItem()
 	if (!GetPlace(m_metaTreeCtrl->GetSelection(), type, parent))
 		return;
 
-	// ASK — the new object's row comes back with the frame and is selected, the inspector showing it; then its editor is
-	// opened, as the desktop's click did (NewItem, then OpenObjectForm): made while the row is shown, it shows its own.
-	// ⭐ ONE EXCHANGE: the same work opens the editor (Open) and the answer carries the object's rows (Show) — the
-	// answer of the respond that let it finish when it asked something (a form's kind). A server that knows neither
-	// answers neither (Opened, Created): the row's rows are read, and the editor opened, as before.
+	// ASK — the new object's row comes back with the frame and is selected, the inspector showing it — its rows came
+	// with the same answer (the frame's Properties), nothing is read; then its editor is opened, as the desktop's click
+	// did (NewItem, then OpenObjectForm): made while the row is shown, it shows its own.
 	ibProtocolNode args;
 	args.SetValue(ibProtocolName::Type, type);
 	args.SetValue(ibProtocolName::Parent, parent);
-	args.SetValue(ibProtocolName::Open, true);
-	args.SetValue(ibProtocolName::Show, true);
 	std::set<long long> drawn;
 	ibObjectIds(m_root, drawn);
-	if (!Command(ibProtocolMetaDataCommand::Create, args))
-		return;
-	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
-	const ibProtocolNode answer = frame != nullptr ? frame->GetSettledAnswer() : ibProtocolNode();
-	if (answer.Has(ibProtocolName::Created) && answer.Has(ibProtocolName::Properties))
-		ibValueMetaObject::KeepRows(m_tab, static_cast<ibMetaID>(answer.GetInt(ibProtocolName::Created)),
-			answer.FindChild(ibProtocolName::Properties));
-	if (SelectCreated(drawn) && !answer.Has(ibProtocolName::Opened))
+	if (Command(ibProtocolMetaDataCommand::Create, args) && SelectCreated(drawn))
 		EditItem();
 }
 
@@ -443,8 +431,8 @@ void ibMetaTreeBase::RemoveItem()
 		return;
 
 	// ASK, then let the answer come back — the row goes with the frame, the editors over it with the server's Removed.
-	// ⭐ …and the rows of the object selected after it come in the same answer (Select → Selected, Properties): the
-	// row the tree goes to — the next one, else the one before, else the parent.
+	// ⭐ …and the row the tree goes to — the next one, else the one before, else the parent: its rows shown with the same
+	// answer (Select, the frame's Properties), so it is selected without reading them.
 	wxTreeItemId next = m_metaTreeCtrl->GetNextSibling(selection);
 	if (!next.IsOk())
 		next = m_metaTreeCtrl->GetPrevSibling(selection);
@@ -457,21 +445,16 @@ void ibMetaTreeBase::RemoveItem()
 	args.SetValue(ibProtocolName::Id, id);
 	if (select != 0)
 		args.SetValue(ibProtocolName::Select, select);
-	if (!Command(ibProtocolMetaDataCommand::Remove, args))
+	if (!Command(ibProtocolMetaDataCommand::Remove, args) || nextPath.IsEmpty())
 		return;
-	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
-	const ibProtocolNode answer = frame != nullptr ? frame->GetSettledAnswer() : ibProtocolNode();
-	if (answer.Has(ibProtocolName::Selected) && answer.Has(ibProtocolName::Properties)) {
-		ibValueMetaObject::KeepRows(m_tab, static_cast<ibMetaID>(answer.GetInt(ibProtocolName::Selected)),
-			answer.FindChild(ibProtocolName::Properties));
-		// The frame drew the tree anew without the old row (the parent selected in its place): the row asked for is
-		// selected again, its rows already kept; else, the tree selected it as the old one went — shown again.
-		const wxTreeItemId item = nextPath.IsEmpty() ? wxTreeItemId() : FindItem(m_metaTreeCtrl->GetRootItem(), nextPath);
-		if (item.IsOk() && item != m_metaTreeCtrl->GetSelection())
-			m_metaTreeCtrl->SelectItem(item);
-		else
-			ActivateTree();
-	}
+
+	// The frame drew the tree anew without the old row, the parent selected in its place: the row it goes to selected
+	// again; else, the tree selected it as the old one went — shown again.
+	const wxTreeItemId item = FindItem(m_metaTreeCtrl->GetRootItem(), nextPath);
+	if (item.IsOk() && item != m_metaTreeCtrl->GetSelection())
+		m_metaTreeCtrl->SelectItem(item);
+	else
+		ActivateTree();
 }
 
 void ibMetaTreeBase::PropertyItem()
@@ -488,7 +471,6 @@ void ibMetaTreeBase::PropertyItem()
 
 void ibMetaTreeBase::SelectItem()
 {
-	++m_selections;
 	UpdateToolbar();
 
 	// WHAT THE INSPECTOR SHOWS — the row's object, made as the row is selected, what the server says of it asked as it is
@@ -503,18 +485,13 @@ void ibMetaTreeBase::SelectItem()
 
 void ibMetaTreeBase::ActivateTree()
 {
-	// Hidden, the inspector holds it all the same — Properties shows what it holds.
-	ibObjectInspector* const inspector = objectInspector;
-	if (inspector != nullptr)
-		inspector->SelectObject(m_object.get());
-}
-
-void ibMetaTreeBase::ActivateTreeLater()
-{
-	const unsigned selections = m_selections;
-	CallAfter([this, selections]() {
-		if (selections == m_selections)
-			ActivateTree();
+	// ⭐ SHOWN ONCE THE EVENT THAT ACTIVATED IT IS DONE, the object held by then: a click on another row as the focus
+	// comes to the tree selects it on the way, and the inspector is asked once, for that row — it skips the one it shows.
+	CallAfter([this]() {
+		// Hidden, the inspector holds it all the same — Properties shows what it holds.
+		ibObjectInspector* const inspector = objectInspector;
+		if (inspector != nullptr)
+			inspector->SelectObject(m_object.get());
 	});
 }
 

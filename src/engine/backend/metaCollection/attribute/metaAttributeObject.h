@@ -87,7 +87,7 @@ class BACKEND_API ibValueMetaObjectAttributeBase :
 		wxString GetComment() const override      { return m_owner != nullptr ? m_owner->GetComment() : wxString(); }
 		bool     IsAllowed() const override       { return m_owner != nullptr && m_owner->IsAllowed(); }
 		bool     IsAvailable() const override     { return m_owner == nullptr || m_owner->IsAvailable(); }
-		wxIcon   GetColumnIcon() const override   { return m_owner != nullptr ? m_owner->GetColumnIcon() : wxIcon(); }
+		ibPictureDescription GetColumnPicture() const override { return m_owner != nullptr ? m_owner->GetColumnPicture() : ibPictureDescription(); }
 		wxString GetPhysicalName() const override { return m_owner != nullptr ? m_owner->GetPhysicalName() : wxString(); }
 		ibMetaID GetColumnId() const override     { return m_owner != nullptr ? m_owner->GetColumnId() : 0; }
 		// ⚠ A DETACHED COLUMN HAS NO TYPE, and the interface returns a REFERENCE — so it answers with
@@ -110,10 +110,10 @@ class BACKEND_API ibValueMetaObjectAttributeBase :
 	}
 
 	// A METAOBJECT COLUMN WEARS ITS OWN PICTURE. The column face asks (queryColumn.h), the
-	// metaobject answers with the icon its class registered — so a dimension, a resource and a
-	// plain attribute are told apart by whoever draws them, and neither the drawer nor this class
-	// holds a list of kinds: each level already overrides GetIcon() for its own tree.
-	wxIcon GetColumnIcon() const override { return GetIcon(); }
+	// metaobject answers with its class — the number its icon is registered under — so a dimension, a
+	// resource and a plain attribute are told apart by whoever draws them, and neither the drawer nor
+	// this class holds a list of kinds: each level's class already wears its own icon in its own tree.
+	ibPictureDescription GetColumnPicture() const override { return GetClassType(); }
 
 	// (The whole SQL-field façade — GetSQLFieldName / GetCompositeSQLFieldName / GetExcludeSQLFieldName /
 	//  GetSQLFieldCount / GetSQLFieldData, plus the ibFieldTypes / ibSQLField re-exports — is GONE. An
@@ -425,8 +425,10 @@ public:
 	// side of an accounting register's dimension or resource kept per side (`CurrencyDr`, `QuantityCr`) — is
 	// drawn as that field in a field list, a dimension as a dimension and a figure as a figure, not as one
 	// more plain attribute. Restated by the owner with the name and the caption; unset, the class's own.
-	void SetOwnerIcon(const wxIcon& icon) { m_ownerIcon = icon; }
-	wxIcon GetColumnIcon() const override { return m_ownerIcon.IsOk() ? m_ownerIcon : ibValueMetaObjectAttributeBase::GetColumnIcon(); }
+	void SetOwnerPicture(const ibPictureDescription& picture) { m_ownerPicture = picture; }
+	ibPictureDescription GetColumnPicture() const override {
+		return !m_ownerPicture.IsEmptyPicture() ? m_ownerPicture : ibValueMetaObjectAttributeBase::GetColumnPicture();
+	}
 
 	friend class ibValue;
 
@@ -446,7 +448,7 @@ private:
 	ibIndexingMode m_indexingMode = ibIndexingMode::ibIndexingMode_DontIndex;
 
 	wxString m_strSynonym;
-	wxIcon   m_ownerIcon;   // see SetOwnerIcon
+	ibPictureDescription m_ownerPicture;   // see SetOwnerPicture
 };
 
 #endif

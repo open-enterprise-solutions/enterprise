@@ -161,19 +161,9 @@ ibTabDocument* ibFrontendMainFrameDesigner::CreateDocument(ibProtocolViewKind ki
 	return ibFrontendMainFrame::CreateDocument(kind, tabId);
 }
 
-std::vector<int> ibFrontendMainFrameDesigner::ReadsAtLogin() const
+std::vector<ibProtocolSchema> ibFrontendMainFrameDesigner::GetStartSchemas() const
 {
-	return { static_cast<int>(ibProtocolSchema::Debugger) };
-}
-
-void ibFrontendMainFrameDesigner::TakeLogin(const ibProtocolNode& answer)
-{
-	for (const ibProtocolNode& read : answer.FindChild(ibProtocolName::Read).Children()) {
-		if (read.GetInt(ibProtocolName::Schema) == static_cast<long long>(ibProtocolSchema::Debugger)) {
-			m_debuggerStore = read;
-			m_debuggerStoreRead = true;
-		}
-	}
+	return { ibProtocolSchema::Debugger };
 }
 
 bool ibFrontendMainFrameDesigner::Show(bool show)
@@ -181,9 +171,10 @@ bool ibFrontendMainFrameDesigner::Show(bool show)
 	bool ret = ibFrontendMainFrame::Show(show);
 	if (ret && show) {
 		// The debugger, over the configuration now logged in to — the desktop's was made with its configuration
-		// (ibMetaDataConfigurationStorage::OnInitialize).
+		// (ibMetaDataConfigurationStorage::OnInitialize): made over its store as the login read it (ShowSchema), else
+		// asked for it.
 		if (m_debugClient == nullptr)
-			m_debugClient.reset(new ibDebuggerClient(m_debuggerStoreRead ? &m_debuggerStore : nullptr));
+			m_debugClient.reset(new ibDebuggerClient);
 
 		// The assistant comes up with the designer where the desktop's window started it — on the server, as the
 		// designer's session starts (ibClientFrameDesigner::CreateStartupPage); its refusal comes in the messages.

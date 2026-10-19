@@ -2389,7 +2389,7 @@ void ibDialogQueryConstructor::OnAddAggregate(wxCommandEvent&)
 	// column — cost a dialog, an expression to read, and an OK, for a call the grid can offer whole.
 	//
 	// The Function cell beside the row is where it is changed afterwards, out of the very same list
-	// (the engine's AggregatesFor), so nothing is decided here that cannot be undecided in one click.
+	// (the engine's ibQueryAggregatesFor), so nothing is decided here that cannot be undecided in one click.
 	const std::vector<wxString> fields = SelectedFieldsOf(m_groupingSource);
 	if (fields.empty())
 		return;
@@ -2434,7 +2434,7 @@ void ibDialogQueryConstructor::OnAddAggregate(wxCommandEvent&)
 		FillAll();
 }
 
-// ⭐ THE FOLD THIS FIELD CAN TAKE, asked of the ENGINE. `AggregatesFor(type)` is the same list the
+// ⭐ THE FOLD THIS FIELD CAN TAKE, asked of the ENGINE. `ibQueryAggregatesFor(type)` is the same list the
 // Function cell drops down and the same one CheckNames refuses by, so a seeded row can never be a
 // row the query rejects: a string opens as COUNT because there is no sum of strings, a number opens
 // as SUM because that is what a number is folded by nine times in ten.
@@ -2462,7 +2462,7 @@ ibQueryAstExprPtr ibDialogQueryConstructor::SeededAggregateFor(const ibQuerySele
 	if (argument->m_kind == ibQueryAstExprKind::Column)
 		type = m_model.TypeOfPath(select, argument->m_path, m_package, m_statement);
 
-	const std::vector<ibQueryKeyword> offered = ibQueryLowering::AggregatesFor(type);
+	const std::vector<ibQueryKeyword> offered = ibQueryAggregatesFor(type);
 	if (offered.empty())
 		return nullptr;
 	// SUM when the type has one, otherwise whatever the engine offers first (COUNT, for the types

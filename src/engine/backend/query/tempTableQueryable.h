@@ -36,16 +36,18 @@ public:
 	// for the ordinary one.
 	ibTempColumn(const wxString& name, const wxString& physical,
 	             const ibTypeDescription& type, ibMetaID modelId, const wxString& synonym = wxEmptyString,
-	             Kind kind = Kind::Composite, const wxIcon& icon = wxNullIcon)
+	             Kind kind = Kind::Composite, const ibPictureDescription& picture = ibPictureDescription())
 		: m_name(name), m_physical(physical), m_type(type), m_modelId(modelId), m_synonym(synonym),
-		  m_kind(kind), m_icon(icon) {}
+		  m_kind(kind), m_picture(picture) {}
 
 	// ⭐ THE PICTURE THIS COLUMN IS DRAWN WITH, handed over by whoever published it. A derived surface's
 	// column is computed — a balance, a turnover, a side of a dimension — and stands for something the
 	// configuration declared; the publisher knows which, so it hands the picture over at that moment.
 	// None given, the base's default stands, which is right for an ordinary temp table: its columns are
 	// made by whoever filled it and stand for nothing.
-	wxIcon GetColumnIcon() const override { return m_icon.IsOk() ? m_icon : ibBackendQueryColumn::GetColumnIcon(); }
+	ibPictureDescription GetColumnPicture() const override {
+		return !m_picture.IsEmptyPicture() ? m_picture : ibBackendQueryColumn::GetColumnPicture();
+	}
 
 	// ⭐ A TEMP TABLE'S COLUMN IS COMPOSITE — it has real fields and spreads into them. A DECLARED
 	// query's may not: an output with no column behind it is COMPUTED, one field read by name, and
@@ -91,7 +93,7 @@ private:
 	ibMetaID                  m_modelId;
 	wxString                  m_synonym;    // empty = the name
 	Kind                      m_kind = Kind::Composite;   // see GetColumnKind
-	wxIcon                    m_icon;       // none = the base's default
+	ibPictureDescription      m_picture;    // none = the base's default
 	const ibBackendSourceColumn* m_standsFor = nullptr;   // see StandsFor
 	ibBalanceRole                m_balanceRole = ibBalanceRole::None;   // see PlaysInBalance
 	int                          m_periodRank  = 0;

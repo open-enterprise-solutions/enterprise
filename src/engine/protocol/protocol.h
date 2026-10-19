@@ -95,7 +95,9 @@ namespace ibProtocolName {
 	// The designer's inspector: the object it shows (NodeId, Tab — an edit goes back by schema Properties), its categories
 	// (Name, Title) and property rows — Name, Title, Help, Class, Value, Presentation, ReadOnly, and what a property may
 	// be set to (its children Id, Title, Picture; Multiple — several at once). What its object's state hides is not sent.
-	// …and an external file's root row's: the header above its tree — its object's rows, as the inspector's.
+	// …and an external file's root row's: the header above its tree — its object's rows, as the inspector's. And an event
+	// of the frame's answer: the rows of each object a door acted on (an edit, a new object, the one the tree selects
+	// after a removal, a form editor's own), each by its NodeId and Tab — the client shows them without reading them.
 	inline constexpr const char* Properties = "Properties";
 	inline constexpr const char* Help       = "Help";     // …a property row's: what it is for, as the inspector says it
 	inline constexpr const char* Class      = "Class";    // …a property row's: the server's property class by name
@@ -123,11 +125,8 @@ namespace ibProtocolName {
 	inline constexpr const char* Button    = "Button";
 	inline constexpr const char* Response  = "Response";
 	inline constexpr const char* Selected  = "Selected";
-	inline constexpr const char* Created   = "Created";   // MetaData Create {Show}: the new object's id, beside the frame
-	inline constexpr const char* Open      = "Open";      // MetaData Create: open its editor in the same work
-	inline constexpr const char* Opened    = "Opened";    // MetaData Create {Open}: whether the same work opened its editor
-	inline constexpr const char* Show      = "Show";      // MetaData Create: answer the new object's Properties too
-	inline constexpr const char* Select    = "Select";    // MetaData Remove: the object selected after it, its Properties
+	inline constexpr const char* Select    = "Select";    // MetaData Remove: the object the tree selects after it — its
+	                                                    // Properties shown with the answer
 	inline constexpr const char* Multiple  = "Multiple";   // a choice's: several may be chosen — answered with Ids
 	inline constexpr const char* Ids       = "Ids";
 	inline constexpr const char* Act       = "Act";       // a saved settings' answer: what was done to the shelf

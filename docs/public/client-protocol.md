@@ -138,8 +138,8 @@ model set one — `TextColour`, `BackgroundColour` (a colour's text, `r,g,b`, as
 a table reads no rows — its `fetch` is refused, and a designer's client does not ask.
 
 From protocol 4 a fetch from the start (`Direction` 0) may name `Before`, the rows wanted ahead of the row it starts
-at; the answer gives those rows first and says in `Before` how many came. A server before protocol 4 gives none, and
-the client fetches them backwards (`Direction` -1) on its own.
+at; the answer gives those rows first and says in `Before` how many came. A server before protocol 4 gives none: the
+page comes alone.
 
 From protocol 5 a table's `State` may carry `Rows` with a new `Version` — the first page, the same shape as `fetch`
 (rows as children, `End`, `Before`, `Pictures`) — so the client need not fetch to draw the tab; a server that does
@@ -173,6 +173,7 @@ drawn empty.
 | `Tabs`, `ActiveTab` | the tabs, each by its id (`NodeId`, given when it opens, never another tab's): `Title` (a modified document's ends with `*`), `Icon`, `Locked` (the start page — first, never closed), `Commands` (the commands its document takes now), `Formats` (what its document saves as: `Title`, `Mask`), `File` (its document's file, once it has one), `Parent` (the tab whose document owns this one's — raised under it, closed with it); the active one by its id |
 | `Messages`, `Clear` | messages to the person since the last answer — events, never in a patch |
 | `Exit` | the client is to go: Exit done, every tab closed — an event, never in a patch |
+| `Properties` | the inspector's rows (as `Schema` 10 shows them) of each object a door acted on since the last answer, each by its `NodeId` and `Tab` (the tab whose tree holds it; absent: the configuration's) — an event, never in a patch |
 | `Request` | a question to the person, while one is pending |
 | `View` | the active tab drawn: a form — its `Key` and its controls as the designer saved them, each with a `State` of what it shows now; or the start page |
 
@@ -226,21 +227,15 @@ A schema the client's application does not have, or the person has no right to, 
 What a schema shows is read once for what the person does: a dialog opened by a schema's menu item is drawn from that
 item's answer, and the client asks again only after one of the schema's commands changed what it shows (assistant
 access: Options is one exchange; Start now is the command and one read of the token and endpoint it settled on).
-The inspector's Save (`Schema` 10, `Command` 4) is answered with the object's `Properties` as they are after it, beside
-the frame: an edit is one exchange. A server that sends none there is asked with `schema` again, as before.
+The inspector's rows of an object a door acted on come as the event `Properties` (above), and the client takes them in
+for that object instead of reading them with `schema`: after the inspector's Save (`Schema` 10, `Command` 4 — an edit
+is one exchange), after the configuration tree's Create (`Schema` 9, `Command` 2 — the new object) and Remove
+(`Command` 3, which takes `Select`: the id the tree selects after it), and when a form editor tab opens over a form of
+the configuration. When the work waits on a question (a form's type), they ride the answer to the `respond` that lets
+it finish. A server that sends none is read with `schema`, as before.
 
-The designer's configuration tree (`Schema` 9) answers its commands with what the tree shows next, beside the frame,
-when the client asks for it. Create (`Command` 2) takes `Open` — open the new object's editor in the same work, as
-the desktop's New did — and `Show`; its answer carries `Created` (the new id), `Opened` (whether an editor was opened)
-and the new object's `Properties`. Remove (`Command` 3) takes `Select` — the id the tree selects after it — and its
-answer carries `Selected` and that object's `Properties`. When the work waits on a question (a form's type), these
-ride the answer to the `respond` that lets it finish. A server that does not know the fields answers none of them,
-and the client opens the editor and reads the rows as before.
-
-A schema read (`schema` without `Command`) changes nothing, so a client may keep what it read and show it again
-without asking, until it makes a call that may change something — any but a schema read, `picture`, `frame` and
-`users`, and any call carrying `Pending` — or is told `changed`. The thin designer keeps the inspector's
-`Properties` this way: walking back to an object it showed, or clicking it again, is not a call.
+A schema read changes nothing and moves no frame number, so the client keeps the inspector's rows it received or read
+while the number stays: clicking an object again, or walking back to it, before anything else was done is not a call.
 
 ## Questions to the person
 
@@ -255,7 +250,7 @@ without asking, until it makes a call that may change something — any but a sc
 | 9 Menu | items: `Id`, `Caption`, `Checked`, `Enabled` (false — greyed) and their own items — a submenu; a popup menu where the mouse is | `Id` — the item picked; none — dismissed |
 | 8 SavedSettings | `Mode` (0 save, 1 restore), `Key`, `Default` and items: `Id`, `Caption` — the person's saved settings | `Act` (1 save, 2 restore, 3 default, 4 rename, 5 remove), `Id`, `Name`; none — closed |
 | 10 FormEditor | the active tab's form, as the frame has it: `Picture`, `HasSetting`, `Result` (the act before's: 0 done, 1 no storage, 2 no address, 3 refused), `Classes` (`Name`, `Picture`) | `Act` (1 apply — with `Controls`: each `Control`, its `Position`, the properties a person may arrange; 2 save; 3 reset); none — closed |
-| 11 ListSettings | a table's settings: `Settings` (the setting in force, in the node form the settings schema writes), `Fields` (`Name`, `Presentation`, `Id`, `Type`, `Available`), `References` (`Type` — a class id as text, `Targets` — the metaobjects it points at), `Error` | `Settings` — the setting edited; none — cancelled |
+| 11 ListSettings | a table's settings: `Settings` (the setting in force, in the node form the settings schema writes), `Fields` (`Name`, `Presentation`, `Id`, `Type`, `Available`, `Picture` — the column's, by its id, where the source describes itself; none — the attribute picture), `References` (`Type` — a class id as text, `Targets` — the metaobjects it points at), `Error` | `Settings` — the setting edited; none — cancelled |
 | 12 SimpleChoice | `Value` — a field's number or date, with its type | `Value` — the one chosen; none — dismissed |
 | 13 ComposerSettings | a report's settings: `Settings` (the setting in force), `Composition` (what the report arranges, in its node form), `Fields` and `References` as ListSettings has them — the fields its query offers, no `Id`; `Error` | `Settings` — the setting edited; none — cancelled |
 | 14 Error | a script's failure: `Picture`, `Text` — the error with its call stack | `Act`: 1 close the window, 2 and send it to the designer debugging the base, 3 and close the client — each does the one before it too; none — 1 |

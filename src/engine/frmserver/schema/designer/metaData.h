@@ -21,14 +21,15 @@ public:
 	virtual void Build(const ibSession& session, const ibDataNode& args, ibDataNode& result) const override;
 
 	// Open {Id} — the object's editor; Create {Type, Parent} — a new one of that class under that object (0: the
-	// configuration's own), and its editor opened, as a click on New did; Remove {Id}; Move {Id, Position} — put at that
-	// place among its parent's children; Copy {Id, File} — written into that file, uploaded empty, done in the asking;
-	// Paste {Type, Parent, File} — read from that one. The configuration's own, by the right to its base (data
-	// administration): Rollback, Apply — its ledger put to the person (ibDialogApplyChange), Load {File} — read from that
-	// uploaded file, Unload {File} — written into that one, uploaded empty, done in the asking; how each went is said to
-	// the person by the server. Refused, nothing done: no such object, a class its parent does not take, no such file, no
-	// such right. Each with Tab — in that tab's tree, an external file's (ibMetaDataDocument), not the configuration's:
-	// the configuration's own refused there.
+	// configuration's own), its rows shown with the answer (ibClientFrame::ShowProperties) — the tree selects it and
+	// opens its editor, as a click on New did; Remove {Id, Select} — and the rows of the object the tree selects after it
+	// shown; Move {Id, Position} — put at that place among its parent's children; Copy {Id, File} — written into that
+	// file, uploaded empty, done in the asking; Paste {Type, Parent, File} — read from that one. The configuration's
+	// own, by the right to its base (data administration): Rollback, Apply — its ledger put to the person
+	// (ibDialogApplyChange), Load {File} — read from that uploaded file, Unload {File} — written into that one, uploaded
+	// empty, done in the asking; how each went is said to the person by the server. Refused, nothing done: no such
+	// object, a class its parent does not take, no such file, no such right. Each with Tab — in that tab's tree, an
+	// external file's (ibMetaDataDocument), not the configuration's: the configuration's own refused there.
 	virtual std::function<void()> Command(const ibSession& session, s32 command,
 		const ibDataNode& args, ibProtocolRefusal& refusal, wxString& error) const override;
 
@@ -41,18 +42,6 @@ public:
 	// The object `name` names by its id — refused, null, when nothing of the configuration has it.
 	static ibValueMetaObject* FindObject(ibMetaData* metaData, const ibDataNode& args, const wxString& name,
 		ibProtocolRefusal& refusal, wxString& error);
-
-	// WHAT THE TREE READS NEXT, beside the frame: Create {Show} — the new object's id (Created) and its Properties;
-	// Create {Open} — its editor opened by the same work, and whether one was (Opened); Remove {Select} — the
-	// Properties of the object the tree selects after it (Selected). A server without these answers none of them, and
-	// the client reads and opens as before.
-	virtual void Answer(const ibSession& session, s32 command, const ibDataNode& args, ibDataNode& result) const override;
-
-private:
-
-	// The last Create's object and whether its editor opened — this client's (a doc manager's schemas are its frame's).
-	mutable s32 m_created = 0;
-	mutable bool m_opened = false;
 };
 
 #endif

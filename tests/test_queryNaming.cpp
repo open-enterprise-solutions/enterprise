@@ -17,6 +17,7 @@
 #include "backend/query/queryRender.h"
 #include "backend/query/queryRewrite.h"
 #include "backend/query/queryLowering.h"
+#include "core/query/queryAggregates.h"         // ibQueryAggregatesFor — which folds a type admits
 #include "backend/query/queryConstructorModel.h"
 #include "backend/composition/dataComposer.h"
 #include "backend/query/queryableFactory.h"      // ibQueryableSourceDescriptor — a virtual table that consumes its condition
@@ -592,7 +593,7 @@ bool Offers(const std::vector<ibQueryKeyword>& list, ibQueryKeyword keyword)
 TEST(QueryAggregateTypes, ANumberTakesEveryFold)
 {
 	const std::vector<ibQueryKeyword> allowed =
-		ibQueryLowering::AggregatesFor(TypeOf(ibValueTypes::TYPE_NUMBER));
+		ibQueryAggregatesFor(TypeOf(ibValueTypes::TYPE_NUMBER));
 	EXPECT_TRUE(Offers(allowed, ibQueryKeyword::Sum));
 	EXPECT_TRUE(Offers(allowed, ibQueryKeyword::Avg));
 	EXPECT_TRUE(Offers(allowed, ibQueryKeyword::Min));
@@ -605,7 +606,7 @@ TEST(QueryAggregateTypes, AStringIsOrderedButNotSummable)
 	// The whole point of the rule: `SUM(Description)` is not a mistake to be caught by the database
 	// in a dialect of its own — it is a choice that should never have been offered.
 	const std::vector<ibQueryKeyword> allowed =
-		ibQueryLowering::AggregatesFor(TypeOf(ibValueTypes::TYPE_STRING));
+		ibQueryAggregatesFor(TypeOf(ibValueTypes::TYPE_STRING));
 	EXPECT_FALSE(Offers(allowed, ibQueryKeyword::Sum));
 	EXPECT_FALSE(Offers(allowed, ibQueryKeyword::Avg));
 	EXPECT_TRUE(Offers(allowed, ibQueryKeyword::Min));
@@ -616,7 +617,7 @@ TEST(QueryAggregateTypes, AStringIsOrderedButNotSummable)
 TEST(QueryAggregateTypes, ADateIsOrderedAndNotSummable)
 {
 	const std::vector<ibQueryKeyword> allowed =
-		ibQueryLowering::AggregatesFor(TypeOf(ibValueTypes::TYPE_DATE));
+		ibQueryAggregatesFor(TypeOf(ibValueTypes::TYPE_DATE));
 	EXPECT_FALSE(Offers(allowed, ibQueryKeyword::Sum));
 	EXPECT_TRUE(Offers(allowed, ibQueryKeyword::Max));
 }
@@ -626,7 +627,7 @@ TEST(QueryAggregateTypes, AnUnknownTypeOffersEverything)
 	// ⚠ Empty means UNKNOWN, never "no type" — and unknown must not narrow. Which type a row holds
 	// is the row's business; refusing on "it might be a string" would be this answer inventing one,
 	// and it would take away a fold the query can perfectly well do.
-	const std::vector<ibQueryKeyword> allowed = ibQueryLowering::AggregatesFor(ibTypeDescription());
+	const std::vector<ibQueryKeyword> allowed = ibQueryAggregatesFor(ibTypeDescription());
 	EXPECT_TRUE(Offers(allowed, ibQueryKeyword::Sum));
 	EXPECT_TRUE(Offers(allowed, ibQueryKeyword::Count));
 }
@@ -635,7 +636,7 @@ TEST(QueryAggregateTypes, CountIsAlwaysThere)
 {
 	// A cell whose list is empty is a cell nobody can fill. Counting asks nothing of the type, so it
 	// is the one answer that always exists.
-	EXPECT_TRUE(Offers(ibQueryLowering::AggregatesFor(TypeOf(ibValueTypes::TYPE_BOOLEAN)),
+	EXPECT_TRUE(Offers(ibQueryAggregatesFor(TypeOf(ibValueTypes::TYPE_BOOLEAN)),
 		ibQueryKeyword::Count));
 }
 

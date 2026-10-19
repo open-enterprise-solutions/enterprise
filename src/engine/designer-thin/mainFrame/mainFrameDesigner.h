@@ -90,10 +90,6 @@ public:
 	// started with it when they switched it on (the desktop's).
 	virtual bool Show(bool show = true) override;
 
-	// The debugger's store, read in the login (Read) — not a call of its own at the start.
-	virtual std::vector<int> ReadsAtLogin() const override;
-	virtual void TakeLogin(const ibProtocolNode& answer) override;
-
 	// The configuration's tree and the messages — the desktop's, where the debugger shows a stop and what was said.
 	ibConfigurationTree* GetMetaWindow() const { return m_metaWindow; }
 	ibOutputWindow* GetOutputWindow() const { return m_outputWindow; }
@@ -121,8 +117,10 @@ protected:
 	// The designer's tabs — an external data processor's and report's tree — over the base's.
 	virtual ibTabDocument* CreateDocument(ibProtocolViewKind kind, long long tabId) override;
 
-	// The designer's Users and Options — the desktop's dialogs (Administration → Users, Tools → Options) — over the
-	// base's schemas.
+	// The debugger's store, read in the login — not a call of its own at the start.
+	virtual std::vector<ibProtocolSchema> GetStartSchemas() const override;
+	// The designer's Users and Options — the desktop's dialogs (Administration → Users, Tools → Options) — and the
+	// debugger made over its store as the login read it, over the base's schemas.
 	virtual void ShowSchema(ibProtocolSchema schema, const ibProtocolNode& shown) override;
 	// …and the questions only the designer is asked — the restructure's ledger (the desktop's ibDialogApplyChange), the
 	// kind of a form just made (ibDialogSelectTypeForm); the rest — the base's.
@@ -170,9 +168,6 @@ private:
 	// THE DEBUGGER — the engine's client, the designer's own (designer-thin/backend/debugger): its sockets go straight to
 	// the runtimes; its breakpoints are kept by the server. Made when the frame logged in, gone with the frame.
 	std::unique_ptr<ibDebuggerClient> m_debugClient;
-	// Its store as the login answered it, and whether it did: a server that does not know Read answers none.
-	ibProtocolNode m_debuggerStore;
-	bool m_debuggerStoreRead = false;
 
 	wxAuiToolBar* m_debugToolbar = nullptr;
 

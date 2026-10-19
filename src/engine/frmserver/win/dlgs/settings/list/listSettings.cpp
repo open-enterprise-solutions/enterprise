@@ -34,7 +34,7 @@ ibDataNode SettingsRequest(ibValueModel* model, const ibMetaData* metaData)
 					continue;
 				ibWriteSettingsField(fields, node->GetSourceName(), node->GetSourceSynonym(),
 					static_cast<ibMetaID>(node->GetSourceId()), node->GetTypeValueDesc(),
-					node->GetColumn() == nullptr || node->GetColumn()->IsAvailable(), metaData);
+					node->GetColumn() == nullptr || node->GetColumn()->IsAvailable(), node->GetSourcePicture(), metaData);
 				types.push_back(node->GetTypeValueDesc());
 			}
 		}
@@ -46,7 +46,7 @@ ibDataNode SettingsRequest(ibValueModel* model, const ibMetaData* metaData)
 				continue;
 			// …named by how it reads (its caption), as the reader's window speaks; the path stays its name.
 			ibWriteSettingsField(fields, col->GetColumnName(), col->GetColumnCaption(), static_cast<ibMetaID>(col->GetColumnID()),
-				col->GetColumnTypeValue(), col->IsColumnAvailable(), metaData);
+				col->GetColumnTypeValue(), col->IsColumnAvailable(), ibPictureDescription(), metaData);
 			types.push_back(col->GetColumnTypeValue());
 		}
 	}

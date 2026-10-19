@@ -36,12 +36,9 @@ public:
 	// The tree's tab — 0: the configuration's (the frame's MetaData), else an external file's.
 	long long GetTab() const { return m_tab; }
 
-	// Its tab became the active one, or the tree the focus — the object it holds is sent to the inspector, received anew
-	// only where another was shown (the desktop's ibMetaTreeView::OnActivateView).
+	// Its tab became the active one, or the tree the focus — the object it holds is sent to the inspector once the event
+	// is done, received anew only where another was shown (the desktop's ibMetaTreeView::OnActivateView).
 	void ActivateTree();
-	// …the tree the focus came to: sent once the event that brought it is done — a click on another row selects it on
-	// the way, and only that row is shown (the one left selected was asked of the server first, for nothing).
-	void ActivateTreeLater();
 
 	// THE MODULE, SHOWN — the desktop's (ibConfigurationTree::EditModule), by the address a runtime stopped or failed
 	// at: its editor opened by the server (Open {Module}), the line put before the person — the run line (setRunLine)
@@ -170,8 +167,6 @@ private:
 	// ⭐ TRUE WHILE OnSetFocus IS ITSELF MOVING THE ACTIVATION — the desktop's: on Cocoa a focus moved tells the window
 	// that held it inside SetFocus, and the handler answered its own move until the stack ran out.
 	bool m_switchingActivation = false;
-	// How many rows the person has selected — an activation left for later is not sent once a row was selected after it.
-	unsigned m_selections = 0;
 
 	wxAuiToolBar* m_metaTreeToolbar = nullptr;
 	wxTreeCtrl* m_metaTreeCtrl = nullptr;

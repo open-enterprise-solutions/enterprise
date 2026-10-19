@@ -25,13 +25,7 @@
 
 #include "core/description/typeDescription.h"    // ibTypeDescription (the column's L3 type)
 #include "backend/databaseLayer/columnType.h"   // ibColumnType — the canonical type a column's field declares
-
-// ⚠ NOT <wx/icon.h> — FORWARD-DECLARED. backend.dll is GUI-free (CLAUDE.md), and this header is
-// included by every attribute metaobject, so one GUI include here reaches ~25 direct includers and
-// everything behind them. A virtual returning wxIcon compiles against an incomplete type; only the
-// two files that DEFINE such a body need the real header, and they already include it.
-class wxIcon;
-
+#include "core/description/pictureDescription.h"   // ibPictureDescription — the column's picture, by its number (GetColumnPicture)
 #include "core/query/queryBalanceRole.h"      // ibBalanceRole — what a column is in a balance (GetBalanceRole)
 
 #include <limits>   // numeric_limits — the ceiling a composed id may not pass (CanComposeSyntheticId)
@@ -156,15 +150,19 @@ public:
 	virtual bool IsAvailable() const { return true; }
 
 	// THE COLUMN'S OWN PICTURE — asked of the column, never deduced by the reader. The default is
-	// the plain ATTRIBUTE picture from the icon library, so every column is dressed even when it
-	// stands behind no metaobject (a view's column, a temp table's); a column that IS a metaobject
-	// answers with whatever picture its own metatype registered. That is what keeps a dimension
-	// from looking like a resource without anybody, anywhere, keeping a list of kinds and a switch
-	// over it — a metatype added tomorrow is dressed the day it registers an icon.
+	// the plain ATTRIBUTE picture, so every column is dressed even when it stands behind no
+	// metaobject (a view's column, a temp table's); a column that IS a metaobject answers with its
+	// metatype's. That is what keeps a dimension from looking like a resource without anybody,
+	// anywhere, keeping a list of kinds and a switch over it — a metatype added tomorrow is dressed
+	// the day it registers.
 	//
-	// Body in metaAttributeObject_res.cpp, next to the icon it returns: this header must not pull
-	// the metadata tree in (the attribute metaobject includes THIS file).
-	virtual wxIcon GetColumnIcon() const;
+	// ⭐ A NUMBER, NOT AN IMAGE: the class whose picture it is, as a tree row names one to the client
+	// (ibClientFrame::SendPicture). Whoever draws it makes its own image from it — the desktop beside
+	// the server, the client from the server's answer.
+	//
+	// Body in metaAttributeObject_res.cpp, next to the attribute class it names: this header must not
+	// pull the metadata tree in (the attribute metaobject includes THIS file).
+	virtual ibPictureDescription GetColumnPicture() const;
 
 	// …AND WHAT IT IS IN A BALANCE (ibBalanceRole) — a fact about the column a person is shown, like its
 	// picture, so it is asked here, where the field lists see a column. Answered by the view that published

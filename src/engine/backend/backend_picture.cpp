@@ -253,8 +253,20 @@ wxIcon ibBackendPicture::GetPictureAsIcon(const ibPictureID& id)
 	const ibCtorAbstractType* so = ibValue::GetAvailableCtor(id);
 	if (so != nullptr)
 		return so->GetClassIcon();
-	
+
 	return wxNullIcon;
+}
+
+wxIcon ibBackendPicture::GetPictureAsIcon(const ibPictureDescription& pictureDesc, const ibMetaData* metaData)
+{
+	if (pictureDesc.m_type == ibPictureType::eFromBackend)
+		return GetPictureAsIcon(pictureDesc.m_class_identifier);
+
+	const wxBitmap bitmap = CreatePicture(pictureDesc, metaData);
+	wxIcon icon;
+	if (bitmap.IsOk())
+		icon.CopyFromBitmap(bitmap);
+	return icon;
 }
 
 std::vector<ibBackendPictureEntry> ibBackendPicture::GetArrayPicture()

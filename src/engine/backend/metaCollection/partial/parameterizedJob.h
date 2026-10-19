@@ -38,7 +38,7 @@
 #include "commonObject.h"
 #include "reference/reference.h"
 
-#include "backend/job/jobSchedule.h"
+#include "core/job/jobSchedule.h"
 #include "backend/propertyManager/property/propertySchedule.h"   // the designer-side default schedule
 #include "backend/system/value/valueJob.h"                        // g_valueScheduleCLSID — the Schedule requisite's type
 

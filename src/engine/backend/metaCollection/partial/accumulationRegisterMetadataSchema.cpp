@@ -496,7 +496,7 @@ const ibBackendQueryable* ibValueMetaObjectAccumulationRegister::GetViewQueryabl
 		columns.push_back(ibTempColumn(periodName, periodField,
 		                               GetRegisterPeriod()->GetTypeDesc(), ibRegDerivedColumnId(GetRegisterPeriod()->GetMetaID(), 1),
 		                               GetRegisterPeriod()->GetSynonym(),
-		                               ibBackendQueryColumn::Kind::Computed, GetRegisterPeriod()->GetColumnIcon())
+		                               ibBackendQueryColumn::Kind::Computed, GetRegisterPeriod()->GetColumnPicture())
 		                  .PlaysInBalance(ibBalanceRole::Moment, ibSourcePeriodRank(1)));
 
 		// The coarser projections the view exposes alongside the stored period. DERIVED from the
@@ -516,7 +516,7 @@ const ibBackendQueryable* ibValueMetaObjectAccumulationRegister::GetViewQueryabl
 				                               GetRegisterPeriod()->GetTypeDesc(),
 				                               ibRegDerivedColumnId(GetRegisterPeriod()->GetMetaID(), 2 + static_cast<unsigned int>(u.first)),
 				                               wxEmptyString, ibBackendQueryColumn::Kind::Computed,
-				                               GetRegisterPeriod()->GetColumnIcon())
+				                               GetRegisterPeriod()->GetColumnPicture())
 				                  .PlaysInBalance(ibBalanceRole::Moment, ibSourcePeriodRank(1)));   // a grain of the same period
 	}
 
@@ -559,7 +559,7 @@ const ibBackendQueryable* ibValueMetaObjectAccumulationRegister::GetViewQueryabl
 		                               ibAccumFigureField(ibRegValueField(res), suffix),
 		                               res->GetTypeDesc(), ibRegDerivedColumnId(res->GetMetaID(), ++figureNo),
 		                               ibRegColumnCaptionOf(res->GetSynonym(), ibRegFigureCaption(suffix)),
-		                               ibBackendQueryColumn::Kind::Computed, res->GetColumnIcon()).StandsFor(res)
+		                               ibBackendQueryColumn::Kind::Computed, res->GetColumnPicture()).StandsFor(res)
 		                  .PlaysInBalance(ibRegFigureBalanceRole(suffix)));
 	};
 

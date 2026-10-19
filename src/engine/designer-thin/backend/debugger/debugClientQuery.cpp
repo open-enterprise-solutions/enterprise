@@ -45,7 +45,18 @@ namespace {
 
 ///////////////////////////////////////////////////////////////////////////////////////
 
-ibDebuggerClient::ibDebuggerClient(const ibProtocolNode* store) :
+ibDebuggerClient::ibDebuggerClient() :
+	m_activeSocket(nullptr),
+	m_adapter(new ibDebuggerClientAdapter),
+	m_enterLoop(false), m_connectionSuccess(false), m_numberOfConnectionAttempts(numberOfConnectionAttempts)
+{
+	ibDebuggerClient::CreateBreakpointDatabase();
+	ms_debugClient = this;
+
+	LoadModuleCollection();
+}
+
+ibDebuggerClient::ibDebuggerClient(const ibProtocolNode& store) :
 	m_activeSocket(nullptr),
 	m_adapter(new ibDebuggerClientAdapter),
 	m_enterLoop(false), m_connectionSuccess(false), m_numberOfConnectionAttempts(numberOfConnectionAttempts)
@@ -74,20 +85,22 @@ bool ibDebuggerClient::CreateBreakpointDatabase()
 // THE CONFIGURATION THE DEBUGGER IS OF, as the engine's was given it: its guid (the runtime's verify) and every module,
 // read with its lines — what the desktop's tree did for each module at load (OnBeforeRunMetaObject), and its modules
 // again at an apply (OnSaveMetaObject).
-void ibDebuggerClient::LoadModuleCollection(const ibProtocolNode* store)
+void ibDebuggerClient::LoadModuleCollection()
 {
-	// Read in the login already when the server could (login's Read) — empty when the configuration has no debugger,
-	// which costs nothing more then: a start was a call of its own for an empty answer.
 	ibProtocolNode answer;
-	if (store != nullptr)
-		answer = *store;
-	else if (!AskStore(ibProtocolNode(), answer))
-		return;
-	m_configGuid = ibGuid(answer.GetString(ibProtocolName::Guid));
+	if (AskStore(ibProtocolNode(), answer))
+		LoadModuleCollection(answer);
+}
+
+// …from the store's answer, asked or read in the login already (the designer's GetStartSchemas) — empty when the
+// configuration has no debugger: a start was a call of its own for an empty answer.
+void ibDebuggerClient::LoadModuleCollection(const ibProtocolNode& store)
+{
+	m_configGuid = ibGuid(store.GetString(ibProtocolName::Guid));
 	// InitializeModule over the one answer: each row brings its module's breakpoints, where InitializeModule would ask
 	// the store for them a module at a time — a call each, 71 at a designer's start: ten seconds 130 ms from the
 	// server (2026-10-15).
-	for (const ibProtocolNode& module : answer.FindChild(ibProtocolName::Rows).Children()) {
+	for (const ibProtocolNode& module : store.FindChild(ibProtocolName::Rows).Children()) {
 		const wxString strModuleName = module.GetString(ibProtocolName::Module);
 		std::map<unsigned int, int>& list_module_offset = m_listOffsetBreakpoint[strModuleName];
 		list_module_offset.clear();

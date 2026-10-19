@@ -22,6 +22,7 @@
 #include "clientFrameDesigner.h"
 #include "clientFrameRuntime.h"
 #include "clientHost.h"      // NotifyChanged — the client told its frame changed by itself
+#include "propertyInspector.h"   // ShowProperties — an object's rows, as the inspector writes them
 #include "protocol/protocol.h"
 #include "clientSession.h"
 
@@ -190,6 +191,24 @@ bool ibClientFrame::TakeExitPending()
 	const bool was = m_exitPending;
 	m_exitPending = false;
 	return was;
+}
+
+void ibClientFrame::ShowProperties(ibValueMetaObject* object, s32 tabId)
+{
+	ibPropertyInspector inspector;
+	inspector.SelectObject(object, tabId);
+	ibDataNode rows;
+	inspector.OnDraw(rows);
+	std::lock_guard<std::mutex> lock(m_msgMutex);
+	m_shownProperties.push_back(std::move(rows));
+}
+
+std::vector<ibDataNode> ibClientFrame::TakeShownProperties()
+{
+	std::lock_guard<std::mutex> lock(m_msgMutex);
+	std::vector<ibDataNode> out;
+	out.swap(m_shownProperties);
+	return out;
 }
 
 

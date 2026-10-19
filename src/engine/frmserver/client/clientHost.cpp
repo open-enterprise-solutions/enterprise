@@ -197,6 +197,58 @@ const ibBackendCommandItem* FindCommand(const ibSession& session, ibMetaID metaI
 	return metaData != nullptr ? dynamic_cast<const ibBackendCommandItem*>(metaData->FindAnyObjectByFilter(metaId)) : nullptr;
 }
 
+// WHAT A SCHEMA SHOWS, asked on the client's session: what it lists may depend on the person's rights. Without the right
+// to it, the person gets an error, not the schema; what it could not read is the person's refusal, in the base's words —
+// an unreadable list is not an empty one (the users' ListAll throws it). The method Schema's, and a login's Read.
+bool BuildSchema(const ibClientSchema& schema, const std::shared_ptr<ibSession>& session, const ibDataNode& args,
+	ibDataNode& result, ibProtocolRefusal& refusal, wxString& error)
+{
+	bool done = false;
+	session->Submit([&schema, &session, &args, &result, &done, &refusal, &error]() {
+		if (!schema.AccessRight(*session)) {
+			refusal = ibProtocolRefusal::NoRight;
+			error = wxT("no right to this schema");
+			return;
+		}
+		try {
+			schema.Build(*session, args, result);
+			done = true;
+		}
+		catch (const ibCoreException& err) {
+			refusal = ibProtocolRefusal::Failed;
+			error = err.GetErrorDescription();
+		}
+	}).get();
+	return done;
+}
+
+// …AND EVERY SCHEMA A LOGIN NAMES (its Read), each built as above, beside the frame of its start. A schema the person has
+// no right to, or one that could not be read, is left out: the client asks for it, and is told why.
+void BuildSchema(ibClientInstance& instance, const ibDataNode& params, ibDataNode& result)
+{
+	const ibDataValue* const reads = params.FindField(ibProtocolName::Read);
+	ibClientFrame* const frame = instance.GetFrame();
+	const std::shared_ptr<ibSession> session = instance.ShareSession();
+	if (reads == nullptr || reads->Kind() != ibDataKind::Array || frame == nullptr || session == nullptr)
+		return;
+	ibDataNode& answered = result.Child(ibProtocolName::Read);
+	for (const ibDataValue& read : reads->AsArray()) {
+		if (read.Kind() != ibDataKind::Child || read.AsChild() == nullptr)
+			continue;
+		const s32 kind = read.AsChild()->GetValue<s32>(ibProtocolName::Schema);
+		const ibClientSchema* const schema = frame->GetDocumentManager()->FindSchema(static_cast<ibProtocolSchema>(kind));
+		if (schema == nullptr)
+			continue;
+		ibDataNode built;
+		ibProtocolRefusal refusal = ibProtocolRefusal::None;
+		wxString error;
+		if (!BuildSchema(*schema, session, ibDataNode(), built, refusal, error))
+			continue;
+		built.SetValue(ibProtocolName::Schema, kind);
+		answered.Children().push_back(std::move(built));
+	}
+}
+
 // THE MENU AS IT STANDS NOW: each item with what it does, a command with its name, default key and picture, and whether
 // it is enabled now (the desktop's EVT_UPDATE_UI): a command by the active tab's document, a schema by its own right —
 // the same questions a call of it is refused by.
@@ -710,51 +762,6 @@ wxString ibClientHost::Call(const wxString& text, const void* connection, const 
 	return answer;
 }
 
-void ibClientHost::ReadAtLogin(Client& client, const ibDataNode& params, ibDataNode& result)
-{
-	const ibDataValue* const reads = params.FindField(wxString::FromUTF8(ibProtocolName::Read));
-	ibClientFrame* const frame = client.instance->GetFrame();
-	const std::shared_ptr<ibSession> session = client.instance->ShareSession();
-	if (reads == nullptr || reads->Kind() != ibDataKind::Array || frame == nullptr || session == nullptr)
-		return;
-	ibDataNode& answered = result.Child(wxString::FromUTF8(ibProtocolName::Read));
-	for (const ibDataValue& read : reads->AsArray()) {
-		if (read.Kind() != ibDataKind::Child || read.AsChild() == nullptr)
-			continue;
-		const s32 kind = read.AsChild()->GetValue<s32>(wxString::FromUTF8(ibProtocolName::Schema));
-		const ibClientSchema* const schema = frame->GetDocumentManager()->FindSchema(static_cast<ibProtocolSchema>(kind));
-		if (schema == nullptr)
-			continue;
-		// A schema the person has no right to, or one that could not be read, is left out: the client asks for it.
-		ibDataNode built;
-		bool read_ = false;
-		session->Submit([schema, &session, &built, &read_]() {
-			if (!schema->AccessRight(*session))
-				return;
-			try {
-				schema->Build(*session, ibDataNode(), built);
-				read_ = true;
-			}
-			catch (const ibCoreException&) {
-			}
-		}).get();
-		if (!read_)
-			continue;
-		built.SetValue(wxString::FromUTF8(ibProtocolName::Schema), kind);
-		answered.Children().push_back(std::move(built));
-	}
-}
-
-void ibClientHost::AnswerAfter(Client& client, ibSession& session, ibDataNode& result)
-{
-	// Only once the command's work is done — a question still waiting answers with the frame alone — and once.
-	if (!client.answerAfter || client.unsettled.valid())
-		return;
-	const std::function<void(ibSession&, ibDataNode&)> answer = std::move(client.answerAfter);
-	client.answerAfter = nullptr;
-	session.Submit([&answer, &session, &result]() { answer(session, result); }).get();
-}
-
 bool ibClientHost::Call(ibProtocolMethod method, const ibDataNode& params, ibDataNode& result, ibProtocolRefusal& refusal,
 	wxString& error, const void* connection, const wxString& address)
 {
@@ -830,7 +837,7 @@ bool ibClientHost::Call(ibProtocolMethod method, const ibDataNode& params, ibDat
 			// would build it, beside the frame: the designer's debugger store was a call of its own at every start, for
 			// an empty answer where the configuration has no debugger. Only once the start is done, not waiting.
 			if (done && !client->unsettled.valid())
-				ReadAtLogin(*client, params, result);
+				BuildSchema(*client->instance, params, result);
 		}
 		}
 	}
@@ -928,22 +935,7 @@ bool ibClientHost::Call(ibProtocolMethod method, const ibDataNode& params, ibDat
 					refuse(ibProtocolRefusal::NotFound, wxT("no such schema"));
 				}
 				else if (params.FindField(wxT("Command")) == nullptr) {
-					// Without the right to it, the person gets an error, not the schema.
-					session->Submit([schema, &session, &args, &result, &done, &refuse]() {
-						if (!schema->AccessRight(*session))
-							refuse(ibProtocolRefusal::NoRight, wxT("no right to this schema"));
-						else {
-							// What the schema could not read is the person's refusal, in the base's words — an
-							// unreadable list is not an empty one (the users' ListAll throws it).
-							try {
-								schema->Build(*session, args, result);
-								done = true;
-							}
-							catch (const ibCoreException& err) {
-								refuse(ibProtocolRefusal::Failed, err.GetErrorDescription());
-							}
-						}
-					}).get();
+					done = BuildSchema(*schema, session, args, result, refusal, error);
 				}
 				else {
 					// What a person did in it: refused before anything is done, or the work that does it — run as the
@@ -956,22 +948,8 @@ bool ibClientHost::Call(ibProtocolMethod method, const ibDataNode& params, ibDat
 						else
 							work = schema->Command(*session, command, args, refusal, error);
 					}).get();
-					client->answerAfter = nullptr;
 					if (work)
 						done = Run(*client, [work](ibClientFrame*) { work(); }, since, result, refusal, error);
-					// …and what the schema shows after it, beside the frame, where the client would read it next: the
-					// work done — or, waiting for the person, in the answer to the respond that lets it finish.
-					if (done) {
-						client->answerAfter = [schema, command, args](ibSession& session, ibDataNode& answer) {
-							try {
-								schema->Answer(session, command, args, answer);
-							}
-							catch (const ibCoreException&) {
-								// …not read: the client reads it itself, as without it
-							}
-						};
-						AnswerAfter(*client, *session, result);
-					}
 				}
 			}
 			else if (method == ibProtocolMethod::Execute) {
@@ -1037,8 +1015,6 @@ bool ibClientHost::Call(ibProtocolMethod method, const ibDataNode& params, ibDat
 					refuse(ibProtocolRefusal::NotFound, wxT("no such request is waiting"));
 				else
 					done = Run(*client, nullptr, since, result, refusal, error);
-				if (done && session != nullptr)
-					AnswerAfter(*client, *session, result);
 			}
 			else if (method == ibProtocolMethod::Fetch) {
 				ibClientFrame* const frame = client->instance->GetFrame();
@@ -1548,6 +1524,14 @@ void ibClientHost::DrawFrame(ibClientFrame* frame, ibDataNode& state, ibDataNode
 	// Exit done — the client goes; its session goes when it logs out.
 	if (frame->TakeExitPending())
 		events.SetValue(wxT("Exit"), true);
+	// The inspector's rows of what a door acted on (ShowProperties) — each by its object's id and tab: the client shows
+	// them without reading them again.
+	std::vector<ibDataNode> shown = frame->TakeShownProperties();
+	if (!shown.empty()) {
+		ibDataNode& properties = events.Child(wxT("Properties"));
+		for (ibDataNode& rows : shown)
+			properties.Children().push_back(std::move(rows));
+	}
 
 	if (frame->HasPendingRequest()) {
 		const ibClientFrame::PendingRequest pending = frame->PeekPendingRequest();
