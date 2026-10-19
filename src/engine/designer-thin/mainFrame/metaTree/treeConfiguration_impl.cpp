@@ -449,6 +449,7 @@ void ibMetaTreeBase::PropertyItem()
 
 void ibMetaTreeBase::SelectItem()
 {
+	++m_selections;
 	UpdateToolbar();
 
 	// WHAT THE INSPECTOR SHOWS — the row's object, made as the row is selected, what the server says of it asked as it is
@@ -467,6 +468,15 @@ void ibMetaTreeBase::ActivateTree()
 	ibObjectInspector* const inspector = objectInspector;
 	if (inspector != nullptr)
 		inspector->SelectObject(m_object.get());
+}
+
+void ibMetaTreeBase::ActivateTreeLater()
+{
+	const unsigned selections = m_selections;
+	CallAfter([this, selections]() {
+		if (selections == m_selections)
+			ActivateTree();
+	});
 }
 
 void ibMetaTreeBase::UpItem()

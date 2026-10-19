@@ -165,5 +165,5 @@ void ibMetaTreeBase::ibMetaTreeView::OnActivateView(bool activate, ibFrontendVie
 	ibFrontendView* WXUNUSED(deactiveView))
 {
 	if (activate)
-		m_ownerTree->ActivateTree();
+		m_ownerTree->ActivateTreeLater();
 }
