@@ -5,7 +5,7 @@
 // ONE PLACE FOR THE READINGS, as the accumulation and accounting registers have one for their totals. Nothing is
 // kept beside the records (calculationRegister.h, "The fact — a reading of the records"); what is here READS them:
 // the fact, a relation over the records and the chart's Displacing section, and the companion that publishes it
-// to L3 as `<Register>.ActualActionPeriod`; and the base (GetBase).
+// to L3 as `<Register>.ActualActionPeriod`; the base (GetBase), and the same reading as `<Register>.Base<BaseRegister>`.
 //
 
 #include "calculationRegister.h"
@@ -371,7 +371,7 @@ namespace {
 
 // A record, as the register lays one out (Max, 2026-09-14): the registration, the recorder and the line first, the
 // position, the base period, Active, Storno, the dimensions. Every reading of the records publishes these first —
-// the fact, the schedule data.
+// the fact, the schedule data, the base.
 std::vector<const ibValueMetaObjectAttributeBase*> ibCalcRecordLayout(const ibValueMetaObjectCalculationRegister* reg)
 {
 	std::vector<const ibValueMetaObjectAttributeBase*> record = { reg->GetRegistrationPeriod(), reg->GetRegisterRecorder(),
@@ -384,6 +384,18 @@ std::vector<const ibValueMetaObjectAttributeBase*> ibCalcRecordLayout(const ibVa
 	record.push_back(reg->GetStorno());
 	for (const ibValueMetaObjectDimension* dimension : reg->GetDimensionArrayObject())
 		record.push_back(dimension);
+	return record;
+}
+
+// A record's own columns: the record as the register lays it out (ibCalcRecordLayout), its resources, its attributes —
+// what the schedule data and the base publish of it.
+std::vector<const ibValueMetaObjectAttributeBase*> ibCalcRecordAttributes(const ibValueMetaObjectCalculationRegister* reg)
+{
+	std::vector<const ibValueMetaObjectAttributeBase*> record = ibCalcRecordLayout(reg);
+	for (const ibValueMetaObjectResource* resource : reg->GetResourceArrayObject())
+		record.push_back(resource);
+	for (const ibValueMetaObjectAttributeBase* attribute : reg->GetAttributeArrayObject())
+		record.push_back(attribute);
 	return record;
 }
 
@@ -442,14 +454,14 @@ std::vector<const ibBackendQueryColumn*> ibCalcFactQueryable::GetPrimaryKeyColum
 
 namespace {
 
-// ⭐⭐ WHAT A READING OF THE RECORDS NARROWS ITS TABLES BY — the fact and the schedule data alike, from the same four
-// arguments (ibCalcViewArg) and the WHERE around the reading (`extra`). The reading's conditions on the subject's own
+// ⭐⭐ WHAT A READING OF THE RECORDS NARROWS ITS TABLES BY — the fact, the schedule data and the base alike, from the
+// same arguments (ibCalcViewArg) and the WHERE around the reading (`extra`). The reading's conditions on the subject's own
 // fields — whichever way they were written — become the narrowing of the tables the relation reads: a dimension
 // narrows every one of them by equality, the rest of the subject the subject alone (calculationRegister.h says
 // why), a date by a range as well. A narrowing only ever keeps MORE than the condition: each reading applies the
 // whole condition itself afterwards. `pieces` says whether the reading's two action days are a piece's (the fact)
 // or the record's own (the schedule data).
-ibCalcNarrowing ibCalcNarrowingOf(const ibValueMetaObjectCalculationRegister* reg, const ibCalcViewSpec& spec, bool pieces,
+ibCalcNarrowing ibCalcNarrowingOf(const ibValueMetaObjectCalculationRegister* reg, bool pieces,
 	const std::vector<ibQueryCondition>& extra, const ibQueryPredicatePtr& condition,
 	const ibValue& moment, const ibValue& actionFrom, const ibValue& actionTo)
 {
@@ -550,7 +562,9 @@ ibCalcNarrowing ibCalcNarrowingOf(const ibValueMetaObjectCalculationRegister* re
 	if (terms.empty() && !before)
 		return nullptr;
 	const ibMetaData* metaData = reg->GetMetaData();
-	const wxString period = spec.m_period;
+	// The registration period's field — the register's own, kept whether or not its records keep action periods (a
+	// base is read for those that do not).
+	const wxString period = ibRegValueField(reg->GetRegistrationPeriod());
 	return [terms, before, period, metaData](const wxString& alias, bool subject) {
 		ibQueryExprPtr all;
 		if (before)
@@ -582,7 +596,7 @@ ibQueryRamTable ibCalcFactQueryable::ComputeRows(const std::vector<ibQueryCondit
 
 	const ibCalcViewSpec spec = ibCalcViewSpecOf(m_reg);
 	const ibMetaData* metaData = m_reg->GetMetaData();
-	const ibCalcNarrowing narrowing = ibCalcNarrowingOf(m_reg, spec, /*pieces*/ true, extra, m_condition, m_moment, m_actionFrom, m_actionTo);
+	const ibCalcNarrowing narrowing = ibCalcNarrowingOf(m_reg, /*pieces*/ true, extra, m_condition, m_moment, m_actionFrom, m_actionTo);
 	const ibQueryRelPtr relation = ibCalcFactRelation(spec, narrowing);
 	if (!relation)
 		return out;
@@ -716,39 +730,43 @@ void ibCalcFactSourceDescriptor::FillConditionExplorer(ibSourceDataObject::ibSou
 
 namespace {
 
-// Each item of a comma-separated list, trimmed; empty items dropped.
-std::vector<wxString> ibCalcBaseItemsOf(const wxString& list)
+// Each item of a comma-separated list, trimmed; empty items dropped. The engine's string, as the argument holds it: a
+// copy of it is a count, and nothing is made a wxString on the way (a name meeting a metadata name asks IsSameAs).
+std::vector<ibString> ibCalcBaseItemsOf(const ibString& list)
 {
-	std::vector<wxString> out;
-	for (wxString item : wxSplit(list, wxT(','), wxT('\0'))) {
-		item.Trim().Trim(false);
+	std::vector<ibString> out;
+	for (size_t from = 0;;) {
+		const size_t comma = list.find(wxT(','), from);
+		const ibString item = list.Mid(from, comma == ibString::npos ? ibString::npos : comma - from).TrimAll();
 		if (!item.IsEmpty())
 			out.push_back(item);
+		if (comma == ibString::npos)
+			return out;
+		from = comma + 1;
 	}
-	return out;
 }
 
 // "Register.Field": the register named — one this register takes a base from — and the field's name after the dot.
 const ibValueMetaObjectCalculationRegister* ibCalcBaseRegisterOf(const ibValueMetaObjectCalculationRegister* reg,
-	const wxString& path, wxString& field)
+	const ibString& path, ibString& field)
 {
 	const int dot = path.Find(wxT('.'));
 	if (dot == wxNOT_FOUND)
 		ibBackendCoreException::Error(_("GetBase: '%s' is not written as 'Register.Field'"), path);
-	const wxString name = path.Left(dot);
+	const ibString name = path.Left(dot);
 	field = path.Mid(dot + 1);
 	for (const ibValueMetaObjectCalculationRegister* related : reg->GetRelatedRegisters())
-		if (stringUtils::CompareString(related->GetName(), name))
+		if (name.IsSameAs(related->GetName(), false))
 			return related;
 	ibBackendCoreException::Error(_("GetBase: '%s' is not a register '%s' takes a base from"), name, reg->GetName());
 	return nullptr;
 }
 
 template <typename T, typename List>
-T* ibCalcNamed(const List& list, const wxString& name)
+T* ibCalcNamed(const List& list, const ibString& name)
 {
 	for (T* one : list)
-		if (one != nullptr && stringUtils::CompareString(one->GetName(), name))
+		if (one != nullptr && name.IsSameAs(one->GetName(), false))
 			return one;
 	return nullptr;
 }
@@ -767,8 +785,8 @@ ibCalcBaseAsked ibCalcBaseAskedOf(const ibValueMetaObjectCalculationRegister* re
 		ibValue item;
 		figures->GetAt(ibValue(static_cast<int>(i)), item);
 		ibCalcBaseAsked::ibFigure figure;
-		for (const wxString& path : ibCalcBaseItemsOf(item.GetString())) {
-			wxString name;
+		for (const ibString& path : ibCalcBaseItemsOf(item.GetString())) {
+			ibString name;
 			const ibValueMetaObjectCalculationRegister* base = ibCalcBaseRegisterOf(reg, path, name);
 			const ibValueMetaObjectResource* resource = ibCalcNamed<ibValueMetaObjectResource>(base->GetResourceArrayObject(), name);
 			if (resource == nullptr)
@@ -786,14 +804,14 @@ ibCalcBaseAsked ibCalcBaseAskedOf(const ibValueMetaObjectCalculationRegister* re
 		ibBackendCoreException::Error(_("GetBase: the dimensions are a structure of this register's dimensions"));
 	for (long key = 0; key < pairs->GetNProps(); ++key) {
 		ibCalcBaseAsked::ibPairing pairing;
-		const wxString own = pairs->GetPropName(key);
+		const ibString& own = pairs->GetPropName(key);
 		pairing.m_own = ibCalcNamed<ibValueMetaObjectDimension>(reg->GetDimensionArrayObject(), own);
 		if (pairing.m_own == nullptr)
 			ibBackendCoreException::Error(_("GetBase: '%s' is not a dimension of '%s'"), own, reg->GetName());
 		ibValue value;
 		pairs->GetPropVal(key, value);
-		for (const wxString& path : ibCalcBaseItemsOf(value.GetString())) {
-			wxString name;
+		for (const ibString& path : ibCalcBaseItemsOf(value.GetString())) {
+			ibString name;
 			const ibValueMetaObjectCalculationRegister* base = ibCalcBaseRegisterOf(reg, path, name);
 			const ibValueMetaObjectDimension* dimension = ibCalcNamed<ibValueMetaObjectDimension>(base->GetDimensionArrayObject(), name);
 			if (dimension == nullptr)
@@ -808,8 +826,8 @@ ibCalcBaseAsked ibCalcBaseAskedOf(const ibValueMetaObjectCalculationRegister* re
 		for (unsigned int i = 0; i < breakdown->Count(); ++i) {
 			ibValue item;
 			breakdown->GetAt(ibValue(static_cast<int>(i)), item);
-			wxString name;
-			const ibValueMetaObjectCalculationRegister* base = ibCalcBaseRegisterOf(reg, item.GetString().Trim().Trim(false), name);
+			ibString name;
+			const ibValueMetaObjectCalculationRegister* base = ibCalcBaseRegisterOf(reg, item.GetString().TrimAll(), name);
 			const ibValueMetaObjectAttributeBase* field = ibCalcNamed<ibValueMetaObjectAttributeBase>(base->GetGenericAttributeArrayObject(), name);
 			if (field == nullptr)
 				ibBackendCoreException::Error(_("GetBase: register '%s' has no field '%s'"), base->GetName(), name);
@@ -819,33 +837,41 @@ ibCalcBaseAsked ibCalcBaseAskedOf(const ibValueMetaObjectCalculationRegister* re
 	return asked;
 }
 
+// ⭐ ONE RULE FOR WHAT A RECORD ASKS WITH, whoever holds it — the line in a set, a record read for the manager or the
+// Base table. A register keeping no base period has no such columns, and its records ask over the period they are
+// registered in (ibCalcReadBase).
+ibCalcBaseRecord ibCalcBaseRecordOf(const ibValueMetaObjectCalculationRegister* reg, const ibCalcBaseAsked& asked,
+	const std::function<ibValue(const ibValueMetaObjectAttributeBase*)>& valueOf)
+{
+	ibCalcBaseRecord record;
+	record.m_line = valueOf(reg->GetRegisterLineNumber());
+	record.m_type = valueOf(reg->GetCalculationType());
+	if (reg->IsUseBasePeriod()) {
+		record.m_from = valueOf(reg->GetBasePeriodStart()).GetDate();
+		record.m_to = valueOf(reg->GetBasePeriodEnd()).GetDate();
+	}
+	record.m_registration = valueOf(reg->GetRegistrationPeriod()).GetDate();
+	for (const ibCalcBaseAsked::ibPairing& pairing : asked.m_dimensions)
+		record.m_dimensions.push_back(valueOf(pairing.m_own));
+	return record;
+}
+
+namespace {
+
 // ⭐ EACH SIDE READ ONCE, MATCHED HERE. The records asking come in hand (a record's GetBase: the one being written;
 // the manager's: the recorder's, read by it); the base registers' records are read once for the span of their base
 // periods — narrowed by every paired dimension the records agree on, so one record reads one employee — and meet
 // the records here, by (type, paired values). A join into the fact has no index to ride (the records by the recorder
 // were looked up per piece: 97 s where two reads took 20, 2026-09-14). The division stays here, in exact decimals: a
 // NUMERIC divided in SQL keeps the scale of its operands and cuts at the cent on every piece.
-ibValue ibCalcReadBase(const ibValueMetaObjectCalculationRegister* reg, const ibCalcBaseAsked& asked,
-	const std::vector<ibCalcBaseRecord>& records)
+//
+// Said a row at a time — the record's place among `records`, its section values, a sum a figure each: one row a
+// record, or a record and a section, in the records' order. GetBase lays the rows out as a value table (below), the
+// Base table as its own rows (ibCalcBaseQueryable::ComputeRows).
+void ibCalcReadBase(const ibValueMetaObjectCalculationRegister* reg, const ibCalcBaseAsked& asked,
+	const std::vector<ibCalcBaseRecord>& records,
+	const std::function<void(size_t record, const std::vector<ibValue>& sections, const std::vector<ibNumber>& figures)>& row)
 {
-	// The fast table the answer is filled into (ibQueryRamTable::ToValueTable loads it), its columns numbered in the
-	// order they stand: the line, a figure each, a section each.
-	ibQueryRamTable table;
-	const ibMetaID lineColumn = 1;
-	table.AddColumn(lineColumn, wxT("LineNumber"), reg->GetRegisterLineNumber()->GetTypeDesc(),
-		reg->GetRegisterLineNumber()->GetSynonym());
-	std::vector<ibMetaID> figureColumns, sectionColumns;
-	for (const ibCalcBaseAsked::ibFigure& figure : asked.m_figures) {
-		figureColumns.push_back(static_cast<ibMetaID>(table.Columns().size() + 1));
-		table.AddColumn(figureColumns.back(), figure.m_name, figure.m_resources.front().second->GetTypeDesc(),
-			figure.m_resources.front().second->GetSynonym());
-	}
-	for (const auto& section : asked.m_sections) {
-		sectionColumns.push_back(static_cast<ibMetaID>(table.Columns().size() + 1));
-		table.AddColumn(sectionColumns.back(), section.second->GetName(), section.second->GetTypeDesc(),
-			section.second->GetSynonym());
-	}
-
 	// What each record gathers: its breakdowns (the section values, in the order first met) and a sum a figure each.
 	struct ibGathered {
 		std::unordered_map<std::vector<ibValue>, size_t, ibValueSeqHash, ibValueSeqEqual> m_at;
@@ -1103,16 +1129,430 @@ ibValue ibCalcReadBase(const ibValueMetaObjectCalculationRegister* reg, const ib
 	for (size_t i = 0; i < records.size(); ++i) {
 		if (gathered[i].m_rows.empty())
 			gathered[i].Row(std::vector<ibValue>(asked.m_sections.size()), asked.m_figures.size());
-		for (const auto& breakdown : gathered[i].m_rows) {
-			const long at = table.AppendRow();
-			table.SetCell(at, lineColumn, records[i].m_line);
-			for (size_t c = 0; c < asked.m_figures.size(); ++c)
-				table.SetCell(at, figureColumns[c], ibValue(breakdown.second[c]));   // to the figure's type as it is loaded
-			for (size_t s = 0; s < asked.m_sections.size(); ++s)
-				table.SetCell(at, sectionColumns[s], breakdown.first[s]);
-		}
+		for (const auto& breakdown : gathered[i].m_rows)
+			row(i, breakdown.first, breakdown.second);
 	}
+}
+
+} // namespace
+
+// …laid out as the value table GetBase answers: "LineNumber", a column a figure, a column a section.
+ibValue ibCalcReadBase(const ibValueMetaObjectCalculationRegister* reg, const ibCalcBaseAsked& asked,
+	const std::vector<ibCalcBaseRecord>& records)
+{
+	// The fast table the answer is filled into (ibQueryRamTable::ToValueTable loads it), its columns numbered in the
+	// order they stand: the line, a figure each, a section each.
+	ibQueryRamTable table;
+	const ibMetaID lineColumn = 1;
+	table.AddColumn(lineColumn, wxT("LineNumber"), reg->GetRegisterLineNumber()->GetTypeDesc(),
+		reg->GetRegisterLineNumber()->GetSynonym());
+	std::vector<ibMetaID> figureColumns, sectionColumns;
+	for (const ibCalcBaseAsked::ibFigure& figure : asked.m_figures) {
+		figureColumns.push_back(static_cast<ibMetaID>(table.Columns().size() + 1));
+		table.AddColumn(figureColumns.back(), figure.m_name, figure.m_resources.front().second->GetTypeDesc(),
+			figure.m_resources.front().second->GetSynonym());
+	}
+	for (const auto& section : asked.m_sections) {
+		sectionColumns.push_back(static_cast<ibMetaID>(table.Columns().size() + 1));
+		table.AddColumn(sectionColumns.back(), section.second->GetName(), section.second->GetTypeDesc(),
+			section.second->GetSynonym());
+	}
+
+	ibCalcReadBase(reg, asked, records, [&](size_t record, const std::vector<ibValue>& sections, const std::vector<ibNumber>& figures) {
+		const long at = table.AppendRow();
+		table.SetCell(at, lineColumn, records[record].m_line);
+		for (size_t c = 0; c < figures.size(); ++c)
+			table.SetCell(at, figureColumns[c], ibValue(figures[c]));   // to the figure's type as it is loaded
+		for (size_t s = 0; s < sections.size(); ++s)
+			table.SetCell(at, sectionColumns[s], sections[s]);
+	});
 	return table.ToValueTable();
+}
+
+namespace {
+
+// ⭐ THE STORED RECORDS THAT ASK FOR THEIR BASE — read one way for the manager's GetBase and the Base table: the
+// active ones (an inactive record counts for nothing), inside the narrowing, meeting the condition WHOLE. The
+// condition is written on the record's columns; a figure or a section of a base is not something a record is chosen
+// by, and is refused. A recorder's lines in order, each record in the order of ibCalcRecordAttributes.
+std::vector<std::vector<ibValue>> ibCalcReadRecords(const ibValueMetaObjectCalculationRegister* reg,
+	const ibCalcNarrowing& narrowing, const ibQueryPredicatePtr& condition)
+{
+	const ibMetaData* metaData = reg->GetMetaData();
+	const std::vector<const ibValueMetaObjectAttributeBase*> record = ibCalcRecordAttributes(reg);
+	const wxString r = wxT("r");
+
+	ibQueryExprPtr where = ibBinOp(ibQueryBinOp::Ne, ibCol(r, ibRegValueField(reg->GetRegisterActive())), ibConst(ibValue(0)));
+	const auto also = [&where](const ibQueryExprPtr& term) {
+		if (term)
+			where = ibBinOp(ibQueryBinOp::And, where, term);
+	};
+	if (narrowing)
+		also(narrowing(r, true));
+	if (condition)
+		also(ibDbTableProvider::BuildPredicateIR(reg->GetQueryable(),
+			ibRegConditionOn(reg->GetQueryable(), condition,
+				[reg](const ibBackendQueryColumn* column) { return reg->FindAnyAttributeObjectByFilter(column->GetColumnId()) != nullptr; }),
+			r));
+
+	std::vector<ibQueryProjItem> proj;
+	std::set<wxString> projected;
+	for (const ibValueMetaObjectAttributeBase* attribute : record)
+		for (const wxString& field : ColumnFieldNames(attribute->GetQueryColumn()))
+			if (projected.insert(field).second)
+				proj.push_back(ibQueryProjItem{ ibCol(r, field), field });
+
+	ibDatabaseQueryBuilder q;
+	q.From(ibScan(reg->GetPhysicalTableName(), r));
+	q.Project(proj);
+	q.Where(where);
+	for (const wxString& field : ibRegFieldsOf(reg->GetRegisterRecorder()))
+		q.OrderBy(field);
+	q.OrderBy(ibRegValueField(reg->GetRegisterLineNumber()));
+
+	std::vector<std::vector<ibValue>> records;
+	ibQueryResult rs = q.Execute();
+	while (rs.Next()) {
+		std::vector<ibValue> one(record.size());
+		for (size_t at = 0; at < record.size(); ++at) {
+			const ibBackendQueryColumn* column = record[at]->GetQueryColumn();
+			column->ReadValue(column->GetPhysicalName(), metaData, one[at], rs);
+		}
+		records.push_back(std::move(one));
+	}
+	return records;
+}
+
+// What a record read asks with: its fields, found in `one` by their place in `record` (ibCalcRecordAttributes).
+ibCalcBaseRecord ibCalcBaseRecordOf(const ibValueMetaObjectCalculationRegister* reg, const ibCalcBaseAsked& asked,
+	const std::vector<const ibValueMetaObjectAttributeBase*>& record, const std::vector<ibValue>& one)
+{
+	return ibCalcBaseRecordOf(reg, asked, [&record, &one](const ibValueMetaObjectAttributeBase* field) {
+		const auto at = std::find(record.begin(), record.end(), field);
+		return at != record.end() ? one[at - record.begin()] : ibValue();
+	});
+}
+
+} // namespace
+
+ibValue ibCalcReadBase(const ibValueMetaObjectCalculationRegister* reg, const ibCalcBaseAsked& asked,
+	const ibQueryPredicatePtr& condition)
+{
+	const std::vector<const ibValueMetaObjectAttributeBase*> record = ibCalcRecordAttributes(reg);
+	std::vector<ibCalcBaseRecord> asking;
+	for (const std::vector<ibValue>& one : ibCalcReadRecords(reg, nullptr, condition))
+		asking.push_back(ibCalcBaseRecordOf(reg, asked, record, one));
+	return ibCalcReadBase(reg, asked, asking);
+}
+
+// ============================================================================
+// The base, as a source — Base<BaseRegister>
+// ============================================================================
+
+namespace {
+
+// The table's name, before the base register's — and a figure's, after its resource's: `BaseAccruals`, `ResultBase`.
+static const wxChar* const ibCalcBaseName = wxT("Base");
+// …and a section's, after its field's: `EmployeeSection`.
+static const wxChar* const ibCalcBaseSectionName = wxT("Section");
+
+// The numbers a base column is derived by, over the metaID of what it is OF (ibRegDerivedColumnId): a figure over the
+// base register's resource, a section over its field — so a register taking its base from itself publishes `Result`
+// and `ResultBase`, `Employee` and `EmployeeSection`, side by side.
+enum ibCalcBaseColumn {
+	ibCalcBaseColumn_Figure = 1,
+	ibCalcBaseColumn_Section,
+};
+
+// What the base is summed of: every resource of the base register that holds a number.
+std::vector<const ibValueMetaObjectResource*> ibCalcBaseResources(const ibValueMetaObjectCalculationRegister* base)
+{
+	std::vector<const ibValueMetaObjectResource*> resources;
+	for (const ibValueMetaObjectResource* resource : base->GetResourceArrayObject())
+		if (!resource->IsDeleted() && resource->GetTypeDesc().ContainType(g_valueNumberCLSID))
+			resources.push_back(resource);
+	return resources;
+}
+
+// What it can be broken down by: a base record's registration, recorder, line, type and month, its dimensions, its
+// attributes — in the order the register lays a record out. Not its days, its base period, Active or Storno: those
+// say how a record counts, not what it is of.
+std::vector<const ibValueMetaObjectAttributeBase*> ibCalcBaseSectionFields(const ibValueMetaObjectCalculationRegister* base)
+{
+	std::vector<const ibValueMetaObjectAttributeBase*> fields = { base->GetRegistrationPeriod(), base->GetRegisterRecorder(),
+		base->GetRegisterLineNumber(), base->GetCalculationType(), base->GetActionPeriod() };
+	for (const ibValueMetaObjectDimension* dimension : base->GetDimensionArrayObject())
+		fields.push_back(dimension);
+	for (const ibValueMetaObjectAttributeBase* attribute : base->GetAttributeArrayObject())
+		fields.push_back(attribute);
+	return fields;
+}
+
+// The names an argument lists: an array of them, or one string of them separated by commas. Left out — none.
+std::vector<ibString> ibCalcBaseItemsOf(const ibValue& names)
+{
+	ibValueArray* array = nullptr;
+	if (!names.ConvertToValue(array) || array == nullptr)
+		return ibCalcBaseItemsOf(names.GetString());
+	std::vector<ibString> out;
+	for (unsigned int i = 0; i < array->Count(); ++i) {
+		ibValue item;
+		array->GetAt(ibValue(static_cast<int>(i)), item);
+		for (const ibString& name : ibCalcBaseItemsOf(item.GetString()))
+			out.push_back(name);
+	}
+	return out;
+}
+
+// ⭐ THE TABLE'S QUESTION — GetBase's (ibCalcBaseAskedOf), of one base register: every numeric resource of it a figure
+// under its own name; this register's Dimensions holding the base register's BaseDimensions to their values, in
+// order — the dimensions of the same names, when BaseDimensions is left out; the base register's Sections.
+ibCalcBaseAsked ibCalcBaseAskedOf(const ibValueMetaObjectCalculationRegister* reg, const ibValueMetaObjectCalculationRegister* base,
+	const ibValue& dimensions, const ibValue& baseDimensions, const ibValue& sections)
+{
+	const wxString table = reg->GetName() + wxT(".") + ibCalcBaseName + base->GetName();
+	ibCalcBaseAsked asked;
+	for (const ibValueMetaObjectResource* resource : ibCalcBaseResources(base))
+		asked.m_figures.push_back({ resource->GetName(), { { base, resource } } });
+
+	const std::vector<ibString> names = ibCalcBaseItemsOf(dimensions);
+	std::vector<ibString> baseNames = ibCalcBaseItemsOf(baseDimensions);
+	if (baseNames.empty())
+		baseNames = names;
+	if (baseNames.size() != names.size())
+		ibBackendCoreException::Error(_("%s: %zu dimension(s) of the register are paired with %zu of the base register - name as many of each"),
+			table, names.size(), baseNames.size());
+	for (size_t i = 0; i < names.size(); ++i) {
+		ibCalcBaseAsked::ibPairing pairing;
+		pairing.m_own = ibCalcNamed<const ibValueMetaObjectDimension>(reg->GetDimensionArrayObject(), names[i]);
+		if (pairing.m_own == nullptr)
+			ibBackendCoreException::Error(_("%s: '%s' is not a dimension of '%s'"), table, names[i], reg->GetName());
+		const ibValueMetaObjectDimension* dimension = ibCalcNamed<const ibValueMetaObjectDimension>(base->GetDimensionArrayObject(), baseNames[i]);
+		if (dimension == nullptr)
+			ibBackendCoreException::Error(_("%s: '%s' is not a dimension of '%s'"), table, baseNames[i], base->GetName());
+		pairing.m_base.push_back({ base, dimension });
+		asked.m_dimensions.push_back(std::move(pairing));
+	}
+
+	const std::vector<const ibValueMetaObjectAttributeBase*> fields = ibCalcBaseSectionFields(base);
+	for (const ibString& name : ibCalcBaseItemsOf(sections)) {
+		const ibValueMetaObjectAttributeBase* field = ibCalcNamed<const ibValueMetaObjectAttributeBase>(fields, name);
+		if (field == nullptr)
+			ibBackendCoreException::Error(_("%s: the base is not broken down by '%s' - a section is a dimension, an attribute or a record's registration, recorder, line, type or month of '%s'"),
+				table, name, base->GetName());
+		asked.m_sections.push_back({ base, field });
+	}
+	return asked;
+}
+
+} // namespace
+
+// ⭐ THE SHAPE `Base<BaseRegister>` PUBLISHES — a record's own columns, as ScheduleData's (ibRegAttributeColumn: the
+// register's names, types and ids); every numeric resource of the base register as `<Resource>Base`, a sum; every
+// field of it the base can be broken down by as `<Field>Section`, typed and laid out as the field. The last two are
+// numbered as derived columns of what they are of (ibCalcBaseColumn).
+const ibBackendQueryable* ibValueMetaObjectCalculationRegister::GetBaseSurface(const ibValueMetaObjectCalculationRegister* base) const
+{
+	if (base == nullptr)
+		return nullptr;
+	const std::vector<const ibValueMetaObjectAttributeBase*> record = ibCalcRecordAttributes(this);
+	const std::vector<const ibValueMetaObjectResource*> resources = ibCalcBaseResources(base);
+	const std::vector<const ibValueMetaObjectAttributeBase*> sections = ibCalcBaseSectionFields(base);
+
+	wxString shape;
+	for (const ibValueMetaObjectAttributeBase* attribute : record)
+		ibRegSignAttribute(shape, attribute);
+	for (const ibValueMetaObjectResource* resource : resources)
+		ibRegSignAttribute(shape, resource);
+	for (const ibValueMetaObjectAttributeBase* field : sections)
+		ibRegSignAttribute(shape, field);
+
+	return m_surfaces.Obtain(ibCalcBaseName + base->GetName(), shape,
+		wxString::Format(wxT("%s_%s%i"), GetPhysicalTableName(), ibCalcBaseName, base->GetMetaID()), GetMetaData(),
+		[&](std::vector<ibTempColumn>& columns)
+	{
+		for (const ibValueMetaObjectAttributeBase* attribute : record)
+			columns.push_back(ibRegAttributeColumn(attribute));
+		for (const ibValueMetaObjectResource* resource : resources) {
+			const wxString name = resource->GetName() + ibCalcBaseName;
+			columns.push_back(ibTempColumn(name, name, resource->GetTypeDesc(), ibRegDerivedColumnId(resource->GetMetaID(), ibCalcBaseColumn_Figure),
+				ibRegColumnCaptionOf(resource->GetSynonym(), _("Base")),
+				ibBackendQueryColumn::Kind::Computed, resource->GetColumnPicture()).StandsFor(resource));
+		}
+		for (const ibValueMetaObjectAttributeBase* field : sections)
+			columns.push_back(ibRegAttributeColumn(field, field->GetName() + ibCalcBaseSectionName,
+				ibRegColumnCaptionOf(field->GetSynonym(), _("Section")), ibRegDerivedColumnId(field->GetMetaID(), ibCalcBaseColumn_Section)));
+	});
+}
+
+// A record and its section: the recorder, the line, and every section asked for.
+std::vector<const ibBackendQueryColumn*> ibCalcBaseQueryable::GetPrimaryKeyColumns() const
+{
+	std::vector<wxString> names = { m_reg->GetRegisterRecorder()->GetName(), m_reg->GetRegisterLineNumber()->GetName() };
+	for (const auto& section : m_asked.m_sections)
+		names.push_back(section.second->GetName() + ibCalcBaseSectionName);
+	std::vector<const ibBackendQueryColumn*> out;
+	const ibBackendQueryable* surface = NavigationSource();
+	for (const wxString& name : names)
+		if (const ibBackendQueryColumn* column = surface != nullptr ? surface->ResolveColumnByName(name) : nullptr)
+			out.push_back(column);
+	return out;
+}
+
+// ⭐⭐ THE ROWS — GetBase's road, the arguments its question: the records they choose, read as the manager's GetBase
+// reads them (ibCalcReadRecords) inside the narrowing the fact narrows by (ibCalcNarrowingOf); what each asks with
+// (ibCalcBaseRecordOf); and the base of each (ibCalcReadBase) — each base register read once and matched to the
+// records here. A row a record and a section; a record whose base holds nothing, one row of zeros.
+ibQueryRamTable ibCalcBaseQueryable::ComputeRows(const std::vector<ibQueryCondition>& extra) const
+{
+	ibQueryRamTable out;
+	const ibBackendQueryable* surface = NavigationSource();
+	if (surface == nullptr)
+		return out;
+	for (const ibBackendQueryColumn* column : surface->GetColumns())
+		out.AddColumn(column->GetColumnId(), column->GetName(), column->GetTypeDesc());
+
+	const std::vector<const ibValueMetaObjectAttributeBase*> record = ibCalcRecordAttributes(m_reg);
+
+	ibJournalStopwatch readRecords, readBase;
+	readRecords.Resume();
+	const std::vector<std::vector<ibValue>> records = ibCalcReadRecords(m_reg,
+		ibCalcNarrowingOf(m_reg, /*pieces*/ false, extra, m_condition, m_moment, m_actionFrom, m_actionTo), m_condition);
+	readRecords.Pause();
+	if (records.empty())
+		return out;
+
+	std::vector<ibCalcBaseRecord> asking;
+	asking.reserve(records.size());
+	for (const std::vector<ibValue>& one : records)
+		asking.push_back(ibCalcBaseRecordOf(m_reg, m_asked, record, one));
+
+	// ---- the base of each: a row a record and a section ----------------------------------------------------------
+	std::vector<ibMetaID> figureColumns, sectionColumns;
+	for (const ibCalcBaseAsked::ibFigure& figure : m_asked.m_figures)
+		figureColumns.push_back(ibRegDerivedColumnId(figure.m_resources.front().second->GetMetaID(), ibCalcBaseColumn_Figure));
+	for (const auto& section : m_asked.m_sections)
+		sectionColumns.push_back(ibRegDerivedColumnId(section.second->GetMetaID(), ibCalcBaseColumn_Section));
+
+	readBase.Resume();
+	ibCalcReadBase(m_reg, m_asked, asking, [&](size_t i, const std::vector<ibValue>& sections, const std::vector<ibNumber>& figures) {
+		const long row = out.AppendRow();
+		for (size_t a = 0; a < record.size(); ++a)
+			out.SetCell(row, record[a]->GetMetaID(), records[i][a]);
+		for (size_t c = 0; c < figures.size(); ++c)
+			out.SetCell(row, figureColumns[c], ibValue(figures[c]));
+		for (size_t s = 0; s < sections.size(); ++s)
+			out.SetCell(row, sectionColumns[s], sections[s]);
+	});
+	readBase.Pause();
+	ibJournalInfo(wxT("query.road"), wxT("Base%s of %s: %zu record(s) read in %lld ms, the base of them in %lld ms"),
+		m_base->GetName(), m_reg->GetName(), records.size(), readRecords.Ms(), readBase.Ms());
+	return out;
+}
+
+wxString ibCalcBaseSourceDescriptor::GetNamespace() const
+{
+	return ibValue::GetNameObjectFromID(m_meta->GetClassType());
+}
+
+wxString ibCalcBaseSourceDescriptor::GetName() const
+{
+	return m_meta->GetName() + wxT(".") + ibCalcBaseName + m_base->GetName();
+}
+
+const ibBackendQueryable* ibCalcBaseSourceDescriptor::CreateQueryable(ibValue** paParams, long lSizeArray)
+{
+	return CreateQueryable(paParams, lSizeArray, {}, ibQueryReadColumns());
+}
+
+// What a condition is resolved against: the surface the reading publishes.
+const ibBackendQueryable* ibCalcBaseSourceDescriptor::GetConditionScope() const
+{
+	return m_meta != nullptr ? m_meta->GetBaseSurface(m_base) : nullptr;
+}
+
+// Built and KEPT by the base — the same call gives the same object back (queryableFactory.h, MakeCompanion); the
+// question is asked of the arguments here, so a name the base register does not have is refused before a row is read.
+const ibBackendQueryable* ibCalcBaseSourceDescriptor::CreateQueryable(ibValue** paParams, long lSizeArray,
+	const std::vector<ibQueryPredicatePtr>& conditions, const ibQueryReadColumns& /*read*/)
+{
+	const ibValue actionFrom = ibRegArg(paParams, lSizeArray, ibCalcBaseArg::BeginOfActionPeriod);
+	const ibValue actionTo = ibRegArg(paParams, lSizeArray, ibCalcBaseArg::EndOfActionPeriod);
+	// Days of action asked of records that keep none would read nothing, and say nothing of why.
+	if (!m_meta->IsUseActionPeriod() && (!actionFrom.IsEmpty() || !actionTo.IsEmpty()))
+		ibBackendCoreException::Error(_("%s: register '%s' keeps no action periods - leave BeginOfActionPeriod and EndOfActionPeriod out"),
+			GetName(), m_meta->GetName());
+	return MakeCompanionFor<ibCalcBaseQueryable>(conditions, paParams, lSizeArray, m_meta, m_base,
+		ibCalcBaseAskedOf(m_meta, m_base, ibRegArg(paParams, lSizeArray, ibCalcBaseArg::Dimensions),
+			ibRegArg(paParams, lSizeArray, ibCalcBaseArg::BaseDimensions), ibRegArg(paParams, lSizeArray, ibCalcBaseArg::Sections)),
+		ibRegArg(paParams, lSizeArray, ibCalcBaseArg::Period), actionFrom, actionTo,
+		ibRegConsumedCondition(conditions, ibCalcBaseArg::Condition));
+}
+
+// THE BASE'S ARGUMENTS (ibCalcBaseArg): the fact's times, what is held and broken down, then the condition —
+// `BaseAccruals(&Month, , , "Employee", , "CalculationType")`.
+void ibCalcBaseSourceDescriptor::DescribeParameters(std::vector<ibQuerySourceParameter>& out) const
+{
+	const auto argument = [&out](const wxChar* name, const ibValueMetaObjectAttributeBase* typedBy, const wxString& description) {
+		ibQuerySourceParameter parameter;
+		parameter.m_name = name;
+		parameter.m_description = description;
+		if (typedBy != nullptr)
+			parameter.m_type = typedBy->GetTypeDesc();
+		out.push_back(parameter);
+	};
+	argument(wxT("Period"), m_meta != nullptr ? m_meta->GetRegistrationPeriod() : nullptr,
+		_("AS OF WHICH REGISTRATION PERIOD - a moment: the records registered up to the end of the period it falls in, "
+		  "in the register's periodicity. Left out, every period is read."));
+	argument(wxT("BeginOfActionPeriod"), m_meta != nullptr ? m_meta->GetActionPeriodStart() : nullptr,
+		_("FOR WHICH DAYS OF ACTION, from - the records in force on this day or later. Left out, from the first; "
+		  "only for a register that keeps action periods."));
+	argument(wxT("EndOfActionPeriod"), m_meta != nullptr ? m_meta->GetActionPeriodEnd() : nullptr,
+		_("FOR WHICH DAYS OF ACTION, to - the records in force on this day or earlier. Left out, to the last; "
+		  "only for a register that keeps action periods."));
+	argument(wxT("Dimensions"), nullptr,
+		_("WHICH DIMENSIONS OF THIS REGISTER HOLD THE BASE TO A RECORD'S VALUES - an array of their names, or a string "
+		  "of them separated by commas. Left out, a record's base is the base register's whole."));
+	argument(wxT("BaseDimensions"), nullptr,
+		_("THE BASE REGISTER'S DIMENSIONS THEY ARE COMPARED WITH, paired with Dimensions in order. Left out, the "
+		  "dimensions of the same names."));
+	argument(wxT("Sections"), nullptr,
+		_("WHAT THE BASE IS BROKEN DOWN BY - the base register's fields: a dimension, an attribute, the registration "
+		  "period, recorder, line, type or month. Each fills its <Field>Section column, a row a record and a section. "
+		  "Left out, a row a record."));
+	ibAppendRegisterConditionParameter(out);
+}
+
+// A record's column IS the register's attribute (the note in ibFillExplorerFromRegisterView); a figure and a section
+// are their own.
+void ibCalcBaseSourceDescriptor::FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const
+{
+	const ibBackendQueryable* surface = m_meta->GetBaseSurface(m_base);
+	if (surface == nullptr)
+		return;
+	for (const ibBackendQueryColumn* column : surface->GetColumns()) {
+		if (const ibValueMetaObjectAttributeBase* attribute = m_meta->FindAnyAttributeObjectByFilter(column->GetColumnId()))
+			explorer.AppendColumn(attribute->GetQueryColumn(), /*enabled*/ true, /*visible*/ true);
+		else
+			explorer.AppendColumn(column);
+	}
+}
+
+// What the records can be selected by inside: their own fields.
+void ibCalcBaseSourceDescriptor::FillConditionExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const
+{
+	const auto append = [&explorer](const ibValueMetaObjectAttributeBase* field) {
+		if (field != nullptr)
+			explorer.AppendColumn(field->GetQueryColumn(), /*enabled*/ true, /*visible*/ true);
+	};
+	for (const ibValueMetaObjectDimension* dimension : m_meta->GetDimensionArrayObject())
+		append(dimension);
+	append(m_meta->GetCalculationType());
+	append(m_meta->GetActionPeriod());
+	append(m_meta->GetRegisterRecorder());
+	append(m_meta->GetRegistrationPeriod());
+	for (const ibValueMetaObjectAttributeBase* attribute : m_meta->GetAttributeArrayObject())
+		append(attribute);
 }
 
 // ============================================================================
@@ -1165,17 +1605,6 @@ std::vector<ibCalcSchedulePeriod> ibCalcSchedulePeriods(const ibValueMetaObjectC
 	return periods;
 }
 
-// A record's own columns: the record as the register lays it out (ibCalcRecordLayout), its resources, its attributes.
-std::vector<const ibValueMetaObjectAttributeBase*> ibCalcScheduleRecordAttributes(const ibValueMetaObjectCalculationRegister* reg)
-{
-	std::vector<const ibValueMetaObjectAttributeBase*> record = ibCalcRecordLayout(reg);
-	for (const ibValueMetaObjectResource* resource : reg->GetResourceArrayObject())
-		record.push_back(resource);
-	for (const ibValueMetaObjectAttributeBase* attribute : reg->GetAttributeArrayObject())
-		record.push_back(attribute);
-	return record;
-}
-
 // The schedule register a register is bound to, or none.
 const ibValueMetaObjectRegisterData* ibCalcScheduleRegister(const ibValueMetaObjectCalculationRegister* reg)
 {
@@ -1224,7 +1653,7 @@ std::vector<wxString> ibCalcScheduleAskedSums(const ibValueMetaObjectCalculation
 // `<Resource><Period>` and numbered as derived columns of that resource.
 const ibBackendQueryable* ibValueMetaObjectCalculationRegister::GetScheduleDataSurface() const
 {
-	const std::vector<const ibValueMetaObjectAttributeBase*> record = ibCalcScheduleRecordAttributes(this);
+	const std::vector<const ibValueMetaObjectAttributeBase*> record = ibCalcRecordAttributes(this);
 	const std::vector<const ibValueMetaObjectResource*> resources = ibCalcScheduleResources(ibCalcScheduleRegister(this));
 	const std::vector<ibCalcSchedulePeriod> periods = ibCalcSchedulePeriods(this);
 
@@ -1282,7 +1711,7 @@ ibQueryRamTable ibCalcScheduleDataQueryable::ComputeRows(const std::vector<ibQue
 	if (!m_reg->IsUseActionPeriod() || schedule == nullptr || scheduleDate == nullptr)
 		return out;
 
-	const std::vector<const ibValueMetaObjectAttributeBase*> record = ibCalcScheduleRecordAttributes(m_reg);
+	const std::vector<const ibValueMetaObjectAttributeBase*> record = ibCalcRecordAttributes(m_reg);
 	const std::vector<const ibValueMetaObjectResource*> resources = ibCalcScheduleResources(schedule);
 	const std::vector<ibCalcSchedulePeriod> periods = ibCalcSchedulePeriods(m_reg);
 
@@ -1313,7 +1742,7 @@ ibQueryRamTable ibCalcScheduleDataQueryable::ComputeRows(const std::vector<ibQue
 
 	// ---- the narrowing, as the fact narrows (ibCalcNarrowingOf) — the two action days here the record's own
 	const ibCalcViewSpec spec = ibCalcViewSpecOf(m_reg);
-	const ibCalcNarrowing narrowing = ibCalcNarrowingOf(m_reg, spec, /*pieces*/ false, extra, m_condition, m_moment, m_actionFrom, m_actionTo);
+	const ibCalcNarrowing narrowing = ibCalcNarrowingOf(m_reg, /*pieces*/ false, extra, m_condition, m_moment, m_actionFrom, m_actionTo);
 
 	// ---- the records --------------------------------------------------------------------------------------------
 	ibJournalStopwatch readRecords, readSums, lay;
@@ -1370,7 +1799,7 @@ ibQueryRamTable ibCalcScheduleDataQueryable::ComputeRows(const std::vector<ibQue
 				needed[at] = true;
 	}
 
-	std::vector<std::vector<ibValue>> records;   // each in the order of ibCalcScheduleRecordAttributes
+	std::vector<std::vector<ibValue>> records;   // each in the order of ibCalcRecordAttributes
 	{
 		std::vector<ibQueryProjItem> proj;
 		std::set<wxString> projected;

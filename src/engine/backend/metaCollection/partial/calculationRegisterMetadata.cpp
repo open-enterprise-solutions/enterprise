@@ -403,6 +403,11 @@ bool ibValueMetaObjectCalculationRegister::OnAfterRunMetaObject(int flags)
 		m_metaData->RegisterSource(&m_scheduleDataSource);
 	if (HasRecalculation())
 		m_metaData->RegisterSource(&m_recalculationSource);
+	// The base, a table a register this one takes it from, where its chart takes a base at all.
+	const ibValueMetaObjectChartOfCalculationTypes* chart = GetChartOfCalculationTypes();
+	if (chart != nullptr && chart->GetBaseDependence() != ibBaseDependence::eBaseNone)
+		for (const ibValueMetaObjectCalculationRegister* base : GetRelatedRegisters())
+			m_metaData->RegisterSource(&m_baseSources.emplace_back(this, base));
 
 	if (auto* cc = m_metaData->GetCompileCache()) {
 
@@ -421,7 +426,11 @@ bool ibValueMetaObjectCalculationRegister::OnAfterRunMetaObject(int flags)
 bool ibValueMetaObjectCalculationRegister::OnBeforeCloseMetaObject()
 {
 	m_metaData->UnregisterSource(&m_factSource);   // mirror of the run's RegisterSource
+	m_metaData->UnregisterSource(&m_scheduleDataSource);
 	m_metaData->UnregisterSource(&m_recalculationSource);
+	for (ibCalcBaseSourceDescriptor& source : m_baseSources)
+		m_metaData->UnregisterSource(&source);
+	m_baseSources.clear();
 
 	if (!(*m_propertyManagerModule)->OnBeforeCloseMetaObject())
 		return false;

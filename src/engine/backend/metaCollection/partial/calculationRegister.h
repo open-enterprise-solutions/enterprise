@@ -14,6 +14,7 @@
 #include "backend/query/tempTableQueryable.h"   // ibTempColumn — the columns a reading adds to a record's own
 
 #include <functional>   // ibCalcNarrowing
+#include <list>         // the base's sources (m_baseSources)
 #include <memory>
 #include <utility>      // std::pair — the Displacing section's named fields
 #include <vector>
@@ -48,6 +49,13 @@ class ibValueMetaObjectResource;
 namespace ibCalcViewArg { enum { Period = 0, BeginOfActionPeriod = 1, EndOfActionPeriod = 2, Condition = 3, Count }; }
 static_assert(ibCalcViewArg::EndOfActionPeriod == ibCalcViewArg::BeginOfActionPeriod + 1, "the interval is one argument pair");
 static_assert(ibCalcViewArg::Condition == ibCalcViewArg::Count - 1, "the condition is last");
+
+// …AND THE BASE'S (ibCalcBaseSourceDescriptor): the same three times, then what the base is asked for, the condition
+// last — which of this register's dimensions hold the base register's to their values (Dimensions, BaseDimensions:
+// paired in order), and which of the base register's fields the base is broken down by (Sections).
+namespace ibCalcBaseArg { enum { Period = ibCalcViewArg::Period, BeginOfActionPeriod = ibCalcViewArg::BeginOfActionPeriod,
+	EndOfActionPeriod = ibCalcViewArg::EndOfActionPeriod, Dimensions, BaseDimensions, Sections, Condition, Count }; }
+static_assert(ibCalcBaseArg::Condition == ibCalcBaseArg::Count - 1, "the condition is last");
 
 class ibCalcFactSourceDescriptor : public ibQueryableSourceDescriptor {
 public:
@@ -91,6 +99,32 @@ public:
 	void FillConditionExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const override;
 private:
 	ibValueMetaObjectCalculationRegister* m_meta;
+};
+
+// `<Register>.Base<BaseRegister>` — THE BASE OF EACH RECORD, AS A TABLE: what GetBase answers (the section "The base",
+// below), asked of the records the arguments choose. One table a register this one takes a base from
+// (GetRelatedRegisters), itself among them. A record's own columns, as ScheduleData lays them out; every numeric
+// resource of the base register summed into `<Resource>Base`; and every field of it the base can be broken down by
+// as `<Field>Section` — filled for the ones the Sections argument names, a row a record and a section. The arguments
+// are ibCalcBaseArg's.
+class ibCalcBaseSourceDescriptor : public ibQueryableSourceDescriptor {
+public:
+	ibCalcBaseSourceDescriptor(ibValueMetaObjectCalculationRegister* meta, const ibValueMetaObjectCalculationRegister* base)
+		: m_meta(meta), m_base(base) {}
+	virtual wxString GetNamespace() const override;
+	virtual wxString GetName() const override;
+	virtual const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray) override;
+	// THE CONDITION IS CONSUMED — resolved against the base's surface and applied to the records read.
+	virtual const ibBackendQueryable* CreateQueryable(ibValue** paParams, long lSizeArray,
+	                                                  const std::vector<ibQueryPredicatePtr>& conditions,
+	                                                  const ibQueryReadColumns& read) override;
+	virtual const ibBackendQueryable* GetConditionScope() const override;
+	virtual void DescribeParameters(std::vector<ibQuerySourceParameter>& out) const override;
+	virtual void FillSourceExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const override;
+	virtual void FillConditionExplorer(ibSourceDataObject::ibSourceExplorer& explorer) const override;
+private:
+	ibValueMetaObjectCalculationRegister*       m_meta;
+	const ibValueMetaObjectCalculationRegister* m_base;   // the register the base is read from
 };
 
 // `<Register>.Recalculation` — THE REGISTER'S MARKS, as a table: the recorder whose records a mark sends back, the
@@ -225,6 +259,8 @@ public:
 	const ibBackendQueryable* GetFactSurface() const;
 	// The shape ScheduleData publishes: the record's columns and the schedule's sums (ibCalcScheduleDataSourceDescriptor).
 	const ibBackendQueryable* GetScheduleDataSurface() const;
+	// The shape `Base<base>` publishes: the record's columns, the base register's figures and sections (ibCalcBaseSourceDescriptor).
+	const ibBackendQueryable* GetBaseSurface(const ibValueMetaObjectCalculationRegister* base) const;
 
 	// ⭐ CALCULATION TYPE — the standard attribute every calculation record carries: which calculation
 	// type of the bound chart this record is. The chart's relations over it (Displacing, Base, Leading)
@@ -452,6 +488,9 @@ private:
 	ibCalcFactSourceDescriptor m_factSource{ this };
 	ibCalcScheduleDataSourceDescriptor m_scheduleDataSource{ this };
 	ibRecalculationSourceDescriptor m_recalculationSource{ this };
+	// …and the base, a source a register this one takes it from — made at the run, dropped at the close, each where
+	// the factory's pointer to it stays put until then.
+	std::list<ibCalcBaseSourceDescriptor> m_baseSources;
 
 	// The shape the fact publishes, and what it was built from (GetFactSurface).
 	mutable ibRegSurfaceCache m_surfaces;
@@ -707,9 +746,18 @@ struct ibCalcBaseRecord
 BACKEND_API ibCalcBaseAsked ibCalcBaseAskedOf(const ibValueMetaObjectCalculationRegister* reg, const ibValue& resources,
 	const ibValue& dimensions, const ibValue& sections);
 
+// What a record asks with, off its fields as `valueOf` answers them — a line in hand and a record read alike: its
+// line, its type, its base period where the register keeps one, its registration, its values of the paired dimensions.
+BACKEND_API ibCalcBaseRecord ibCalcBaseRecordOf(const ibValueMetaObjectCalculationRegister* reg, const ibCalcBaseAsked& asked,
+	const std::function<ibValue(const ibValueMetaObjectAttributeBase*)>& valueOf);
+
 // The base of each record, as the value table GetBase answers.
 BACKEND_API ibValue ibCalcReadBase(const ibValueMetaObjectCalculationRegister* reg, const ibCalcBaseAsked& asked,
 	const std::vector<ibCalcBaseRecord>& records);
+// …of the stored records `condition` chooses, read as the Base table reads them: the active ones, a recorder's lines
+// in order.
+BACKEND_API ibValue ibCalcReadBase(const ibValueMetaObjectCalculationRegister* reg, const ibCalcBaseAsked& asked,
+	const ibQueryPredicatePtr& condition);
 
 //********************************************************************************************
 //*                                  The fact, as a source                                   *
@@ -764,6 +812,29 @@ private:
 	// ⭐ WHAT THE QUERY READS OF THIS TABLE — a sum nobody named is not computed, and the schedule is not opened
 	// over that period's days at all (ibCalcScheduleAskedSums). Everything, when nobody could say.
 	ibQueryReadColumns  m_read;
+};
+
+// The companion of `Base<BaseRegister>` — its rows, computed: the records the arguments choose, and the base of each,
+// read the way GetBase reads it (ibCalcReadBase).
+class ibCalcBaseQueryable : public ibComputedRegisterQueryable<ibValueMetaObjectCalculationRegister> {
+public:
+	ibCalcBaseQueryable(const ibValueMetaObjectCalculationRegister* reg, const ibValueMetaObjectCalculationRegister* base,
+		const ibCalcBaseAsked& asked, const ibValue& moment = ibValue(), const ibValue& actionFrom = ibValue(),
+		const ibValue& actionTo = ibValue(), const ibQueryPredicatePtr& condition = nullptr)
+		: ibComputedRegisterQueryable(reg), m_base(base), m_asked(asked), m_moment(moment), m_actionFrom(actionFrom),
+		  m_actionTo(actionTo), m_condition(condition) {}
+
+	virtual const ibBackendQueryable* NavigationSource() const override { return m_reg->GetBaseSurface(m_base); }
+	// A record and its section: its recorder, its line, and the sections asked for.
+	virtual std::vector<const ibBackendQueryColumn*> GetPrimaryKeyColumns() const override;
+	virtual ibQueryRamTable ComputeRows(const std::vector<ibQueryCondition>& extra) const override;
+
+private:
+	const ibValueMetaObjectCalculationRegister* m_base;   // the register the base is read from
+	ibCalcBaseAsked m_asked;            // every numeric resource of it a figure, the pairings, the sections
+	ibValue m_moment;                   // the moment of registration read up to (ibCalcBaseArg); empty — every period
+	ibValue m_actionFrom, m_actionTo;   // the days of action the records meet; empty — any
+	ibQueryPredicatePtr m_condition;    // written into the parentheses, on the record's columns; null — none
 };
 
 //********************************************************************************************

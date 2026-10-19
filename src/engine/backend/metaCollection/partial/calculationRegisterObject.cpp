@@ -74,21 +74,11 @@ bool ibValueRecordSetObjectCalculationRegister::ibValueCalculationLine::CallAsFu
 	const ibCalcBaseAsked asked = ibCalcBaseAskedOf(reg, lSizeArray > 0 ? *paParams[0] : ibValue(),
 		lSizeArray > 1 ? *paParams[1] : ibValue(), lSizeArray > 2 ? *paParams[2] : ibValue());
 
-	ibCalcBaseRecord record;
-	ibValue from, to, registered;
-	GetValueByMetaID(reg->GetRegisterLineNumber()->GetMetaID(), record.m_line);
-	GetValueByMetaID(reg->GetCalculationType()->GetMetaID(), record.m_type);
-	GetValueByMetaID(reg->GetBasePeriodStart()->GetMetaID(), from);
-	GetValueByMetaID(reg->GetBasePeriodEnd()->GetMetaID(), to);
-	GetValueByMetaID(reg->GetRegistrationPeriod()->GetMetaID(), registered);
-	record.m_from = from.GetDate();
-	record.m_to = to.GetDate();
-	record.m_registration = registered.GetDate();
-	for (const ibCalcBaseAsked::ibPairing& pairing : asked.m_dimensions) {
+	const ibCalcBaseRecord record = ibCalcBaseRecordOf(reg, asked, [this](const ibValueMetaObjectAttributeBase* field) {
 		ibValue value;
-		GetValueByMetaID(pairing.m_own->GetMetaID(), value);
-		record.m_dimensions.push_back(value);
-	}
+		GetValueByMetaID(field->GetMetaID(), value);
+		return value;
+	});
 	pvarRetValue = ibCalcReadBase(reg, asked, { record });
 	return true;
 }
