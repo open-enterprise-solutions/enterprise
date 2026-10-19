@@ -452,6 +452,7 @@ namespace ibProtocol {
 			Schedule         = 16,   // ibSchedule
 			ApplyChange      = 17,   // ibApplyChange
 			FormType         = 18,   // ibFormType
+			DeclaredChoice   = 19,   // ibDeclaredChoice
 		};
 
 		// Text, Caption, Style (wx's button flags) → Button (wx's code: 2 Yes, 8 No, 4 OK, 16 Cancel).
@@ -615,15 +616,18 @@ namespace ibProtocol {
 			inline constexpr const char* Chosen       = "Chosen";         // a value chosen on the server's choice form: Value,
 			                                                              // Choice
 			inline constexpr const char* Value        = "Value";
+			inline constexpr const char* Declared     = "Declared";      // Act Choose: the cell's full type description
+			                                                              // (ibTypeDescriptionMemory), when the client knows it
 
 			// What the window asked on the way.
 			enum class ibAct : int {
 				Expand = 1,   // a reference field opened: the fields of its Targets — asked again with Expanded, their fields
 				              // (children as Fields') and their References
 				Choose = 2,   // a value of a type of the server's chosen (Type — its class id as text, Value — the one held,
-				              // Choice — the number the client asks it under): its quick choice, or its choice form — a tab
-				              // like any other; what is chosen comes back in the window's question as Chosen (Choice, and
-				              // Value with its Presentation beside {t, v}), whenever it is
+				              // Choice — the number the client asks it under, Declared — the cell's full type when known):
+				              // its quick choice, its choice form, or in the designer DeclaredChoice; what is chosen comes
+				              // back in the window's question as Chosen (Choice, and Value with its Presentation beside
+				              // {t, v}), whenever it is
 			};
 
 		}
@@ -704,6 +708,27 @@ namespace ibProtocol {
 			inline constexpr const char* Synonym = "Synonym";
 			inline constexpr const char* Comment = "Comment";
 			inline constexpr const char* Id      = "Id";
+
+		}
+
+		// The designer's declared-value picker (desktop ibShowPredefinedSelector): while a configuration is written
+		// there is no data, so a reference cell offers what the configuration DECLARES — EmptyRef, a predefined
+		// element, an enumeration member. Types — one branch per admitted reference (Title, MetaId) with nested
+		// children Name, Guid (empty Guid is EmptyRef; nested children are folders). Primitives — Id, Caption, Type
+		// (class id as text) offered beside the technical declared-value entry → Type (a primitive settled) or
+		// MetaId, Guid, Written (the declaration); none — cancelled.
+		namespace ibDeclaredChoice {
+
+			inline constexpr const char* Caption    = "Caption";
+			inline constexpr const char* Types      = "Types";       // children: Title, MetaId, and value children
+			inline constexpr const char* Title      = "Title";
+			inline constexpr const char* MetaId     = "MetaId";
+			inline constexpr const char* Name       = "Name";
+			inline constexpr const char* Guid       = "Guid";        // empty — EmptyRef of that type
+			inline constexpr const char* Primitives = "Primitives";  // children: Id, Caption, Type
+			inline constexpr const char* Id         = "Id";
+			inline constexpr const char* Type       = "Type";        // response: primitive class id as text
+			inline constexpr const char* Written    = "Written";     // response: CatalogRef.Goods.EmptyRef etc.
 
 		}
 

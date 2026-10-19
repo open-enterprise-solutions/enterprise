@@ -294,6 +294,9 @@ while the number stays: clicking an object again, or walking back to it, before 
 | 14 Error | a script's failure: `Picture`, `Text` — the error with its call stack | `Act`: 1 close the window, 2 and send it to the designer debugging the base, 3 and close the client — each does the one before it too; none — 1 |
 | 15 Print | a script's sheet: `Sheet`, as a gridbox's `fetch` gives it | `Done` — printed; false — the print dialog cancelled, or the printer failed |
 | 16 Schedule | a form's schedule: `Schedule`, in its stored form | `Schedule` — the one edited, and the form is modified; none — cancelled |
+| 17 ApplyChange | the restructure's ledger: `Picture` and items `Level`, `Text` | `Done` — applied; none — cancelled, rolled back |
+| 18 FormType | a form just made: `Caption`, `Name`, `Synonym`, `Comment` and items `Id`, `Caption`, `Name` — the kinds its owner offers | `Id`, `Name`, `Synonym`, `Comment` — the kind chosen; none — cancelled, form taken away |
+| 19 DeclaredChoice | the designer's declared-value picker: `Caption`, `Types` (each `Title`, `MetaId`, nested `Name`/`Guid` — empty Guid is EmptyRef), `Primitives` (`Id`, `Caption`, `Type`) | `Type` — a primitive settled; or `MetaId`, `Guid`, `Written` (and `Name`) — a declared value; none — cancelled |
 
 A SavedSettings window stays open through its acts: each act is a `respond`, done by the server, which asks again with
 the shelf as it now stands and `Done` — how the act went — until the window answers with no `Act`. A FormEditor window
@@ -304,9 +307,9 @@ with `Expanded`, the fields of those targets (one per name, its type the union o
 `Presentation` the synonym), and their `References`. The setting answered is read against the configuration and
 checked: one refused is asked again as it was given, with `Error`; one taken becomes the table's user setting, and its
 rows are read again. `Act` 2 Choose — a condition's value of a type of the server's (`Type`, `Value` held, `Choice` —
-the client's number for it): the server opens its quick choice, or its choice form — a tab like any other. The value
-chosen comes back in the window's question, asked again or said anew, as `Chosen` (`Choice`, `Value` with its
-`Presentation`).
+the client's number for it, `Declared` — the cell's full type description when known): the server opens its quick
+choice, its choice form — a tab like any other — or, in the designer, DeclaredChoice. The value chosen comes back in
+the window's question, asked again or said anew, as `Chosen` (`Choice`, `Value` with its `Presentation`).
 
 A ComposerSettings window acts the same way. The setting taken becomes the report's user setting; the report is not
 composed again — its gridbox says `ComposeState` 2 until the person composes it.
