@@ -206,6 +206,9 @@
     <ClCompile Include="docManager\templates\docViewFunctionalOption.cpp">
       <Filter>docManager\templates</Filter>
     </ClCompile>
+    <ClCompile Include="docManager\templates\docViewComposer.cpp">
+      <Filter>docManager\templates</Filter>
+    </ClCompile>
     <ClCompile Include="docManager\templates\docViewInterface.cpp">
       <Filter>docManager\templates</Filter>
     </ClCompile>
@@ -345,6 +348,9 @@
       <Filter>docManager\templates</Filter>
     </ClInclude>
     <ClInclude Include="docManager\templates\docViewFunctionalOption.h">
+      <Filter>docManager\templates</Filter>
+    </ClInclude>
+    <ClInclude Include="docManager\templates\docViewComposer.h">
       <Filter>docManager\templates</Filter>
     </ClInclude>
     <ClInclude Include="docManager\templates\docViewInterface.h">

@@ -11,6 +11,8 @@
 #include "frmclient/backend/serialize/dataProtocol.h"                       // a field's type, as the server writes it
 #include "frmclient/backend/metaCollection/partial/reference/reference.h"   // ibValueReferenceDataObject — what a reference points at
 #include "frmclient/backend/metaCollection/resource/metaResourceObject.h"   // the RESOURCE metatype — its own class icon
+#include "frmclient/backend/metaData.h"                                      // a tab's configuration — its tab
+#include "frmclient/docView/tabDocument.h"                                   // a tab's fetch — a composer's, its targets' fields
 #include "frmclient/mainFrame/mainFrame.h"                                  // ibFrontendMainFrame::Respond — a target's fields asked
 #include "protocol/protocol.h"
 
@@ -72,11 +74,27 @@ static int ibSettingsResourceIcon(wxTreeCtrl* tree)
 
 // THE FIELDS OF A REFERENCE'S TARGETS — asked of the server, which holds the configuration (Act Expand): the window it
 // asked stays open, and it asks it again with them (Expanded), and says which of their types are references.
-static std::vector<ibSettingsPlainField> AskTargetFields(const std::vector<ibMetaID>& targets)
+static std::vector<ibSettingsPlainField> AskTargetFields(const std::vector<ibMetaID>& targets, const ibMetaData* metaData)
 {
 	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
 	if (frame == nullptr || targets.empty())
 		return {};
+
+	// ⭐ A TAB'S CONFIGURATION ASKS ITS TAB — a composer's panel is no window the server asked, so there is no question
+	// to answer on the way: the tab is fetched (Request: {Kind: Expand, Targets}) and answers as the window is asked again.
+	if (metaData != nullptr && metaData->GetTabId() != 0) {
+		const ibTabDocument* const document = frame->FindDocument(metaData->GetTabId());
+		if (document == nullptr)
+			return {};
+		ibProtocolNode request, answer;
+		request.SetValue(ibProtocolName::Kind, static_cast<long long>(ibProtocolComposerRequest::Expand));
+		for (const ibMetaID& target : targets)
+			request.AddItem(ibProtocolName::Targets, static_cast<long long>(target));
+		if (!document->Fetch(request, answer))
+			return {};
+		ibValueReferenceDataObject::ReadReferences(answer.FindChild(ibProtocolName::References));
+		return ibReadSettingsFields(answer.FindChild(ibProtocolName::Expanded));
+	}
 
 	ibProtocolNode act;
 	act.SetValue(ibProtocolName::Act, static_cast<long long>(ibProtocolListSettingsAct::Expand));
@@ -104,7 +122,7 @@ static void ExpandSourceFieldNode(wxTreeCtrl* tree, const wxTreeItemId& item, co
 
 	// ⭐⭐ ONE NAME, ONE FIELD — AND ALL THE NAMES THERE ARE: what the targets have, united, is the server's to work out
 	// (the configuration is there); it answers with them in the order the targets declare them.
-	for (const ibSettingsPlainField& col : AskTargetFields(data->m_refTypes)) {
+	for (const ibSettingsPlainField& col : AskTargetFields(data->m_refTypes, metaData)) {
 		ibSourceFieldNode* child = new ibSourceFieldNode();
 		child->m_path = data->m_path + wxT(".") + col.m_name;
 		const wxString label = col.m_presentation.IsEmpty() ? col.m_name : col.m_presentation;

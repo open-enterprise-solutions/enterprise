@@ -93,6 +93,14 @@ composed again when the person says so (Compose). When a composed sheet's `Versi
 also carry `Sheet` (and `ReadOnly`) — the same as `fetch` would give — so the client need not fetch; a server that
 does not put `Sheet` in the state is answered with `fetch`, as before.
 
+In the designer a report's composer is a tab of `Kind` 14. Its `View` holds `State` (`ReadOnly`), `Composition` —
+the composer's description in its node form — and `Fields`, `References`, `Error` — what its query offers, as the
+ComposerSettings question has them. The client edits the description itself and sends it back whole: event
+`Change {Composition}`; the configuration is modified, and the answer's `View` carries the fields of the query the
+composition now has. The fields of another text are fetched by the tab: `fetch {Tab, Request: {Kind: 21, Text}}` —
+`Fields`, `References`, `Error`; the fields of a reference's targets — `fetch {Tab, Request: {Kind: 22, Targets}}` —
+`Expanded` and `References`, as a ListSettings window asked again has them.
+
 A picture is named by its id everywhere — in the view, a tab's `Icon`, a schema, a request, a list of choices: a
 backend picture's number, as a decimal (a class's own: its class id), or a configuration picture's guid. No answer
 carries the picture itself:

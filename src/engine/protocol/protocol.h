@@ -810,6 +810,20 @@ enum class ibProtocolViewKind : int {
 	                         // {Waiting — what the person sent has no answer yet, Pending — the messages no assistant has
 	                         // collected}, View.Rows — the transcript, an entry a row (Text); what the person writes —
 	                         // event {Tab, Event: Change, Args: {Text}}
+	Composer         = 14,   // the designer's editor of a report's composer — the composition panel: View.State
+	                         // {ReadOnly}, View.Composition — the composer's description in its node form, View.Fields
+	                         // and View.References — what its query offers, as the settings questions have them
+	                         // (View.Error — why it offers none); the fields of a text being edited, or of a reference's targets — fetch {Tab,
+	                         // Request: {Kind (ibProtocolComposerRequest), Text}}; an edit — event {Tab, Event: Input},
+	                         // what the panel holds — event {Tab, Event: Change, Args: {Composition}}
+};
+
+// WHAT A COMPOSER'S TAB IS ASKED — `fetch {Tab, Request: {Kind, …}}`, numbered past the form's
+// (ibProtocolFormDesignerRequest).
+enum class ibProtocolComposerRequest : int {
+	Fields = 21,   // {Text} — the fields that query text offers: Fields, References, Error — as the tab's view has them
+	Expand = 22,   // {Targets} — a reference field opened: the fields of those targets, Expanded and their References —
+	               // as a settings window's Act Expand has them asked again
 };
 
 // WHAT A FORM'S TAB IS ASKED besides its module's — `fetch {Tab, Request: {Kind, …}}`, numbered past the module's

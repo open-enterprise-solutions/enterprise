@@ -30,6 +30,12 @@ FRMSERVER_API void ibWriteSettingsField(ibDataNode& fields, const wxString& name
 FRMSERVER_API void ibWriteSettingsReferences(ibDataNode& references, const std::vector<ibTypeDescription>& types,
 	const ibMetaData* metaData);
 
+// THE FIELDS OF A REFERENCE'S TARGETS — a settings window's Act Expand, answered: `expanded` one field per name (its type
+// the union of the targets'), `references` which of their types are references. For a door that asks no window (a
+// composer's tab, ibProtocolComposerRequest::Expand).
+FRMSERVER_API void ibWriteSettingsTargetFields(ibDataNode& expanded, ibDataNode& references,
+	const std::vector<ibMetaID>& targets, const ibMetaData* metaData);
+
 // The window, asked with `question` (its Kind, and what the door tells it) and `edited` — the setting it edits. True: OK,
 // with `edited` the setting given back, read and taken by the schema. False: cancelled, or nobody to ask — `edited` as
 // it was.
