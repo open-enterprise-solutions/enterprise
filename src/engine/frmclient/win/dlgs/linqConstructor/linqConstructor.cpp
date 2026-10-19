@@ -14,6 +14,10 @@
 #include "frmclient/win/ctrls/dataview/dataviewEditOnActivate.h"   // …opened by a double-click
 #include "frmclient/win/dlgs/callbackDropTarget.h"   // a drop is the arrow's verb, reached by the mouse
 #include "frmclient/win/editor/codeEditor/codeEditor.h"   // the block, coloured as the module is
+#include "frmclient/docView/tabDocument.h"               // the module's tab — what the compiler is asked through
+#include "frmclient/win/picture.h"                       // ibProtocolPicture — a kind's picture, by its id
+#include "protocol/protocol.h"                           // ibProtocol::ibView::ibModule::ibLinq
+#include "protocol/protocolNode.h"
 
 #include <wx/artprov.h>
 #include <wx/button.h>
@@ -78,11 +82,14 @@ const wxString kArrowOut = wxString(wxUniChar(0x2039));
 
 } // namespace
 
+namespace linq = ibProtocol::ibView::ibModule::ibLinq;
+
 ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxString& text, unsigned int caret,
-	short codeStyle, bool readOnly)
+	ibTabDocument* module, short codeStyle, bool readOnly)
 	: wxDialog(parent, wxID_ANY, _("LINQ query constructor"), wxDefaultPosition, wxDefaultSize,
 		wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER),
-	m_text(text), m_caret(std::min<unsigned int>(caret, (unsigned int)text.length())), m_codeStyle(codeStyle)
+	m_text(text), m_caret(std::min<unsigned int>(caret, (unsigned int)text.length())), m_module(module),
+	m_codeStyle(codeStyle), m_verdictTimer(this)
 {
 	m_anchor = m_caret;
 
@@ -90,13 +97,40 @@ ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxStrin
 	// compiler's to say - it bracketed the text while reading it; the parts are read back out of that
 	// text by the block's own reader, and OK replaces that stretch.
 	//
-	// ⚠ NOT HERE YET: the compiler's outline (the desktop's ibOutlineScriptQueries) is the server's — the module's
-	// tab will answer where the query at the caret starts, and ibLinqBlock::Parse reads it from there as the desktop
-	// does. Until then no query is found at the caret: the window opens empty, and OK writes a new block there —
-	// said as the desktop says a query it could not read (openRefusal), so the person knows why the trees are bare.
+	// The compiler's outline is the server's (the desktop's ibOutlineScriptQueries): the module's tab answers where
+	// the query at the caret starts, and ibLinqBlock::Parse reads it from there as the desktop does. The same answer
+	// says what is visible there and what each of those and `Data` hold (Open) — the window's opening is one question.
 	ibLinqBlock opened(m_codeStyle);
-	wxString openRefusal = _("This client does not ask the compiler yet: the tables and the names visible at the caret "
-		"are not listed, and a query the caret stands in is not opened.");
+	wxString openRefusal;
+	ibProtocolNode opening;
+	{
+		wxBusyCursor busy;
+		ibProtocolNode request;
+		request.SetValue(linq::Open, true);
+		if (!AskModule(request, m_text, m_caret, opening))
+			openRefusal = _("The module's tab was not asked: the tables and the names visible at the caret are not "
+				"listed, and a query the caret stands in is not opened.");
+	}
+	const ibProtocolNode query = opening.FindChild(linq::Query);
+	if (query.IsNode()) {
+		// ⭐ WHERE THE QUERY ENDS IS THE LEXER'S TO SAY, not the compiler's bracket: the bracket ends
+		// where the compiler STOPPED, and in a query left half-written - `On g. Equals c.` - that is
+		// mid-way, so OK replaced the first half and left the rest standing after the new block. The
+		// reader is handed the module from the query's start and says how much of it the query is.
+		const unsigned int from = static_cast<unsigned int>(query.GetInt(linq::From));
+		const wxString rest = m_text.Mid(from);
+		size_t consumed = 0;
+		if (ibLinqBlock::Parse(rest, opened, openRefusal, &consumed)) {
+			// The stretch itself, without the whitespace around it.
+			const wxString read = rest.Left(consumed);
+			const wxString trimmedLeft = wxString(read).Trim(false);
+			const wxString trimmed = wxString(trimmedLeft).Trim(true);
+			m_replacing = true;
+			m_replaceFrom = from + (unsigned int)(read.length() - trimmedLeft.length());
+			m_replaceTo = m_replaceFrom + (unsigned int)trimmed.length();
+			m_anchor = m_replaceFrom;
+		}
+	}
 
 	// A probe is appended to the text up to the START of the anchor's line: the statements above are
 	// finished, the one the block stands in may not be (`q = |`), and a probe glued onto half a
@@ -107,12 +141,16 @@ ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxStrin
 	// WHAT IS VISIBLE WHERE THE BLOCK STANDS - the dropdown's own list, the values in it: the module's
 	// variables, the procedure's locals and parameters, the object's own attributes and tabular sections.
 	//
-	// ⚠ NOT HERE YET: the names are the compiler's (the desktop's ibNamesAtCaret — what is not callable, declared or a
-	// member) and will be the module's tab's answer; until then none, and "Visible here" says so.
+	// The names are the compiler's (the desktop's ibNamesAtCaret — what is not callable, declared or a member), the
+	// tab's answer to the opening, asked where the block stands.
+	for (const ibProtocolNode& name : opening.FindChild(linq::Names).Children())
+		m_variables.push_back(name.GetString(linq::Name));
+	for (const ibProtocolNode& kind : opening.FindChild(linq::Kinds).Children())
+		m_kindPictures[kind.GetString(linq::Name)] = kind.GetString(linq::Picture);
 
 	// ASKED ONCE, for every tree: which visible names are places to open and which are plain values
 	// (a leaf with no arrow, for a condition), and what `Data` holds - its sections head every tree,
-	// the way the metadata kinds head the query constructor's.
+	// the way the metadata kinds head the query constructor's. (The opening answered them: nothing is asked here.)
 	{
 		wxBusyCursor busy;
 		for (const wxString& name : m_variables)
@@ -470,6 +508,7 @@ ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxStrin
 	m_groupInto->Bind(wxEVT_TEXT, [this](wxCommandEvent&) { ShowResult(); });
 	m_distinct->Bind(wxEVT_CHECKBOX, [this](wxCommandEvent&) { ShowResult(); });
 	Bind(wxEVT_BUTTON, &ibDialogLinqConstructor::OnOk, this, wxID_OK);
+	Bind(wxEVT_TIMER, [this](wxTimerEvent&) { AskVerdict(); }, m_verdictTimer.GetId());
 
 	SetSizerAndFit(top);
 	SetSize(FromDIP(wxSize(1060, 700)));
@@ -488,28 +527,91 @@ ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxStrin
 //  IntelliSense, asked
 // ---------------------------------------------------------------------------
 
-ibDialogLinqConstructor::ibProbe ibDialogLinqConstructor::Ask(const wxString& WXUNUSED(probe)) const
+ibDialogLinqConstructor::ibProbe ibDialogLinqConstructor::Ask(const wxString& probe) const
 {
 	// ⭐ AS A COMPLETION, like the dropdown: answering compiles the text and walks it, values are made
 	// on the way, and a name not written yet is ordinary here rather than an error.
 	//
-	// ⚠ NOT HERE YET: the walk is the server's (the desktop's ibValueAtCaret at the probe's end) — the module's tab
-	// will answer it: whether the probe resolved, the class it resolved to, the names after the dot that are not
-	// scoped to a frame. Until then nothing resolves.
-	return ibProbe();
+	// The walk is the server's (the desktop's ibValueAtCaret at the probe's end): the module's tab answers whether the
+	// probe resolved, the class it resolved to, the names after the dot that are not scoped to a frame. A probe the
+	// window asked before — or that a question for a whole place answered on the way — asks nothing.
+	auto known = m_asked.find(probe);
+	if (known == m_asked.end()) {
+		AskAll({ probe }, {});
+		known = m_asked.find(probe);
+	}
+	return known != m_asked.end() ? known->second : ibProbe();
 }
 
 ibDialogLinqConstructor::ibProbe ibDialogLinqConstructor::MembersOf(const wxString& expression) const
 {
-	return Ask(m_probeHead + wxT("linqProbe = ") + expression + wxT("."));
+	return Ask(MembersProbe(expression));
 }
 
 ibDialogLinqConstructor::ibProbe ibDialogLinqConstructor::RowOf(const wxString& expression) const
 {
+	return Ask(RowProbe(expression));
+}
+
+wxString ibDialogLinqConstructor::MembersProbe(const wxString& expression) const
+{
+	return m_probeHead + wxT("linqProbe = ") + expression + wxT(".");
+}
+
+wxString ibDialogLinqConstructor::RowProbe(const wxString& expression) const
+{
 	// A ROW is what the source yields, and it is asked where a row is: inside a query over it, after
 	// the dot of its alias - exactly where a person writing the query by hand stands.
-	return Ask(m_probeHead + wxT("linqProbe = ") + Word(KEY_FROM) + wxT(" ") + kProbeRow + wxT(" ")
-		+ Word(KEY_IN) + wxT(" ") + expression + wxT(" ") + Word(KEY_WHERE) + wxT(" ") + kProbeRow + wxT("."));
+	return m_probeHead + wxT("linqProbe = ") + Word(KEY_FROM) + wxT(" ") + kProbeRow + wxT(" ")
+		+ Word(KEY_IN) + wxT(" ") + expression + wxT(" ") + Word(KEY_WHERE) + wxT(" ") + kProbeRow + wxT(".");
+}
+
+bool ibDialogLinqConstructor::AskModule(ibProtocolNode& request, const wxString& text, unsigned int position,
+	ibProtocolNode& answer) const
+{
+	if (m_module == nullptr)
+		return false;
+	request.SetValue(ibProtocol::ibView::ibModule::Kind, static_cast<int>(ibProtocol::ibView::ibModule::ibRequest::Linq))
+		.SetValue(ibProtocol::ibView::ibModule::Text, text)
+		.SetValue(ibProtocol::ibView::ibModule::Position, static_cast<int>(position));
+	if (!m_module->Fetch(request, answer))
+		return false;
+	KeepValues(answer);
+	return true;
+}
+
+void ibDialogLinqConstructor::KeepValues(const ibProtocolNode& answer) const
+{
+	for (const ibProtocolNode& value : answer.FindChild(linq::Values).Children()) {
+		ibProbe probe;
+		probe.m_resolved = value.GetBool(linq::Resolved);
+		probe.m_type = value.GetString(linq::Type);
+		for (const ibProtocolNode& name : value.FindChild(linq::Names).Children())
+			probe.m_names.push_back(name.GetString(linq::Name));
+		m_asked[value.GetString(linq::Text)] = probe;
+	}
+}
+
+void ibDialogLinqConstructor::AskAll(const std::vector<wxString>& probes, const std::vector<wxString>& deep) const
+{
+	ibProtocolNode request;
+	bool asking = false;
+	for (const wxString& probe : probes) {
+		if (m_asked.find(probe) != m_asked.end())
+			continue;
+		request.AddItem(linq::Probes, probe);
+		if (std::find(deep.begin(), deep.end(), probe) != deep.end())
+			request.AddItem(linq::Deep, probe);
+		asking = true;
+	}
+	if (!asking)
+		return;
+	ibProtocolNode answer;
+	if (!AskModule(request, m_text, m_caret, answer)) {
+		// Not answered: each is known as resolving to nothing, so it is not asked again.
+		for (const wxString& probe : probes)
+			m_asked.emplace(probe, ibProbe());
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -537,9 +639,19 @@ int ibDialogLinqConstructor::IconIndex(wxTreeCtrl* tree, const wxString& key, co
 // the day it registers.
 int ibDialogLinqConstructor::KindIcon(wxTreeCtrl* tree, const wxString& section)
 {
-	// ⚠ NOT HERE YET: the kind's registration is the server's (the desktop's GetAvailableCtor(kind)->GetClassIcon); a
-	// section wears the folder the desktop fell back to. Until the walk is asked no section is listed anyway.
-	return IconIndex(tree, wxT("kind:") + section, []() -> wxIcon {
+	// The kind's registration is the server's (the desktop's GetAvailableCtor(kind)->GetClassIcon): the opening
+	// answered each section's picture; one with none wears the folder the desktop fell back to.
+	return IconIndex(tree, wxT("kind:") + section, [this, &section]() -> wxIcon {
+		const auto picture = m_kindPictures.find(section);
+		if (picture != m_kindPictures.end() && !picture->second.IsEmpty()) {
+			const wxBitmap bitmap = ibProtocolPicture(picture->second);
+			if (bitmap.IsOk()) {
+				wxIcon icon;
+				icon.CopyFromBitmap(bitmap);
+				if (icon.IsOk())
+					return icon;
+			}
+		}
 		return wxArtProvider::GetIcon(wxART_COMMON_FOLDER, wxART_METATREE, wxSize(16, 16));
 	});
 }
@@ -657,10 +769,16 @@ void ibDialogLinqConstructor::OnExpanding(wxTreeEvent& event)
 	//     tabular section waits inside it;
 	//   * something iterated whose rows name nothing (a table filled at run time), or that did not resolve
 	//     at all (an argument of no known type), is a table whose fields are written by hand.
+	const bool underData = node->m_expression.StartsWith(wxT("Data."));
+	// …ASKED AS ONE QUESTION: the place, its rows, and — off `Data` — what each member is (AddPlace's probes).
+	{
+		const wxString membersProbe = MembersProbe(node->m_expression);
+		AskAll({ membersProbe, RowProbe(node->m_expression) },
+			underData ? std::vector<wxString>() : std::vector<wxString>{ membersProbe });
+	}
 	const ibProbe members = MembersOf(node->m_expression);
 	const bool structure = members.m_type == wxT("Structure");
 	const ibProbe rows = structure ? ibProbe() : RowOf(node->m_expression);
-	const bool underData = node->m_expression.StartsWith(wxT("Data."));
 
 	if (!structure && !rows.m_names.empty()) {
 		node->m_kind = ibNodeKind::Source;
@@ -1247,11 +1365,67 @@ void ibDialogLinqConstructor::ShowResult()
 	// query it replaces or at the caret - and says what it understood: which names the query binds,
 	// where each came from, which columns the answer has. The window keeps no opinion of its own.
 	//
-	// ⚠ NOT HERE YET: that reading is the server's (the desktop's ibOutlineScriptQueries over the module with the
-	// block in it — the bindings, their origins and fields, the answer's columns), and the module's tab will answer
-	// it. Until then the line says it was not asked.
+	// That reading is the server's (the desktop's ibOutlineScriptQueries over the module with the block in it — the
+	// bindings, their origins and fields, the answer's columns): the module's tab answers it once the typing pauses,
+	// and a block already read is not asked again.
+	const wxString text = m_text.Left(m_anchor) + block + m_text.Mid(m_replacing ? m_replaceTo : m_anchor);
+	if (m_module == nullptr) {
+		m_verdict->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
+		m_verdict->SetLabelText(_("The compiler's reading of the block is not asked here - check the module after OK."));
+		return;
+	}
+	if (text == m_verdictText) {
+		m_verdict->SetForegroundColour(m_verdictRead ? wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT)
+			: wxColour(0xC0, 0x30, 0x30));
+		m_verdict->SetLabelText(m_verdictLabel);
+		return;
+	}
 	m_verdict->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
-	m_verdict->SetLabelText(_("The compiler's reading of the block is not asked in this client yet - check the module after OK."));
+	m_verdict->SetLabelText(_("The compiler is reading the block..."));
+	m_verdictTimer.StartOnce(400);
+}
+
+void ibDialogLinqConstructor::AskVerdict()
+{
+	wxString refusal;
+	const wxString block = Collect().RenderDraft(IndentAt(m_anchor), refusal);
+	if (!refusal.IsEmpty() || block.IsEmpty())
+		return;
+	const wxString text = m_text.Left(m_anchor) + block + m_text.Mid(m_replacing ? m_replaceTo : m_anchor);
+	if (text == m_verdictText)
+		return;
+
+	ibProtocolNode request;
+	request.SetValue(linq::Verdict, true);
+	ibProtocolNode answer;
+	const bool asked = AskModule(request, text, m_anchor, answer);
+	const ibProtocolNode read = answer.FindChild(linq::Read);
+
+	m_verdictText = text;
+	m_verdictRead = asked && read.IsNode();
+	if (!m_verdictRead) {
+		m_verdictLabel = asked ? wxString(_("The compiler did not read a query at this place - look at the block."))
+			: wxString(_("The compiler's reading of the block was not answered - check the module after OK."));
+	}
+	else {
+		wxString names;
+		for (const ibProtocolNode& binding : read.FindChild(linq::Bindings).Children()) {
+			names += (names.IsEmpty() ? wxString() : wxString(wxT(", "))) + binding.GetString(linq::Name) + wxT(" (")
+				+ binding.GetString(linq::Origin);
+			const long long offers = binding.GetInt(linq::Offers);
+			if (offers > 0)
+				names += wxString::Format(_(", %u fields"), (unsigned)offers);
+			names += wxT(")");
+		}
+		wxString columns;
+		for (const ibProtocolNode& column : read.FindChild(linq::Columns).Children())
+			columns += (columns.IsEmpty() ? wxString() : wxString(wxT(", "))) + column.GetString(linq::Name);
+		m_verdictLabel = wxString::Format(_("The compiler reads it: %s. Columns of the answer: %s."),
+			names, columns.IsEmpty() ? wxString(_("the row itself")) : columns);
+	}
+	m_verdict->SetForegroundColour(m_verdictRead ? wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT)
+		: wxColour(0xC0, 0x30, 0x30));
+	m_verdict->SetLabelText(m_verdictLabel);
 }
 
 void ibDialogLinqConstructor::OnOk(wxCommandEvent& event)

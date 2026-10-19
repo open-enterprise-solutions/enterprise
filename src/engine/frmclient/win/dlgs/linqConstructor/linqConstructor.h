@@ -28,9 +28,10 @@
 // back by ibLinqBlock::Parse — and replaced on OK.
 //
 // ⚠ IN THE CLIENT THE THREE DOORS AND THE OUTLINE ARE THE SERVER'S — the compiler and the module are there, and
-// they will be asked of the module's tab; not yet. Here the window opens on what it can build without them: the
-// tabs, the lists, the block written with the lexer's words in the module's syntax (its tab's), and a line under it
-// that says the walk is not asked. The trees hold only "Visible here".
+// they are asked of the module's tab (ibProtocol::ibView::ibModule::ibLinq): the window's opening once, the places
+// a tree opens once each (the place, its rows and what its members are, in one question), the compiler's reading of
+// the block once per block it has not read. Each answer is kept for the window's life, so a question asked again —
+// a probe, the same block — asks nothing.
 //
 ////////////////////////////////////////////////////////////////////////////
 
@@ -42,6 +43,7 @@
 #include <wx/textctrl.h>
 #include <wx/checkbox.h>
 #include <wx/stattext.h>
+#include <wx/timer.h>
 
 #include <functional>
 #include <map>
@@ -49,16 +51,18 @@
 
 class wxNotebook;
 class wxToolBar;
+class ibTabDocument;
+class ibProtocolNode;
 
 class FRMCLIENT_API ibDialogLinqConstructor : public wxDialog
 {
 public:
 
-	// `text` is the module's text and `caret` the CHARACTER position the window was opened at;
-	// `codeStyle` is the syntax the module is written in — what the client knows of the module (its tab's State);
-	// the desktop's `module`, its bindings and its configuration, is the server's.
+	// `text` is the module's text and `caret` the CHARACTER position the window was opened at; `module` — the desktop's
+	// module — is the module's tab, asked what the compiler says (null: nothing is asked); `codeStyle` is the syntax the
+	// module is written in (its tab's State).
 	ibDialogLinqConstructor(wxWindow* parent, const wxString& text, unsigned int caret,
-		short codeStyle, bool readOnly);
+		ibTabDocument* module, short codeStyle, bool readOnly);
 
 	// The parts, as the tabs hold them.
 	ibLinqBlock Collect() const;
@@ -82,6 +86,18 @@ private:
 	ibProbe Ask(const wxString& probe) const;
 	ibProbe MembersOf(const wxString& expression) const;
 	ibProbe RowOf(const wxString& expression) const;
+
+	// ---- the module's tab, asked (the client's half of the desktop's three doors) ----
+	// The probe texts MembersOf and RowOf ask.
+	wxString MembersProbe(const wxString& expression) const;
+	wxString RowProbe(const wxString& expression) const;
+	// One question of the tab (Kind Linq, Text, Position, and the parts `request` names); its Values kept.
+	bool AskModule(ibProtocolNode& request, const wxString& text, unsigned int position, ibProtocolNode& answer) const;
+	void KeepValues(const ibProtocolNode& answer) const;
+	// The probes not known yet, in one question; those in `deep` with their names' probes too.
+	void AskAll(const std::vector<wxString>& probes, const std::vector<wxString>& deep) const;
+	// The compiler's reading of the block, asked once the typing has paused.
+	void AskVerdict();
 
 	// A value that is only a value - a number, a string, a date, a flag: a leaf, which goes into a
 	// condition and is read as nothing. An expression the walk could not resolve is NOT one: it may be
@@ -139,6 +155,7 @@ private:
 	unsigned int             m_replaceFrom = 0;
 	unsigned int             m_replaceTo = 0;
 	wxString                 m_probeHead;      // the text up to the anchor's line — what a probe is appended to
+	ibTabDocument*           m_module = nullptr;   // the module's tab — what the compiler is asked through
 	short                    m_codeStyle;
 	std::vector<wxString>    m_variables;      // the names visible at the anchor that hold a value
 	std::vector<bool>        m_variableOpens;  // …and whether each is a place to open, or a plain value
@@ -178,6 +195,15 @@ private:
 	// The block, shown by the code editor itself — the same colouring the module has.
 	class ibCodeEditor*       m_block = nullptr;
 	wxStaticText*             m_verdict = nullptr;
+
+	// What the tab answered, kept for the window's life: each probe by its text, each section's picture by its name,
+	// and the block last read with what the compiler read of it.
+	mutable std::map<wxString, ibProbe> m_asked;
+	std::map<wxString, wxString>        m_kindPictures;
+	wxTimer                             m_verdictTimer;
+	wxString                            m_verdictText;   // the module with the block in, as last asked
+	wxString                            m_verdictLabel;  // …and the line it was answered with
+	bool                                m_verdictRead = false;
 };
 
 #endif
