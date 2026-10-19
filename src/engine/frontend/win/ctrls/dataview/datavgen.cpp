@@ -7359,7 +7359,7 @@ void ibDataViewCtrl::DrawTableContent(wxDC& dc, ibDataViewMainWindow* tableWindo
 					{
 						wxRendererNative::Get().DrawFocusRect
 						(
-							this,
+							tableWindow,   // the window being painted: macOS draws a focus rect into its context
 							dc,
 							rowRect,
 							flags
