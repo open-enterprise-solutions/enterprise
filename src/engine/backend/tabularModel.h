@@ -1162,7 +1162,15 @@ public:
 					const ibValue& cFoundedValue = listValue.at(0);
 					if (notify && m_valueTable != nullptr && cValue != cFoundedValue)
 						m_valueTable->RowValueChanged(this, col);
-					cValue.SetValue(cFoundedValue);
+					// Plain assignment, not .SetValue(): a reference-kind cell (a chosen-or-not EnumRef,
+					// a Catalog/DocumentRef) is TYPE_REFFER over an object that is ALWAYS constructed
+					// read-only (ibValueReferenceDataObject's identity is immutable; re-choosing REPOINTS
+					// the cell, it does not edit the object in place). .SetValue() on a TYPE_REFFER value
+					// forwards into that object (`m_pRef->SetValue(...)`) and raised "Attempt to assign a
+					// value to a write-denied variable" the moment a grid cell committed a reference pick —
+					// every time, for any reference type, with the edit never reaching the row (#482).
+					// operator=() repoints the wrapper itself instead, which is what a cell swap means here.
+					cValue = cFoundedValue;
 				}
 				return true;
 			}

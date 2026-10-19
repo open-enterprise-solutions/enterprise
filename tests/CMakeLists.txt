@@ -129,6 +129,7 @@ add_executable(oes_tests
     test_sequenceBorder.cpp
     test_typeChangeLedger.cpp
     test_acceptanceCatalogs.cpp
+    test_tabularEnumPersist.cpp
     test_acceptanceAccumulation.cpp
     test_sqliteBlobLifetime.cpp
     test_calcDisplacement.cpp
