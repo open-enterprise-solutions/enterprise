@@ -54,6 +54,7 @@ void ibFrontendMainFrameDesigner::CreateGUI()
 	CreateDebugToolbar();
 
 	CreateMetadataPane();
+	CreateGitPane();
 
 	// tell the manager to "commit" all the changes just made
 	m_mgr.Update();

@@ -75,12 +75,12 @@ void ibFrontendMainFrameDesigner::InitializeDefaultMenu()
 
 	// ⚠ WHAT THE PERSON MAY DO IS THE SERVER'S TO SAY — its MetaData doors are refused without the right to the base, and
 	// the refusal is said; the desktop's items greyed by that right stand here. Open database configuration and the
-	// comparisons are not ported yet — their tabs (plan: thin-designer-editors.md §8); until they are, offered greyed.
+	// comparisons are the desktop's windows (docViewMetaFile, docViewConfigCompare), what fills them not yet the
+	// server's: they say so (OnOpenConfiguration, OnConfiguration; plan: thin-designer-editors.md §8).
 	m_menuConfiguration = new wxMenu;
 
 	menuItem = m_menuConfiguration->Append(wxID_DESIGNER_CONFIGURATION_OPEN_DATABASE, _("Open database configuration"));
 	menuItem->SetBitmap(wxArtProvider::GetBitmapBundle(wxART_DATABASE, wxART_FRONTEND, wxSize(16, 16)));
-	menuItem->Enable(false);
 	menuItem = m_menuConfiguration->Append(wxID_DESIGNER_CONFIGURATION_ROLLBACK_DATABASE, _("Rollback to database configuration"));
 	menuItem->SetBitmap(wxArtProvider::GetBitmapBundle(wxART_DATABASE_ROOLBACK, wxART_FRONTEND, wxSize(16, 16)));
 
@@ -99,14 +99,9 @@ void ibFrontendMainFrameDesigner::InitializeDefaultMenu()
 	// Configuration menu stays compact.
 	wxMenu* menuCompare = new wxMenu;
 
-	menuItem = menuCompare->Append(wxID_DESIGNER_CONFIGURATION_COMPARE_FILE, _("With file..."));
-	menuItem->Enable(false);
-
-	menuItem = menuCompare->Append(wxID_DESIGNER_CONFIGURATION_COMPARE_DB, _("With database configuration"));
-	menuItem->Enable(false);
-
-	menuItem = menuCompare->Append(wxID_DESIGNER_CONFIGURATION_COMPARE_TWO_FILES, _("Two files..."));
-	menuItem->Enable(false);
+	menuCompare->Append(wxID_DESIGNER_CONFIGURATION_COMPARE_FILE, _("With file..."));
+	menuCompare->Append(wxID_DESIGNER_CONFIGURATION_COMPARE_DB, _("With database configuration"));
+	menuCompare->Append(wxID_DESIGNER_CONFIGURATION_COMPARE_TWO_FILES, _("Two files..."));
 
 	m_menuConfiguration->AppendSubMenu(menuCompare, _("Compare configurations"));
 
@@ -120,9 +115,10 @@ void ibFrontendMainFrameDesigner::InitializeDefaultMenu()
 
 	ibFrontendMainFrame::InitializeDefaultMenu();
 
+	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnOpenConfiguration, this, wxID_DESIGNER_CONFIGURATION_OPEN_DATABASE);
 	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnRollbackConfiguration, this, wxID_DESIGNER_CONFIGURATION_ROLLBACK_DATABASE);
 	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnUpdateConfiguration, this, wxID_DESIGNER_CONFIGURATION_UPDATE_DATABASE);
-	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnConfiguration, this, wxID_DESIGNER_CONFIGURATION_LOAD_FROM_FILE, wxID_DESIGNER_CONFIGURATION_SAVE_TO_FILE);
+	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnConfiguration, this, wxID_DESIGNER_CONFIGURATION_LOAD_FROM_FILE, wxID_DESIGNER_CONFIGURATION_COMPARE_TWO_FILES);
 	Bind(wxEVT_UPDATE_UI, &ibFrontendMainFrameDesigner::OnUpdateSaveMetadata, this, wxID_DESIGNER_CONFIGURATION_ROLLBACK_DATABASE);
 	Bind(wxEVT_UPDATE_UI, &ibFrontendMainFrameDesigner::OnUpdateSaveMetadata, this, wxID_DESIGNER_CONFIGURATION_UPDATE_DATABASE);
 
@@ -136,6 +132,7 @@ void ibFrontendMainFrameDesigner::InitializeDefaultMenu()
 
 	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnRunDebugCommand, this, wxID_DESIGNER_DEBUG_EDIT_POINT, wxID_DESIGNER_DEBUG_REMOVE_ALL_DEBUGPOINTS);
 	Bind(wxEVT_UPDATE_UI, &ibFrontendMainFrameDesigner::OnUpdateDebugCommand, this, wxID_DESIGNER_DEBUG_STEP_OVER, wxID_DESIGNER_DEBUG_NEXT_POINT);
+	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnConnection, this, wxID_APPLICATION_CONNECTION);
 
 	// Syntax helper — lambda bindings, no member fn to lose to the
 	// designer header.

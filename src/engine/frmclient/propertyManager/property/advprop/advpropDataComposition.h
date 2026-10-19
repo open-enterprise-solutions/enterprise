@@ -30,7 +30,7 @@ public:
 	ibPGDataCompositionProperty(const ibPropertyObject* property = nullptr, const wxString& label = wxPG_LABEL,
 		const wxString& name = wxPG_LABEL, const wxVariant& value = wxNullVariant,
 		ibSettingsDoor door = ibSettingsDoor());
-	virtual ~ibPGDataCompositionProperty();
+	virtual ~ibPGDataCompositionProperty() override;
 
 	const ibPropertyObject* GetPropertyObject() const { return m_property; }
 
@@ -44,7 +44,7 @@ public:
 	virtual void OnSetValue() override;
 
 	// Refresh values of child properties. Automatically called after value is set.
-	virtual void RefreshChildren();
+	virtual void RefreshChildren() override;
 
 protected:
 

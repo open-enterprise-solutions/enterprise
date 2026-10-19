@@ -1,0 +1,203 @@
+﻿#include "advpropGeneration.h"
+
+#include "frmclient/backend/propertyManager/property/variant/variantGen.h"
+
+#include "frmclient/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
+#include "frmclient/propertyManager/property/private/propertyRegistry.h"
+#include "frmclient/propertyManager/propertyEditor.h"
+
+#define icon_size 16
+
+// -----------------------------------------------------------------------
+// ibPGGenerationProperty
+// -----------------------------------------------------------------------
+
+wxPG_IMPLEMENT_PROPERTY_CLASS(ibPGGenerationProperty, wxPGProperty, ComboBoxAndButton)
+
+// register frontend property
+class ibPropertyGenerationLoader
+{
+public:
+	ibPropertyGenerationLoader()
+	{
+		// ibPropertyGeneration — the bases as the server stores them (ibMetaDescriptionMemory: the metaIds it names),
+		// what may fill it the row's choices.
+		ibPropertyRegistry::Register(wxT("ibPropertyGeneration"), [](ibBackendProperty* property) -> wxPGProperty* {
+			ibPropertyChoiceList choices;
+			property->GetValueList(choices);
+			ibMetaDescription metaDesc;
+			ibMetaDescriptionMemory::ReadNode(property->GetNodeValue(), metaDesc);
+			return new ibPGGenerationProperty(property->GetPropertyObject(), property->GetLabel(), property->GetName(),
+				wxVariant(new ibVariantDataGeneration(property->GetPropertyObject(), metaDesc)), choices);
+		},
+		[](const wxVariant& value) {
+			ibDataValue node;
+			if (const ibVariantDataGeneration* const data = property_cast(value, ibVariantDataGeneration))
+				ibMetaDescriptionMemory::WriteNode(node, data->GetMetaDesc());
+			return node;
+		});
+	}
+}g_generationLoader;
+
+ibPGGenerationProperty::ibPGGenerationProperty(const ibPropertyObject* property, const wxString& label, const wxString& strName, const wxVariant& value,
+	const ibPropertyChoiceList& choices)
+	: wxPGProperty(label, strName), m_ownerProperty(property)
+{
+	for (unsigned int idx = 0; idx < choices.GetCount(); idx++)
+		m_choices.Add(choices.GetLabel(idx), choices.GetBitmap(idx), choices.GetId(idx));
+
+	m_flags |= wxPGPropertyFlags_ActiveButton; // Property button always enabled.
+
+	SetValue(value);
+}
+
+wxString ibPGGenerationProperty::ValueToString(wxVariant& value, wxPGPropValFormatFlags flags) const
+{
+	// ⚠ NAMED BY THE CHOICES — the client holds no configuration to name an id by (ibPGChartBindingProperty).
+	const ibVariantDataGeneration* const data = property_cast(value, ibVariantDataGeneration);
+	if (data == nullptr)
+		return wxEmptyString;
+	wxString strDescr;
+	const ibMetaDescription& md = data->GetMetaDesc();
+	for (unsigned int idx = 0; idx < md.GetTypeCount(); idx++) {
+		const int index = m_choices.Index(static_cast<int>(md.GetByIdx(idx)));
+		if (index == wxNOT_FOUND)
+			continue;
+		strDescr = strDescr.IsEmpty() ? m_choices.GetLabel(index) : strDescr + wxT(", ") + m_choices.GetLabel(index);
+	}
+	return strDescr;
+}
+
+bool ibPGGenerationProperty::StringToValue(wxVariant& variant,
+	const wxString& text,
+	wxPGPropValFormatFlags flags) const
+{
+	return false;
+}
+
+bool ibPGGenerationProperty::IntToValue(wxVariant& value, int number, wxPGPropValFormatFlags flags) const
+{
+	ibVariantDataGeneration* dataGen = property_cast(value, ibVariantDataGeneration);
+	if (dataGen != nullptr) {
+		ibVariantDataGeneration* newDataGen = dataGen->Clone();
+		wxASSERT(newDataGen);
+		ibMetaDescription& md = newDataGen->GetMetaDesc();
+		md.SetDefaultMetaType(m_choices.GetValue(number));
+		value = newDataGen;
+		return true;
+	}
+	return false;
+}
+
+#include "frmclient/win/ctrls/checktree.h"
+
+wxPGEditorDialogAdapter* ibPGGenerationProperty::GetEditorDialog() const
+{
+	class wxPGGenerationEventAdapter : public wxPGEditorDialogAdapter {
+		class ibTreeItemPropertyData : public wxTreeItemData {
+			ibMetaID m_metaID;
+		public:
+			ibTreeItemPropertyData(ibMetaID id) : wxTreeItemData(), m_metaID(id) {}
+			ibMetaID GetMetaID() const { return m_metaID; }
+		};
+
+		// ⭐ WHAT THE PROPERTY OFFERS — the choices it was built with (ibPropertyGeneration::GetValueList), not a list
+		// of kinds of this dialog's own. The desktop's grouped them by kind, asking the configuration each one's class;
+		// the client holds no configuration, and lists them as the row brought them.
+		void FillFromChoices(const wxPGChoices& choices, ibCheckTree* tc, ibVariantDataGeneration* data) {
+
+			wxImageList* imageList = tc->GetImageList();
+			wxASSERT(imageList);
+			for (unsigned int idx = 0; idx < choices.GetCount(); idx++) {
+				const ibMetaID id = choices.GetValue(idx);
+				const wxBitmapBundle& bitmap = choices.Item(idx).GetBitmap();
+				const int icon = bitmap.IsOk() ? imageList->Add(bitmap.GetBitmap(wxSize(icon_size, icon_size))) : -1;
+				wxTreeItemId newItem = tc->AppendItem(tc->GetRootItem(), choices.GetLabel(idx),
+					icon, icon, new ibTreeItemPropertyData(id));
+
+				const bool checked = data != nullptr && data->GetMetaDesc().ContainMetaType(id);
+				tc->SetItemState(newItem, checked ? ibCheckTree::CHECKED : ibCheckTree::UNCHECKED);
+				tc->Check(newItem, checked);
+			}
+		}
+
+	public:
+
+		virtual bool DoShowDialog(wxPropertyGrid* pg, wxPGProperty* prop) override
+		{
+			ibPGGenerationProperty* dlgProp = wxDynamicCast(prop, ibPGGenerationProperty);
+			wxCHECK_MSG(dlgProp, false, "Function called for incompatible property");
+
+			ibVariantDataGeneration* data = property_cast(dlgProp->GetValue(), ibVariantDataGeneration);
+			if (data == nullptr) return false;
+
+			// launch editor dialog
+			wxDialog* dlg = new wxDialog(pg, wxID_ANY, _("Choice generation"), wxDefaultPosition, wxDefaultSize,
+				wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER | wxCLIP_CHILDREN);
+
+			dlg->SetFont(pg->GetFont()); // To allow entering chars of the same set as the propGrid
+
+			// Multi-line text editor dialog.
+			const int spacing = wxPropertyGrid::IsSmallScreen() ? 4 : 8;
+			wxBoxSizer* topsizer = new wxBoxSizer(wxVERTICAL);
+			wxBoxSizer* rowsizer = new wxBoxSizer(wxHORIZONTAL);
+
+			ibCheckTree* tc = new ibCheckTree(dlg, wxID_ANY,
+				wxDefaultPosition, wxDefaultSize, wxTR_HAS_BUTTONS | wxTR_LINES_AT_ROOT | wxTR_NO_LINES | wxTR_HIDE_ROOT | wxCR_MULTIPLE_CHECK | wxCR_EMPTY_CHECK | wxSUNKEN_BORDER | wxTR_TWIST_BUTTONS);
+
+			tc->AddRoot(wxEmptyString);   // the root is hidden (wxTR_HIDE_ROOT); only its existence matters
+
+			rowsizer->Add(tc, wxSizerFlags(1).Expand().Border(wxALL, spacing));
+			topsizer->Add(rowsizer, wxSizerFlags(1).Expand());
+
+			tc->SetDoubleBuffered(true);
+			tc->Enable(!dlgProp->HasFlag(wxPGFlags::ReadOnly));
+
+			wxStdDialogButtonSizer* buttonSizer = dlg->CreateStdDialogButtonSizer(wxOK | wxCANCEL);
+			topsizer->Add(buttonSizer, wxSizerFlags(0).Right().Border(wxBOTTOM | wxRIGHT, spacing));
+
+			dlg->SetSizer(topsizer);
+			topsizer->SetSizeHints(dlg);
+
+			if (!wxPropertyGrid::IsSmallScreen()) {
+				dlg->SetSize(dlg->FromDIP(wxSize(400, 300)));
+				dlg->Move(pg->GetGoodEditorDialogPosition(prop, dlg->GetSize()));
+			}
+
+			tc->SetFocus();
+
+			// Make an state image list containing small icons
+			tc->AssignImageList(
+				new wxImageList(icon_size, icon_size)
+			);
+
+			FillFromChoices(dlgProp->GetChoices(), tc, data);
+
+			tc->ExpandAll(); int res = dlg->ShowModal();
+
+			ibVariantDataGeneration* clone = data->Clone();
+			{
+				ibMetaDescription& metaDesc = clone->GetMetaDesc(); metaDesc.ClearMetaType();
+				wxArrayTreeItemIds ids;
+				tc->GetSelections(ids);   // the count is in ids itself
+				// BY VALUE: wxArrayTreeItemIds stores void*, so a reference binds to a per-iteration temporary.
+				for (const wxTreeItemId selItem : ids) {
+					if (selItem.IsOk()) {
+						wxTreeItemData* dataItem = tc->GetItemData(selItem);
+						if (dataItem && res == wxID_OK) {
+							ibTreeItemPropertyData* item = dynamic_cast<ibTreeItemPropertyData*>(dataItem);
+							wxASSERT(item);
+							metaDesc.AppendMetaType(item->GetMetaID());
+						}
+					}
+				}
+			}
+			SetValue(clone);
+
+			dlg->Destroy();
+			return res == wxID_OK;
+		}
+	};
+
+	return new wxPGGenerationEventAdapter();
+}

@@ -132,6 +132,15 @@ void ibFrontendMainFrameDesigner::OnAttachForDebugging(wxCommandEvent& WXUNUSED(
 // configuration takes them down there (its tree's Closed), as the desktop closed its MDI children first. And the
 // message boxes the desktop showed when it was done the server asks — it alone knows how it went.
 
+void ibFrontendMainFrameDesigner::OnOpenConfiguration(wxCommandEvent& WXUNUSED(event))
+{
+	// ⚠ NOT HERE YET: the desktop's raised the browser already open on the database's configuration, else opened one —
+	// its tree read-only in a tab (ibMetadataBrowserDocument, designer-thin/docManager/templates/docViewMetaFile.h). The
+	// database's configuration is the server's: it would raise that tab (a Kind for it), its rows in the tab's view.
+	wxMessageBox(_("Opening the database configuration is not in the thin client yet."),
+		wxTheApp->GetAppDisplayName(), wxOK | wxICON_INFORMATION, this);
+}
+
 void ibFrontendMainFrameDesigner::OnRollbackConfiguration(wxCommandEvent& WXUNUSED(event))
 {
 	m_metaWindow->RollbackConfiguration();
@@ -193,6 +202,19 @@ void ibFrontendMainFrameDesigner::OnConfiguration(wxCommandEvent& event)
 		if (m_metaWindow->SaveConfigToFile(saveFileDialog.GetPath())) {
 			wxMessageBox(_("Successfully unloaded to: ") + saveFileDialog.GetPath());
 		}
+	}
+	else if (wxID_DESIGNER_CONFIGURATION_COMPARE_FILE == event.GetId()
+		|| wxID_DESIGNER_CONFIGURATION_COMPARE_DB == event.GetId()
+		|| wxID_DESIGNER_CONFIGURATION_COMPARE_TWO_FILES == event.GetId())
+	{
+		// ⚠ NOT HERE YET — THE THREE COMPARISONS. The desktop's loaded the other side — a file of the person's, the base's
+		// configuration under the edits, or two files — and opened the compare tab over both roots
+		// (ibConfigCompareDocument::Configure, designer-thin/docManager/templates/docViewConfigCompare.h), the walk over
+		// them done as it opened (ibMetaDiffWalker). Both sides and the walk are the server's: the other configuration loaded
+		// there (a file uploaded as Load does, or the base's), its records sent, and the merge the tab's Apply writes. Asked
+		// before any file is picked, so nobody chooses one for nothing.
+		wxMessageBox(_("Comparing configurations is not in the thin client yet."),
+			wxTheApp->GetAppDisplayName(), wxOK | wxICON_INFORMATION, this);
 	}
 }
 
@@ -348,4 +370,12 @@ void ibFrontendMainFrameDesigner::ShowSchema(ibProtocolSchema schema, const ibPr
 	}
 
 	SaveOptions();
+}
+
+#include "frmclient/win/dlgs/connectionDB.h"
+
+void ibFrontendMainFrameDesigner::OnConnection(wxCommandEvent& WXUNUSED(event))
+{
+	ibDialogConnection dlg(this, wxID_ANY);
+	dlg.ShowModal();
 }

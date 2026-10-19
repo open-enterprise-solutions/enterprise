@@ -59,6 +59,9 @@
   <ItemGroup>
     <ClCompile Include="anyValue.cpp" />
     <ClCompile Include="build.cpp" />
+    <ClCompile Include="compiler\blockSyntaxLINQ.cpp">
+      <Filter>compiler</Filter>
+    </ClCompile>
     <ClCompile Include="compiler\lexValue.cpp">
       <Filter>compiler</Filter>
     </ClCompile>
@@ -191,6 +194,9 @@
     <ClInclude Include="anyValue.h" />
     <ClInclude Include="build.h" />
     <ClInclude Include="clsid.h" />
+    <ClInclude Include="compiler\blockSyntaxLINQ.h">
+      <Filter>compiler</Filter>
+    </ClInclude>
     <ClInclude Include="compiler\codeDef.h">
       <Filter>compiler</Filter>
     </ClInclude>

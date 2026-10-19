@@ -45,6 +45,7 @@ bool ibPGHyperLinkProperty::StringToValue(wxVariant& variant,
 	return false;
 }
 
+#include "frmclient/backend/metaCollection/metaObject.h"                       // GetMetaID — the owner, opened itself
 #include "frmclient/backend/propertyManager/property/propertySerializable.h"   // GetObjectId — the module the row names
 #include "frmclient/docView/docView.h"   // docManager — the door that opens a metaobject
 
@@ -58,19 +59,23 @@ void ibPGHyperLinkProperty::OnSetValue()
 		// standing turns one click into every later refresh.
 		m_value.SetName(wxEmptyString);
 
-		// THE LINK CARRIES ITS COMMAND — open the module its row names (Object), in the configuration its owner was
-		// opened from; the server opens it. Taken now, by value: the owner is the inspector's, and goes with the next
-		// selection.
+		// THE LINK CARRIES ITS COMMAND — open the module its row names (Object: an inner module's), or else the owner
+		// itself (a form's, a template's, a module's own text — the desktop's link opened its owner metaobject), in the
+		// configuration its owner was opened from; the server opens it. Taken now, by value: the owner is the
+		// inspector's, and goes with the next selection.
 		const ibPropertyObject* const owner = m_ownerProperty;
 		const ibPropertySerializable* const property = owner != nullptr
 			? dynamic_cast<const ibPropertySerializable*>(owner->GetProperty(GetName())) : nullptr;
+		const ibValueMetaObject* const metaObject = dynamic_cast<const ibValueMetaObject*>(owner);
+		const ibMetaID id = property != nullptr && property->GetObjectId() != 0 ? property->GetObjectId()
+			: metaObject != nullptr ? metaObject->GetMetaID() : 0;
 		const ibMetaData* const metaData = owner != nullptr ? owner->GetMetaData() : nullptr;
-		if (property != nullptr && property->GetObjectId() != 0 && metaData != nullptr) {
+		if (id != 0 && metaData != nullptr) {
 
 			// ⚠ DEFERRED, because the click is still being dispatched: opening a document from
 			// inside the grid's own event tears down the cell that is handling it.
 			wxTheApp->CallAfter(
-				[id = property->GetObjectId(), metaData = *metaData]() {
+				[id, metaData = *metaData]() {
 
 					// ⭐⭐ JUST OPEN IT. Whose it is — the document holding that configuration, or
 					// nobody's when it is the one the main window shows — is worked out INSIDE

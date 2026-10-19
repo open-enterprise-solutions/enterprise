@@ -1,0 +1,50 @@
+﻿#ifndef __POINT_VARIANT_H__
+#define __POINT_VARIANT_H__
+
+#include "frmclient/backend/backend_core.h"
+#include "core/graphics/geometry.h"   // ibPoint — the point, as data
+
+// A point in a variant, our own — the engine's ibVariantDataPoint (backend/propertyManager/property/variant/
+// variantPoint.h).
+//
+// wxWidgets does ship one — WX_PG_DECLARE_VARIANT_DATA_EXPORTED(wxPoint) in
+// wx/propgrid/propgriddefs.h, reachable through `variant << point`. But it belongs to
+// PROPGRID: using it made the backend property layer depend on the editor library for a
+// pair of ints. Same shape as ibVariantDataNumber — data in the variant, Eq for change
+// detection and diff (docs/private/property-system.md §3, §6.1).
+class ibVariantDataPoint : public wxVariantData {
+	wxString MakeString() const { return m_point.ToString(); }
+public:
+
+	void SetPoint(const ibPoint& point) { m_point = point; }
+	ibPoint& GetPoint() { return m_point; }
+
+	ibVariantDataPoint(const ibPoint& point = ibDefaultPosition) : m_point(point) {}
+
+	virtual bool Eq(wxVariantData& data) const override {
+		ibVariantDataPoint* srcData = dynamic_cast<ibVariantDataPoint*>(&data);
+		if (srcData != nullptr) {
+			return m_point == srcData->GetPoint();
+		}
+		return false;
+	}
+
+#if wxUSE_STD_IOSTREAM
+	virtual bool Write(wxSTD ostream& str) const override {
+		str << MakeString();
+		return true;
+	}
+#endif
+
+	virtual bool Write(wxString& str) const override {
+		str = MakeString();
+		return true;
+	}
+
+	virtual wxString GetType() const override { return wxT("ibVariantDataPoint"); }
+
+private:
+	ibPoint m_point;
+};
+
+#endif

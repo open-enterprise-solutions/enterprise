@@ -13,7 +13,7 @@
 #include "core/description/typeDescription.h"             // ibTypeDescription - a type, possibly several
 #include "backend/objCtor.h"                     // ibCtorMetaValueType - one door: the metaobject AND the maker
 #include "backend/metaCollection/metaObjectComposite.h"   // where fields live: catalog, document, register, tabular section
-#include "backend/compiler/blockSyntaxLINQ.h"    // ibLinqClausesAfter - which query word may follow which
+#include "core/compiler/blockSyntaxLINQ.h"       // ibLinqClausesAfter - which query word may follow which
 
 #include <limits>   // the "no closing position" sentinel is named, not spelled as a cast
 #include <memory>

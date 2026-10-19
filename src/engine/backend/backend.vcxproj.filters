@@ -57,9 +57,6 @@
     <ClInclude Include="compiler\scriptComplete.h">
       <Filter>compiler</Filter>
     </ClInclude>
-    <ClInclude Include="compiler\blockSyntaxLINQ.h">
-      <Filter>compiler</Filter>
-    </ClInclude>
     <ClInclude Include="appData.h" />
     <ClInclude Include="appDataCtorToken.h" />
     <ClInclude Include="appHost.h" />
@@ -1105,9 +1102,6 @@
       <Filter>compiler</Filter>
     </ClCompile>
     <ClCompile Include="compiler\scriptComplete.cpp">
-      <Filter>compiler</Filter>
-    </ClCompile>
-    <ClCompile Include="compiler\blockSyntaxLINQ.cpp">
       <Filter>compiler</Filter>
     </ClCompile>
     <ClCompile Include="appData.cpp" />

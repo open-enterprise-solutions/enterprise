@@ -9,6 +9,7 @@ set(DESIGNER_THIN_SOURCES
     backend/debugger/debugClientAsync.cpp
     backend/debugger/debugClientBridge.cpp
     backend/debugger/debugClientQuery.cpp
+    backend/vcs/gitService.cpp
     mainFrame/debugger/debugClientImpl.cpp
     win/editor/codeEditor/codeEditorDesigner.cpp
     win/editor/commonAttributeEditor/commonAttributeEditor.cpp
@@ -35,6 +36,9 @@ set(DESIGNER_THIN_SOURCES
     docManager/templates/docViewComposer.cpp
     docManager/templates/docViewInterface.cpp
     docManager/templates/docViewRole.cpp
+    docManager/templates/docViewConfigCompare.cpp
+    docManager/templates/docViewMetaFile.cpp
+    mainFrame/configCompare/configCompareModel.cpp
     mainFrame/local/localWindow.cpp
     mainFrame/mainFrameDesigner.cpp
     mainFrame/mainFrameDesignerEvent.cpp
@@ -50,6 +54,7 @@ set(DESIGNER_THIN_SOURCES
     mainFrame/metaTree/treeDataReportEvent.cpp
     mainFrame/metaTree/treeDataReport_impl.cpp
     mainFrame/stack/stackWindow.cpp
+    mainFrame/vcs/gitPanel.cpp
     mainFrame/watch/watchctrl.cpp
     mainFrame/watch/watchdroptarget.cpp
     mainFrame/watch/watchWindow.cpp
@@ -64,6 +69,7 @@ set(DESIGNER_THIN_SOURCES
     win/dlg/homePageEditor.cpp
     win/dlg/predefinedEditor.cpp
     win/dlg/textEditor.cpp
+    win/ctrl/menuBar.cpp
 )
 
 add_executable(designer-thin ${DESIGNER_THIN_SOURCES})

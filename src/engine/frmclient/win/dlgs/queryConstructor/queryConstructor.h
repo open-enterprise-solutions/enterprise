@@ -3,10 +3,15 @@
 
 // THE QUERY CONSTRUCTOR — the desktop's ibDialogQueryConstructor (frontend/win/dlgs/queryConstructor/queryConstructor.h):
 // the designer's, over the sources and fields the configuration has. Its doors are here with the desktop's signatures,
-// and they answer Cancel: the client is not the designer yet, and a window that opens one (a composition's Query tab)
-// is not built for a reader.
+// and they answer Cancel.
+//
+// ⚠ NOT HERE YET: the window and its pickers (queryConstructor*.cpp, query*Dialog, query*Model) are not ported — the
+// sources and fields it shows are the server's configuration, the query it reads and writes the server's parser. A door
+// a person opens SAYS so, rather than opening nothing.
 
 #include <wx/string.h>
+#include <wx/intl.h>
+#include <wx/msgdlg.h>
 
 #include <vector>
 
@@ -30,17 +35,22 @@ enum ibQueryConstructorExclude {
 };
 
 // Open the constructor over query TEXT (a package). True on OK, with `queryText` replaced; false on Cancel, with the
-// text untouched — which is the answer here.
-inline bool ibShowQueryConstructor(wxWindow* WXUNUSED(parent), wxString& WXUNUSED(queryText),
+// text untouched — which is the answer here, said to the person.
+inline bool ibShowQueryConstructor(wxWindow* parent, wxString& WXUNUSED(queryText),
 	const ibMetaData* WXUNUSED(metaData), bool WXUNUSED(readOnly) = false, int WXUNUSED(exclude) = ibQueryExclude_None)
 {
+	wxMessageBox(_("The query constructor is not in this client yet: the query is written by hand."),
+		_("Query constructor"), wxOK | wxICON_INFORMATION, parent);
 	return false;
 }
 
-// WHICH GROUPINGS AN AREA COVERS — the desktop's picker over the groupings named. It answers Cancel: `inOut` stays.
-inline bool ibPickGroupingScope(wxWindow* WXUNUSED(parent), const std::vector<wxString>& WXUNUSED(groupings),
+// WHICH GROUPINGS AN AREA COVERS — the desktop's picker over the groupings named. It answers Cancel, said to the
+// person: `inOut` stays.
+inline bool ibPickGroupingScope(wxWindow* parent, const std::vector<wxString>& WXUNUSED(groupings),
 	const std::vector<wxString>& WXUNUSED(separators), wxString& WXUNUSED(inOut))
 {
+	wxMessageBox(_("The picker of the groupings is not in this client yet: the area is written by hand."),
+		_("Query constructor"), wxOK | wxICON_INFORMATION, parent);
 	return false;
 }
 

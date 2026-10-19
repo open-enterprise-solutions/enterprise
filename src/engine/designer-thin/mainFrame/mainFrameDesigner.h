@@ -67,6 +67,24 @@ enum {
 // "shortcuts" profile began.
 static_assert(wxID_DESIGNER_ABOUT == 10026, "append new designer commands before wxID_DESIGNER_END - the key profile keeps keys by number");
 
+// …and the desktop's application commands, by the same numbers. Here only Connection is bound, where the desktop binds
+// it (no menu item sends it, there either); the rest are the server's menu — Users, Options and the assistant.
+enum {
+	wxID_APPLICATION_DEBUG = wxID_HIGHEST + 1,
+	wxID_APPLICATION_SETTING,
+	wxID_APPLICATION_USERS,
+	wxID_APPLICATION_ACTIVE_USERS,
+	wxID_APPLICATION_AUDIT_LOG,
+	wxID_APPLICATION_CONNECTION,
+	// Assistant access — one command, because starting and stopping are the same
+	// switch seen from its two sides; the label follows the state through
+	// EVT_UPDATE_UI rather than through two entries a person has to choose between.
+	wxID_APPLICATION_MCP_SERVER,
+	wxID_APPLICATION_MCP_ASSISTANT,
+};
+// …and the same for these (see above): a new one goes last.
+static_assert(wxID_APPLICATION_MCP_ASSISTANT == wxID_HIGHEST + 8, "append new application commands last - the key profile keeps keys by number");
+
 #define mainFrame	(ibFrontendMainFrameDesigner::GetFrame())
 
 // THE DESIGNER'S MAIN WINDOW — the desktop's ibFrontendMainFrameDesigner (designer/mainFrame) on the thin client.
@@ -106,7 +124,7 @@ public:
 protected:
 
 	// The base's parts, and the desktop designer's around them (its CreateWideGui): the Update database button on the
-	// main toolbar, the debug toolbar beside it, the configuration's tree on the left.
+	// main toolbar, the debug toolbar beside it, the configuration's tree on the left, version control's pane hidden.
 	virtual void CreateGUI() override;
 	// …and the notebook along the bottom — the messages, then the debugger's three (the desktop's).
 	virtual void CreateBottomPane() override;
@@ -135,6 +153,8 @@ private:
 
 	// The configuration's tree's pane — the desktop's.
 	void CreateMetadataPane();
+	// …and version control's, the desktop's: hidden, floating on the right, over the working copy beside the file base.
+	void CreateGitPane();
 	// The debug commands as buttons, beside the main toolbar. They are the Debug menu's own commands
 	// (same ids, same handlers, same OnUpdateDebugCommand for enabling) - a button is a second way to
 	// press a menu item, not a second implementation of it.
@@ -153,6 +173,8 @@ private:
 	void OnStartDebugWithoutDebugThin(wxCommandEvent& event);
 	void OnAttachForDebugging(wxCommandEvent& event);
 
+	// The database's configuration, browsed in a tab of its own — the desktop's; ⚠ not in the thin yet, said so.
+	void OnOpenConfiguration(wxCommandEvent& event);
 	void OnRollbackConfiguration(wxCommandEvent& event);
 	void OnUpdateConfiguration(wxCommandEvent& event);
 	void OnConfiguration(wxCommandEvent& event);
@@ -161,8 +183,11 @@ private:
 
 	void OnRunDebugCommand(wxCommandEvent& event);
 	void OnUpdateDebugCommand(wxUpdateUIEvent& event);
+	// The connection's dialog — the desktop's (ibDialogConnection).
+	void OnConnection(wxCommandEvent& event);
 
 	ibConfigurationTree* m_metaWindow = nullptr;
+	class ibGitPanel* m_gitPanel = nullptr;
 	class ibHelpPaneView* m_helpPane = nullptr;
 
 	// THE DEBUGGER — the engine's client, the designer's own (designer-thin/backend/debugger): its sockets go straight to
