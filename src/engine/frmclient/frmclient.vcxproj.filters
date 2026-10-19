@@ -1065,7 +1065,13 @@
     <ClCompile Include="propertyManager\property\advprop\advpropList.cpp">
       <Filter>propertyManager\property\advprop</Filter>
     </ClCompile>
+    <ClCompile Include="propertyManager\property\advprop\advpropSchedule.cpp">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClCompile>
     <ClInclude Include="propertyManager\property\advprop\advpropList.h">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClInclude>
+    <ClInclude Include="propertyManager\property\advprop\advpropSchedule.h">
       <Filter>propertyManager\property\advprop</Filter>
     </ClInclude>
     <ClCompile Include="propertyManager\property\advprop\advpropType.cpp">
