@@ -116,6 +116,10 @@ From protocol 4 a fetch from the start (`Direction` 0) may name `Before`, the ro
 at; the answer gives those rows first and says in `Before` how many came. A server before protocol 4 gives none, and
 the client fetches them backwards (`Direction` -1) on its own.
 
+From protocol 5 a table's `State` may carry `Rows` with a new `Version` — the first page, the same shape as `fetch`
+(rows as children, `End`, `Before`, `Pictures`) — so the client need not fetch to draw the tab; a server that does
+not put `Rows` in the state is answered with `fetch`, as before.
+
 A table's column dragged in its header is `Move {Column, Holder, Position}`: `Holder` the group it now stands in, 0 the
 table. The client moves the column in its own copy of the form at once; the server's form follows.
 

@@ -688,6 +688,22 @@ void ibValueModelTableBox::OnUpdate(ibDataNode& state, ibVisualHost* host)
 	}
 	state.SetValue(wxT("Version"), m_rowsVersion);
 
+	// THE FIRST PAGE RIDES THE FRAME THAT NAMES ITS VERSION — once. Same shape as Fetch (rows as children,
+	// End, Before, Pictures). The client that reads Rows here skips the opening fetch; one that does not still asks.
+	// Count matches the client's idle bootstrap default (viewport unknown → 100 + slack). Done before CurrentRow so
+	// the handles this page hands out are the ones CurrentRow names. A Version already sent with its Rows stays light.
+	if (m_rowsSentVersion != m_rowsVersion) {
+		ibDataNode request, fetched;
+		request.SetValue(wxT("Direction"), 0);
+		request.SetValue(wxT("Anchor"), 0);
+		request.SetValue(wxT("Parent"), 0);
+		request.SetValue(wxT("Count"), 105);   // 100 + kBufferSlack — the client's first page when the viewport is unset
+		if (Fetch(request, fetched)) {
+			state.Child(wxT("Rows")) = std::move(fetched);
+			m_rowsSentVersion = m_rowsVersion;
+		}
+	}
+
 	// The current row as the handle the client was given — HANDED OUT HERE when it was not yet (a choice form opened on
 	// a value, a created row not read yet): the client reads around the row it names, the rows above it too. A client
 	// that knew no row read "around the current one" as the top of the table, and never read above it.
