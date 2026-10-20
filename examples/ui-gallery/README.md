@@ -108,11 +108,14 @@ in `src/engine/frontend/visualView/ctrl/notebook.cpp`:
    the stored font is unset. The page contents were never the problem: a page
    whose controls are unbound (e.g. `Button`) is empty by design (see above).
 
-   Still open: three pages (`Checkbox`, `Textctrl`, `Coming soon`) hold a long
-   single-line static text, about 2150 px wide, so the notebook is laid out
-   wider than the form window. The strip then believes every tab fits (no
-   scroll arrows), and tabs past the window edge (after `Gridbox` in an 800 px
-   window) are clipped and cannot be reached.
+   A third, layout bug is fixed here, not in #528: the `Coming soon` page's
+   static text was one line about 2150 px wide, so the notebook was laid out
+   wider than the form window, the strip believed every tab fit (no scroll
+   arrows), and the tabs past the window edge (after `Gridbox` in an 800 px
+   window) could not be reached. The text is now broken into lines with explicit
+   `\n`, and the static text's caption is measured line by line
+   (`ibControlStaticTextValue::CaptionExtent`), as it was already drawn, so a
+   multi-line caption gets the height of all its lines.
 
 ### Protocol divergence
 
