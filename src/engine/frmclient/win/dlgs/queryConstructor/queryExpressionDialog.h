@@ -4,6 +4,8 @@
 // THE EXPRESSION EDITOR — the desktop's ibDialogQueryExpression (frontend/win/dlgs/queryConstructor/
 // queryExpressionDialog.h): the designer's, with the fields, the language's palette and the parser — which is the
 // server's. Here with the desktop's public face, and it answers Cancel: the text it was given stays as it was.
+//
+// ⚠ NOT HERE YET: ibDialogQueryExpression itself — it parses through the engine's query parser, which is the server's.
 
 #include <wx/dialog.h>
 
@@ -14,13 +16,11 @@
 
 class ibMetaData;
 
-// ONE WINDOW FOR A FIELD'S BALANCE ROLE — the desktop's, beside the expression editor. It answers Cancel: the role stays
-// as it was said.
-inline bool ibEditBalanceRole(wxWindow* WXUNUSED(parent), bool& WXUNUSED(said), ibBalanceRole& WXUNUSED(role),
-	int& WXUNUSED(periodRank), bool WXUNUSED(readOnly) = false, bool WXUNUSED(withNumber) = true)
-{
-	return false;
-}
+// ONE WINDOW FOR A FIELD'S BALANCE ROLE — the desktop's (queryExpressionDialog.cpp), as it is: the word the query writes
+// (PERIOD, DIMENSION, OPENING, CLOSING, NONE), and for a PERIOD its number. It knows no query and no configuration, so it
+// runs on the client whole and asks the server nothing. `withNumber` false hides the number. True = accepted.
+bool ibEditBalanceRole(wxWindow* parent, bool& said, ibBalanceRole& role, int& periodRank,
+                       bool readOnly = false, bool withNumber = true);
 
 class ibDialogQueryExpression : public wxDialog
 {

@@ -275,6 +275,7 @@
     <ClCompile Include="win\dlgs\formatConstructor\formatConstructor.cpp" />
     <ClCompile Include="win\dlgs\linqConstructor\linqConstructor.cpp" />
     <ClCompile Include="win\dlgs\queryConstructor\queryConstructorEdit.cpp" />
+    <ClCompile Include="win\dlgs\queryConstructor\queryExpressionDialog.cpp" />
     <ClCompile Include="win\dlgs\colHeight.cpp" />
     <ClCompile Include="win\dlgs\connectionDB.cpp" />
     <ClCompile Include="win\dlgs\rowHeight.cpp" />
