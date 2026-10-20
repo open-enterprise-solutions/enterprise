@@ -1,0 +1,481 @@
+#include "webServer.h"
+
+// Asio before wx: winsock2.h must come ahead of the windows.h a wx header may bring.
+#include <asio/io_context.hpp>
+
+#include <atomic>
+#include <chrono>
+#include <csignal>
+#include <thread>
+
+#include <nlohmann/json.hpp>
+
+#include <wx/dir.h>
+#include <wx/file.h>
+#include <wx/fileconf.h>
+#include <wx/filename.h>
+#include <wx/mstream.h>
+#include <wx/tokenzr.h>
+#include <wx/utils.h>   // wxGetFullHostName — the server named in an address
+#include <wx/zstream.h>
+
+#ifdef __WXMSW__
+#include <windows.h>   // SetConsoleCtrlHandler — the console window closing
+#endif
+
+#include "protocol/connectionFile.h"
+#include "protocol/connectionServer.h"   // the oes:// address and the path of a base's clients — the protocol's
+
+#include "http/httpClient.h"
+#include "http/webSocketFrame.h"
+
+namespace {
+
+// WHERE THE SERVER STANDS — one value, read by the main thread and the signals alike (appserver/appServer.cpp says
+// why the console's closing waits for the stop).
+enum class ibServeState { Serving, Stopping, Stopped };
+std::atomic<ibServeState> s_state{ ibServeState::Serving };
+
+void OnStopSignal(int)
+{
+	ibServeState serving = ibServeState::Serving;
+	s_state.compare_exchange_strong(serving, ibServeState::Stopping);
+}
+
+#ifdef __WXMSW__
+BOOL WINAPI OnConsoleClose(DWORD type)
+{
+	if (type != CTRL_CLOSE_EVENT && type != CTRL_LOGOFF_EVENT && type != CTRL_SHUTDOWN_EVENT)
+		return FALSE;
+	OnStopSignal(0);
+	for (int waited = 0; waited < 4500 && s_state.load() != ibServeState::Stopped; waited += 50)
+		::Sleep(50);
+	return TRUE;
+}
+#endif
+
+// How long a POST to an application server may wait for its answer — the call's work, until it settles.
+constexpr std::chrono::seconds kPostWait(300);
+
+std::string Utf8(const wxString& text)
+{
+	return std::string(text.utf8_str());
+}
+
+// A path of web.conf, made absolute against the web folder.
+wxString Beside(const wxString& folder, const wxString& path)
+{
+	if (path.IsEmpty())
+		return path;
+	wxFileName name(path);
+	if (name.IsRelative())
+		name.MakeAbsolute(folder);
+	return name.GetFullPath();
+}
+
+// A PEM file, whole; false with why.
+bool ReadPem(const wxString& path, std::string& text, wxString& error)
+{
+	wxFile file;
+	if (!wxFileName::FileExists(path) || !file.Open(path)) {
+		error = wxString::Format(wxT("%s is not there or not readable"), path);
+		return false;
+	}
+	const wxFileOffset length = file.Length();
+	text.assign(static_cast<std::size_t>(length > 0 ? length : 0), '\0');
+	if (length > 0 && file.Read(&text[0], static_cast<size_t>(length)) != length) {
+		error = wxString::Format(wxT("%s could not be read"), path);
+		return false;
+	}
+	return true;
+}
+
+// ⭐ THE TRANSPORT DEFLATES, when the browser asked for it as it connected (?compress=deflate) — the application
+// server's rule (appserver/clientListener.cpp), kept by this transport for the bases it holds: an answer of some size
+// goes as a BINARY message holding it deflated, raw (RFC 1951, what DecompressionStream("deflate-raw") reads), a small
+// one as text.
+constexpr std::size_t kDeflateFrom = 1024;
+
+void SendAnswer(ibWebSocket& socket, std::string text, bool deflate)
+{
+	if (!deflate || text.size() < kDeflateFrom) {
+		socket.Send(std::move(text));
+		return;
+	}
+	wxMemoryOutputStream packed;
+	{
+		wxZlibOutputStream zip(packed, wxZ_DEFAULT_COMPRESSION, wxZLIB_NO_HEADER);
+		zip.Write(text.data(), text.size());
+		if (!zip.Close()) {
+			socket.Send(std::move(text));   // not packed — sent as it is
+			return;
+		}
+	}
+	const wxStreamBuffer* const buffer = packed.GetOutputStreamBuffer();
+	socket.SendBinary(std::string(static_cast<const char*>(buffer->GetBufferStart()),
+		static_cast<std::size_t>(packed.GetLength())));
+}
+
+bool WantsDeflate(const ibHttpRequest& request)
+{
+	return request.GetParameter("compress") == "deflate";
+}
+
+// A BROWSER'S SOCKET TO A FILE BASE — the base is the server here: the relay is the connection its clients log in
+// through, told what the base says to them, and they leave with it.
+class ibFileRelay : public ibWebSocketHandler {
+public:
+
+	ibFileRelay(const ibProtocolFileBase& base, std::shared_ptr<ibWebSocket> socket) :
+		m_base(base), m_socket(std::move(socket)), m_address(wxString::FromUTF8(m_socket->GetRequest().m_address)),
+		m_deflate(WantsDeflate(m_socket->GetRequest()))
+	{
+		const std::weak_ptr<ibWebSocket> told = m_socket;
+		const bool deflate = m_deflate;
+		m_base.Listen(this, [told, deflate](const std::string& text) {
+			if (const std::shared_ptr<ibWebSocket> socket = told.lock())
+				SendAnswer(*socket, text, deflate);
+		});
+	}
+
+	virtual void OnMessage(std::string text) override
+	{
+		std::string answer;
+		wxString error;
+		if (!m_base.Call(text, this, m_address, answer, error)) {
+			ibWebServerSay(ibJournalMark::Error, wxT("a browser's call did not reach its base: %s"), error);
+			m_socket->Close(ibWebSocketClose::ServerError, "the base is not open");
+			return;
+		}
+		if (!answer.empty())
+			SendAnswer(*m_socket, std::move(answer), m_deflate);
+	}
+
+	virtual void OnClose() override
+	{
+		m_base.Disconnect(this);
+	}
+
+private:
+	const ibProtocolFileBase&    m_base;
+	std::shared_ptr<ibWebSocket> m_socket;
+	wxString                     m_address;
+	bool                         m_deflate;
+};
+
+// A BROWSER'S SOCKET TO AN APPLICATION SERVER'S BASE — a socket of the web server's own to the server for each, the
+// messages carried both ways as they are: a deflated answer stays deflated, if the browser asked for it.
+class ibServerRelay : public ibWebSocketHandler {
+public:
+
+	ibServerRelay(asio::io_context& io, const std::string& host, std::uint16_t port, const std::string& target,
+		std::shared_ptr<ibWebSocket> socket, const wxString& publication) :
+		m_socket(std::move(socket))
+	{
+		const std::weak_ptr<ibWebSocket> told = m_socket;
+		m_upstream = std::make_shared<ibWebSocketClient>(io,
+			[told](std::uint8_t opcode, std::string payload) {
+				const std::shared_ptr<ibWebSocket> socket = told.lock();
+				if (!socket)
+					return;
+				if (opcode == ibWebSocketOpcode::Binary)
+					socket->SendBinary(std::move(payload));
+				else
+					socket->Send(std::move(payload));
+			},
+			[told, publication](const std::string& reason) {
+				if (!reason.empty())
+					ibWebServerSay(ibJournalMark::Warning, wxT("publication '%s': %s"), publication,
+						wxString::FromUTF8(reason));
+				if (const std::shared_ptr<ibWebSocket> socket = told.lock())
+					socket->Close(reason.empty() ? ibWebSocketClose::GoingAway : ibWebSocketClose::BadGateway,
+						reason.empty() ? "the server closed the connection" : "the server is not reached");
+			});
+		m_upstream->Open(host, port, target);
+	}
+
+	virtual void OnMessage(std::string text) override
+	{
+		m_upstream->Send(std::move(text));
+	}
+
+	virtual void OnClose() override
+	{
+		m_upstream->Close();
+	}
+
+private:
+	std::shared_ptr<ibWebSocket>       m_socket;
+	std::shared_ptr<ibWebSocketClient> m_upstream;
+};
+
+} // namespace
+
+//*******************************************************************************************
+//*                                      The config                                         *
+//*******************************************************************************************
+
+bool ibWebConfig::Read(const wxString& folder, wxString& error)
+{
+	m_folder = folder;
+	m_root = Beside(folder, wxT("www"));
+	const wxString path = folder + wxFileName::GetPathSeparator() + wxT("web.conf");
+	if (!wxFileName::FileExists(path))
+		return true;
+
+	// Read as written: a Windows path keeps its backslashes.
+	wxFileConfig conf(wxEmptyString, wxEmptyString, path, wxEmptyString,
+		wxCONFIG_USE_LOCAL_FILE | wxCONFIG_USE_NO_ESCAPE_CHARACTERS);
+
+	const auto port = [&conf, &path, &error](const wxString& key, std::optional<std::uint16_t>& value) {
+		if (!conf.HasEntry(key))
+			return true;   // left as it was: HTTP on its default, HTTPS off
+		const wxString written = conf.Read(key, wxEmptyString).Strip(wxString::both);
+		if (written.IsEmpty()) {
+			value.reset();
+			return true;
+		}
+		unsigned long number = 0;
+		if (!written.ToULong(&number) || number > 65535) {
+			error = wxString::Format(wxT("%s: %s=%s is not a port"), path, key, written);
+			return false;
+		}
+		value = static_cast<std::uint16_t>(number);
+		return true;
+	};
+
+	m_host = conf.Read(wxT("Host"), m_host).Strip(wxString::both);
+	if (!port(wxT("HttpPort"), m_httpPort) || !port(wxT("HttpsPort"), m_httpsPort))
+		return false;
+	m_certificate = Beside(folder, conf.Read(wxT("Certificate"), wxEmptyString).Strip(wxString::both));
+	m_privateKey = Beside(folder, conf.Read(wxT("PrivateKey"), wxEmptyString).Strip(wxString::both));
+	const wxString root = conf.Read(wxT("Root"), wxEmptyString).Strip(wxString::both);
+	if (!root.IsEmpty())
+		m_root = Beside(folder, root);
+	wxStringTokenizer origins(conf.Read(wxT("Origins"), wxEmptyString), wxT(","));
+	while (origins.HasMoreTokens()) {
+		const wxString origin = origins.GetNextToken().Strip(wxString::both);
+		if (!origin.IsEmpty())
+			m_origins.push_back(origin);
+	}
+	conf.Read(wxT("Workers"), &m_workers, 0L);
+
+	wxString group;
+	long cookie = 0;
+	std::vector<wxString> groups;
+	for (bool more = conf.GetFirstGroup(group, cookie); more; more = conf.GetNextGroup(group, cookie))
+		groups.push_back(group);
+	for (const wxString& name : groups) {
+		conf.SetPath(wxT("/") + name);
+		ibWebPublication publication;
+		publication.m_name = name;
+		publication.m_kind = conf.Read(wxT("Kind"), wxEmptyString).Strip(wxString::both).Lower();
+		publication.m_directory = Beside(folder, conf.Read(wxT("Directory"), wxEmptyString).Strip(wxString::both));
+		publication.m_locale = conf.Read(wxT("Locale"), wxEmptyString).Strip(wxString::both);
+		conf.Read(wxT("Debug"), &publication.m_debug, false);
+		publication.m_address = conf.Read(wxT("Address"), wxEmptyString).Strip(wxString::both);
+		conf.SetPath(wxT("/"));
+		if (publication.m_kind != wxT("firebird") && publication.m_kind != wxT("server")) {
+			error = wxString::Format(wxT("%s: [%s] Kind=%s - a publication is firebird (a file base) or server"),
+				path, name, publication.m_kind);
+			return false;
+		}
+		m_publications.push_back(publication);
+	}
+	return true;
+}
+
+//*******************************************************************************************
+//*                                      The server                                         *
+//*******************************************************************************************
+
+ibWebServer::ibWebServer(const ibWebConfig& config) :
+	m_config(config)
+{
+}
+
+// Out of line: the file base is only declared in the header.
+ibWebServer::~ibWebServer()
+{
+	Stop();
+}
+
+bool ibWebServer::Publish(const ibWebPublication& publication)
+{
+	const wxString& name = publication.m_name;
+	if (name.IsEmpty() || name.Find(wxT('/')) != wxNOT_FOUND) {
+		ibWebServerSay(ibJournalMark::Error, wxT("'%s' is not a publication's name - it is a segment of the path"), name);
+		return false;
+	}
+	if (m_bases.count(name) != 0) {
+		ibWebServerSay(ibJournalMark::Error, wxT("publication '%s' is named twice"), name);
+		return false;
+	}
+	const std::string path = "/" + Utf8(name) + "/client";
+
+	if (publication.m_kind == wxT("firebird")) {
+		// THE FILE BASE, OPENED HERE — the request ibFileBaseOpen reads.
+		nlohmann::json request = { { "Directory", Utf8(publication.m_directory) }, { "Name", Utf8(name) } };
+		if (!publication.m_locale.IsEmpty())
+			request["Locale"] = Utf8(publication.m_locale);
+		if (publication.m_debug)
+			request["Debug"] = true;
+		auto base = std::make_unique<ibProtocolFileBase>();
+		wxString error;
+		if (!base->Open(request.dump(), error)) {
+			ibWebServerSay(ibJournalMark::Error, wxT("publication '%s': the file base at %s did not open: %s"), name,
+				publication.m_directory, error);
+			return false;
+		}
+		const ibProtocolFileBase* const held = base.get();
+		m_bases[name] = std::move(base);
+
+		m_http.WebSocket(path, [held](const std::shared_ptr<ibWebSocket>& socket) {
+			return std::make_shared<ibFileRelay>(*held, socket);
+		});
+		m_http.Post(path, [held](const ibHttpRequest& request, ibHttpResponder respond) {
+			// A request on its own — no connection, as an application server answers a POST.
+			std::string answer;
+			wxString error;
+			ibHttpResponse response;
+			if (!held->Call(request.m_body, nullptr, wxString::FromUTF8(request.m_address), answer, error))
+				response.m_status = 503;
+			else if (answer.empty())
+				response.m_status = 204;   // a notification — no answer wanted
+			else
+				response.SetContent(std::move(answer), "application/json");
+			respond(std::move(response));
+		});
+		return true;
+	}
+
+	// AN APPLICATION SERVER'S BASE — reached over its port, for each browser.
+	wxString host, base;
+	int port = ibProtocolConnectionServer::kDefaultPort;
+	if (!ibProtocolConnectionServer::ParseAddress(publication.m_address, host, port, base)) {
+		ibWebServerSay(ibJournalMark::Error, wxT("publication '%s': '%s' is not the address of a base: oes://server[:port]/<base>"),
+			name, publication.m_address);
+		return false;
+	}
+	const std::string server = Utf8(host);
+	const std::uint16_t serverPort = static_cast<std::uint16_t>(port);
+	const std::string target = ibProtocolConnectionServer::ClientPath(base);
+	asio::io_context& io = m_http.GetContext();
+	m_http.WebSocket(path, [&io, server, serverPort, target, name](const std::shared_ptr<ibWebSocket>& socket) {
+		const std::string asked = WantsDeflate(socket->GetRequest()) ? target + "?compress=deflate" : target;
+		return std::make_shared<ibServerRelay>(io, server, serverPort, asked, socket, name);
+	});
+	m_http.Post(path, [&io, server, serverPort, target, name](const ibHttpRequest& request, ibHttpResponder respond) {
+		ibHttpPost(io, server, serverPort, target, request.m_body, "application/json", kPostWait,
+			[respond, name](int status, std::string body, const std::string& error) {
+				ibHttpResponse response;
+				if (status == 0) {
+					ibWebServerSay(ibJournalMark::Warning, wxT("publication '%s': %s"), name, wxString::FromUTF8(error));
+					response.m_status = 502;
+				}
+				else {
+					response.m_status = status;
+					if (!body.empty())
+						response.SetContent(std::move(body), "application/json");
+				}
+				respond(std::move(response));
+			});
+	});
+	// Not a file base: nothing is held for it but the routes.
+	m_bases[name] = nullptr;
+	return true;
+}
+
+int ibWebServer::Run()
+{
+	// Told to stop from here on — while the bases are still being opened too.
+	std::signal(SIGINT, OnStopSignal);
+	std::signal(SIGTERM, OnStopSignal);
+#ifdef SIGBREAK
+	std::signal(SIGBREAK, OnStopSignal);   // Windows: Ctrl+Break
+#endif
+#ifdef __WXMSW__
+	::SetConsoleCtrlHandler(OnConsoleClose, TRUE);   // after the signals: asked first, it passes on what is theirs
+#endif
+
+	// However Run ends — served and stopped, or refused at any step — a console closing waits no longer.
+	struct ibStoppedMark { ~ibStoppedMark() { s_state.store(ibServeState::Stopped); } } stoppedMark;
+
+	std::size_t published = 0;
+	for (const ibWebPublication& publication : m_config.m_publications) {
+		if (s_state.load() != ibServeState::Serving)
+			break;
+		if (Publish(publication))
+			++published;
+	}
+
+	const bool site = !m_config.m_root.IsEmpty() && wxDirExists(m_config.m_root);
+	if (site)
+		m_http.Mount("/", Utf8(m_config.m_root));
+	if (published == 0 && !site) {
+		ibWebServerSay(ibJournalMark::Error, wxT("nothing to serve: no publication opened, and no site's files at %s"),
+			m_config.m_root);
+		Stop();
+		return 1;
+	}
+
+	ibHttpServerOptions options;
+	options.m_host = Utf8(m_config.m_host);
+	options.m_httpPort = m_config.m_httpPort;
+	options.m_httpsPort = m_config.m_httpsPort;
+	wxString pemError;
+	if ((!m_config.m_certificate.IsEmpty() && !ReadPem(m_config.m_certificate, options.m_certificate, pemError))
+		|| (!m_config.m_privateKey.IsEmpty() && !ReadPem(m_config.m_privateKey, options.m_privateKey, pemError))) {
+		ibWebServerSay(ibJournalMark::Error, wxT("%s - nothing is served"), pemError);
+		Stop();
+		return 1;
+	}
+	for (const wxString& origin : m_config.m_origins)
+		options.m_origins.push_back(Utf8(origin));
+	options.m_workers = m_config.m_workers > 0 ? static_cast<std::size_t>(m_config.m_workers) : 0;
+
+	std::string refusal;
+	if (!m_http.Start(options, refusal)) {
+		ibWebServerSay(ibJournalMark::Error, wxT("the port did not open: %s - nothing is served"), wxString::FromUTF8(refusal));
+		Stop();
+		return 1;
+	}
+
+	// WHERE A BROWSER GOES — each port, and each publication on it.
+	const wxString host = m_config.m_host.IsEmpty() ? wxGetFullHostName() : m_config.m_host;
+	std::vector<wxString> origins;
+	if (m_http.GetHttpsPort() != 0)
+		origins.push_back(wxString::Format(wxT("https://%s:%u"), host, static_cast<unsigned>(m_http.GetHttpsPort())));
+	if (m_http.GetHttpPort() != 0)
+		origins.push_back(wxString::Format(wxT("http://%s:%u"), host, static_cast<unsigned>(m_http.GetHttpPort())));
+	for (const wxString& origin : origins) {
+		if (site)
+			ibWebServerSay(ibJournalMark::Info, wxT("site %s: %s/"), m_config.m_root, origin);
+		for (const auto& entry : m_bases) {
+			wxString socket = origin;
+			socket.Replace(wxT("http"), wxT("ws"), false);
+			ibWebServerSay(ibJournalMark::Info, wxT("publication '%s': %s/%s/client"), entry.first, socket, entry.first);
+		}
+	}
+	ibWebServerSay(ibJournalMark::Info, wxT("serving %u of %u publication(s) - Ctrl+C to stop"),
+		static_cast<unsigned>(published), static_cast<unsigned>(m_config.m_publications.size()));
+
+	while (s_state.load() == ibServeState::Serving)
+		std::this_thread::sleep_for(std::chrono::milliseconds(250));
+
+	ibWebServerSay(ibJournalMark::Info, wxT("stopping"));
+	Stop();
+	ibWebServerSay(ibJournalMark::Info, wxT("stopped"));
+	return 0;
+}
+
+void ibWebServer::Stop()
+{
+	m_http.Stop();
+	// Each file base's clients go with it — each its own session's teardown — and then the base.
+	for (auto& entry : m_bases) {
+		if (entry.second)
+			entry.second->Close();
+	}
+	m_bases.clear();
+}

@@ -21,9 +21,11 @@ class ibDebuggerClient;
 // appData's static getters.
 #define activeMetaData			(appEnv::ActiveMetaData())
 //////////////////////////////////////////////////////////////////////////////////////////////////////
-// Lifecycle — ibApplicationInstance::CreateActiveMetaData picks the concrete subclass by the kind of the
-// base's first session; teardown happens in the base's Close (ibApplicationInstance::Close), which calls
-// OnDestroy and then lets the base's reference go — the polymorphic dtor chain runs with the last holder.
+// Lifecycle — ibApplicationInstance::CreateActiveMetaData makes the application's (ibMetaDataConfiguration) as the
+// base opens; teardown happens in the base's Close (ibApplicationInstance::Close), which closes it, calls OnDestroy
+// and then lets the base's reference go — the polymorphic dtor chain runs with the last holder. A designer's
+// session's own (ibMetaDataConfigurationStorage) is made by the session itself (ibSession::AcquireMetaData) and goes
+// with it.
 //////////////////////////////////////////////////////////////////////////////////////////////////////
 
 enum ibConfigType {
@@ -357,7 +359,7 @@ public:
 
 	virtual ~ibMetaDataConfigurationStorage();
 
-	// Construction restricted to ibApplicationInstance::CreateActiveMetaData
+	// Construction restricted to a designer's session (ibSession::AcquireMetaData)
 	// via the ib::AppDataCtorToken gate. The inner baseline reference
 	// (m_configMetadata) is constructed by forwarding the same token — and with it the same base.
 	explicit ibMetaDataConfigurationStorage(ib::AppDataCtorToken owner);

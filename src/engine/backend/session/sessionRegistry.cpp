@@ -209,36 +209,11 @@ bool ibSessionRegistry::HasClients() const
 
 // --- Session factory facade ----------------------------------------------
 
-void ibSessionRegistry::EnsureStartedForCreateSession()
-{
-	if (m_threadAlive.load(std::memory_order_acquire)) return;
-
-	// Own sys_session row I/O: registry handles INSERT / UPDATE / DELETE
-	// via its write connection and holds pessimistic row locks that peers
-	// use to detect liveness. Replaces the pre-2026-04-20 1 Hz heartbeat
-	// UPDATE path. EnableSysSessionOwnership is idempotent; only effective
-	// before the first Start().
-	EnableSysSessionOwnership(true);
-
-	// Designer-exclusive policy — one designer per IB at a time, in EVERY process: a designer is a session's kind,
-	// and a file base's designer and a thin designer in a server are the same question. It lets everyone else
-	// through. AddPolicy must happen BEFORE Start so the chain is immutable once the consumer thread is running.
-	AddPolicy(std::make_unique<ibDesignerExclusivePolicy>(this));
-
-	// …and a base served by an application server is that server's — in EVERY process, because the refusal has to happen
-	// in the one trying to come in (docs/private/multi-base-process.md § 5.2).
-	AddPolicy(std::make_unique<ibServiceExclusivePolicy>(this));
-
-	Start();
-}
-
 ibSessionHolder ibSessionRegistry::CreateSessionOfKind(ibRunMode runMode,
                                                        const wxString& computer,
                                                        ibSessionKind kind,
                                                        ibConnectRequest::SessionFactory factory)
 {
-	EnsureStartedForCreateSession();
-
 	// Anonymous-phase Connect — registry INSERTs a row with userName=''
 	// immediately so peers (Active Users UI, designer-exclusive policy)
 	// see "someone is logging in", and a job is visible from the moment it
@@ -285,13 +260,7 @@ ibSessionHolder ibSessionRegistry::CreateSessionWithFactory(ibRunMode runMode,
                                                             const wxString& address,
                                                             ibConnectRequest::SessionFactory factory)
 {
-	// Per-tab variant — registry is normally already running by the time
-	// per-tab logins arrive (wes process bring-up created its WebServer
-	// system session at startup). EnsureStartedForCreateSession is
-	// idempotent so calling it here is safe in either order. The kind is the
-	// caller's: a web tab's, a client of the protocol's.
-	EnsureStartedForCreateSession();
-
+	// Per-tab variant. The kind is the caller's: a web tab's, a client of the protocol's.
 	ibConnectRequest req;
 	req.m_computer       = computer;
 	req.m_appMode        = runMode;
@@ -311,10 +280,28 @@ ibSessionHolder ibSessionRegistry::CreateSessionWithFactory(ibRunMode runMode,
 
 // --- Thread lifecycle ----------------------------------------------------
 
+// ⭐ STARTED ONCE, BY ITS BASE AS IT OPENS (ibApplicationInstance::Open), before anybody comes in. It used to start
+// with the base's first session, unguarded — and two hundred first logins at once each added the policies below and
+// started it (the web server's load test, 2026-10-20: the policy vector torn under a push_back).
 void ibSessionRegistry::Start()
 {
 	if (m_threadAlive.load(std::memory_order_acquire)) return;
 	if (m_fatal.load(std::memory_order_acquire))       return;
+
+	// Own sys_session row I/O: registry handles INSERT / UPDATE / DELETE
+	// via its write connection and holds pessimistic row locks that peers
+	// use to detect liveness. Replaces the pre-2026-04-20 1 Hz heartbeat
+	// UPDATE path.
+	EnableSysSessionOwnership(true);
+
+	// Designer-exclusive policy — one designer per IB at a time, in EVERY process: a designer is a session's kind,
+	// and a file base's designer and a thin designer in a server are the same question. It lets everyone else
+	// through. Added BEFORE the thread so the chain is immutable once the consumer thread is running.
+	AddPolicy(std::make_unique<ibDesignerExclusivePolicy>(this));
+
+	// …and a base served by an application server is that server's — in EVERY process, because the refusal has to happen
+	// in the one trying to come in (docs/private/multi-base-process.md § 5.2).
+	AddPolicy(std::make_unique<ibServiceExclusivePolicy>(this));
 
 	// When we own sys_session, grab ONE dedicated pool connection for
 	// INSERT/UPDATE/DELETE + JobRefreshSnapshot's SELECT. (The NOWAIT-probe
@@ -354,7 +341,7 @@ void ibSessionRegistry::Start()
 
 void ibSessionRegistry::Stop()
 {
-	// No registry thread — no session was ever made here, so nothing of ours is in the worker pool either.
+	// No registry thread — the base never came up (Open starts it), so nothing of ours is in the worker pool either.
 	if (!m_thread.joinable())
 		return;
 
@@ -770,12 +757,11 @@ void ibSessionRegistry::NotifyAuthenticated(ibSession* s)
 		for (const auto& cb : firsts)
 			if (cb) cb(s);
 	}
-	// Between phases — OnFirstConnect's metadataCreate may have just made the
-	// base's active configuration, and the session acquires its own reference
-	// to it NOW: the one it works in for its whole life, whatever replaces the
-	// active one later. OnAuthenticated's listeners (RunDatabase ->
-	// OnBeforeRunMetaObject) need session->mm to exist. Session creates
-	// its root here so ownership stays in ibSession (see EnsureRoot).
+	// Between phases — the session acquires its own reference to the base's
+	// active configuration NOW (a designer's session: one of its own): the one
+	// it works in for its whole life, whatever replaces the active one later.
+	// OnAuthenticated's listeners (CompileRoot) need session->mm to exist.
+	// Session creates its root here so ownership stays in ibSession (see EnsureRoot).
 	s->AcquireMetaData();
 	s->EnsureRoot();
 	for (const auto& cb : auths)

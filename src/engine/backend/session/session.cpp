@@ -1000,7 +1000,22 @@ void ibSession::AcquireMetaData()
 {
 	if (m_metaData)
 		return;
-	if (ibMetaDataConfigurationBase* const active = ibApplicationInstance::GetActiveMetaData(GetApplicationInstance()))
+	// ⭐ A DESIGNER'S SESSION WORKS IN A WORLD OF ITS OWN (Max, 2026-10-20: *"the designer's metadata is held only
+	// by the designer's session; the rest live with the active one, by reference count"*) — the configuration it
+	// edits, made for it and held by it alone. The base's active one it leaves to the rest, and only an apply
+	// replaces it.
+	if (IsDesignerSessionKind(GetKind())) {
+
+		// Held BEFORE it loads — a session's own configuration is the first answer `activeMetaData` gives on its
+		// thread (ibApplicationInstance::GetActiveMetaData), and its loading asks for it. The session is bound to the
+		// thread for its bring-up (NotifyAuthenticated), so the rights checked and the language pinned are its user's.
+		m_metaData = ibMetaData::MakeShared<ibMetaDataConfigurationStorage>(ib::AppDataCtorToken{ GetApplicationInstance() });
+
+		// …and one that did not come up goes with the reference: nobody else holds it.
+		if (!m_metaData->OnInitialize(_app_start_default_flag) || !m_metaData->RunDatabase())
+			m_metaData.reset();
+	}
+	else if (ibMetaDataConfigurationBase* const active = ibApplicationInstance::GetActiveMetaData(GetApplicationInstance()))
 		m_metaData = std::static_pointer_cast<ibMetaDataConfigurationBase>(active->shared_from_this());
 }
 
@@ -1013,8 +1028,8 @@ void ibSession::ReleaseMetaData()
 void ibSession::EnsureRoot()
 {
 	// Wired by ibSessionRegistry::NotifyAuthenticated to land between
-	// OnFirstConnect (metadataCreate) and OnAuthenticated (RunDatabase /
-	// CompileRoot). CreateRoot itself is idempotent; this wrapper just
+	// AcquireMetaData and OnAuthenticated (CompileRoot).
+	// CreateRoot itself is idempotent; this wrapper just
 	// guards on the acquired configuration so headless sessions
 	// (Launcher, technical) without metadata don't fault.
 	if (m_root) return;
@@ -1539,14 +1554,14 @@ ibSession::OpenResult ibSession::Open(const wxString& user, const wxString& pass
 	ibAuthState res = submitAttach(user, password);
 	if (res == ibAuthState::Authenticated) {
 		// NotifyAuthenticated fires three phases in order:
-		//   1. OnFirstConnect listeners — process-level metadata bootstrap
-		//      (metadataCreate, populates the base's active one) on the first auth.
+		//   1. OnFirstConnect listeners, on the first auth (the base's
+		//      configuration ran as it opened, before anybody came in).
 		//   2. session->AcquireMetaData + EnsureRoot — the session's own reference
-		//      to it, and the per-session root mm allocated over it NOW so
-		//      step 3's listeners can rely on GetManagerModule() != null.
+		//      to it (a designer's: one of its own), and the per-session root mm
+		//      allocated over it NOW so step 3's listeners can rely on
+		//      GetManagerModule() != null.
 		//   3. OnAuthenticated listeners — per-session bring-up
-		//      (RunDatabase fires OnBefore/AfterRunMetaObject which read
-		//      session->mm; CompileRoot; AttachRuntime).
+		//      (CompileRoot; AttachRuntime).
 		// Note: NotifyAuthenticated binds this session for the bring-up
 		// (and gives the thread back after), so any breakpoint hit inside
 		// the listeners resolves Current() to THIS session (the registry-
