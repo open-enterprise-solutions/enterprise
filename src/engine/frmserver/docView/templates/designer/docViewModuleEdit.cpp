@@ -18,6 +18,8 @@
 #include "backend/backend_picture.h"         // ibBackendPicture::SendPicture — the picture by its id
 #include "core/serialize/dataBuilder.h"
 #include "frmserver/client/clientFrame.h"   // IsClosingWindow — the client leaving vs a tab's cross
+#include "docViewComposerEdit.h"         // ibFetchComposerRequest — a reference's [+] (Expand), asked by the query constructor
+#include "queryConstructorRequest.h"     // ibFetchQueryConstructorRequest — what the query constructor asks the configuration
 
 #include <algorithm>
 
@@ -568,6 +570,14 @@ bool ibModuleTextView::Fetch(const ibDataNode& request, ibDataNode& response)
 		GetDocument()->ConvertMetaObjectToType<ibValueMetaObjectModuleBase>();
 	if (creator == nullptr)
 		return false;
+
+	// THE QUERY CONSTRUCTOR opened over this module's query asks the module's configuration — its sources, a source's
+	// fields and parameters, and a reference's fields one level down (the composer's Expand).
+	if (ibFetchQueryConstructorRequest(request, response, creator->GetMetaData()))
+		return true;
+	if (static_cast<ibProtocol::ibView::ibComposer::ibRequest>(request.GetValue<s32>(ibProtocol::ibView::ibComposer::Kind))
+	    == ibProtocol::ibView::ibComposer::ibRequest::Expand)
+		return ibFetchComposerRequest(request, response, creator->GetMetaData());
 
 	const wxString text = request.GetValue<wxString>(ibProtocol::ibView::ibModule::Text);
 	const unsigned int caret = static_cast<unsigned int>(request.GetValue<s32>(ibProtocol::ibView::ibModule::Position));

@@ -13,6 +13,7 @@
 #include "queryable.h"                            // ibSourceMetaDataScope, ibPeriodUnits — the desktop's header brings them (queryableFactory.h)
 #include "frmclient/backend/compiler/value.h"     // ibValue — likewise
 
+#include <memory>
 #include <vector>
 
 class ibMetaData;
@@ -38,10 +39,12 @@ FRMCLIENT_API std::vector<struct ibSettingsPlainField> ibListSourceFields(ibMeta
 	const ibMetaData* metaData, wxString* error = nullptr);
 
 // ⭐⭐ THE DESKTOP'S MODEL, UNDER ITS OWN NAME — the windows of win/dlgs/queryConstructor are the desktop's, ported whole,
-// and they ask this class what they ask there. What only the configuration answers (the sources, their fields, a
-// reference's target, a virtual table's parameters) is the server's: ⚠ NOT HERE YET — the protocol for it waits for
-// Max (query-constructor-doors.md: Sources, Fields, SourceParameters), and until then those questions answer nothing. What the package itself
-// answers (its temporary tables, the roles it says) is read here, as the desktop reads it.
+// and they ask this class what they ask there. What only the configuration answers is asked of the tab the window was
+// opened from (ibProtocol::ibView::ibQueryConstructor): the sources, a source's fields, a virtual table's parameters —
+// and a reference's fields one level down, the composer's Expand. Everything the desktop's model DERIVES from those
+// (qualified fields, the walk of a path, the fields of a select) is the desktop's code, run here over the answers.
+// What the package itself answers (its temporary tables, the roles it says) is read here, as the desktop reads it.
+// ONE QUESTION PER SOURCE: the answers are kept for the model's life — the window's.
 
 // WHAT ARGUMENTS A VIRTUAL TABLE TAKES — the desktop's (backend/query/queryableFactory.h), as the server describes it.
 struct ibQuerySourceParameter
@@ -288,6 +291,7 @@ public:
 
 private:
 	const ibMetaData* m_metaData = nullptr;   // which configuration the question is for — the server answers it
+	std::shared_ptr<struct ibQueryModelAnswers> m_known;   // what the tab already answered — kept for the window's life
 };
 
 // ⭐⭐ …AND NO ROLE THE TEXT SAYS. What a field is in a balance is a composition's word on its Fields page

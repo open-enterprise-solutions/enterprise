@@ -1053,10 +1053,12 @@ void ibCodeEditor::OnContextMenu(wxContextMenuEvent& event)
 	// (A module that cannot be changed still opens it, read-only: a query one may not edit is still
 	// one worth reading, and refusing would hide the only view of it there is.)
 	//
-	// ⚠ THE CONFIGURATION IS THE SERVER'S: the client's constructor is asked with none (it is a stub on the client yet).
+	// THE CONFIGURATION IS THE SERVER'S: the constructor asks it of this editor's tab (ibView::ibQueryConstructor). An
+	// editor on no tab (a window's own) has nobody to ask — the desktop's "no configuration open".
 	menu.Bind(wxEVT_MENU, [this, literal, caret](wxCommandEvent&) {
 		wxString text = literal.m_text;
-		if (!ibShowQueryConstructor(this, text, nullptr, !IsEditable()))
+		const ibMetaData metaData = m_document != nullptr ? m_document->GetMetaData() : ibMetaData();
+		if (!ibShowQueryConstructor(this, text, m_document != nullptr ? &metaData : nullptr, !IsEditable()))
 			return;
 		if (literal.Found()) ReplaceStringLiteral(literal, text);
 		else                 InsertStringLiteral(caret, text);

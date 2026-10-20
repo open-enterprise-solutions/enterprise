@@ -41,12 +41,18 @@ public:
 		return icon;
 	}
 
-	// A PICTURE AS A DESCRIPTION SAYS IT — the desktop's. One of the engine's pictures is the core's, read here; a
-	// configuration's own picture is the server's: ⚠ NOT HERE YET (not one of the three requests; a question for Max), an empty icon.
+	// A PICTURE AS A DESCRIPTION SAYS IT — the desktop's. One of the engine's pictures by its number; a configuration's
+	// by its guid, as the server names it (ibBackendPicture::SendPicture) and the client receives it (ibProtocolPicture).
 	static wxIcon GetPictureAsIcon(const ibPictureDescription& pictureDesc, const class ibMetaData* WXUNUSED(metaData) = nullptr) {
 		if (pictureDesc.m_type == ibPictureType::eFromBackend)
 			return GetPictureAsIcon(pictureDesc.m_class_identifier);
-		return wxIcon();
+		wxIcon icon;
+		if (pictureDesc.m_type == ibPictureType::eFromConfiguration && pictureDesc.m_meta_guid.isValid()) {
+			const wxBitmap picture = ibProtocolPicture(pictureDesc.m_meta_guid.str());
+			if (picture.IsOk())
+				icon.CopyFromBitmap(picture);
+		}
+		return icon;
 	}
 
 	static wxImage GetImageFromBase64(const wxString& src, const wxSize& size = wxDefaultSize) {
