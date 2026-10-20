@@ -6,6 +6,7 @@
 #include "notebook.h"
 
 #include "frmclient/visualView/pageWindow.h"
+#include "frmclient/visualView/visualHostClient.h"   // a designer's host selects by it
 #include "frmclient/win/picture.h"
 #include "frmclient/win/theme/luna_tabart.h"
 
@@ -71,6 +72,13 @@ void ibValueNotebook::OnPageChanged(wxAuiNotebookEvent& event)
 		if (child->GetWindow() != page || child->GetControlID() == m_activePage)
 			continue;
 		m_activePage = child->GetControlID();
+
+		// The designer's: the page clicked is selected in its editor (the desktop's SelectControl) - nothing goes to
+		// the server.
+		if (GetVisualHost().IsDesignerHost()) {
+			GetVisualHost().SelectControl(child);
+			return;
+		}
 
 		ibProtocolNode args;
 		args.SetValue(ibProtocol::ibEvent::Page, m_activePage);
