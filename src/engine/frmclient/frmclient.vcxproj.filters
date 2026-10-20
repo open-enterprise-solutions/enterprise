@@ -1083,6 +1083,9 @@
     <ClCompile Include="propertyManager\property\advprop\advpropFont.cpp">
       <Filter>propertyManager\property\advprop</Filter>
     </ClCompile>
+    <ClInclude Include="propertyManager\property\advprop\advpropColour.h">
+      <Filter>propertyManager\property\advprop</Filter>
+    </ClInclude>
     <ClInclude Include="propertyManager\property\advprop\advpropFont.h">
       <Filter>propertyManager\property\advprop</Filter>
     </ClInclude>

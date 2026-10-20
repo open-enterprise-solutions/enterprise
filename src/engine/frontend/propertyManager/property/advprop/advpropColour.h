@@ -29,6 +29,8 @@ public:
 		wxPGPropValFormatFlags flags = wxPGPropValFormatFlags::Null) const override;
 	virtual bool IntToValue(wxVariant& variant, int number,
 		wxPGPropValFormatFlags flags = wxPGPropValFormatFlags::Null) const override;
+	// The value is ibColour's text, not a choice's label: wxEnumProperty's check refuses every colour.
+	virtual bool ValidateValue(wxVariant& value, wxPGValidationInfo& validationInfo) const override;
 
 	virtual bool OnEvent(wxPropertyGrid* propgrid, wxWindow* primary, wxEvent& event) override;
 

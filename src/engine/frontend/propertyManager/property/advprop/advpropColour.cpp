@@ -257,6 +257,17 @@ bool ibPGColourProperty::IntToValue(wxVariant& variant, int number, wxPGPropValF
 	return true;
 }
 
+bool ibPGColourProperty::ValidateValue(wxVariant& value, wxPGValidationInfo& WXUNUSED(validationInfo)) const
+{
+	// wxEnumProperty looks a text value up among the labels; ours is the colour's `r,g,b` (empty for none).
+	const wxString text = value.GetString();
+	if (text.empty())
+		return true;
+
+	ibColour colour;
+	return colour.FromString(text);
+}
+
 bool ibPGColourProperty::QueryColourFromUser(wxVariant& variant) const
 {
 	wxPropertyGrid* propgrid = GetGrid();
