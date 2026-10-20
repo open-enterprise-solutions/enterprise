@@ -6,6 +6,8 @@
 #include "frmclient/propertyManager/property/private/propertyRegistry.h"
 #include "core/serialize/dataBuilder.h"   // ibDataNode — the row the configuration's pictures come with
 
+#include "frmclient/win/picture.h"   // ibProtocolPicture — a configuration's picture, by its guid
+
 #include "protocol/protocol.h"   // ibProtocol::ibSchema::ibProperties — the row's keys
 
 // -----------------------------------------------------------------------
@@ -96,12 +98,20 @@ wxPGPictureProperty::wxPGPictureProperty(const wxString& label,
 		m_confChoices.insert_or_assign(entry.GetValue(), wxNullGuid);
 
 		// The configuration's pictures — the picture metaobjects of the owner's configuration, or of the one it extends:
-		// the server's, brought by the row by name and guid. Drawn by name only — a picture named is fetched first.
+		// the server's, brought by the row by name and guid.
 		if (pictures != nullptr) {
+			// …each drawn with its own picture, as the desktop's: the server's, asked for by guid all at once (picture
+			// {Pictures}) — one call for the lot, and none once the client keeps them.
+			std::vector<wxString> guids;
+			for (const ibDataNode& item : pictures->Children())
+				guids.push_back(item.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Guid));
+			ibProtocolPictureReceive(guids);
 			for (const ibDataNode& item : pictures->Children()) {
+				const wxString guid = item.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Guid);
 				wxPGChoiceEntry& entry = configurationChoices.AddAsSorted(
 					item.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Name), system_config++);
-				m_confChoices.insert_or_assign(entry.GetValue(), ibGuid(item.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Guid)));
+				entry.SetBitmap(ibProtocolPicture(guid));
+				m_confChoices.insert_or_assign(entry.GetValue(), ibGuid(guid));
 			}
 		}
 
