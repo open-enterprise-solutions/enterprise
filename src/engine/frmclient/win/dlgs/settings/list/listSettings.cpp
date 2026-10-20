@@ -239,7 +239,7 @@ wxWindow* ibListSettingsPanel::BuildQueryPage(wxWindow* parent)
 	header->AddStretchSpacer();
 
 	// THE CONSTRUCTOR OPENS ON THIS VERY TEXT and writes back into it — as the composer's Query page has it. (On the
-	// client the constructor is not ported yet: its door answers Cancel, queryConstructor.h.)
+	// client it is the ported window, whose catalogue and fields come from the server: queryConstructor.h.)
 	m_queryBuild = new wxButton(page, wxID_ANY, _("Query constructor"));
 	m_queryBuild->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
 		if (m_queryText == nullptr)
