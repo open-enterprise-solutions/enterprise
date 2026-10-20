@@ -6,6 +6,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "valueQueryable.h"
+#include "backend/query/queryLiteral.h"   // ibQueryLiteralValue / ibQueryLiteralOf — a query's constant and the engine's value
 #include "valueArray.h"                          // ibValueArray — the RAM floor container
 #include "valueMap.h"                            // ibValueStructure — structure-shaped rows (no single row ref)
 #include "valueTable.h"                          // ibValueModelTable — the ToTable materialised result
@@ -757,7 +758,7 @@ bool ResolveCapturesInPlace(ibQueryAstExpr& e, const ibRunContext* frame)
 		if (cell == nullptr)
 			return false;
 		e.m_kind    = ibQueryAstExprKind::Literal;
-		e.m_literal = *cell;
+		e.m_literal = ibQueryLiteralOf(*cell);
 		return true;
 	}
 	ibQueryAstExprPtr* children[] = { &e.m_arg, &e.m_lhs, &e.m_rhs, &e.m_low, &e.m_high, &e.m_else };

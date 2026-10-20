@@ -1,4 +1,19 @@
 #include "backend/query/queryException.h"
+#include "core/query/queryRefusal.h"   // the core lexer and parser refuse through it
+
+// ⭐ THE ENGINE'S RAISE FOR THE CORE'S QUERY PARSER: a text that does not read is ibBackendQuerySyntaxException here,
+// as it was when the lexer and the parser were the engine's — every handler that catches it by type still does.
+// Given when the library loads, so no parse runs before it.
+namespace {
+
+void RaiseQuerySyntax(unsigned int line, unsigned int col, const wxString& message)
+{
+	ibBackendQuerySyntaxException::ErrorAt(line, col, wxT("%s"), message);
+}
+
+[[maybe_unused]] const bool s_queryRefusalGiven = (ibQueryRefusal::SetRaise(&RaiseQuerySyntax), true);
+
+} // namespace
 
 // Thrown by value, caught by const reference (project convention).
 

@@ -3,6 +3,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "queryConstructorModel.h"
+#include "backend/query/queryLiteral.h"   // ibQueryLiteralValue / ibQueryLiteralOf — a query's constant and the engine's value
 
 #include "queryRender.h"                 // ibRenderQueryExpr — an unaliased projection is named by its own text
 #include "queryParser.h"                 // ibQueryCastType / ibQueryMakeCast — a primitive CAST, both ways
@@ -480,7 +481,7 @@ std::vector<ibQueryConstructorField> ibQueryConstructorModel::GetFields(
 				continue;
 			}
 			if (arg->m_kind == ibQueryAstExprKind::Literal) {
-				args.push_back(arg->m_literal);
+				args.push_back(ibQueryLiteralValue(arg->m_literal));
 				continue;
 			}
 			if (i < declared.size() && !declared[i].m_choices.empty()

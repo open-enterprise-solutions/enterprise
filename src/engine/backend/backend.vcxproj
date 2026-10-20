@@ -264,6 +264,7 @@
     <ClInclude Include="query\queryRamTable.h" />
     <ClInclude Include="query\queryRowCursor.h" />
     <ClInclude Include="query\queryLexer.h" />
+    <ClInclude Include="query\queryLiteral.h" />
     <ClInclude Include="query\queryAST.h" />
     <ClInclude Include="query\queryRender.h" />
     <ClInclude Include="query\queryConstructorModel.h" />

@@ -4,7 +4,8 @@
 
 #include "queryLexer.h"
 
-#include "queryException.h"   // ibBackendQuerySourceException — L4 refuses in its own variety
+#include "core/exception.h"       // ibCoreException — a lexer refusal is still one
+#include "core/query/queryRefusal.h"   // ibQueryRefusal — the text does not read; the side raises its own
 
 // The keyword and scalar-call tables the lexer matches against are the core's (core/query/queryKeywords.cpp):
 // the thin client's editor reads the same words.
@@ -26,11 +27,11 @@ void ibQueryLexer::RaiseRefusal() const
 	// L4 refuses in its OWN variety, carrying the position as data — the text is what is wrong here,
 	// not the machinery, and the caller that shows this is the one editing the query.
 	if (errorDesc.empty())
-		ibBackendQuerySyntaxException::ErrorAt(currLine, currPos,
-			_("Query lexical error at line %u (position %u)"), currLine, currPos);
+		ibQueryRefusal::Syntax(currLine, currPos,
+			wxString::Format(_("Query lexical error at line %u (position %u)"), currLine, currPos));
 	else
-		ibBackendQuerySyntaxException::ErrorAt(currLine, currPos,
-			_("Query lexical error at line %u (position %u): %s"), currLine, currPos, errorDesc);
+		ibQueryRefusal::Syntax(currLine, currPos,
+			wxString::Format(_("Query lexical error at line %u (position %u): %s"), currLine, currPos, errorDesc));
 }
 
 wxChar ibQueryLexer::PeekRawByte() const
@@ -128,35 +129,35 @@ std::vector<ibQueryToken> ibQueryLexer::Tokenize(const wxString& queryText)
 			sUpper.clear(); GetNumber(&sUpper); RaiseRefusal();
 			t.m_kind = ibQueryTokenKind::Number;
 			if (!t.m_literal.SetNumber(sUpper))
-				ibBackendQuerySyntaxException::ErrorAt(GetCurrentLine() + 1, GetCurrentPos(),
-					_("Query: '%s' is not a valid number at line %u (position %u)"),
-					sUpper, GetCurrentLine() + 1, GetCurrentPos());
+				ibQueryRefusal::Syntax(GetCurrentLine() + 1, GetCurrentPos(),
+					wxString::Format(_("Query: '%s' is not a valid number at line %u (position %u)"),
+					sUpper, GetCurrentLine() + 1, GetCurrentPos()));
 			t.m_text = sUpper;
 		}
 		else if (IsString()) {
 			sUpper.clear(); GetString(&sUpper); RaiseRefusal();
 			t.m_kind = ibQueryTokenKind::String;
 			if (!t.m_literal.SetString(sUpper))
-				ibBackendQuerySyntaxException::ErrorAt(GetCurrentLine() + 1, GetCurrentPos(),
-					_("Query: a string literal could not be read at line %u (position %u)"),
-					GetCurrentLine() + 1, GetCurrentPos());
+				ibQueryRefusal::Syntax(GetCurrentLine() + 1, GetCurrentPos(),
+					wxString::Format(_("Query: a string literal could not be read at line %u (position %u)"),
+					GetCurrentLine() + 1, GetCurrentPos()));
 			t.m_text = sUpper;
 		}
 		else if (IsDate()) {
 			sUpper.clear(); GetDate(&sUpper); RaiseRefusal();
 			t.m_kind = ibQueryTokenKind::Date;
 			if (!t.m_literal.SetDate(sUpper))
-				ibBackendQuerySyntaxException::ErrorAt(GetCurrentLine() + 1, GetCurrentPos(),
-					_("Query: '%s' is not a valid date at line %u (position %u)"),
-					sUpper, GetCurrentLine() + 1, GetCurrentPos());
+				ibQueryRefusal::Syntax(GetCurrentLine() + 1, GetCurrentPos(),
+					wxString::Format(_("Query: '%s' is not a valid date at line %u (position %u)"),
+					sUpper, GetCurrentLine() + 1, GetCurrentPos()));
 			t.m_text = sUpper;
 		}
 		else if (IsByte(wxT('&'))) {           // &Name — a query parameter
 			GetByte();                         // consume '&'
 			if (!IsWord())
-				ibBackendQuerySyntaxException::ErrorAt(GetCurrentLine() + 1, GetCurrentPos(),
-					_("Query: expected a parameter name after '&' at line %u (position %u)"),
-					GetCurrentLine() + 1, GetCurrentPos());
+				ibQueryRefusal::Syntax(GetCurrentLine() + 1, GetCurrentPos(),
+					wxString::Format(_("Query: expected a parameter name after '&' at line %u (position %u)"),
+					GetCurrentLine() + 1, GetCurrentPos()));
 			sUpper.clear(); sOrig.clear();
 			GetWord(&sUpper, &sOrig, /*realName*/false, /*get_point*/false);
 			t.m_kind = ibQueryTokenKind::Param;

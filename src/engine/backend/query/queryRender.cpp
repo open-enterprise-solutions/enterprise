@@ -3,6 +3,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "queryRender.h"
+#include "backend/query/queryLiteral.h"   // ibQueryLiteralValue / ibQueryLiteralOf — a query's constant and the engine's value
 
 #include "core/query/queryKeywords.h"
 
@@ -161,7 +162,7 @@ wxString RenderExpr(const ibQueryAstExpr& expr)
 		return Join(expr.m_path, wxT("."));
 
 	case ibQueryAstExprKind::Literal:
-		return RenderLiteral(expr.m_literal);
+		return RenderLiteral(ibQueryLiteralValue(expr.m_literal));
 
 	case ibQueryAstExprKind::Param:
 		return wxT("&") + expr.m_paramName;

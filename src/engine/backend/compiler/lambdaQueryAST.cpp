@@ -4,6 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "lambdaQueryAST.h"
+#include "backend/query/queryLiteral.h"   // ibQueryLiteralValue / ibQueryLiteralOf — a query's constant and the engine's value
 
 #include "backend/query/queryAST.h"   // ibQueryAstExpr — the L4-1 AST the pushdown lowers
 #include "backend/compiler/byteCode.h"       // the instructions the second recorder reads
@@ -266,7 +267,7 @@ ibQueryAstExprPtr ResolveSlot(const CodeCur& c, const ibParamRunUnit& slot, int 
 		if (slot.m_numIndex < 0 || (size_t)slot.m_numIndex >= c.bc.m_listConst.size())
 			return c.Refuse(wxT("a constant that is not in the pool"), 0);
 		auto e = ibQueryAstExpr::Make(ibQueryAstExprKind::Literal);
-		e->m_literal = c.bc.m_listConst[(size_t)slot.m_numIndex];
+		e->m_literal = ibQueryLiteralOf(c.bc.m_listConst[(size_t)slot.m_numIndex]);
 		return e;
 	}
 

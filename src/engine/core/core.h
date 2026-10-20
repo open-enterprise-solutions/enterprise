@@ -128,6 +128,27 @@ constexpr ibClassID GetIDByVT(ibValueTypes valueType) {
 	}
 }
 
+// THE WIDEST NUMBER AND THE LONGEST STRING a type may be qualified with — `Number(32)`, `String(1024)`. The engine's
+// and the client's: the query's parser checks a CAST against them on either side.
+#define MAX_PRECISION_NUMBER 32
+#define MAX_LENGTH_STRING 1024
+
+// THE PRIMITIVE'S NAME AS THE LANGUAGE WRITES IT — the `Number` of `New TypeDescription("Number")` and of a query's
+// `CAST(… AS Number(15, 2))`; nullptr for a kind that is no primitive. The engine registers its primitives by the same
+// words (backend/compiler/value.cpp, PRIMITIVE_TYPE_REGISTER) and a test holds the two together (test_queryLiteral):
+// the query's parser, which the client runs too, reads them here.
+constexpr const char* GetNameByVT(ibValueTypes valueType) {
+	switch (valueType) {
+	case ibValueTypes::TYPE_EMPTY: return "Undefined";
+	case ibValueTypes::TYPE_BOOLEAN: return "Boolean";
+	case ibValueTypes::TYPE_NUMBER: return "Number";
+	case ibValueTypes::TYPE_DATE: return "Date";
+	case ibValueTypes::TYPE_STRING: return "String";
+	case ibValueTypes::TYPE_NULL: return "Null";
+	default: return nullptr;
+	}
+}
+
 // What a date keeps — the date, both, the time. Here, beside the value types, because the type
 // description keeps it (typeDescription.h) and the format string reads it (formatString.h).
 enum ibDateFractions {

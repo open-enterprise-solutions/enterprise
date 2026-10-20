@@ -2812,6 +2812,9 @@
     <ClInclude Include="query\queryLexer.h">
       <Filter>query</Filter>
     </ClInclude>
+    <ClInclude Include="query\queryLiteral.h">
+      <Filter>query</Filter>
+    </ClInclude>
     <ClInclude Include="query\queryAST.h">
       <Filter>query</Filter>
     </ClInclude>

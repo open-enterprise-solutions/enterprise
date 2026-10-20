@@ -4,6 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "queryLowering.h"
+#include "backend/query/queryLiteral.h"   // ibQueryLiteralValue / ibQueryLiteralOf — a query's constant and the engine's value
 
 #include "queryException.h"                // ibBackendQuerySourceException — L3 refuses in its own variety
 #include "queryRewrite.h"                 // ibQueryRewrite — optimizer pass (AST -> AST)
@@ -1447,7 +1448,7 @@ std::map<wxString, ibValue> WithEveryParameter(const wxString& text, const std::
 ibValue EvalValue(const ibQueryAstExpr& e, const std::map<wxString, ibValue>& params)
 {
 	RefuseIfQueryStackLow(e.m_line, e.m_col);
-	if (e.m_kind == ibQueryAstExprKind::Literal) return e.m_literal;
+	if (e.m_kind == ibQueryAstExprKind::Literal) return ibQueryLiteralValue(e.m_literal);
 	if (e.m_kind == ibQueryAstExprKind::Param) {
 		const ibValue* v = FindParam(params, e.m_paramName);
 		if (v == nullptr) {
@@ -2811,7 +2812,7 @@ ibQueryColumnExprPtr BuildColumnExprFromAst(const std::vector<ibSourceBinding>& 
 		return ibQueryColumnExpr::Col(cols[0]);
 	}
 	case ibQueryAstExprKind::Literal:
-		return ibQueryColumnExpr::Const(e.m_literal);
+		return ibQueryColumnExpr::Const(ibQueryLiteralValue(e.m_literal));
 	case ibQueryAstExprKind::Param:
 	case ibQueryAstExprKind::Value:   // value(...) resolves to a constant, exactly like a &parameter
 		return ibQueryColumnExpr::Const(EvalValue(e, params));
