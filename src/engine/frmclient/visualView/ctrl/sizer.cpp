@@ -41,7 +41,7 @@ void ibValueBoxSizer::Update(const ibProtocolNode& node)
 
 void ibValueWrapSizer::Create(wxWindow* /*parent*/, const ibProtocolNode& node)
 {
-	m_sizer = new wxWrapSizer(static_cast<int>(node.GetInt(ibProtocol::ibForm::ibProperty::Orient, wxHORIZONTAL)), wxWRAPSIZER_DEFAULT_FLAGS);
+	m_sizer = new wxWrapSizer(static_cast<int>(node.GetInt(ibProtocol::ibForm::ibProperty::Orient, wxHORIZONTAL)), wxREMOVE_LEADING_SPACES);   // not the default flags: see ibValueWrapSizer::Create
 }
 
 void ibValueWrapSizer::Update(const ibProtocolNode& node)
