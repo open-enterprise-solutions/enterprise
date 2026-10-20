@@ -707,7 +707,16 @@ void ibValueModelTableBox::OnUpdated(wxObject* wxobject, ibFrontendWindow* wxpar
 			// up the new row.  Real model swap (oldModel != null && new !=
 			// old) still resets — different dataset, old line meaningless.
 			const bool freshControl = (dataViewOldModel == nullptr);
-			if (freshControl) dataViewCtrl->SetFocus();
+			// The table takes the focus as its form opens, but only where it can be seen: on a
+			// notebook page that is not selected (a hidden ancestor) focusing it makes the notebook
+			// switch to that page, and the form opens on the table's page instead of its first.
+			if (freshControl) {
+				bool visible = true;
+				for (wxWindow* w = dataViewCtrl; w != nullptr && !w->IsTopLevel(); w = w->GetParent()) {
+					if (!w->IsShown()) { visible = false; break; }
+				}
+				if (visible) dataViewCtrl->SetFocus();
+			}
 			dataViewCtrl->AssociateModel(dataViewNewModel);
 			if (!freshControl) {
 				m_tableCurrentLine.Reset();
