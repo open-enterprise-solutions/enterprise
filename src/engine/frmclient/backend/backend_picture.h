@@ -41,6 +41,14 @@ public:
 		return icon;
 	}
 
+	// A PICTURE AS A DESCRIPTION SAYS IT — the desktop's. One of the engine's pictures is the core's, read here; a
+	// configuration's own picture is the server's: ⚠ NOT HERE YET (not one of the three requests; a question for Max), an empty icon.
+	static wxIcon GetPictureAsIcon(const ibPictureDescription& pictureDesc, const class ibMetaData* WXUNUSED(metaData) = nullptr) {
+		if (pictureDesc.m_type == ibPictureType::eFromBackend)
+			return GetPictureAsIcon(pictureDesc.m_class_identifier);
+		return wxIcon();
+	}
+
 	static wxImage GetImageFromBase64(const wxString& src, const wxSize& size = wxDefaultSize) {
 		const wxImage image = ibProtocolImage(src);
 		return size != wxDefaultSize && image.IsOk() ? image.Scale(size.x, size.y, wxIMAGE_QUALITY_HIGH) : image;
