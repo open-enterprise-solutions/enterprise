@@ -1000,7 +1000,7 @@ void ibVisualHost::ibContentWindow::ClearControl(ibValueFrame* control, bool for
 		}
 
 		wxSizer* controlParentSizer = nullptr;
-		if (controlParent != nullptr && controlParent->GetClassName() == wxT("NotebookPage")) {
+		if (controlParent != nullptr && (controlParent->GetClassName() == wxT("NotebookPage") || controlParent->GetClassName() == wxT("Panel"))) {
 			ibPanelPage* pageWnd = dynamic_cast<ibPanelPage*>(GetWxObject(controlParent));
 			wxASSERT(pageWnd);
 			controlParentSizer = pageWnd->GetSizer();

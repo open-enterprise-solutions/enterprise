@@ -1,0 +1,131 @@
+# UI Component Gallery
+
+A Storybook-style catalog of OES's form controls — one `NotebookPage` per control
+type, built as a `Form` on the `UIComponentGallery` `DataProcessor`, inside this
+folder's base. It was built live through the Designer's MCP server (an assistant
+driving `metadata_create`/`form_add`/`form_bind`, not hand-authored), and is kept
+here as a worked example of what that looks like, plus a record of what it found.
+
+## Why `visualView`, not `uikit`
+
+OES has two layers that could be called "the UI kit":
+
+- `src/engine/frontend/uikit/` — a wxUniversal-fork, desktop-only renderer (the
+  "Luna" theme). Unfinished, and the web client never calls into it at all.
+- `src/engine/frontend/visualView/ctrl/` — the 19 form-control types a developer
+  actually places from the Designer's palette. This is the layer a form's
+  metadata is built from, and the only one with any chance of reaching the web
+  client — see the gap below for how much of a chance that actually is.
+
+A gallery built on `uikit` would showcase widgets the web client can never show
+under any circumstance. This gallery catalogs `visualView` instead.
+
+## The 19 catalogued control types
+
+Exact registered names (`CONTROL_TYPE_REGISTER` in `visualView/ctrl/*.cpp`), one
+gallery page each, plus a 20th "coming soon" page: `Button`, `Checkbox`,
+`Radiobutton`, `Textbox`, `Textctrl`, `Statictext`, `Staticline`, `Slider`,
+`Gauge`, `Tablebox`, `Gridbox`, `Chartbox`, `Htmlbox`, `Toolbar`, `Notebook`,
+`Boxsizer`, `Gridsizer`, `Staticboxsizer`, `Wrapsizer`. Some controls (`Checkbox`,
+`Textctrl`, `Tablebox`) need a bound `Attribute`/`TabularSection` to render at all
+— confirmed by reading each control's own `form_control` property schema rather
+than assumed; see the note on `UIComponentGallery` (metaID 1005) in the base
+itself for the per-control findings.
+
+## Known gaps
+
+### `Choice`, `ComboBox`, the unregistered `ListBox` variant
+
+These exist as C++ classes under `visualView/ctrl/` but are never passed through
+`CONTROL_TYPE_REGISTER`, so they cannot appear in this gallery, or in any form on
+either client, until someone separately verifies their rendering and registers
+them. The gallery's 20th page names this gap instead of silently omitting them.
+
+### The web client renders almost none of this gallery — a real gap, bigger than expected
+
+The original plan for this gallery assumed the `visualView/ctrl` layer "already
+reaches the web client for free" through `src/engine/frontend/web/jsonAdapter.h`.
+That assumption was wrong: `jsonAdapter.h` is a 33-line `nlohmann::json` adapter
+for `wxString` only, not a serializer. The actual web-rendering path is each
+control's own `Create()`, conditionally compiled with `#ifdef OES_USE_WEB`
+(`frontend/web/webWindow.h` holds the `ibWeb*` widget classes it instantiates).
+Grepping `visualView/ctrl/*.cpp` for `new ibWeb` shows only:
+
+**Have a web implementation:** `Button`, `Checkbox`, `Textctrl`, `Toolbar` (+
+item/separator), `Statictext`, `Boxsizer`, `Staticboxsizer`, `Gridsizer`,
+`Wrapsizer`, and `Tablebox` (stub only — placeholder, not a real grid).
+
+**Have none at all** — under a web build their `Create()` still constructs a real
+native wx widget, which isn't an `ibWebWindow` and can't be walked into JSON, so
+the whole subtree (the control and everything inside it) is silently dropped from
+what the web client ever sees: `Notebook`, `NotebookPage`, `Radiobutton`,
+`Slider`, `Gauge`, `Gridbox`, `Textbox`, `Staticline`, `Htmlbox`, `Chartbox`,
+`Listbox`, `Choice`, `Combobox`.
+
+Since this gallery's root control is a `Notebook`, opening it in the web client
+(`wenterprise-server` + `webClient/client.html`) currently renders nothing at
+all — confirmed by inspecting the server's own `open-meta/<id>` JSON response,
+which comes back as `{"children":[{"type":"boxsizer","orient":8}]}`: an empty
+root sizer, no `Notebook`, no pages. Implementing the missing `ibWeb*` widgets
+for the 13 types above is real new engine work, not a gallery-authoring task —
+out of scope for this pass.
+
+### Desktop: a page-selection bug and a tab-rendering bug
+
+Both are fixed in a separate change (PR #528, "Notebook: inactive tabs vanish on
+macOS when a control's Font is empty"); without it this gallery opens on an
+arbitrary page and shows only the active tab.
+
+Opening this gallery in `enterprise.exe` (or the Designer's own form editor) used
+to show only one `NotebookPage` at a time, picking a different, seemingly
+arbitrary page on every fresh run — with the visible tab's own label sometimes
+not even matching what was drawn under it. Two distinct bugs were involved, both
+in `src/engine/frontend/visualView/ctrl/notebook.cpp`:
+
+1. **Selection — fixed.** A notebook built wholesale in one pass (every
+   `NotebookPage::OnCreated` calls `AddPage(..., select=false)`, since no page
+   has a reason to prefer itself over a sibling) never explicitly selects a
+   page — but wx's standard "focusing a descendant switches its notebook to
+   that page" behaviour fires anyway, for whichever control happens to receive
+   initial keyboard focus, landing on an arbitrary page. Confirmed by tracing:
+   `OnCreated` still reads the correct initial selection; the very next
+   `OnUpdated` pass already reads a different one. Fixed by pinning the
+   selection to page 0 exactly once, in `ibValueNotebook::OnUpdated`, guarded by
+   a new `m_selectionSettled` member so a tab the user later switches to is
+   never stolen back. Verified with a pristine-vs-fixed rebuild comparison: the
+   unmodified code consistently mis-selects (confirmed across multiple cold
+   restarts); the fixed build consistently selects page 0.
+2. **Rendering — fixed.** Only the active tab painted in the strip; the other
+   19 took their place (the active one sat where it belonged, e.g. mid-strip for
+   `Textbox`) but drew nothing. Tracing `wxAuiLunaTabArt::DrawTab` showed every
+   inactive tab being drawn with an invalid normal font. The gallery's controls
+   carry a stored but unset `Font` (point size 0): the property is non-null, so
+   `ibValueWindow::ApplyLook` passed `typeConv::FontToWxFont()`'s `wxNullFont` on
+   to `SetFont()`. For a plain window that just resets the font, but
+   `wxAuiNotebook::SetFont` copies it into the tab art as the normal-tab font
+   (only the bold selected font comes out valid), and macOS draws text in an
+   invalid font as nothing. `ApplyLook` now leaves the inherited font alone when
+   the stored font is unset. The page contents were never the problem: a page
+   whose controls are unbound (e.g. `Button`) is empty by design (see above).
+
+   Still open: three pages (`Checkbox`, `Textctrl`, `Coming soon`) hold a long
+   single-line static text, about 2150 px wide, so the notebook is laid out
+   wider than the form window. The strip then believes every tab fits (no
+   scroll arrows), and tabs past the window edge (after `Gridbox` in an 800 px
+   window) are clipped and cannot be reached.
+
+### Protocol divergence
+
+`wenterprise-server`'s web protocol is a bespoke REST + JSON + SSE API over the
+control tree (`src/engine/wenterprise-server/main.cpp`), not the documented
+unified JSON-RPC protocol (`docs/public/client-protocol.md`). Aligning the two is
+a separate, larger task, independent of the gaps above.
+
+## Opening it
+
+- Desktop: `designer.exe --file=examples/ui-gallery` /
+  `enterprise.exe --file=examples/ui-gallery`, then Operations → Data processors
+  → UI Component Gallery.
+- Web (`-DOES_BUILD_WEB=ON` build only — off by default, CI never turns it on):
+  `wenterprise-server --file=examples/ui-gallery`, open the served
+  `webClient/client.html`. Per the gap above, expect an empty form.

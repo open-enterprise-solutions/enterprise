@@ -14,16 +14,16 @@
 namespace {
 
 // Resolve the sizer that actually owns this SizerItem's child. On
-// desktop the NotebookPage wrapper hides its inner wxSizer, so we
-// unwrap it here. On web the mapping is direct: parent's wxObject
-// (ibWebSizer subclass) IS the container.
+// desktop the NotebookPage (and, likewise, Panel) wrapper hides its
+// inner wxSizer, so we unwrap it here. On web the mapping is direct:
+// parent's wxObject (ibWebSizer subclass) IS the container.
 ibFrontendSizer* ResolveParentSizer(ibVisualHost* visualHost, ibValueFrame* object)
 {
 	ibValueFrame* parent = object->GetParent();
 	if (parent == nullptr) return nullptr;
 	wxObject* parentWx = visualHost->GetWxObject(parent);
 #ifndef OES_USE_WEB
-	if (parent->GetClassName() == wxT("NotebookPage")) {
+	if (parent->GetClassName() == wxT("NotebookPage") || parent->GetClassName() == wxT("Panel")) {
 		ibPanelPage* page = dynamic_cast<ibPanelPage*>(parentWx);
 		return page != nullptr ? page->GetSizer() : nullptr;
 	}
@@ -114,10 +114,10 @@ void ibValueSizerItem::OnUpdated(wxObject* wxobject, ibFrontendWindow* /*wxparen
 		idx);
 
 #ifndef OES_USE_WEB
-	// NotebookPage layout fixup — after sizer mutation the notebook-
-	// page child window needs a manual Layout to settle; no web analog.
+	// NotebookPage/Panel layout fixup — after sizer mutation the page/panel
+	// child window needs a manual Layout to settle; no web analog.
 	ibValueFrame* parent = object->GetParent();
-	if (parent != nullptr && parent->GetClassName() == wxT("NotebookPage")) {
+	if (parent != nullptr && (parent->GetClassName() == wxT("NotebookPage") || parent->GetClassName() == wxT("Panel"))) {
 		if (auto* page = dynamic_cast<ibPanelPage*>(visualHost->GetWxObject(parent)))
 			page->Layout();
 	}
