@@ -4,7 +4,7 @@
 
 #include "queryParser.h"
 
-#include "queryException.h"   // ibBackendQuerySourceException — L4 refuses in its own variety
+#include "core/query/queryRefusal.h"   // ibQueryRefusal — the text does not read: where and why, as data
 #include "core/description/typeDescription.h"   // ibTypeDescription — what a CAST to a primitive converts to
 #include "core/fiber/fiber.h"          // StackLow — a parenthesized expression is native recursion
 
@@ -39,7 +39,7 @@ bool ReadCastPrimitive(const ibQueryAstExpr& cast, ibTypeDescription& type, wxSt
 	if (cast.m_kind != ibQueryAstExprKind::Cast || cast.m_path.size() != 1)
 		return false;
 	const ibValueTypes* const vt = std::find_if(std::begin(s_castPrimitives), std::end(s_castPrimitives),
-		[&cast](ibValueTypes t) { return cast.m_path.front().IsSameAs(ibValue::GetNameObjectFromVT(t), false); });
+		[&cast](ibValueTypes t) { return cast.m_path.front().IsSameAs(GetNameObjectFromVT(t), false); });
 	if (vt == std::end(s_castPrimitives))
 		return false;
 
@@ -48,8 +48,10 @@ bool ReadCastPrimitive(const ibQueryAstExpr& cast, ibTypeDescription& type, wxSt
 	for (const ibQueryAstExprPtr& q : cast.m_args) {
 		if (!q || q->m_kind != ibQueryAstExprKind::Literal)
 			continue;
-		if (q->m_literal.GetType() == ibValueTypes::TYPE_NUMBER) numbers.push_back(static_cast<unsigned int>(q->m_literal.GetNumber().ToUInt()));
-		else                                                     words.push_back(q->m_literal.GetString());
+		if (!q->m_literal)
+			continue;
+		if (q->m_literal->GetType() == ibValueTypes::TYPE_NUMBER) numbers.push_back(static_cast<unsigned int>(q->m_literal->GetNumber().ToUInt()));
+		else                                                      words.push_back(q->m_literal->GetString());
 	}
 
 	ibQualifierNumber number(0, 0);
@@ -87,7 +89,7 @@ bool ReadCastPrimitive(const ibQueryAstExpr& cast, ibTypeDescription& type, wxSt
 			wrong = _("a Boolean takes no qualifier");
 		break;
 	}
-	type = ibTypeDescription(ibValue::GetIDByVT(*vt), ibTypeDescription::ibTypeData(number, date, text));
+	type = ibTypeDescription(GetIDByVT(*vt), ibTypeDescription::ibTypeData(number, date, text));
 	return true;
 }
 
@@ -97,7 +99,7 @@ wxArrayString ibQueryCastPrimitiveWords()
 {
 	wxArrayString words;
 	for (const ibValueTypes vt : s_castPrimitives)
-		words.Add(ibValue::GetNameObjectFromVT(vt));
+		words.Add(GetNameObjectFromVT(vt));
 	return words;
 }
 
@@ -111,28 +113,30 @@ ibQueryAstExprPtr ibQueryMakeCast(ibQueryAstExprPtr value, const ibTypeDescripti
 {
 	if (type.GetClsidCount() != 1)
 		return nullptr;
-	const ibValueTypes vt = ibValue::GetVTByID(type.GetFirstClsid());
-	if (std::find(std::begin(s_castPrimitives), std::end(s_castPrimitives), vt) == std::end(s_castPrimitives))
+	const ibValueTypes* const found = std::find_if(std::begin(s_castPrimitives), std::end(s_castPrimitives),
+		[&type](ibValueTypes t) { return GetIDByVT(t) == type.GetFirstClsid(); });
+	if (found == std::end(s_castPrimitives))
 		return nullptr;
+	const ibValueTypes vt = *found;
 
 	auto cast = ibQueryAstExpr::Make(ibQueryAstExprKind::Cast);
 	cast->m_arg  = std::move(value);
-	cast->m_path = { ibValue::GetNameObjectFromVT(vt) };
-	auto qualify = [&cast](const ibValue& q) {
+	cast->m_path = { GetNameObjectFromVT(vt) };
+	auto qualify = [&cast](const ibLexValue& q) {
 		auto literal = ibQueryAstExpr::Make(ibQueryAstExprKind::Literal);
-		literal->m_literal = q;
+		literal->m_literal = ibAnyValuePtr<ibAnyValue>(new ibLexValue(q));
 		cast->m_args.push_back(literal);
 	};
 	// Only what limits something is written: `Number`, `String` and `Date` alone limit nothing (ReadCastPrimitive).
 	if (vt == ibValueTypes::TYPE_NUMBER && type.GetPrecision() > 0) {
-		qualify(ibValue(ibNumber(type.GetPrecision())));
-		if (type.GetScale() > 0) qualify(ibValue(ibNumber(type.GetScale())));
+		qualify(ibLexValue(ibNumber(type.GetPrecision())));
+		if (type.GetScale() > 0) qualify(ibLexValue(ibNumber(type.GetScale())));
 	}
 	else if (vt == ibValueTypes::TYPE_STRING && type.GetLength() > 0)
-		qualify(ibValue(ibNumber(type.GetLength())));
+		qualify(ibLexValue(ibNumber(type.GetLength())));
 	else if (vt == ibValueTypes::TYPE_DATE && type.GetDateFraction() != ibDateFractions_DateTime) {
 		for (const std::pair<ibDateFractions, const wxChar*>& f : s_dateFractions)
-			if (f.first == type.GetDateFraction()) qualify(ibValue(wxString(f.second)));
+			if (f.first == type.GetDateFraction()) qualify(ibLexValue(wxString(f.second)));
 	}
 	return cast;
 }
@@ -174,8 +178,8 @@ void ibQueryParser::ThrowQueryException(const ibQueryToken& at, const wxString& 
 	// so only the SENTENCE is shifted here. Printing the raw offset made every reported position one
 	// character short of the token it named, which reads as "the parser is pointing at the space before
 	// the problem" and costs whoever is reading the log an argument with their own arithmetic.
-	ibBackendQuerySyntaxException::ErrorAt(at.m_line, at.m_col,
-		_("Query syntax error at line %u (position %u): %s"), at.m_line, at.m_col + 1, msg);
+	throw ibQueryRefusal(at.m_col, at.m_line,
+		wxString::Format(_("Query syntax error at line %u (position %u): %s"), at.m_line, at.m_col + 1, msg));
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -382,7 +386,7 @@ ibQuerySelectPtr ibQueryParser::ParseSelectCore()
 		const ibQueryToken& n = Cur();
 		if (n.m_kind != ibQueryTokenKind::Number)
 			ThrowQueryException(n, _("expected a number after TOP"));
-		sel->m_top = n.m_literal.GetInteger();
+		sel->m_top = n.m_literal.GetNumber().ToInt();
 		if (sel->m_top <= 0)
 			ThrowQueryException(n, _("TOP expects a positive row count"));
 		++m_pos;
@@ -1373,7 +1377,7 @@ ibQueryAstExprPtr ibQueryParser::ParsePrimary()
 		if (!negate)
 			return operand;
 		auto zero = ibQueryAstExpr::Make(ibQueryAstExprKind::Literal);
-		zero->m_literal = ibValue(0);
+		zero->m_literal = ibAnyValuePtr<ibAnyValue>(new ibLexValue(ibNumber(0)));
 		zero->m_line = line; zero->m_col = col;
 		auto neg = ibQueryAstExpr::Make(ibQueryAstExprKind::Arith);
 		neg->m_arith = ibQueryArithOp::Sub;
@@ -1429,19 +1433,19 @@ ibQueryAstExprPtr ibQueryParser::ParsePrimary()
 	if (tk.IsKeyword(ibQueryKeyword::True)) {
 		++m_pos;
 		auto e = ibQueryAstExpr::Make(ibQueryAstExprKind::Literal);
-		e->m_literal.SetBoolean(ibQueryKeywordText(ibQueryKeyword::True));
+		e->m_literal = ibAnyValuePtr<ibAnyValue>(new ibLexValue(true));
 		return e;
 	}
 	if (tk.IsKeyword(ibQueryKeyword::False)) {
 		++m_pos;
 		auto e = ibQueryAstExpr::Make(ibQueryAstExprKind::Literal);
-		e->m_literal.SetBoolean(ibQueryKeywordText(ibQueryKeyword::False));
+		e->m_literal = ibAnyValuePtr<ibAnyValue>(new ibLexValue(false));
 		return e;
 	}
 	if (tk.IsKeyword(ibQueryKeyword::Null)) {
 		++m_pos;
 		auto e = ibQueryAstExpr::Make(ibQueryAstExprKind::Literal);
-		e->m_literal.SetType(ibValueTypes::TYPE_NULL);
+		e->m_literal = ibAnyValuePtr<ibAnyValue>(new ibLexValue(ibValueTypes::TYPE_NULL));
 		return e;
 	}
 	// ⭐ …AND `UNDEFINED` — THE RUNTIME'S OWN EMPTY VALUE, the same one a script writes by that name
@@ -1455,7 +1459,7 @@ ibQueryAstExprPtr ibQueryParser::ParsePrimary()
 	if (tk.IsKeyword(ibQueryKeyword::Undefined)) {
 		++m_pos;
 		auto e = ibQueryAstExpr::Make(ibQueryAstExprKind::Literal);
-		e->m_literal.SetType(ibValueTypes::TYPE_EMPTY);
+		e->m_literal = ibAnyValuePtr<ibAnyValue>(new ibLexValue(ibValueTypes::TYPE_EMPTY));
 		return e;
 	}
 
@@ -1485,7 +1489,7 @@ ibQueryAstExprPtr ibQueryParser::ParsePrimary()
 	    tk.m_kind == ibQueryTokenKind::String ||
 	    tk.m_kind == ibQueryTokenKind::Date) {
 		auto e = ibQueryAstExpr::Make(ibQueryAstExprKind::Literal);
-		e->m_literal = tk.m_literal;
+		e->m_literal = ibAnyValuePtr<ibAnyValue>(new ibLexValue(tk.m_literal));
 		e->m_line = tk.m_line; e->m_col = tk.m_col;
 		++m_pos;
 		return e;
@@ -1745,7 +1749,7 @@ ibQueryAstExprPtr ibQueryParser::ParseCast()
 				ThrowQueryException(q, _("expected a number or a word qualifying the cast type"));
 			auto qualifier = ibQueryAstExpr::Make(ibQueryAstExprKind::Literal);
 			qualifier->m_line = q.m_line; qualifier->m_col = q.m_col;
-			qualifier->m_literal = q.m_kind == ibQueryTokenKind::Number ? q.m_literal : ibValue(q.m_text);
+			qualifier->m_literal = ibAnyValuePtr<ibAnyValue>(new ibLexValue(q.m_kind == ibQueryTokenKind::Number ? q.m_literal : ibLexValue(q.m_text)));
 			cast->m_args.push_back(qualifier);
 			++m_pos;
 		} while (AcceptPunct(wxT(',')));

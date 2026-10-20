@@ -84,7 +84,8 @@ TEST(QueryRewrite, NotTruthyColumn_BecomesEqualsFalse)
 	EXPECT_EQ(sel->m_where->m_cmp, ibQueryCompareOp::Eq);
 	EXPECT_EQ(sel->m_where->m_lhs->m_path[0], wxT("IsFolder"));
 	ASSERT_EQ(sel->m_where->m_rhs->m_kind, ibQueryAstExprKind::Literal);
-	EXPECT_FALSE(sel->m_where->m_rhs->m_literal.GetBoolean());
+	ASSERT_TRUE(sel->m_where->m_rhs->m_literal);
+	EXPECT_FALSE(sel->m_where->m_rhs->m_literal->GetBoolean());
 }
 
 //////////////////////////////////////////////////////////////////////

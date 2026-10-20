@@ -5,6 +5,8 @@
 
 #include "queryRewrite.h"
 #include "queryRender.h"   // ibQueryOutputName - the one answer to "what is this column called"
+#include "core/compiler/lexValue.h"   // ibLexValue — a constant the rewrite writes itself
+#include "core/diagnostics/journal.h"   // ibJournalInfo — the rewrite says what it did
 
 #include <algorithm>
 #include <functional>
@@ -176,7 +178,7 @@ ibQueryAstExprPtr NormalizeNeg(const ibQueryAstExprPtr& e)
 		cmp->m_cmp = ibQueryCompareOp::Eq;
 		cmp->m_lhs = inner;
 		cmp->m_rhs = ibQueryAstExpr::Make(ibQueryAstExprKind::Literal);
-		cmp->m_rhs->m_literal = ibValue(false);
+		cmp->m_rhs->m_literal = ibAnyValuePtr<ibAnyValue>(new ibLexValue(false));
 		cmp->m_line = e->m_line; cmp->m_col = e->m_col;
 		cmp->m_rhs->m_line = e->m_line; cmp->m_rhs->m_col = e->m_col;
 		return cmp;
@@ -1139,7 +1141,7 @@ ibQuerySelectPtr ibQueryRewrite::ReorderJoins(const ibQuerySelect& ast)
 
 bool ibQueryIsTrueLiteral(const ibQueryAstExprPtr& expr)
 {
-	return expr && expr->m_kind == ibQueryAstExprKind::Literal && expr->m_literal.GetBoolean();
+	return expr && expr->m_kind == ibQueryAstExprKind::Literal && expr->m_literal && expr->m_literal->GetBoolean();
 }
 
 void ibQueryFlattenAnd(const ibQueryAstExprPtr& expr, std::vector<ibQueryAstExprPtr>& out)

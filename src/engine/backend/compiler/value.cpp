@@ -194,6 +194,15 @@ ibValue::ibValue(ibString&& cParam)   // native — takes the text over (runtime
 }
 
 // The kinds a text can write — each into its own slot; Undefined and Null hold nothing.
+ibValue ibValue::FromAnyValue(const ibAnyValuePtr<ibAnyValue>& value)
+{
+	if (!value)
+		return ibValue();
+	if (const ibLexValue* const lexValue = dynamic_cast<const ibLexValue*>(&*value))
+		return ibValue(*lexValue);
+	return ibValue(static_cast<const ibValue&>(*value));
+}
+
 ibValue::ibValue(const ibLexValue& lexValue)
 	: m_typeClass(lexValue.GetType()), m_bReadOnly(false), m_refCount(0), m_dData()
 {
@@ -1607,11 +1616,12 @@ bool ibValue::AdjustOutValue(const ibValue& varValue, ibValue& out) const
 //*                       Runtime register                             *
 //**********************************************************************
 
-PRIMITIVE_TYPE_REGISTER(ibValue, "Undefined", ibValueTypes::TYPE_EMPTY, g_valueUndefinedCLSID);
+// The primitives' names are the core's one table (core/core.h, GetNameObjectFromVT).
+PRIMITIVE_TYPE_REGISTER(ibValue, GetNameObjectFromVT(ibValueTypes::TYPE_EMPTY), ibValueTypes::TYPE_EMPTY, g_valueUndefinedCLSID);
 
-PRIMITIVE_TYPE_REGISTER(ibValue, "Boolean", ibValueTypes::TYPE_BOOLEAN, g_valueBooleanCLSID);
-PRIMITIVE_TYPE_REGISTER(ibValue, "Number", ibValueTypes::TYPE_NUMBER, g_valueNumberCLSID);
-PRIMITIVE_TYPE_REGISTER(ibValue, "Date", ibValueTypes::TYPE_DATE, g_valueDateCLSID);
-PRIMITIVE_TYPE_REGISTER(ibValue, "String", ibValueTypes::TYPE_STRING, g_valueStringCLSID);
+PRIMITIVE_TYPE_REGISTER(ibValue, GetNameObjectFromVT(ibValueTypes::TYPE_BOOLEAN), ibValueTypes::TYPE_BOOLEAN, g_valueBooleanCLSID);
+PRIMITIVE_TYPE_REGISTER(ibValue, GetNameObjectFromVT(ibValueTypes::TYPE_NUMBER), ibValueTypes::TYPE_NUMBER, g_valueNumberCLSID);
+PRIMITIVE_TYPE_REGISTER(ibValue, GetNameObjectFromVT(ibValueTypes::TYPE_DATE), ibValueTypes::TYPE_DATE, g_valueDateCLSID);
+PRIMITIVE_TYPE_REGISTER(ibValue, GetNameObjectFromVT(ibValueTypes::TYPE_STRING), ibValueTypes::TYPE_STRING, g_valueStringCLSID);
 
-PRIMITIVE_TYPE_REGISTER(ibValue, "Null", ibValueTypes::TYPE_NULL, g_valueNullCLSID);
+PRIMITIVE_TYPE_REGISTER(ibValue, GetNameObjectFromVT(ibValueTypes::TYPE_NULL), ibValueTypes::TYPE_NULL, g_valueNullCLSID);

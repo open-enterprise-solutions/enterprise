@@ -2921,7 +2921,10 @@ public:
 
 			try {
 				ibQueryParser parser;
-				const ibQueryPackage package = parser.ParsePackage(text);
+				// The engine's door: the core parser's refusal is raised as the engine's, so the syntax handler below reads its span.
+				ibQueryPackage package;
+				try { package = parser.ParsePackage(text); }
+				catch (const ibQueryRefusal& refusal) { ibBackendQuerySyntaxException::Raise(refusal); }
 
 				// Against THIS configuration, named explicitly: a tool is not standing inside one.
 				const ibSourceMetaDataScope resolveAgainst(activeMetaData);

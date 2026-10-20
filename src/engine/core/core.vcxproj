@@ -197,6 +197,7 @@
     <ClCompile Include="programFolder.cpp" />
     <ClCompile Include="query\queryAggregates.cpp" />
     <ClCompile Include="query\queryKeywords.cpp" />
+    <ClCompile Include="query\queryRefusal.cpp" />
     <ClCompile Include="serialize\dataBuilder.cpp" />
     <ClCompile Include="serialize\jsonProvider.cpp" />
     <ClCompile Include="serialize\jsonText.cpp" />
@@ -265,6 +266,7 @@
     <ClInclude Include="query\queryConstructorField.h" />
     <ClInclude Include="query\queryKeywords.h" />
     <ClInclude Include="query\queryPeriodUnits.h" />
+    <ClInclude Include="query\queryRefusal.h" />
     <ClInclude Include="query\queryUnfold.h" />
     <ClInclude Include="roleCompositionMode.h" />
     <ClInclude Include="selectorDataType.h" />

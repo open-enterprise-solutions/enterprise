@@ -3,6 +3,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "dataComposerInternal.h"
+#include "backend/query/queryException.h"   // ibBackendQuerySyntaxException::Raise — the engine's door for the core parser
 
 #include "backend/query/queryParser.h"        // ibQueryParser — text -> AST
 #include "backend/query/queryable.h"          // ibBackendQueryable / ibBackendQueryColumn
@@ -1841,7 +1842,9 @@ void ibDataDBComposer::EnsureTempTables() const
 ibQuerySelectPtr ibDataDBComposer::ParseComposed(const wxString& text, ibQueryPackage& package,
 	std::map<wxString, const ibQuerySelect*>& named) const
 {
-	package = ibQueryParser().ParsePackage(text);
+	// The engine's door: the core parser's refusal is raised as the engine's (ibBackendQuerySyntaxException).
+	try { package = ibQueryParser().ParsePackage(text); }
+	catch (const ibQueryRefusal& refusal) { ibBackendQuerySyntaxException::Raise(refusal); }
 	named.clear();
 	if (package.m_statements.empty())
 		return nullptr;

@@ -265,7 +265,7 @@ std::shared_ptr<ibQueryAstExpr> InList(const wxString& column, const std::vector
 	in->m_lhs->m_path = { column };
 	for (const ibValue& v : values) {
 		auto literal = ibQueryAstExpr::Make(ibQueryAstExprKind::Literal);
-		literal->m_literal = v;
+		literal->m_literal = v.ToAnyValue();
 		in->m_list.push_back(literal);
 	}
 	return in;

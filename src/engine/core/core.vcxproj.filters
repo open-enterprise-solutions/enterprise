@@ -159,6 +159,9 @@
     <ClCompile Include="query\queryKeywords.cpp">
       <Filter>query</Filter>
     </ClCompile>
+    <ClCompile Include="query\queryRefusal.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
     <ClCompile Include="serialize\dataBuilder.cpp">
       <Filter>serialize</Filter>
     </ClCompile>
@@ -325,6 +328,9 @@
       <Filter>query</Filter>
     </ClInclude>
     <ClInclude Include="query\queryPeriodUnits.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\queryRefusal.h">
       <Filter>query</Filter>
     </ClInclude>
     <ClInclude Include="query\queryUnfold.h">

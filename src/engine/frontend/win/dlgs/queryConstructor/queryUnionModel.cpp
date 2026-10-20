@@ -323,7 +323,7 @@ static void UnlineFieldElsewhere(ibQuerySelect* target, const wxString& field, s
 
 		ibQueryProjection none;
 		none.m_expr = ibQueryAstExpr::Make(ibQueryAstExprKind::Literal);
-		none.m_expr->m_literal.SetType(ibValueTypes::TYPE_NULL);
+		none.m_expr->m_literal = ibAnyValuePtr<ibAnyValue>(new ibLexValue(ibValueTypes::TYPE_NULL));
 		none.m_alias = ibQueryOutputName(target->m_projections[i]);
 		target->m_projections[i] = none;
 		return;   // it stood on one row; it stands on one row
@@ -385,7 +385,7 @@ bool ibQueryUnionFieldModel::SetBranchColumn(unsigned int row, unsigned int bran
 
 			ibQueryProjection none;
 			none.m_expr = ibQueryAstExpr::Make(ibQueryAstExprKind::Literal);
-			none.m_expr->m_literal.SetType(ibValueTypes::TYPE_NULL);
+			none.m_expr->m_literal = ibAnyValuePtr<ibAnyValue>(new ibLexValue(ibValueTypes::TYPE_NULL));
 			none.m_alias = keptName;
 			target->m_projections[row] = none;
 
@@ -453,7 +453,7 @@ bool ibQueryUnionFieldModel::SetBranchColumn(unsigned int row, unsigned int bran
 		if (branch != 0 && m_select != nullptr) {
 			ibQueryProjection none;
 			none.m_expr = ibQueryAstExpr::Make(ibQueryAstExprKind::Literal);
-			none.m_expr->m_literal.SetType(ibValueTypes::TYPE_NULL);
+			none.m_expr->m_literal = ibAnyValuePtr<ibAnyValue>(new ibLexValue(ibValueTypes::TYPE_NULL));
 			none.m_alias = fresh;
 			m_select->m_selectAll = false;
 			m_select->m_projections.push_back(none);
