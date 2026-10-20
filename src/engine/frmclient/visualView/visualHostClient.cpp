@@ -47,6 +47,14 @@ void ReadControl(ibValueFrame* control, const ibProtocolNode& node)
 	control->SetSubscribedEvents(state.GetList(ibProtocol::ibForm::ibState::Subscribed));
 }
 
+// A control whose orientation is a style it is created with — a line, a slider, a gauge: a new Orient builds it anew
+// (ShapeOf keeps it in the shape for the same reason).
+bool IsOrientCreated(const wxString& type)
+{
+	return type == ibProtocol::ibForm::ibType::Staticline || type == ibProtocol::ibForm::ibType::Slider
+		|| type == ibProtocol::ibForm::ibType::Gauge;
+}
+
 // A view as a list of what it is made of: each node's type and id, in order, nested as they are — and what a control
 // is BUILT with rather than set afterwards: how a sizer item lays its child out, which way a line, a slider, a gauge runs.
 void ShapeOf(const ibProtocolNode& node, std::string& shape)
@@ -60,7 +68,7 @@ void ShapeOf(const ibProtocolNode& node, std::string& shape)
 		shape += '(' + std::to_string(node.GetInt(ibProtocol::ibForm::ibProperty::Proportion)) + '|' + std::to_string(ibValueSizerItem::GetFlag(node))
 			+ '|' + std::to_string(node.GetInt(ibProtocol::ibForm::ibProperty::BorderSize)) + ')';
 	}
-	else if (type == ibProtocol::ibForm::ibType::Staticline || type == ibProtocol::ibForm::ibType::Slider || type == ibProtocol::ibForm::ibType::Gauge) {
+	else if (IsOrientCreated(type)) {
 		shape += '(' + std::to_string(node.GetInt(ibProtocol::ibForm::ibProperty::Orient)) + ')';
 	}
 
@@ -71,16 +79,24 @@ void ShapeOf(const ibProtocolNode& node, std::string& shape)
 }
 
 // A patch that changes the view's shape — a control added, taken away or moved: said by the entries that order and
-// remove the children with ids, at any control of it (framePatch.cpp). What changes inside a control's own entries — its
-// State's lists — is no part of the shape.
-bool IsShapeChanged(const ibProtocolNode& patch)
+// remove the children with ids, at any control of it (framePatch.cpp); and a new Orient of a control created with it,
+// read from the view's node of the same id. What changes inside a control's own entries — its State's lists — is no
+// part of the shape.
+bool IsShapeChanged(const ibProtocolNode& view, const ibProtocolNode& patch)
 {
 	if (patch.Has(ibProtocol::ibNode::Order) || patch.Has(ibProtocol::ibNode::RemovedIds)
 		|| patch.Has(ibProtocol::ibNode::ChildrenWhole))
 		return true;
-	for (const ibProtocolNode& child : patch.Children()) {
-		if (IsShapeChanged(child))
-			return true;
+	if (patch.Has(ibProtocol::ibForm::ibProperty::Orient) && IsOrientCreated(view.GetType()))
+		return true;
+	for (const ibProtocolNode& changed : patch.Children()) {
+		for (const ibProtocolNode& child : view.Children()) {
+			if (child.GetId() == changed.GetId()) {
+				if (IsShapeChanged(child, changed))
+					return true;
+				break;
+			}
+		}
 	}
 	return false;
 }
@@ -193,7 +209,7 @@ void ibVisualHostClient::Draw(const ibProtocolNode& view, const ibProtocolNode& 
 	// ⭐ WHAT THE PATCH CHANGED IS DRAWN, NOTHING ELSE — a control whose node in it has entries of its own; the rest is
 	// not looked at, nor compared, and laid out again only when what changed takes room. The view is built anew when the
 	// patch changes its shape, when it was not built yet, and when there is no patch: a frame sent whole.
-	if (patch.IsNode() && !m_shape.empty() && !IsShapeChanged(patch)) {
+	if (patch.IsNode() && !m_shape.empty() && !IsShapeChanged(view, patch)) {
 		const bool layoutChanged = IsLayoutChanged(patch);
 		if (layoutChanged)
 			freeze.Lock(this);
