@@ -112,9 +112,9 @@ void ibValueStaticText::Update(wxObject* wxobject, ibVisualHost* visualHost)
 		staticText->SetLabel(GetControlTitle());
 		staticText->SetValueText(read ? value.GetString() : ibString());
 
-		// Unbound, the caption is the whole control — text, not the title of a value: it stays
-		// out of the form's label column.
-		staticText->SetCaptionOnly(m_propertySource->IsEmptyProperty());
+		// Unbound, the caption is the whole control — text, not the title of a value: no value
+		// half, and it stays out of the form's label column.
+		staticText->ShowValue(!m_propertySource->IsEmptyProperty());
 
 		// A link only where there is something to open: an empty value is plain text, because a
 		// link that leads nowhere is worse than no link.

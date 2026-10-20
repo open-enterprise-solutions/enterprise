@@ -143,6 +143,12 @@ void CalculateLabels(const ibValueFrame* control, wxBoxSizer* parentSizer, int& 
 	if (parentSizer->GetOrientation() == wxHORIZONTAL)
 		return;
 
+	// A PAGE stops it too — a window that lays out what is in it with a sizer of its own (a notebook's page, the one
+	// control that is both): its labels are a column of their own, which ApplyLabels measures when it reaches the page.
+	// Walked on, every page of a notebook was one column with the form, and the widest caption anywhere set every label.
+	if (control->GetWindow() != nullptr && control->GetSizer() != nullptr)
+		return;
+
 	wxBoxSizer* const childSizer = dynamic_cast<wxBoxSizer*>(control->GetSizer());
 	wxBoxSizer* const nextParent = childSizer != nullptr ? childSizer : parentSizer;
 	for (unsigned int idx = 0; idx < control->GetChildCount(); idx++)
@@ -153,6 +159,18 @@ void ApplyLabels(const ibValueFrame* control, wxBoxSizer* parentSizer, int& maxL
 {
 	wxBoxSizer* const childSizer = dynamic_cast<wxBoxSizer*>(control->GetSizer());
 	ibControlDynamicBorder* const label = dynamic_cast<ibControlDynamicBorder*>(control->GetWindow());
+
+	// A page starts a column of its own (see CalculateLabels): measured in its sizer, from nothing.
+	if (control->GetWindow() != nullptr && childSizer != nullptr) {
+		int pageMax = 0;
+		if (childSizer->GetOrientation() == wxVERTICAL) {
+			for (unsigned int idx = 0; idx < control->GetChildCount(); idx++)
+				CalculateLabels(control->GetChild(idx), childSizer, pageMax);
+		}
+		for (unsigned int idx = 0; idx < control->GetChildCount(); idx++)
+			ApplyLabels(control->GetChild(idx), childSizer, pageMax);
+		return;
+	}
 
 	// What is in it sees a copy of the width: what it changes stays with it.
 	int subtreeMax = maxLabelWidth;

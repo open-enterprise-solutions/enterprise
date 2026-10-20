@@ -41,7 +41,9 @@ void ibValueBoxSizer::Update(const ibProtocolNode& node)
 
 void ibValueWrapSizer::Create(wxWindow* /*parent*/, const ibProtocolNode& node)
 {
-	m_sizer = new wxWrapSizer(static_cast<int>(node.GetInt(ibProtocol::ibForm::ibProperty::Orient, wxHORIZONTAL)), wxREMOVE_LEADING_SPACES);   // not the default flags: see ibValueWrapSizer::Create
+	// Not wxWRAPSIZER_DEFAULT_FLAGS, as on the desktop: its wxEXTEND_LAST_ON_EACH_LINE stretches the last control of
+	// every line to the line's end, whatever its own sizer item and MaximumSize say. Leading spaces are still dropped.
+	m_sizer = new wxWrapSizer(static_cast<int>(node.GetInt(ibProtocol::ibForm::ibProperty::Orient, wxHORIZONTAL)), wxREMOVE_LEADING_SPACES);
 }
 
 void ibValueWrapSizer::Update(const ibProtocolNode& node)

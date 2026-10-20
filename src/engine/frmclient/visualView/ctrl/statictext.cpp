@@ -21,6 +21,8 @@ void ibValueStaticText::Update(const ibProtocolNode& node)
 
 	m_staticText->SetLabel(state.GetString(ibProtocol::ibForm::ibState::Caption));
 	m_staticText->SetValueText(state.GetString(ibProtocol::ibForm::ibState::Text));
+	// No value text — bound to nothing: the caption is the whole control.
+	m_staticText->ShowValue(state.Has(ibProtocol::ibForm::ibState::Text));
 	m_staticText->SetHyperlink(state.GetBool(ibProtocol::ibForm::ibState::Link));
 	m_staticText->SetWindowStyle(node.GetInt(ibProtocol::ibForm::ibProperty::TitleLocation)
 		== static_cast<int>(ibProtocol::ibForm::ibProperty::ibTitleLocation::Left) ? wxALIGN_LEFT : wxALIGN_RIGHT);

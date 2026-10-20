@@ -183,7 +183,7 @@ ibValueModelTableBox::ibValueModelTableBox(ibVisualHostClient& host, long long c
 
 ibValueModelTableBox::~ibValueModelTableBox() = default;
 
-void ibValueModelTableBox::Create(wxWindow* parent, const ibProtocolNode& /*node*/)
+void ibValueModelTableBox::Create(wxWindow* parent, const ibProtocolNode& node)
 {
 	m_panel = new wxPanel(parent, wxID_ANY);
 	wxBoxSizer* const sizer = new wxBoxSizer(wxVERTICAL);
@@ -272,6 +272,17 @@ void ibValueModelTableBox::Create(wxWindow* parent, const ibProtocolNode& /*node
 				OnAnswered(answer);
 		});
 	});
+	// The table takes the focus as its form opens — the desktop's, as its model is attached — but only where it can be
+	// seen: on a notebook page that is not selected (a hidden ancestor) focusing it makes the notebook switch to that page,
+	// and the form opens on the table's page instead of its first. What it stands in is drawn already, before what is in
+	// it; its own Visible is the State's, which Update lays on.
+	if (!designer) {
+		bool visible = node.FindChild(ibProtocol::ibForm::ibState::State).GetBool(ibProtocol::ibForm::ibState::Visible, true);
+		for (wxWindow* w = parent; visible && w != nullptr && !w->IsTopLevel(); w = w->GetParent())
+			visible = w->IsShown();
+		if (visible)
+			m_dataView->SetFocus();
+	}
 	m_dataView->AssociateModel(model);
 	model->DecRef();   // the data view holds it
 
