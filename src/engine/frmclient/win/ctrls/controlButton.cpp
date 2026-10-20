@@ -61,8 +61,8 @@ wxSize ibControlButton::DoGetBestClientSize() const
 
 		// Add the bitmap contribution (if any).
 		const wxBitmap bmp = BitmapForCurrentState();
-		const int bmpW = bmp.IsOk() ? bmp.GetWidth() : 0;
-		const int bmpH = bmp.IsOk() ? bmp.GetHeight() : 0;
+		const int bmpW = bmp.IsOk() ? bmp.GetLogicalWidth() : 0;
+		const int bmpH = bmp.IsOk() ? bmp.GetLogicalHeight() : 0;
 		const int bmpGap = (bmp.IsOk() && !label.empty()) ? FromDIP(6) : 0;
 
 		int contentW = tw + bmpW + bmpGap;
@@ -185,8 +185,8 @@ void ibControlButton::OnPaint(wxPaintEvent& WXUNUSED(event))
 
 	wxCoord tw = 0, th = 0;
 	if (!label.empty()) dc.GetTextExtent(label, &tw, &th);
-	const int bmpW = bmp.IsOk() ? bmp.GetWidth() : 0;
-	const int bmpH = bmp.IsOk() ? bmp.GetHeight() : 0;
+	const int bmpW = bmp.IsOk() ? bmp.GetLogicalWidth() : 0;
+	const int bmpH = bmp.IsOk() ? bmp.GetLogicalHeight() : 0;
 	const int gap = (bmp.IsOk() && !label.empty()) ? FromDIP(6) : 0;
 
 	int pressShift = (m_pressed || m_keyPressed) ? FromDIP(1) : 0;
