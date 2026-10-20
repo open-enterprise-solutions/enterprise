@@ -4,7 +4,7 @@
 
 ////////////////////////////////////////////////////////////////////////
 
-// ⚠ HELD AS THE RAW FORM, unchanged — its node (ibBackendProperty::ReadNodeValue). A configuration written before this
+// ⚠ HELD AS THE RAW FORM, unchanged — its node (ibPropertySerializable::ReadNodeValue). A configuration written before this
 // reads as it always did, and one written now is still read by everything that speaks the format.
 ibTranslateString ibPropertyTString::GetValueAsTranslate() const
 {
@@ -13,11 +13,11 @@ ibTranslateString ibPropertyTString::GetValueAsTranslate() const
 
 void ibPropertyTString::SetValue(const ibTranslateString& translate)
 {
-	ibProperty::ReadNodeValue(ibDataValue::String(translate.GetRawText()));
+	ibPropertySerializable::ReadNodeValue(ibDataValue::String(translate.GetRawText()));
 }
 
 bool ibPropertyTString::ReadNodeValue(const ibDataValue& value)
 {
-	ibProperty::ReadNodeValue(ibDataValue::String(value.AsString()));
+	ibPropertySerializable::ReadNodeValue(ibDataValue::String(value.AsString()));
 	return true;
 }

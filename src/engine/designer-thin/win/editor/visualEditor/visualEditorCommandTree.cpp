@@ -14,6 +14,7 @@
 
 #include "frmclient/backend/backend_picture.h"                         // ibBackendPicture — the attribute's picture
 #include "frmclient/backend/metaCollection/metaObject.h"               // g_metaAttributeCLSID — the tree's default picture
+#include "frmclient/backend/propertyManager/property/propertySerializable.h"   // its properties — a row's each
 #include "designer-thin/docManager/templates/docViewModuleEditor.h"    // ibModuleEditDocument — what the holder is asked through
 #include "frmclient/mainFrame/mainFrame.h"
 #include "frmclient/mainFrame/objinspect/objinspect.h"
@@ -92,6 +93,11 @@ bool ibFormCommandValue::Receive()
 	request.SetValue(ibProtocol::ibView::ibFormDesigner::FormCommand, m_commandId);
 	ibProtocolNode answer;
 	return m_formHandler->GetEditorDocument()->Fetch(request, answer) && ibPropertyObject::Receive(answer);
+}
+
+ibProperty* ibFormCommandValue::CreateProperty(ibPropertyCategory* cat, const ibDataNode& row)
+{
+	return ibPropertyObject::CreateProperty<ibPropertySerializable>(cat, row);
 }
 
 void ibFormCommandValue::OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue)

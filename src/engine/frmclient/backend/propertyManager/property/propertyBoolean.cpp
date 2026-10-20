@@ -9,7 +9,7 @@ bool ibPropertyBoolean::GetValueAsBoolean() const
 
 void ibPropertyBoolean::SetValue(const bool boolean)
 {
-	ibProperty::ReadNodeValue(ibDataValue::Bool(boolean));
+	ibPropertySerializable::ReadNodeValue(ibDataValue::Bool(boolean));
 }
 
 bool ibPropertyBoolean::ReadNodeValue(const ibDataValue& value)

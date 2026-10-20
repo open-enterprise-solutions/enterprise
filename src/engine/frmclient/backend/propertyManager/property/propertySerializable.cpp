@@ -80,3 +80,23 @@ ibPropertyChoiceMode ibPropertySerializable::GetValueList(ibPropertyChoiceList& 
 	return m_mode;
 }
 
+bool ibPropertySerializable::GetProtocolValue(ibDataNode& row) const
+{
+	if (m_type.IsEmpty())
+		return ibProperty::GetProtocolValue(row);
+	row = m_row;
+	return true;
+}
+
+bool ibPropertySerializable::ReadNodeValue(const ibDataValue& value)
+{
+	m_propValue = wxVariant(new ibVariantDataSerializable(GetType(), value, m_propValue.GetString()));
+	return true;
+}
+
+bool ibPropertySerializable::WriteNodeValue(ibDataValue& value) const
+{
+	value = ibVariantDataSerializable::GetNodeValue(m_propValue);
+	return true;
+}
+

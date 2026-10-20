@@ -10,6 +10,7 @@
 
 #include "frmclient/backend/backend_picture.h"                         // ibBackendPicture — the attribute's picture
 #include "frmclient/backend/metaCollection/metaObject.h"               // g_metaAttributeCLSID — the attribute's picture
+#include "frmclient/backend/propertyManager/property/propertySerializable.h"   // its properties — a row's each
 #include "frmclient/mainFrame/mainFrame.h"
 #include "frmclient/mainFrame/objinspect/objinspect.h"
 
@@ -111,6 +112,11 @@ bool ibFormAttributeValue::Receive()
 		request.SetValue(ibProtocol::ibView::ibFormDesigner::Column, m_columnId);
 	ibProtocolNode answer;
 	return m_formHandler->GetEditorDocument()->Fetch(request, answer) && ibPropertyObject::Receive(answer);
+}
+
+ibProperty* ibFormAttributeValue::CreateProperty(ibPropertyCategory* cat, const ibDataNode& row)
+{
+	return ibPropertyObject::CreateProperty<ibPropertySerializable>(cat, row);
 }
 
 void ibFormAttributeValue::OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue)

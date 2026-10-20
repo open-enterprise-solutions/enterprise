@@ -1,27 +1,27 @@
 ﻿#ifndef __PROPERTY_STRING_H__
 #define __PROPERTY_STRING_H__
 
-#include "frmclient/backend/propertyManager/propertyObject.h"
+#include "frmclient/backend/propertyManager/property/propertySerializable.h"
 #include "frmclient/backend/backend_localization.h"   // ibTranslateString — what a caption holds
 
-class FRMCLIENT_API ibPropertyStringBase : public ibProperty {
+class FRMCLIENT_API ibPropertyStringBase : public ibPropertySerializable {
 public:
 
-	// …held as its node (ibBackendProperty::ReadNodeValue) — set by the string it is.
+	// …held as its node (ibPropertySerializable::ReadNodeValue) — set by the string it is.
 	wxString GetValueAsString() const;
 	void SetValue(const wxString& strValue);
 
-	ibPropertyStringBase(ibPropertyCategory* cat, const wxString& name) : ibProperty(cat, name, wxNullVariant)
+	ibPropertyStringBase(ibPropertyCategory* cat, const wxString& name) : ibPropertySerializable(cat, name, wxNullVariant)
 	{
 	}
 
 	ibPropertyStringBase(ibPropertyCategory* cat, const wxString& name, const wxString& label)
-		: ibProperty(cat, name, label, wxNullVariant)
+		: ibPropertySerializable(cat, name, label, wxNullVariant)
 	{
 	}
 
 	ibPropertyStringBase(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString)
-		: ibProperty(cat, name, label, helpString, wxNullVariant)
+		: ibPropertySerializable(cat, name, label, helpString, wxNullVariant)
 	{
 	}
 
@@ -110,12 +110,12 @@ public:
 
 //base property for "caption" - for translate
 // ⭐ IT HOLDS AN ibTranslateString, the way the number property holds an ibNumber — so it stands on
-// ibProperty and not on the string base. A string property stores a string and its setter replaces
+// ibPropertySerializable and not on the string base. A string property stores a string and its setter replaces
 // it, which is exactly how every other language used to be lost.
-class FRMCLIENT_API ibPropertyTString : public ibProperty {
+class FRMCLIENT_API ibPropertyTString : public ibPropertySerializable {
 public:
 
-	// …held as its node, the raw text (ibBackendProperty::ReadNodeValue).
+	// …held as its node, the raw text (ibPropertySerializable::ReadNodeValue).
 	ibTranslateString GetValueAsTranslate() const;
 	void SetValue(const ibTranslateString& translate);
 
@@ -136,19 +136,19 @@ public:
 	// makes `(cat, name, text)` fit the second one as well — `C2668: ambiguous call` at every
 	// declaration (measured on the first build). The number property can afford one; this cannot.
 	ibPropertyTString(ibPropertyCategory* cat, const wxString& name,
-		const ibTranslateString& value) : ibProperty(cat, name, wxNullVariant)
+		const ibTranslateString& value) : ibPropertySerializable(cat, name, wxNullVariant)
 	{
 		SetValue(value);
 	}
 
 	ibPropertyTString(ibPropertyCategory* cat, const wxString& name, const wxString& label,
-		const ibTranslateString& value) : ibProperty(cat, name, label, wxNullVariant)
+		const ibTranslateString& value) : ibPropertySerializable(cat, name, label, wxNullVariant)
 	{
 		SetValue(value);
 	}
 
 	ibPropertyTString(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString,
-		const ibTranslateString& value) : ibProperty(cat, name, label, helpString, wxNullVariant)
+		const ibTranslateString& value) : ibPropertySerializable(cat, name, label, helpString, wxNullVariant)
 	{
 		SetValue(value);
 	}

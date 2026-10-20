@@ -10,6 +10,7 @@
 
 #include "designer-thin/docManager/templates/docViewModuleEditor.h"   // ibModuleEditDocument — Modify, Fetch, Post
 #include "frmclient/backend/serialize/dataProtocol.h"   // ibWriteProtocolNode — a property's value into the control's node
+#include "frmclient/backend/propertyManager/property/propertySerializable.h"   // a layer's properties — a row's each
 #include "frmclient/mainFrame/objinspect/objinspect.h"
 
 #include <wx/artprov.h>
@@ -1050,6 +1051,11 @@ bool ibValueLayerObject::Receive()
 	ibPropertyObject::Receive(FindRows(found->second));
 	ibVisualEditorNotebook::ibVisualEditor::Receive(this, GetNode());
 	return true;
+}
+
+ibProperty* ibValueLayerObject::CreateProperty(ibPropertyCategory* cat, const ibDataNode& row)
+{
+	return ibPropertyObject::CreateProperty<ibPropertySerializable>(cat, row);
 }
 
 void ibValueLayerObject::SetCommandItems(const std::vector<ibProtocolNode>& items, int selected) const

@@ -958,6 +958,9 @@ public:
 
 private:
 
+	// …each of its rows, the server's property (ibPropertySerializable).
+	virtual ibProperty* CreateProperty(ibPropertyCategory* cat, const ibDataNode& row) override;
+
 	ibVisualEditorNotebook::ibVisualEditor* m_formHandler;
 	const long long m_attributeId;
 	const long long m_columnId;
@@ -994,6 +997,9 @@ public:
 	void ReadRow(const ibProtocolNode& row);
 
 private:
+
+	// …each of its rows, the server's property (ibPropertySerializable).
+	virtual ibProperty* CreateProperty(ibPropertyCategory* cat, const ibDataNode& row) override;
 
 	ibVisualEditorNotebook::ibVisualEditor* m_formHandler;
 	const long long m_commandId;
@@ -1039,6 +1045,9 @@ public:
 	ibProtocolNode GetNode() const;
 
 protected:
+
+	// …each of its rows, the server's property (ibPropertySerializable).
+	virtual ibProperty* CreateProperty(ibPropertyCategory* cat, const ibDataNode& row) override;
 
 	// The form as it stands with the command bar of this control given those commands — drawn by the server, a command
 	// the editor's; then the one at `selected` shown (wxNOT_FOUND: none).
