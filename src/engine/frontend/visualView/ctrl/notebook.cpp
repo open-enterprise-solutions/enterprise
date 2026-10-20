@@ -86,26 +86,6 @@ void ibValueNotebook::OnUpdated(wxObject* wxobject, wxWindow* wxparent, ibVisual
 		if (!visualHost->IsDesignerHost())
 			style |= wxAUI_NB_TAB_SPLIT;
 		notebook->SetWindowStyle(style);
-
-		// By the time this (post-order) runs, every NotebookPage child has already run
-		// AddPage() with select=false — none has a reason to prefer itself over a
-		// sibling. On a notebook grown one page at a time through the designer's own
-		// AddNotebookPage(), that's harmless (wx auto-selects a lone first page). On one
-		// materialized wholesale from stored metadata, nothing ever explicitly selects a
-		// page — yet between the OnCreated pass and this OnUpdated pass, wx's standard
-		// "focusing a descendant switches its notebook to that page" behavior has
-		// already fired for whichever control the platform happened to give initial
-		// keyboard focus to (observed landing on a page deep in the tree, with the tab
-		// strip and the visible page panel left disagreeing about which one that is —
-		// confirmed by tracing: OnCreated still reads selection 0, this OnUpdated
-		// already reads a different one). Settle it to page 0 the first time this
-		// control is ever updated, and never again, so a tab the user later switches to
-		// is never stolen back.
-		if (!m_selectionSettled) {
-			m_selectionSettled = true;
-			if (notebook->GetPageCount() > 0)
-				notebook->ChangeSelection(0);  // not SetSelection: must not fire PAGE_CHANGED (see OnPageChanged)
-		}
 	}
 }
 

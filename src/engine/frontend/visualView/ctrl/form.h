@@ -522,6 +522,9 @@ public:
 
 	virtual int GetComponentType() const { return COMPONENT_TYPE_FRAME; }
 
+	// The form's controls lie in one sizer, which the host keeps as the form's own object (its GetWxObject).
+	virtual ibFrontendSizer* GetSizer(wxObject* wxobject) const override;
+
 private:
 
 	//doc event

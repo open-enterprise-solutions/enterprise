@@ -308,8 +308,9 @@ private:
 			}
 			else {
 				// Multi-line: a caption with explicit '\n' is measured line by line, the same way
-				// OnPaint draws it, so its rows are not clipped to one line's height.
-				wxClientDC dc(const_cast<ibControlStaticTextValue*>(this));
+				// OnPaint draws it, so its rows are not clipped to one line's height. A screen DC, as
+				// the border's caption measures itself (ibDynamicStaticText::DoGetBestClientSize).
+				wxScreenDC dc;
 				dc.SetFont(GetFont());
 				wxCoord w = 0, h = 0;
 				dc.GetMultiLineTextExtent(m_labelText, &w, &h);

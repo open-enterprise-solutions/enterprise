@@ -1617,14 +1617,12 @@ ibMetaDataDocument* ibDocManager::FindMetaDataDocument(const ibMetaData* metaDat
 ibDocument* ibDocManager::FindOpenDocument(const wxString& identifier,
                                            const ibDocument* docParent) const
 {
-    // MINE FIRST — a document opened without an owner joins this list, and that is the ordinary case.
-    if ( ibDocument* found = FindDocumentByIdentifier(identifier) )
-        return found;
-
-    // …THEN THE OWNER'S. Editors opened from a navigator belong to the document holding that
-    // configuration and are not in the list above, so without this half the answer is "not open"
-    // about most of what is on screen.
-    return docParent != nullptr ? docParent->FindChildDocument(identifier) : nullptr;
+    // ⚠ AT THE OWNER, NOT MINE FIRST. Editors opened from a navigator belong to the document holding that
+    // configuration and are not in my list; mine are the main window's configuration's, which has no document.
+    // The same guid is in every configuration open at once — the main window's, the database's, a file's —
+    // and mine first answered the main window's editor about the others' objects (2026-10-20: Common of the
+    // database's and of an .oap raised the configuration's Common).
+    return docParent != nullptr ? docParent->FindChildDocument(identifier) : FindDocumentByIdentifier(identifier);
 }
 
 ibMetaDocument* ibDocManager::FindOpenDocument(ibValueMetaObject* metaObject) const

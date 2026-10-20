@@ -39,6 +39,12 @@ void ibValuePanel::Cleanup(wxObject* wxobject, ibVisualHost* visualHost)
 {
 }
 
+ibFrontendSizer* ibValuePanel::GetSizer(wxObject* wxobject) const
+{
+	ibPanelPage* const panel = static_cast<ibPanelPage*>(wxobject);   // what Create built
+	return panel != nullptr ? panel->GetSizer() : nullptr;
+}
+
 //**********************************************************************************
 //*                                    Data										   *
 //**********************************************************************************

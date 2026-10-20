@@ -630,12 +630,14 @@ void ibVisualEditorNotebook::ibVisualEditor::ModifyProperty(ibProperty* prop, co
 			edited = m_formNode.Clone();
 			edited.Apply(patch);
 			for (const ibProtocolNode& described : answer.FindChild(ibProtocol::ibView::ibFormDesigner::Controls).Children()) {
-				if (described.GetInt(ibProtocol::ibView::ibFormDesigner::Control) == controlId)
+				if (described.GetInt(ibProtocol::ibView::ibFormDesigner::Control) == controlId) {
 					rowsAfter = described;
+					break;
+				}
 			}
 		}
 		ibVisualEditorFormCmd* const cmd = new ibVisualEditorFormCmd(this, m_formNode, edited, patch, m_selected, m_selected, m_trees, m_trees);
-		if (rowsAfter.IsNode() && rowsBefore.IsNode() && !(rowsAfter == rowsBefore))
+		if (rowsAfter.IsNode() && rowsBefore.IsNode() && rowsAfter != rowsBefore)
 			cmd->SetRows(controlId, rowsBefore, rowsAfter);
 		Execute(cmd);
 	});
@@ -655,14 +657,16 @@ void ibVisualEditorNotebook::ibVisualEditor::ReceiveRows(long long controlId, co
 	if (control == nullptr || !FindPath(m_formNode, controlId, path))
 		return;
 
-	// The inspector lets go of the control's rows before they go, and shows the new ones.
-	const bool shown = objectInspector->GetSelectedObject() == control;
-	if (shown)
+	// The inspector lets go of what it shows before the rows go, and shows it again. The control's rows are on it as the
+	// shown one's, or as a sizer item's drawn under its child's (ibObjectInspector::Create): asked of the control alone,
+	// a sizer item's edit left the grid on the rows it had just freed (designer-thin dump, 2026-10-20 12:08).
+	ibPropertyObject* const shown = objectInspector->GetSelectedObject();
+	if (shown != nullptr)
 		objectInspector->SelectObject(nullptr);
 	control->Receive(rows);
 	Receive(control, path.back());
-	if (shown)
-		objectInspector->SelectObject(control, true);
+	if (shown != nullptr)
+		objectInspector->SelectObject(shown, true);
 }
 
 /////////////////////////////////////////////////////////////////////////////////////

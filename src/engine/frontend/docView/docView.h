@@ -646,7 +646,7 @@ protected:
     // identity of this kind answers with an empty string and simply never matches.
     ibDocument* FindDocumentByIdentifier(const wxString& identifier) const;
 
-    // Mine first, then the owner's editors.
+    // At the owner: its editors, or mine where there is no owner.
     ibDocument* FindOpenDocument(const wxString& identifier, const ibDocument* docParent) const;
 
     // WHICH DOCUMENT IS SHOWING THIS CONFIGURATION — null for the one the main window holds, which

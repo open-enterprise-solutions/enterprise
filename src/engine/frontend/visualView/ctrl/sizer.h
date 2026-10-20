@@ -10,6 +10,9 @@ class FRONTEND_API ibValueSizer : public ibValueControl {
 
 	virtual int GetComponentType() const { return COMPONENT_TYPE_SIZER; }
 
+	// A sizer lays its children out in itself.
+	virtual ibFrontendSizer* GetSizer(wxObject* wxobject) const override;
+
 	//load & save object in control 
 	virtual bool ReadData(const ibDataNode& node);
 	virtual bool WriteData(ibDataNode& node) const;

@@ -126,15 +126,15 @@ ibDialogUserItem::ibDialogUserItem(wxWindow* parent, wxWindowID id, const wxStri
 
 	// The configuration's roles and languages — the server's, listed beside the users (the desktop's read them off the
 	// active configuration). A role's picture is its class's (ibValueMetaObjectRole::GetIcon is GetIconGroup), asked of
-	// the server by the class id once and kept by the client (ibProtocolPicture).
+	// the server by the class id once and kept by the client (ibProtocolPicture). One picture, so one image for all.
+	const wxBitmap picture = ibBackendPicture::GetPicture(g_metaRoleCLSID);
+	const int image = picture.IsOk() ? imageList->Add(picture) : wxNOT_FOUND;
 	for (const ibUserInfo::RoleBrief& role : ibUserInfo::ListRoles()) {
 		ibDataUserRole entry;
 		entry.m_strRoleGuid = role.m_strRoleGuid;
 		entry.m_strRoleName = role.m_strRoleName;
 		entry.m_miRoleId = wxNOT_FOUND;
 		entry.m_mode = role.m_mode;
-		const wxBitmap picture = ibBackendPicture::GetPicture(g_metaRoleCLSID);
-		const int image = picture.IsOk() ? imageList->Add(picture) : wxNOT_FOUND;
 		const wxTreeItemId& id = m_choiceRole->AppendItem(root, role.m_strRoleTitle, image, image);
 		m_choiceRole->SetItemState(id, ibCheckTree::UNCHECKED);
 		m_roleArray.insert_or_assign(id, entry);

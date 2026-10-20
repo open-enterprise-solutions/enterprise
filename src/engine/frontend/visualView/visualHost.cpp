@@ -351,8 +351,7 @@ void ibVisualHost::SetOrientation(int orient)
 #include "frontend/win/theme/luna_toolbarart.h"
 #include "backend/backend_picture.h"           // ibBackendPicture / ibPictureDescription
 
-#include "pageWindow.h"
-
+#include <wx/sizer.h>   // wxStaticBoxSizer — a framed group's box is its children's parent
 #include <wx/collpane.h>
 #include <wx/wupdlock.h>   // wxWindowUpdateLocker — RAII Freeze/Thaw
 
@@ -757,14 +756,9 @@ void ibVisualHost::ibContentWindow::GenerateControl(ibValueFrame* obj, wxWindow*
 	switch (obj->GetComponentType())
 	{
 	case COMPONENT_TYPE_WINDOW:
-		// Component-type + classname discriminators already narrowed
-		// the type at compile time — Create for a COMPONENT_TYPE_WINDOW
-		// always returns a wxWindow-derived object, and the NotebookPage
-		// class specifically returns ibPanelPage. static_cast is safe.
-		if (obj->GetClassName() == wxT("NotebookPage"))
-			createdWindow = static_cast<ibPanelPage*>(createdObject);
-		else
-			createdWindow = static_cast<wxWindow*>(createdObject);
+		// The component type already narrowed it — Create for a COMPONENT_TYPE_WINDOW always returns a wxWindow-derived
+		// object (a page's ibPanelPage among them). static_cast is safe.
+		createdWindow = static_cast<wxWindow*>(createdObject);
 		break;
 
 	case COMPONENT_TYPE_SIZER:
@@ -999,15 +993,8 @@ void ibVisualHost::ibContentWindow::ClearControl(ibValueFrame* control, bool for
 			controlParent = controlParent->GetParent();
 		}
 
-		wxSizer* controlParentSizer = nullptr;
-		if (controlParent != nullptr && (controlParent->GetClassName() == wxT("NotebookPage") || controlParent->GetClassName() == wxT("Panel"))) {
-			ibPanelPage* pageWnd = dynamic_cast<ibPanelPage*>(GetWxObject(controlParent));
-			wxASSERT(pageWnd);
-			controlParentSizer = pageWnd->GetSizer();
-		}
-		else {
-			controlParentSizer = dynamic_cast<wxSizer*>(GetWxObject(controlParent));
-		}
+		// The sizer it lay in — the parent's to say (a sizer itself, a page's own, the form's controls').
+		wxSizer* const controlParentSizer = controlParent != nullptr ? controlParent->GetSizer(GetWxObject(controlParent)) : nullptr;
 
 		if (controlParentSizer != nullptr)
 			controlParentSizer->Detach(controlSizer);

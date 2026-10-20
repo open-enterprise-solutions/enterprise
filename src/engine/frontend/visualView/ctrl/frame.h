@@ -322,6 +322,10 @@ public:
 	 */
 	virtual void Cleanup(wxObject* obj, ibVisualHost* visualHost) {};
 
+	// What its children are laid out in, `wxobject` being what Create built for it (the host keeps it): a sizer itself,
+	// a page's own, the form's controls' (the thin client's GetSizer). None — a control that lays nothing out.
+	virtual ibFrontendSizer* GetSizer(wxObject* wxobject) const { return nullptr; }
+
 public:
 
 	// call current event — ask the event for its dispatcher (a named-event value or a lambda, both ibEventDispatcher)

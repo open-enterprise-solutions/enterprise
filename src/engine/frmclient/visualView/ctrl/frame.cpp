@@ -178,10 +178,11 @@ void ibValueFrame::ApplyLook(wxWindow* window, const ibProtocolNode& node)
 	if (window == nullptr)
 		return;
 
-	// Unset, the form writes no text for it.
-	const wxString font = node.GetString(ibProtocol::ibForm::ibProperty::Font);
-	if (!font.IsEmpty())
-		window->SetFont(typeConv::StringToFont(font));
+	// Unset — no text, or a stored form's text with no size: the window keeps its parent's. wxNullFont is not that (the
+	// desktop's ApplyLook): a notebook draws every inactive tab with no font at all.
+	const wxFont font = typeConv::StringToFont(node.GetString(ibProtocol::ibForm::ibProperty::Font));
+	if (font.IsOk())
+		window->SetFont(font);
 	const wxString foreground = node.GetString(ibProtocol::ibForm::ibProperty::ForegroundColour);
 	if (!foreground.IsEmpty())
 		window->SetForegroundColour(typeConv::StringToColour(foreground));

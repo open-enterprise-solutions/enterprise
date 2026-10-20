@@ -12,6 +12,12 @@
 //*                            Control                              *
 //*******************************************************************
 
+ibFrontendSizer* ibValueSizer::GetSizer(wxObject* wxobject) const
+{
+	// What Create built — a sizer, every kind of it (box, wrap, framed group, grid).
+	return static_cast<ibFrontendSizer*>(wxobject);
+}
+
 void ibValueSizer::UpdateSizer(ibFrontendSizer* sizer)
 {
 	if (sizer == nullptr)

@@ -586,6 +586,14 @@ protected:
     // matches.
     ibDocument* FindDocumentByIdentifier(const wxString& identifier) const;
 
+    // At the owner: its editors, or mine where there is no owner (the desktop's).
+    ibDocument* FindOpenDocument(const wxString& identifier, const ibDocument* docParent) const;
+
+    // WHICH DOCUMENT IS SHOWING THIS CONFIGURATION — null for the session's own, which the frame's tree holds with no
+    // document at all (the desktop's). This is the owner an editor is opened under; getting it wrong puts the editor in
+    // the manager's top level instead of under its tree, and every later "is it open?" then looks in the wrong place.
+    class ibMetaDataDocument* FindMetaDataDocument(const class ibMetaData* metaData) const;
+
     int               m_defaultDocumentNameCounter;
     int               m_maxDocsOpen;
     wxList            m_docs;

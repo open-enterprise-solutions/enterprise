@@ -24,7 +24,7 @@ public:
 	ibValuePanel();
 
 	//get title
-	virtual wxString GetControlTitle() const {
+	virtual wxString GetControlTitle() const override {
 		return _("Panel");
 	}
 
@@ -34,6 +34,8 @@ public:
 	virtual void Update(wxObject* wxobject, ibVisualHost* visualHost) override;
 	virtual void OnUpdated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost) override;
 	virtual void Cleanup(wxObject* wxobject, ibVisualHost* visualHost) override;
+	// The panel lays its controls out in its own sizer (ibPanelPage).
+	virtual ibFrontendSizer* GetSizer(wxObject* wxobject) const override;
 
 	//load & save object in control
 	virtual bool ReadData(const ibDataNode& node) override;

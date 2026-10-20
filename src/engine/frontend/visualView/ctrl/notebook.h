@@ -67,8 +67,6 @@ private:
 
 	ibValueNotebookPage* m_activePage;
 	std::vector< ibValueNotebookPage*> m_pageArray;
-	// Guards the one-time initial-selection fix in OnUpdated — see notebook.cpp.
-	bool m_selectionSettled = false;
 
 	ibPropertyCategory* m_categoryNotebook = ibPropertyObject::CreatePropertyCategory(wxT("Notebook"), _("Notebook"));
 	ibPropertyEnum<ibValueEnumOrientNotebookPage>* m_propertyOrient = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumOrientNotebookPage>>(m_categoryNotebook, wxT("OrientPage"), _("Orient page"),
@@ -106,6 +104,8 @@ public:
 	virtual void OnUpdated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVisualHost* visualHost) override;
 	virtual void OnSelected(wxObject* wxobject) override;
 	virtual void Cleanup(wxObject* obj, ibVisualHost* visualHost) override;
+	// The page lays its controls out in its own sizer (ibPanelPage).
+	virtual ibFrontendSizer* GetSizer(wxObject* wxobject) const override;
 
 	virtual bool CanDeleteControl() const;
 

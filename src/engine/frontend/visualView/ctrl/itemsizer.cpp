@@ -1,9 +1,6 @@
 #include "sizer.h"
 #include "core/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "form.h"
-#ifndef OES_USE_WEB
-#include "frontend/visualView/pageWindow.h"
-#endif
 
 
 #ifdef OES_USE_WEB
@@ -13,26 +10,12 @@
 
 namespace {
 
-// Resolve the sizer that actually owns this SizerItem's child. On
-// desktop the NotebookPage (and, likewise, Panel) wrapper hides its
-// inner wxSizer, so we unwrap it here. On web the mapping is direct:
-// parent's wxObject (ibWebSizer subclass) IS the container.
+// The sizer this SizerItem's child lies in — the parent's to say (a sizer itself, a page's own, the form's controls').
 ibFrontendSizer* ResolveParentSizer(ibVisualHost* visualHost, ibValueFrame* object)
 {
 	ibValueFrame* parent = object->GetParent();
 	if (parent == nullptr) return nullptr;
-	wxObject* parentWx = visualHost->GetWxObject(parent);
-#ifndef OES_USE_WEB
-	if (parent->GetClassName() == wxT("NotebookPage") || parent->GetClassName() == wxT("Panel")) {
-		ibPanelPage* page = dynamic_cast<ibPanelPage*>(parentWx);
-		return page != nullptr ? page->GetSizer() : nullptr;
-	}
-	return wxDynamicCast(parentWx, wxSizer);
-#else
-	// dynamic_cast through the typedef upsets MSVC in some contexts;
-	// spell out the concrete target here.
-	return dynamic_cast<ibWebSizer*>(parentWx);
-#endif
+	return parent->GetSizer(visualHost->GetWxObject(parent));
 }
 
 wxObject* GetSizerItemChildWx(ibVisualHost* visualHost, ibValueFrame* object)
@@ -114,12 +97,12 @@ void ibValueSizerItem::OnUpdated(wxObject* wxobject, ibFrontendWindow* /*wxparen
 		idx);
 
 #ifndef OES_USE_WEB
-	// NotebookPage/Panel layout fixup — after sizer mutation the page/panel
-	// child window needs a manual Layout to settle; no web analog.
+	// A WINDOW that lays its children out itself (a page, a panel) settles only when told to after its sizer changed;
+	// a sizer is laid out by the window it is in. No web analog.
 	ibValueFrame* parent = object->GetParent();
-	if (parent != nullptr && (parent->GetClassName() == wxT("NotebookPage") || parent->GetClassName() == wxT("Panel"))) {
-		if (auto* page = dynamic_cast<ibPanelPage*>(visualHost->GetWxObject(parent)))
-			page->Layout();
+	if (parent != nullptr && parent->GetComponentType() == COMPONENT_TYPE_WINDOW) {
+		if (wxWindow* const window = sizer->GetContainingWindow())
+			window->Layout();
 	}
 #endif
 }

@@ -475,6 +475,11 @@ ibDocTemplate* ibDocManager::FindTemplateByDocClassInfo(const wxClassInfo* class
 
 ibMetaDocument* ibDocManager::OpenForm(ibValueMetaObject* metaObject, long flags)
 {
+	// ⭐⭐ WHOSE IT IS, WORKED OUT HERE (the desktop's): an editor of the database's configuration or of a file's belongs
+	// under the document that shows it, one of the session's own to the manager itself. The caller knows WHAT to open;
+	// the owner follows from the object.
+	ibMetaDocument* docParent = FindMetaDataDocument(metaObject->GetMetaData());
+
 	// ⭐⭐ ALREADY OPEN? THEN RAISE IT. This opened UNCONDITIONALLY, so the second Open on the same
 	// module built a rival document over the first: two editors of one text, each unaware of the
 	// other's edits, and whichever was saved last won. It is what made the property panel's Open
@@ -500,13 +505,19 @@ ibMetaDocument* ibDocManager::OpenForm(ibValueMetaObject* metaObject, long flags
 	auto* newDocument = wxDynamicCast(docClassInfo->CreateObject(), ibMetaDocument);
 	wxASSERT(newDocument);
 
+	if (docParent != nullptr)
+		newDocument->SetDocParent(docParent);
+
 	try {
 		newDocument->SetTitle(metaObject->GetModuleName());
 		newDocument->SetFilename(metaObject->GetDocPath());
 		newDocument->SetDocumentTemplate(docTemplate);
 		newDocument->SetMetaObject(metaObject);
 
-		AddDocument(newDocument);
+		// Owned documents (those with a parent) are managed by the parent, not the global doc list — adding them here
+		// would double-delete on close.
+		if (docParent == nullptr)
+			AddDocument(newDocument);
 
 		newDocument->SetIcon(ibPictureDescription(metaObject->GetClassType()));
 

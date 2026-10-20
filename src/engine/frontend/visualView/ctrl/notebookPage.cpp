@@ -67,7 +67,11 @@ void ibValueNotebookPage::OnUpdated(wxObject* wxobject, wxWindow* wxparent, ibVi
 
     // RemovePage DETACHES without hiding — see OnCreated. A page turned invisible therefore has to
     // be hidden here too, or it goes on painting over the tab strip it was just taken off.
-    ((wxWindow*)wxobject)->Show(shown);
+    // ⚠ HIDE ONLY — a page on the notebook is the NOTEBOOK's to show: its selected one, the rest hidden. Shown here,
+    // every page stood over the selected one, the last on top took the first focus, and the notebook turned to it:
+    // a stored form opened on its last page (2026-10-20, the thin client's twin hides only).
+    if (!shown)
+        ((wxWindow*)wxobject)->Hide();
 
     if (shown) {
 
@@ -122,6 +126,12 @@ void ibValueNotebookPage::Cleanup(wxObject* wxobject, ibVisualHost* visualHost)
         wxASSERT(page);
         page->PopEventHandler(true);
     }
+}
+
+ibFrontendSizer* ibValueNotebookPage::GetSizer(wxObject* wxobject) const
+{
+    ibPanelPage* const page = static_cast<ibPanelPage*>(wxobject);   // what Create built
+    return page != nullptr ? page->GetSizer() : nullptr;
 }
 
 bool ibValueNotebookPage::CanDeleteControl() const

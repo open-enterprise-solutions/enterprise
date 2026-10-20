@@ -11,8 +11,10 @@
 // ibWebTimer full type needed for the dtor's delete in the idle-handler
 // cleanup loop — ibFrontendTimer resolves to ibWebTimer on this build.
 #include "frontend/web/webTimer.h"
+#include "frontend/web/webSizer.h"   // ibFrontendSizer — the controls' sizer the form answers with
 #else
 #include <wx/timer.h>
+#include <wx/sizer.h>
 #endif
 
 #ifdef OES_USE_WEB
@@ -93,6 +95,11 @@ void ibValueForm::OnUpdated(wxObject* wxobject, ibFrontendWindow* wxparent, ibVi
 		wndParent->Layout();
 	}
 #endif
+}
+
+ibFrontendSizer* ibValueForm::GetSizer(wxObject* wxobject) const
+{
+	return static_cast<ibFrontendSizer*>(wxobject);
 }
 
 //**********************************************************************************
