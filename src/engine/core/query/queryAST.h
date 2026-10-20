@@ -24,6 +24,7 @@
 #include "core/query/queryBalanceRole.h"  // ibBalanceRole — what a projected field is in a balance (ROLE)
 #include "core/query/queryAstExpr.h"      // ibQueryAstExprPtr — the expression's name, which every side hands about
 
+#include <wx/arrstr.h>   // wxbase exports std::vector<wxString> (wxArrayString's base) — seen here, a unit imports it
 #include <vector>
 #include <memory>
 
