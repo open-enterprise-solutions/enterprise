@@ -8,6 +8,7 @@
 
 //ADVANCED OBJECTS
 constexpr ibClassID g_metaAttributeCLSID = metadata_to_clsid("MD_ATTR");
+constexpr ibClassID g_metaRoleCLSID = metadata_to_clsid("MD_ROLE");
 
 // ⭐ A METAOBJECT OF THE CONFIGURATION — the engine's ibValueMetaObject (backend/metaCollection/metaObject.h), as the
 // thin client holds it: ONE CLASS for every kind, no heir. What it is made of — its properties, how they read, what they
