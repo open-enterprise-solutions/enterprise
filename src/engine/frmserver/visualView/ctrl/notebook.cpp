@@ -1,6 +1,7 @@
 #include "notebook.h"
 #include "core/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "form.h"
+#include "frmserver/visualView/visualHost.h"   // IsDesignerHost, CreateControl — the designer's new notebook gets its first page
 
 //***********************************************************************************
 //*                                 Value Notebook                                  *
@@ -11,6 +12,28 @@ ibValueNotebook::ibValueNotebook() : ibValueWindow(), m_activePage(nullptr)
 	m_members.Bind(this, &ibValueNotebook::FillControlMembers);
 	//set default params
 	//m_minimum_size = wxSize(300, 100);
+}
+
+//***********************************************************************************
+//*                                 Special Notebook func                           *
+//***********************************************************************************
+
+void ibValueNotebook::AddNotebookPage(ibVisualHost* host)
+{
+	wxASSERT(m_formOwner);
+
+	// Named, numbered and put on the notebook by the form (NewObject), then built as the designer's add builds one.
+	ibValueFrame* newNotebookPage = m_formOwner->NewObject(g_controlNotebookPageCLSID, this);
+	if (newNotebookPage != nullptr)
+		host->CreateControl(newNotebookPage, true);
+}
+
+void ibValueNotebook::OnCreated(ibVisualHost* host, bool firstCreated)
+{
+	if (host->IsDesignerHost() && GetChildCount() == 0
+		&& firstCreated) {
+		ibValueNotebook::AddNotebookPage(host);
+	}
 }
 
 //***********************************************************************************
