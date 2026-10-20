@@ -874,7 +874,35 @@ void ibDialogQueryConstructor::OnFieldTreeExpanding(wxTreeEvent& event)
 	event.Skip();
 
 	wxTreeCtrl* tree = dynamic_cast<wxTreeCtrl*>(event.GetEventObject());
+	if (tree == m_sourceTree && FillCatalogueFields(event.GetItem()))
+		return;
 	ibQueryExpandFieldNode(tree, event.GetItem(), m_model, FieldIconOf(tree));
+}
+
+// ⚠ THIN: A CATALOGUE TABLE'S FIELDS, asked when it is opened (see FillCatalogue). The node carries
+// BOTH: its own field path and the TABLE it came out of — dragging a field out of the catalogue means
+// "read this table and select this field", so the row has to know which table that is, at every level
+// of the unfold. False: not a catalogue table still waiting for its fields.
+bool ibDialogQueryConstructor::FillCatalogueFields(const wxTreeItemId& item)
+{
+	ibQueryTreeNode* node = ibQueryNodeOf(m_sourceTree, item);
+	if (node == nullptr || node->m_expanded || node->m_temp || node->m_path.empty() || !node->m_field.IsEmpty()
+		|| node->m_sourceIndex != -1)
+		return false;
+	node->m_expanded = true;
+
+	wxWindowUpdateLocker hold(m_sourceTree);
+	m_sourceTree->DeleteChildren(item);   // the placeholder that made the [+] appear
+	// THE TREE'S OWN LIST, kept: a fresh one (PrepareIcons) would take the kinds' pictures off the rows drawn.
+	TreeIcons icons;
+	icons.m_images = m_sourceTree->GetImageList();
+	icons.m_field  = FieldIconOf(m_sourceTree);
+	ibQuerySource asSource;
+	asSource.m_name = node->m_path;
+	const std::vector<wxString> path = node->m_path;
+	for (const ibQueryConstructorField& field : m_model.GetFields(asSource, m_package, m_statement))
+		ibQueryAddFieldNode(m_sourceTree, item, field, FieldIcon(icons, field), -1, wxEmptyString, path);
+	return true;
 }
 
 // A NESTED QUERY and a TEMP TABLE have no metatype, so there is no registered class icon for them
@@ -979,15 +1007,14 @@ void ibDialogQueryConstructor::FillCatalogue(wxTreeCtrl* tree, bool withFields)
 			continue;
 
 		// AND ITS FIELDS, so a field can be dragged straight from the catalogue into the query —
-		// which is what "you can drag any field you can see" means. Filled now rather than lazily:
-		// the model answers from the descriptor without touching the database.
-		ibQuerySource asSource;
-		asSource.m_name = source.m_path;
-		// The node carries BOTH: its own field path and the TABLE it came out of — dragging a field
-		// out of the catalogue means "read this table and select this field", so the row has to know
-		// which table that is, at every level of the unfold.
-		for (const ibQueryConstructorField& field : m_model.GetFields(asSource, m_package, m_statement))
-			ibQueryAddFieldNode(tree, table, field, FieldIcon(icons, field), -1, wxEmptyString, source.m_path);
+		// which is what "you can drag any field you can see" means.
+		//
+		// ⚠ THIN: FILLED WHEN THE TABLE IS OPENED, not here. The desktop fills every table now because
+		// its model answers from the descriptor; here a table's fields are the server's answer (request
+		// Fields), and filling them all made opening the window one call per table in the
+		// configuration. The placeholder gives the [+]; OnFieldTreeExpanding asks once (the model
+		// keeps the answer) — FillCatalogueFields.
+		tree->AppendItem(table, wxT("..."));
 	}
 
 	// AND THE PACKAGE'S OWN TEMP TABLES, at the bottom beside the metaobject sources — because a

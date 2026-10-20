@@ -260,6 +260,8 @@ private:
 	// with its picture. The left pane unfolds every table into its fields; the table picker stops at the table
 	// (PickTable), so the two show one catalogue the same way.
 	void FillCatalogue(class wxTreeCtrl* tree, bool withFields);
+	// ⚠ THIN: a catalogue table's fields, asked when it is opened — false: not such a table.
+	bool FillCatalogueFields(const wxTreeItemId& item);
 
 	// ---- verbs ----------------------------------------------------------
 	void OnAddStatement(wxCommandEvent&);
