@@ -6,6 +6,8 @@
 #include "backend/query/queryable.h"
 #include "core/serialize/dataBuilder.h"
 #include "backend/compiler/value.h"
+#include "backend/backend_picture.h"           // ibBackendPicture::SendPicture — a source's picture, by its id
+#include "backend/metaCollection/genericData.h"  // ibValueMetaObjectGenericData — the metaobject a source reads
 
 
 // The factory the list resolves THROUGH — the metadata it runs ON BEHALF OF (its owner's config). Its per-config
@@ -95,6 +97,12 @@ bool ibPropertyDynamicSource::GetProtocolValue(ibDataNode& row)
 		ibDataNode& choice = row.AddChild(0, static_cast<ibMetaID>(row.Children().size() + 1));
 		choice.SetValue(ibProtocol::ibSchema::ibProperties::Id, static_cast<s32>(tableId));
 		choice.SetValue(ibProtocol::ibSchema::ibProperties::Title, descriptor->GetNamespace() + wxT(".") + descriptor->GetName());
+		// …drawn as the desktop's drop-down draws it: the picture of the metaobject behind the source (its class's, as
+		// CreateValueList draws a metaobject); a source with no metaobject behind it goes without.
+		const ibValueMetaObjectGenericData* const metaObject = queryable->GetSourceMetaObject();
+		if (metaObject != nullptr)
+			choice.SetValue(ibProtocol::ibSchema::ibProperties::Picture,
+				ibBackendPicture::SendPicture(ibPictureDescription(metaObject->GetClassType())));
 	}
 	return true;
 }
