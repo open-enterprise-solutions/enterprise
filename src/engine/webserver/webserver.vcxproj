@@ -192,4 +192,15 @@
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
+  <!--
+    The site's stage: www\ packed into $(OutDir)web\www.wpk (zip), the way syntaxHelper\(locale)\ becomes
+    help\(locale).hlk (backend.vcxproj) - one file a release carries beside the program. A run whose web.conf names
+    the folder itself (Root=) serves it as it is and needs no build.
+  -->
+  <Target Name="StageWebSite" AfterTargets="Build"
+          Inputs="$(ProjectDir)www\**\*"
+          Outputs="$(OutDir)web\www.wpk">
+    <MakeDir Directories="$(OutDir)web" />
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -Command &quot;Add-Type -A 'System.IO.Compression.FileSystem'; if (Test-Path '$(OutDir)web\www.wpk') { Remove-Item '$(OutDir)web\www.wpk' -Force }; [IO.Compression.ZipFile]::CreateFromDirectory('$(ProjectDir)www', '$(OutDir)web\www.wpk', 'Optimal', 0)&quot;" />
+  </Target>
 </Project>

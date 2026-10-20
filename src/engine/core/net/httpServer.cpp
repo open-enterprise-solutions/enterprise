@@ -322,6 +322,26 @@ ibReply Plain(int status, const std::string& text)
 	return reply;
 }
 
+// A FILE HELD IN MEMORY — a pack's: its bytes, and its tag made once as it was mounted.
+struct ibHeldFile {
+	std::shared_ptr<const std::string> m_data;
+	std::string                        m_tag;
+};
+
+// A held file's tag: its size and a hash of its bytes (FNV-1a) — a file changed in a new pack has a new one.
+std::string TagOf(const std::string& data)
+{
+	std::uint64_t hash = 14695981039346656037ull;
+	for (const unsigned char c : data) {
+		hash ^= c;
+		hash *= 1099511628211ull;
+	}
+	char tag[64];
+	std::snprintf(tag, sizeof(tag), "\"%llx-%llx\"", static_cast<unsigned long long>(data.size()),
+		static_cast<unsigned long long>(hash));
+	return tag;
+}
+
 // THE FILES OF THE MOUNTED DIRECTORIES — read once and kept while unchanged (the same time and size), the copy a
 // thousand peers are sent. A file over kShelfFileMax is read for each request and not kept.
 class ibStaticFiles {
@@ -375,7 +395,33 @@ public:
 		char tag[64];
 		std::snprintf(tag, sizeof(tag), "\"%llx-%llx\"", static_cast<unsigned long long>(size),
 			static_cast<unsigned long long>(time.time_since_epoch().count()));
+		return Reply(std::move(data), tag, file, request);
+	}
 
+	// …and of `relative` among files held in memory, refused as a directory's would be.
+	ibReply Serve(const std::map<std::string, ibHeldFile>& files, const std::string& relative,
+		const ibHttpRequest& request) const
+	{
+		std::filesystem::path path;
+		if (!Resolve(std::filesystem::path(), relative, path))
+			return Plain(404, "Not Found");
+		const std::string name = path.generic_u8string();
+		auto found = files.end();
+		if (!name.empty() && relative.back() != '/')
+			found = files.find(name);
+		if (found == files.end())   // a folder: its index.html
+			found = files.find(name.empty() ? std::string("index.html") : name + "/index.html");
+		if (found == files.end())
+			return Plain(404, "Not Found");
+		return Reply(found->second.m_data, found->second.m_tag, std::filesystem::u8path(found->first), request);
+	}
+
+private:
+
+	// A file's answer, by its tag: asked again each time, and 304 for the copy the browser holds.
+	static ibReply Reply(std::shared_ptr<const std::string> data, const std::string& tag,
+		const std::filesystem::path& file, const ibHttpRequest& request)
+	{
 		ibReply reply;
 		reply.m_headers.emplace_back("ETag", tag);
 		// Asked again each time: the files are the application's, and a page must not outlive a new release.
@@ -388,8 +434,6 @@ public:
 		reply.m_body = std::move(data);
 		return reply;
 	}
-
-private:
 
 	struct ibShelved {
 		std::filesystem::file_time_type    m_time;
@@ -437,6 +481,7 @@ struct ibHttpServerState {
 	struct ibMount {
 		std::string           m_prefix;
 		std::filesystem::path m_root;   // canonical
+		std::shared_ptr<const std::map<std::string, ibHeldFile>> m_files;   // …or files held in memory, by their path
 	};
 	std::vector<ibMount> m_mounts;
 	ibStaticFiles        m_files;
@@ -814,9 +859,12 @@ private:
 				if (prefix.back() != '/' && path.size() > prefix.size() && path[prefix.size()] != '/')
 					continue;
 				const std::filesystem::path root = mount.m_root;
+				const auto files = mount.m_files;
 				// The file is found on a worker — the disk is not the I/O threads' to wait for.
-				asio::post(*m_server.m_workers, [self, request, root, prefix, head]() {
-					ibReply reply = self->m_server.m_files.Serve(root, request->m_path.substr(prefix.size()), *request);
+				asio::post(*m_server.m_workers, [self, request, root, files, prefix, head]() {
+					const std::string relative = request->m_path.substr(prefix.size());
+					ibReply reply = files ? self->m_server.m_files.Serve(*files, relative, *request)
+						: self->m_server.m_files.Serve(root, relative, *request);
 					reply.m_bodyless = head;
 					asio::post(self->m_executor, [self, reply = std::move(reply)]() mutable { self->Answer(std::move(reply)); });
 				});
@@ -1469,17 +1517,37 @@ void ibHttpServer::WebSocket(const std::string& path, ibWebSocketOpening opening
 	m_state->m_sockets[path] = std::move(opening);
 }
 
+namespace {
+
+// A mount among the others — the longest prefix first: /app/ before /.
+void AddMount(std::vector<ibHttpServerState::ibMount>& mounts, ibHttpServerState::ibMount mount)
+{
+	mounts.push_back(std::move(mount));
+	std::sort(mounts.begin(), mounts.end(),
+		[](const ibHttpServerState::ibMount& a, const ibHttpServerState::ibMount& b) {
+			return a.m_prefix.size() > b.m_prefix.size();
+		});
+}
+
+} // namespace
+
 void ibHttpServer::Mount(const std::string& prefix, const std::string& directory)
 {
 	std::error_code error;
 	const std::filesystem::path root = std::filesystem::weakly_canonical(std::filesystem::u8path(directory), error);
-	m_state->m_mounts.push_back(ibHttpServerState::ibMount{ prefix.empty() ? std::string("/") : prefix,
-		error ? std::filesystem::u8path(directory) : root });
-	// The longest prefix first: /app/ before /.
-	std::sort(m_state->m_mounts.begin(), m_state->m_mounts.end(),
-		[](const ibHttpServerState::ibMount& a, const ibHttpServerState::ibMount& b) {
-			return a.m_prefix.size() > b.m_prefix.size();
-		});
+	AddMount(m_state->m_mounts, ibHttpServerState::ibMount{ prefix.empty() ? std::string("/") : prefix,
+		error ? std::filesystem::u8path(directory) : root, nullptr });
+}
+
+void ibHttpServer::Mount(const std::string& prefix, std::map<std::string, std::string> files)
+{
+	auto held = std::make_shared<std::map<std::string, ibHeldFile>>();
+	for (auto& file : files) {
+		std::string tag = TagOf(file.second);
+		(*held)[file.first] = ibHeldFile{ std::make_shared<const std::string>(std::move(file.second)), std::move(tag) };
+	}
+	AddMount(m_state->m_mounts, ibHttpServerState::ibMount{ prefix.empty() ? std::string("/") : prefix,
+		std::filesystem::path(), std::move(held) });
 }
 
 bool ibHttpServer::Start(const ibHttpServerOptions& options, std::string& error)

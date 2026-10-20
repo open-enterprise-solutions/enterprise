@@ -1,5 +1,6 @@
 #include "webServer.h"
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <csignal>
@@ -14,6 +15,8 @@
 #include <wx/mstream.h>
 #include <wx/tokenzr.h>
 #include <wx/utils.h>   // wxGetFullHostName — the server named in an address
+#include <wx/wfstream.h>
+#include <wx/zipstrm.h>
 #include <wx/zstream.h>
 
 #ifdef __WXMSW__
@@ -82,6 +85,41 @@ bool ReadPem(const wxString& path, std::string& text, wxString& error)
 	text.assign(static_cast<std::size_t>(length > 0 ? length : 0), '\0');
 	if (length > 0 && file.Read(&text[0], static_cast<size_t>(length)) != length) {
 		error = wxString::Format(wxT("%s could not be read"), path);
+		return false;
+	}
+	return true;
+}
+
+// THE SITE PACKED — www.wpk, a zip of the site's folder (the build packs src/engine/webserver/www into it): each file
+// by its path in the site, as an address names it; false with why.
+bool ReadPack(const wxString& path, std::map<std::string, std::string>& files, wxString& error)
+{
+	wxFileInputStream input(path);
+	wxZipInputStream zip(input, wxConvUTF8);
+	if (!input.IsOk() || !zip.IsOk()) {
+		error = wxString::Format(wxT("%s could not be read"), path);
+		return false;
+	}
+	for (std::unique_ptr<wxZipEntry> entry(zip.GetNextEntry()); entry; entry.reset(zip.GetNextEntry())) {
+		if (entry->IsDir())
+			continue;
+		// As the address has it, whoever packed it: a backslash of Windows' archiver, a leading ./ of CMake's.
+		std::string name = Utf8(entry->GetInternalName());
+		std::replace(name.begin(), name.end(), '\\', '/');
+		if (name.compare(0, 2, "./") == 0)
+			name.erase(0, 2);
+		std::string data;
+		char buffer[16 * 1024];
+		while (zip.CanRead()) {
+			zip.Read(buffer, sizeof(buffer));
+			if (zip.LastRead() == 0)
+				break;
+			data.append(buffer, zip.LastRead());
+		}
+		files[name] = std::move(data);
+	}
+	if (files.empty()) {
+		error = wxString::Format(wxT("%s holds no file"), path);
 		return false;
 	}
 	return true;
@@ -416,12 +454,46 @@ int ibWebServer::Run()
 			++published;
 	}
 
-	const bool site = !m_config.m_root.IsEmpty() && wxDirExists(m_config.m_root);
-	if (site)
-		m_http.Mount("/", Utf8(m_config.m_root));
-	if (published == 0 && !site) {
-		ibWebServerSay(ibJournalMark::Error, wxT("nothing to serve: no publication opened, and no site's files at %s"),
-			m_config.m_root);
+	// THE SITE — its folder when there is one (an edit is served at the next request), else its pack beside web.conf,
+	// what a release ships. The same files at / and at each publication's address: a publication's page is the site's
+	// index.html, its socket beside it.
+	const wxString pack = m_config.m_folder + wxFileName::GetPathSeparator() + wxT("www.wpk");
+	std::map<std::string, std::string> packed;
+	wxString site;
+	if (!m_config.m_root.IsEmpty() && wxDirExists(m_config.m_root)) {
+		site = m_config.m_root;
+	}
+	else if (wxFileName::FileExists(pack)) {
+		wxString packError;
+		if (ReadPack(pack, packed, packError))
+			site = pack;
+		else
+			ibWebServerSay(ibJournalMark::Error, wxT("%s - the site is not served"), packError);
+	}
+	if (!site.IsEmpty()) {
+		std::vector<std::string> prefixes = { "/" };
+		for (const auto& entry : m_bases)
+			prefixes.push_back("/" + Utf8(entry.first) + "/");
+		for (const std::string& prefix : prefixes) {
+			if (packed.empty())
+				m_http.Mount(prefix, Utf8(site));
+			else
+				m_http.Mount(prefix, packed);
+		}
+		// A publication's address without its slash, sent on to it: the page names its files beside it.
+		for (const auto& entry : m_bases) {
+			const std::string page = "/" + Utf8(entry.first);
+			m_http.Get(page, [page](const ibHttpRequest&, ibHttpResponder respond) {
+				ibHttpResponse response;
+				response.m_status = 301;
+				response.m_headers.emplace_back("Location", page + "/");
+				respond(std::move(response));
+			});
+		}
+	}
+	if (published == 0 && site.IsEmpty()) {
+		ibWebServerSay(ibJournalMark::Error, wxT("nothing to serve: no publication opened, and no site at %s or %s"),
+			m_config.m_root, pack);
 		Stop();
 		return 1;
 	}
@@ -456,12 +528,16 @@ int ibWebServer::Run()
 	if (m_http.GetHttpPort() != 0)
 		origins.push_back(wxString::Format(wxT("http://%s:%u"), host, static_cast<unsigned>(m_http.GetHttpPort())));
 	for (const wxString& origin : origins) {
-		if (site)
-			ibWebServerSay(ibJournalMark::Info, wxT("site %s: %s/"), m_config.m_root, origin);
+		if (!site.IsEmpty())
+			ibWebServerSay(ibJournalMark::Info, wxT("site %s: %s/"), site, origin);
 		for (const auto& entry : m_bases) {
 			wxString socket = origin;
 			socket.Replace(wxT("http"), wxT("ws"), false);
-			ibWebServerSay(ibJournalMark::Info, wxT("publication '%s': %s/%s/client"), entry.first, socket, entry.first);
+			if (!site.IsEmpty())
+				ibWebServerSay(ibJournalMark::Info, wxT("publication '%s': %s/%s/, its socket %s/%s/client"), entry.first,
+					origin, entry.first, socket, entry.first);
+			else
+				ibWebServerSay(ibJournalMark::Info, wxT("publication '%s': %s/%s/client"), entry.first, socket, entry.first);
 		}
 	}
 	ibWebServerSay(ibJournalMark::Info, wxT("serving %u of %u publication(s) - Ctrl+C to stop"),

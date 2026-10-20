@@ -18,6 +18,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <map>
 #include <memory>
 #include <optional>
 #include <string>
@@ -132,6 +133,9 @@ public:
 	// The files of `directory` under the path `prefix` — GET and HEAD, a folder answered by its index.html, nothing
 	// outside the directory, no hidden file, no listing.
 	void Mount(const std::string& prefix, const std::string& directory);
+	// …and files held in memory, by their path under `prefix` (index.html, js/app.js) — a pack read whole: served as a
+	// directory's are.
+	void Mount(const std::string& prefix, std::map<std::string, std::string> files);
 
 	// Listening, with the threads up — or false, with why in `error`.
 	bool Start(const ibHttpServerOptions& options, std::string& error);

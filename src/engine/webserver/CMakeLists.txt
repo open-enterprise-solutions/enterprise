@@ -47,3 +47,11 @@ endif()
 
 find_package(Threads REQUIRED)
 target_link_libraries(webserver PRIVATE Threads::Threads)
+
+# The site's stage: www/ packed into web/www.wpk (zip) beside the program, as the help is (backend/CMakeLists.txt).
+add_custom_command(TARGET webserver POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:webserver>/web"
+    COMMAND ${CMAKE_COMMAND} -E chdir "${CMAKE_CURRENT_SOURCE_DIR}/www"
+            ${CMAKE_COMMAND} -E tar c "$<TARGET_FILE_DIR:webserver>/web/www.wpk" --format=zip "."
+    COMMENT "Packing the site into web/www.wpk"
+    VERBATIM)

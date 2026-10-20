@@ -5,8 +5,10 @@
 // clients between a browser and the base. A PUBLICATION is a base under a name in the address — a file base, opened
 // here and held as a server holds its bases (protocol/connectionFile.h: one base, a connection per browser), or a
 // base of an application server, reached over its port (core/net/httpClient.h). Either way the browser sees the same
-// door, the one an application server has:
+// door, the one an application server has — and the site's page beside it:
 //
+//   GET  /<publication>/          the page: the site's index.html, the same for every publication — the base is the
+//                                 address's; the page's own files beside it (/<publication>/js/…)
 //   WS   /<publication>/client    a connection: each text message one JSON-RPC request, answered by its response
 //   POST /<publication>/client    one request, its response
 //
@@ -14,7 +16,9 @@
 //
 //   <web folder>/                   web beside the program, unless --dir names another
 //     web.conf
-//     www/                          the site's files, unless Root names another folder
+//     www/                          the site's files, unless Root names another folder: served as they are
+//     www.wpk                       …packed (a zip), what a release ships — read when there is no such folder. The
+//                                   build packs src/engine/webserver/www, the site's source, into it
 //
 //   ; web.conf
 //   Host=127.0.0.1                  where browsers reach it: empty — every interface (HTTP there only sends a
@@ -23,7 +27,8 @@
 //   HttpsPort=                      left out or empty — no HTTPS; it speaks over Certificate and PrivateKey (PEM)
 //   Certificate=
 //   PrivateKey=
-//   Root=www                        the site's files
+//   Root=www                        the site's files — a folder: a site being written names its source here, and an
+//                                   edit is served at the next request, with no build
 //   Origins=                        the pages of other sites that may open a socket here, comma-separated
 //   Workers=                        the threads that call the bases; empty — four per core, 32 at least
 //   [trade]                         a publication: the base at /trade/client

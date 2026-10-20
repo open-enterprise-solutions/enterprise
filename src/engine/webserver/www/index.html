@@ -1,0 +1,38 @@
+<!doctype html>
+<!--
+  THE PAGE OF A PUBLICATION - served at /<publication>/ from this folder, or from its pack (www.wpk) in a release
+  (webserver/webServer.h). The base is the address's first segment; its socket stands beside the page,
+  <publication>/client, and speaks the client protocol (docs/public/client-protocol.md). The page names its own files
+  relative to itself (js/..., css/...), so one site serves every publication.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OES</title>
+</head>
+<body>
+<p id="status"></p>
+<script type="module">
+const status = document.getElementById('status');
+const publication = location.pathname.split('/').filter(Boolean)[0];
+if (!publication) {
+	status.textContent = 'No publication in the address: open /<publication>/.';
+}
+else {
+	// The protocol's socket, beside the page: ws:// for http://, wss:// for https://.
+	const address = new URL('client', location.href);
+	address.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+	const socket = new WebSocket(address);
+	socket.onopen = () => socket.send(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'users', params: {} }));
+	socket.onmessage = (message) => {
+		const answer = JSON.parse(message.data);
+		status.textContent = answer.error
+			? `${publication}: ${answer.error.message}`
+			: `${publication}: connected, users ${JSON.stringify(answer.result.Users ?? [])}`;
+	};
+	socket.onclose = () => { status.textContent += ' (closed)'; };
+}
+</script>
+</body>
+</html>
