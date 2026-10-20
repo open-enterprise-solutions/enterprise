@@ -1154,11 +1154,9 @@ private:
 	{
 		std::string message;
 		message.swap(m_message);
-		if (m_messageOpcode == ibWebSocketOpcode::Binary) {
-			Fail(ibWebSocketClose::Unsupported);   // the protocol speaks text
-			return;
-		}
-		if (!ibIsUtf8(message)) {
+		// Binary is the handler's to take or refuse (OnBinary): the protocol over it decides what it speaks.
+		const bool binary = m_messageOpcode == ibWebSocketOpcode::Binary;
+		if (!binary && !ibIsUtf8(message)) {
 			Fail(ibWebSocketClose::NotText);
 			return;
 		}
@@ -1166,9 +1164,12 @@ private:
 			return;   // closing: nothing more is handed on
 		m_firstHeard = true;
 		++m_queued;
-		asio::post(*m_work, [self = shared_from_this(), handler = m_handler, message = std::move(message)]() mutable {
+		asio::post(*m_work, [self = shared_from_this(), handler = m_handler, binary, message = std::move(message)]() mutable {
 			try {
-				handler->OnMessage(std::move(message));
+				if (binary)
+					handler->OnBinary(std::move(message));
+				else
+					handler->OnMessage(std::move(message));
 			}
 			catch (...) {
 			}
@@ -1507,8 +1508,10 @@ bool ibHttpServer::Start(const ibHttpServerOptions& options, std::string& error)
 		error = "a certificate is named and HTTPS is given no port";
 		return false;
 	}
-	const bool own = IsLoopback(options.m_host);
-	if (options.m_httpPort && !own && !options.m_httpsPort) {
+	// Where HTTP listens it serves in the clear: on this machine's own addresses, or wherever the application server's
+	// exception says (the header).
+	const bool clear = IsLoopback(options.m_host) || options.m_clearBeyondMachine;
+	if (options.m_httpPort && !clear && !options.m_httpsPort) {
 		error = "plain HTTP serves on this machine's own addresses only (127.0.0.1, ::1, localhost); to listen on "
 			+ (options.m_host.empty() ? std::string("every interface") : options.m_host)
 			+ ", give HTTPS a port, a certificate and its key - HTTP there then only sends a browser on to HTTPS";
@@ -1547,7 +1550,7 @@ bool ibHttpServer::Start(const ibHttpServerOptions& options, std::string& error)
 	}
 	if (options.m_httpPort) {
 		state.m_httpPort = *options.m_httpPort;
-		if (!state.Listen(address, state.m_httpPort, /*secure*/ false, /*redirect*/ !own, error)) {
+		if (!state.Listen(address, state.m_httpPort, /*secure*/ false, /*redirect*/ !clear, error)) {
 			state.m_listeners.clear();
 			return false;
 		}

@@ -189,7 +189,7 @@ add_executable(oes_tests
     test_functionalOption.cpp
     test_metadataMove.cpp
     test_sectionInterfaceItems.cpp
-    test_socketLock.cpp
+    test_debugServer.cpp
     test_lockRace.cpp
     test_clientListener.cpp
 )
@@ -608,7 +608,7 @@ target_link_libraries(oes_frontend_runtime_test
         backend
         frontend
         wx::core wx::aui wx::html wx::propgrid wx::adv
-        wx::stc  wx::xrc wx::qa  wx::base wx::net wx::xml
+        wx::stc  wx::xrc wx::qa  wx::base wx::xml
         GTest::gtest
         GTest::gtest_main
 )

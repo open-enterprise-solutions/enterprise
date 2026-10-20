@@ -43,5 +43,5 @@ target_include_directories(simplePlugin PRIVATE
 # BACKEND_API. Fix it at the declaration (drop the export attribute), the way
 # ibDiagnosticSink was fixed after it broke this link on 2026-08-05.
 target_link_libraries(simplePlugin PRIVATE
-    wx::core wx::aui wx::html wx::propgrid wx::adv wx::stc wx::xrc wx::qa wx::base wx::net wx::xml
+    wx::core wx::aui wx::html wx::propgrid wx::adv wx::stc wx::xrc wx::qa wx::base wx::xml
 )

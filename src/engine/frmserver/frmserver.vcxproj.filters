@@ -807,18 +807,9 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <Filter Include="res">
-      <UniqueIdentifier>{3a8c43ef-66aa-4a5f-9a8d-dfe454435925}</UniqueIdentifier>
-    </Filter>
+    <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="res\resource.h">
-      <Filter>res</Filter>
-    </ClInclude>
-  </ItemGroup>
-  <ItemGroup>
-    <ResourceCompile Include="res\frmserver.rc">
-      <Filter>res</Filter>
-    </ResourceCompile>
+    <ResourceCompile Include="frmserver.rc" />
   </ItemGroup>
 </Project>

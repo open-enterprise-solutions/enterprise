@@ -1,7 +1,7 @@
-#ifndef __WEBSERVER_HTTP_SERVER_H__
-#define __WEBSERVER_HTTP_SERVER_H__
+#ifndef __CORE_NET_HTTP_SERVER_H__
+#define __CORE_NET_HTTP_SERVER_H__
 
-// THE WEB SERVER'S HTTP — HTTP/1.1 and WebSocket (RFC 6455), over plain TCP or TLS, ASYNCHRONOUS: a few I/O threads
+// THE ENGINE'S HTTP — HTTP/1.1 and WebSocket (RFC 6455), over plain TCP or TLS, ASYNCHRONOUS: a few I/O threads
 // carry every connection (Asio), and a socket waiting for its person costs a buffer, not a thread — the port holds
 // thousands of them. The I/O threads only move bytes: parsing (llhttp), framing, TLS. What may take long — a file
 // read, a base's call — is a handler's, and handlers run on the workers.
@@ -12,7 +12,7 @@
 // connection that does not read what it is sent is let go.
 //
 // HTTP AND HTTPS, either or both, each on its own port. ⭐ THE CLEAR DOES NOT CROSS A NETWORK — the rule of
-// backend/server/listener.h, said again here because this program links no backend: on this machine's own addresses
+// backend/server/listener.h, said again here because the core links no backend: on this machine's own addresses
 // (127.0.0.0/8, ::1, localhost) HTTP serves; on any other it only sends a browser on to HTTPS, and with no HTTPS to
 // send it to it is refused.
 
@@ -24,13 +24,15 @@
 #include <utility>
 #include <vector>
 
+#include "core/core.h"
+
 namespace asio { class io_context; }
 
 // What the server's threads share — its routes, its threads, its connections (httpServer.cpp).
 struct ibHttpServerState;
 
 // One request, whole — its head and its body.
-struct ibHttpRequest {
+struct CORE_API ibHttpRequest {
 	std::string m_method;    // as written: GET, HEAD, POST
 	std::string m_path;      // decoded, without the query: /trade/client
 	std::string m_query;     // as written, after the '?'
@@ -45,7 +47,7 @@ struct ibHttpRequest {
 	std::string GetParameter(const std::string& name) const;
 };
 
-struct ibHttpResponse {
+struct CORE_API ibHttpResponse {
 	int         m_status = 200;
 	std::vector<std::pair<std::string, std::string>> m_headers;
 	std::string m_body;
@@ -82,6 +84,8 @@ public:
 
 	// One text message, whole.
 	virtual void OnMessage(std::string text) = 0;
+	// One binary message, whole — a protocol that speaks text closes the socket (ibWebSocketClose::Unsupported).
+	virtual void OnBinary(std::string data) = 0;
 	// The socket is gone — closed by either side, dropped, or the server stopping: once, after the last OnMessage.
 	virtual void OnClose() = 0;
 };
@@ -95,6 +99,10 @@ struct ibHttpServerOptions {
 	// The ports, each listened to when it is given: 0 — the system chooses, and GetHttpPort / GetHttpsPort say which.
 	std::optional<std::uint16_t> m_httpPort;
 	std::optional<std::uint16_t> m_httpsPort;
+
+	// ⚠ HTTP SERVED IN THE CLEAR BEYOND THIS MACHINE TOO — the application server's alone, until oess://: its thin
+	// clients speak ws:// only (protocol/connectionServer.cpp), and the web server reaches it the same way.
+	bool          m_clearBeyondMachine = false;
 
 	// PEM text — the certificate (its chain after it) and its key: what HTTPS is spoken over, and only it.
 	std::string   m_certificate;
@@ -110,7 +118,7 @@ struct ibHttpServerOptions {
 	std::vector<std::string> m_origins;
 };
 
-class ibHttpServer {
+class CORE_API ibHttpServer {
 public:
 
 	ibHttpServer();

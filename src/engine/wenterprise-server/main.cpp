@@ -15,7 +15,6 @@
 // typedef, otherwise MSVC sees two incompatible ssize_t definitions.
 #include <wx/app.h>
 #include <wx/init.h>
-#include <wx/socket.h>
 #include <wx/types.h>
 
 // Trick cpp-httplib into skipping its own ssize_t typedef when it comes
@@ -391,8 +390,8 @@ int main(int argc, char** argv)
 #endif
 	const CmdArgs args = ParseArgs(argc, argv);
 
-	// wxInitializer + wxSocketBase::Initialize + ibCrashGuard::Install
-	// in one shot. wes is headless — no wxApp, faults need the persistent
+	// wxInitializer + ibCrashGuard::Install in one shot. wes is headless —
+	// no wxApp, faults need the persistent
 	// minidump + std::set_terminate + signal handlers from crashGuard so
 	// they don't disappear silently with the process.
 	ibOesConsoleBoot boot(wxT("wenterprise-server"), argc, argv);

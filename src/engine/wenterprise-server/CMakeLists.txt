@@ -26,7 +26,6 @@ target_link_libraries(wenterprise-server
         wfrontend
         backend
         wx::base
-        wx::net
         wx::xml
 )
 

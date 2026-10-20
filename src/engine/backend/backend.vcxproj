@@ -364,7 +364,7 @@
     <ClInclude Include="propertyManager\property\variant\variantSpreadsheet.h" />
     <ClInclude Include="propertyManager\property\variant\variantTranslate.h" />
     <ClInclude Include="propertyManager\property\variant\variantType.h" />
-    <ClInclude Include="res\resource.h" />
+    <ClInclude Include="resource.h" />
     <ClInclude Include="roleHelper.h" />
     <ClInclude Include="srcObject.h" />
     <ClInclude Include="srcDataObject.h" />
@@ -1396,7 +1396,7 @@
     </CopyFileToFolders>
   </ItemGroup>
   <ItemGroup>
-    <ResourceCompile Include="res\backend.rc" />
+    <ResourceCompile Include="backend.rc" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>15.0</VCProjectVersion>
@@ -1483,7 +1483,7 @@
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll;$(oesLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>core.lib;mbedtls.lib;bcrypt.lib;wxmsw33ud_aui.lib;wxmsw33ud_qa.lib;wxmsw33ud_html.lib;wxmsw33ud_propgrid.lib;wxmsw33ud_adv.lib;wxmsw33ud_core.lib;wxbase33ud_xml.lib;wxbase33ud_net.lib;wxmsw33ud_stc.lib;wxmsw33ud_xrc.lib;wxbase33ud.lib;wxtiffd.lib;wxjpegd.lib;wxpngd.lib;wxzlibd.lib;wxscintillad.lib;wxregexud.lib;wxexpatd.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>core.lib;mbedtls.lib;bcrypt.lib;wxmsw33ud_aui.lib;wxmsw33ud_qa.lib;wxmsw33ud_html.lib;wxmsw33ud_propgrid.lib;wxmsw33ud_adv.lib;wxmsw33ud_core.lib;wxbase33ud_xml.lib;wxmsw33ud_stc.lib;wxmsw33ud_xrc.lib;wxbase33ud.lib;wxtiffd.lib;wxjpegd.lib;wxpngd.lib;wxzlibd.lib;wxscintillad.lib;wxregexud.lib;wxexpatd.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -1503,7 +1503,7 @@
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_x64_dll;$(oesLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>core.lib;mbedtls.lib;bcrypt.lib;wxmsw33ud_aui.lib;wxmsw33ud_qa.lib;wxmsw33ud_html.lib;wxmsw33ud_propgrid.lib;wxmsw33ud_adv.lib;wxmsw33ud_core.lib;wxbase33ud_xml.lib;wxbase33ud_net.lib;wxmsw33ud_stc.lib;wxmsw33ud_xrc.lib;wxbase33ud.lib;wxtiffd.lib;wxjpegd.lib;wxpngd.lib;wxzlibd.lib;wxscintillad.lib;wxregexud.lib;wxexpatd.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>core.lib;mbedtls.lib;bcrypt.lib;wxmsw33ud_aui.lib;wxmsw33ud_qa.lib;wxmsw33ud_html.lib;wxmsw33ud_propgrid.lib;wxmsw33ud_adv.lib;wxmsw33ud_core.lib;wxbase33ud_xml.lib;wxmsw33ud_stc.lib;wxmsw33ud_xrc.lib;wxbase33ud.lib;wxtiffd.lib;wxjpegd.lib;wxpngd.lib;wxzlibd.lib;wxscintillad.lib;wxregexud.lib;wxexpatd.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <Profile>true</Profile>
     </Link>
   </ItemDefinitionGroup>
@@ -1531,7 +1531,7 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>DebugFastLink</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll;$(oesLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>core.lib;mbedtls.lib;bcrypt.lib;wxmsw33u_aui.lib;wxmsw33u_qa.lib;wxmsw33u_html.lib;wxmsw33u_propgrid.lib;wxmsw33u_adv.lib;wxmsw33u_core.lib;wxbase33u_xml.lib;wxbase33u_net.lib;wxmsw33u_stc.lib;wxmsw33u_xrc.lib;wxbase33u.lib;wxtiffd.lib;wxjpegd.lib;wxpngd.lib;wxzlibd.lib;wxscintillad.lib;wxregexud.lib;wxexpatd.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>core.lib;mbedtls.lib;bcrypt.lib;wxmsw33u_aui.lib;wxmsw33u_qa.lib;wxmsw33u_html.lib;wxmsw33u_propgrid.lib;wxmsw33u_adv.lib;wxmsw33u_core.lib;wxbase33u_xml.lib;wxmsw33u_stc.lib;wxmsw33u_xrc.lib;wxbase33u.lib;wxtiffd.lib;wxjpegd.lib;wxpngd.lib;wxzlibd.lib;wxscintillad.lib;wxregexud.lib;wxexpatd.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -1559,7 +1559,7 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>DebugFastLink</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_x64_dll;$(oesLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>core.lib;mbedtls.lib;bcrypt.lib;wxmsw33u_aui.lib;wxmsw33u_qa.lib;wxmsw33u_html.lib;wxmsw33u_propgrid.lib;wxmsw33u_adv.lib;wxmsw33u_core.lib;wxbase33u_xml.lib;wxbase33u_net.lib;wxmsw33u_stc.lib;wxmsw33u_xrc.lib;wxbase33u.lib;wxtiffd.lib;wxjpegd.lib;wxpngd.lib;wxzlibd.lib;wxscintillad.lib;wxregexud.lib;wxexpatd.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>core.lib;mbedtls.lib;bcrypt.lib;wxmsw33u_aui.lib;wxmsw33u_qa.lib;wxmsw33u_html.lib;wxmsw33u_propgrid.lib;wxmsw33u_adv.lib;wxmsw33u_core.lib;wxbase33u_xml.lib;wxmsw33u_stc.lib;wxmsw33u_xrc.lib;wxbase33u.lib;wxtiffd.lib;wxjpegd.lib;wxpngd.lib;wxzlibd.lib;wxscintillad.lib;wxregexud.lib;wxexpatd.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>

@@ -92,7 +92,6 @@ target_link_libraries(frontend
         wx::xrc
         wx::qa
         wx::base
-        wx::net
         wx::xml
 )
 
@@ -233,7 +232,6 @@ target_link_libraries(wfrontend
         wx::xrc
         wx::qa
         wx::base
-        wx::net
         wx::xml
 )
 

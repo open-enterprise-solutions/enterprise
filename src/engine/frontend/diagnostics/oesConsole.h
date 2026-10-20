@@ -5,17 +5,16 @@
 //
 // wes (wenterprise-server) and appserver don't have a wxApp — they're
 // plain `int main(argc, argv)` that uses wx primitives (wxString,
-// wxSocket, wxLocale, wx file ops) via wxInitializer. The boot
-// sequence is identical in every such binary:
+// wxLocale, wx file ops) via wxInitializer. The boot sequence is
+// identical in every such binary:
 //
 //   wxInitializer init(argc, argv);
 //   if (!init.IsOk()) { ... return 1; }
-//   wxSocketBase::Initialize();
 //   ibCrashGuard::Install(exeName);
 //
 // Wrapped here so future console exes (next health-check daemon,
 // stress-test driver, etc.) wire in two lines instead of duplicating
-// the four. Header-only — uses only BACKEND_API ibCrashGuard + wx
+// the three. Header-only — uses only BACKEND_API ibCrashGuard + wx
 // primitives that the binary already links anyway, so it doesn't add
 // a transitive frontend.dll dependency.
 //
@@ -30,16 +29,10 @@
 //   }
 //
 // Destructor lets wxInitializer's own dtor clean up wx state on exit.
-// No need to call wxSocketBase::Shutdown() — wx does that as part of
-// its own shutdown when the initializer dies. (GUI exes like
-// enterprise/designer call Shutdown explicitly in OnExit because
-// their teardown timing is different — non-wxApp binaries don't need
-// the extra dance.)
 
 #include "core/diagnostics/crashGuard.h"
 
 #include <wx/init.h>
-#include <wx/socket.h>
 #include <wx/string.h>
 
 class ibOesConsoleBoot {
@@ -48,7 +41,6 @@ public:
 		: m_wxInit(argc, argv)
 	{
 		if (!m_wxInit.IsOk()) return;
-		wxSocketBase::Initialize();
 		// Install AFTER wx is up so the crash guard's wxString /
 		// wxFileName / wxDateTime usage in its handlers (terminate
 		// log path, dump filename) has its wx prerequisites ready.

@@ -98,9 +98,10 @@ checkout that fetched less than the tree needs - an older workflow, a partial cl
 
 **A third-party header is named by its library** — `src/3rdparty` is on every include path:
 `<cpp-httplib/httplib.h>`, `<nlohmann/json.hpp>` (from its `single_include`, also on the path), Mbed TLS's
-`<mbedtls/…>` and wx's `<wx/…>` from their own include folders. The web server's two — Asio (`<asio.hpp>`, standalone,
-release `asio-1-36-0`) and llhttp (`<llhttp.h>`, branch `release/v9.3.0`, which carries the generated C sources; built
-as the static `llhttp` target) — are on its include path only.
+`<mbedtls/…>` and wx's `<wx/…>` from their own include folders. The core's network (`core/net`) has two more — Asio
+(`<asio.hpp>`, standalone, release `asio-1-36-0`, compiled once in `core/net/asio.cpp`; private to core — no header of
+`core/net` includes it) and llhttp (`<llhttp.h>`, branch `release/v9.3.0`, which
+carries the generated C sources; built as the static `llhttp` target, linked into core only).
 
 **nlohmann/json is the upstream repository, pinned to a release** (`src/3rdparty/nlohmann`). Updating it is
 moving the pin:
@@ -327,7 +328,8 @@ the web is not built there.
 ### macOS-specific Notes
 
 - wxWidgets is built from the submodule via `add_subdirectory()` — no system wxWidgets needed
-- Backend links against `wx::base`, `wx::core`, `wx::net`, `wx::xml`, `wx::propgrid`, `wx::aui`, `wx::stc`
+- Backend links against `wx::base`, `wx::core`, `wx::xml`, `wx::propgrid`, `wx::aui`, `wx::stc` — not `wx::net`:
+  every socket is the core's (`core/net`)
 - Firebird embedded is not available via Homebrew; use SQLite for local development
 - App bundles (`designer.app`, `enterprise.app`) are created automatically by CMake, and this
   path is **exercised, not merely declared**: they have been built on a real Mac, with the

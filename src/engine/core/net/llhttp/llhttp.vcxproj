@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-  <!-- LLHTTP, COMPILED THE WAY THIS BUILD NEEDS IT - the HTTP/1.1 parser the web server reads its requests with.
+  <!-- LLHTTP, COMPILED THE WAY THIS BUILD NEEDS IT - the HTTP/1.1 parser the core's HTTP (core/net) reads its requests with.
 
        The sources are the submodule's, pinned at a release branch and moved by changing a gitlink; nothing here
        writes into src\3rdparty\llhttp. The release branch carries the generated C (src\llhttp.c) - no node, no
@@ -11,7 +11,7 @@
        is not used by either build: it writes libllhttp.pc into the submodule's tree and asks for CMake 3.25.
 
        On Windows llhttp.h declares every function __declspec(dllexport) whatever it is compiled into, so the
-       program that links this library exports them too. That is harmless and is said here so it is not a
+       module that links this library (core.dll) exports them too. That is harmless and is said here so it is not a
        surprise in a dependency listing. -->
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -71,19 +71,19 @@
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-    <Import Project="..\..\..\..\Common.props" />
+    <Import Project="..\..\..\..\..\Common.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-    <Import Project="..\..\..\..\Common.props" />
+    <Import Project="..\..\..\..\..\Common.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-    <Import Project="..\..\..\..\Common.props" />
+    <Import Project="..\..\..\..\..\Common.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-    <Import Project="..\..\..\..\Common.props" />
+    <Import Project="..\..\..\..\..\Common.props" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <ItemDefinitionGroup>

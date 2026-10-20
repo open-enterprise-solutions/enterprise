@@ -42,5 +42,4 @@ target_link_libraries(enterprise-thin PRIVATE
     protocol
     frmclient
     wx::core wx::aui wx::stc wx::adv wx::base
-    wx::net   # the socket layer, started on the main thread for a file base's debugger (mainApp.cpp)
 )

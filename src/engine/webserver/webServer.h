@@ -4,7 +4,7 @@
 // THE WEB SERVER — the bases' transport for browsers: it serves a site's files, and carries the protocol of a base's
 // clients between a browser and the base. A PUBLICATION is a base under a name in the address — a file base, opened
 // here and held as a server holds its bases (protocol/connectionFile.h: one base, a connection per browser), or a
-// base of an application server, reached over its port (http/httpClient.h). Either way the browser sees the same
+// base of an application server, reached over its port (core/net/httpClient.h). Either way the browser sees the same
 // door, the one an application server has:
 //
 //   WS   /<publication>/client    a connection: each text message one JSON-RPC request, answered by its response
@@ -47,7 +47,7 @@
 
 #include "core/diagnostics/journal.h"
 
-#include "http/httpServer.h"
+#include "core/net/httpServer.h"
 
 class ibProtocolFileBase;
 

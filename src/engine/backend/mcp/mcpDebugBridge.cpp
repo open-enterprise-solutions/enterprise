@@ -475,7 +475,7 @@ void ibMcpDebugBridge::Announce(const wxString& text) const
 // events
 //---------------------------------------------------------------------------
 
-void ibMcpDebugBridge::OnSessionStart(wxSocketClient* sock)
+void ibMcpDebugBridge::OnSessionStart()
 {
 	{
 		std::lock_guard<std::mutex> lock(m_mutex);
@@ -484,7 +484,7 @@ void ibMcpDebugBridge::OnSessionStart(wxSocketClient* sock)
 	Announce(wxT("debugger: a runtime connected"));
 }
 
-void ibMcpDebugBridge::OnSessionEnd(wxSocketClient* sock)
+void ibMcpDebugBridge::OnSessionEnd()
 {
 	{
 		std::lock_guard<std::mutex> lock(m_mutex);
@@ -499,7 +499,7 @@ void ibMcpDebugBridge::OnSessionEnd(wxSocketClient* sock)
 	Announce(wxT("debugger: the runtime disconnected"));
 }
 
-void ibMcpDebugBridge::OnEnterLoop(wxSocketClient* sock, const ibDebugLineData& data)
+void ibMcpDebugBridge::OnEnterLoop(const ibDebugLineData& data)
 {
 	wxString where;
 	{
@@ -528,7 +528,7 @@ void ibMcpDebugBridge::OnEnterLoop(wxSocketClient* sock, const ibDebugLineData& 
 		where, data.m_line));
 }
 
-void ibMcpDebugBridge::OnLeaveLoop(wxSocketClient* sock, const ibDebugLineData& data)
+void ibMcpDebugBridge::OnLeaveLoop(const ibDebugLineData& data)
 {
 	Running();
 }

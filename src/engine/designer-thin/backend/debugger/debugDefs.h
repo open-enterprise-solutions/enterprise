@@ -423,8 +423,76 @@ struct ibWatchedExpression {
 #define numberOfLaunchConnectionAttempts 15
 /////////////////////////////////////////////////////////////////////////////////////////////
 
-#define waitVerifyDebuggerTimeout 5 //sec
 #define waitDebuggerTimeout 50 //msec
+
+/////////////////////////////////////////////////////////////////////////////////////////////
+
+#include <chrono>
+#include <condition_variable>
+#include <deque>
+#include <mutex>
+#include <string>
+
+// ⭐ WHAT ONE SOCKET SAID, FOR THE THREAD THAT READS IT — its commands in the order they came, and its going. One per
+// socket, at either end: the far end's commands are dispatched on the connection's own thread (RecvCommand), never on
+// the socket's. Held by the socket's handlers as much as by the connection — a handler may be told after the
+// connection let the socket go, and what it says then lands here, read by nobody.
+class ibDebugCommandQueue {
+public:
+
+	// A command, whole — from the socket's thread.
+	void Push(std::string command)
+	{
+		{
+			std::lock_guard<std::mutex> lock(m_mutex);
+			m_queue.push_back(std::move(command));
+		}
+		m_cv.notify_one();
+	}
+
+	// The socket is gone; `reason` — why, empty when either end simply closed it. What it said before is still popped.
+	void Stop(const std::string& reason)
+	{
+		{
+			std::lock_guard<std::mutex> lock(m_mutex);
+			m_stop = true;
+			m_reason = reason;
+		}
+		m_cv.notify_one();
+	}
+
+	// The next command, waiting up to `maxWaitMs` — or false: none came, or the socket has gone and nothing it said is
+	// left (IsStopped).
+	bool Pop(std::string& command, int maxWaitMs)
+	{
+		std::unique_lock<std::mutex> lock(m_mutex);
+		m_cv.wait_for(lock, std::chrono::milliseconds(maxWaitMs), [this]() { return !m_queue.empty() || m_stop; });
+		if (m_queue.empty())
+			return false;
+		command = std::move(m_queue.front());
+		m_queue.pop_front();
+		return true;
+	}
+
+	bool IsStopped() const
+	{
+		std::lock_guard<std::mutex> lock(m_mutex);
+		return m_stop;
+	}
+
+	std::string GetReason() const
+	{
+		std::lock_guard<std::mutex> lock(m_mutex);
+		return m_reason;
+	}
+
+private:
+	mutable std::mutex      m_mutex;
+	std::condition_variable m_cv;
+	std::deque<std::string> m_queue;
+	bool                    m_stop = false;
+	std::string             m_reason;
+};
 
 /////////////////////////////////////////////////////////////////////////////////////////////
 

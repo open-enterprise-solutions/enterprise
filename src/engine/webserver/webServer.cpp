@@ -1,8 +1,5 @@
 #include "webServer.h"
 
-// Asio before wx: winsock2.h must come ahead of the windows.h a wx header may bring.
-#include <asio/io_context.hpp>
-
 #include <atomic>
 #include <chrono>
 #include <csignal>
@@ -26,8 +23,8 @@
 #include "protocol/connectionFile.h"
 #include "protocol/connectionServer.h"   // the oes:// address and the path of a base's clients — the protocol's
 
-#include "http/httpClient.h"
-#include "http/webSocketFrame.h"
+#include "core/net/httpClient.h"
+#include "core/net/webSocketFrame.h"
 
 namespace {
 
@@ -151,6 +148,11 @@ public:
 			SendAnswer(*m_socket, std::move(answer), m_deflate);
 	}
 
+	virtual void OnBinary(std::string) override
+	{
+		m_socket->Close(ibWebSocketClose::Unsupported, "the protocol speaks text");
+	}
+
 	virtual void OnClose() override
 	{
 		m_base.Disconnect(this);
@@ -173,7 +175,7 @@ public:
 		m_socket(std::move(socket))
 	{
 		const std::weak_ptr<ibWebSocket> told = m_socket;
-		m_upstream = std::make_shared<ibWebSocketClient>(io,
+		m_upstream = std::make_shared<ibWebSocketClient>(io, nullptr,
 			[told](std::uint8_t opcode, std::string payload) {
 				const std::shared_ptr<ibWebSocket> socket = told.lock();
 				if (!socket)
@@ -197,6 +199,11 @@ public:
 	virtual void OnMessage(std::string text) override
 	{
 		m_upstream->Send(std::move(text));
+	}
+
+	virtual void OnBinary(std::string) override
+	{
+		m_socket->Close(ibWebSocketClose::Unsupported, "the protocol speaks text");
 	}
 
 	virtual void OnClose() override

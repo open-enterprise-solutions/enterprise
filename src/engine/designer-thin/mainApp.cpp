@@ -11,7 +11,6 @@
 #include <wx/dirdlg.h>
 #include <wx/image.h>
 #include <wx/msgdlg.h>
-#include <wx/socket.h>
 #include <wx/stdpaths.h>
 
 #include "core/diagnostics/crashGuard.h"   // ibCrashGuard::Install — the process's journal and dumps
@@ -72,10 +71,6 @@ bool ibAppDesigner::OnInit()
 	// whatever goes wrong after it has somewhere to be said: one journal of the process, the client's, the protocol's
 	// and a file base's engine's lines in it alike.
 	ibCrashGuard::Install(wxT("designer-thin"));
-
-	// THE SOCKETS ON THIS THREAD, as the desktop's (ibWxApp::DoOnInit): the debugger's connections open theirs on their
-	// own threads, and a file base has none here before them — wx does not start the socket layer from a worker thread.
-	wxSocketBase::Initialize();
 
 	// THE COMMAND LINE FIRST, then the connection: wx calls OnExit only after an OnInit that succeeded, so nothing is
 	// opened before a refusal here could leave it behind (the codeRunner exit crash, 2026-10-07).

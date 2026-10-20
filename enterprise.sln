@@ -43,6 +43,10 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "backend", "src\engine\backe
 	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "core", "src\engine\core\core.vcxproj", "{A1B2C3D4-0009-4E5F-8A9B-C0D1E2F30009}"
+	ProjectSection(ProjectDependencies) = postProject
+		{A1B2C3D4-0003-4E5F-8A9B-C0D1E2F30003} = {A1B2C3D4-0003-4E5F-8A9B-C0D1E2F30003}
+		{A1B2C3D4-000B-4E5F-8A9B-C0D1E2F3000B} = {A1B2C3D4-000B-4E5F-8A9B-C0D1E2F3000B}
+	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "plugins", "plugins", "{95B54CB1-6B46-46C3-9DC6-059D6E7DD4CB}"
 EndProject
@@ -54,7 +58,6 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "appserver", "src\engine\app
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "protocol", "src\engine\protocol\protocol.vcxproj", "{A1B2C3D4-0008-4E5F-8A9B-C0D1E2F30008}"
 	ProjectSection(ProjectDependencies) = postProject
-		{A1B2C3D4-0003-4E5F-8A9B-C0D1E2F30003} = {A1B2C3D4-0003-4E5F-8A9B-C0D1E2F30003}
 		{A1B2C3D4-0009-4E5F-8A9B-C0D1E2F30009} = {A1B2C3D4-0009-4E5F-8A9B-C0D1E2F30009}
 	EndProjectSection
 EndProject
@@ -103,14 +106,12 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "wenterprise-server", "src\e
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "mbedtls", "src\engine\backend\tls\mbedtls.vcxproj", "{A1B2C3D4-0003-4E5F-8A9B-C0D1E2F30003}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "llhttp", "src\engine\webserver\llhttp\llhttp.vcxproj", "{A1B2C3D4-000B-4E5F-8A9B-C0D1E2F3000B}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "llhttp", "src\engine\core\net\llhttp\llhttp.vcxproj", "{A1B2C3D4-000B-4E5F-8A9B-C0D1E2F3000B}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "webserver", "src\engine\webserver\webserver.vcxproj", "{A1B2C3D4-000C-4E5F-8A9B-C0D1E2F3000C}"
 	ProjectSection(ProjectDependencies) = postProject
-		{A1B2C3D4-0003-4E5F-8A9B-C0D1E2F30003} = {A1B2C3D4-0003-4E5F-8A9B-C0D1E2F30003}
 		{A1B2C3D4-0008-4E5F-8A9B-C0D1E2F30008} = {A1B2C3D4-0008-4E5F-8A9B-C0D1E2F30008}
 		{A1B2C3D4-0009-4E5F-8A9B-C0D1E2F30009} = {A1B2C3D4-0009-4E5F-8A9B-C0D1E2F30009}
-		{A1B2C3D4-000B-4E5F-8A9B-C0D1E2F3000B} = {A1B2C3D4-000B-4E5F-8A9B-C0D1E2F3000B}
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "3rdparty", "3rdparty", "{30505279-F3BF-4D6A-AB08-B9AADBEA1FEA}"

@@ -19,10 +19,10 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="res\resource.h" />
+    <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>
-    <ResourceCompile Include="res\core.rc" />
+    <ResourceCompile Include="core.rc" />
   </ItemGroup>
   <!-- THE CORE — the shared meanings under the engine (backend) and its clients (frmclient): the class ids and the ids
        of the configuration, the kinds of a value, a text, a number, a date, a guid, a block of bytes read and written,
@@ -87,18 +87,20 @@
   <ItemDefinitionGroup>
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
-      <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;_UNICODE;WXUSINGDLL;_USRDLL;CORE_EXPORTS;_WIN32_WINNT=0x0A00;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;_UNICODE;WXUSINGDLL;_USRDLL;CORE_EXPORTS;_WIN32_WINNT=0x0A00;ASIO_STANDALONE;ASIO_SEPARATE_COMPILATION;ASIO_NO_DEPRECATED;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>false</ConformanceMode>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
-      <AdditionalIncludeDirectories>$(oesEngine);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(oesEngine);$(oes3rdParty)asio\asio\include;$(oes3rdParty)llhttp\include;$(oes3rdParty)mbedtls\include;$(oesEngine)backend\tls;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <!-- Asio's templates (net\) make more sections than an object file holds by default. -->
+      <AdditionalOptions>/bigobj %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(oesLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>ws2_32.lib;crypt32.lib;bcrypt.lib;mbedtls.lib;llhttp.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -193,6 +195,27 @@
     <ClCompile Include="guid.cpp" />
     <ClCompile Include="job\jobScheduleRules.cpp" />
     <ClCompile Include="localization.cpp" />
+    <ClCompile Include="net\asio.cpp">
+      <PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="net\httpClient.cpp">
+      <PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="net\httpServer.cpp">
+      <PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="net\httpStream.cpp">
+      <PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="net\ioThreads.cpp">
+      <PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="net\tlsStream.cpp">
+      <PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="net\webSocketFrame.cpp">
+      <PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
     <ClCompile Include="pictureRegistry.cpp" />
     <ClCompile Include="programFolder.cpp" />
     <ClCompile Include="query\queryAggregates.cpp" />
@@ -256,6 +279,12 @@
     <ClInclude Include="localization.h" />
     <ClInclude Include="logger\loggerQuery.h" />
     <ClInclude Include="mcp\mcpSettings.h" />
+    <ClInclude Include="net\httpClient.h" />
+    <ClInclude Include="net\httpServer.h" />
+    <ClInclude Include="net\httpStream.h" />
+    <ClInclude Include="net\ioThreads.h" />
+    <ClInclude Include="net\tlsStream.h" />
+    <ClInclude Include="net\webSocketFrame.h" />
     <ClInclude Include="pictureRegistry.h" />
     <ClInclude Include="programFolder.h" />
     <ClInclude Include="propertyChoiceMode.h" />

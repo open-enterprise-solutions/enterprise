@@ -1,7 +1,13 @@
 #include "httpClient.h"
 
+#include <deque>
+#include <vector>
+
 #include <asio/connect.hpp>
+#include <asio/io_context.hpp>
+#include <asio/ip/tcp.hpp>
 #include <asio/post.hpp>
+#include <asio/steady_timer.hpp>
 #include <asio/strand.hpp>
 #include <asio/write.hpp>
 
@@ -46,13 +52,67 @@ std::string Authority(const std::string& host, std::uint16_t port)
 //*                                     The WebSocket                                       *
 //*******************************************************************************************
 
-ibWebSocketClient::ibWebSocketClient(asio::io_context& io, ibMessage message, ibClosed closed) :
+// THE SOCKET AND WHAT IT HOLDS — Asio's, so it stays in the core: a module that holds a client includes no Asio, and
+// what Asio's headers make in every file that includes them (its error categories, Winsock's start) is made here
+// only. Shared: each handler holds it while it runs, and it outlives the client that let it go until they have.
+struct ibWebSocketClientState : public std::enable_shared_from_this<ibWebSocketClientState> {
+
+	using ibOpened  = ibWebSocketClient::ibOpened;
+	using ibMessage = ibWebSocketClient::ibMessage;
+	using ibClosed  = ibWebSocketClient::ibClosed;
+
+	ibWebSocketClientState(asio::io_context& io, ibOpened opened, ibMessage message, ibClosed closed);
+
+	void Open(const std::string& host, std::uint16_t port, const std::string& target);
+	// A message — ibWebSocketOpcode::Text or ::Binary.
+	void Send(std::uint8_t opcode, std::string payload);
+	void Close();
+
+	void Connected();
+	void ReadHead();
+	void Opened(std::string leftover);
+	void Read();
+	void OnFrames(const char* data, std::size_t size);
+	void SendFrame(std::uint8_t opcode, std::string payload);
+	void Queue(std::string bytes);
+	void Pump();
+	void Drop(const std::string& reason);
+
+	asio::ip::tcp::socket   m_socket;   // on a strand of its own — the resolver and the timer go by its executor
+	asio::ip::tcp::resolver m_resolver;
+	asio::steady_timer      m_timer;    // the opening's deadline
+	ibOpened                m_opened;
+	ibMessage               m_message;
+	ibClosed                m_closed;
+	std::string             m_host;
+	std::uint16_t           m_port = 0;
+	std::string             m_target;
+	std::string             m_key;
+
+	bool                    m_open = false;
+	bool                    m_gone = false;
+	bool                    m_closeSent = false;
+	bool                    m_closeWhenWritten = false;
+	std::vector<std::pair<std::uint8_t, std::string>> m_waiting;   // sent before it opened, each with its opcode
+	std::string             m_head;       // the response's head, as it comes
+	std::deque<std::string> m_out;
+	std::size_t             m_outBytes = 0;
+	bool                    m_writing = false;
+	ibWebSocketFrameReader  m_frames;
+	std::string             m_assembled;
+	std::uint8_t            m_assembledOpcode = ibWebSocketOpcode::Text;
+	bool                    m_assembling = false;
+	char                    m_buffer[16 * 1024];
+};
+
+ibWebSocketClientState::ibWebSocketClientState(asio::io_context& io, ibOpened opened, ibMessage message, ibClosed closed) :
 	m_socket(asio::make_strand(io)), m_resolver(m_socket.get_executor()), m_timer(m_socket.get_executor()),
-	m_message(std::move(message)), m_closed(std::move(closed)), m_frames(/*masked*/ false, kMaxAnswerBytes)
+	m_opened(std::move(opened)), m_message(std::move(message)), m_closed(std::move(closed)),
+	m_frames(/*masked*/ false, kMaxAnswerBytes)
 {
 }
 
-void ibWebSocketClient::Open(const std::string& host, std::uint16_t port, const std::string& target)
+void ibWebSocketClientState::Open(const std::string& host, std::uint16_t port, const std::string& target)
 {
 	asio::post(m_socket.get_executor(), [self = shared_from_this(), host, port, target]() {
 		self->m_host = host;
@@ -83,7 +143,7 @@ void ibWebSocketClient::Open(const std::string& host, std::uint16_t port, const 
 	});
 }
 
-void ibWebSocketClient::Connected()
+void ibWebSocketClientState::Connected()
 {
 	if (m_gone)
 		return;
@@ -97,7 +157,7 @@ void ibWebSocketClient::Connected()
 	ReadHead();
 }
 
-void ibWebSocketClient::ReadHead()
+void ibWebSocketClientState::ReadHead()
 {
 	m_socket.async_read_some(asio::buffer(m_buffer, sizeof(m_buffer)),
 		[self = shared_from_this()](const std::error_code& error, std::size_t bytes) {
@@ -150,12 +210,17 @@ void ibWebSocketClient::ReadHead()
 		});
 }
 
-void ibWebSocketClient::Opened(std::string leftover)
+void ibWebSocketClientState::Opened(std::string leftover)
 {
 	m_open = true;
 	m_timer.cancel();
-	for (std::string& waiting : m_waiting)
-		SendFrame(ibWebSocketOpcode::Text, std::move(waiting));
+	// Told once; and let go of, as the other handlers are when the socket goes.
+	const ibOpened opened = std::move(m_opened);
+	m_opened = nullptr;
+	if (opened)
+		opened();
+	for (std::pair<std::uint8_t, std::string>& waiting : m_waiting)
+		SendFrame(waiting.first, std::move(waiting.second));
 	m_waiting.clear();
 	if (!leftover.empty())
 		OnFrames(leftover.data(), leftover.size());
@@ -163,7 +228,7 @@ void ibWebSocketClient::Opened(std::string leftover)
 		Read();
 }
 
-void ibWebSocketClient::Read()
+void ibWebSocketClientState::Read()
 {
 	m_socket.async_read_some(asio::buffer(m_buffer, sizeof(m_buffer)),
 		[self = shared_from_this()](const std::error_code& error, std::size_t bytes) {
@@ -175,7 +240,7 @@ void ibWebSocketClient::Read()
 		});
 }
 
-void ibWebSocketClient::OnFrames(const char* data, std::size_t size)
+void ibWebSocketClientState::OnFrames(const char* data, std::size_t size)
 {
 	if (m_gone)
 		return;
@@ -231,20 +296,20 @@ void ibWebSocketClient::OnFrames(const char* data, std::size_t size)
 		Read();
 }
 
-void ibWebSocketClient::Send(std::string text)
+void ibWebSocketClientState::Send(std::uint8_t opcode, std::string payload)
 {
-	asio::post(m_socket.get_executor(), [self = shared_from_this(), text = std::move(text)]() mutable {
+	asio::post(m_socket.get_executor(), [self = shared_from_this(), opcode, payload = std::move(payload)]() mutable {
 		if (self->m_gone || self->m_closeSent)
 			return;
 		if (!self->m_open) {
-			self->m_waiting.push_back(std::move(text));
+			self->m_waiting.emplace_back(opcode, std::move(payload));
 			return;
 		}
-		self->SendFrame(ibWebSocketOpcode::Text, std::move(text));
+		self->SendFrame(opcode, std::move(payload));
 	});
 }
 
-void ibWebSocketClient::Close()
+void ibWebSocketClientState::Close()
 {
 	asio::post(m_socket.get_executor(), [self = shared_from_this()]() {
 		if (self->m_gone || self->m_closeSent)
@@ -261,7 +326,7 @@ void ibWebSocketClient::Close()
 	});
 }
 
-void ibWebSocketClient::SendFrame(std::uint8_t opcode, std::string payload)
+void ibWebSocketClientState::SendFrame(std::uint8_t opcode, std::string payload)
 {
 	ibWebSocketFrame frame;
 	frame.m_opcode = opcode;
@@ -269,7 +334,7 @@ void ibWebSocketClient::SendFrame(std::uint8_t opcode, std::string payload)
 	Queue(frame.Encode(/*masked*/ true));
 }
 
-void ibWebSocketClient::Queue(std::string bytes)
+void ibWebSocketClientState::Queue(std::string bytes)
 {
 	if (m_gone)
 		return;
@@ -282,7 +347,7 @@ void ibWebSocketClient::Queue(std::string bytes)
 	Pump();
 }
 
-void ibWebSocketClient::Pump()
+void ibWebSocketClientState::Pump()
 {
 	if (m_writing || m_gone)
 		return;
@@ -306,7 +371,7 @@ void ibWebSocketClient::Pump()
 		});
 }
 
-void ibWebSocketClient::Drop(const std::string& reason)
+void ibWebSocketClientState::Drop(const std::string& reason)
 {
 	if (m_gone)
 		return;
@@ -319,9 +384,40 @@ void ibWebSocketClient::Drop(const std::string& reason)
 	// Told once; and what was handed over is let go here, so nothing it holds outlives the socket.
 	const ibClosed closed = std::move(m_closed);
 	m_closed = nullptr;
+	m_opened = nullptr;
 	m_message = nullptr;
 	if (closed)
 		closed(reason);
+}
+
+ibWebSocketClient::ibWebSocketClient(asio::io_context& io, ibOpened opened, ibMessage message, ibClosed closed) :
+	m_state(std::make_shared<ibWebSocketClientState>(io, std::move(opened), std::move(message), std::move(closed)))
+{
+}
+
+ibWebSocketClient::~ibWebSocketClient()
+{
+	m_state->Close();
+}
+
+void ibWebSocketClient::Open(const std::string& host, std::uint16_t port, const std::string& target)
+{
+	m_state->Open(host, port, target);
+}
+
+void ibWebSocketClient::Send(std::string text)
+{
+	m_state->Send(ibWebSocketOpcode::Text, std::move(text));
+}
+
+void ibWebSocketClient::SendBinary(std::string data)
+{
+	m_state->Send(ibWebSocketOpcode::Binary, std::move(data));
+}
+
+void ibWebSocketClient::Close()
+{
+	m_state->Close();
 }
 
 //*******************************************************************************************

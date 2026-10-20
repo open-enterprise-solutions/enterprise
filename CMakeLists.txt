@@ -284,10 +284,10 @@ add_subdirectory(src/3rdparty/mbedtls EXCLUDE_FROM_ALL)
 set(CMAKE_POSITION_INDEPENDENT_CODE ${OES_PIC_WAS})
 add_compile_definitions(CPPHTTPLIB_MBEDTLS_SUPPORT)
 
-# THE WEB SERVER'S HTTP — its own, beside cpp-httplib: llhttp parses the requests, Asio carries the sockets (both
-# webserver's alone). llhttp is built here from the three C files of its release branch, as
-# webserver/llhttp/llhttp.vcxproj builds them: its own CMake writes into the submodule's tree and asks for CMake 3.25.
-# Asio is header-only, compiled once inside the web server (webserver/http/asio.cpp).
+# THE CORE'S HTTP (core/net) — its own, beside cpp-httplib: llhttp parses the requests, Asio carries the sockets (both
+# the core's alone). llhttp is built here from the three C files of its release branch, as
+# core/net/llhttp/llhttp.vcxproj builds them: its own CMake writes into the submodule's tree and asks for CMake 3.25.
+# Asio is header-only, compiled once inside the core (core/net/asio.cpp).
 oes_require_submodule(llhttp include/llhttp.h)
 oes_require_submodule(asio asio/include/asio.hpp)
 add_library(llhttp STATIC

@@ -237,6 +237,7 @@ A headless process that serves the bases of its **server folder** (`--dir`, by d
 - **Opening:** every base through `CreateFile/ServerAppDataEnv` in `eSERVER_MODE`, then a session of kind `Service` logged into it. A base that does not open or refuses the login is said and closed alone; the rest are served. Firebird and PostgreSQL bases share one process.
 - **Who may come in** (`ibServiceExclusivePolicy`, asked at open by `CanOpen` and at every session by `CanAdd`): application servers (`eSERVER_MODE`) share a base with application servers, file bases with file bases — a file-base process (designer, enterprise, the web host) is refused while a server serves the base, and a server while a file base uses it. The row's run mode decides, whatever its kind: a server's thin clients are the server's. What several servers on one base share already lives in it: `sys_session`, `sys_lock`, a job's claim and its clock in `sys_job`.
 - **Journal:** every line about a base carries its name — `(trade1) source …`. The console shows the server's own lines and every warning and error; the running commentary stays in the file.
+- **Clients' port** (`Port`, 7373; `clientListener`): `WS /<base>/client` and `POST /<base>/client` over the core's HTTP (`core/net`, Asio) — a waiting socket costs a buffer, not a thread. Plain HTTP on every interface until oess:// (`ibHttpServerOptions::m_clearBeyondMachine`); `ClientConnections` (backend.conf, 1000) at once; a socket that has not logged in goes 15 s after it opened.
 - **Stop:** Ctrl+C, SIGTERM or the console closing raises a flag; the main thread ends the server's sessions, then closes every base newest first.
 - **Not yet:** a port and a protocol for clients (the host's protocol is the next stage), choosing which bases to start (`--base`, for a coordinator), running as a Windows service, creating a new base (only the designer creates the system tables).
 
@@ -248,7 +249,7 @@ A transport between browsers and bases: it holds no forms and runs no code of it
 
 - **Publications** — `web.conf` in the web folder (`--dir`, by default `web` beside the program), or one named on the command line (`--file` / `--server`). One group per publication: `Kind=firebird` + `Directory` — a file base opened in this process through `fileserver` and held as a server holds its bases (a connection per browser); `Kind=server` + `Address=oes://host:port/base` — a base of an application server, relayed.
 - **Routes:** `WS /<publication>/client` — a connection, each text message one JSON-RPC request of the [client protocol](public/client-protocol.md), the base's notifications pushed; `POST /<publication>/client` — one request; the site's files from `Root` (`www`) at `/`, with ETag/304.
-- **Transport:** Asio (standalone) + llhttp, TLS by Mbed TLS. HTTP serves loopback only; on any other interface plain HTTP only sends the browser on to HTTPS. Answers of 1 KB and more are deflated on `?compress=deflate`; a page of another site (`Origin` not in `Origins`) is refused.
+- **Transport:** the core's (`core/net`) — Asio (standalone) + llhttp, TLS by Mbed TLS. HTTP serves loopback only; on any other interface plain HTTP only sends the browser on to HTTPS. Answers of 1 KB and more are deflated on `?compress=deflate`; a page of another site (`Origin` not in `Origins`) is refused.
 - **Stop:** Ctrl+C, Ctrl+Break or the console closing — the listeners stop, then every base it opened closes.
 - **Not yet:** the browser client (a scaffold), web services, running as a service.
 
@@ -259,7 +260,7 @@ Two header-only helpers in `frontend/diagnostics/` cover the boilerplate every b
 | Binary type | Helper | What it wires |
 |---|---|---|
 | GUI (`enterprise` / `designer` / `codeRunner` / `launcher`) | `ibWxApp` base class (`oesApp.h`) | `wxApp::OnInit` → `ibCrashGuard::Install` + `DoOnInit()`; `OnRun` → try/catch around `DoOnRun()`; 3 exception overrides (main-loop / unhandled / fatal). Subclass overrides only `GetExeName()` + optional `DoOnRun()`. |
-| Console (`wenterprise-server` / `appserver`) | `ibOesConsoleBoot` RAII (`oesConsole.h`) | Single object that holds a `wxInitializer`, runs `wxSocketBase::Initialize`, calls `ibCrashGuard::Install`. `IsOk()` checks the wx init result. |
+| Console (`wenterprise-server` / `appserver`) | `ibOesConsoleBoot` RAII (`oesConsole.h`) | Single object that holds a `wxInitializer` and calls `ibCrashGuard::Install`. `IsOk()` checks the wx init result. |
 
 ### Crash plumbing layers
 
@@ -278,7 +279,7 @@ Two header-only helpers in `frontend/diagnostics/` cover the boilerplate every b
 
   frontend/diagnostics/oesConsole.h       ─── Header-only. RAII boot helper for
                                               console binaries. Wraps wxInitializer +
-                                              wxSocket init + crashGuard::Install.
+                                              crashGuard::Install.
 
   wfrontend layer (web)                   ─── cpp-httplib set_exception_handler in
                                               wes' main.cpp emits JSON 500 with

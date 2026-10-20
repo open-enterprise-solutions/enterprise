@@ -3,7 +3,7 @@
 #
 # The backend is the core engine: compiler, metadata, database layer, debugger.
 # It has NO GUI code. It links against wxBase (wxString, wxDateTime, wxFile,
-# wxSocket, wxThread, etc.) but never against wxCore or any GUI toolkit.
+# wxThread, etc.) but never against wxCore or any GUI toolkit.
 ################################################################################
 
 cmake_minimum_required(VERSION 3.20)
@@ -166,7 +166,6 @@ target_link_libraries(backend
         core
         wx::base
         wx::core
-        wx::net
         wx::xml
         wx::propgrid
         wx::aui

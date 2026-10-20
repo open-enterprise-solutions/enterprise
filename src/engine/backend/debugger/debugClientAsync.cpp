@@ -132,24 +132,24 @@ void ibDebuggerClient::ibDebuggerClientAdapter::RemoveBridge(ibDebuggerClientBri
 		m_debugBridges.end());
 }
 
-void ibDebuggerClient::ibDebuggerClientAdapter::OnSessionStart(wxSocketClient* sock)
+void ibDebuggerClient::ibDebuggerClientAdapter::OnSessionStart()
 {
-	IB_DEBUG_FANOUT(OnSessionStart(sock));
+	IB_DEBUG_FANOUT(OnSessionStart());
 }
 
-void ibDebuggerClient::ibDebuggerClientAdapter::OnSessionEnd(wxSocketClient* sock)
+void ibDebuggerClient::ibDebuggerClientAdapter::OnSessionEnd()
 {
-	IB_DEBUG_FANOUT(OnSessionEnd(sock));
+	IB_DEBUG_FANOUT(OnSessionEnd());
 }
 
-void ibDebuggerClient::ibDebuggerClientAdapter::OnEnterLoop(wxSocketClient* sock, const ibDebugLineData& data)
+void ibDebuggerClient::ibDebuggerClientAdapter::OnEnterLoop(const ibDebugLineData& data)
 {
-	IB_DEBUG_FANOUT(OnEnterLoop(sock, data));
+	IB_DEBUG_FANOUT(OnEnterLoop(data));
 }
 
-void ibDebuggerClient::ibDebuggerClientAdapter::OnLeaveLoop(wxSocketClient* sock, const ibDebugLineData& data)
+void ibDebuggerClient::ibDebuggerClientAdapter::OnLeaveLoop(const ibDebugLineData& data)
 {
-	IB_DEBUG_FANOUT(OnLeaveLoop(sock, data));
+	IB_DEBUG_FANOUT(OnLeaveLoop(data));
 }
 
 void ibDebuggerClient::ibDebuggerClientAdapter::OnAutoComplete(const ibDebugAutoCompleteData& data)

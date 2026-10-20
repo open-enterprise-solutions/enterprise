@@ -1,5 +1,5 @@
-#ifndef __WEBSERVER_HTTP_STREAM_H__
-#define __WEBSERVER_HTTP_STREAM_H__
+#ifndef __CORE_NET_HTTP_STREAM_H__
+#define __CORE_NET_HTTP_STREAM_H__
 
 // THE BYTES OF ONE CONNECTION — plain TCP, or TLS over it (tlsStream.h): what the connection reads and writes, the
 // same either way. Every call is made on the connection's strand, the socket's executor, and every `done` is called

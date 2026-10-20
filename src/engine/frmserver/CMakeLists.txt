@@ -36,7 +36,6 @@ target_link_libraries(frmserver
         wx::html
         wx::adv
         wx::base
-        wx::net
         wx::xml
 )
 

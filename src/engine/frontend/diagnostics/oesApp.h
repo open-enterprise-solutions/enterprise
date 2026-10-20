@@ -42,7 +42,6 @@
 #include <wx/debugrpt.h>
 #include <wx/log.h>
 #include <wx/msgdlg.h>
-#include <wx/socket.h>
 #include <wx/string.h>
 #include <wx/thread.h>
 
@@ -61,17 +60,11 @@ public:
 	// dump-file prefix and dialog caption. Override on the concrete app.
 	virtual wxString GetExeName() const = 0;
 
-	// Subclass entry points. Defaults match what enterprise / designer
-	// were duplicating verbatim — `wxSocketBase::Initialize()` (needed
-	// by appData's transport stack) + `wxApp::OnInit()` (the wx side of
-	// init: cmd-line parse, image handler registration). Override only
-	// if the exe needs extra steps (codeRunner / launcher construct a
-	// frame here; enterprise / designer keep the default).
-	virtual bool DoOnInit()
-	{
-		wxSocketBase::Initialize();
-		return wxApp::OnInit();
-	}
+	// Subclass entry points. The default is `wxApp::OnInit()` (the wx
+	// side of init: cmd-line parse, image handler registration). Override
+	// only if the exe needs extra steps (codeRunner / launcher construct
+	// a frame here; enterprise / designer keep the default).
+	virtual bool DoOnInit() { return wxApp::OnInit(); }
 
 	virtual int DoOnRun() { return wxApp::OnRun(); }
 
@@ -304,8 +297,8 @@ public:
 #if wxUSE_ON_FATAL_EXCEPTION && wxUSE_STACKWALKER
 	void OnFatalException() override
 	{
-		// wxSocketBase / wxDebugReport / wxDebugReportPreviewStd are
-		// main-thread-only — they assert wxIsMainThread() inside. A
+		// wxDebugReport / wxDebugReportPreviewStd are main-thread-only
+		// — they assert wxIsMainThread() inside. A
 		// background-thread fault going through the wx path double-faults.
 		// Surface a platform-native message + TerminateProcess.
 		if (!wxIsMainThread()) {

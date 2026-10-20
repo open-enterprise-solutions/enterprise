@@ -1,5 +1,5 @@
-#ifndef __WEBSERVER_TLS_STREAM_H__
-#define __WEBSERVER_TLS_STREAM_H__
+#ifndef __CORE_NET_TLS_STREAM_H__
+#define __CORE_NET_TLS_STREAM_H__
 
 // TLS OVER A CONNECTION — Mbed TLS, the build's own (backend/tls), driven without a socket of its own: what it
 // writes is collected and handed to the socket, what the socket reads is handed to it, so a connection waiting for

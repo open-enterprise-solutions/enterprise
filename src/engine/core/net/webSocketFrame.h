@@ -1,5 +1,5 @@
-#ifndef __WEBSERVER_WEB_SOCKET_FRAME_H__
-#define __WEBSERVER_WEB_SOCKET_FRAME_H__
+#ifndef __CORE_NET_WEB_SOCKET_FRAME_H__
+#define __CORE_NET_WEB_SOCKET_FRAME_H__
 
 // A WEBSOCKET'S FRAMES (RFC 6455 § 5) — read as the bytes come and written whole, for both ends: the server's, whose
 // peer must mask what it sends, and the client's (the web server's own connection to an application server), which
@@ -8,6 +8,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+
+#include "core/core.h"
 
 namespace ibWebSocketOpcode {
 	constexpr std::uint8_t Continuation = 0x0;
@@ -31,7 +33,7 @@ namespace ibWebSocketClose {
 	constexpr std::uint16_t BadGateway    = 1014;
 }
 
-struct ibWebSocketFrame {
+struct CORE_API ibWebSocketFrame {
 	bool         m_final = true;
 	std::uint8_t m_opcode = ibWebSocketOpcode::Text;
 	std::string  m_payload;   // unmasked
@@ -40,7 +42,7 @@ struct ibWebSocketFrame {
 	std::string Encode(bool masked) const;
 };
 
-class ibWebSocketFrameReader {
+class CORE_API ibWebSocketFrameReader {
 public:
 
 	// `masked` — the peer is a client, and every frame it sends is masked; otherwise none may be. `limit` — the
