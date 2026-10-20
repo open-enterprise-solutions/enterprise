@@ -5,8 +5,8 @@
 #include "backend/query/queryable.h"                 // ibBackendQueryable
 #include "backend/query/queryableFactory.h"          // ibQueryableSourceDescriptor (source holder + its command surface)
 #include "backend/query/queryColumn.h"               // ibBackendQueryColumn::GetColumnId
-#include "backend/query/queryParser.h"               // the query is READ by the engine's own parser
-#include "backend/query/queryLexer.h"                // ibQueryLexer::ParamNames — the parameters the TEXT asks for
+#include "core/query/queryParser.h"               // the query is READ by the engine's own parser
+#include "core/query/queryLexer.h"                // ibQueryLexer::ParamNames — the parameters the TEXT asks for
 #include "backend/system/systemManager.h"            // system functions
 #include "backend/compiler/procUnit.h"                // ibProcUnit::Evaluate — a parameter expression is run here
 #include "backend/compiler/procContext.h"             // ibRunContext — the frame an expression is evaluated in
@@ -14,7 +14,7 @@
 #include "backend/session/session.h"                   // ibSession::Current / GetPUState — where the root lives
 #include "backend/system/value/valueType.h"           // ibValueTypeDescription::AdjustValue — the result decides the type
 #include "backend/query/queryConstructorModel.h"      // ibQueryConstructorModel — the fields a window offers
-#include "backend/query/queryRender.h"               // ibRenderQuery / ibQueryColumnFromPath — the seed query, written out
+#include "core/query/queryRender.h"               // ibRenderQuery / ibQueryColumnFromPath — the seed query, written out
 #include "backend/backend_exception.h"               // the engine's verdict on a query that will not resolve
 #include "backend/srcDataObject.h"                   // ibSourceExplorer
 #include "core/serialize/dataBuilder.h"           // ibDataNode (object-level save/load)

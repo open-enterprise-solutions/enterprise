@@ -12,7 +12,7 @@
 #include "backend/metaCollection/partial/reference/reference.h" // ibValueReferenceDataObject — reference-as-source
 #include "backend/metaCollection/resource/metaResourceObject.h"   // the RESOURCE metatype — its own class icon
 #include "backend/query/queryConstructorModel.h"   // WalkPath — where a written path starts, and its hops by type
-#include "backend/query/queryRender.h"             // ibQueryColumnFromPath — a written path as its hops
+#include "core/query/queryRender.h"             // ibQueryColumnFromPath — a written path as its hops
 
 #include <map>  // what each field name of a composite field may be, united across its targets
 #include <set>   // …and which names have already been put up, so a shared one goes up once

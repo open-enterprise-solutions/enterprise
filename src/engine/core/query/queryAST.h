@@ -17,7 +17,7 @@
 //
 // See docs/private/query-language-arc.md §14 / §23.
 
-#include "backend/backend.h"   // BACKEND_API
+#include "core/core.h"   // CORE_API
 #include "core/anyValue.h"          // ibAnyValuePtr — a constant: what the text wrote, or a value a run put there
 #include "core/query/queryKeywords.h"     // ibQueryKeyword (aggregate func tag)
 #include "core/query/queryUnfold.h"       // ibQueryDimUnfold — the three unfold words, shared with L3

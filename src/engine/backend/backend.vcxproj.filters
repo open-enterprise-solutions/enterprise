@@ -2641,19 +2641,10 @@
     <ClCompile Include="query\dataQueryBuilder.cpp">
       <Filter>query</Filter>
     </ClCompile>
-    <ClCompile Include="query\queryLexer.cpp">
-      <Filter>query</Filter>
-    </ClCompile>
-    <ClCompile Include="query\queryRender.cpp">
-      <Filter>query</Filter>
-    </ClCompile>
     <ClCompile Include="query\queryConstructorModel.cpp">
       <Filter>query</Filter>
     </ClCompile>
     <ClCompile Include="query\queryTempStore.cpp">
-      <Filter>query</Filter>
-    </ClCompile>
-    <ClCompile Include="query\queryParser.cpp">
       <Filter>query</Filter>
     </ClCompile>
     <ClCompile Include="query\queryLowering.cpp">
@@ -2663,9 +2654,6 @@
       <Filter>query</Filter>
     </ClCompile>
     <ClCompile Include="query\queryHierarchy.cpp">
-      <Filter>query</Filter>
-    </ClCompile>
-    <ClCompile Include="query\queryRewrite.cpp">
       <Filter>query</Filter>
     </ClCompile>
     <ClCompile Include="compiler\lambdaQueryAST.cpp">
@@ -2809,22 +2797,10 @@
     <ClInclude Include="query\queryRowCursor.h">
       <Filter>query</Filter>
     </ClInclude>
-    <ClInclude Include="query\queryLexer.h">
-      <Filter>query</Filter>
-    </ClInclude>
-    <ClInclude Include="query\queryAST.h">
-      <Filter>query</Filter>
-    </ClInclude>
-    <ClInclude Include="query\queryRender.h">
-      <Filter>query</Filter>
-    </ClInclude>
     <ClInclude Include="query\queryConstructorModel.h">
       <Filter>query</Filter>
     </ClInclude>
     <ClInclude Include="query\queryTempStore.h">
-      <Filter>query</Filter>
-    </ClInclude>
-    <ClInclude Include="query\queryParser.h">
       <Filter>query</Filter>
     </ClInclude>
     <ClInclude Include="query\queryLowering.h">
@@ -2834,9 +2810,6 @@
       <Filter>query</Filter>
     </ClInclude>
     <ClInclude Include="query\queryHierarchy.h">
-      <Filter>query</Filter>
-    </ClInclude>
-    <ClInclude Include="query\queryRewrite.h">
       <Filter>query</Filter>
     </ClInclude>
     <ClInclude Include="compiler\lambdaQueryAST.h">

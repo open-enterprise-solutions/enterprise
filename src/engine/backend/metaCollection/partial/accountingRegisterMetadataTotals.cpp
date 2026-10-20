@@ -57,7 +57,7 @@
 #include "backend/query/dataQueryBuilder.h"                        // L3 door — From(source).Select() / SelectAggregate()
 #include "backend/databaseLayer/databaseMaterializeBuilder.h"       // L2-2 — RenderMaterializedRead: the READ side of the materialised surface
 #include "backend/query/queryRamTable.h"                           // FoldBalancesForward — the running step, shared with the accumulation register
-#include "backend/query/queryAST.h"                                // ibQueryDimUnfold — «in» / «in hierarchy» / «hierarchy only», the language's own three words
+#include "core/query/queryAST.h"                                // ibQueryDimUnfold — «in» / «in hierarchy» / «hierarchy only», the language's own three words
 #include "backend/query/queryHierarchy.h"                          // ibQueryHierarchyScope — the operator that resolves those three words into values
 #include "backend/query/queryException.h"                          // ibBackendQueryNameException — a breakdown field the register does not have
 #include "backend/databaseLayer/databaseLayer.h"                   // ibDateTime::BeginOfPeriod / BeginOfNextPeriod (fdatetime.h) — the GRAIN, in RAM terms

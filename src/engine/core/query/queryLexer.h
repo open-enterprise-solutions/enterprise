@@ -17,7 +17,7 @@
 // See docs/private/query-language-arc.md §14 / §23.
 
 #include "core/compiler/translateCode.h"   // ibTranslateCode (char primitives)
-#include "backend/backend.h"               // BACKEND_API
+#include "core/core.h"   // CORE_API
 #include "core/compiler/lexValue.h"   // ibLexValue — a constant as the text wrote it
 #include "core/query/queryKeywords.h"
 
@@ -54,7 +54,7 @@ struct ibQueryToken
 	bool IsEnd() const { return m_kind == ibQueryTokenKind::End; }
 };
 
-class BACKEND_API ibQueryLexer : protected ibTranslateCode
+class CORE_API ibQueryLexer : protected ibTranslateCode
 {
 public:
 	// A query is not a module: the lexer reads its words with GetWord and matches them against the

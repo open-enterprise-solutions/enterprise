@@ -13,7 +13,7 @@
 
 #include "backend/compiler/compileCode.h"
 #include "backend/compiler/lambdaQueryAST.h"
-#include "backend/query/queryAST.h"
+#include "core/query/queryAST.h"
 
 #include "lambdaRecordFix.h"
 

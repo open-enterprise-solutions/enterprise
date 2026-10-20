@@ -30,9 +30,9 @@
 
 #include <gtest/gtest.h>
 
-#include "backend/query/queryAST.h"
-#include "backend/query/queryParser.h"
-#include "backend/query/queryRender.h"
+#include "core/query/queryAST.h"
+#include "core/query/queryParser.h"
+#include "core/query/queryRender.h"
 #include "backend/backend_exception.h"
 
 namespace {

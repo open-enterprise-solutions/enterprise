@@ -7,7 +7,7 @@
 
 #include <gtest/gtest.h>
 
-#include "backend/query/queryLexer.h"
+#include "core/query/queryLexer.h"
 
 namespace {
 
