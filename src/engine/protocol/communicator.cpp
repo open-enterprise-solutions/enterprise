@@ -83,8 +83,15 @@ int ExchangeDelay()
 }
 
 // Password and Token are bearer secrets. The debug journal records the exchange; the release build's macro is empty.
+// Only a text that names one is read again: a login's. Every frame read a second time for the journal cost more than
+// reading it for the client (a Debug profile, 2026-10-20: 535 ms against 387).
 std::string Redacted(const std::string& text)
 {
+	static const std::string password = std::string("\"") + ibProtocol::ibLogin::Password + "\"";
+	static const std::string token = std::string("\"") + ibProtocol::ibLogin::Token + "\"";
+	if (text.find(password) == std::string::npos && text.find(token) == std::string::npos)
+		return text;
+
 	json node = json::parse(text, nullptr, false);
 	if (!node.is_object())
 		return text;
