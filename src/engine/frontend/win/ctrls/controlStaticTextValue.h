@@ -307,8 +307,12 @@ private:
 				m_cachedLabelSize = wxSize(0, 0);
 			}
 			else {
+				// Multi-line: a caption with explicit '\n' is measured line by line, the same way
+				// OnPaint draws it, so its rows are not clipped to one line's height.
+				wxClientDC dc(const_cast<ibControlStaticTextValue*>(this));
+				dc.SetFont(GetFont());
 				wxCoord w = 0, h = 0;
-				GetTextExtent(m_labelText, &w, &h);
+				dc.GetMultiLineTextExtent(m_labelText, &w, &h);
 				m_cachedLabelSize = wxSize(w, h);
 			}
 		}
