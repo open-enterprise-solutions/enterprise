@@ -794,13 +794,23 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 		client->connectionless = connection == nullptr;
 		client->connection.store(connection, std::memory_order_relaxed);
 		client->protocol = std::min(protocol, ibProtocol::Version);
+		// THE LOGIN — false: its user or its password; thrown: refused before any (another designer at work), said as
+		// it is. Read as a wrong password, it opened the client's login window on a question nobody asked (2026-10-20).
+		const auto logIn = [&]() {
+			try {
+				if (client->instance->Login(params.GetValue<wxString>(ibProtocol::ibLogin::User), params.GetValue<wxString>(ibProtocol::ibLogin::Password)))
+					return true;
+				refuse(ibProtocol::ibRefusal::LoginRefused, wxT("the login was refused"));
+			}
+			catch (const ibCoreException& err) {
+				refuse(ibProtocol::ibRefusal::NotNow, err.GetErrorDescription());
+			}
+			return false;
+		};
 		if (protocol < 1) {
 			refuse(ibProtocol::ibRefusal::BadParameter, wxString::Format(wxT("no protocol version %d"), protocol));
 		}
-		else if (!client->instance->Login(params.GetValue<wxString>(ibProtocol::ibLogin::User), params.GetValue<wxString>(ibProtocol::ibLogin::Password))) {
-			refuse(ibProtocol::ibRefusal::LoginRefused, wxT("the login was refused"));
-		}
-		else {
+		else if (logIn()) {
 			{
 				std::lock_guard<std::mutex> lock(m_mutex);
 				m_clients[id] = client;

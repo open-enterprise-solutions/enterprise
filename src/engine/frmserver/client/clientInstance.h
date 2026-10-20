@@ -38,7 +38,8 @@ public:
 	~ibClientInstance();
 
 	// Opens a session in the base as `user`, on the session's own worker. False: refused (the reason is
-	// journalled where it happened).
+	// journalled where it happened). Throws (ibCoreException) what refuses the session before any login — another
+	// designer at work — so the person is told why, not asked to log in again.
 	bool Login(const wxString& user, const wxString& password);
 
 	// ON THE SESSION'S WORKER, after Login: the frame of the client's mode first — a start may already open forms or

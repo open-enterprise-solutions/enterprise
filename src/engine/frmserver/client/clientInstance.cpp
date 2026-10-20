@@ -52,13 +52,10 @@ bool ibClientInstance::Login(const wxString& user, const wxString& password)
 	// ITS KIND IS THE CLIENT'S MODE: the runtime's a thin client; the designer's a thin designer — a designer as the
 	// desktop's is (no runtime, the one designer of the base), whatever process hosts it.
 	const ibSessionKind kind = m_mode == ibProtocol::ibLogin::ibMode::Designer ? ibSessionKind::ThinDesigner : ibSessionKind::ThinClient;
-	ibSessionHolder holder;
-	try {
-		holder = m_applicationInstance->CreateSession<ibClientSession>(kind, m_id, m_address);
-	}
-	catch (const ibCoreException&) {
-		holder.Reset();
-	}
+	// …REFUSED BEFORE ANY LOGIN — another designer at work (ibDesignerExclusivePolicy): thrown on, its reason the person's
+	// to read. Turned into false here, it reached the client as a wrong password, and the login window asked for a name
+	// that was never the question (2026-10-20).
+	ibSessionHolder holder = m_applicationInstance->CreateSession<ibClientSession>(kind, m_id, m_address);
 	if (!holder)
 		return false;
 	ibSession* const session = holder.Get();
