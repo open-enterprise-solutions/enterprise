@@ -10,18 +10,24 @@
  *
  * ⚠ ONCE PER MODULE, because Mbed TLS is a static library: the engine's copy and a test binary's copy each
  * have their own function pointers and their own global mutexes. Include this header in exactly one
- * translation unit of every module that uses Mbed TLS, after httplib.h (which is what says whether TLS is
- * compiled in at all). Two inclusions in one module would hand the mutexes over twice and leak the first set.
+ * translation unit of every module that uses Mbed TLS, after <windows.h> (httplib.h and asio.hpp both bring
+ * it). Two inclusions in one module would hand the mutexes over twice and leak the first set. Whether there is
+ * anything to hand over is the configuration's to say (MBEDTLS_THREADING_ALT, oes_mbedtls_config.h).
  *
- * Today that is valueHttp.cpp (the engine) and tests/test_valueHttpSecure.cpp (the test binary). The web
- * server compiles httplib.h too and links Mbed TLS through the engine, and its TLS listener - as the
- * assistant's - is made INSIDE the engine (server/listener.cpp), on the engine's copy, whose mutexes are
- * already given; it needs no copy of this header until it makes a TLS context of its own.
+ * Today that is valueHttp.cpp (the engine), webserver/http/tlsStream.cpp (the web server, which links its own
+ * copy) and tests/test_valueHttpSecure.cpp (the test binary). wenterprise-server compiles httplib.h too and
+ * links Mbed TLS through the engine, and its TLS listener - as the assistant's - is made INSIDE the engine
+ * (server/listener.cpp), on the engine's copy, whose mutexes are already given; it needs no copy of this
+ * header until it makes a TLS context of its own.
  */
 
-#if defined(CPPHTTPLIB_SSL_ENABLED) && defined(_WIN32)
+#if defined(_WIN32)
 
 #include <mbedtls/threading.h>
+
+#endif
+
+#if defined(_WIN32) && defined(MBEDTLS_THREADING_ALT)
 
 #include <new>
 

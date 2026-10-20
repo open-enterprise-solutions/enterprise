@@ -207,7 +207,7 @@ public:
 	static constexpr int kActivityWidth = 128;
 
 	// ---- Session factory facade ----
-	// Wraps the EnsureStartedForCreateSession + Connect(req) handshake.
+	// Wraps the Connect(req) handshake — the registry is up already, started by its base as it opened.
 	// `appData->CreateSession*` forward here; per-tab web flow and the
 	// clients of the protocol use the (presetGuid, address) overload to
 	// inject their own identity.
@@ -251,17 +251,17 @@ public:
 	// Set whether the registry owns sys_session row I/O. Default false —
 	// handlers only drive in-memory state transitions (useful for tests
 	// or embedding scenarios where a different actor keeps the table).
-	// CreateSessionWithFactory flips this to true before Start() so the
+	// Start flips this to true before its thread runs, so the
 	// handlers take over INSERT / UPDATE / DELETE and `HoldRowLocks`
-	// takes real pessimistic locks. Must be set BEFORE Start() — Start
-	// decides whether to check out pool connections based on this flag.
+	// takes real pessimistic locks — Start decides whether to check out
+	// pool connections based on this flag.
 	void EnableSysSessionOwnership(bool enabled) { m_ownsSysSession = enabled; }
 	bool OwnsSysSession() const { return m_ownsSysSession; }
 
-	// Start the consumer thread. No-op if already running. Invariant:
-	// must be called once — and only once — before any Submit(). Typically
-	// called via EnsureStartedForCreateSession from CreateSessionWithFactory
-	// right after the DB is open.
+	// Start the consumer thread — sys_session ownership on and the policies
+	// added first. No-op if already running. Invariant: must be called
+	// once — and only once — before any Submit(): by its base as it opens
+	// (ibApplicationInstance::Open), after the configuration, before the jobs.
 	void Start();
 
 	// Signal stop, wake the thread, join it. The kill-switch — submits
@@ -517,12 +517,6 @@ public:
 
 private:
 
-	// Idempotent registry bring-up driven from CreateSessionWithFactory.
-	// First call enables sys_session ownership, registers the
-	// DesignerExclusive and ServiceExclusive policies, and starts the
-	// consumer thread. Subsequent calls are no-ops.
-	void EnsureStartedForCreateSession();
-
 	void ThreadBody() noexcept;
 
 	// Drain queue: pop snapshot from each bin top-down (Urgent first),
@@ -700,8 +694,8 @@ private:
 	std::deque<ibRegistryRequest>                                m_pendingExclusive;
 
 	// --- sys_session ownership ----
-	// Off by default — handlers only drive state transitions. Flip to
-	// true (via EnableSysSessionOwnership) before Start() to take over
+	// Off by default — handlers only drive state transitions. Start turns
+	// it on (EnableSysSessionOwnership) before its thread runs, taking over
 	// sys_session row I/O + pessimistic row locks.
 	bool                                                         m_ownsSysSession = false;
 

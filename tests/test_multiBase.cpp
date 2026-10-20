@@ -34,6 +34,7 @@
 #include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
 #include "backend/session/session.h"
 #include "backend/session/sessionHolder.h"
+#include "backend/session/sessionRegistry.h"           // Start — a base put together by hand starts its registry
 
 namespace {
 
@@ -256,7 +257,7 @@ TEST_F(OneBaseFix, AnEmptyUserListOpensAndAnUnreadableOneRefuses)
 		EXPECT_TRUE(server->AuthenticateUser(wxEmptyString, wxEmptyString, info));
 	}
 
-	// The registry started by the web server's own session holds a connection
+	// The registry, started below as Open starts it, holds a connection
 	// for sys_session. On the one-connection :memory: base above, the login's
 	// read then waits until the pool says it is exhausted and the door
 	// refuses. A file and a wider pool let that read see the empty list.
@@ -272,6 +273,8 @@ TEST_F(OneBaseFix, AnEmptyUserListOpensAndAnUnreadableOneRefuses)
 			"CREATE TABLE sys_session ("
 			"session TEXT PRIMARY KEY, userName TEXT, application INTEGER, "
 			"started TEXT, lastActive TEXT, computer TEXT)")), -1);
+		// …the base being put together by hand, its registry is started the way Open starts it.
+		ibApplicationInstance::GetSessionRegistry()->Start();
 		ibSessionHolder web = webBase->CreateSession(ibSessionKind::WebServer);
 		ASSERT_NE(web.Get(), nullptr);
 		ibSessionScope scope(web.Get());

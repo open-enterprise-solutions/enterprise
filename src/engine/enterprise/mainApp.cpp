@@ -121,6 +121,8 @@ int ibAppEnterprise::DoOnRun()
 	auto bringUp = [&]() -> bool {
 		ibFileInstanceRequest request;
 		request.m_locale = m_strLocale;
+		// `--debug`: the debug server comes up with the base's configuration, and every session is debuggable.
+		request.m_loadMetadataFlags = m_debugEnable ? _app_start_create_debug_server_flag : _app_start_default_flag;
 		if (!m_strFile.IsEmpty())
 			request.m_directory = m_strFile;
 		else {
@@ -248,15 +250,9 @@ int ibAppEnterprise::DoOnRun()
 	//      window takes ownership; from here it IS the session's life.
 	//   4. Show — EnsureRuntime creates root + ProcUnits, AllowRun fires
 	//      BeforeStart.
-	// Stash flags so OnFirstConnect listener picks them up when
-	// LoadMetadata fires from the registry event chain.
-	appData->m_loadMetadataFlags = m_debugEnable
-		? _app_start_create_debug_server_flag
-		: _app_start_default_flag;
-
 	// Registry listeners (wired in appData ctor) handle BindSessionToThread,
-	// LoadMetadata, CreateRoot + CompileRoot + AttachRuntime
-	// through OnFirstConnect / OnAuthenticated.
+	// CreateRoot + CompileRoot + AttachRuntime through OnAuthenticated; the
+	// configuration ran as the base opened.
 	// The holder lives on this stack frame until it is handed to the main
 	// form. Every failure path below simply lets it go — dropping the
 	// holder IS closing the session (anonymous sys_session row removed,

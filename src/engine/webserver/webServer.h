@@ -1,0 +1,119 @@
+#ifndef __WEBSERVER_WEB_SERVER_H__
+#define __WEBSERVER_WEB_SERVER_H__
+
+// THE WEB SERVER — the bases' transport for browsers: it serves a site's files, and carries the protocol of a base's
+// clients between a browser and the base. A PUBLICATION is a base under a name in the address — a file base, opened
+// here and held as a server holds its bases (protocol/connectionFile.h: one base, a connection per browser), or a
+// base of an application server, reached over its port (http/httpClient.h). Either way the browser sees the same
+// door, the one an application server has:
+//
+//   WS   /<publication>/client    a connection: each text message one JSON-RPC request, answered by its response
+//   POST /<publication>/client    one request, its response
+//
+// Started by hand it narrates in its console and stays until Ctrl+C; later it becomes a service.
+//
+//   <web folder>/                   web beside the program, unless --dir names another
+//     web.conf
+//     www/                          the site's files, unless Root names another folder
+//
+//   ; web.conf
+//   Host=127.0.0.1                  where browsers reach it: empty — every interface (HTTP there only sends a
+//                                   browser on to HTTPS)
+//   HttpPort=8080                   left out — 8080; empty — no HTTP; 0 — the system chooses
+//   HttpsPort=                      left out or empty — no HTTPS; it speaks over Certificate and PrivateKey (PEM)
+//   Certificate=
+//   PrivateKey=
+//   Root=www                        the site's files
+//   Origins=                        the pages of other sites that may open a socket here, comma-separated
+//   Workers=                        the threads that call the bases; empty — four per core, 32 at least
+//   [trade]                         a publication: the base at /trade/client
+//   Kind=firebird                   firebird — a file base, opened here from its Directory
+//   Directory=bases/trade
+//   Locale=                         the platform's locale for the base; empty — as the base says
+//   Debug=false                     true — the engine's debug server comes up, as enterprise's --debug
+//   [remote]
+//   Kind=server                     server — a base of an application server, at its Address
+//   Address=oes://appserver:7373/trade
+//
+// Every path is relative to the web folder.
+
+#include <cstdint>
+#include <map>
+#include <memory>
+#include <optional>
+#include <vector>
+
+#include <wx/string.h>
+
+#include "core/diagnostics/journal.h"
+
+#include "http/httpServer.h"
+
+class ibProtocolFileBase;
+
+// What the web server says goes through Print, not the journal macros: those compile to nothing in a release build,
+// and this is what a person watching the console must always see.
+template <typename... Args>
+void ibWebServerSay(ibJournalMark mark, const wxFormatString& format, const Args&... args)
+{
+	ibTechJournal::Print(mark, wxT("webserver"), format, args...);
+}
+
+// ONE PUBLICATION — a base under a name in the address.
+struct ibWebPublication {
+	wxString m_name;        // the path's first segment — the group of web.conf
+	wxString m_kind;        // lower-cased: firebird, server
+	wxString m_directory;   // firebird: the base's folder
+	wxString m_locale;
+	bool     m_debug = false;
+	wxString m_address;     // server: oes://server[:port]/<base>
+};
+
+// WHAT IS SERVED — web.conf, with the command line over it.
+struct ibWebConfig {
+	wxString                      m_folder;
+	wxString                      m_host = wxT("127.0.0.1");
+	std::optional<std::uint16_t>  m_httpPort = s_defaultHttpPort;
+	std::optional<std::uint16_t>  m_httpsPort;
+	wxString                      m_certificate;   // paths
+	wxString                      m_privateKey;
+	wxString                      m_root;
+	std::vector<wxString>         m_origins;
+	long                          m_workers = 0;
+	std::vector<ibWebPublication> m_publications;
+
+	// web.conf in `folder`, when there is one; false with why in `error` — a port that is not one, a publication of
+	// no kind this server knows. No file is no error: nothing is published but what the command line says.
+	bool Read(const wxString& folder, wxString& error);
+
+	// The web server's default port — the web's usual one beside the application server's 7373.
+	static constexpr std::uint16_t s_defaultHttpPort = 8080;
+};
+
+class ibWebServer {
+public:
+
+	explicit ibWebServer(const ibWebConfig& config);
+	~ibWebServer();
+
+	// The whole life: open, serve until Ctrl+C / SIGTERM / the console closing, stop. The process's exit code.
+	int Run();
+
+private:
+
+	// One publication: its file base opened, or its server's address read — and its routes given. False, the reason
+	// said, when it cannot be served; the rest are.
+	bool Publish(const ibWebPublication& publication);
+
+	// The connections let go first — each browser's clients leave their base — and then the file bases.
+	void Stop();
+
+	const ibWebConfig& m_config;
+	ibHttpServer       m_http;
+
+	// Every publication served, by name: the file base opened here for it, each the server of its browsers — none for
+	// an application server's.
+	std::map<wxString, std::unique_ptr<ibProtocolFileBase>> m_bases;
+};
+
+#endif

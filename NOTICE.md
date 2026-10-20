@@ -47,6 +47,8 @@ These keep their own licenses. Nothing in LICENSE.md changes or overrides them.
 | cpp-httplib | `src/3rdparty/cpp-httplib` (submodule) | MIT |
 | Mbed TLS | `src/3rdparty/mbedtls` (submodule) | Apache-2.0 |
 | nlohmann/json | `src/3rdparty/nlohmann` | MIT |
+| Asio (standalone) | `src/3rdparty/asio` (submodule) | Boost Software License 1.0 |
+| llhttp | `src/3rdparty/llhttp` (submodule) | MIT |
 | SQLite | `src/engine/backend/databaseLayer/sqllite/engine` | public domain |
 | Firebird client headers | `src/engine/backend/databaseLayer/firebird/engine` | InterBase Public License 1.0 / IDPL, per file header |
 | wxCharts (Xavier Leclercq) | `src/engine/frontend/win/ctrls/charts` | MIT |

@@ -1,0 +1,48 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="http">
+      <UniqueIdentifier>{6D1B7A52-3C0E-4F8A-9E21-5B7C40D2A10C}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="http\asio.cpp">
+      <Filter>http</Filter>
+    </ClCompile>
+    <ClCompile Include="http\httpClient.cpp">
+      <Filter>http</Filter>
+    </ClCompile>
+    <ClCompile Include="http\httpServer.cpp">
+      <Filter>http</Filter>
+    </ClCompile>
+    <ClCompile Include="http\httpStream.cpp">
+      <Filter>http</Filter>
+    </ClCompile>
+    <ClCompile Include="http\tlsStream.cpp">
+      <Filter>http</Filter>
+    </ClCompile>
+    <ClCompile Include="http\webSocketFrame.cpp">
+      <Filter>http</Filter>
+    </ClCompile>
+    <ClCompile Include="main.cpp" />
+    <ClCompile Include="webServer.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="http\httpClient.h">
+      <Filter>http</Filter>
+    </ClInclude>
+    <ClInclude Include="http\httpServer.h">
+      <Filter>http</Filter>
+    </ClInclude>
+    <ClInclude Include="http\httpStream.h">
+      <Filter>http</Filter>
+    </ClInclude>
+    <ClInclude Include="http\tlsStream.h">
+      <Filter>http</Filter>
+    </ClInclude>
+    <ClInclude Include="http\webSocketFrame.h">
+      <Filter>http</Filter>
+    </ClInclude>
+    <ClInclude Include="webServer.h" />
+  </ItemGroup>
+</Project>

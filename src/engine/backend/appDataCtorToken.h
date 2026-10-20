@@ -11,7 +11,8 @@
 //
 // How it works:
 //   - The token's constructor is private.
-//   - Only `ibApplicationInstance` and `ibApplicationHost` are friends, so only they can mint a token.
+//   - Only `ibApplicationInstance`, `ibApplicationHost` and `ibSession` are friends, so only they can mint a
+//     token (a designer's session makes the configuration it edits — ibSession::AcquireMetaData).
 //   - Subsystem ctors take an `ibAppDataCtorToken` argument.
 //
 // Net effect: subsystems can declare their ctors public (no friend
@@ -49,6 +50,7 @@
 // path that surfaced the bug.
 class ibApplicationInstance;
 class ibApplicationHost;
+class ibSession;
 
 namespace ib {
 
@@ -62,9 +64,11 @@ class AppDataCtorToken {
 public:
 #else
 	// Mintable only from inside ibApplicationInstance's TU — and the host's, which owns the process's share:
-	// the plugins and the syntax-helper corpus (appHost.h).
+	// the plugins and the syntax-helper corpus (appHost.h); and a designer's session's, for the configuration
+	// it edits, made for it and held by it alone (ibSession::AcquireMetaData).
 	friend class ::ibApplicationInstance;
 	friend class ::ibApplicationHost;
+	friend class ::ibSession;
 #endif
 	explicit AppDataCtorToken(ibApplicationInstance* applicationInstance = nullptr) : m_applicationInstance(applicationInstance) {}
 public:

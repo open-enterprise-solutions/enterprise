@@ -23,6 +23,7 @@
 #include "backend/appHost.h"   // ibApplicationInstanceScope — the HTTP and sweep threads work for the served base
 #include "backend/session/session.h"
 #include "backend/session/sessionRegistry.h"
+#include "backend/debugger/debugServer.h"   // wfrontendDebugMode — asked of the debug server
 #include "backend/backend_exception.h"
 #include "core/diagnostics/journal.h"
 #include "backend/databaseLayer/connectionHolder.h"
@@ -700,16 +701,12 @@ WFRONTEND_API bool wfrontendInitFile(
 		ibFileInstanceRequest request;
 		request.m_directory = wxString::FromUTF8(filePath.c_str());
 		request.m_locale    = wxString::FromUTF8(locale.c_str());
+		// The debug server comes up with the base's configuration, as it opens; every session is debuggable.
+		if (debugEnable)
+			request.m_loadMetadataFlags = _app_start_create_debug_server_flag;
 		return ibApplicationInstance::CreateAppDataEnv(request) != nullptr;
 	}))
 		return false;
-
-	// Stamp debug flag BEFORE FinishConnect: OnFirstConnect listener
-	// (in appData::WireSessionEvents) reads m_loadMetadataFlags inside
-	// metadataCreate, which decides whether to construct debugServer.
-	// Per-session EnableDebug() in OnAuthenticated also gates on this.
-	if (debugEnable)
-		appData->m_loadMetadataFlags = _app_start_create_debug_server_flag;
 
 	if (!RunBringUp([&] { return FinishConnect(ibUser, ibPassword); }))
 		return false;
@@ -744,12 +741,11 @@ WFRONTEND_API bool wfrontendInitServer(
 		request.m_password = wxString::FromUTF8(password.c_str());
 		request.m_database = wxString::FromUTF8(database.c_str());
 		request.m_locale   = wxString::FromUTF8(locale.c_str());
+		if (debugEnable)
+			request.m_loadMetadataFlags = _app_start_create_debug_server_flag;
 		return ibApplicationInstance::CreateAppDataEnv(request) != nullptr;
 	}))
 		return false;
-
-	if (debugEnable)
-		appData->m_loadMetadataFlags = _app_start_create_debug_server_flag;
 
 	if (!RunBringUp([&] { return FinishConnect(ibUser, ibPassword); }))
 		return false;
@@ -1000,7 +996,8 @@ WFRONTEND_API bool wfrontendDebugMode()
 {
 	if (!g_initialized.load() || appData == nullptr)
 		return false;
-	return (appData->m_loadMetadataFlags & _app_start_create_debug_server_flag) != 0;
+	// Asked of the debug server: a base opened with it brings it up listening, and it listens until the base closes.
+	return debugServer != nullptr && debugServer->EnableDebugging();
 }
 
 WFRONTEND_API bool wfrontendSessionPaused(const std::string& sessionId)

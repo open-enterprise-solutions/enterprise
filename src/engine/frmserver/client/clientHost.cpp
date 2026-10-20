@@ -842,7 +842,10 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 		}
 	}
 	else if (method == ibProtocol::ibMethod::Users) {
-		// The names the login window offers, as the desktop's lists them — asked before any login.
+		// The names the login window offers, as the desktop's lists them — asked before any login, so on the caller's
+		// thread, which works for no base (the server's listener, a file base's client, the web server's worker): it
+		// works for this host's for the read.
+		const ibApplicationInstanceScope working(m_applicationInstance);
 		try {
 			std::vector<ibDataValue> names;
 			for (const ibUserInfo::Brief& user : ibUserInfo::ListAll())

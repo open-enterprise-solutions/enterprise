@@ -284,6 +284,26 @@ add_subdirectory(src/3rdparty/mbedtls EXCLUDE_FROM_ALL)
 set(CMAKE_POSITION_INDEPENDENT_CODE ${OES_PIC_WAS})
 add_compile_definitions(CPPHTTPLIB_MBEDTLS_SUPPORT)
 
+# THE WEB SERVER'S HTTP — its own, beside cpp-httplib: llhttp parses the requests, Asio carries the sockets (both
+# webserver's alone). llhttp is built here from the three C files of its release branch, as
+# webserver/llhttp/llhttp.vcxproj builds them: its own CMake writes into the submodule's tree and asks for CMake 3.25.
+# Asio is header-only, compiled once inside the web server (webserver/http/asio.cpp).
+oes_require_submodule(llhttp include/llhttp.h)
+oes_require_submodule(asio asio/include/asio.hpp)
+add_library(llhttp STATIC
+    "${OES_3RDPARTY_DIR}/llhttp/src/llhttp.c"
+    "${OES_3RDPARTY_DIR}/llhttp/src/http.c"
+    "${OES_3RDPARTY_DIR}/llhttp/src/api.c"
+)
+target_include_directories(llhttp PUBLIC "${OES_3RDPARTY_DIR}/llhttp/include")
+set_target_properties(llhttp PROPERTIES POSITION_INDEPENDENT_CODE ON)
+# Another tree's generated C: its warnings are not ours to read.
+if(MSVC)
+    target_compile_options(llhttp PRIVATE /W0)
+else()
+    target_compile_options(llhttp PRIVATE -w)
+endif()
+
 if(WIN32)
     add_compile_definitions(
         WIN32
@@ -569,6 +589,7 @@ endif()
 #   frmclient      — SHARED library  (defines FRMCLIENT_EXPORTS; the thin client's core — the protocol's client half)
 #   fileserver     — SHARED library  (defines FILESERVER_EXPORTS; a file base for the thin client, loaded by frmclient)
 #   appserver     — executable      (console subsystem; the application server — `daemon` is its alias)
+#   webserver     — executable      (console subsystem; the bases' transport for browsers — links protocol alone)
 #   enterprise    — executable      (GUI subsystem)
 #   enterprise-thin   — executable      (GUI subsystem; the thin runtime — links frmclient alone)
 #   designer      — executable      (GUI subsystem)
@@ -588,6 +609,7 @@ add_subdirectory("${OES_ENGINE_DIR}/frmserver")
 add_subdirectory("${OES_ENGINE_DIR}/fileserver")
 add_subdirectory("${OES_ENGINE_DIR}/frmclient")
 add_subdirectory("${OES_ENGINE_DIR}/appserver")
+add_subdirectory("${OES_ENGINE_DIR}/webserver")
 add_subdirectory("${OES_ENGINE_DIR}/enterprise")
 add_subdirectory("${OES_ENGINE_DIR}/enterprise-thin")
 add_subdirectory("${OES_ENGINE_DIR}/designer")

@@ -26,33 +26,6 @@ constexpr std::chrono::seconds kReadPoll(1);
 // The longest a notification of the server's is — a line; anything longer is an answer.
 constexpr std::size_t kNotificationMax = 1024;
 
-// `oes://server[:port]/<base>` — the address the server prints for every base it serves.
-bool ParseAddress(const wxString& address, wxString& host, int& port, wxString& base)
-{
-	wxString rest;
-	if (!address.StartsWith(wxT("oes://"), &rest))
-		return false;
-	const int slash = rest.Find(wxT('/'));
-	if (slash == wxNOT_FOUND)
-		return false;
-	wxString authority = rest.Left(slash);
-	base = rest.Mid(slash + 1);
-	if (base.EndsWith(wxT("/")))
-		base.RemoveLast();
-
-	port = ibProtocolConnectionServer::kDefaultPort;
-	const int colon = authority.Find(wxT(':'), true);
-	if (colon != wxNOT_FOUND && !authority.EndsWith(wxT("]"))) {
-		long number = 0;
-		if (!authority.Mid(colon + 1).ToLong(&number) || number <= 0 || number > 65535)
-			return false;
-		port = static_cast<int>(number);
-		authority = authority.Left(colon);
-	}
-	host = authority;
-	return !host.IsEmpty() && !base.IsEmpty() && base.Find(wxT('/')) == wxNOT_FOUND;
-}
-
 // A base's name in the path — its UTF-8 bytes, every one but the unreserved escaped.
 std::string EscapeSegment(const wxString& segment)
 {
@@ -96,6 +69,37 @@ bool Inflate(std::string& message)
 
 } // namespace
 
+bool ibProtocolConnectionServer::ParseAddress(const wxString& address, wxString& host, int& port, wxString& base)
+{
+	wxString rest;
+	if (!address.StartsWith(wxT("oes://"), &rest))
+		return false;
+	const int slash = rest.Find(wxT('/'));
+	if (slash == wxNOT_FOUND)
+		return false;
+	wxString authority = rest.Left(slash);
+	base = rest.Mid(slash + 1);
+	if (base.EndsWith(wxT("/")))
+		base.RemoveLast();
+
+	port = kDefaultPort;
+	const int colon = authority.Find(wxT(':'), true);
+	if (colon != wxNOT_FOUND && !authority.EndsWith(wxT("]"))) {
+		long number = 0;
+		if (!authority.Mid(colon + 1).ToLong(&number) || number <= 0 || number > 65535)
+			return false;
+		port = static_cast<int>(number);
+		authority = authority.Left(colon);
+	}
+	host = authority;
+	return !host.IsEmpty() && !base.IsEmpty() && base.Find(wxT('/')) == wxNOT_FOUND;
+}
+
+std::string ibProtocolConnectionServer::ClientPath(const wxString& base)
+{
+	return "/" + EscapeSegment(base) + "/client";
+}
+
 ibProtocolConnectionServer::ibProtocolConnectionServer() = default;
 
 bool ibProtocolConnectionServer::Open(const wxString& address, wxString& error)
@@ -110,8 +114,8 @@ bool ibProtocolConnectionServer::Open(const wxString& address, wxString& error)
 	}
 
 	// Compressed, as the protocol offers it: an answer of some size comes as a binary message.
-	const std::string url = "ws://" + std::string(host.utf8_str()) + ":" + std::to_string(port) + "/"
-		+ EscapeSegment(base) + "/client?compress=deflate";
+	const std::string url = "ws://" + std::string(host.utf8_str()) + ":" + std::to_string(port)
+		+ ClientPath(base) + "?compress=deflate";
 	auto socket = std::make_unique<httplib::ws::WebSocketClient>(url);
 	if (!socket->is_valid()) {
 		error = wxString::Format(_("'%s' is not the address of a base: oes://server[:port]/<base>"), address);
