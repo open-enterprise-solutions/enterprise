@@ -1,0 +1,145 @@
+#ifndef __WEBSERVER_HTTP_SERVER_H__
+#define __WEBSERVER_HTTP_SERVER_H__
+
+// THE WEB SERVER'S HTTP — HTTP/1.1 and WebSocket (RFC 6455), over plain TCP or TLS, ASYNCHRONOUS: a few I/O threads
+// carry every connection (Asio), and a socket waiting for its person costs a buffer, not a thread — the port holds
+// thousands of them. The I/O threads only move bytes: parsing (llhttp), framing, TLS. What may take long — a file
+// read, a base's call — is a handler's, and handlers run on the workers.
+//
+// What it refuses by itself, before any handler sees a request: a header block over 16 KB, a body or a WebSocket
+// message over 4 MB, a request that takes more than 30 seconds to arrive, a keep-alive connection silent for a minute,
+// a WebSocket from a page of another origin, a client that does not mask its frames, a text that is not UTF-8. A
+// connection that does not read what it is sent is let go.
+//
+// HTTP AND HTTPS, either or both, each on its own port. ⭐ THE CLEAR DOES NOT CROSS A NETWORK — the rule of
+// backend/server/listener.h, said again here because this program links no backend: on this machine's own addresses
+// (127.0.0.0/8, ::1, localhost) HTTP serves; on any other it only sends a browser on to HTTPS, and with no HTTPS to
+// send it to it is refused.
+
+#include <cstdint>
+#include <functional>
+#include <memory>
+#include <optional>
+#include <string>
+#include <utility>
+#include <vector>
+
+namespace asio { class io_context; }
+
+// What the server's threads share — its routes, its threads, its connections (httpServer.cpp).
+struct ibHttpServerState;
+
+// One request, whole — its head and its body.
+struct ibHttpRequest {
+	std::string m_method;    // as written: GET, HEAD, POST
+	std::string m_path;      // decoded, without the query: /trade/client
+	std::string m_query;     // as written, after the '?'
+	std::vector<std::pair<std::string, std::string>> m_headers;   // names lower-cased, in their order
+	std::string m_body;
+	std::string m_address;   // the peer's IP
+	bool        m_secure = false;   // came over TLS
+
+	// The first header of that lower-case name; empty when there is none.
+	std::string GetHeader(const std::string& name) const;
+	// One parameter of the query, decoded; empty when there is none.
+	std::string GetParameter(const std::string& name) const;
+};
+
+struct ibHttpResponse {
+	int         m_status = 200;
+	std::vector<std::pair<std::string, std::string>> m_headers;
+	std::string m_body;
+
+	// The body and its Content-Type.
+	void SetContent(std::string body, const std::string& type);
+};
+
+// THE ANSWER TO A REQUEST — given once, from any thread: at once, or when what it waits for has come. The request a
+// handler is given is its own copy, alive while the handler runs; one answered later is the handler's to copy.
+using ibHttpResponder = std::function<void(ibHttpResponse response)>;
+using ibHttpHandler   = std::function<void(const ibHttpRequest& request, ibHttpResponder respond)>;
+
+// AN OPEN WEBSOCKET, as its handler holds it. Every call is safe from any thread; after the socket closed it does
+// nothing.
+class ibWebSocket {
+public:
+	virtual ~ibWebSocket() = default;
+
+	// A message, queued and sent in order.
+	virtual void Send(std::string text) = 0;
+	virtual void SendBinary(std::string data) = 0;
+	// The closing handshake begun, with `code` and `reason` (RFC 6455 § 7.4); OnClose follows.
+	virtual void Close(std::uint16_t code, const std::string& reason) = 0;
+
+	// The request it was opened by.
+	virtual const ibHttpRequest& GetRequest() const = 0;
+};
+
+// WHAT A WEBSOCKET IS TOLD — on a worker, one call at a time for that socket, in the order it happened.
+class ibWebSocketHandler {
+public:
+	virtual ~ibWebSocketHandler() = default;
+
+	// One text message, whole.
+	virtual void OnMessage(std::string text) = 0;
+	// The socket is gone — closed by either side, dropped, or the server stopping: once, after the last OnMessage.
+	virtual void OnClose() = 0;
+};
+
+// A WebSocket asked for: its handler, or null — refused, and the request answered 404. On a worker.
+using ibWebSocketOpening = std::function<std::shared_ptr<ibWebSocketHandler>(const std::shared_ptr<ibWebSocket>& socket)>;
+
+struct ibHttpServerOptions {
+	std::string   m_host;              // empty — every interface (HTTP there only sends on to HTTPS, see above)
+
+	// The ports, each listened to when it is given: 0 — the system chooses, and GetHttpPort / GetHttpsPort say which.
+	std::optional<std::uint16_t> m_httpPort;
+	std::optional<std::uint16_t> m_httpsPort;
+
+	// PEM text — the certificate (its chain after it) and its key: what HTTPS is spoken over, and only it.
+	std::string   m_certificate;
+	std::string   m_privateKey;
+
+	std::size_t   m_threads = 0;       // the I/O threads; 0 — one per core
+	std::size_t   m_workers = 0;       // the handlers' threads; 0 — four per core, 32 at least
+	std::size_t   m_maxConnections = 10000;
+	std::size_t   m_maxConnectionsPerAddress = 0;   // 0 — no limit: an office behind one address is a thousand people
+
+	// The origins a page may open a WebSocket from besides the server's own (scheme://host[:port], as a browser
+	// sends it). A request without an Origin is no browser's, and is let in.
+	std::vector<std::string> m_origins;
+};
+
+class ibHttpServer {
+public:
+
+	ibHttpServer();
+	~ibHttpServer();
+
+	// THE ROUTES — by the exact decoded path; a request for none of them goes to the files mounted, and failing them
+	// is answered 404. Said before Start.
+	void Get(const std::string& path, ibHttpHandler handler);
+	void Post(const std::string& path, ibHttpHandler handler);
+	void WebSocket(const std::string& path, ibWebSocketOpening opening);
+	// The files of `directory` under the path `prefix` — GET and HEAD, a folder answered by its index.html, nothing
+	// outside the directory, no hidden file, no listing.
+	void Mount(const std::string& prefix, const std::string& directory);
+
+	// Listening, with the threads up — or false, with why in `error`.
+	bool Start(const ibHttpServerOptions& options, std::string& error);
+	// The port closed and every connection let go: each WebSocket's handler is told OnClose before Stop returns.
+	void Stop();
+
+	// The ports listened to; 0 — that one is not.
+	std::uint16_t GetHttpPort() const;
+	std::uint16_t GetHttpsPort() const;
+
+	// THE I/O THREADS' CONTEXT — for a connection a handler opens itself (the web server's to an application server):
+	// it is carried by the same threads, and stops with them.
+	asio::io_context& GetContext();
+
+private:
+	std::unique_ptr<ibHttpServerState> m_state;
+};
+
+#endif

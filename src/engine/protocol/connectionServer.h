@@ -23,6 +23,12 @@ public:
 	// The port the protocol takes when an address names none — the server's own default (appserver/clientListener).
 	static constexpr int kDefaultPort = 7373;
 
+	// `oes://server[:port]/<base>` — the address the server prints for every base it serves — read; false when it
+	// is not one. The port left out is kDefaultPort.
+	static bool ParseAddress(const wxString& address, wxString& host, int& port, wxString& base);
+	// Where a base's clients come in on its server — /<base>/client, the name escaped.
+	static std::string ClientPath(const wxString& base);
+
 	// Made where the socket's type is whole (the .cpp) — so is its destruction.
 	ibProtocolConnectionServer();
 

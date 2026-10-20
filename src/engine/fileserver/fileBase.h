@@ -8,13 +8,17 @@
 
 #include "fileserver/fileserver.h"
 
-// A FILE BASE'S FOUR DOORS, for the thin client that loads this library: it asks for them by their names
-// (protocol/connectionFile.cpp). The base is opened here and its clients' host stands beside it.
+// A FILE BASE'S FIVE DOORS, for the program that loads this library — a thin client, the web server: it asks for them
+// by their names (protocol/connectionFile.cpp). The base is opened here and its clients' host stands beside it.
 //
 // TEXT, AS A SERVER'S PORT SPEAKS IT — one JSON-RPC request in, its answer out, UTF-8 both ways: the call goes through
 // the very door the port's does (ibClientHost::Call(text)), so a file base gives the client exactly what a server
 // would, and the client keeps no road of its own for it. Nothing of the backend is in these signatures — the client
 // is built without it.
+//
+// ONE BASE, MANY CONNECTIONS — as the port's: a call names the connection it came by, the clients logged in through
+// it are its own, it is told what the base says to them, and they go when it does (ibFileBaseDisconnect). A thin
+// client is one connection; the web server is one per browser.
 //
 // C names, so a loader asks for them as they are written.
 struct ibFileBase;
@@ -27,12 +31,19 @@ extern "C" {
 // `--debug`). Null when it did not open, and why in `error`.
 FILESERVER_API ibFileBase* ibFileBaseOpen(const std::string& request, wxString& error);
 
-// One JSON-RPC request to the base's clients, and its answer.
-FILESERVER_API bool ibFileBaseCall(ibFileBase* base, const std::string& request, std::string& answer, wxString& error);
+// One JSON-RPC request to the base's clients, and its answer. `connection` and `address` — as ibClientHost::Call
+// takes them: the connection it came by (null — none, a request on its own: an HTTP POST) and the computer it comes
+// from (empty — this one).
+FILESERVER_API bool ibFileBaseCall(ibFileBase* base, const std::string& request, const void* connection,
+	const wxString& address, std::string& answer, wxString& error);
 
-// How the program is told something — a JSON-RPC notification of the base's (`changed {Client}`: a client's frame
+// How a connection is told something — a JSON-RPC notification of the base's (`changed {Client}`: a client's frame
 // changed by itself), handed to `notified` on whichever thread of the base's said it; empty — told nothing.
-FILESERVER_API void ibFileBaseListen(ibFileBase* base, std::function<void(const std::string& text)> notified);
+FILESERVER_API void ibFileBaseListen(ibFileBase* base, const void* connection,
+	std::function<void(const std::string& text)> notified);
+
+// The connection closed: the clients logged in through it go, and it is told nothing more.
+FILESERVER_API void ibFileBaseDisconnect(ibFileBase* base, const void* connection);
 
 // Its clients go — each its own session's teardown, while the base still stands — and then the base.
 FILESERVER_API void ibFileBaseClose(ibFileBase* base);

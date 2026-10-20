@@ -10,7 +10,8 @@
 // ms_instance / Get / Initialize / Destroy retired — ownership moved
 // to ibApplicationInstance::m_activeMetaData, shared with every session let
 // in while it was active (ibSession::GetMetaData). The fabric
-// lives on ibApplicationInstance::CreateActiveMetaData, its tear-down in the base's Close;
+// lives on ibApplicationInstance::CreateActiveMetaData (a designer's session's own: ibSession::AcquireMetaData),
+// its tear-down in the base's Close;
 // callers reach the active metadata through `appEnv::ActiveMetaData()`
 // (which the legacy `activeMetaData` macro now redirects to).
 //
@@ -460,9 +461,9 @@ bool ibMetaDataConfiguration::OnInitialize(const int flags)
 
 	// Localization: pin the configuration's main language code (metadata
 	// short-code form ru/en/uk) into the translate state of whoever loads
-	// it — the designer's session, a base's first session. Every other
-	// session takes its base's in CompileRoot; the user's preferred
-	// language is assigned by SetUserInfo on authentication and wins.
+	// it — the base's opening. Every session takes its base's in CompileRoot;
+	// the user's preferred language is assigned by SetUserInfo on
+	// authentication and wins.
 	ibBackendLocalization::SetUserLanguage(GetLangCode());
 
 	if ((flags & _app_start_create_debug_server_flag) != 0) {
@@ -510,11 +511,7 @@ bool ibMetaDataConfigurationStorage::OnInitialize(const int flags)
 {
 	m_metaGuid = ibGuid::newGuid();
 
-	if (!ibMetaDataConfigurationStorage::TableAlreadyCreated()) {
-		ibMetaDataConfigurationStorage::CreateConfigTable();
-		ibMetaDataConfigurationStorage::CreateConfigSaveTable();
-		ibMetaDataConfigurationStorage::CreateConfigSequence();
-	}
+	// (Its tables are the base's, made as it opens — ibApplicationInstance::Open.)
 
 	// Designer-side debugger client. Same 1:1-with-metadata footing as
 	// m_debugServer above — promoted to ibApplicationInstance if multi-metadata

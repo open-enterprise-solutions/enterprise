@@ -16,3 +16,10 @@
 [submodule "src/3rdparty/nlohmann"]
 	path = src/3rdparty/nlohmann
 	url = https://github.com/nlohmann/json.git
+[submodule "src/3rdparty/asio"]
+	path = src/3rdparty/asio
+	url = https://github.com/chriskohlhoff/asio.git
+[submodule "src/3rdparty/llhttp"]
+	path = src/3rdparty/llhttp
+	url = https://github.com/nodejs/llhttp.git
+	branch = release

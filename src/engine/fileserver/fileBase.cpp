@@ -60,8 +60,11 @@ ibFileBase* ibFileBaseOpen(const std::string& request, wxString& error)
 	opening.m_database  = text("Database");
 	const auto create = where.find("Create");
 	opening.m_create = create != where.end() && create->is_boolean() && create->get<bool>();
+	// THE DEBUG SERVER — as enterprise.exe's `--debug`: it comes up with the base's configuration
+	// (ibMetaDataConfiguration::OnInitialize), and every session after it is debuggable.
 	const auto debug = where.find("Debug");
-	const bool debugEnable = debug != where.end() && debug->is_boolean() && debug->get<bool>();
+	if (debug != where.end() && debug->is_boolean() && debug->get<bool>())
+		opening.m_loadMetadataFlags = _app_start_create_debug_server_flag;
 
 	// THE THREAD COMES BACK AS IT WAS. Opening leaves it working for the base — and the client's thread works for
 	// none: its calls are served on the sessions' own workers (ibClientHost::Call), as the application server's are.
@@ -87,40 +90,42 @@ ibFileBase* ibFileBaseOpen(const std::string& request, wxString& error)
 		return nullptr;
 	}
 
-	// THE DEBUG SERVER — as enterprise.exe's `--debug`: the flag the first session's configuration starts it by
-	// (ibMetaDataConfiguration::OnInitialize), set before any session is, and every session after it debuggable.
-	if (debugEnable)
-		applicationInstance->m_loadMetadataFlags = _app_start_create_debug_server_flag;
-
 	auto base = std::make_unique<ibFileBase>();
 	base->applicationInstance = applicationInstance;
 	base->host = std::make_unique<ibClientHost>(applicationInstance);
 	return base.release();
 }
 
-bool ibFileBaseCall(ibFileBase* base, const std::string& request, std::string& answer, wxString& error)
+bool ibFileBaseCall(ibFileBase* base, const std::string& request, const void* connection,
+	const wxString& address, std::string& answer, wxString& error)
 {
 	if (base == nullptr || !base->host) {
 		error = wxT("no base is open");
 		return false;
 	}
-	// The port's door: the envelope read, the call made, the answer written — as a server's client is answered. The
-	// base is the connection its clients log in through: what the base says, it says to them (ibFileBaseListen).
-	answer = std::string(base->host->Call(wxString::FromUTF8(request.data(), request.size()), base).utf8_str());
+	// The port's door: the envelope read, the call made, the answer written — as a server's client is answered.
+	answer = std::string(base->host->Call(wxString::FromUTF8(request.data(), request.size()), connection, address).utf8_str());
 	return true;
 }
 
-void ibFileBaseListen(ibFileBase* base, std::function<void(const std::string& text)> notified)
+void ibFileBaseListen(ibFileBase* base, const void* connection, std::function<void(const std::string& text)> notified)
 {
 	if (base == nullptr || !base->host)
 		return;
 	if (!notified) {
-		base->host->SetNotifier(base, nullptr);
+		base->host->SetNotifier(connection, nullptr);
 		return;
 	}
-	base->host->SetNotifier(base, [notified = std::move(notified)](const wxString& text) {
+	base->host->SetNotifier(connection, [notified = std::move(notified)](const wxString& text) {
 		notified(std::string(text.utf8_str()));
 	});
+}
+
+void ibFileBaseDisconnect(ibFileBase* base, const void* connection)
+{
+	if (base == nullptr || !base->host)
+		return;
+	base->host->Disconnect(connection);
 }
 
 void ibFileBaseClose(ibFileBase* base)

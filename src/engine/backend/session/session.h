@@ -459,12 +459,10 @@ public:
 	void ClearRoot();
 
 	// Idempotent CreateRoot over the configuration this session acquired.
-	// Called by ibSessionRegistry::NotifyAuthenticated between the
-	// OnFirstConnect phase (which may run metadataCreate, populating
-	// the base's active one) and the OnAuthenticated phase (whose listeners —
-	// e.g. RunDatabase → OnBeforeRunMetaObject — need session->mm to
-	// already exist). No-op when m_root already set or the session
-	// holds no configuration.
+	// Called by ibSessionRegistry::NotifyAuthenticated right after
+	// AcquireMetaData, before the OnAuthenticated phase (whose listeners —
+	// CompileRoot — need session->mm to already exist). No-op when m_root
+	// already set or the session holds no configuration.
 	void EnsureRoot();
 
 	// Read access — single overload, const only. The non-const reference
@@ -873,9 +871,11 @@ private:
 	ibSessionState WaitForState(ibSessionState from, std::chrono::milliseconds timeout);
 	ibAuthState    WaitForAuth (ibAuthState    from, std::chrono::milliseconds timeout);
 
-	// Its +1 — the base's active configuration as it stands when the session is let in (GetMetaData). Acquired
-	// once, by the registry (NotifyAuthenticated), before the root is built over it; a rented read takes its
-	// parent's instead (ibJobManager).
+	// Its +1 — the base's active configuration as it stands when the session is let in (GetMetaData); a designer's
+	// session makes one of its own instead, the configuration it edits (ibMetaDataConfigurationStorage), held by it
+	// alone.
+	// Acquired once, by the registry (NotifyAuthenticated), before the root is built over it; a rented read takes
+	// its parent's instead (ibJobManager).
 	void AcquireMetaData();
 	// …and its −1, when it leaves (NotifyDisconnect): the root built over it first, then the reference. The last
 	// session working in a configuration the base has replaced closes it here, on the thread that takes it down.
