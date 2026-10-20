@@ -2641,9 +2641,6 @@
     <ClCompile Include="query\dataQueryBuilder.cpp">
       <Filter>query</Filter>
     </ClCompile>
-    <ClCompile Include="query\queryLexer.cpp">
-      <Filter>query</Filter>
-    </ClCompile>
     <ClCompile Include="query\queryRender.cpp">
       <Filter>query</Filter>
     </ClCompile>
@@ -2651,9 +2648,6 @@
       <Filter>query</Filter>
     </ClCompile>
     <ClCompile Include="query\queryTempStore.cpp">
-      <Filter>query</Filter>
-    </ClCompile>
-    <ClCompile Include="query\queryParser.cpp">
       <Filter>query</Filter>
     </ClCompile>
     <ClCompile Include="query\queryLowering.cpp">
@@ -2809,13 +2803,7 @@
     <ClInclude Include="query\queryRowCursor.h">
       <Filter>query</Filter>
     </ClInclude>
-    <ClInclude Include="query\queryLexer.h">
-      <Filter>query</Filter>
-    </ClInclude>
     <ClInclude Include="query\queryLiteral.h">
-      <Filter>query</Filter>
-    </ClInclude>
-    <ClInclude Include="query\queryAST.h">
       <Filter>query</Filter>
     </ClInclude>
     <ClInclude Include="query\queryRender.h">
@@ -2825,9 +2813,6 @@
       <Filter>query</Filter>
     </ClInclude>
     <ClInclude Include="query\queryTempStore.h">
-      <Filter>query</Filter>
-    </ClInclude>
-    <ClInclude Include="query\queryParser.h">
       <Filter>query</Filter>
     </ClInclude>
     <ClInclude Include="query\queryLowering.h">

@@ -34,7 +34,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "backend/backend.h"   // BACKEND_API
-#include "queryAST.h"
+#include "core/query/queryAST.h"
 
 #include <wx/string.h>
 

@@ -13,7 +13,7 @@
 
 #include "dataComposerInternal.h"
 
-#include "backend/query/queryParser.h"        // ibQueryParser — text -> AST
+#include "core/query/queryParser.h"        // ibQueryParser — text -> AST
 #include "backend/query/queryable.h"          // ibBackendQueryable / ibBackendQueryColumn
 #include "backend/query/queryableFactory.h"   // the source factory — the column dictionary
 #include "backend/query/dataQueryBuilder.h"   // ibDataQueryResult / ibSelectKind
@@ -24,7 +24,7 @@
 #include "backend/query/queryReadState.h"     // ibQueryReadState — one build, one state of the data
 #include "backend/query/queryRender.h"        // ibQueryColumnFromPath
 #include "core/query/queryKeywords.h"         // ibQueryKeywordText
-#include "backend/query/queryLexer.h"         // ibQueryLexer::IsIdentifier
+#include "core/query/queryLexer.h"         // ibQueryLexer::IsIdentifier
 #include "backend/session/session.h"          // ibSession::RunState — the walk hears a cancel
 #include "backend/backend_localization.h"     // a column title written in several languages, read in the reader's
 

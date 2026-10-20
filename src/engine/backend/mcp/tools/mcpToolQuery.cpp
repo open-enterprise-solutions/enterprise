@@ -28,7 +28,7 @@
 #include "backend/query/queryableFactory.h"      // ibQuerySourceParameter — what a virtual table takes
 #include "backend/query/queryException.h"
 #include "backend/query/queryLowering.h"
-#include "backend/query/queryParser.h"
+#include "core/query/queryParser.h"
 #include "backend/query/queryable.h"
 
 #include <wx/tokenzr.h>

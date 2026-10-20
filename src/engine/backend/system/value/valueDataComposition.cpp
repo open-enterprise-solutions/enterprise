@@ -5,8 +5,8 @@
 #include "backend/query/queryable.h"                 // ibBackendQueryable
 #include "backend/query/queryableFactory.h"          // ibQueryableSourceDescriptor (source holder + its command surface)
 #include "backend/query/queryColumn.h"               // ibBackendQueryColumn::GetColumnId
-#include "backend/query/queryParser.h"               // the query is READ by the engine's own parser
-#include "backend/query/queryLexer.h"                // ibQueryLexer::ParamNames — the parameters the TEXT asks for
+#include "core/query/queryParser.h"               // the query is READ by the engine's own parser
+#include "core/query/queryLexer.h"                // ibQueryLexer::ParamNames — the parameters the TEXT asks for
 #include "backend/system/systemManager.h"            // system functions
 #include "backend/compiler/procUnit.h"                // ibProcUnit::Evaluate — a parameter expression is run here
 #include "backend/compiler/procContext.h"             // ibRunContext — the frame an expression is evaluated in

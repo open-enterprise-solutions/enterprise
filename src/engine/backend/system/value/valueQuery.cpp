@@ -4,7 +4,7 @@
 
 #include "valueQuery.h"
 
-#include "backend/query/queryParser.h"
+#include "core/query/queryParser.h"
 #include "core/diagnostics/crashGuard.h"  // ibJournal — the technology journal
 #include "valueArray.h"                  // ibValueArray — a package answers with results BY POSITION
 #include "backend/compiler/typeCtor.h"   // VALUE_TYPE_REGISTER / SYSTEM_TYPE_REGISTER / ENUM_TYPE_REGISTER

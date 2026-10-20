@@ -43,7 +43,7 @@
 #include "backend/query/columnLayout.h"       // ColumnFieldNames — the metadata column's physical field spelling
 #include "backend/databaseLayer/databaseQueryBuilder.h"   // ibScan / ibFunc — a statement written by hand (the codec test)
 #include "backend/query/queryLowering.h"      // ibQueryLowering::LowerLambdaPredicate (L4-2 lowering)
-#include "backend/query/queryAST.h"           // ibQueryAstExpr (recorded lambda)
+#include "core/query/queryAST.h"           // ibQueryAstExpr (recorded lambda)
 #include "backend/compiler/compileCode.h"     // ibCompileCode — script lexer feeding the LINQ recorder
 #include "backend/compiler/lambdaQueryAST.h"  // ibBuildLambdaQueryAstFromCode (L4-2 recorder)
 

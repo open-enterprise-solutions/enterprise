@@ -34,7 +34,7 @@
 #include "backend/compiler/value.h"           // ibValue / ibNumber
 #include "backend/compiler/compileCode.h"     // ibCompileCode — the script lexer feeding the recorder
 #include "backend/compiler/lambdaQueryAST.h"  // ibBuildLambdaQueryAstFromCode (L4-2 recorder)
-#include "backend/query/queryAST.h"           // ibQueryAstExpr
+#include "core/query/queryAST.h"           // ibQueryAstExpr
 
 #include "lambdaRecordFix.h"                  // ibTestRecordLambda — body -> compiled lambda -> AST
 #include "backend/query/queryLowering.h"      // ibQueryLowering::LowerLambdaPredicate (L4-2 lowering)

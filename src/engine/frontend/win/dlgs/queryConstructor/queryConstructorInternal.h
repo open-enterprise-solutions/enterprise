@@ -32,7 +32,7 @@
 #include "queryGridModel.h"
 #include "queryExpressionDialog.h"
 
-#include "backend/query/queryParser.h"
+#include "core/query/queryParser.h"
 #include "backend/query/queryRender.h"
 #include "backend/query/queryRewrite.h"    // Clone — the engine's own deep copy of a select
 #include "backend/query/queryLowering.h"   // CheckNames — the engine resolves the names, we only ask

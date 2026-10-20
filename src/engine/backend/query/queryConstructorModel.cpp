@@ -6,7 +6,7 @@
 #include "backend/query/queryLiteral.h"   // ibQueryLiteralValue / ibQueryLiteralOf — a query's constant and the engine's value
 
 #include "queryRender.h"                 // ibRenderQueryExpr — an unaliased projection is named by its own text
-#include "queryParser.h"                 // ibQueryCastType / ibQueryMakeCast — a primitive CAST, both ways
+#include "core/query/queryParser.h"                 // ibQueryCastType / ibQueryMakeCast — a primitive CAST, both ways
 #include "queryable.h"                   // ibBackendQueryable::GetSourceMetaObject — a table's own reference type
 #include "backend/metaCollection/genericData.h"   // ResolveQueryConstant — …typed by its empty reference
 #include "backend/appData.h"             // ibApplicationInstance::GetQueryableFactory (no config open)
@@ -755,7 +755,7 @@ std::vector<ibQueryConstructorField> ibQueryConstructorModel::GetQualifiedFields
 // where it used to live and where it made every editor of a query hold a running one.
 // ------------------------------------------------------------------------------------------------
 
-#include "queryParser.h"                 // ibQueryParser — the text is parsed here and nowhere else
+#include "core/query/queryParser.h"                 // ibQueryParser — the text is parsed here and nowhere else
 #include "queryable.h"                   // ibSourceMetaDataScope — names resolve against THIS config
 #include "queryLowering.h"               // PlacePackageLinks — where a linked selection stands, asked ONCE
 

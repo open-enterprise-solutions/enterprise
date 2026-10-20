@@ -10,7 +10,7 @@
 #include <gtest/gtest.h>
 
 #include "backend/query/queryLiteral.h"
-#include "backend/query/queryParser.h"
+#include "core/query/queryParser.h"
 #include "backend/query/queryException.h"
 #include "backend/system/value/valueArray.h"
 #include "core/query/queryRefusal.h"

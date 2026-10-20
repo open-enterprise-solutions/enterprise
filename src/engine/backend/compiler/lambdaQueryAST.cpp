@@ -6,7 +6,7 @@
 #include "lambdaQueryAST.h"
 #include "backend/query/queryLiteral.h"   // ibQueryLiteralValue / ibQueryLiteralOf — a query's constant and the engine's value
 
-#include "backend/query/queryAST.h"   // ibQueryAstExpr — the L4-1 AST the pushdown lowers
+#include "core/query/queryAST.h"   // ibQueryAstExpr — the L4-1 AST the pushdown lowers
 #include "backend/compiler/byteCode.h"       // the instructions the second recorder reads
 #include "backend/compiler/compileContext.h" // DEF_VAR_CONST / DEF_VAR_NORET — how an operand names a pool
 #include "core/compiler/codeDef.h"    // KEY_* script keyword ids / OPER_* opcodes

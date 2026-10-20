@@ -6,8 +6,8 @@
 #include "queryUnionModel.h"
 
 #include "backend/query/queryRender.h"
-#include "backend/query/queryLexer.h"   // IsIdentifier — the language decides what a name can be
-#include "backend/query/queryParser.h"  // a field picked for a branch is read by the ENGINE
+#include "core/query/queryLexer.h"   // IsIdentifier — the language decides what a name can be
+#include "core/query/queryParser.h"  // a field picked for a branch is read by the ENGINE
 #include "backend/query/queryRewrite.h" // ibQueryEnsureUniqueName — what to call a field with no natural name
 
 #include "core/exception.h"   // ibCoreException — what a refused field throws

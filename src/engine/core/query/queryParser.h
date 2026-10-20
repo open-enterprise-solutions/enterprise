@@ -42,7 +42,7 @@
 // tail only (a computed expression across a JOIN's leaves, a computed column over aggregates, a
 // dot-walk leaf inside a boolean WHERE over a non-co-located JOIN). See docs/private/query-language-arc.md §23.4.
 //
-// Throws ibBackendCoreException (line / position) on a syntax error.
+// Refuses through ibQueryRefusal (line / position) on a syntax error: the engine's is ibBackendQuerySyntaxException.
 //
 // See docs/private/query-language-arc.md §14 / §23.
 
@@ -51,7 +51,7 @@
 
 #include <wx/arrstr.h>
 
-class BACKEND_API ibQueryParser
+class CORE_API ibQueryParser
 {
 public:
 	ibQueryParser() = default;
@@ -90,8 +90,8 @@ private:
 	void   ExpectKw(ibQueryKeyword kw, const wxChar* what);
 	bool   AcceptPunct(wxChar c);
 	void   ExpectPunct(wxChar c, const wxChar* what);
-	// Reports a syntax error: formats line / position and throws ibBackendQuerySyntaxException —
-	// L4's own variety, carrying the token's span as data (query/queryException.h). The LOWERING has
+	// Reports a syntax error: formats line / position and refuses through ibQueryRefusal — the engine's
+	// ibBackendQuerySyntaxException, carrying the token's span as data (backend/query/queryException.h). The LOWERING has
 	// a variety of its own for a text that reads and names what is not there. Always throws, so
 	// any code after a call is logically unreachable, mirroring the codebase's "Error(); return false;"
 	// idiom. Named for what it DOES: "Fail" reads like a status the caller might inspect.
@@ -168,10 +168,10 @@ struct ibTypeDescription;
 // Both directions of the one reading, so what a window writes is what the lowering reads:
 //   · ibQueryCastType — the type a Cast converts to; false = no primitive target (the narrowing road);
 //   · ibQueryMakeCast — the Cast bringing `value` to `type`; null for a type that is not one primitive.
-BACKEND_API bool              ibQueryCastType(const ibQueryAstExpr& cast, ibTypeDescription& type);
-BACKEND_API ibQueryAstExprPtr ibQueryMakeCast(ibQueryAstExprPtr value, const ibTypeDescription& type);
+CORE_API bool              ibQueryCastType(const ibQueryAstExpr& cast, ibTypeDescription& type);
+CORE_API ibQueryAstExprPtr ibQueryMakeCast(ibQueryAstExprPtr value, const ibTypeDescription& type);
 // …and the words those primitives are written as, in the order a list offers them — for a palette, a cell's
 // drop-down: whatever offers a CAST's type asks here rather than keeping its own four words.
-BACKEND_API wxArrayString     ibQueryCastPrimitiveWords();
+CORE_API wxArrayString     ibQueryCastPrimitiveWords();
 
 #endif
