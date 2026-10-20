@@ -59,10 +59,21 @@ FRMCLIENT_API bool ibPickGroupingScope(wxWindow* parent,
                                        const std::vector<wxString>& separators,
                                        wxString& inOut);
 
-// QUERY TEXT, PAINTED AS THE LANGUAGE — the desktop's: its words are the engine's keyword table, which is the server's.
-// Here the text reads plain.
-inline void ibStyleQueryText(class wxStyledTextCtrl* WXUNUSED(text))
-{
-}
+// QUERY TEXT, PAINTED AS THE LANGUAGE — the desktop's (queryConstructor.cpp): its words are the language's keyword
+// table (core), its colours the engine's defaults, and line numbers in the margin.
+FRMCLIENT_API void ibStyleQueryText(class wxStyledTextCtrl* text);
+
+// The indicator `&name` is painted with. An INDICATOR and not a style, because the lexer owns the
+// styles and repaints them; indicators are drawn on top and survive re-lexing.
+constexpr int kQueryParameterIndicator = 8;
+// …and the one a word of the language is painted with where only its PLACE says it is one: `Date` after the
+// AS of a CAST is a type, `YEAR` before a bracket a call — and `Doc.Date` stays a field.
+constexpr int kQueryPlacedWordIndicator = 9;
+
+// MARK WHAT THE LEXER CANNOT — call after the pane's text changes, since the marks go with the text they
+// marked. Every `&name`: a parameter is a value handed in from outside, and reading exactly like a column
+// of the query is how somebody spends a while wondering why "that field" cannot be found. And every word
+// that is the language's by its place (kQueryPlacedWordIndicator) — ⚠ not here yet, see queryConstructor.cpp.
+FRMCLIENT_API void ibMarkQueryText(class wxStyledTextCtrl* text);
 
 #endif
