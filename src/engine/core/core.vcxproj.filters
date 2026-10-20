@@ -62,6 +62,9 @@
     <ClCompile Include="compiler\blockSyntaxLINQ.cpp">
       <Filter>compiler</Filter>
     </ClCompile>
+    <ClCompile Include="compiler\foldLevel.cpp">
+      <Filter>compiler</Filter>
+    </ClCompile>
     <ClCompile Include="compiler\lexValue.cpp">
       <Filter>compiler</Filter>
     </ClCompile>
@@ -198,6 +201,9 @@
       <Filter>compiler</Filter>
     </ClInclude>
     <ClInclude Include="compiler\codeDef.h">
+      <Filter>compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\foldLevel.h">
       <Filter>compiler</Filter>
     </ClInclude>
     <ClInclude Include="compiler\lexValue.h">

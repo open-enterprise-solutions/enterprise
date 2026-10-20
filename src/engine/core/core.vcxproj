@@ -157,6 +157,7 @@
     <ClCompile Include="anyValue.cpp" />
     <ClCompile Include="build.cpp" />
     <ClCompile Include="compiler\blockSyntaxLINQ.cpp" />
+    <ClCompile Include="compiler\foldLevel.cpp" />
     <ClCompile Include="compiler\lexValue.cpp" />
     <ClCompile Include="compiler\scriptParseCode.cpp" />
     <ClCompile Include="compiler\translateCode.cpp" />
@@ -215,6 +216,7 @@
     <ClInclude Include="clsid.h" />
     <ClInclude Include="compiler\blockSyntaxLINQ.h" />
     <ClInclude Include="compiler\codeDef.h" />
+    <ClInclude Include="compiler\foldLevel.h" />
     <ClInclude Include="compiler\lexValue.h" />
     <ClInclude Include="compiler\scriptParseCode.h" />
     <ClInclude Include="compiler\translateCode.h" />

@@ -36,13 +36,13 @@ wxString ibCodeEditor::MakeProcedureTemplate(const wxString& name, const wxStrin
 // ⚠ THE SYNTAX IS THE TAB'S, and it comes with the tab's view (SetCodeStyle): until then — and for a text with no tab — the
 // stream reads the default a session's compile state starts with (ibCompileState: CES).
 ibCodeEditor::ibCodeEditor()
-	: wxStyledTextCtrl(), m_ac(this), m_ct(this), m_tc(CODE_CES), m_fp(this)
+	: wxStyledTextCtrl(), m_ac(this), m_ct(this), m_tc(CODE_CES)
 {
 }
 
 ibCodeEditor::ibCodeEditor(ibTabDocument* document, wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSize& size, long style, const wxString& name)
 	: wxStyledTextCtrl(parent, id, pos, size, style, name),
-	  m_document(document), m_ac(this), m_ct(this), m_tc(CODE_CES), m_fp(this)
+	  m_document(document), m_ac(this), m_ct(this), m_tc(CODE_CES)
 {
 	// initialize styles
 	StyleClearAll();
@@ -612,7 +612,7 @@ void ibCodeEditor::HighlightSyntaxAndCalculateFoldLevel(const int fromPos, const
 		}
 	}
 
-	m_fp.UpdateFoldLevel();
+	UpdateFoldLevel();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1154,4 +1154,15 @@ void ibCodeEditor::OnContextMenu(wxContextMenuEvent& event)
 		pt = ClientToScreen(wxPoint(PointFromPosition(pos).x, PointFromPosition(pos).y));
 	}
 	PopupMenu(&menu, ScreenToClient(pt));
+}
+
+void ibCodeEditor::UpdateFoldLevel()
+{
+	// The syntax that drives the folds is the stream's — the module's syntax, as its tab says (SetCodeStyle).
+	std::vector<int> levels;
+	if (!m_fp.UpdateFoldLevel(m_tc, m_tc.GetCodeStyle() == CODE_CES, GetLineCount(), levels))
+		return;
+
+	for (int line = 1; line < static_cast<int>(levels.size()); line++)
+		SetFoldLevel(line, levels[line]);
 }
