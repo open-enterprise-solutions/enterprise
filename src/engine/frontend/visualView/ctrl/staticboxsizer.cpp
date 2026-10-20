@@ -65,7 +65,8 @@ void ibValueStaticBoxSizer::Update(wxObject* wxobject, ibVisualHost* visualHost)
 
 	target->SetLabel(m_propertyTitle->GetValueAsTranslateString());
 	target->SetMinSize(typeConv::SizeToWxSize(m_propertyMinSize->GetValueAsSize()));
-	target->SetFont(typeConv::FontToWxFont(m_propertyFont->GetValueAsFont()));
+	if (!m_propertyFont->IsEmptyProperty())
+		target->SetFont(typeConv::FontToWxFont(m_propertyFont->GetValueAsFont()));
 	target->SetForegroundColour(typeConv::ColourToWxColour(m_propertyFG->GetValueAsColour()));
 	target->SetBackgroundColour(typeConv::ColourToWxColour(m_propertyBG->GetValueAsColour()));
 	target->Enable(m_propertyEnabled->GetValueAsBoolean());

@@ -28,6 +28,9 @@ public:
 	{
 	}
 
+	// Unset — no text, or a stored one with no size.
+	virtual bool IsEmptyProperty() const override { return !GetValueAsFont().IsOk(); }
+
 	// set/get property data
 	virtual bool SetDataValue(const ibValue& varPropVal);
 	virtual bool GetDataValue(ibValue& pvarPropVal) const;
