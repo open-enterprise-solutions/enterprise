@@ -102,6 +102,8 @@ bool ibFormVisualEditView::OnCreate(ibFrontendDocument* doc, long flags)
 	WatchFocus(true);
 	// EVERY command passes by: which ids are the active control's is its view's to say.
 	Bind(wxEVT_MENU, &ibFormVisualEditView::OnActiveControlCommand, this);
+	// …and so does a choice on its toolbar (a sheet's Zoom): the toolbar's controls send wxEVT_CHOICE, not wxEVT_MENU.
+	Bind(wxEVT_CHOICE, &ibFormVisualEditView::OnActiveControlCommand, this);
 
 	return ibFrontendView::OnCreate(doc, flags);
 }
