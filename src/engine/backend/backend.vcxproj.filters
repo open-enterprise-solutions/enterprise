@@ -2641,9 +2641,6 @@
     <ClCompile Include="query\dataQueryBuilder.cpp">
       <Filter>query</Filter>
     </ClCompile>
-    <ClCompile Include="query\queryRender.cpp">
-      <Filter>query</Filter>
-    </ClCompile>
     <ClCompile Include="query\queryConstructorModel.cpp">
       <Filter>query</Filter>
     </ClCompile>
@@ -2657,9 +2654,6 @@
       <Filter>query</Filter>
     </ClCompile>
     <ClCompile Include="query\queryHierarchy.cpp">
-      <Filter>query</Filter>
-    </ClCompile>
-    <ClCompile Include="query\queryRewrite.cpp">
       <Filter>query</Filter>
     </ClCompile>
     <ClCompile Include="compiler\lambdaQueryAST.cpp">
@@ -2806,9 +2800,6 @@
     <ClInclude Include="query\queryLiteral.h">
       <Filter>query</Filter>
     </ClInclude>
-    <ClInclude Include="query\queryRender.h">
-      <Filter>query</Filter>
-    </ClInclude>
     <ClInclude Include="query\queryConstructorModel.h">
       <Filter>query</Filter>
     </ClInclude>
@@ -2822,9 +2813,6 @@
       <Filter>query</Filter>
     </ClInclude>
     <ClInclude Include="query\queryHierarchy.h">
-      <Filter>query</Filter>
-    </ClInclude>
-    <ClInclude Include="query\queryRewrite.h">
       <Filter>query</Filter>
     </ClInclude>
     <ClInclude Include="compiler\lambdaQueryAST.h">

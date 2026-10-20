@@ -14,7 +14,7 @@
 #include <wx/artprov.h>
 
 #include "core/query/queryParser.h"
-#include "backend/query/queryRender.h"
+#include "core/query/queryRender.h"
 #include "core/query/queryKeywords.h"
 #include "backend/backend_exception.h"
 #include "core/description/typeDescription.h"     // a CAST to a primitive, read as the type it converts to

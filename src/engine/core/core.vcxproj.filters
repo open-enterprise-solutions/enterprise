@@ -171,6 +171,12 @@
     <ClCompile Include="query\queryRefusal.cpp">
       <Filter>query</Filter>
     </ClCompile>
+    <ClCompile Include="query\queryRender.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
+    <ClCompile Include="query\queryRewrite.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
     <ClCompile Include="serialize\dataBuilder.cpp">
       <Filter>serialize</Filter>
     </ClCompile>
@@ -352,6 +358,12 @@
       <Filter>query</Filter>
     </ClInclude>
     <ClInclude Include="query\queryRefusal.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\queryRender.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\queryRewrite.h">
       <Filter>query</Filter>
     </ClInclude>
     <ClInclude Include="query\queryUnfold.h">

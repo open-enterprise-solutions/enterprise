@@ -1278,7 +1278,7 @@ TEST(TypedEmpty, ATypeNobodyHasIsTheEmptyValueNotARefusal) {
 #include "backend/system/value/composition/valueComposerField.h"
 #include "backend/backend_composition.h"
 #include "backend/composition/dataComposer.h"
-#include "backend/query/queryRender.h"   // ibRenderQueryExpr — the text IS the expression rendered
+#include "core/query/queryRender.h"   // ibRenderQueryExpr — the text IS the expression rendered
 
 TEST(CompositionField, IsARegisteredType) {
 	EXPECT_TRUE(ibValue::IsRegisterCtor(wxT("CompositionField")));

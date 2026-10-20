@@ -13,7 +13,7 @@
 #include "backend/metaData.h"                 // ibMetaData::GetSourceFactory — resolve by-name sources per-config
 #include "backend/backend_exception.h"        // ibBackendCoreException
 #include "backend/query/queryReadState.h"  // ibQueryReadState — one build, one state of the data
-#include "backend/query/queryRender.h"        // ibQueryColumnFromPath — a dotted path becomes a column, once
+#include "core/query/queryRender.h"        // ibQueryColumnFromPath — a dotted path becomes a column, once
 #include "core/query/queryKeywords.h"         // ibQueryKeywordText — a grouping line is written in the query's own words
 #include "core/query/queryLexer.h"         // ibQueryLexer::IsIdentifier — what a NAME is, asked of the tier that defines it
 #include "backend/query/queryConstructorModel.h"   // ibQueryFieldsOfText / WalkPath — the author's fields and a path's walk, as the pickers read them

@@ -264,13 +264,11 @@
     <ClInclude Include="query\queryRamTable.h" />
     <ClInclude Include="query\queryRowCursor.h" />
     <ClInclude Include="query\queryLiteral.h" />
-    <ClInclude Include="query\queryRender.h" />
     <ClInclude Include="query\queryConstructorModel.h" />
     <ClInclude Include="query\queryTempStore.h" />
     <ClInclude Include="query\queryLowering.h" />
     <ClInclude Include="query\queryException.h" />
     <ClInclude Include="query\queryHierarchy.h" />
-    <ClInclude Include="query\queryRewrite.h" />
     <ClInclude Include="compiler\lambdaQueryAST.h" />
     <ClInclude Include="query\queryableFactory.h" />
     <ClInclude Include="composition\dataComposer.h" />
@@ -774,13 +772,11 @@
     <ClCompile Include="metaCollection\partial\informationRegisterObject.cpp" />
     <ClCompile Include="query\queryColumn.cpp" />
     <ClCompile Include="query\dataQueryBuilder.cpp" />
-    <ClCompile Include="query\queryRender.cpp" />
     <ClCompile Include="query\queryConstructorModel.cpp" />
     <ClCompile Include="query\queryTempStore.cpp" />
     <ClCompile Include="query\queryLowering.cpp" />
     <ClCompile Include="query\queryException.cpp" />
     <ClCompile Include="query\queryHierarchy.cpp" />
-    <ClCompile Include="query\queryRewrite.cpp" />
     <ClCompile Include="compiler\lambdaQueryAST.cpp" />
     <ClCompile Include="query\queryableFactory.cpp" />
     <ClCompile Include="composition\dataComposer.cpp" />

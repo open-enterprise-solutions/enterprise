@@ -5,7 +5,7 @@
 #include "queryConstructorModel.h"
 #include "backend/query/queryLiteral.h"   // ibQueryLiteralValue / ibQueryLiteralOf — a query's constant and the engine's value
 
-#include "queryRender.h"                 // ibRenderQueryExpr — an unaliased projection is named by its own text
+#include "core/query/queryRender.h"                 // ibRenderQueryExpr — an unaliased projection is named by its own text
 #include "core/query/queryParser.h"                 // ibQueryCastType / ibQueryMakeCast — a primitive CAST, both ways
 #include "queryable.h"                   // ibBackendQueryable::GetSourceMetaObject — a table's own reference type
 #include "backend/metaCollection/genericData.h"   // ResolveQueryConstant — …typed by its empty reference

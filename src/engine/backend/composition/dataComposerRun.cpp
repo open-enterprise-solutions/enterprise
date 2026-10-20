@@ -22,7 +22,7 @@
 #include "backend/metaData.h"                 // ibMetaData::GetSourceFactory
 #include "backend/backend_exception.h"        // ibBackendCoreException
 #include "backend/query/queryReadState.h"     // ibQueryReadState — one build, one state of the data
-#include "backend/query/queryRender.h"        // ibQueryColumnFromPath
+#include "core/query/queryRender.h"        // ibQueryColumnFromPath
 #include "core/query/queryKeywords.h"         // ibQueryKeywordText
 #include "core/query/queryLexer.h"         // ibQueryLexer::IsIdentifier
 #include "backend/session/session.h"          // ibSession::RunState — the walk hears a cancel

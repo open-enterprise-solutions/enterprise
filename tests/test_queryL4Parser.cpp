@@ -14,7 +14,7 @@
 // ⚠ AT THE TOP, not beside the round-trip section further down: a test up here renders an AST back
 // to text (ONTO is written where INTO is), and an include that arrives 200 lines later is not
 // visible to it. MSBuild does not compile tests, so this only ever fails in the CMake tree.
-#include "backend/query/queryRender.h"
+#include "core/query/queryRender.h"
 
 namespace {
 
@@ -573,7 +573,7 @@ TEST(QueryL4Parser, UnionAll_FlagPerBranch)
 // AST does not keep them.
 // ===========================================================================
 
-#include "backend/query/queryRender.h"
+#include "core/query/queryRender.h"
 
 namespace {
 

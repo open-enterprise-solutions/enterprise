@@ -14,8 +14,8 @@
 
 #include "core/query/queryAST.h"
 #include "core/query/queryParser.h"
-#include "backend/query/queryRender.h"
-#include "backend/query/queryRewrite.h"
+#include "core/query/queryRender.h"
+#include "core/query/queryRewrite.h"
 #include "backend/query/queryLowering.h"
 #include "core/query/queryAggregates.h"         // ibQueryAggregatesFor — which folds a type admits
 #include "backend/query/queryConstructorModel.h"

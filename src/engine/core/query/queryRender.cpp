@@ -3,13 +3,12 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "queryRender.h"
-#include "backend/query/queryLiteral.h"   // ibQueryLiteralValue / ibQueryLiteralOf — a query's constant and the engine's value
 
 #include "core/query/queryKeywords.h"
+#include <wx/intl.h>   // _() — the renderer's own refusals are translated
 
 #include <set>   // which levels open a branch — read while the BY list is joined
 
-#include "backend/compiler/value.h"
 
 namespace {
 
@@ -46,7 +45,7 @@ wxString Join(const std::vector<wxString>& parts, const wxString& separator)
 // through the value's own string form — which is the honest answer for a type
 // the query language has no literal syntax for, and the parser will then refuse
 // it rather than silently accept something else.
-wxString RenderLiteral(const ibValue& value)
+wxString RenderLiteral(const ibAnyValue& value)
 {
 	switch (value.GetType())
 	{
@@ -162,7 +161,7 @@ wxString RenderExpr(const ibQueryAstExpr& expr)
 		return Join(expr.m_path, wxT("."));
 
 	case ibQueryAstExprKind::Literal:
-		return RenderLiteral(ibQueryLiteralValue(expr.m_literal));
+		return RenderLiteral(expr.m_literal.Get());
 
 	case ibQueryAstExprKind::Param:
 		return wxT("&") + expr.m_paramName;

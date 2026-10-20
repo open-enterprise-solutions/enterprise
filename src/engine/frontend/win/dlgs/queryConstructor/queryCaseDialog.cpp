@@ -7,7 +7,7 @@
 #include "queryGridModel.h"
 
 #include "core/query/queryParser.h"
-#include "backend/query/queryRender.h"
+#include "core/query/queryRender.h"
 #include "core/query/queryKeywords.h"
 #include "backend/backend_exception.h"
 

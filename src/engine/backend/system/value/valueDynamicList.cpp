@@ -6,7 +6,7 @@
 //  only for the deleted RunPage/ibDynamicListProvider; the fetch lives in the base RunComposerPage now.)
 #include "backend/query/queryColumn.h"               // ibBackendQueryColumn::GetColumnId
 #include "core/query/queryParser.h"               // the arbitrary query is READ by the engine's own parser
-#include "backend/query/queryRender.h"               // ibRenderQuery / ibQueryColumnFromPath — the seed query, written out
+#include "core/query/queryRender.h"               // ibRenderQuery / ibQueryColumnFromPath — the seed query, written out
 #include "backend/backend_exception.h"               // the engine's verdict on a query that will not resolve
 #include "backend/srcDataObject.h"                      // ibSourceExplorer
 #include "backend/metaCollection/partial/reference/reference.h"   // ibValueReferenceDataObject — GetItemKey row guid
