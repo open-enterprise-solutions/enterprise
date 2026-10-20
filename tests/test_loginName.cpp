@@ -73,7 +73,8 @@ TEST_F(LoginNameFix, UsersAnswersTheNamesBeforeAnyLogin)
 {
 	Keep(wxT("right-secret"));
 
-	ibClientHost host(nullptr);
+	// The host of the test's base, as a server makes one per base: `users` binds the caller's thread to it for the read.
+	ibClientHost host(appData);
 	const wxString answer = host.Call(wxT(R"({"jsonrpc":"2.0","id":1,"method":"users","params":{}})"));
 	EXPECT_FALSE(answer.Contains(wxT("\"error\""))) << answer;
 	EXPECT_TRUE(answer.Contains(wxT("\"Users\""))) << answer;
