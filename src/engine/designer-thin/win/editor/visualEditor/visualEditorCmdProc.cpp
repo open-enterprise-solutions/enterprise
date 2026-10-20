@@ -166,10 +166,25 @@ public:
 		m_selectedBefore(selectedBefore), m_selectedAfter(selectedAfter), m_treesBefore(treesBefore), m_treesAfter(treesAfter) {
 	}
 
+	// A property's edit — the control's rows before it and as the server wrote them after it, so an undo shows the old.
+	void SetRows(long long controlId, const ibProtocolNode& before, const ibProtocolNode& after) {
+		m_rowsControl = controlId;
+		m_rowsBefore = before;
+		m_rowsAfter = after;
+	}
+
 protected:
 
-	virtual void DoExecute() override { m_visualEditor->Draw(m_after, m_treesAfter, m_patch, m_selectedAfter); }
-	virtual void DoRestore() override { m_visualEditor->Draw(m_before, m_treesBefore, ibProtocolNode(), m_selectedBefore); }
+	virtual void DoExecute() override {
+		m_visualEditor->Draw(m_after, m_treesAfter, m_patch, m_selectedAfter);
+		if (m_rowsControl != 0)
+			m_visualEditor->ReceiveRows(m_rowsControl, m_rowsAfter);
+	}
+	virtual void DoRestore() override {
+		m_visualEditor->Draw(m_before, m_treesBefore, ibProtocolNode(), m_selectedBefore);
+		if (m_rowsControl != 0)
+			m_visualEditor->ReceiveRows(m_rowsControl, m_rowsBefore);
+	}
 
 private:
 
@@ -182,6 +197,9 @@ private:
 	long long m_selectedAfter;
 	ibProtocolNode m_treesBefore;
 	ibProtocolNode m_treesAfter;
+	long long m_rowsControl = 0;   // none: the command changes no control's rows
+	ibProtocolNode m_rowsBefore;
+	ibProtocolNode m_rowsAfter;
 };
 
 void ibVisualEditorNotebook::ibVisualEditor::Execute(ibVisualEditorCmd* cmd)
@@ -600,14 +618,51 @@ void ibVisualEditorNotebook::ibVisualEditor::ModifyProperty(ibProperty* prop, co
 		request.SetValue(ibProtocol::ibView::ibFormDesigner::Kind, static_cast<int>(ibProtocol::ibView::ibFormDesigner::ibRequest::Rows));
 		request.SetValue(ibProtocol::ibView::ibFormDesigner::Control, controlId);
 		request.SetValue(ibProtocol::ibView::ibFormDesigner::Form, edited);
+		// …and its rows the same answer wrote of it: what the inspector shows of the value is the server's words (a Source's
+		// Presentation), and the ones it was read with name the value it had (a binding picked showed "<not selected>",
+		// and the old one when the control was selected again, 2026-10-19).
+		const auto held = m_rows.find(controlId);
+		const ibProtocolNode rowsBefore = held != m_rows.end() ? held->second : ibProtocolNode();
+		ibProtocolNode rowsAfter;
 		ibProtocolNode answer;
 		if (m_document->Fetch(request, answer)) {
 			PatchState(answer.FindChild(ibProtocol::ibView::ibFormDesigner::Node), step);
 			edited = m_formNode.Clone();
 			edited.Apply(patch);
+			for (const ibProtocolNode& described : answer.FindChild(ibProtocol::ibView::ibFormDesigner::Controls).Children()) {
+				if (described.GetInt(ibProtocol::ibView::ibFormDesigner::Control) == controlId)
+					rowsAfter = described;
+			}
 		}
-		Execute(new ibVisualEditorFormCmd(this, m_formNode, edited, patch, m_selected, m_selected, m_trees, m_trees));
+		ibVisualEditorFormCmd* const cmd = new ibVisualEditorFormCmd(this, m_formNode, edited, patch, m_selected, m_selected, m_trees, m_trees);
+		if (rowsAfter.IsNode() && rowsBefore.IsNode() && !(rowsAfter == rowsBefore))
+			cmd->SetRows(controlId, rowsBefore, rowsAfter);
+		Execute(cmd);
 	});
+}
+
+void ibVisualEditorNotebook::ibVisualEditor::ReceiveRows(long long controlId, const ibProtocolNode& rows)
+{
+	if (!rows.IsNode())
+		return;
+	m_rows[controlId] = rows;
+
+	ibValueForm* const valueForm = GetValueForm();
+	if (valueForm == nullptr)
+		return;
+	ibValueFrame* const control = controlId == valueForm->GetControlID() ? valueForm : valueForm->FindControlByID(controlId);
+	std::vector<ibProtocolNode> path;
+	if (control == nullptr || !FindPath(m_formNode, controlId, path))
+		return;
+
+	// The inspector lets go of the control's rows before they go, and shows the new ones.
+	const bool shown = objectInspector->GetSelectedObject() == control;
+	if (shown)
+		objectInspector->SelectObject(nullptr);
+	control->Receive(rows);
+	Receive(control, path.back());
+	if (shown)
+		objectInspector->SelectObject(control, true);
 }
 
 /////////////////////////////////////////////////////////////////////////////////////
