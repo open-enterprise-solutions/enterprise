@@ -1001,11 +1001,9 @@ bool ibMcpServer::Start(ibSession* session, wxString& refusal)
 	// they always did and the same stop is visible on this side. The debug client
 	// owns what it is given, which is why this is a bare `new` and why letting go
 	// is a call to it rather than a delete of our own.
-	if (debugClient != nullptr && m_debugBridge == nullptr) {
+	if (debugClient != nullptr && ibMcpDebug() == nullptr) {
 		ibMcpDebugBridge* bridge = new ibMcpDebugBridge();
-		if (bridge->Attach())
-			m_debugBridge = bridge;
-		else
+		if (!bridge->Attach())
 			delete bridge;
 	}
 
@@ -1047,12 +1045,12 @@ void ibMcpServer::Stop()
 
 	m_running.store(false);
 
-	// Detach DESTROYS the bridge — the debug client's list owns it — so the
-	// pointer is dropped in the same breath.
-	if (m_debugBridge != nullptr) {
-		m_debugBridge->Detach();
-		m_debugBridge = nullptr;
-	}
+	// Detach DESTROYS the bridge — the debug client's list owns it. ⚠ ASKED, NOT REMEMBERED: the debug
+	// client is the configuration's, so the bridge dies with it — and `Watch(nullptr)` above can be what
+	// lets the configuration go. A pointer kept here was read after that (crash dump 2026-10-20 16:45,
+	// thin designer's exit); the bridge's destructor clears what `ibMcpDebug` answers.
+	if (ibMcpDebugBridge* const bridge = ibMcpDebug())
+		bridge->Detach();
 
 	if (m_listener) {
 		// Stop() wakes the stream, closes the server and JOINS — so the port is

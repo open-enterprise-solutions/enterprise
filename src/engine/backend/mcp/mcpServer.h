@@ -297,10 +297,6 @@ private:
 
 	std::atomic<bool>            m_running{ false };
 
-	// Not owned — the debug client's bridge list owns what it holds. Null when
-	// the process has no debugger, or while the server is stopped.
-	class ibMcpDebugBridge*      m_debugBridge = nullptr;
-
 	// WHAT THE CLIENT SAID IT CAN DO, taken from its handshake. Asked before
 	// every outgoing request, because a client that cannot sample must be told
 	// so by a disabled button rather than by silence after a press.
