@@ -66,8 +66,23 @@ wxString Refusal(const std::function<void()>& fn, std::size_t reserve = ibFiber:
 	return wxString();
 }
 
+// THE CODE THESE TESTS WRITE IS VES (If…Then…EndIf). The style is the current session's, and it is shared: a fixture
+// that runs a configuration sets it to the configuration's, and a suite that ran before this one could leave it so.
+// So each compile here pins the style for itself and puts back what it found — the order the suites run in decides
+// nothing.
+class ibVesCodeStyle {
+public:
+	ibVesCodeStyle() { ibCompileCode::SetCodeStyle(CODE_VES); }
+	~ibVesCodeStyle() { ibCompileCode::SetCodeStyle(m_saved); }
+	ibVesCodeStyle(const ibVesCodeStyle&) = delete;
+	ibVesCodeStyle& operator=(const ibVesCodeStyle&) = delete;
+private:
+	const short m_saved = ibCompileCode::GetCodeStyle();
+};
+
 void RunDepth(int n, int& out)
 {
+	const ibVesCodeStyle style;
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
 	const wxString src =
 		wxT("Function Depth(n) Public\n")
@@ -225,6 +240,7 @@ TEST(FiberStack, Expression_UnderTheCeiling_Compiles)
 {
 	bool compiled = false;
 	RunOnFiber([&] {
+		const ibVesCodeStyle style;
 		ibCompileCode cc(wxT("test"), wxT("memory"), false);
 		compiled = cc.Compile(Parens(399));
 	});
@@ -234,6 +250,7 @@ TEST(FiberStack, Expression_UnderTheCeiling_Compiles)
 TEST(FiberStack, Expression_PastTheCeiling_Raises)
 {
 	const wxString why = Refusal([&] {
+		const ibVesCodeStyle style;
 		ibCompileCode cc(wxT("test"), wxT("memory"), false);
 		cc.Compile(Parens(450));
 	});
