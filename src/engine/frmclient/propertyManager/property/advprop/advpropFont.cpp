@@ -1,8 +1,21 @@
 ﻿#include "advpropFont.h"
 
+#include "frmclient/backend/propertyManager/property/variant/variantSerializable.h"   // the value — the font's node
 #include "frmclient/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
 #include "frmclient/propertyManager/property/private/propertyRegistry.h"
 #include "frmclient/win/typeconv.h"   // FontToWxFont / WxFontToFont — the dialog's font, and back
+
+namespace {
+
+// The value of a font: the same property's (the cell's own), its node the font's text as the server stores it, read as
+// that text.
+wxVariant WriteFont(const wxVariant& value, const ibFont& font)
+{
+	const wxString text = font.ToString();
+	return wxVariant(new ibVariantDataSerializable(value.GetType(), ibDataValue::String(text), text));
+}
+
+} // namespace
 
 // -----------------------------------------------------------------------
 // ibPGFontProperty
@@ -75,18 +88,16 @@ class ibPropertyFontLoader
 public:
 	ibPropertyFontLoader() {
 		ibPropertyRegistry::Register(wxT("ibPropertyFont"), [](ibBackendProperty* property) -> wxPGProperty* {
-			ibFont font;
-			font.FromString(property->GetNodeValue().AsString());
-			return new ibPGFontProperty(property->GetLabel(), property->GetName(), font);
+			return new ibPGFontProperty(property->GetLabel(), property->GetName(), property->GetValue());
 		});
 	}
 } g_fontLoader;
 
 ibPGFontProperty::ibPGFontProperty(const wxString& label, const wxString& name,
-	const ibFont& value)
+	const wxVariant& value)
 	: wxEditorDialogProperty(label, name)
 {
-	SetValue(WXVARIANT(wxString(value.ToString())));
+	SetValue(value);
 
 	// Initialize font family choices list
 	if (!wxPGGlobalVars->m_fontFamilyChoices)
@@ -151,7 +162,7 @@ bool ibPGFontProperty::DisplayEditorDialog(wxPropertyGrid* pg, wxVariant& value)
 	}
 	if (dlg.ShowModal() == wxID_OK)
 	{
-		value = WXVARIANT(wxString(typeConv::WxFontToFont(dlg.GetFontData().GetChosenFont()).ToString()));
+		value = WriteFont(m_value, typeConv::WxFontToFont(dlg.GetFontData().GetChosenFont()));
 		return true;
 	}
 
@@ -164,7 +175,7 @@ ibFont ibPGFontProperty::GetVal(const wxVariant* pVariant) const
 		pVariant = &m_value;
 
 	ibFont font;
-	if (!font.FromString(pVariant->GetString()) || !font.IsOk())
+	if (!font.FromString(ibVariantDataSerializable::GetNodeValue(*pVariant).AsString()) || !font.IsOk())
 		font = typeConv::WxFontToFont(*wxNORMAL_FONT);
 	return font;
 }
@@ -230,5 +241,5 @@ wxVariant ibPGFontProperty::ChildChanged(wxVariant& thisValue,
 		font.m_family = static_cast<ibFontFamily>(fam);
 	}
 
-	return WXVARIANT(wxString(font.ToString()));
+	return WriteFont(thisValue, font);
 }

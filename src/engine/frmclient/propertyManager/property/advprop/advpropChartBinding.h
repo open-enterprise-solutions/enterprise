@@ -25,7 +25,7 @@ public:
 	bool IsSet() const { return m_choiceMode == ibPropertyChoiceMode::Mult; }
 
 	ibPGChartBindingProperty(const wxString& label = wxPG_LABEL, const wxString& name = wxPG_LABEL,
-		const std::vector<ibMetaID>& value = std::vector<ibMetaID>(),
+		const wxVariant& value = wxVariant(),
 		const ibPropertyChoiceList& choices = ibPropertyChoiceList(),
 		ibPropertyChoiceMode mode = ibPropertyChoiceMode::Single);
 
@@ -42,9 +42,9 @@ public:
 
 	virtual wxPGEditorDialogAdapter* GetEditorDialog() const override;
 
-	// The ids a value holds, and a value holding them.
+	// The ids a value holds, and the same property's value holding others.
 	static std::vector<ibMetaID> IdsOf(const wxVariant& value);
-	static wxVariant ValueOf(const std::vector<ibMetaID>& ids);
+	static wxVariant ValueOf(const wxVariant& value, const std::vector<ibMetaID>& ids);
 
 protected:
 	ibPropertyChoiceMode m_choiceMode = ibPropertyChoiceMode::Single;

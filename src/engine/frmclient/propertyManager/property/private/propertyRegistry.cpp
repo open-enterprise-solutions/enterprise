@@ -14,34 +14,19 @@ wxPGProperty* CreateAsString(ibBackendProperty* property)
 	return shown;
 }
 
-// …and its value back, by the kind the grid holds it in.
-ibDataValue GetNodeValueByKind(const wxVariant& value)
-{
-	const wxString type = value.GetType();
-	if (type == wxT("bool"))
-		return ibDataValue::Bool(value.GetBool());
-	if (type == wxT("long"))
-		return ibDataValue::Int(value.GetLong());
-	if (type == wxT("ulonglong"))
-		return ibDataValue::UInt(value.GetULongLong().GetValue());
-	if (type == wxT("longlong"))
-		return ibDataValue::Int(value.GetLongLong().GetValue());
-	return ibDataValue::String(value.GetString());
-}
-
 } // namespace
 
-std::map<wxString, ibPropertyRegistry::ibPropertyEntry>& ibPropertyRegistry::GetEntries()
+std::map<wxString, ibPropertyRegistry::ibPropertyMaker>& ibPropertyRegistry::GetEntries()
 {
-	static std::map<wxString, ibPropertyEntry> s_entries;
+	static std::map<wxString, ibPropertyMaker> s_entries;
 	return s_entries;
 }
 
-void ibPropertyRegistry::Register(const wxString& type, ibPropertyMaker maker, ibPropertyWriter writer)
+void ibPropertyRegistry::Register(const wxString& type, ibPropertyMaker maker)
 {
 	wxASSERT_MSG(GetEntries().find(type) == GetEntries().end(),
 		wxString::Format(wxT("ibPropertyRegistry: '%s' is registered twice"), type));
-	GetEntries()[type] = { std::move(maker), std::move(writer) };
+	GetEntries()[type] = std::move(maker);
 }
 
 wxPGProperty* ibPropertyRegistry::Create(ibBackendProperty* property)
@@ -49,7 +34,7 @@ wxPGProperty* ibPropertyRegistry::Create(ibBackendProperty* property)
 	wxPGProperty* result = nullptr;
 	const auto found = GetEntries().find(property->GetType());
 	if (found != GetEntries().end())
-		result = found->second.m_maker(property);
+		result = found->second(property);
 	if (result == nullptr)
 		result = CreateAsString(property);
 
@@ -57,14 +42,6 @@ wxPGProperty* ibPropertyRegistry::Create(ibBackendProperty* property)
 	if (!property->IsEditable())
 		result->ChangeFlag(wxPGFlags::ReadOnly, true);
 	return result;
-}
-
-ibDataValue ibPropertyRegistry::GetNodeValue(const ibBackendProperty* property, const wxVariant& value)
-{
-	const auto found = GetEntries().find(property->GetType());
-	if (found != GetEntries().end() && found->second.m_writer)
-		return found->second.m_writer(value);
-	return GetNodeValueByKind(value);
 }
 
 wxPGChoices ibPropertyRegistry::GetChoices(ibBackendProperty* property)

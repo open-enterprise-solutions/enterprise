@@ -18,7 +18,7 @@ class ibPGColourProperty : public wxEnumProperty {
 	WX_PG_DECLARE_PROPERTY_CLASS(ibPGColourProperty)
 public:
 
-	ibPGColourProperty(const wxString& label = wxPG_LABEL, const wxString& name = wxPG_LABEL, const ibColour& value = ibColour());
+	ibPGColourProperty(const wxString& label = wxPG_LABEL, const wxString& name = wxPG_LABEL, const wxVariant& value = wxNullVariant);
 	virtual ~ibPGColourProperty() = default;
 
 	virtual void OnSetValue() override;

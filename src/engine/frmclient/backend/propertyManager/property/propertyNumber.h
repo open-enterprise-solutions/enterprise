@@ -8,47 +8,35 @@
 
 //base property for "integer"
 class FRMCLIENT_API ibPropertyInteger : public ibProperty {
-	static wxVariant CreateVariantData(const int& val) { return wxVariant((long)val); }   // WXVARIANT<int> IS wxVariant((long)v) — propgriddefs.h
 public:
 
-	void SetValue(const int& val) { m_propValue = CreateVariantData(val); }
-	int GetValueAsInteger() const { return m_propValue.GetLong(); }
+	// …held as its node (ibBackendProperty::ReadNodeValue).
+	void SetValue(const int& val) { ibProperty::ReadNodeValue(ibDataValue::Int(val)); }
+	int GetValueAsInteger() const { return static_cast<int>(GetNodeValue().AsInt()); }
 
 	ibPropertyInteger(ibPropertyCategory* cat, const wxString& name,
-		const int& value = 0) : ibProperty(cat, name, CreateVariantData(value))
+		const int& value = 0) : ibProperty(cat, name, wxNullVariant)
 	{
+		SetValue(value);
 	}
 
 	ibPropertyInteger(ibPropertyCategory* cat, const wxString& name, const wxString& label,
-		const int& value = 0) : ibProperty(cat, name, label, CreateVariantData(value))
+		const int& value = 0) : ibProperty(cat, name, label, wxNullVariant)
 	{
+		SetValue(value);
 	}
 
 	ibPropertyInteger(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString,
-		const int& value = 0) : ibProperty(cat, name, label, helpString, CreateVariantData(value))
+		const int& value = 0) : ibProperty(cat, name, label, helpString, wxNullVariant)
 	{
+		SetValue(value);
 	}
 
 	virtual bool IsEmptyProperty() const { return GetValueAsInteger() == 0; }
 
-
-	// set/get property data
-	virtual bool SetDataValue(const ibValue& varPropVal) {
-		SetValue(varPropVal.GetInteger());
-		return true;
-	}
-	virtual bool GetDataValue(ibValue& pvarPropVal) const {
-		pvarPropVal = GetValueAsInteger();
-		return true;
-	}
-
 	//per-type node value
 	virtual bool ReadNodeValue(const ibDataValue& value) override {
 		SetValue((int)value.AsInt());
-		return true;
-	}
-	virtual bool WriteNodeValue(ibDataValue& value) const override {
-		value = ibDataValue::Int(GetValueAsInteger());
 		return true;
 	}
 
@@ -58,48 +46,35 @@ public:
 
 //base property for "unsigned integer"
 class FRMCLIENT_API ibPropertyUInteger : public ibProperty {
-	static wxVariant CreateVariantData(const unsigned int& val) { return wxVariant((long)val); }
 public:
 
-	void SetValue(const unsigned int& val) { m_propValue = CreateVariantData(val); }
-	unsigned int GetValueAsUInteger() const { return m_propValue.GetLong(); }
+	// …held as its node (ibBackendProperty::ReadNodeValue).
+	void SetValue(const unsigned int& val) { ibProperty::ReadNodeValue(ibDataValue::UInt(val)); }
+	unsigned int GetValueAsUInteger() const { return static_cast<unsigned int>(GetNodeValue().AsUInt()); }
 
 	ibPropertyUInteger(ibPropertyCategory* cat, const wxString& name,
-		const unsigned int& value = 0) : ibProperty(cat, name, CreateVariantData(value))
+		const unsigned int& value = 0) : ibProperty(cat, name, wxNullVariant)
 	{
+		SetValue(value);
 	}
 
 	ibPropertyUInteger(ibPropertyCategory* cat, const wxString& name, const wxString& label,
-		const unsigned int& value = 0) : ibProperty(cat, name, label, CreateVariantData(value))
+		const unsigned int& value = 0) : ibProperty(cat, name, label, wxNullVariant)
 	{
+		SetValue(value);
 	}
 
 	ibPropertyUInteger(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString,
-		const unsigned int& value = 0) : ibProperty(cat, name, label, helpString, CreateVariantData(value))
+		const unsigned int& value = 0) : ibProperty(cat, name, label, helpString, wxNullVariant)
 	{
+		SetValue(value);
 	}
 
 	virtual bool IsEmptyProperty() const { return GetValueAsUInteger() == 0; }
 
-
-	// set/get property data
-	virtual bool SetDataValue(const ibValue& varPropVal) {
-		SetValue(varPropVal.GetUInteger());
-		return true;
-	}
-
-	virtual bool GetDataValue(ibValue& pvarPropVal) const {
-		pvarPropVal = GetValueAsUInteger();
-		return true;
-	}
-
 	//per-type node value
 	virtual bool ReadNodeValue(const ibDataValue& value) override {
 		SetValue((unsigned int)value.AsInt());
-		return true;
-	}
-	virtual bool WriteNodeValue(ibDataValue& value) const override {
-		value = ibDataValue::Int(GetValueAsUInteger());
 		return true;
 	}
 

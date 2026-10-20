@@ -1,5 +1,4 @@
 #include "propertyChoiceLink.h"
-#include "variant/variantChoiceLink.h"
 
 #include "core/serialize/dataBuilder.h"   // ibDataNode — the row the lists come with
 #include "frmclient/win/picture.h"        // ibProtocolPicture — an item's picture, as the wire carries it

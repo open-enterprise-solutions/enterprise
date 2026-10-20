@@ -1,6 +1,7 @@
 ﻿#include "advpropRecord.h"
 
-#include "frmclient/backend/propertyManager/property/variant/variantRecord.h"
+#include "frmclient/backend/propertyManager/property/variant/variantSerializable.h"   // the value — the registers' node
+#include "core/description/typeDescription.h"                                         // ibMetaDescriptionMemory
 
 #include "frmclient/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
 #include "frmclient/propertyManager/property/private/propertyRegistry.h"
@@ -17,6 +18,26 @@
 
 wxPG_IMPLEMENT_PROPERTY_CLASS(ibPGRecordProperty, wxPGProperty, ComboBoxAndButton)
 
+namespace {
+
+// The registers a value names, as the server stores them…
+ibMetaDescription ReadMeta(const wxVariant& value)
+{
+	ibMetaDescription metaDesc;
+	ibMetaDescriptionMemory::ReadNode(ibVariantDataSerializable::GetNodeValue(value), metaDesc);
+	return metaDesc;
+}
+
+// …and the value of others: the same property's, named by the cell (ValueToString).
+wxVariant WriteMeta(const wxVariant& value, const ibMetaDescription& metaDesc)
+{
+	ibDataValue node;
+	ibMetaDescriptionMemory::WriteNode(node, metaDesc);
+	return wxVariant(new ibVariantDataSerializable(value.GetType(), node, wxEmptyString));
+}
+
+} // namespace
+
 // register frontend property
 class ibPropertyRecordLoader
 {
@@ -28,21 +49,13 @@ public:
 		const ibPropertyRegistry::ibPropertyMaker maker = [](ibBackendProperty* property) -> wxPGProperty* {
 			ibPropertyChoiceList choices;
 			property->GetValueList(choices);
-			ibMetaDescription metaDesc;
-			ibMetaDescriptionMemory::ReadNode(property->GetNodeValue(), metaDesc);
 			return new ibPGRecordProperty(property->GetPropertyObject(), property->GetLabel(), property->GetName(),
-				wxVariant(new ibVariantDataRecord(property->GetPropertyObject(), metaDesc)), choices);
+				property->GetValue(), choices);
 		};
-		const ibPropertyRegistry::ibPropertyWriter writer = [](const wxVariant& value) {
-			ibDataValue node;
-			if (const ibVariantDataRecord* const data = property_cast(value, ibVariantDataRecord))
-				ibMetaDescriptionMemory::WriteNode(node, data->GetMetaDesc());
-			return node;
-		};
-		ibPropertyRegistry::Register(wxT("ibPropertyRecord"), maker, writer);
+		ibPropertyRegistry::Register(wxT("ibPropertyRecord"), maker);
 		// …and its heir, the sequences a document is registered in: the desktop's registry matched it as an
 		// ibPropertyRecord (a cast), the server names it by its own class.
-		ibPropertyRegistry::Register(wxT("ibPropertySequenceRecord"), maker, writer);
+		ibPropertyRegistry::Register(wxT("ibPropertySequenceRecord"), maker);
 	}
 }g_recordLoader;
 
@@ -65,11 +78,8 @@ ibPGRecordProperty::ibPGRecordProperty(const ibPropertyObject* property, const w
 wxString ibPGRecordProperty::ValueToString(wxVariant& value, wxPGPropValFormatFlags flags) const
 {
 	// ⚠ NAMED BY THE CHOICES — the client holds no configuration to name an id by (ibPGChartBindingProperty).
-	const ibVariantDataRecord* const data = property_cast(value, ibVariantDataRecord);
-	if (data == nullptr)
-		return wxEmptyString;
 	wxString strDescr;
-	const ibMetaDescription& md = data->GetMetaDesc();
+	const ibMetaDescription md = ReadMeta(value);
 	for (unsigned int idx = 0; idx < md.GetTypeCount(); idx++) {
 		const int index = m_choices.Index(static_cast<int>(md.GetByIdx(idx)));
 		if (index == wxNOT_FOUND)
@@ -88,16 +98,10 @@ bool ibPGRecordProperty::StringToValue(wxVariant& variant,
 
 bool ibPGRecordProperty::IntToValue(wxVariant& value, int number, wxPGPropValFormatFlags flags) const
 {
-	ibVariantDataRecord* dataRecord = property_cast(value, ibVariantDataRecord);
-	if (dataRecord != nullptr) {
-		ibVariantDataRecord* newDataRecord = dataRecord->Clone();
-		wxASSERT(newDataRecord);
-		ibMetaDescription& md = newDataRecord->GetMetaDesc();
-		md.SetDefaultMetaType(m_choices.GetValue(number));
-		value = newDataRecord;
-		return true;
-	}
-	return false;
+	ibMetaDescription md = ReadMeta(value);
+	md.SetDefaultMetaType(m_choices.GetValue(number));
+	value = WriteMeta(value, md);
+	return true;
 }
 
 #include "frmclient/win/ctrls/checktree.h"
@@ -117,7 +121,7 @@ wxPGEditorDialogAdapter* ibPGRecordProperty::GetEditorDialog() const
 		// as the desktop's (FillByClsid). Each one's kind is its data — its class, as the server's property listed it —
 		// named and drawn as the server registered it (the row's Classes).
 		void FillFromChoices(const wxPGChoices& choices, const std::vector<u64>& choiceData,
-			ibCheckTree* tc, ibVariantDataRecord* data) {
+			ibCheckTree* tc, const ibMetaDescription& held) {
 
 			wxImageList* imageList = tc->GetImageList();
 			wxASSERT(imageList);
@@ -139,7 +143,7 @@ wxPGEditorDialogAdapter* ibPGRecordProperty::GetEditorDialog() const
 				wxTreeItemId newItem = tc->AppendItem(group->second, choices.GetLabel(idx),
 					icon, icon, new ibTreeItemPropertyData(id));
 
-				const bool checked = data != nullptr && data->GetMetaDesc().ContainMetaType(id);
+				const bool checked = held.ContainMetaType(id);
 				tc->SetItemState(newItem, checked ? ibCheckTree::CHECKED : ibCheckTree::UNCHECKED);
 				tc->Check(newItem, checked);
 			}
@@ -152,8 +156,7 @@ wxPGEditorDialogAdapter* ibPGRecordProperty::GetEditorDialog() const
 			ibPGRecordProperty* dlgProp = wxDynamicCast(prop, ibPGRecordProperty);
 			wxCHECK_MSG(dlgProp, false, "Function called for incompatible property");
 
-			ibVariantDataRecord* data = property_cast(dlgProp->GetValue(), ibVariantDataRecord);
-			if (data == nullptr) return false;
+			const ibMetaDescription held = ReadMeta(dlgProp->GetValue());
 
 			// launch editor dialog
 			wxDialog* dlg = new wxDialog(pg, wxID_ANY, _("Choice recorder"), wxDefaultPosition, wxDefaultSize,
@@ -195,12 +198,12 @@ wxPGEditorDialogAdapter* ibPGRecordProperty::GetEditorDialog() const
 				new wxImageList(icon_size, icon_size)
 			);
 
-			FillFromChoices(dlgProp->GetChoices(), dlgProp->m_choiceData, tc, data);
+			FillFromChoices(dlgProp->GetChoices(), dlgProp->m_choiceData, tc, held);
 
 			tc->ExpandAll(); int res = dlg->ShowModal();
-			ibVariantDataRecord* clone = data->Clone();
+			ibMetaDescription metaDesc = held;
 			{
-				ibMetaDescription& metaDesc = clone->GetMetaDesc(); metaDesc.ClearMetaType();
+				metaDesc.ClearMetaType();
 				wxArrayTreeItemIds ids;
 				tc->GetSelections(ids);   // the count is in ids itself
 				// BY VALUE: wxArrayTreeItemIds stores void*, so a reference binds to a per-iteration temporary.
@@ -215,7 +218,7 @@ wxPGEditorDialogAdapter* ibPGRecordProperty::GetEditorDialog() const
 					}
 				}
 			}
-			SetValue(clone);
+			SetValue(WriteMeta(dlgProp->GetValue(), metaDesc));
 			dlg->Destroy();
 			return res == wxID_OK;
 		}

@@ -1770,6 +1770,21 @@ wxWindow* ibFrontendMainFrame::CreateChildFrame(ibFrontendView* view, const wxPo
 	return subframe;
 }
 
+namespace {
+
+// THE TOOLBAR EMPTIED as wxToolBar::ClearTools empties one — the windows of its controls too: wxAuiToolBar::Clear lets go
+// of the items alone, and a control left behind (a sheet's Zoom) stayed on show over the next view's tools, and took
+// clicks for a view no longer shown (2026-10-20).
+void ClearTools(wxAuiToolBar& toolbar)
+{
+	for (size_t idx = 0; idx < toolbar.GetToolCount(); ++idx)
+		if (wxWindow* const window = toolbar.FindToolByIndex(static_cast<int>(idx))->GetWindow())
+			window->Destroy();
+	toolbar.Clear();
+}
+
+} // namespace
+
 void ibFrontendMainFrame::ActivateView(ibFrontendView* view, bool activate)
 {
 	if (m_docToolbar == nullptr)
@@ -1784,7 +1799,7 @@ void ibFrontendMainFrame::ActivateView(ibFrontendView* view, bool activate)
 		if (viewFrame != nullptr) viewFrame->SetMenuBar(view->CreateMenuBar());
 #endif
 		if (viewFrame != nullptr) {
-			m_docToolbar->Clear();
+			ClearTools(*m_docToolbar);
 			view->OnCreateToolbar(m_docToolbar);
 			m_docToolbar->Realize();
 		}
@@ -1843,7 +1858,7 @@ void ibFrontendMainFrame::UpdateFrameManager()
 		}
 	}
 
-	if (view_count == 0) m_docToolbar->Clear();
+	if (view_count == 0) ClearTools(*m_docToolbar);
 
 	wxAuiPaneInfo& infoToolBar = m_mgr.GetPane(m_docToolbar);
 	const bool showToolBar = m_docToolbar->GetToolCount() > 0;

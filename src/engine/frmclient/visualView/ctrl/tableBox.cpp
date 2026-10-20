@@ -9,6 +9,7 @@
 #include <wx/renderer.h>   // wxRendererNative::DrawCheckMark — a boolean cell
 
 #include "core/serialize/dataBuilder.h"              // ibDataValue — a column's width, as its property takes it
+#include "frmclient/backend/appData.h"               // DesignerMode — no table's rows are read there
 #include "frmclient/visualView/commandBar.h"
 #include "frmclient/visualView/visualHostClient.h"   // a designer's host selects and moves by it
 #include "frmclient/win/picture.h"
@@ -205,7 +206,10 @@ void ibValueModelTableBox::Create(wxWindow* parent, const ibProtocolNode& /*node
 	// is served here once when the reset asks from the top — no wire call.
 	std::weak_ptr<bool> alive = m_alive;
 	ibViewFetcher wire = MakeFetcher();
-	ibViewFetcher fetcher = [this, wire](const ibProtocolNode& request, ibProtocolNode& answer) -> bool {
+	// …none in the designer: its tables have no rows to show, the server reads none there (ibValueModelTableBox::Fetch) —
+	// a form tried out in it was refused (404), each of its tables (2026-10-15).
+	const bool designer = appData->DesignerMode();
+	ibViewFetcher fetcher = [this, wire, designer](const ibProtocolNode& request, ibProtocolNode& answer) -> bool {
 		// The page State's Rows was read as: from the top, or (Anchor) around the row the server stands on, with its Count
 		// and as many rows ahead (Before; fewer — none more above). Taken for a read it holds all of: that Anchor, no
 		// larger a Count, no more rows ahead than it has — or the top reached.
@@ -260,7 +264,7 @@ void ibValueModelTableBox::Create(wxWindow* parent, const ibProtocolNode& /*node
 				return true;
 			}
 		}
-		return wire(request, answer);
+		return !designer && wire(request, answer);
 	};
 	ibViewTableModel* const model = new ibViewTableModel(std::move(fetcher), [this, alive](const ibViewTableModel::ibAnswer& answer) {
 		wxTheApp->CallAfter([this, alive, answer]() {

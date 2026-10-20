@@ -260,46 +260,6 @@ public:
 
 	////////////////////
 
-	// ⭐ AND THE PROBE FORM — "are you this?", answering null when the answer is no.
-	//
-	// The pair is `Get` and `Find`, the way this tree names them everywhere else: Get is for a shape
-	// that is KNOWN, and a value that is not it is a defect worth raising over; Find is for a SEARCH,
-	// where "no" is an ordinary answer. A caller walking every property of an object asking which one
-	// holds a type description, or which ones are relationships, gets a no from most of them — and
-	// with only the raising form it had to reach past the accessor and cast the variant by hand,
-	// which is the recognising-from-outside this whole property contract exists to remove.
-	template <typename cast_type = wxVariantData>
-	inline cast_type* find_cell_variant(const wxVariant& val) const {
-		return dynamic_cast<cast_type*>(val.GetRefData());
-	}
-
-	template <typename cast_type = wxVariantData>
-	inline cast_type* find_cell_variant() const {
-		return find_cell_variant<cast_type>(m_propValue);
-	}
-
-	// ⭐⭐ A CELL THAT IS NOT WHAT IT IS ASKED FOR RAISES. Every caller dereferences the result on the
-	// spot (`get_cell_variant<X>()->GetSomething()`), so a null is a null dereference one line later —
-	// and the assert that used to stand here is gone in Release, which is where it would happen.
-	//
-	// It IS reachable: SetValue takes any wxVariant and is called with whatever the grid announces
-	// (ibObjectInspector::ModifyProperty), and the same expression runs on the load and save paths.
-	// This tree's rule is that a failure raises rather than quietly answering something wrong.
-	template <typename cast_type = wxVariantData>
-	inline cast_type* get_cell_variant(const wxVariant& val) const {
-		cast_type* ret_type = find_cell_variant<cast_type>(val);
-		if (ret_type == nullptr)
-			ibBackendCoreException::Error(_("Property '%s': its value is not of the expected kind"), GetName());
-		return ret_type;
-	}
-
-	template <typename cast_type = wxVariantData>
-	inline cast_type* get_cell_variant() const {
-		return get_cell_variant<cast_type>(m_propValue);
-	}
-
-	////////////////////
-
 	virtual bool IsOk() const { return !m_propValue.IsNull(); }
 	virtual bool IsEmptyProperty() const { return false; }
 
@@ -338,32 +298,6 @@ public:
 	//  none of its business. Asking "are you one of these" already has a door — the value's own
 	//  ConvertToValue / a cast at the point of use — and the caller that needs the answer needs the
 	//  typed interface in the same breath anyway.)
-
-protected:
-
-	// ⭐ THE ANSWER FOR A RELATIONSHIP, BUILT ONCE, HERE. Every property whose choices are OTHER
-	// METAOBJECTS answers the same way: take the classes that may fill it, walk them, and carry each
-	// one's variant out with it. Five properties do that, and the walk used to be written five times
-	// in the FRONT — in the constructors of five wxPGProperty editors, where nothing headless could
-	// reach it and where the clsid list, a fact about the property, was kept.
-	//
-	// `mode` is what the caller returns: this function does not decide whether one or several are
-	// allowed, the property does.
-	//
-	// `accept` narrows the classes when belonging to one is not enough — a document posts only to
-	// registers that HAVE A RECORDER, a rule that lived inside one of those front-side fill loops and
-	// would have been lost bringing the classes down, leaving a list wider than the designer's own.
-	//
-	// ⚠ A PLAIN FUNCTION POINTER, so a captureless lambda goes straight in with no std::function
-	// between them — and nothing is added to the base for the properties that have no such rule.
-	//
-	// ⚠ IT TAKES A PROPERTY OBJECT, NOT A METAOBJECT. A candidate IS one, and saying so keeps this
-	// header inside its own world: the property system has no business naming a metaCollection type
-	// to express "one of the things I might be set to". The property that has a rule knows what it
-	// is looking at and narrows it there.
-	ibPropertyChoiceMode CreateValueList(ibPropertyChoiceList& list, ibPropertyChoiceMode mode,
-		const std::initializer_list<ibClassID> classes,
-		bool (*accept)(const ibPropertyObject*) = nullptr);
 
 public:
 
@@ -409,14 +343,10 @@ public:
 	virtual bool CopyNodeValue(ibDataValue& value) const;
 	virtual bool PasteNodeValue(const ibDataValue& value);
 
-	//Set/Get property data
-	virtual bool SetDataValue(const ibValue& varPropVal) = 0;
-	virtual bool GetDataValue(ibValue& pvarPropVal) const = 0;
-
-	// ⭐ PROPERTY -> PROTOCOL VALUE — the row the server's property answered the inspector with (its own GetProtocolValue,
-	// the same question): its value, and what its window offers beyond the value (the lists it chooses from), read by
-	// whichever cell shows it — of any property, so none is cast to the one class that holds a row. False: it came of none.
-	virtual bool GetProtocolValue(ibDataNode& row) const { return false; }
+	// ⭐ PROPERTY -> PROTOCOL VALUE — the backend's (ibBackendProperty::GetProtocolValue), the same question: its name, title,
+	// class, value as stored and how it reads; a server's property, the row it came of — with what its window offers beyond
+	// the value (the lists it chooses from). Read by whichever cell shows it, of any property: none is cast to learn it.
+	virtual bool GetProtocolValue(ibDataNode& row) const;
 
 protected:
 
@@ -427,8 +357,13 @@ protected:
 	// exists to intercept, and the compiler now says so instead of the configuration losing a
 	// default three layers away. GetNodeValue / SetNodeValue are the surface; these are the
 	// implementation, and the pair reads Read/Write while the doors read Get/Set.
-	virtual bool ReadNodeValue(const ibDataValue& value) = 0;
-	virtual bool WriteNodeValue(ibDataValue& value) const = 0;
+	//
+	// ⭐ THE VALUE IS ONE VARIANT, THE SAME FOR EVERY TYPE (ibVariantDataSerializable, Max, 2026-10-20) — the node the
+	// server stores it as, named by the property's class: what is read is held as it comes, what is written is what is
+	// held. Whoever sets and gets it moves a variant and knows nothing of the node; a type that reads more than one shape
+	// of a node (a flag spelled as a word) reads it, and holds what it read here.
+	virtual bool ReadNodeValue(const ibDataValue& value);
+	virtual bool WriteNodeValue(ibDataValue& value) const;
 
 protected:
 	virtual void DoSetValue(const wxVariant& val) { m_propValue = val; }
@@ -472,10 +407,6 @@ protected:
 
 ///////////////////////////////////////////////////////////////////////////////
 
-#define property_cast(val, type) dynamic_cast<type*>(val.GetData())
-
-///////////////////////////////////////////////////////////////////////////////
-
 // ---------------------------------------------------------
 // ibPropertyObjectNotifier
 // ---------------------------------------------------------
@@ -492,7 +423,9 @@ public:
 	ibPropertyObjectNotifier() { m_owner = nullptr; }
 	virtual ~ibPropertyObjectNotifier() { m_owner = nullptr; }
 
-	virtual bool PropertyHidden(const ibProperty* property, bool hide) = 0;
+	virtual bool SetState(const ibProperty* property, bool hide) = 0;
+	// …and ALL OF IT: what was shown of the object is to be read anew (ibDataViewModelNotifier::Cleared, the same word).
+	virtual bool Cleared() = 0;
 
 	// Null once the object we were registered on is gone (its dtor clears it) — so the
 	// front can tell "still showing a live object" from "holding a corpse" without the
@@ -727,6 +660,9 @@ protected:
 	// The push. An OnPropertyRefresh override calls this for a property IT declared;
 	// silence means "not mine, leave it alone".
 	bool HideProperty(const ibProperty* property, bool hide = true);
+	// …of all of it: what it shows is no longer so (an edit answered with its rows anew) — the one showing it reads it
+	// again, as a model's view does (ibDataViewModel::Cleared). A metaobject's, a form's control, a grid's alike.
+	bool Cleared();
 
 public:
 

@@ -4,6 +4,7 @@
 
 #include "core/serialize/dataBuilder.h"
 #include "frmclient/backend/serialize/dataProtocol.h"   // ibReadProtocolNode, ibWriteProtocolNode — the rows, the edit
+#include "frmclient/backend/propertyManager/property/variant/variantSerializable.h"   // an edit's value — its node
 #include "frmclient/mainFrame/mainFrame.h"              // the door to the server
 
 wxString ibValueMetaObject::GetName() const
@@ -101,6 +102,11 @@ bool ibValueMetaObject::Send(const wxString& name, const ibDataValue& value) con
 	return frame->Call(ibProtocol::ibMethod::Schema, params, answer);
 }
 
+bool ibValueMetaObject::Send(const wxString& name, const wxVariant& value) const
+{
+	return Send(name, ibVariantDataSerializable::GetNodeValue(value));
+}
+
 namespace {
 
 	// The rows received, and the frame they are true at: another frame drops them all.
@@ -163,8 +169,14 @@ bool ibValueMetaObject::Receive()
 	return ibPropertyObject::Receive(rows);
 }
 
-bool ibValueMetaObject::OnPropertyChanging(ibProperty* property, const wxVariant& WXUNUSED(newValue))
+bool ibValueMetaObject::OnPropertyChanging(ibProperty* property, const wxVariant& newValue)
 {
-	// …the value as the property's node holds it now: the door (ibPropertyGate) gave it before asking.
-	return Send(property->GetName(), property->GetNodeValue());
+	return Send(property->GetName(), newValue);
+}
+
+void ibValueMetaObject::OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue)
+{
+	// …its rows came with the answer (Receive, by the tab and the id), taken in as it is read anew.
+	Cleared();
+	ibPropertyObject::OnPropertyChanged(property, oldValue, newValue);
 }

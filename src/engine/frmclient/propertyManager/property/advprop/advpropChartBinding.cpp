@@ -6,47 +6,9 @@
 #include "frmclient/propertyManager/property/private/propertyRegistry.h"
 #include "frmclient/propertyManager/propertyEditor.h"
 #include "frmclient/win/ctrls/checktree.h"
+#include "frmclient/backend/propertyManager/property/variant/variantSerializable.h"   // the value — the ids' node
 
 #define icon_size 16
-
-namespace {
-
-// THE VALUE — the ids, as the row carries them. A variant of its own, so equal sets compare equal and the grid sees
-// no change where there is none.
-class ibVariantDataMetaIds : public wxVariantData {
-public:
-	explicit ibVariantDataMetaIds(const std::vector<ibMetaID>& ids) : m_ids(ids) {}
-	virtual bool Eq(wxVariantData& data) const override {
-		const ibVariantDataMetaIds* const other = dynamic_cast<const ibVariantDataMetaIds*>(&data);
-		return other != nullptr && other->m_ids == m_ids;
-	}
-	virtual wxString GetType() const override { return wxT("ibVariantDataMetaIds"); }
-	virtual wxVariantData* Clone() const override { return new ibVariantDataMetaIds(m_ids); }
-	const std::vector<ibMetaID>& GetIds() const { return m_ids; }
-private:
-	std::vector<ibMetaID> m_ids;
-};
-
-// The row's value, its node form: an Array of ids; anything else (no value yet) holds none.
-std::vector<ibMetaID> ReadIds(const ibDataValue& value)
-{
-	std::vector<ibMetaID> ids;
-	if (value.Kind() != ibDataKind::Array)
-		return ids;
-	for (const ibDataValue& item : value.AsArray())
-		ids.push_back(static_cast<ibMetaID>(item.AsInt()));
-	return ids;
-}
-
-ibDataValue WriteIds(const wxVariant& value)
-{
-	std::vector<ibDataValue> items;
-	for (const ibMetaID id : ibPGChartBindingProperty::IdsOf(value))
-		items.push_back(ibDataValue::Int(id));
-	return ibDataValue::Array(items);
-}
-
-} // namespace
 
 // -----------------------------------------------------------------------
 // ibPGChartBindingProperty
@@ -64,30 +26,39 @@ public:
 			ibPropertyChoiceList choices;
 			const ibPropertyChoiceMode mode = property->GetValueList(choices);
 			return new ibPGChartBindingProperty(property->GetLabel(), property->GetName(),
-				ReadIds(property->GetNodeValue()), choices, mode);
+				property->GetValue(), choices, mode);
 		};
 		for (const wxChar* className : {
 				wxT("ibPropertyChartOfAccounts"), wxT("ibPropertyChartOfCharacteristicTypes"),
 				wxT("ibPropertyChartOfCalculationTypes"), wxT("ibPropertyAccountingKind"),
 				wxT("ibPropertyFunctionalOptions") })
-			ibPropertyRegistry::Register(className, maker, WriteIds);
+			ibPropertyRegistry::Register(className, maker);
 	}
 } g_chartBindingLoader;
 
+// The row's value, its node form: an Array of ids; anything else (no value yet) holds none.
 std::vector<ibMetaID> ibPGChartBindingProperty::IdsOf(const wxVariant& value)
 {
-	if (const ibVariantDataMetaIds* const data = dynamic_cast<const ibVariantDataMetaIds*>(value.GetData()))
-		return data->GetIds();
-	return std::vector<ibMetaID>();
+	std::vector<ibMetaID> ids;
+	const ibDataValue node = ibVariantDataSerializable::GetNodeValue(value);
+	if (node.Kind() != ibDataKind::Array)
+		return ids;
+	for (const ibDataValue& item : node.AsArray())
+		ids.push_back(static_cast<ibMetaID>(item.AsInt()));
+	return ids;
 }
 
-wxVariant ibPGChartBindingProperty::ValueOf(const std::vector<ibMetaID>& ids)
+// …named by the cell (ValueToString).
+wxVariant ibPGChartBindingProperty::ValueOf(const wxVariant& value, const std::vector<ibMetaID>& ids)
 {
-	return wxVariant(new ibVariantDataMetaIds(ids));
+	std::vector<ibDataValue> items;
+	for (const ibMetaID id : ids)
+		items.push_back(ibDataValue::Int(id));
+	return wxVariant(new ibVariantDataSerializable(value.GetType(), ibDataValue::Array(items), wxEmptyString));
 }
 
 ibPGChartBindingProperty::ibPGChartBindingProperty(const wxString& label, const wxString& strName,
-	const std::vector<ibMetaID>& value, const ibPropertyChoiceList& choices, ibPropertyChoiceMode mode)
+	const wxVariant& value, const ibPropertyChoiceList& choices, ibPropertyChoiceMode mode)
 	: wxPGProperty(label, strName), m_choiceMode(mode)
 {
 	for (unsigned int idx = 0; idx < choices.GetCount(); idx++)
@@ -95,7 +66,7 @@ ibPGChartBindingProperty::ibPGChartBindingProperty(const wxString& label, const 
 
 	m_flags |= wxPGPropertyFlags_ActiveButton; // Property button always enabled.
 
-	SetValue(ValueOf(value));
+	SetValue(value);
 }
 
 // The names of what it holds, as the desktop's value string lists them.
@@ -124,7 +95,7 @@ bool ibPGChartBindingProperty::IntToValue(wxVariant& value, int number, wxPGProp
 {
 	if (number < 0 || number >= static_cast<int>(m_choices.GetCount()))
 		return false;
-	value = ValueOf(std::vector<ibMetaID>{ static_cast<ibMetaID>(m_choices.GetValue(number)) });
+	value = ValueOf(value, std::vector<ibMetaID>{ static_cast<ibMetaID>(m_choices.GetValue(number)) });
 	return true;
 }
 
@@ -214,7 +185,7 @@ wxPGEditorDialogAdapter* ibPGChartBindingProperty::GetEditorDialog() const
 					if (ibTreeItemPropertyData* item = dynamic_cast<ibTreeItemPropertyData*>(tc->GetItemData(selItem)))
 						ids.push_back(item->GetMetaID());
 				}
-				SetValue(ValueOf(ids));
+				SetValue(ValueOf(dlgProp->GetValue(), ids));
 			}
 
 			dlg->Destroy();

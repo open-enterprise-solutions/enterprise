@@ -1,7 +1,7 @@
 #ifndef _FRMCLIENT_BACKEND_META_COMPOSER_OBJECT_H__
 #define _FRMCLIENT_BACKEND_META_COMPOSER_OBJECT_H__
 
-#include <wx/variant.h>
+#include "core/description/compositionDescription.h"   // ibCompositionDescription — what its tab edits
 
 class ibMetaData;
 
@@ -12,7 +12,7 @@ class ibMetaData;
 class ibValueMetaObjectComposer {
 public:
 	const ibMetaData* GetMetaData() const { return nullptr; }
-	wxVariant GetCompositionValue() const { return wxVariant(); }
+	ibCompositionDescription GetCompositionDesc() const { return ibCompositionDescription(); }
 };
 
 #endif

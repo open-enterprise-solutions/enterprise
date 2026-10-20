@@ -1,5 +1,6 @@
 ﻿#include "advpropSchedule.h"
 
+#include "frmclient/backend/propertyManager/property/variant/variantSerializable.h"   // the value — the schedule's node
 #include "frmclient/mainFrame/objinspect/objinspect.h"                  // the object shown — the property is found on it again
 #include "frmclient/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
 #include "frmclient/propertyManager/property/private/propertyRegistry.h"
@@ -83,8 +84,9 @@ void ibPGScheduleProperty::OnSetValue()
 				if (property == nullptr)
 					return;
 
+				const wxVariant held = property->GetValue();
 				ibJobScheduleDescription schedule;
-				ibJobScheduleDescriptionMemory::ReadNode(property->GetNodeValue(), schedule);
+				ibJobScheduleDescriptionMemory::ReadNode(ibVariantDataSerializable::GetNodeValue(held), schedule);
 				ibDialogJobSchedule dlg(nullptr, schedule);
 				if (dlg.ShowModal() != wxID_OK)
 					return;
@@ -97,7 +99,8 @@ void ibPGScheduleProperty::OnSetValue()
 				property = inspector->GetSelectedObject() == owner ? owner->GetProperty(name) : nullptr;
 				ibDataValue node;
 				if (property != nullptr && ibJobScheduleDescriptionMemory::WriteNode(node, dlg.GetSchedule()))
-					ibPropertyGate::SetValue(owner, property, node);
+					ibPropertyGate::SetValue(owner, property,
+						wxVariant(new ibVariantDataSerializable(held.GetType(), node, held.GetString())));
 			}
 		);
 	}

@@ -12,7 +12,7 @@ public:
 
 	ibPGEventProperty(const wxString& label = wxPG_LABEL,
 		const wxString& name = wxPG_LABEL,
-		const wxString& value = wxEmptyString);
+		const wxVariant& value = wxNullVariant);
 
 	virtual wxString ValueToString(wxVariant& value,
 		wxPGPropValFormatFlags flags = wxPGPropValFormatFlags::Null) const override;

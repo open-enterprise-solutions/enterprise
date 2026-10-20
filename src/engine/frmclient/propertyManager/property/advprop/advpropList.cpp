@@ -1,4 +1,5 @@
 #include "advpropList.h"
+#include "frmclient/backend/propertyManager/property/variant/variantSerializable.h"   // the value — the chosen one's id
 #include "frmclient/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
 #include "frmclient/propertyManager/property/private/propertyRegistry.h"
 #include "frmclient/propertyManager/propertyEditor.h"
@@ -11,6 +12,23 @@
 
 wxPG_IMPLEMENT_PROPERTY_CLASS(ibPGListProperty, wxPGProperty, ComboBoxAndButton)
 
+namespace {
+
+// The id a value holds — the chosen one's; none picked: wxNOT_FOUND…
+long ReadId(const wxVariant& value)
+{
+	const ibDataValue node = ibVariantDataSerializable::GetNodeValue(value);
+	return node.Kind() == ibDataKind::Number ? static_cast<long>(node.AsInt()) : wxNOT_FOUND;
+}
+
+// …and the value of another: the same property's, named by the cell (ValueToString).
+wxVariant WriteId(const wxVariant& value, long id)
+{
+	return wxVariant(new ibVariantDataSerializable(value.GetType(), ibDataValue::Int(id), wxEmptyString));
+}
+
+} // namespace
+
 // register frontend property 
 class ibPropertyListLoader
 {
@@ -19,27 +37,21 @@ public:
 	{
 		// ibPropertyList, whatever it lists — a language, a role: the choices are the row's (GetValueList, asked on the
 		// server), the value the chosen one's id.
-		ibPropertyRegistry::Register(wxT("ibPropertyList"), [](ibBackendProperty* property) -> wxPGProperty* {
+		const ibPropertyRegistry::ibPropertyMaker maker = [](ibBackendProperty* property) -> wxPGProperty* {
 			ibPropertyChoiceList choices;
 			property->GetValueList(choices);
-			return new ibPGListProperty(property->GetLabel(), property->GetName(), choices,
-				static_cast<int>(property->GetNodeValue().AsInt()));
-		});
+			return new ibPGListProperty(property->GetLabel(), property->GetName(), choices, property->GetValue());
+		};
+		ibPropertyRegistry::Register(wxT("ibPropertyList"), maker);
 
 		// …and a DYNAMIC LIST'S SOURCE, the table it reads: the choices are the sources the configuration registers, the
 		// value the chosen one's table id (none picked: no value).
-		ibPropertyRegistry::Register(wxT("ibPropertyDynamicSource"), [](ibBackendProperty* property) -> wxPGProperty* {
-			ibPropertyChoiceList choices;
-			property->GetValueList(choices);
-			const ibDataValue value = property->GetNodeValue();
-			return new ibPGListProperty(property->GetLabel(), property->GetName(), choices,
-				value.Kind() == ibDataKind::Number ? static_cast<int>(value.AsInt()) : wxNOT_FOUND);
-		});
+		ibPropertyRegistry::Register(wxT("ibPropertyDynamicSource"), maker);
 	}
 }g_listLoader;
 
 ibPGListProperty::ibPGListProperty(const wxString& label, const wxString& strName,
-	const ibPropertyChoiceList& choices, int value)
+	const ibPropertyChoiceList& choices, const wxVariant& value)
 	: wxPGProperty(label, strName)
 {
 	wxPGChoices ch;
@@ -49,7 +61,6 @@ ibPGListProperty::ibPGListProperty(const wxString& label, const wxString& strNam
 		ch.Add(item);
 	}
 	m_choices.Assign(ch);
-	m_value = wxVariant(0L);
 
 	m_flags |= wxPGPropertyFlags_ActiveButton; // Property button always enabled.
 	SetValue(value);
@@ -57,8 +68,9 @@ ibPGListProperty::ibPGListProperty(const wxString& label, const wxString& strNam
 
 wxString ibPGListProperty::ValueToString(wxVariant& value, wxPGPropValFormatFlags flags) const
 {
+	const long id = ReadId(value);
 	for (unsigned int idx = 0; idx < m_choices.GetCount(); idx++) {
-		if (value.GetLong() == m_choices.GetValue(idx))
+		if (id == m_choices.GetValue(idx))
 			return m_choices.GetLabel(idx);
 	}
 
@@ -70,7 +82,7 @@ bool ibPGListProperty::StringToValue(wxVariant& variant,
 	wxPGPropValFormatFlags flags) const
 {
 	if (text.IsEmpty()) {
-		variant = WXVARIANT(wxNOT_FOUND);
+		variant = WriteId(variant, wxNOT_FOUND);
 		return true;
 	}
 
@@ -79,8 +91,13 @@ bool ibPGListProperty::StringToValue(wxVariant& variant,
 
 bool ibPGListProperty::IntToValue(wxVariant& value, int number, wxPGPropValFormatFlags flags) const
 {
-	value = WXVARIANT(m_choices.GetValue(number));
+	value = WriteId(value, m_choices.GetValue(number));
 	return true;
+}
+
+int ibPGListProperty::GetChoiceSelection() const
+{
+	return m_choices.Index(ReadId(m_value));
 }
 
 #include <wx/dataview.h>
@@ -172,7 +189,7 @@ wxPGEditorDialogAdapter* ibPGListProperty::GetEditorDialog() const
 			lc->SetFocus();
 
 			const wxPGChoices& choices = dlgProp->GetChoices();
-			const long selected = prop->GetValue().GetLong();
+			const long selected = ReadId(prop->GetValue());
 
 			for (unsigned int idx = 0; idx < choices.GetCount(); idx++) {
 				const wxBitmapBundle& bitmap = choices.Item(idx).GetBitmap();
@@ -187,11 +204,11 @@ wxPGEditorDialogAdapter* ibPGListProperty::GetEditorDialog() const
 
 			const int res = dlg->ShowModal();
 			const wxDataViewItem& item = lc->GetSelection();
-			if (res == wxID_OK && item.IsOk()) SetValue(
+			if (res == wxID_OK && item.IsOk()) SetValue(WriteId(prop->GetValue(),
 				choices.GetValue(
-					static_cast<unsigned int>(reinterpret_cast<uintptr_t>(item.GetID())) - 1));
+					static_cast<unsigned int>(reinterpret_cast<uintptr_t>(item.GetID())) - 1)));
 			else if (res == wxID_OK)
-				SetValue(wxNOT_FOUND);
+				SetValue(WriteId(prop->GetValue(), wxNOT_FOUND));
 
 			dlg->Destroy();
 			return res == wxID_OK;

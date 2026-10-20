@@ -4,9 +4,22 @@
 #include <wx/colordlg.h>
 #include <wx/odcombo.h>
 
+#include "frmclient/backend/propertyManager/property/variant/variantSerializable.h"   // the value — the colour's node
 #include "frmclient/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
 #include "frmclient/propertyManager/property/private/propertyRegistry.h"
 #include "frmclient/win/typeconv.h"   // ColourToWxColour / WxColourToColour — the dialog's and the painter's colour
+
+namespace {
+
+// The value of a colour: the same property's (the cell's own), its node the colour's text `r,g,b` as the server
+// stores it, read as that text.
+wxVariant WriteColour(const wxVariant& value, const ibColour& colour)
+{
+	const wxString text = colour.ToString();
+	return wxVariant(new ibVariantDataSerializable(value.GetType(), ibDataValue::String(text), text));
+}
+
+} // namespace
 
 // -----------------------------------------------------------------------
 // ibPGColourProperty
@@ -87,9 +100,7 @@ public:
 	ibPropertyColourLoader()
 	{
 		ibPropertyRegistry::Register(wxT("ibPropertyColour"), [](ibBackendProperty* property) -> wxPGProperty* {
-			ibColour colour;
-			colour.FromString(property->GetNodeValue().AsString());
-			return new ibPGColourProperty(property->GetLabel(), property->GetName(), colour);
+			return new ibPGColourProperty(property->GetLabel(), property->GetName(), property->GetValue());
 		});
 	}
 }s_enumLoader;
@@ -97,13 +108,13 @@ public:
 static wxPGChoices gs_ibPGColourProperty_choicesCache;
 
 ibPGColourProperty::ibPGColourProperty(const wxString& label, const wxString& name,
-	const ibColour& value)
+	const wxVariant& value)
 	: wxEnumProperty(label, name, gs_cp_es_normcolour_labels, gs_cp_es_normcolour_values,
 		&gs_ibPGColourProperty_choicesCache)
 {
 	m_flags |= wxPGPropertyFlags_StaticChoices; // Colour selection cannot be changed.
 
-	m_value = WXVARIANT(wxString(value.ToString()));
+	m_value = value;
 
 	OnSetValue();
 }
@@ -114,7 +125,7 @@ ibColour ibPGColourProperty::GetVal(const wxVariant* pVariant) const
 		pVariant = &m_value;
 
 	ibColour colour;
-	colour.FromString(pVariant->GetString());
+	colour.FromString(ibVariantDataSerializable::GetNodeValue(*pVariant).AsString());
 	return colour;
 }
 
@@ -217,7 +228,7 @@ bool ibPGColourProperty::StringToValue(wxVariant& value, const wxString& text, w
 	wxVariant choice;
 	if (ValueFromString_(choice, &index, colStr, flags) && index >= 0)
 	{
-		value = WXVARIANT(wxString(GetColour(index).ToString()));
+		value = WriteColour(m_value, GetColour(index));
 		return true;
 	}
 
@@ -235,7 +246,7 @@ bool ibPGColourProperty::StringToValue(wxVariant& value, const wxString& text, w
 	if (!customColour.Set(colStr))
 		return false;
 
-	value = WXVARIANT(wxString(typeConv::WxColourToColour(customColour).ToString()));
+	value = WriteColour(m_value, typeConv::WxColourToColour(customColour));
 	return true;
 }
 
@@ -252,7 +263,7 @@ bool ibPGColourProperty::IntToValue(wxVariant& variant, int number, wxPGPropValF
 	}
 	else
 	{
-		variant = WXVARIANT(wxString(GetColour(number).ToString()));
+		variant = WriteColour(m_value, GetColour(number));
 	}
 
 	return true;
@@ -261,7 +272,7 @@ bool ibPGColourProperty::IntToValue(wxVariant& variant, int number, wxPGPropValF
 bool ibPGColourProperty::ValidateValue(wxVariant& value, wxPGValidationInfo& WXUNUSED(validationInfo)) const
 {
 	// wxEnumProperty looks a text value up among the labels; ours is the colour's `r,g,b` (empty for none).
-	const wxString text = value.GetString();
+	const wxString text = ibVariantDataSerializable::GetNodeValue(value).AsString();
 	if (text.empty())
 		return true;
 
@@ -290,7 +301,7 @@ bool ibPGColourProperty::QueryColourFromUser(wxVariant& variant) const
 	wxColourDialog dialog(propgrid, &data);
 	if (dialog.ShowModal() == wxID_OK)
 	{
-		variant = WXVARIANT(wxString(typeConv::WxColourToColour(dialog.GetColourData().GetColour()).ToString()));
+		variant = WriteColour(m_value, typeConv::WxColourToColour(dialog.GetColourData().GetColour()));
 
 		SetValueInEvent(variant);
 

@@ -1,6 +1,7 @@
 ﻿#include "advpropCalcSchedule.h"
 
-#include "frmclient/backend/propertyManager/property/variant/variantCalcSchedule.h"
+#include "frmclient/backend/propertyManager/property/variant/variantSerializable.h"   // the value — the schedule's node
+#include "core/description/calcScheduleDescription.h"                                 // ibCalcScheduleDescriptionMemory
 
 #include "frmclient/propertyManager/property/private/prop.h"
 #include "frmclient/propertyManager/property/private/propertyRegistry.h"
@@ -16,6 +17,22 @@ enum : s32 {
 	kListDate = 2,    // a dimension of the register — the date
 	kListLink = 3,    // a dimension to link; its children the fields that may answer for it
 };
+
+// The schedule a value holds, as the server stores it…
+ibCalcScheduleDescription ReadSchedule(const wxVariant& value)
+{
+	ibCalcScheduleDescription scheduleDesc;
+	ibCalcScheduleDescriptionMemory::ReadNode(ibVariantDataSerializable::GetNodeValue(value), scheduleDesc);
+	return scheduleDesc;
+}
+
+// …and the value of another one: the same property's, named by the cell (ValueToString).
+wxVariant WriteSchedule(const wxVariant& value, const ibCalcScheduleDescription& scheduleDesc)
+{
+	ibDataValue node;
+	ibCalcScheduleDescriptionMemory::WriteNode(node, scheduleDesc);
+	return wxVariant(new ibVariantDataSerializable(value.GetType(), node, wxEmptyString));
+}
 
 } // namespace
 
@@ -34,16 +51,7 @@ public:
 		// ibPropertyCalcSchedule — the schedule as the server stores it (ibCalcScheduleDescriptionMemory), the registers
 		// it may read the row's choices.
 		ibPropertyRegistry::Register(wxT("ibPropertyCalcSchedule"), [](ibBackendProperty* property) -> wxPGProperty* {
-			ibCalcScheduleDescription scheduleDesc;
-			ibCalcScheduleDescriptionMemory::ReadNode(property->GetNodeValue(), scheduleDesc);
-			return new ibPGCalcScheduleProperty(property, property->GetLabel(), property->GetName(),
-				wxVariant(new ibVariantDataCalcSchedule(property->GetPropertyObject(), scheduleDesc)));
-		},
-		[](const wxVariant& value) {
-			ibDataValue node;
-			if (const ibVariantDataCalcSchedule* const data = property_cast(value, ibVariantDataCalcSchedule))
-				ibCalcScheduleDescriptionMemory::WriteNode(node, data->GetScheduleDesc());
-			return node;
+			return new ibPGCalcScheduleProperty(property, property->GetLabel(), property->GetName(), property->GetValue());
 		});
 	}
 } g_calcScheduleLoader;
@@ -129,65 +137,52 @@ wxString ibPGCalcScheduleProperty::ValueToString(wxVariant& value, wxPGPropValFo
 {
 	// ⚠ NAMED BY THE CHOICES — the client holds no configuration to name the register by (the engine's variant asked
 	// it); the row's choices are named as the server named them.
-	const ibVariantDataCalcSchedule* const data = property_cast(value, ibVariantDataCalcSchedule);
-	if (data == nullptr || !data->GetScheduleDesc().IsOk())
+	const ibCalcScheduleDescription sd = ReadSchedule(value);
+	if (!sd.IsOk())
 		return wxEmptyString;
-	const int index = m_choices.Index(static_cast<int>(data->GetScheduleDesc().GetRegister()));
+	const int index = m_choices.Index(static_cast<int>(sd.GetRegister()));
 	return index != wxNOT_FOUND ? m_choices.GetLabel(index) : wxString();
 }
 
 bool ibPGCalcScheduleProperty::IntToValue(wxVariant& value, int number, wxPGPropValFormatFlags flags) const
 {
-	ibVariantDataCalcSchedule* data = property_cast(value, ibVariantDataCalcSchedule);
-	if (data != nullptr) {
-		ibVariantDataCalcSchedule* newData = data->Clone();
-		wxASSERT(newData);
-		newData->GetScheduleDesc().SetSchedule(m_choices.GetValue(number), 0, 0);
-		value = newData;
-		return true;
-	}
-	return false;
+	ibCalcScheduleDescription sd = ReadSchedule(value);
+	sd.SetSchedule(m_choices.GetValue(number), 0, 0);
+	value = WriteSchedule(value, sd);
+	return true;
 }
 
 int ibPGCalcScheduleProperty::GetChoiceSelection() const
 {
-	ibVariantDataCalcSchedule* data = property_cast(m_value, ibVariantDataCalcSchedule);
-	return data != nullptr ? m_choices.Index(data->GetScheduleDesc().GetRegister()) : wxNOT_FOUND;
+	return m_choices.Index(ReadSchedule(m_value).GetRegister());
 }
 
 wxVariant ibPGCalcScheduleProperty::ChildChanged(wxVariant& thisValue, int childIndex, wxVariant& childValue) const
 {
-	ibVariantDataCalcSchedule* data = property_cast(thisValue, ibVariantDataCalcSchedule);
-	if (data != nullptr) {
-		ibVariantDataCalcSchedule* newData = data->Clone();
-		wxASSERT(newData);
-		ibCalcScheduleDescription& sd = newData->GetScheduleDesc();
-		const ibMetaID id = childValue.GetLong();
-		if (childIndex == 0) {
-			sd.SetSchedule(sd.GetRegister(), id, sd.GetDate());
-		}
-		else if (childIndex == 1) {
-			sd.SetSchedule(sd.GetRegister(), sd.GetValue(), id);
-		}
-		else {
-			const size_t link = childIndex - 2;   // the link rows follow the value and the date
-			if (link < m_linkDimensions.size())
-				sd.SetLink(m_linkDimensions[link], id);
-		}
-		return newData;
+	ibCalcScheduleDescription sd = ReadSchedule(thisValue);
+	const ibMetaID id = childValue.GetLong();
+	if (childIndex == 0) {
+		sd.SetSchedule(sd.GetRegister(), id, sd.GetDate());
 	}
-	return wxNullVariant;
+	else if (childIndex == 1) {
+		sd.SetSchedule(sd.GetRegister(), sd.GetValue(), id);
+	}
+	else {
+		const size_t link = childIndex - 2;   // the link rows follow the value and the date
+		if (link < m_linkDimensions.size())
+			sd.SetLink(m_linkDimensions[link], id);
+	}
+	return WriteSchedule(thisValue, sd);
 }
 
 void ibPGCalcScheduleProperty::RefreshChildren()
 {
-	ibVariantDataCalcSchedule* data = property_cast(m_value, ibVariantDataCalcSchedule);
-	if (data == nullptr || m_scheduleValue == nullptr)
+	if (m_scheduleValue == nullptr)
 		return;
 
 	// The lists are the row's, for the register it was written for: another register or date is the server's to
 	// answer — the row's Set comes back with the rows, and those carry their lists.
-	const ibCalcScheduleDescription& sd = data->GetScheduleDesc();
+	const ibCalcScheduleDescription sd = ReadSchedule(m_value);
 	m_scheduleValue->SetValue(sd.GetValue());
 	m_scheduleValue->Enable(sd.IsOk());
 	m_scheduleDate->SetValue(sd.GetDate());

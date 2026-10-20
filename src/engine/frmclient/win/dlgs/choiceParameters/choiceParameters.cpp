@@ -1,7 +1,6 @@
 ﻿#include "choiceParameters.h"
 
 #include "frmclient/backend/propertyManager/property/propertyChoiceLink.h"           // ibFieldReferenceTypes
-#include "frmclient/backend/propertyManager/property/variant/variantChoiceLink.h"   // ibChoiceHolderName — what the fields belong to
 
 #include "frmclient/win/dlgs/queryConstructor/queryGridModel.h"   // the one grid model for a plain list
 #include "frmclient/win/ctrls/dataview/dataviewEditOnActivate.h"  // …and the one way a cell opens on a double-click

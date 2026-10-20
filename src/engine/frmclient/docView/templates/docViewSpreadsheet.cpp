@@ -80,7 +80,6 @@ EVT_MENU(wxID_UNGROUP_ROW, ibSpreadsheetEditView::OnMenuEvent)
 EVT_MENU(wxID_GROUP_COL, ibSpreadsheetEditView::OnMenuEvent)
 EVT_MENU(wxID_UNGROUP_COL, ibSpreadsheetEditView::OnMenuEvent)
 EVT_CHOICE(wxID_SHEET_ZOOM, ibSpreadsheetEditView::OnZoomChoice)
-EVT_GRID_ZOOM(ibSpreadsheetEditView::OnGridZoomChanged)
 wxEND_EVENT_TABLE()
 
 bool ibSpreadsheetEditView::OnCreate(ibFrontendDocument* docBase, long flags)
@@ -89,6 +88,9 @@ bool ibSpreadsheetEditView::OnCreate(ibFrontendDocument* docBase, long flags)
 	m_gridEditor = new ibGridEditor(doc, m_viewFrame, wxID_ANY);
 	m_gridEditor->EnableEditing(flags != ibDOC_READONLY);
 	m_gridEditor->EnableGridArea(doc->ConvertMetaObjectToType<ibValueMetaObjectSpreadsheetBase>());
+	// Its grid's zoom (Ctrl+wheel) heard from the grid itself, not from a frame: a grid box's view is no frame's — the
+	// form's view stands in front of it — and its choice stayed at 100% over a sheet at 150% (2026-10-20).
+	m_gridEditor->Bind(wxEVT_GRID_ZOOM, &ibSpreadsheetEditView::OnGridZoomChanged, this);
 
 	return ibFrontendView::OnCreate(docBase, flags);
 }

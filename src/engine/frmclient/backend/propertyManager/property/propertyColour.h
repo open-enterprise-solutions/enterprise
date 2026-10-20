@@ -5,48 +5,37 @@
 
 //base property for "colour"
 class FRMCLIENT_API ibPropertyColour : public ibProperty {
-	static wxVariant CreateVariantData(const wxColour& val) {
-		wxVariant newValue;
-		newValue << val;
-		return newValue;
-	}
 public:
 
-	wxColour GetValueAsColour() const {
-		wxColour colour;
-		colour << m_propValue;
-		return colour;
-	}
+	// …held as its node, the colour's text (ibBackendProperty::ReadNodeValue).
+	wxColour GetValueAsColour() const { return typeConv::StringToColour(GetValueAsString()); }
+	wxString GetValueAsString() const;
 
-	wxString GetValueAsString() const { return typeConv::ColourToString(GetValueAsColour()); }
-
-	void SetValue(const wxColour& val) { ibProperty::SetValue(CreateVariantData(val)); }
-	void SetValue(const wxString& val) { SetValue(typeConv::StringToColour(val)); }
+	void SetValue(const wxColour& val) { SetValue(typeConv::ColourToString(val)); }
+	void SetValue(const wxString& val);
 
 	ibPropertyColour(ibPropertyCategory* cat, const wxString& name, const wxColour& c = wxNullColour)
-		: ibProperty(cat, name, CreateVariantData(c))
+		: ibProperty(cat, name, wxNullVariant)
 	{
+		SetValue(c);
 	}
 
 	ibPropertyColour(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxColour& c = wxNullColour)
-		: ibProperty(cat, name, label, CreateVariantData(c))
+		: ibProperty(cat, name, label, wxNullVariant)
 	{
+		SetValue(c);
 	}
 
 	ibPropertyColour(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString, const wxColour& c = wxNullColour)
-		: ibProperty(cat, name, label, helpString, CreateVariantData(c))
+		: ibProperty(cat, name, label, helpString, wxNullVariant)
 	{
+		SetValue(c);
 	}
-
-	// set/get property data
-	virtual bool SetDataValue(const ibValue& varPropVal);
-	virtual bool GetDataValue(ibValue& pvarPropVal) const;
 
 	//load & save object in control 
 
 	// readable node value
 	virtual bool ReadNodeValue(const ibDataValue& value) override;
-	virtual bool WriteNodeValue(ibDataValue& value) const override;
 
 public:
 

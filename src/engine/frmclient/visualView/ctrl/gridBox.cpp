@@ -59,6 +59,13 @@ void ibValueGridBox::Create(wxWindow* parent, const ibProtocolNode& /*node*/)
 	gridWindow->EnableGridArea(false);
 	gridWindow->EnableGridLines(false);
 
+	// WHAT IT SHOWS until the server's sheet comes (Update): one of its own, not to be edited — the desktop's box shows its
+	// model's from here on. An editor with none had nothing a change is taken from (the designer's crash, 2026-10-20), and
+	// an empty one edited would be handed over in place of the server's.
+	auto document = std::make_shared<ibSpreadsheetObject>();
+	document->EnableEditing(false);
+	m_gridDocument->SetSpreadsheetDocument(document);
+
 	sizer->Add(gridWindow, 1, wxEXPAND);
 	m_panel->SetSizer(sizer);
 	// ⚠ A SIZE OF ITS OWN, as the table's — never the grid's best one: that is every row the grid holds, and the grid

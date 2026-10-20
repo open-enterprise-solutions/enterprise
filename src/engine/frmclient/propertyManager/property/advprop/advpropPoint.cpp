@@ -1,6 +1,6 @@
 ﻿#include "advpropPoint.h"
 
-#include "frmclient/backend/propertyManager/property/variant/variantPoint.h"
+#include "frmclient/backend/propertyManager/property/variant/variantSerializable.h"   // the value — the point's node
 #include "frmclient/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
 #include "frmclient/propertyManager/property/private/propertyRegistry.h"
 
@@ -23,42 +23,31 @@ public:
 		// ibPropertyPoint — the point as the server stores it: its text, `x,y` (ibPoint::ToString); none reads as the
 		// default position, as the engine's property reads it.
 		ibPropertyRegistry::Register(wxT("ibPropertyPoint"), [](ibBackendProperty* property) -> wxPGProperty* {
-			ibPoint point = ibDefaultPosition;
-			point.FromString(property->GetNodeValue().AsString());
-			return new ibPGPointProperty(property->GetLabel(), property->GetName(), point);
-		},
-		[](const wxVariant& value) {
-			ibPoint point = ibDefaultPosition;
-			if (ibVariantDataPoint* const pointVariant = property_cast(value, ibVariantDataPoint))
-				point = pointVariant->GetPoint();
-			return ibDataValue::String(point.ToString());
+			return new ibPGPointProperty(property->GetLabel(), property->GetName(), property->GetValue());
 		});
 	}
 }g_pointerLoader;
 
 ibPGPointProperty::ibPGPointProperty(const wxString& label,
 	const wxString& strName,
-	const ibPoint& value) : wxPGProperty(label, strName)
+	const wxVariant& value) : wxPGProperty(label, strName)
 {
-	DoSetValue(value);
-	AddPrivateChild(new wxIntProperty(_("X"), wxT("x"), value.m_x));
-	AddPrivateChild(new wxIntProperty(_("Y"), wxT("y"), value.m_y));
+	SetValue(value);
+	const ibPoint point = GetVal();
+	AddPrivateChild(new wxIntProperty(_("X"), wxT("x"), point.m_x));
+	AddPrivateChild(new wxIntProperty(_("Y"), wxT("y"), point.m_y));
 }
 
 ibPGPointProperty::~ibPGPointProperty() {}
-
-void ibPGPointProperty::DoSetValue(const ibPoint& value)
-{
-	m_value = wxVariant(new ibVariantDataPoint(value));
-}
 
 ibPoint ibPGPointProperty::GetVal(const wxVariant* pVariant) const
 {
 	if (!pVariant)
 		pVariant = &m_value;
 
-	ibVariantDataPoint* data = dynamic_cast<ibVariantDataPoint*>(pVariant->GetData());
-	return data != nullptr ? data->GetPoint() : ibDefaultPosition;
+	ibPoint point = ibDefaultPosition;
+	point.FromString(ibVariantDataSerializable::GetNodeValue(*pVariant).AsString());
+	return point;
 }
 
 void ibPGPointProperty::RefreshChildren()
@@ -84,5 +73,6 @@ wxVariant ibPGPointProperty::ChildChanged(wxVariant& thisValue, const int childI
 			point.m_y = val;
 			break;
 	}
-	return wxVariant(new ibVariantDataPoint(point));
+	return wxVariant(new ibVariantDataSerializable(thisValue.GetType(), ibDataValue::String(point.ToString()),
+		point.ToString()));
 }

@@ -945,58 +945,7 @@
     <ClCompile Include="backend\propertyManager\property\propertyStringExt.cpp">
       <Filter>backend\propertyManager\property</Filter>
     </ClCompile>
-    <ClInclude Include="backend\propertyManager\property\variant\variantOwner.h">
-      <Filter>backend\propertyManager\property\variant</Filter>
-    </ClInclude>
-    <ClCompile Include="backend\propertyManager\property\variant\variantSize.cpp">
-      <Filter>backend\propertyManager\property\variant</Filter>
-    </ClCompile>
-    <ClInclude Include="backend\propertyManager\property\variant\variantType.h">
-      <Filter>backend\propertyManager\property\variant</Filter>
-    </ClInclude>
-    <ClInclude Include="backend\propertyManager\property\variant\variantCalcSchedule.h">
-      <Filter>backend\propertyManager\property\variant</Filter>
-    </ClInclude>
-    <ClInclude Include="backend\propertyManager\property\variant\variantChoiceLink.h">
-      <Filter>backend\propertyManager\property\variant</Filter>
-    </ClInclude>
-    <ClInclude Include="backend\propertyManager\property\variant\variantCommandSource.h">
-      <Filter>backend\propertyManager\property\variant</Filter>
-    </ClInclude>
-    <ClInclude Include="backend\propertyManager\property\variant\variantGen.h">
-      <Filter>backend\propertyManager\property\variant</Filter>
-    </ClInclude>
-    <ClInclude Include="backend\propertyManager\property\variant\variantMetaDesc.h">
-      <Filter>backend\propertyManager\property\variant</Filter>
-    </ClInclude>
-    <ClInclude Include="backend\propertyManager\property\variant\variantNumber.h">
-      <Filter>backend\propertyManager\property\variant</Filter>
-    </ClInclude>
-    <ClInclude Include="backend\propertyManager\property\variant\variantPicture.h">
-      <Filter>backend\propertyManager\property\variant</Filter>
-    </ClInclude>
-    <ClInclude Include="backend\propertyManager\property\variant\variantPoint.h">
-      <Filter>backend\propertyManager\property\variant</Filter>
-    </ClInclude>
-    <ClInclude Include="backend\propertyManager\property\variant\variantRecord.h">
-      <Filter>backend\propertyManager\property\variant</Filter>
-    </ClInclude>
-    <ClInclude Include="backend\propertyManager\property\variant\variantSource.h">
-      <Filter>backend\propertyManager\property\variant</Filter>
-    </ClInclude>
-    <ClInclude Include="backend\propertyManager\property\variant\variantSize.h">
-      <Filter>backend\propertyManager\property\variant</Filter>
-    </ClInclude>
-    <ClCompile Include="backend\propertyManager\property\variant\variantAction.cpp">
-      <Filter>backend\propertyManager\property\variant</Filter>
-    </ClCompile>
-    <ClInclude Include="backend\propertyManager\property\variant\variantAction.h">
-      <Filter>backend\propertyManager\property\variant</Filter>
-    </ClInclude>
-    <ClInclude Include="backend\propertyManager\property\variant\variantTranslate.h">
-      <Filter>backend\propertyManager\property\variant</Filter>
-    </ClInclude>
-    <ClInclude Include="backend\propertyManager\property\variant\variantComposition.h">
+    <ClInclude Include="backend\propertyManager\property\variant\variantSerializable.h">
       <Filter>backend\propertyManager\property\variant</Filter>
     </ClInclude>
     <ClInclude Include="backend\query\queryConstructorModel.h">

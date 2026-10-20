@@ -1,6 +1,7 @@
 ﻿#include "advpropChoiceLink.h"
 
-#include "frmclient/backend/propertyManager/property/variant/variantChoiceLink.h"
+#include "frmclient/backend/propertyManager/property/variant/variantSerializable.h"   // the value — the description's node
+#include "core/description/choiceLinkDescription.h"                                   // ibChoiceLinkDescriptionMemory
 
 #include "frmclient/propertyManager/property/private/prop.h"
 #include "frmclient/propertyManager/property/private/propertyRegistry.h"
@@ -15,6 +16,29 @@
 
 wxPG_IMPLEMENT_PROPERTY_CLASS(ibPGChoiceLinkProperty, wxPGProperty, TextCtrlAndButton)
 
+namespace {
+
+// The description a value holds, as the server stores it…
+template <typename typeDescription>
+typeDescription ReadDescription(const wxVariant& value)
+{
+	typeDescription desc;
+	ibChoiceLinkDescriptionMemory::ReadNode(ibVariantDataSerializable::GetNodeValue(value), desc);
+	return desc;
+}
+
+// …and the value of another one: the same property's, read as the server named the fields until its rows come back
+// (none: nothing).
+template <typename typeDescription>
+wxVariant WriteDescription(const wxVariant& value, const typeDescription& desc)
+{
+	ibDataValue node;
+	ibChoiceLinkDescriptionMemory::WriteNode(node, desc);
+	return wxVariant(new ibVariantDataSerializable(value.GetType(), node, desc.IsOk() ? value.GetString() : wxString()));
+}
+
+}
+
 // register frontend property — the two descriptions as the server stores them (ibChoiceLinkDescriptionMemory), named
 // as the server named them (the row's Presentation), and back as one.
 class ibPropertyChoiceLinkLoader
@@ -23,28 +47,10 @@ public:
 	ibPropertyChoiceLinkLoader()
 	{
 		ibPropertyRegistry::Register(wxT("ibPropertyChoiceLink"), [](ibBackendProperty* property) -> wxPGProperty* {
-			ibChoiceTypeLinkDescription linkDesc;
-			ibChoiceLinkDescriptionMemory::ReadNode(property->GetNodeValue(), linkDesc);
-			return new ibPGChoiceLinkProperty(property, property->GetLabel(), property->GetName(),
-				wxVariant(new ibVariantDataChoiceLink(property->GetPropertyObject(), linkDesc, property->GetValue().GetString())));
-		},
-		[](const wxVariant& value) {
-			ibDataValue node;
-			if (const ibVariantDataChoiceLink* const data = property_cast(value, ibVariantDataChoiceLink))
-				ibChoiceLinkDescriptionMemory::WriteNode(node, data->GetLinkDesc());
-			return node;
+			return new ibPGChoiceLinkProperty(property, property->GetLabel(), property->GetName(), property->GetValue());
 		});
 		ibPropertyRegistry::Register(wxT("ibPropertyChoiceParameters"), [](ibBackendProperty* property) -> wxPGProperty* {
-			ibChoiceParametersDescription paramsDesc;
-			ibChoiceLinkDescriptionMemory::ReadNode(property->GetNodeValue(), paramsDesc);
-			return new ibPGChoiceParametersProperty(property, property->GetLabel(), property->GetName(),
-				wxVariant(new ibVariantDataChoiceParameters(property->GetPropertyObject(), paramsDesc, property->GetValue().GetString())));
-		},
-		[](const wxVariant& value) {
-			ibDataValue node;
-			if (const ibVariantDataChoiceParameters* const data = property_cast(value, ibVariantDataChoiceParameters))
-				ibChoiceLinkDescriptionMemory::WriteNode(node, data->GetParametersDesc());
-			return node;
+			return new ibPGChoiceParametersProperty(property, property->GetLabel(), property->GetName(), property->GetValue());
 		});
 	}
 } g_choiceLinkLoader;
@@ -61,25 +67,15 @@ bool ibPGChoiceLinkProperty::OnEvent(wxPropertyGrid* propgrid, wxWindow* WXUNUSE
 	if (!propgrid->IsMainButtonEvent(event) || m_property == nullptr)
 		return false;
 
-	ibVariantDataChoiceLink* data = property_cast(m_value, ibVariantDataChoiceLink);
-	if (data == nullptr)
-		return false;
-
 	// ⭐ THE WINDOW EDITS A COPY, and the value is posted only if it says something changed — the same
 	// arrangement as its companion below, for the same two reasons: Cancel stays a real cancel all the
 	// way up to the property, and an OK that changed nothing does not mark the configuration modified.
-	//
-	// ⭐ THE CLONE IS HELD BY A VARIANT FROM THE MOMENT IT EXISTS — Clone() hands back a raw pointer and
-	// there are two ways out of here, refused or set; a variant owns what it is given, so the refused
-	// way releases it instead of leaking.
-	ibVariantDataChoiceLink* clone = data->Clone();
-	const wxVariant held(clone);
-
-	if (!ibDialogChoiceLink::ShowChoiceLinkDialog(m_property, clone->GetLinkDesc()))
+	ibChoiceTypeLinkDescription linkDesc = ReadDescription<ibChoiceTypeLinkDescription>(m_value);
+	if (!ibDialogChoiceLink::ShowChoiceLinkDialog(m_property, linkDesc))
 		return false;
 
 	propgrid->EditorsValueWasModified();
-	SetValueInEvent(held);
+	SetValueInEvent(WriteDescription(m_value, linkDesc));
 	return true;
 }
 
@@ -111,19 +107,13 @@ bool ibPGChoiceParametersProperty::OnEvent(wxPropertyGrid* propgrid, wxWindow* W
 		return false;
 	}
 
-	ibVariantDataChoiceParameters* data = property_cast(m_value, ibVariantDataChoiceParameters);
-	if (data == nullptr)
-		return false;
-
 	// ⭐ THE WINDOW EDITS A COPY, and the value is posted only if it says something changed — as the link's above, and
-	// for the same reasons; the clone is held by a variant from the moment it exists.
-	ibVariantDataChoiceParameters* clone = data->Clone();
-	const wxVariant held(clone);
-
-	if (!ibDialogChoiceParameters::ShowChoiceParametersDialog(m_property, clone->GetParametersDesc()))
+	// for the same reasons.
+	ibChoiceParametersDescription paramsDesc = ReadDescription<ibChoiceParametersDescription>(m_value);
+	if (!ibDialogChoiceParameters::ShowChoiceParametersDialog(m_property, paramsDesc))
 		return false;
 
 	propgrid->EditorsValueWasModified();
-	SetValueInEvent(held);
+	SetValueInEvent(WriteDescription(m_value, paramsDesc));
 	return true;
 }

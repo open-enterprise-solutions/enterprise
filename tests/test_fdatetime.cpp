@@ -212,12 +212,14 @@ TEST(DateTime, TheBridgeCarriesAReadingByItsParts)
 }
 
 // "Now" is what the machine's clock on the wall shows - the same reading wx's local parts give, under
-// whichever of the three clocks the suite runs.
+// whichever of the three clocks the suite runs. wx's reading with its milliseconds (UNow): Now() is the
+// second alone, and on Windows its coarse clock may still show the second the precise one has left
+// (CI, 2026-10-20: `now` 4 ms past `after` + 1000).
 TEST(DateTime, NowIsWhatTheWallClockShows)
 {
-	const ibDateTime before = ibDateTime::OfWxDateTime(wxDateTime::Now());
+	const ibDateTime before = ibDateTime::OfWxDateTime(wxDateTime::UNow());
 	const ibDateTime now = ibDateTime::Now();
-	const ibDateTime after = ibDateTime::OfWxDateTime(wxDateTime::Now());
+	const ibDateTime after = ibDateTime::OfWxDateTime(wxDateTime::UNow());
 	EXPECT_FALSE(now.IsEmpty());
 	EXPECT_LE(before.AddMilliseconds(-1000), now);   // a second's slack: wx reads the clock by its own road
 	EXPECT_LE(now, after.AddMilliseconds(1000));

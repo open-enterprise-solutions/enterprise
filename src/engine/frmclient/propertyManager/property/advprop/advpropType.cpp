@@ -3,7 +3,8 @@
 
 #include "frmclient/backend/backend_core.h"                              // MAX_PRECISION_NUMBER, MAX_LENGTH_STRING
 #include "frmclient/backend/compiler/value.h"                            // a type's name and picture, as the server named it
-#include "frmclient/backend/propertyManager/property/variant/variantType.h"
+#include "frmclient/backend/propertyManager/property/variant/variantSerializable.h"   // the value — the type's node
+#include "core/description/typeDescription.h"                                         // ibTypeDescriptionMemory
 
 #include "frmclient/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_* — the grid flags
 #include "frmclient/propertyManager/property/private/propertyRegistry.h"
@@ -16,6 +17,32 @@
 // -----------------------------------------------------------------------
 
 wxPG_IMPLEMENT_PROPERTY_CLASS(ibPGTypeProperty, wxStringProperty, ComboBoxAndButton)
+
+namespace {
+
+// The type a value holds, as the server stores it.
+ibTypeDescription ReadType(const wxVariant& value)
+{
+	ibTypeDescription typeDesc;
+	ibTypeDescriptionMemory::ReadNode(ibVariantDataSerializable::GetNodeValue(value), typeDesc);
+	return typeDesc;
+}
+
+// …and the value of another one: the same property's, read as the names of its types.
+wxVariant WriteType(const wxVariant& value, const ibTypeDescription& typeDesc)
+{
+	ibDataValue node;
+	ibTypeDescriptionMemory::WriteNode(node, typeDesc);
+	wxString names;
+	for (const ibClassID clsid : typeDesc.GetClsidList()) {
+		const ibCtorAbstractType* const typeCtor = ibValue::GetAvailableCtor(clsid);
+		if (typeCtor != nullptr)
+			names = names.IsEmpty() ? typeCtor->GetClassName() : names + wxT(", ") + typeCtor->GetClassName();
+	}
+	return wxVariant(new ibVariantDataSerializable(value.GetType(), node, names));
+}
+
+}
 
 // register frontend property
 class ibPropertyTypeLoader
@@ -31,16 +58,7 @@ public:
 			std::vector<ibClassID> listType;
 			for (unsigned int idx = 0; idx < offered.GetCount(); idx++)
 				listType.push_back(offered.GetValue(idx).GetULongLong().GetValue());
-			ibTypeDescription typeDesc;
-			ibTypeDescriptionMemory::ReadNode(property->GetNodeValue(), typeDesc);
-			return new ibPGTypeProperty(listType, multiple, property->GetLabel(), property->GetName(),
-				wxVariant(new ibVariantDataAttribute(typeDesc)));
-		},
-		[](const wxVariant& value) {
-			ibDataValue node;
-			if (ibVariantDataAttribute* const typeData = property_cast(value, ibVariantDataAttribute))
-				ibTypeDescriptionMemory::WriteNode(node, typeData->GetTypeDesc());
-			return node;
+			return new ibPGTypeProperty(listType, multiple, property->GetLabel(), property->GetName(), property->GetValue());
 		});
 	}
 }g_typeLoader;
@@ -86,63 +104,48 @@ ibPGTypeProperty::ibPGTypeProperty(const std::vector<ibClassID>& listType, bool 
 
 bool ibPGTypeProperty::IntToValue(wxVariant& value, int number, wxPGPropValFormatFlags flags) const
 {
-	ibVariantDataAttribute* dataType = property_cast(value, ibVariantDataAttribute);
-	if (dataType != nullptr) {
-		ibVariantDataAttribute* newType = dataType->Clone();
-		wxASSERT(newType);
-		ibTypeDescription& td = newType->GetTypeDesc();
-		td.SetDefaultMetaType(m_valChoices.at(number));
-		value = newType;
-		return true;
-	}
-	return false;
+	ibTypeDescription td = ReadType(value);
+	td.SetDefaultMetaType(m_valChoices.at(number));
+	value = WriteType(value, td);
+	return true;
 }
 
 wxVariant ibPGTypeProperty::ChildChanged(wxVariant& thisValue, int childIndex, wxVariant& childValue) const
 {
-	ibVariantDataAttribute* dataType = property_cast(thisValue, ibVariantDataAttribute);
-	if (dataType != nullptr) {
-		ibVariantDataAttribute* newType = dataType->Clone();
-		wxASSERT(newType);
-		ibTypeDescription& td = newType->GetTypeDesc();
-		if (childIndex == 0 || childIndex == 1) {
-			long precision = (childIndex == 0)
-				? childValue : m_precision->GetValue(),
-				scale = (childIndex == 1)
-				? childValue : m_scale->GetValue();
-			if (precision > MAX_PRECISION_NUMBER) {
-				precision = m_precision->GetValue();
-				scale = m_scale->GetValue();
-			}
-			else if (precision == 0 || precision < scale) {
-				precision = m_precision->GetValue();
-				scale = m_scale->GetValue();
-			}
-			td.SetNumber(precision, scale);
+	ibTypeDescription td = ReadType(thisValue);
+	if (childIndex == 0 || childIndex == 1) {
+		long precision = (childIndex == 0)
+			? childValue : m_precision->GetValue(),
+			scale = (childIndex == 1)
+			? childValue : m_scale->GetValue();
+		if (precision > MAX_PRECISION_NUMBER) {
+			precision = m_precision->GetValue();
+			scale = m_scale->GetValue();
 		}
-		else if (childIndex == 2) {
-			long dateTime = childValue;
-			td.SetDate((ibDateFractions)dateTime);
+		else if (precision == 0 || precision < scale) {
+			precision = m_precision->GetValue();
+			scale = m_scale->GetValue();
 		}
-		else if (childIndex == 3) {
-			long length = childValue;
-			if (length > MAX_LENGTH_STRING) {
-				length = m_length->GetValue();
-			}
-			td.SetString(length);
-		}
-		return newType;
+		td.SetNumber(precision, scale);
 	}
-
-	return wxNullVariant;
+	else if (childIndex == 2) {
+		long dateTime = childValue;
+		td.SetDate((ibDateFractions)dateTime);
+	}
+	else if (childIndex == 3) {
+		long length = childValue;
+		if (length > MAX_LENGTH_STRING) {
+			length = m_length->GetValue();
+		}
+		td.SetString(length);
+	}
+	return WriteType(thisValue, td);
 }
 
 void ibPGTypeProperty::RefreshChildren()
 {
-	ibVariantDataAttribute* varData = property_cast(m_value, ibVariantDataAttribute);
-
-	if (varData != nullptr) {
-		const ibTypeDescription& td = varData->GetTypeDesc();
+	const ibTypeDescription td = ReadType(m_value);
+	if (td.GetClsidCount() > 0) {
 		if (td.GetClsidCount() < 2) {
 			ibValueTypes id = ibValue::GetVTByID(td.GetFirstClsid());
 			if (id == ibValueTypes::TYPE_NUMBER) {
@@ -229,10 +232,7 @@ void ibPGTypeProperty::RefreshChildren()
 // property answers no choice selection (GetChoiceSelection), so the grid would draw none of its own accord.
 wxBitmapBundle ibPGTypeProperty::GetValuePicture() const
 {
-	ibVariantDataAttribute* const varData = property_cast(m_value, ibVariantDataAttribute);
-	if (varData == nullptr)
-		return wxBitmapBundle();
-	const ibTypeDescription& td = varData->GetTypeDesc();
+	const ibTypeDescription td = ReadType(m_value);
 	if (td.GetClsidCount() != 1)
 		return wxBitmapBundle();
 	const ibClassID chosen = td.GetFirstClsid();
@@ -267,23 +267,19 @@ wxPGEditorDialogAdapter* ibPGTypeProperty::GetEditorDialog() const
 			ibPGTypeProperty* dlgProp = wxDynamicCast(prop, ibPGTypeProperty);
 			wxCHECK_MSG(dlgProp, false, "Function called for incompatible property");
 
-			ibVariantDataAttribute* data = property_cast(dlgProp->GetValue(), ibVariantDataAttribute);
-			if (data == nullptr) return false;
+			const wxVariant value = dlgProp->GetValue();
 
 			// WHAT IS ON OFFER is the property's, as the server offered it — the desktop asked the configuration for it by
 			// the shape (GetTypesByFilter); so is SINGLE OR COMPOSITE: a table slot takes one type, everything else may be
 			// composite.
 			const bool singleChoice = !dlgProp->IsMultiple();
 
-			ibVariantDataAttribute* clone = data->Clone();
-
-			if (!ibShowTypeSelector(pg, ibSelectorDataType::ibSelectorDataType_any, dlgProp->GetTypeList(), clone->GetTypeDesc(),
-				nullptr, !dlgProp->HasFlag(wxPGFlags::ReadOnly), singleChoice)) {
-				clone->DecRef();
+			ibTypeDescription typeDesc = ReadType(value);
+			if (!ibShowTypeSelector(pg, ibSelectorDataType::ibSelectorDataType_any, dlgProp->GetTypeList(), typeDesc,
+				nullptr, !dlgProp->HasFlag(wxPGFlags::ReadOnly), singleChoice))
 				return false;
-			}
 
-			SetValue(clone);
+			SetValue(WriteType(value, typeDesc));
 			return true;
 		}
 	};

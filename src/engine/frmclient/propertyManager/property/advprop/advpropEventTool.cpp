@@ -1,7 +1,8 @@
 #include "advpropEventTool.h"
 
 #include "core/stringUtils.h"
-#include "frmclient/backend/propertyManager/property/variant/variantAction.h"
+#include "frmclient/backend/propertyManager/property/variant/variantSerializable.h"   // the value — the action's node
+#include "core/description/standardCommandDescription.h"                              // ibActionDescriptionMemory
 
 #include "frmclient/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
 #include "frmclient/propertyManager/property/private/propertyRegistry.h"
@@ -13,6 +14,27 @@
 
 wxPG_IMPLEMENT_PROPERTY_CLASS(ibPGEventToolProperty, wxStringProperty, ComboBoxAndButton);
 
+namespace {
+
+// The action a value holds, as the server stores it…
+ibStandardCommandDescription ReadAction(const wxVariant& value)
+{
+	ibStandardCommandDescription actionDesc(wxNOT_FOUND);
+	ibActionDescriptionMemory::ReadNode(ibVariantDataSerializable::GetNodeValue(value), actionDesc);
+	return actionDesc;
+}
+
+// …and the value of another one: the same property's, read as its handler's name (a standard command's is the
+// choice's — ValueToString).
+wxVariant WriteAction(const wxVariant& value, const ibStandardCommandDescription& actionDesc)
+{
+	ibDataValue node;
+	ibActionDescriptionMemory::WriteNode(node, actionDesc);
+	return wxVariant(new ibVariantDataSerializable(value.GetType(), node, actionDesc.GetCustomAction()));
+}
+
+} // namespace
+
 // register frontend property
 class ibPropertyToolLoader
 {
@@ -22,18 +44,9 @@ public:
 		// The server's ibEventAction — its node the action as the core writes it (ibActionDescriptionMemory), its
 		// choices the standard commands it may run.
 		ibPropertyRegistry::Register(wxT("ibEventAction"), [](ibBackendProperty* property) -> wxPGProperty* {
-			ibStandardCommandDescription actionDesc(wxNOT_FOUND);
-			ibActionDescriptionMemory::ReadNode(property->GetNodeValue(), actionDesc);
 			ibPropertyChoiceList choices;
 			property->GetValueList(choices);
-			return new ibPGEventToolProperty(property->GetLabel(), property->GetName(), choices,
-				wxVariant(new ibVariantDataAction(actionDesc)));
-		},
-		[](const wxVariant& value) {
-			ibDataValue node;
-			if (ibVariantDataAction* const dataAction = property_cast(value, ibVariantDataAction))
-				ibActionDescriptionMemory::WriteNode(node, dataAction->GetValueAsActionDesc());
-			return node;
+			return new ibPGEventToolProperty(property->GetLabel(), property->GetName(), choices, property->GetValue());
 		});
 	}
 } g_toolLoader;
@@ -42,9 +55,6 @@ ibPGEventToolProperty::ibPGEventToolProperty(const wxString& label, const wxStri
 	const ibPropertyChoiceList& choices,
 	const wxVariant& value) : wxPGProperty(label, strName)
 {
-	ibVariantDataAction* dataAction = property_cast(value, ibVariantDataAction);
-	wxASSERT(dataAction);
-
 	wxPGChoices ch;
 	for (unsigned int idx = 0; idx < choices.GetCount(); idx++) {
 		wxPGChoiceEntry item(choices.GetLabel(idx), choices.GetId(idx));
@@ -54,7 +64,7 @@ ibPGEventToolProperty::ibPGEventToolProperty(const wxString& label, const wxStri
 	m_choices.Assign(ch);
 	m_value = wxVariant(0L);
 
-	const ibStandardCommandDescription& actionDesc = dataAction->GetValueAsActionDesc();
+	const ibStandardCommandDescription actionDesc = ReadAction(value);
 	if (actionDesc.GetSystemAction() != wxNOT_FOUND) {
 		for (unsigned int i = 0; i < m_choices.GetCount(); i++) {
 			const int val = m_choices.GetValue(i);
@@ -83,9 +93,7 @@ ibPGEventToolProperty::~ibPGEventToolProperty()
 
 wxString ibPGEventToolProperty::ValueToString( wxVariant& value, wxPGPropValFormatFlags flags ) const
 {
-	ibVariantDataAction* dataAction = property_cast(value, ibVariantDataAction);
-	wxASSERT(dataAction);
-	const ibStandardCommandDescription& actionDesc = dataAction->GetValueAsActionDesc();
+	const ibStandardCommandDescription actionDesc = ReadAction(value);
 
 	for (unsigned int i = 0; i < m_choices.GetCount(); i++) {
 		const int sel_val = m_choices.GetValue(i);
@@ -110,7 +118,7 @@ bool ibPGEventToolProperty::StringToValue(wxVariant& variant,
 		if (text.IsEmpty()) {
 			m_actionData.SetString(text);
 		}
-		variant = new ibVariantDataAction(text);
+		variant = WriteAction(variant, ibStandardCommandDescription(text));
 		return true;
 	}
 
@@ -119,7 +127,7 @@ bool ibPGEventToolProperty::StringToValue(wxVariant& variant,
 
 bool ibPGEventToolProperty::IntToValue(wxVariant& value, int number, wxPGPropValFormatFlags flags) const
 {
-	value = new ibVariantDataAction(m_choices.GetValue(number));
+	value = WriteAction(value, ibStandardCommandDescription(static_cast<ibActionID>(m_choices.GetValue(number))));
 
 	m_actionData.SetNumber(
 		m_choices.GetValue(number)
@@ -161,11 +169,11 @@ wxPGEditorDialogAdapter* ibPGEventToolProperty::GetEditorDialog() const
 				wxPGProperty* pgProp = pg->GetPropertyByName(wxT("Name"));
 				const wxString& strActionEvent =
 					(pgProp ? pgProp->GetDisplayedString() : wxString()) + prop->GetName();
-				SetValue(new ibVariantDataAction(strActionEvent));
+				SetValue(WriteAction(dlgProp->GetValue(), ibStandardCommandDescription(strActionEvent)));
 				return true;
 			}
 
-			SetValue(new ibVariantDataAction(strActionEvent));
+			SetValue(WriteAction(dlgProp->GetValue(), ibStandardCommandDescription(strActionEvent)));
 			return true;
 		}
 	};

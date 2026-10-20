@@ -1,6 +1,6 @@
 ﻿#include "advpropSource.h"
 
-#include "frmclient/backend/propertyManager/property/variant/variantSource.h"   // ibVariantDataSource
+#include "frmclient/backend/propertyManager/property/variant/variantSerializable.h"   // the value — the binding's node
 #include "core/description/sourceDescription.h"                                  // ibSourceDescriptionMemory — Parent
 
 #include "frmclient/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
@@ -24,6 +24,26 @@ void ibSetSourcePicker(const ibSourcePicker& picker)
 	SourcePicker() = picker;
 }
 
+namespace {
+
+// The binding a value holds, as the server stores it.
+ibSourceDescription ReadSource(const wxVariant& value)
+{
+	ibSourceDescription desc;
+	ibSourceDescriptionMemory::ReadNode(ibVariantDataSerializable::GetNodeValue(value), desc);
+	return desc;
+}
+
+// …and the value of another one: the same property's, the words the server's to say.
+wxVariant WriteSource(const wxVariant& value, const ibSourceDescription& desc)
+{
+	ibDataValue node;
+	ibSourceDescriptionMemory::WriteNode(node, desc);
+	return wxVariant(new ibVariantDataSerializable(value.GetType(), node, wxEmptyString));
+}
+
+}
+
 // register frontend property — ibPropertySource; the binding as the server stores it (ibSourceDescriptionMemory: the
 // hop path), read as it wrote it (the row's Presentation), and back as one.
 class ibPropertySourceLoader
@@ -32,9 +52,7 @@ public:
 	ibPropertySourceLoader()
 	{
 		ibPropertyRegistry::Register(wxT("ibPropertySource"), [](ibBackendProperty* property) -> wxPGProperty* {
-			ibSourceDescription sourceDesc;
-			ibSourceDescriptionMemory::ReadNode(property->GetNodeValue(), sourceDesc);
-			// …and what it may be bound to, as the row says (an older server's says nothing: an attribute).
+			// …what it may be bound to, as the row says (an older server's says nothing: an attribute).
 			using ibSourceDataType = ibProtocol::ibSchema::ibProperties::ibSourceDataType;
 			ibSourceDataType filter = ibSourceDataType::Attribute;
 			ibSourceDescription table;
@@ -46,13 +64,7 @@ public:
 					ibSourceDescriptionMemory::ReadNode(*parent, table);
 			}
 			return new ibPGDataSourceProperty(property->GetPropertyObject(), property->GetLabel(), property->GetName(),
-				wxVariant(new ibVariantDataSource(sourceDesc, property->GetValue().GetString())), filter, table);
-		},
-		[](const wxVariant& value) {
-			ibDataValue node;
-			if (const ibVariantDataSource* const dataSource = property_cast(value, ibVariantDataSource))
-				ibSourceDescriptionMemory::WriteNode(node, dataSource->GetSourceDesc());
-			return node;
+				property->GetValue(), filter, table);
 		});
 	}
 }g_sourceLoader;
@@ -71,20 +83,20 @@ ibPGDataSourceProperty::ibPGDataSourceProperty(const ibPropertyObject* property,
 wxString ibPGDataSourceProperty::ValueToString(wxVariant& variant,
 	wxPGPropValFormatFlags WXUNUSED(flags)) const
 {
-	return variant.GetString();
+	// …as the server wrote it; nothing bound, or bound and not yet named by the server — not selected.
+	const wxString words = variant.GetString();
+	return ReadSource(variant).IsOk() && !words.IsEmpty() ? words : wxString(_("<not selected>"));
 }
 
 bool ibPGDataSourceProperty::StringToValue(wxVariant& variant, const wxString& text, wxPGPropValFormatFlags flags) const
 {
-	if (text.IsEmpty()) {
-		ibVariantDataSource* dataSource = property_cast(variant, ibVariantDataSource);
-		if (dataSource != nullptr) {
-			dataSource->SetSource(wxNOT_FOUND);
-			return true;
-		}
+	// An empty text unbinds.
+	if (!text.IsEmpty())
 		return false;
-	}
-	return text.IsEmpty();
+	ibSourceDescription desc = ReadSource(variant);
+	desc.ClearSource();
+	variant = WriteSource(variant, desc);
+	return true;
 }
 
 wxPGEditorDialogAdapter* ibPGDataSourceProperty::GetEditorDialog() const
@@ -94,21 +106,21 @@ wxPGEditorDialogAdapter* ibPGDataSourceProperty::GetEditorDialog() const
 		virtual bool DoShowDialog(wxPropertyGrid* pg, wxPGProperty* prop) override
 		{
 			ibPGDataSourceProperty* const cell = wxDynamicCast(prop, ibPGDataSourceProperty);
-			wxVariant value = cell != nullptr ? cell->GetValue() : wxVariant();
-			const ibVariantDataSource* const current = cell != nullptr ? property_cast(value, ibVariantDataSource) : nullptr;
 			// No form holds the control (no picker set) — said, as before.
-			if (current == nullptr || !SourcePicker()) {
+			if (cell == nullptr || !SourcePicker()) {
 				wxMessageBox(_("Choosing a data source is not available in the thin designer yet."),
 					_("Choice source"), wxOK | wxICON_INFORMATION, pg);
 				return false;
 			}
-			ibSourceDescription binding = current->GetSourceDesc();
+			const wxVariant value = cell->GetValue();
+			const ibSourceDescription current = ReadSource(value);
+			ibSourceDescription binding = current;
 			if (!SourcePicker()(pg, cell->GetOwner(), cell->GetFilterSourceDataType(), cell->GetTable(), binding))
 				return false;
 			// …a binding the same as it was changes nothing.
-			if (binding.GetPath() == current->GetSourceDesc().GetPath())
+			if (binding.GetPath() == current.GetPath())
 				return false;
-			SetValue(wxVariant(new ibVariantDataSource(binding)));
+			SetValue(WriteSource(value, binding));
 			return true;
 		}
 	};

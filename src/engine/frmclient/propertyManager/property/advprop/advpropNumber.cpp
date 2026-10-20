@@ -1,5 +1,5 @@
 #include "advpropNumber.h"
-#include "frmclient/backend/propertyManager/property/variant/variantNumber.h"
+#include "frmclient/backend/propertyManager/property/variant/variantSerializable.h"   // the value — the decimal's node
 #include "frmclient/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
 #include "frmclient/propertyManager/property/private/propertyRegistry.h"
 
@@ -9,42 +9,47 @@
 
 wxPG_IMPLEMENT_PROPERTY_CLASS(ibPGNumberProperty, wxNumericProperty, TextCtrl)
 
+namespace {
+
+// The decimal a value holds, as the server stores it (a Number node)…
+ibNumber ReadNumber(const wxVariant& value)
+{
+	const ibDataValue node = ibVariantDataSerializable::GetNodeValue(value);
+	return node.Kind() == ibDataKind::Number ? node.AsNumber() : ibNumber();
+}
+
+// …and the value of another: the same property's, read as the decimal's own words.
+wxVariant WriteNumber(const wxVariant& value, const ibNumber& number)
+{
+	return wxVariant(new ibVariantDataSerializable(value.GetType(), ibDataValue::Number(number), number.ToString()));
+}
+
+} // namespace
+
 // register frontend property
 class ibPropertyNumberLoader
 {
 public:
 	ibPropertyNumberLoader()
 	{
-		// ibPropertyNumber — the decimal as the server stores it (a Number node), and back as one.
-		ibPropertyRegistry::Register(wxT("ibPropertyNumber"), [](ibBackendProperty* property) -> wxPGProperty* {
-			return new ibPGNumberProperty(property->GetLabel(), property->GetName(), property->GetNodeValue().AsNumber());
-		},
-		[](const wxVariant& value) {
-			ibNumber number;
-			if (ibVariantDataNumber* const numberVariant = property_cast(value, ibVariantDataNumber))
-				number = numberVariant->GetNumber();
-			return ibDataValue::Number(number);
-		});
-		ibPropertyRegistry::Register(wxT("ibPropertyInteger"), [](ibBackendProperty* property) -> wxPGProperty* {
-			return new wxIntProperty(property->GetLabel(), property->GetName(),
-				static_cast<long>(property->GetNodeValue().AsInt()));
-		});
-		ibPropertyRegistry::Register(wxT("ibPropertyUInteger"), [](ibBackendProperty* property) -> wxPGProperty* {
-			return new wxUIntProperty(property->GetLabel(), property->GetName(),
-				static_cast<unsigned long>(property->GetNodeValue().AsInt()));
-		});
+		// ibPropertyNumber — the decimal as the server stores it (a Number node), and back as one; an integer, signed or
+		// not, is the same node (ibDataValue::Int, UInt), the server's property keeps it whole.
+		const ibPropertyRegistry::ibPropertyMaker maker = [](ibBackendProperty* property) -> wxPGProperty* {
+			return new ibPGNumberProperty(property->GetLabel(), property->GetName(), property->GetValue());
+		};
+		ibPropertyRegistry::Register(wxT("ibPropertyNumber"), maker);
+		ibPropertyRegistry::Register(wxT("ibPropertyInteger"), maker);
+		ibPropertyRegistry::Register(wxT("ibPropertyUInteger"), maker);
 	}
 }g_numberLoader;
 
 ibPGNumberProperty::ibPGNumberProperty(const wxString& label,
 	const wxString& strName,
-	const ibNumber& value)
+	const wxVariant& value)
 	: wxNumericProperty(label, strName)
 {
 	m_precision = -1;
-	SetValue(
-		new ibVariantDataNumber(value)
-	);
+	SetValue(value);
 }
 
 ibPGNumberProperty::~ibPGNumberProperty() {}
@@ -52,31 +57,21 @@ ibPGNumberProperty::~ibPGNumberProperty() {}
 wxString ibPGNumberProperty::ValueToString(wxVariant& variant,
 	wxPGPropValFormatFlags flags) const
 {
-	wxString text;
-	if (!variant.IsNull()) {
-		ibVariantDataNumber* numberVariant =
-			dynamic_cast<ibVariantDataNumber*>(variant.GetData());
-		const ibNumber& value = numberVariant->GetNumber();
-		text = value.ToString();
-	}
-	return text;
+	return variant.IsNull() ? wxString() : ReadNumber(variant).ToString();
 }
 
 bool ibPGNumberProperty::StringToValue(wxVariant& variant, const wxString& text, wxPGPropValFormatFlags flags) const
 {
-	ibNumber value;
-	ibVariantDataNumber* numberVariant =
-		dynamic_cast<ibVariantDataNumber*>(variant.GetData());
-	wxASSERT(numberVariant);
 	if (text.empty()) {
-		numberVariant->SetNumber(0.0f);
+		variant = WriteNumber(variant, ibNumber());
 		return true;
 	}
 
+	ibNumber value;
 	bool res = value.FromString(text);
 	if (res) {
-		if (numberVariant->GetNumber() != value) {
-			numberVariant->SetNumber(value);
+		if (ReadNumber(variant) != value) {
+			variant = WriteNumber(variant, value);
 			return true;
 		}
 	}
@@ -89,11 +84,7 @@ bool
 ibPGNumberProperty::ValidateValue(wxVariant& variant,
 	wxPGValidationInfo& validationInfo) const
 {
-	ibNumber fpv = 0.0f;
-	ibVariantDataNumber* numberVariant = dynamic_cast<ibVariantDataNumber*>(variant.GetData());
-	if (numberVariant != nullptr) {
-		fpv = numberVariant->GetNumber();
-	}
+	ibNumber fpv = ReadNumber(variant);
 	return DoNumericValidation(fpv, &validationInfo, wxPG_PROPERTY_VALIDATION_ERROR_MESSAGE);
 }
 
@@ -130,15 +121,9 @@ wxVariant ibPGNumberProperty::AddSpinStepValue(long stepScale) const
 {
 	int mode = m_spinWrap ? wxPG_PROPERTY_VALIDATION_WRAP
 		: wxPG_PROPERTY_VALIDATION_SATURATE;
-	wxVariant value = GetValue();
-	ibNumber v = 0.0f;
-	ibVariantDataNumber* numberVariant = dynamic_cast<ibVariantDataNumber*>(value.GetData());
-	if (numberVariant != nullptr) {
-		v = numberVariant->GetNumber();
-	}
+	ibNumber v = ReadNumber(m_value);
 	double step = m_spinStep.GetDouble();
 	v += (step * stepScale);
 	DoNumericValidation(v, nullptr, mode);
-	numberVariant->SetNumber(v);
-	return value;
+	return WriteNumber(m_value, v);
 }

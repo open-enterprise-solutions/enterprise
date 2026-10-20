@@ -5,38 +5,36 @@
 
 //base property for "size"
 class FRMCLIENT_API ibPropertySize : public ibProperty {
-	static wxVariantData* CreateVariantData(const wxSize& val);
 public:
-	wxSize GetValueAsSize() const;
-	wxString GetValueAsString() const { return typeConv::SizeToString(GetValueAsSize()); }
+	// …held as its node, the size's text (ibBackendProperty::ReadNodeValue).
+	wxSize GetValueAsSize() const { return typeConv::StringToSize(GetValueAsString()); }
+	wxString GetValueAsString() const;
 
-	void SetValue(const wxSize& val) { m_propValue = CreateVariantData(val); }
-	void SetValue(const wxString& val) { SetValue(typeConv::StringToSize(val)); }
+	void SetValue(const wxSize& val) { SetValue(typeConv::SizeToString(val)); }
+	void SetValue(const wxString& val);
 
 	ibPropertySize(ibPropertyCategory* cat, const wxString& name, const wxSize& s = wxDefaultSize)
-		: ibProperty(cat, name, CreateVariantData(s))
+		: ibProperty(cat, name, wxNullVariant)
 	{
+		SetValue(s);
 	}
 
 	ibPropertySize(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxSize& s = wxDefaultSize)
-		: ibProperty(cat, name, label, CreateVariantData(s))
+		: ibProperty(cat, name, label, wxNullVariant)
 	{
+		SetValue(s);
 	}
 
 	ibPropertySize(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString, const wxSize& s = wxDefaultSize)
-		: ibProperty(cat, name, label, helpString, CreateVariantData(s))
+		: ibProperty(cat, name, label, helpString, wxNullVariant)
 	{
+		SetValue(s);
 	}
 
-	// set/get property data
-	virtual bool SetDataValue(const ibValue& varPropVal);
-	virtual bool GetDataValue(ibValue& pvarPropVal) const;
-
-	//load & save object in control 
+	//load & save object in control
 
 	// readable node value
 	virtual bool ReadNodeValue(const ibDataValue& value) override;
-	virtual bool WriteNodeValue(ibDataValue& value) const override;
 
 public:
 

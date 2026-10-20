@@ -21,24 +21,13 @@ public:
 	virtual wxString GetType() const override { return m_type; }
 	virtual ibPropertyChoiceMode GetValueList(ibPropertyChoiceList& list) override;
 
-	// Not a value of the engine's — the server holds that.
-	virtual bool SetDataValue(const ibValue& WXUNUSED(varPropVal)) override { return false; }
-	virtual bool GetDataValue(ibValue& WXUNUSED(pvarPropVal)) const override { return false; }
-
 	// The row it was made of, as the server wrote it.
 	virtual bool GetProtocolValue(ibDataNode& row) const override { row = m_row; return true; }
-
-protected:
-
-	// Its value as the server stores it — read as it is, written back as it is.
-	virtual bool ReadNodeValue(const ibDataValue& value) override;
-	virtual bool WriteNodeValue(ibDataValue& value) const override;
 
 private:
 
 	ibDataNode m_row;
 	wxString m_type;
-	ibDataValue m_value;
 	ibPropertyChoiceList m_choices;
 	ibPropertyChoiceMode m_mode = ibPropertyChoiceMode::None;
 	bool m_readOnly = false;

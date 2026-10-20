@@ -1,8 +1,9 @@
 ﻿#include "advpropCommandSource.h"
 
-#include "frmclient/backend/propertyManager/property/variant/variantCommandSource.h"    // ibVariantDataCommandSource (the cell value)
+#include "frmclient/backend/propertyManager/property/variant/variantSerializable.h"   // the value — the binding's node
+#include "core/description/commandDescription.h"                                      // ibCommandDescriptionMemory
 
-#include "frmclient/propertyManager/property/private/prop.h"                    // wxPGPropertyFlags_*, property_cast
+#include "frmclient/propertyManager/property/private/prop.h"                    // wxPGPropertyFlags_*
 #include "frmclient/propertyManager/property/private/propertyRegistry.h"        // ibPropertyRegistry::Register
 #include "frmclient/propertyManager/propertyEditor.h"
 #include "frmclient/win/picture.h"                                             // ibProtocolPicture — a command's picture
@@ -38,6 +39,22 @@ ibCommandDescription ReadCommand(const ibDataNode& row)
 	return desc;
 }
 
+// The command a value binds, as the server stores it…
+ibCommandDescription ReadCommand(const wxVariant& value)
+{
+	ibCommandDescription desc;
+	ibCommandDescriptionMemory::ReadNode(ibVariantDataSerializable::GetNodeValue(value), desc);
+	return desc;
+}
+
+// …and the value of another one: the same property's, read as the words a picked row names it.
+wxVariant WriteCommand(const wxVariant& value, const ibCommandDescription& desc, const wxString& label)
+{
+	ibDataValue node;
+	ibCommandDescriptionMemory::WriteNode(node, desc);
+	return wxVariant(new ibVariantDataSerializable(value.GetType(), node, label));
+}
+
 // One tree item that is a command: what it binds, and the words the cell shows until the server's come back.
 class ibTreeItemCommand : public wxTreeItemData {
 public:
@@ -62,18 +79,10 @@ public:
 	ibPropertyCommandSourceLoader()
 	{
 		ibPropertyRegistry::Register(wxT("ibPropertyCommandSource"), [](ibBackendProperty* property) -> wxPGProperty* {
-			ibCommandDescription commandDesc;
-			ibCommandDescriptionMemory::ReadNode(property->GetNodeValue(), commandDesc);
 			ibDataNode row;
 			const ibDataNode* const tree = property->GetProtocolValue(row) ? row.FindChild(ibProtocol::ibSchema::ibProperties::CommandTree) : nullptr;
 			return new ibPGCommandSourceProperty(property->GetPropertyObject(), property->GetLabel(), property->GetName(),
-				wxVariant(new ibVariantDataCommandSource(commandDesc, property->GetValue().GetString())), tree);
-		},
-		[](const wxVariant& value) {
-			ibDataValue node;
-			if (const ibVariantDataCommandSource* const data = property_cast(value, ibVariantDataCommandSource))
-				ibCommandDescriptionMemory::WriteNode(node, data->GetCommandDesc());
-			return node;
+				property->GetValue(), tree);
 		});
 	}
 } g_commandSourceLoader;
@@ -91,27 +100,22 @@ ibPGCommandSourceProperty::ibPGCommandSourceProperty(const ibPropertyObject* pro
 
 wxString ibPGCommandSourceProperty::ValueToString(wxVariant& variant, wxPGPropValFormatFlags WXUNUSED(flags)) const
 {
-	// Just the variant's own string — the binding's name as the server wrote it.
-	ibVariantDataCommandSource* data = property_cast(variant, ibVariantDataCommandSource);
-	wxString s;
-	if (data != nullptr)
-		data->Write(s);
-	return s;
+	// The binding's name as the server wrote it; nothing bound, or no words for it: not selected.
+	const wxString words = variant.GetString();
+	return ReadCommand(variant).IsOk() && !words.IsEmpty() ? words : wxString(wxT("<not selected>"));
 }
 
 void ibPGCommandSourceProperty::OnSetValue()
 {
 	m_valueBitmapBundle = wxBitmapBundle();   // no bound command -> no image (cell shows text only)
-	wxVariant v = GetValue();                 // keep the variant alive so the cast target outlives the read
-	ibVariantDataCommandSource* data = property_cast(v, ibVariantDataCommandSource);
-	if (data == nullptr || !data->GetCommandDesc().IsOk() || !m_hasTree)
+	const ibCommandDescription desc = ReadCommand(m_value);
+	if (!desc.IsOk() || !m_hasTree)
 		return;
 
 	// The bound command's OWN picture, so the cell shows WHICH command is pulled. The desktop resolves it through the
 	// owner's command door over the form's commands; here they are the server's, and the row's command tree already
 	// names each command's picture — the row of the bound command wears it. Left empty when the command has no picture
 	// or was deleted.
-	const ibCommandDescription& desc = data->GetCommandDesc();
 	wxString pictureId;
 	std::function<bool(const ibDataNode&)> find = [&](const ibDataNode& node) {
 		for (const ibDataNode& row : node.Children()) {
@@ -174,10 +178,7 @@ wxPGEditorDialogAdapter* ibPGCommandSourceProperty::GetEditorDialog() const
 			images->Add(wxArtProvider::GetBitmap(wxART_FOLDER, wxART_OTHER, wxSize(16, 16)));   // 0 — a group, a command without a picture
 			tc->AssignImageList(images);
 
-			wxVariant curVal = dlgProp->GetValue();
-			ibCommandDescription current;
-			if (ibVariantDataCommandSource* data = property_cast(curVal, ibVariantDataCommandSource))
-				current = data->GetCommandDesc();
+			const ibCommandDescription current = ReadCommand(dlgProp->GetValue());
 
 			wxTreeItemId selNode;
 			std::function<void(const wxTreeItemId&, const ibDataNode&)> fill =
@@ -224,7 +225,7 @@ wxPGEditorDialogAdapter* ibPGCommandSourceProperty::GetEditorDialog() const
 				// A group has no command — only a command commits; the same one again is no edit.
 				if (const ibTreeItemCommand* const d = dynamic_cast<const ibTreeItemCommand*>(tc->GetItemData(sel))) {
 					if (d->m_desc.IsOk() && !(current.IsOk() && current == d->m_desc)) {
-						SetValue(new ibVariantDataCommandSource(d->m_desc, d->m_label));
+						SetValue(WriteCommand(dlgProp->GetValue(), d->m_desc, d->m_label));
 						applied = true;
 					}
 				}

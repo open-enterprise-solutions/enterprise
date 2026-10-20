@@ -11,12 +11,12 @@
 // -----------------------------------------------------------------------
 
 // THE DESKTOP'S DECIMAL CELL (frontend/propertyManager/property/advprop/advpropNumber.h) — the exact decimal the server
-// stores (ibNumber, core), held in its variant (ibVariantDataNumber) and edited as one, never through a double.
+// stores (ibNumber, core), read from the property's node and edited as one, never through a double.
 class ibPGNumberProperty : public wxNumericProperty {
 public:
 	ibPGNumberProperty(const wxString& label = wxPG_LABEL,
 		const wxString& name = wxPG_LABEL,
-		const ibNumber& value = 0.0);
+		const wxVariant& value = wxNullVariant);
 	virtual ~ibPGNumberProperty() override;
 
 	virtual wxString ValueToString(wxVariant& value,

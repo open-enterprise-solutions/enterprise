@@ -3,6 +3,9 @@
 
 #include <functional>
 
+#include <wx/choice.h>
+#include <wx/weakref.h>   // the zoom choice — the toolbar's, gone with its tools
+
 #include "frmclient/docView/docView.h"
 #include "frmclient/win/editor/gridEditor/gridEditor.h"
 #include "core/spreadsheet/sheetFormat.h"   // which formats this document can be saved as
@@ -49,7 +52,8 @@ private:
 protected:
 
 	ibGridEditor* m_gridEditor;
-	class wxChoice* m_zoomChoice = nullptr;
+	// The choice it put on the toolbar — the toolbar's: destroyed with its tools when another view's are put up.
+	wxWeakRef<wxChoice> m_zoomChoice;
 
 	wxDECLARE_EVENT_TABLE();
 	wxDECLARE_DYNAMIC_CLASS(ibSpreadsheetEditView);

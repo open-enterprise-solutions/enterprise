@@ -11,7 +11,6 @@
 
 #include <wx/wupdlock.h>   // wxWindowUpdateLocker — RAII Freeze/Thaw
 
-#include "frmclient/backend/appData.h"   // DesignerMode — no table's rows are read there
 #include "frmclient/mainFrame/mainFrame.h"
 #include "frmclient/win/typeconv.h"
 #include "frmclient/win/ctrls/dynamicBorder.h"
@@ -306,10 +305,10 @@ ibViewFetcher ibVisualHostClient::MakeFetcher(long long controlId) const
 	ibFrontendMainFrame* const frame = &m_mainFrame;
 	const wxString form = m_formKey;
 	const long long tab = m_tabId;
-	// …none in the designer — its tables have no rows to show, the server reads none there (ibValueModelTableBox::Fetch):
-	// the editor's tab answered the ask with the whole form and its classes — some 280 KB, a second on every drawing of a
-	// form with a table; a form tried out in it was refused (404), each of its tables (2026-10-15).
-	const bool designer = appData->DesignerMode();
+	// …none in a designer's: the editor's tab answers the ask as its own, with the whole form and its classes — some 280 KB,
+	// a second on every drawing of a form with a table (2026-10-15). A document's tab in the designer is asked: its sheet
+	// comes by Fetch alone (2026-10-20: the designer's whole process refused it, a sheet opened there came empty).
+	const bool designer = IsDesignerHost();
 	return [frame, controlId, form, tab, designer](const ibProtocolNode& request, ibProtocolNode& answer) {
 		if (designer)
 			return false;

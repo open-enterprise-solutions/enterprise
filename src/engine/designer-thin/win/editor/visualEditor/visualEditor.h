@@ -674,6 +674,8 @@ public:
 
 	// SHOW the current element in the inspector — the explicit "Properties": the inspector raised.
 	void ShowCurrentElement(bool forceOpen = true);
+	// …and REFRESH it, the desktop's: what it shows read anew after a command.
+	void RefreshCurrentElement();
 
 	void RefreshEditor() { NotifyEditorRefresh(); }
 
@@ -681,9 +683,9 @@ public:
 	// its rows and every one its values from its node, the selection the control with that id; its attributes' and its
 	// commands' trees as the server's last answer about it wrote them (`trees`: AttributeTree, CommandTree).
 	void Draw(const ibProtocolNode& form, const ibProtocolNode& trees, const ibProtocolNode& patch, long long selected);
-	// …and a control's rows as the server wrote them of the form a command left (a Source's Presentation): in place of
-	// the ones it was read with, its values from its node again, and shown again in the inspector when it is shown there.
-	void ReceiveRows(long long controlId, const ibProtocolNode& rows);
+	// …and a control drawn as its properties say, the desktop's (ibVisualHost::UpdateControl): what of them its node does
+	// not hold put in it.
+	void UpdateControl(ibValueFrame* control);
 
 	// ⭐ THE FORM FROM THE TAB'S ANSWER — drawn (Form), each control reading its rows (Controls), the tree's icons and the
 	// classes a control is made of (Classes); the desktop's LoadForm read the metaobject in its own process.

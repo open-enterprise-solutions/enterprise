@@ -1,4 +1,5 @@
 #include "propertySerializable.h"
+#include "frmclient/backend/propertyManager/property/variant/variantSerializable.h"   // its value — the one variant
 
 #include "frmclient/win/picture.h"   // ibProtocolPicture — a choice's picture, as the wire carries it
 #include "protocol/protocol.h"       // ibProtocol::ibSchema::ibProperties — the row's keys, as the server's inspector writes them
@@ -26,23 +27,27 @@ ibClassID RegisterCtor(const ibDataNode& entry, const wxString& name)
 	return clsid;
 }
 
+// Its value as the server wrote it (ibPropertyInspector): a scalar a field, a composite a node — in the one variant,
+// named by its class and reading as its words.
+wxVariant ReceiveValue(const ibDataNode& row)
+{
+	const ibDataValue* const scalar = row.FindField(ibProtocol::ibSchema::ibProperties::Value);
+	return wxVariant(new ibVariantDataSerializable(row.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Class),
+		scalar != nullptr ? *scalar : row.GetProperty(ibProtocol::ibSchema::ibProperties::Value),
+		row.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Presentation)));
+}
+
 }
 
 ibPropertySerializable::ibPropertySerializable(ibPropertyCategory* cat, const ibDataNode& row) :
 	ibProperty(cat, row.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Name), row.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Title),
-		row.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Help), wxVariant(row.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Presentation))),
+		row.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Help), ReceiveValue(row)),
 	m_row(row),
 	m_type(row.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Class)),
 	m_readOnly(row.GetValue<bool>(ibProtocol::ibSchema::ibProperties::ReadOnly))
 {
 	if (m_propLabel.IsEmpty())
 		m_propLabel = m_propName;
-
-	// …as the server wrote it (ibPropertyInspector): a scalar a field, a composite a node.
-	if (const ibDataValue* const scalar = row.FindField(ibProtocol::ibSchema::ibProperties::Value))
-		m_value = *scalar;
-	else
-		m_value = row.GetProperty(ibProtocol::ibSchema::ibProperties::Value);
 
 	// The classes its choices' data names (Classes) — what a window groups them under.
 	if (const ibDataNode* const classes = row.FindChild(ibProtocol::ibSchema::ibProperties::Classes)) {
@@ -75,17 +80,3 @@ ibPropertyChoiceMode ibPropertySerializable::GetValueList(ibPropertyChoiceList& 
 	return m_mode;
 }
 
-bool ibPropertySerializable::ReadNodeValue(const ibDataValue& value)
-{
-	// The value an edit gives — the one the owner puts before the server (ibValueMetaObject::OnPropertyChanging). Its
-	// presentation is the server's to say: what reads here is a new cell of the old words until the rows come back.
-	m_value = value;
-	m_propValue = wxVariant(m_propValue.GetString());
-	return true;
-}
-
-bool ibPropertySerializable::WriteNodeValue(ibDataValue& value) const
-{
-	value = m_value;
-	return true;
-}

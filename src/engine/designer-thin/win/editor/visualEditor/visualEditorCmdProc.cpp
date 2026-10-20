@@ -166,24 +166,13 @@ public:
 		m_selectedBefore(selectedBefore), m_selectedAfter(selectedAfter), m_treesBefore(treesBefore), m_treesAfter(treesAfter) {
 	}
 
-	// A property's edit — the control's rows before it and as the server wrote them after it, so an undo shows the old.
-	void SetRows(long long controlId, const ibProtocolNode& before, const ibProtocolNode& after) {
-		m_rowsControl = controlId;
-		m_rowsBefore = before;
-		m_rowsAfter = after;
-	}
-
 protected:
 
 	virtual void DoExecute() override {
 		m_visualEditor->Draw(m_after, m_treesAfter, m_patch, m_selectedAfter);
-		if (m_rowsControl != 0)
-			m_visualEditor->ReceiveRows(m_rowsControl, m_rowsAfter);
 	}
 	virtual void DoRestore() override {
 		m_visualEditor->Draw(m_before, m_treesBefore, ibProtocolNode(), m_selectedBefore);
-		if (m_rowsControl != 0)
-			m_visualEditor->ReceiveRows(m_rowsControl, m_rowsBefore);
 	}
 
 private:
@@ -197,10 +186,56 @@ private:
 	long long m_selectedAfter;
 	ibProtocolNode m_treesBefore;
 	ibProtocolNode m_treesAfter;
-	long long m_rowsControl = 0;   // none: the command changes no control's rows
-	ibProtocolNode m_rowsBefore;
-	ibProtocolNode m_rowsAfter;
 };
+
+/**
+* Command for modifying a property.
+*/
+
+class ibVisualEditorModifyPropertyCmd :
+	public ibVisualEditorCmd {
+public:
+
+	ibVisualEditorModifyPropertyCmd(ibVisualEditorNotebook::ibVisualEditor* visualEditor, ibProperty* prop, const wxVariant& oldValue, const wxVariant& newValue);
+
+protected:
+
+	virtual void DoExecute() override;
+	virtual void DoRestore() override;
+
+private:
+	ibVisualEditorNotebook::ibVisualEditor* m_visualEditor;
+
+	ibProperty* m_property;
+	wxVariant m_oldValue, m_newValue;
+};
+
+ibVisualEditorModifyPropertyCmd::ibVisualEditorModifyPropertyCmd(ibVisualEditorNotebook::ibVisualEditor* visualEditor, ibProperty* prop, const wxVariant& oldValue, const wxVariant& newValue) : m_visualEditor(visualEditor),
+m_property(prop), m_oldValue(oldValue), m_newValue(newValue)
+{
+}
+
+void ibVisualEditorModifyPropertyCmd::DoExecute()
+{
+	// Get the ibValueFrame from the event
+	ibValueFrame* control =
+		dynamic_cast<ibValueFrame*>(m_property->GetPropertyObject());
+
+	m_property->SetValue(m_newValue);
+	m_visualEditor->UpdateControl(control);
+	m_visualEditor->RefreshCurrentElement();
+}
+
+void ibVisualEditorModifyPropertyCmd::DoRestore()
+{
+	// Get the ibValueFrame from the event
+	ibValueFrame* control =
+		dynamic_cast<ibValueFrame*>(m_property->GetPropertyObject());
+
+	m_property->SetValue(m_oldValue);
+	m_visualEditor->UpdateControl(control);
+	m_visualEditor->RefreshCurrentElement();
+}
 
 void ibVisualEditorNotebook::ibVisualEditor::Execute(ibVisualEditorCmd* cmd)
 {
@@ -500,10 +535,10 @@ void ibVisualEditorNotebook::ibVisualEditor::ExpandObject(ibValueFrame* obj, boo
 /////////////////////////////////////////////////////////////////////////////////////
 
 void ibVisualEditorNotebook::ibVisualEditor::ModifyProperty(ibProperty* prop, const wxVariant& oldValue,
-	const wxVariant& WXUNUSED(newValue))
+	const wxVariant& newValue)
 {
-	// ⚠ NOT the desktop's `oldValue != newValue`: a control's row is the server's (ibPropertySerializable), and the pair is its
-	// words, the same before and after until rows come back — the value is its node (CopyNodeValue).
+	// The pair is the value before the edit and after it, as the inspector moves them (the desktop's); what goes to the
+	// server, the property's node.
 	ibPropertyObject* const owner = prop->GetPropertyObject();
 	ibDataValue value;
 	if (owner == nullptr || !prop->CopyNodeValue(value))
@@ -514,23 +549,8 @@ void ibVisualEditorNotebook::ibVisualEditor::ModifyProperty(ibProperty* prop, co
 	// (ibVisualEditorNotebook::ModifyEvent): the handler is its node's Value.
 	const wxString type = prop->GetType();
 	const std::shared_ptr<ibDataNode> handler = value.Kind() == ibDataKind::Child ? value.AsChild() : nullptr;
-	if ((type == wxT("ibEventControl") || type == wxT("ibEventAction")) && handler) {
-		// The handler it had is the one the form holds till this edit — the row's words are the server's, the same
-		// until rows come back: a handler renamed or cleared after the first never found its procedure (2026-10-15).
-		wxString previous = oldValue.GetString();
-		std::vector<ibProtocolNode> nodes;
-		if (control != nullptr && FindPath(m_formNode, control->GetControlID(), nodes)) {
-			ibProtocolNode values = nodes.back().Clone();
-			values.Remove(ibProtocol::ibNode::Children);
-			ibDataNode entries;
-			ibReadProtocolNode(values, entries);
-			const ibDataValue* const held = entries.FindProperty(prop->GetName());
-			previous = held != nullptr && held->Kind() == ibDataKind::Child && held->AsChild() != nullptr ?
-				held->AsChild()->GetValue<wxString>(ibProtocol::ibView::ibFormDesigner::Value) : wxString();
-		}
-		m_visualNotebook->ModifyEvent(prop, wxVariant(previous),
-			wxVariant(handler->GetValue<wxString>(ibProtocol::ibView::ibFormDesigner::Value)));
-	}
+	if ((type == wxT("ibEventControl") || type == wxT("ibEventAction")) && handler)
+		m_visualNotebook->ModifyEvent(prop, oldValue, newValue);
 
 	// The command once the inspector's change is over: what it shows is not drawn again inside its own handler.
 	const wxString name = prop->GetName();
@@ -586,87 +606,71 @@ void ibVisualEditorNotebook::ibVisualEditor::ModifyProperty(ibProperty* prop, co
 		return;
 	}
 
-	if (control == nullptr)
+	if (control == nullptr || oldValue == newValue)
 		return;
 
-	const long long controlId = control->GetControlID();
-	CallAfter([this, controlId, name, value]() {
-		std::vector<long long> path;
-		if (!FindControlPath(m_formNode, controlId, path))
-			return;
-
-		// ⭐ BY A PATCH OF THE FRAME, the road the server's answers take (ibVisualHostClient::Draw): the control is drawn
-		// in place — never built anew. In place of what it was — a value that is a node is not merged into the old one.
-		ibProtocolNode patch;
-		ibProtocolNode step = patch;
-		for (const long long id : path) {
-			step = step.AddChild();
-			step.SetValue(ibProtocol::ibNode::Id, id);
-		}
-		step.AddItem(ibProtocol::ibNode::Removed, name);
-		ibDataNode entries;
-		entries.SetProperty(name, value);
-		ibWriteProtocolNode(entries, step);
-
-		ibProtocolNode edited = m_formNode.Clone();
-		edited.Apply(patch);
-
-		// ⭐ ITS STATE IS THE SERVER'S — enabled with its form, shown where available and bound: asked of the form so edited
-		// and put in the same patch, so an undo takes it back with the value (a control made not enabled was drawn enabled,
-		// 2026-10-15).
-		ibProtocolNode request;
-		request.SetValue(ibProtocol::ibView::ibFormDesigner::Kind, static_cast<int>(ibProtocol::ibView::ibFormDesigner::ibRequest::Rows));
-		request.SetValue(ibProtocol::ibView::ibFormDesigner::Control, controlId);
-		request.SetValue(ibProtocol::ibView::ibFormDesigner::Form, edited);
-		// …and its rows the same answer wrote of it: what the inspector shows of the value is the server's words (a Source's
-		// Presentation), and the ones it was read with name the value it had (a binding picked showed "<not selected>",
-		// and the old one when the control was selected again, 2026-10-19).
-		const auto held = m_rows.find(controlId);
-		const ibProtocolNode rowsBefore = held != m_rows.end() ? held->second : ibProtocolNode();
-		ibProtocolNode rowsAfter;
-		ibProtocolNode answer;
-		if (m_document->Fetch(request, answer)) {
-			PatchState(answer.FindChild(ibProtocol::ibView::ibFormDesigner::Node), step);
-			edited = m_formNode.Clone();
-			edited.Apply(patch);
-			for (const ibProtocolNode& described : answer.FindChild(ibProtocol::ibView::ibFormDesigner::Controls).Children()) {
-				if (described.GetInt(ibProtocol::ibView::ibFormDesigner::Control) == controlId) {
-					rowsAfter = described;
-					break;
-				}
-			}
-		}
-		ibVisualEditorFormCmd* const cmd = new ibVisualEditorFormCmd(this, m_formNode, edited, patch, m_selected, m_selected, m_trees, m_trees);
-		if (rowsAfter.IsNode() && rowsBefore.IsNode() && rowsAfter != rowsBefore)
-			cmd->SetRows(controlId, rowsBefore, rowsAfter);
-		Execute(cmd);
+	CallAfter([this, prop, oldValue, newValue]() {
+		Execute(new ibVisualEditorModifyPropertyCmd(this, prop, oldValue, newValue));
+		NotifyPropertyModified(prop);
 	});
 }
 
-void ibVisualEditorNotebook::ibVisualEditor::ReceiveRows(long long controlId, const ibProtocolNode& rows)
+void ibVisualEditorNotebook::ibVisualEditor::UpdateControl(ibValueFrame* control)
 {
-	if (!rows.IsNode())
-		return;
-	m_rows[controlId] = rows;
-
-	ibValueForm* const valueForm = GetValueForm();
-	if (valueForm == nullptr)
-		return;
-	ibValueFrame* const control = controlId == valueForm->GetControlID() ? valueForm : valueForm->FindControlByID(controlId);
-	std::vector<ibProtocolNode> path;
-	if (control == nullptr || !FindPath(m_formNode, controlId, path))
+	// THE DESKTOP'S (ibVisualHost::UpdateControl) — the control drawn as its properties say: what of them its node does
+	// not hold goes into it BY A PATCH OF THE FRAME, the road the server's answers take (ibVisualHostClient::Draw) — the
+	// control drawn in place, never built anew; in place of what it was, a value that is a node not merged into the old
+	// one; none — taken off the node.
+	std::vector<ibProtocolNode> nodes;
+	std::vector<long long> path;
+	if (control == nullptr || !FindPath(m_formNode, control->GetControlID(), nodes) ||
+		!FindControlPath(m_formNode, control->GetControlID(), path))
 		return;
 
-	// The inspector lets go of what it shows before the rows go, and shows it again. The control's rows are on it as the
-	// shown one's, or as a sizer item's drawn under its child's (ibObjectInspector::Create): asked of the control alone,
-	// a sizer item's edit left the grid on the rows it had just freed (designer-thin dump, 2026-10-20 12:08).
-	ibPropertyObject* const shown = objectInspector->GetSelectedObject();
-	if (shown != nullptr)
-		objectInspector->SelectObject(nullptr);
-	control->Receive(rows);
-	Receive(control, path.back());
-	if (shown != nullptr)
-		objectInspector->SelectObject(shown, true);
+	ibProtocolNode patch;
+	ibProtocolNode step = patch;
+	for (const long long id : path) {
+		step = step.AddChild();
+		step.SetValue(ibProtocol::ibNode::Id, id);
+	}
+	ibProtocolNode values = nodes.back().Clone();
+	values.Remove(ibProtocol::ibNode::Children);
+	ibDataNode held;
+	ibReadProtocolNode(values, held);
+	ibDataNode entries;
+	for (unsigned int idx = 0; idx < control->GetPropertyCount(); idx++) {
+		const ibProperty* const property = control->GetPropertyByIndex(idx);
+		ibDataValue value;
+		if (!property->CopyNodeValue(value))
+			continue;
+		const ibDataValue* entry = held.FindProperty(property->GetName());
+		if (entry == nullptr)
+			entry = held.FindField(property->GetName());
+		if (entry != nullptr ? *entry == value : value.IsEmpty())
+			continue;
+		step.AddItem(ibProtocol::ibNode::Removed, property->GetName());
+		if (!value.IsEmpty())
+			entries.SetProperty(property->GetName(), value);
+	}
+	ibWriteProtocolNode(entries, step);
+
+	ibProtocolNode edited = m_formNode.Clone();
+	edited.Apply(patch);
+
+	// ⭐ ITS STATE IS THE SERVER'S — enabled with its form, shown where available and bound: asked of the form so edited
+	// and put in the same patch (a control made not enabled was drawn enabled, 2026-10-15).
+	ibProtocolNode request;
+	request.SetValue(ibProtocol::ibView::ibFormDesigner::Kind, static_cast<int>(ibProtocol::ibView::ibFormDesigner::ibRequest::Rows));
+	request.SetValue(ibProtocol::ibView::ibFormDesigner::Control, control->GetControlID());
+	request.SetValue(ibProtocol::ibView::ibFormDesigner::Form, edited);
+	ibProtocolNode answer;
+	if (m_document->Fetch(request, answer)) {
+		PatchState(answer.FindChild(ibProtocol::ibView::ibFormDesigner::Node), step);
+		edited = m_formNode.Clone();
+		edited.Apply(patch);
+	}
+
+	Draw(edited, m_trees, patch, m_selected);
 }
 
 /////////////////////////////////////////////////////////////////////////////////////
@@ -930,6 +934,16 @@ void ibVisualEditorNotebook::ibVisualEditor::ShowCurrentElement(bool forceOpen)
 		objectInspector->ShowInspector();
 	ibPropertyObject* const element = GetCurrentElement();
 	objectInspector->SelectObject(element != nullptr ? element : GetSelectedObject(), true);
+}
+
+void ibVisualEditorNotebook::ibVisualEditor::RefreshCurrentElement()
+{
+	// The desktop's (ibEditorSelection::Reveal, soft): no panel — nothing to refresh; else the grid rebuilt on the current
+	// element.
+	ibPropertyObject* const element = GetCurrentElement();
+	if (element == nullptr || !objectInspector->IsShownInspector())
+		return;
+	objectInspector->SelectObject(element, true);
 }
 
 void ibVisualEditorNotebook::ibVisualEditor::ScrollToObject(ibValueFrame* obj)

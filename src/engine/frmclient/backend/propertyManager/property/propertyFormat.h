@@ -16,7 +16,7 @@ public:
 
 	// THE FORMAT STRINGS, one per language, as stored. Which language is read is the reader's question
 	// (ibTranslateString::GetString — the language in force).
-	const ibTranslateString& GetValueAsFormatString() const { return GetValueAsTranslate(); }
+	ibTranslateString GetValueAsFormatString() const { return GetValueAsTranslate(); }
 
 	ibPropertyFormat(ibPropertyCategory* cat, const wxString& name,
 		const ibTranslateString& value) : ibPropertyTString(cat, name, value)

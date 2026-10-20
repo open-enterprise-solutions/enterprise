@@ -1,8 +1,6 @@
 ﻿#include "objinspect.h"
 #include "frmclient/propertyManager/property/private/propertyRegistry.h"
 
-#include <algorithm>
-
 #include <wx/wupdlock.h>   // wxWindowUpdateLocker — RAII Freeze/Thaw (guaranteed Thaw on scope exit)
 
 enum {
@@ -36,9 +34,18 @@ public:
 		m_inspector = inspector;
 	}
 
-	virtual bool PropertyHidden(const ibProperty* property, bool hide) wxOVERRIDE
+	virtual bool SetState(const ibProperty* property, bool hide) wxOVERRIDE
 	{
 		return m_inspector->PropertyHidden(property, hide);
+	}
+
+	// …shown anew once the change that told it is done: told from inside it (the grid's edit, a dialog's), a rebuild
+	// would free the properties the change still holds.
+	virtual bool Cleared() wxOVERRIDE
+	{
+		ibObjectInspector* const inspector = m_inspector;
+		inspector->CallAfter([inspector]() { inspector->SelectObject(inspector->GetSelectedObject(), true); });
+		return true;
 	}
 
 private:
@@ -57,7 +64,6 @@ EVT_PG_ITEM_COLLAPSED(WXOES_PROPERTY_GRID, ibObjectInspector::OnPropertyGridExpa
 EVT_PG_ITEM_EXPANDED(WXOES_PROPERTY_GRID, ibObjectInspector::OnPropertyGridExpand)
 EVT_PG_SELECTED(WXOES_PROPERTY_GRID, ibObjectInspector::OnPropertyGridItemSelected)
 EVT_CHILD_FOCUS(ibObjectInspector::OnChildFocus)
-EVT_SHOW(ibObjectInspector::OnShow)
 wxEND_EVENT_TABLE()
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -136,12 +142,6 @@ void ibObjectInspector::Create(ibPropertyObject* object, bool force)
 		return;
 	}
 
-	// ⭐ HIDDEN, IT HOLDS WHAT IT IS GIVEN — the object is the inspector's all the same, and is asked of it (a module's
-	// editor holds what the inspector holds as it is made: opened while it was hidden, it held nothing, and its tab
-	// cleared the inspector at every switch — 2026-10-16). Drawn — what the server says of it received — only shown;
-	// shown, the inspector draws what it holds (OnShow).
-	const bool shown = IsShownInspector();
-
 	// RAII Freeze/Thaw: Thaw MUST run even if a rebuild step throws (e.g. GetClassName on an
 	// unexpected object) or returns early. A skipped Thaw leaves the grid frozen forever (the
 	// "freeze" bug) AND unbalances the freeze count so later rebuilds stop suppressing paint
@@ -175,10 +175,7 @@ void ibObjectInspector::Create(ibPropertyObject* object, bool force)
 		m_propMap.clear();
 		m_eventMap.clear();
 
-		if (object != nullptr && shown) {
-
-			// …what the server says of it, received now that it is shown — the grid above holds none of what it had.
-			object->Receive();
+		if (object != nullptr) {
 
 			std::map<wxString, ibProperty*> propMap, dummyPropMap;
 			std::map<wxString, ibEvent*> eventMap, dummyEventMap;
@@ -223,7 +220,7 @@ void ibObjectInspector::Create(ibPropertyObject* object, bool force)
 
 	// ShownObject, not m_currentSel: asked again with the address of an object that has since died,
 	// the branch above does not rebuild — and the pointer left standing is a corpse.
-	if (shown && ShownObject() != nullptr) {
+	if (ShownObject() != nullptr) {
 		m_currentSel->OnRefresh();
 		for (auto prop : m_propMap) {
 			wxPGProperty* property = prop.first;
@@ -350,17 +347,14 @@ wxPGProperty* ibObjectInspector::GetEvent(ibEvent* event) const
 // inspector (the MCP server) had to carry its own copy of them. Same sequence, one home, and the
 // selection is what this window contributes: the property being edited may belong to a nested child
 // the selection only accumulates, so `asked` and the property's owner are not always the same.
-//
-// …THE VALUE AS THE PROPERTY'S NODE HOLDS IT (ibPropertyRegistry::GetNodeValue): a metaobject's property is the
-// server's, and what goes there is its node (ibValueMetaObject::OnPropertyChanging), not the grid's cell.
 bool ibObjectInspector::ModifyProperty(ibProperty* prop, const wxVariant& newValue)
 {
-	return ibPropertyGate::SetValue(m_currentSel, prop, ibPropertyRegistry::GetNodeValue(prop, newValue));
+	return ibPropertyGate::SetValue(m_currentSel, prop, newValue);
 }
 
 bool ibObjectInspector::ModifyEvent(ibEvent* event, const wxVariant& newValue)
 {
-	return ibPropertyGate::SetEvent(m_currentSel, event, ibPropertyRegistry::GetNodeValue(event, newValue));
+	return ibPropertyGate::SetEvent(m_currentSel, event, newValue);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -455,19 +449,6 @@ void ibObjectInspector::OnPropertyGridChanged(wxPropertyGridEvent& event)
 		}
 	}
 
-	// …AND A PROPERTY THE GRID HAS NO ROW FOR — one the edit revealed: a metaobject reads the server's rows again
-	// after its edit (ibValueMetaObject::OnPropertyChanged), and makes a property the rows had not sent while hidden.
-	for (unsigned int idx = 0; idx < m_currentSel->GetPropertyCount(); idx++) {
-		const ibProperty* const property = m_currentSel->GetPropertyByIndex(idx);
-		const bool drawn = std::any_of(m_propMap.begin(), m_propMap.end(),
-			[property](const std::pair<wxPGProperty* const, ibProperty*>& prop) { return prop.second == property; });
-		if (!drawn) {
-			Create(m_currentSel, true);
-			event.Skip();
-			return;
-		}
-	}
-
 	wxWindowUpdateLocker updateLock(m_pg);   // RAII Thaw — a throwing OnPropertyRefresh must not leave the grid frozen
 
 	{
@@ -552,12 +533,4 @@ void ibObjectInspector::OnBitmapPropertyChanged(wxCommandEvent& event)
 
 void ibObjectInspector::OnChildFocus(wxChildFocusEvent&) {
 	// do nothing to avoid "scrollbar jump" if wx2.9 is used
-}
-
-// SHOWN, IT DRAWS WHAT IT HOLDS — given while hidden, the object was held and not drawn (Create).
-void ibObjectInspector::OnShow(wxShowEvent& event)
-{
-	event.Skip();
-	if (event.IsShown())
-		Create(ShownObject(), true);
 }

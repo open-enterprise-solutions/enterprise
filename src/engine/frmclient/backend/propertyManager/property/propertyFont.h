@@ -7,38 +7,37 @@
 class FRMCLIENT_API ibPropertyFont : public ibProperty {
 public:
 
-	wxFont GetValueAsFont() const { return typeConv::StringToFont(m_propValue); }
-	wxString GetValueAsString() const { return m_propValue; }
-	void SetValue(const wxFont& val) { m_propValue = typeConv::FontToString(val); }
-	void SetValue(const wxString& val) { m_propValue = val; }
+	// …held as its node, the font's text (ibBackendProperty::ReadNodeValue).
+	wxFont GetValueAsFont() const { return typeConv::StringToFont(GetValueAsString()); }
+	wxString GetValueAsString() const;
+	void SetValue(const wxFont& val) { SetValue(typeConv::FontToString(val)); }
+	void SetValue(const wxString& val);
 
 	ibPropertyFont(ibPropertyCategory* cat, const wxString& name, const wxFont& f = wxNullFont)
-		: ibProperty(cat, name, typeConv::FontToString(f))
+		: ibProperty(cat, name, wxNullVariant)
 	{
+		SetValue(f);
 	}
 
 	ibPropertyFont(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxFont& f = wxNullFont)
-		: ibProperty(cat, name, label, typeConv::FontToString(f))
+		: ibProperty(cat, name, label, wxNullVariant)
 	{
+		SetValue(f);
 	}
 
 	ibPropertyFont(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString, const wxFont& f = wxNullFont)
-		: ibProperty(cat, name, label, helpString, typeConv::FontToString(f))
+		: ibProperty(cat, name, label, helpString, wxNullVariant)
 	{
+		SetValue(f);
 	}
 
 	// Unset — no text, or a stored one with no size.
 	virtual bool IsEmptyProperty() const override { return !GetValueAsFont().IsOk(); }
 
-	// set/get property data
-	virtual bool SetDataValue(const ibValue& varPropVal);
-	virtual bool GetDataValue(ibValue& pvarPropVal) const;
-
 	//load & save object in control 
 
 	// readable node value
 	virtual bool ReadNodeValue(const ibDataValue& value) override;
-	virtual bool WriteNodeValue(ibDataValue& value) const override;
 
 public:
 

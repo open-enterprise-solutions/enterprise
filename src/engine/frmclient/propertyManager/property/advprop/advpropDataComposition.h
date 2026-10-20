@@ -14,9 +14,9 @@ struct ibCompositionDescription;
 
 // -----------------------------------------------------------------------
 // ibPGDataCompositionProperty — the desktop's "Settings…" cell (frontend advpropDataComposition.h) over the server's
-// row: the composition is the row's value as the server stores it (ibPropertyDataComposition::WriteNodeValue), read into
-// an ibVariantDataComposition; a click shows the window over a clone and hands the result back through
-// SetValueInEvent, and the inspector sends it as the property's node (the registered writer).
+// row: the composition is the row's value as the server stores it (ibPropertyDataComposition::WriteNodeValue); a click
+// shows the window over a copy read from it and hands the result back through SetValueInEvent as the same property's
+// value, the node the inspector sends.
 //
 // What the window asks of the configuration it asks of the owner's — on a form, the form's tab
 // (ibQueryFieldsOfText: fetch {Tab, Request: {Kind: Fields, Text}}).

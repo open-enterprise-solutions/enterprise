@@ -2,17 +2,14 @@
 #include "core/serialize/dataBuilder.h"   // ibDataNode — readable Bool node value
 
 
-//base property for "bool"
-bool ibPropertyBoolean::SetDataValue(const ibValue& varPropVal)
+bool ibPropertyBoolean::GetValueAsBoolean() const
 {
-	SetValue(varPropVal.GetBoolean());
-	return true;
+	return GetNodeValue().AsBool();
 }
 
-bool ibPropertyBoolean::GetDataValue(ibValue& pvarPropVal) const
+void ibPropertyBoolean::SetValue(const bool boolean)
 {
-	pvarPropVal = ibPropertyBoolean::GetValueAsBoolean();
-	return true;
+	ibProperty::ReadNodeValue(ibDataValue::Bool(boolean));
 }
 
 bool ibPropertyBoolean::ReadNodeValue(const ibDataValue& value)
@@ -52,11 +49,5 @@ bool ibPropertyBoolean::ReadNodeValue(const ibDataValue& value)
 		return false;
 
 	ibPropertyBoolean::SetValue(value.AsBool());
-	return true;
-}
-
-bool ibPropertyBoolean::WriteNodeValue(ibDataValue& value) const
-{
-	value = ibDataValue::Bool(ibPropertyBoolean::GetValueAsBoolean());
 	return true;
 }

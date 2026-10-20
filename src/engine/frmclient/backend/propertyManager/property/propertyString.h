@@ -7,46 +7,30 @@
 class FRMCLIENT_API ibPropertyStringBase : public ibProperty {
 public:
 
-	wxString GetValueAsString() const {
-		static thread_local wxString result;
-		GetValueAsString(result);
-		return std::move(result);
-	}
+	// …held as its node (ibBackendProperty::ReadNodeValue) — set by the string it is.
+	wxString GetValueAsString() const;
+	void SetValue(const wxString& strValue);
 
-	bool GetValueAsString(wxString& result) const {
-		if (!m_propValue.IsNull())
-			return m_propValue.GetData()->Write(result);
-		return false;
-	}
-
-	void SetValue(const wxString& strValue) { m_propValue = strValue; }
-
-	ibPropertyStringBase(ibPropertyCategory* cat, const wxString& name,
-		const wxString& value) : ibProperty(cat, name, value)
+	ibPropertyStringBase(ibPropertyCategory* cat, const wxString& name) : ibProperty(cat, name, wxNullVariant)
 	{
 	}
 
-	ibPropertyStringBase(ibPropertyCategory* cat, const wxString& name, const wxString& label,
-		const wxString& value) : ibProperty(cat, name, label, value)
+	ibPropertyStringBase(ibPropertyCategory* cat, const wxString& name, const wxString& label)
+		: ibProperty(cat, name, label, wxNullVariant)
 	{
 	}
 
-	ibPropertyStringBase(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString,
-		const wxString& value) : ibProperty(cat, name, label, helpString, value)
+	ibPropertyStringBase(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString)
+		: ibProperty(cat, name, label, helpString, wxNullVariant)
 	{
 	}
 
 	virtual bool IsEmptyProperty() const { return GetValueAsString().IsEmpty(); }
 
-	// set/get property data
-	virtual bool SetDataValue(const ibValue& varPropVal);
-	virtual bool GetDataValue(ibValue& pvarPropVal) const;
-
 	//load & save object in control
 
 	// readable node value (typed String) — name / synonym / comment, etc.
 	virtual bool ReadNodeValue(const ibDataValue& value) override;
-	virtual bool WriteNodeValue(ibDataValue& value) const override;
 
 public:
 
@@ -57,60 +41,69 @@ class FRMCLIENT_API ibPropertyString : public ibPropertyStringBase {
 public:
 
 	ibPropertyString(ibPropertyCategory* cat, const wxString& name,
-		const wxString& value) : ibPropertyStringBase(cat, name, value)
+		const wxString& value) : ibPropertyStringBase(cat, name)
 	{
+		SetValue(value);
 	}
 
 	ibPropertyString(ibPropertyCategory* cat, const wxString& name, const wxString& label,
-		const wxString& value) : ibPropertyStringBase(cat, name, label, value)
+		const wxString& value) : ibPropertyStringBase(cat, name, label)
 	{
+		SetValue(value);
 	}
 
 	ibPropertyString(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString,
-		const wxString& value) : ibPropertyStringBase(cat, name, label, helpString, value)
+		const wxString& value) : ibPropertyStringBase(cat, name, label, helpString)
 	{
+		SetValue(value);
 	}
 
 };
 
-//base property for "general" - unique name 
+//base property for "general" - unique name
 class FRMCLIENT_API ibPropertyUString : public ibPropertyStringBase {
 public:
 
 	ibPropertyUString(ibPropertyCategory* cat, const wxString& name,
-		const wxString& value) : ibPropertyStringBase(cat, name, value)
+		const wxString& value) : ibPropertyStringBase(cat, name)
 	{
+		SetValue(value);
 	}
 
 	ibPropertyUString(ibPropertyCategory* cat, const wxString& name, const wxString& label,
-		const wxString& value) : ibPropertyStringBase(cat, name, label, value)
+		const wxString& value) : ibPropertyStringBase(cat, name, label)
 	{
+		SetValue(value);
 	}
 
 	ibPropertyUString(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString,
-		const wxString& value) : ibPropertyStringBase(cat, name, label, helpString, value)
+		const wxString& value) : ibPropertyStringBase(cat, name, label, helpString)
 	{
+		SetValue(value);
 	}
 
 };
 
-//base property for "general" - unique name or empty value 
+//base property for "general" - unique name or empty value
 class FRMCLIENT_API ibPropertyUEString : public ibPropertyUString {
 public:
 
 	ibPropertyUEString(ibPropertyCategory* cat, const wxString& name,
 		const wxString& value) : ibPropertyUString(cat, name, value)
 	{
+		SetValue(value);
 	}
 
 	ibPropertyUEString(ibPropertyCategory* cat, const wxString& name, const wxString& label,
 		const wxString& value) : ibPropertyUString(cat, name, label, value)
 	{
+		SetValue(value);
 	}
 
 	ibPropertyUEString(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString,
 		const wxString& value) : ibPropertyUString(cat, name, label, helpString, value)
 	{
+		SetValue(value);
 	}
 
 };
@@ -120,17 +113,10 @@ public:
 // ibProperty and not on the string base. A string property stores a string and its setter replaces
 // it, which is exactly how every other language used to be lost.
 class FRMCLIENT_API ibPropertyTString : public ibProperty {
-	// 🛑 STATIC, BECAUSE EVERY CALLER IS A MEMBER-INITIALISER. The three constructors below pass its
-	// result to the base, which means it runs BEFORE this object's lifetime has begun; as a non-static
-	// member that is a call on an object that does not exist yet, and UBSan says so in those words -
-	// "member call on address which does not point to an object of type 'ibPropertyTString'", 98 times
-	// in one run (2026-09-22). It never needed `this`: it builds a variant out of its argument.
-	// ⚠ The same shape lives in the other property headers of this family - they are not converted
-	// here, because only the one the tests exercise has been measured.
-	static wxVariantData* CreateVariantData(const ibTranslateString& translate);
 public:
 
-	ibTranslateString& GetValueAsTranslate() const;
+	// …held as its node, the raw text (ibBackendProperty::ReadNodeValue).
+	ibTranslateString GetValueAsTranslate() const;
 	void SetValue(const ibTranslateString& translate);
 
 	// THE ACTIVE SYNONYM — the text, in the language in force. It is the translation converting
@@ -150,29 +136,27 @@ public:
 	// makes `(cat, name, text)` fit the second one as well — `C2668: ambiguous call` at every
 	// declaration (measured on the first build). The number property can afford one; this cannot.
 	ibPropertyTString(ibPropertyCategory* cat, const wxString& name,
-		const ibTranslateString& value) : ibProperty(cat, name, CreateVariantData(value))
+		const ibTranslateString& value) : ibProperty(cat, name, wxNullVariant)
 	{
+		SetValue(value);
 	}
 
 	ibPropertyTString(ibPropertyCategory* cat, const wxString& name, const wxString& label,
-		const ibTranslateString& value) : ibProperty(cat, name, label, CreateVariantData(value))
+		const ibTranslateString& value) : ibProperty(cat, name, label, wxNullVariant)
 	{
+		SetValue(value);
 	}
 
 	ibPropertyTString(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString,
-		const ibTranslateString& value) : ibProperty(cat, name, label, helpString, CreateVariantData(value))
+		const ibTranslateString& value) : ibProperty(cat, name, label, helpString, wxNullVariant)
 	{
+		SetValue(value);
 	}
 
 	virtual bool IsEmptyProperty() const { return GetValueAsTranslate().IsEmpty(); }
 
-	// set/get property data
-	virtual bool SetDataValue(const ibValue& varPropVal);
-	virtual bool GetDataValue(ibValue& pvarPropVal) const;
-
 	//per-type node value
 	virtual bool ReadNodeValue(const ibDataValue& value) override;
-	virtual bool WriteNodeValue(ibDataValue& value) const override;
 
 public:
 
@@ -183,18 +167,21 @@ class FRMCLIENT_API ibPropertyMString : public ibPropertyStringBase {
 public:
 
 	ibPropertyMString(ibPropertyCategory* cat, const wxString& name,
-		const wxString& value) : ibPropertyStringBase(cat, name, value)
+		const wxString& value) : ibPropertyStringBase(cat, name)
 	{
+		SetValue(value);
 	}
 
 	ibPropertyMString(ibPropertyCategory* cat, const wxString& name, const wxString& label,
-		const wxString& value) : ibPropertyStringBase(cat, name, label, value)
+		const wxString& value) : ibPropertyStringBase(cat, name, label)
 	{
+		SetValue(value);
 	}
 
 	ibPropertyMString(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString,
-		const wxString& value) : ibPropertyStringBase(cat, name, label, helpString, value)
+		const wxString& value) : ibPropertyStringBase(cat, name, label, helpString)
 	{
+		SetValue(value);
 	}
 
 };

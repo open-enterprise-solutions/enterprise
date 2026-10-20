@@ -24,9 +24,9 @@ ibPGHyperLinkProperty::ibPGHyperLinkProperty(ibPropertyObject* ownerProperty, co
 	// deferred OpenObjectForm; those fired against a document list that had moved on, and the
 	// designer went down inside ibDocManager::GetDocumentsVector (two dumps, 2026-08-24).
 	//
-	// The value is what it always was — false. The name is put on by the EDITOR at the click
+	// The value is the property's, as it was given. The name is put on by the EDITOR at the click
 	// (propertyEditor.cpp) and taken off by OnSetValue below, which is what makes it an event.
-	wxPGProperty::SetValue(wxVariant(false));
+	wxPGProperty::SetValue(value);
 }
 
 ibPGHyperLinkProperty::~ibPGHyperLinkProperty()
@@ -47,6 +47,7 @@ bool ibPGHyperLinkProperty::StringToValue(wxVariant& variant,
 
 #include "frmclient/backend/metaCollection/metaObject.h"                       // GetMetaID — the owner, opened itself
 #include "core/serialize/dataBuilder.h"   // ibDataValue — the property's value, an inner module's node
+#include "frmclient/backend/propertyManager/property/variant/variantSerializable.h"   // …read from the cell's value
 #include "protocol/protocol.h"            // ibProtocol::ibSchema::ibProperties::Id — the module's, in its node
 #include "frmclient/docView/docView.h"   // docManager — the door that opens a metaobject
 
@@ -65,8 +66,7 @@ void ibPGHyperLinkProperty::OnSetValue()
 		// text — the desktop's link opened its owner metaobject), in the configuration its owner was opened from; the
 		// server opens it. Taken now, by value: the owner is the inspector's, and goes with the next selection.
 		const ibPropertyObject* const owner = m_ownerProperty;
-		const ibProperty* const property = owner != nullptr ? owner->GetProperty(GetName()) : nullptr;
-		const ibDataValue value = property != nullptr ? property->GetNodeValue() : ibDataValue();
+		const ibDataValue value = ibVariantDataSerializable::GetNodeValue(m_value);
 		const std::shared_ptr<ibDataNode> module = value.Kind() == ibDataKind::Child ? value.AsChild() : nullptr;
 		const ibValueMetaObject* const metaObject = dynamic_cast<const ibValueMetaObject*>(owner);
 		const ibMetaID id = module != nullptr ? static_cast<ibMetaID>(module->GetValue<s32>(ibProtocol::ibSchema::ibProperties::Id))

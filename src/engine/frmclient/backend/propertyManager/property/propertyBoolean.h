@@ -7,33 +7,32 @@
 class FRMCLIENT_API ibPropertyBoolean : public ibProperty {
 public:
 
-	bool GetValueAsBoolean() const { return m_propValue; }
-	void SetValue(const bool boolean) { m_propValue = boolean; }
+	// …held as its node (ibBackendProperty::ReadNodeValue).
+	bool GetValueAsBoolean() const;
+	void SetValue(const bool boolean);
 
 	ibPropertyBoolean(ibPropertyCategory* cat, const wxString& name,
-		const bool& value = false) : ibProperty(cat, name, value)
+		const bool& value = false) : ibProperty(cat, name, wxNullVariant)
 	{
+		SetValue(value);
 	}
 
 	ibPropertyBoolean(ibPropertyCategory* cat, const wxString& name, const wxString& label,
-		const bool& value = false) : ibProperty(cat, name, label, value)
+		const bool& value = false) : ibProperty(cat, name, label, wxNullVariant)
 	{
+		SetValue(value);
 	}
 
 	ibPropertyBoolean(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString,
-		const bool& value = false) : ibProperty(cat, name, label, helpString, value)
+		const bool& value = false) : ibProperty(cat, name, label, helpString, wxNullVariant)
 	{
+		SetValue(value);
 	}
-
-	// set/get property data
-	virtual bool SetDataValue(const ibValue& varPropVal);
-	virtual bool GetDataValue(ibValue& pvarPropVal) const;
 
 	//load & save object in control
 
-	// readable node value (typed Bool, not opaque Binary)
+	// readable node value (typed Bool, not opaque Binary) — a flag spelled as a word too
 	virtual bool ReadNodeValue(const ibDataValue& value) override;
-	virtual bool WriteNodeValue(ibDataValue& value) const override;
 
 public:
 

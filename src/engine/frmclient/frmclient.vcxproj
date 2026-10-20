@@ -236,8 +236,6 @@
     <ClCompile Include="backend\propertyManager\property\propertyFont.cpp" />
     <ClCompile Include="backend\propertyManager\property\propertyColour.cpp" />
     <ClCompile Include="backend\propertyManager\property\propertySize.cpp" />
-    <ClCompile Include="backend\propertyManager\property\variant\variantSize.cpp" />
-    <ClCompile Include="backend\propertyManager\property\variant\variantAction.cpp" />
     <ClCompile Include="backend\compiler\value.cpp" />
     <ClCompile Include="settings\formSettings.cpp" />
     <ClCompile Include="propertyManager\property\private\propertyRegistry.cpp" />
@@ -436,19 +434,7 @@
     <ClInclude Include="backend\propertyManager\property\propertyFormat.h" />
     <ClInclude Include="backend\propertyManager\property\propertyNumber.h" />
     <ClInclude Include="backend\propertyManager\property\propertyChoiceLink.h" />
-    <ClInclude Include="backend\propertyManager\property\variant\variantTranslate.h" />
-    <ClInclude Include="backend\propertyManager\property\variant\variantComposition.h" />
-    <ClInclude Include="backend\propertyManager\property\variant\variantType.h" />
-    <ClInclude Include="backend\propertyManager\property\variant\variantCalcSchedule.h" />
-    <ClInclude Include="backend\propertyManager\property\variant\variantChoiceLink.h" />
-    <ClInclude Include="backend\propertyManager\property\variant\variantCommandSource.h" />
-    <ClInclude Include="backend\propertyManager\property\variant\variantGen.h" />
-    <ClInclude Include="backend\propertyManager\property\variant\variantMetaDesc.h" />
-    <ClInclude Include="backend\propertyManager\property\variant\variantNumber.h" />
-    <ClInclude Include="backend\propertyManager\property\variant\variantPicture.h" />
-    <ClInclude Include="backend\propertyManager\property\variant\variantPoint.h" />
-    <ClInclude Include="backend\propertyManager\property\variant\variantRecord.h" />
-    <ClInclude Include="backend\propertyManager\property\variant\variantSource.h" />
+    <ClInclude Include="backend\propertyManager\property\variant\variantSerializable.h" />
     <ClInclude Include="propertyManager\property\private\propertyRegistry.h" />
     <ClInclude Include="propertyManager\property\private\prop.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropNumber.h" />
@@ -479,8 +465,6 @@
     <ClInclude Include="backend\system\value\valueSize.h" />
     <ClInclude Include="backend\system\value\valueDataComposition.h" />
     <ClInclude Include="backend\propertyManager\property\propertySize.h" />
-    <ClInclude Include="backend\propertyManager\property\variant\variantSize.h" />
-    <ClInclude Include="backend\propertyManager\property\variant\variantAction.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropSize.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropEvent.h" />
     <ClInclude Include="propertyManager\property\advprop\advpropEventTool.h" />
@@ -503,7 +487,6 @@
     <ClInclude Include="propertyManager\propertyEditor.h" />
     <ClInclude Include="settings\formSettings.h" />
     <ClInclude Include="backend\system\value\valueColour.h" />
-    <ClInclude Include="backend\propertyManager\property\variant\variantOwner.h" />
     <ClInclude Include="backend\backend_core.h" />
     <ClInclude Include="backend\propertyManager\propertyManager.h" />
     <ClInclude Include="backend\system\value\valueSpreadsheet.h" />

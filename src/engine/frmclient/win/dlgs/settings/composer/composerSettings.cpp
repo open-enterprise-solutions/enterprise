@@ -22,7 +22,6 @@
 #include "frmclient/mainFrame/mainFrame.h"                // the shared editor / font-colour settings
 #include "frmclient/docView/docView.h"                    // ibMetaDocument — the composer editor's document mode
 #include "frmclient/backend/metaCollection/metaComposerObject.h"   // ibValueMetaObjectComposer — what a composer document was opened ON
-#include "frmclient/backend/propertyManager/property/variant/variantComposition.h"  // the SNAPSHOT a Settings property stores
 #include "frmclient/backend/appData.h"                              // the ACTIVE configuration, when the composition names none
 #include "frmclient/backend/system/value/composition/valueComposerField.h"   // a declaration becomes a value for the reader
 #include "frmclient/backend/metaData.h"                             // the compile cache the parent module comes from
@@ -1641,20 +1640,6 @@ private:
 	wxTextCtrl*               m_periodTo   = nullptr;
 };
 
-// THE DESCRIPTION INSIDE A CELL, and the refusal when the cell is not one. A window that cannot
-// name what it edits has nothing to draw, so this raises rather than binding to a stand-in that
-// silently saves nowhere.
-static ibCompositionDescription& DescriptionIn(const wxVariant& composition)
-{
-	ibVariantDataComposition* cell =
-		dynamic_cast<ibVariantDataComposition*>(composition.GetRefData());
-
-	if (cell == nullptr)
-		ibBackendCoreException::Error(_("The composition to edit is not a composition"));
-
-	return cell->GetCompositionDesc();
-}
-
 // ⭐ THE SETTINGS ARE A PANEL, AND THE DIALOG IS ONE OF ITS HOSTS. A composer declared in the
 // metadata is edited on a TAB of its own (the designer opens it like a form or a template — see
 // docViewComposer), while a composition held by a form is edited modally from the gridbox. The
@@ -1672,29 +1657,16 @@ ibComposerSettingsPanel::ibComposerSettingsPanel(wxWindow* parent, ibComposition
 	BuildPanel();
 }
 
-// 🛑⭐⭐ THE DESIGNER'S, HOLDING THE CELL IT EDITS. Same window as above; what differs is the GRIP.
-//
-// A metaobject's composition lives in a property, and a property cell is a VARIANT: storing one
-// swaps in a new cell and lets go of the old (ibPropertyComposition::SetValue). A window binds to
-// it for as long as it is open, which is far longer than the call that opened it - so a bare
-// reference into the cell is freed memory the moment ANYTHING stores a composition. It happened on
-// 2026-09-02: an MCP verb (report_select - every one of those verbs is a read-modify-write) wrote
-// while the settings window stood open, and the designer died later and elsewhere, in
-// ApplyPendingQueryText on a page change, assigning into 0xdddddddd.
-//
-// ⭐ THE VARIANT IS REFERENCE-COUNTED, so holding a COPY of it is the whole fix (Max, 2026-09-02:
-// *"the counter just needs to go up while the form holds it"*). The store swaps in its new cell,
-// this window goes on editing the one it opened - one counter down, still alive - and that cell
-// dies quietly when the window closes. What the window then shows is the composition as it was
-// opened, which is the honest thing for an editor with a Cancel: the new one is picked up when it
-// is reopened.
-ibComposerSettingsPanel::ibComposerSettingsPanel(wxWindow* parent, const wxVariant& composition,
+// 🛑⭐⭐ THE DESIGNER'S, HOLDING WHAT IT EDITS. Same window as above; what differs is the GRIP: a window
+// stays open far longer than the call that opened it, and what it was handed may go first (see the
+// header's m_heldComposition — on the desktop, the 2026-09-02 crash under an MCP write).
+ibComposerSettingsPanel::ibComposerSettingsPanel(wxWindow* parent, const ibCompositionDescription& composition,
 	const ibMetaData* metaData)
 	: wxPanel(parent, wxID_ANY),
 	  m_metaData(metaData), m_readerRoad(false),
 	  m_heldComposition(composition),
-	  m_settings(&DescriptionIn(m_heldComposition).m_variants.front().m_settings),
-	  m_edited(DescriptionIn(m_heldComposition)),
+	  m_settings(&m_heldComposition.m_variants.front().m_settings),
+	  m_edited(m_heldComposition),
 	  m_fieldSource(new ibSettingsFieldTree())
 {
 	BuildPanel();
@@ -2072,23 +2044,18 @@ static const ibMetaData* MetaDataOf(ibMetaDocument* document)
 	return metaComposer != nullptr ? metaComposer->GetMetaData() : nullptr;
 }
 
-// …AND THE COMPOSITION IS REACHED THE SAME WAY — AS THE CELL, not as a reference into it. A tab
-// stays open for as long as somebody is looking at it, and the cell under it is replaced by any
-// store (ibPropertyComposition::SetValue swaps in a new one); the panel holds what it was given, so
-// its count is up for as long as the tab lives. Edits still land in the metaobject's own
-// description, which is the shape ibGridEditor has — no copy travels, and the view stores nothing.
+// …AND THE COMPOSITION IS REACHED THE SAME WAY — the composer's description, held by the panel for as
+// long as the tab lives.
 //
 // ⚠ THE STAND-IN. A composer tab with no composer metaobject cannot happen through the document
 // manager — the template is registered against the composer metatype — but the panel has to bind to
-// something, so it binds to an empty cell here. Nothing written into it is ever saved, which is the
-// truth about a tab that is editing nothing.
-static wxVariant CompositionOf(ibMetaDocument* document)
+// something, so it binds to an empty description here. Nothing written into it is ever saved, which is
+// the truth about a tab that is editing nothing.
+static ibCompositionDescription CompositionOf(ibMetaDocument* document)
 {
-	ibValueMetaObjectComposer* metaComposer = ComposerOf(document);
+	const ibValueMetaObjectComposer* metaComposer = ComposerOf(document);
 
-	return metaComposer != nullptr
-		? metaComposer->GetCompositionValue()
-		: wxVariant(new ibVariantDataComposition(nullptr, ibCompositionDescription()));
+	return metaComposer != nullptr ? metaComposer->GetCompositionDesc() : ibCompositionDescription();
 }
 
 // THE DOCUMENT IS THE ONLY INPUT. Both of the other two — which description is edited, and which

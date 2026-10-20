@@ -15,7 +15,8 @@ public:
 	// Takes the backend's choice list and turns it into wxPGChoices here — the conversion
 	// belongs on this side of the seam (see ibPropertyChoiceList in propertyObject.h).
 	ibPGListProperty(const wxString& label = wxPG_LABEL,
-		const wxString& name = wxPG_LABEL, const ibPropertyChoiceList& choices = ibPropertyChoiceList(), int value = 0);
+		const wxString& name = wxPG_LABEL, const ibPropertyChoiceList& choices = ibPropertyChoiceList(),
+		const wxVariant& value = wxNullVariant);
 
 	virtual wxString ValueToString(wxVariant& value,
 		wxPGPropValFormatFlags flags = wxPGPropValFormatFlags::Null) const override;
@@ -27,6 +28,9 @@ public:
 	virtual bool IntToValue(wxVariant& value,
 		int number,
 		wxPGPropValFormatFlags flags = wxPGPropValFormatFlags::Null) const override;
+
+	// The chosen one's place among the choices — the drop-down's selection.
+	virtual int GetChoiceSelection() const override;
 
 	virtual wxPGEditorDialogAdapter* GetEditorDialog() const override;
 

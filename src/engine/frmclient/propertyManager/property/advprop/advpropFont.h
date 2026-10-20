@@ -17,7 +17,7 @@ class ibPGFontProperty : public wxEditorDialogProperty {
 	WX_PG_DECLARE_PROPERTY_CLASS(ibPGFontProperty)
 public:
 
-	ibPGFontProperty(const wxString& label = wxPG_LABEL, const wxString& name = wxPG_LABEL, const ibFont& value = ibFont());
+	ibPGFontProperty(const wxString& label = wxPG_LABEL, const wxString& name = wxPG_LABEL, const wxVariant& value = wxNullVariant);
 	virtual ~ibPGFontProperty() = default;
 
 	virtual wxVariant ChildChanged(wxVariant& thisValue, int childIndex,

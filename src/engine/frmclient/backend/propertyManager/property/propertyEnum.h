@@ -7,21 +7,21 @@
 class FRMCLIENT_API ibPropertyEnumBase : public ibProperty {
 public:
 
-	long GetValueAsInteger() const { return m_propValue; }
-	void SetValue(const long& i) { m_propValue = i; }
+	// …held as its node, the chosen one's id (ibBackendProperty::ReadNodeValue) — set by the enumeration it is.
+	long GetValueAsInteger() const;
+	void SetValue(const long& i);
 
-	ibPropertyEnumBase(ibPropertyCategory* cat, const wxString& name,
-		const wxVariant& value) : ibProperty(cat, name, value)
+	ibPropertyEnumBase(ibPropertyCategory* cat, const wxString& name) : ibProperty(cat, name, wxNullVariant)
 	{
 	}
 
-	ibPropertyEnumBase(ibPropertyCategory* cat, const wxString& name, const wxString& label,
-		const wxVariant& value) : ibProperty(cat, name, label, value)
+	ibPropertyEnumBase(ibPropertyCategory* cat, const wxString& name, const wxString& label)
+		: ibProperty(cat, name, label, wxNullVariant)
 	{
 	}
 
-	ibPropertyEnumBase(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString,
-		const wxVariant& value) : ibProperty(cat, name, label, helpString, value)
+	ibPropertyEnumBase(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString)
+		: ibProperty(cat, name, label, helpString, wxNullVariant)
 	{
 	}
 
@@ -38,15 +38,10 @@ public:
 		return ibPropertyChoiceMode::Single;
 	}
 
-	// set/get property data
-	virtual bool SetDataValue(const ibValue& varPropVal) = 0;
-	virtual bool GetDataValue(ibValue& pvarPropVal) const = 0;
-
 	//load & save object in control
 
 	// readable node value (typed Number = the enum's integer)
 	virtual bool ReadNodeValue(const ibDataValue& value) override;
-	virtual bool WriteNodeValue(ibDataValue& value) const override;
 
 public:
 
@@ -65,36 +60,22 @@ public:
 	void SetValue(const int& i) { ibPropertyEnumBase::SetValue(i); }
 
 	ibPropertyEnum(ibPropertyCategory* cat, const wxString& name,
-		const valueEnumType& value) : ibPropertyEnumBase(cat, name, static_cast<long>(value))
+		const valueEnumType& value) : ibPropertyEnumBase(cat, name)
 	{
+		SetValue(value);
 	}
 
 	ibPropertyEnum(ibPropertyCategory* cat, const wxString& name, const wxString& label,
-		const valueEnumType& value) : ibPropertyEnumBase(cat, name, label, static_cast<long>(value))
+		const valueEnumType& value) : ibPropertyEnumBase(cat, name, label)
 	{
+		SetValue(value);
 	}
 
 	ibPropertyEnum(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString,
-		const valueEnumType& value) : ibPropertyEnumBase(cat, name, label, helpString, static_cast<long>(value))
+		const valueEnumType& value) : ibPropertyEnumBase(cat, name, label, helpString)
 	{
+		SetValue(value);
 	}
-
-	// set/get property data
-	virtual bool SetDataValue(const ibValue& varPropVal) {
-		SetValue(varPropVal.ConvertToEnumValue<valueEnumType>());
-		return true;
-	};
-
-	virtual bool GetDataValue(ibValue& pvarPropVal) const {
-		ibValue enumVariant = ibPropertyEnum::GetValueAsInteger();
-		ibValue* ppParams[] = { &enumVariant, nullptr };
-		if (m_enumCreator->Init(ppParams, 1)) {
-			pvarPropVal = m_enumCreator->GetEnumVariantValue();
-			return true;
-		}
-		pvarPropVal = m_enumCreator;
-		return true;
-	};
 
 protected:
 	virtual ibPropertyChoiceList GetEnumList() const {

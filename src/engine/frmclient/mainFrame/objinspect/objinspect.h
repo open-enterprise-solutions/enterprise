@@ -61,8 +61,7 @@ public:
 	// Services for the observers
 	void SelectObject(ibPropertyObject* selobj, bool force = false) {
 
-		// …hidden as well: it holds the object, and draws it as it is shown (Create).
-		if (force || m_currentSel != selobj) {
+		if (IsShownInspector() && (force || m_currentSel != selobj)) {
 			Create(selobj, force);
 		}
 
@@ -102,7 +101,6 @@ protected:
 
 	void OnBitmapPropertyChanged(wxCommandEvent& event);
 	void OnChildFocus(wxChildFocusEvent& event);
-	void OnShow(wxShowEvent& event);
 
 private:
 
