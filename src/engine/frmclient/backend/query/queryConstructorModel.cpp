@@ -276,7 +276,7 @@ std::vector<ibQueryConstructorSource> ibQueryConstructorModel::GetSources() cons
 			m_known->m_sources = ibProtocolNode();
 	}
 	std::vector<ibQueryConstructorSource> out;
-	for (const ibProtocolNode& row : m_known->m_sources.GetList(qc::Sources)) {
+	for (const ibProtocolNode& row : m_known->m_sources.FindChild(qc::Sources).Children()) {
 		ibQueryConstructorSource source;
 		for (const ibProtocolNode& segment : row.GetList(qc::Path))
 			source.m_path.push_back(segment.AsString());
@@ -293,7 +293,7 @@ namespace {
 // reference's branch. 0: none (a register, a virtual table).
 ibClassID ReferenceOfSource(const ibProtocolNode& sources, const std::vector<wxString>& path)
 {
-	for (const ibProtocolNode& row : sources.GetList(qc::Sources)) {
+	for (const ibProtocolNode& row : sources.FindChild(qc::Sources).Children()) {
 		const std::vector<ibProtocolNode> segments = row.GetList(qc::Path);
 		if (segments.size() != path.size())
 			continue;
@@ -310,7 +310,7 @@ ibClassID ReferenceOfSource(const ibProtocolNode& sources, const std::vector<wxS
 // …and the table a reference type names: its path joined, as GetReferenceBranches names it.
 wxString SourceOfReference(const ibProtocolNode& sources, ibClassID clsid)
 {
-	for (const ibProtocolNode& row : sources.GetList(qc::Sources)) {
+	for (const ibProtocolNode& row : sources.FindChild(qc::Sources).Children()) {
 		unsigned long long reference = 0;
 		if (!row.GetString(qc::Reference).ToULongLong(&reference) || static_cast<ibClassID>(reference) != clsid)
 			continue;
@@ -340,7 +340,7 @@ std::vector<ibQuerySourceParameter> ibQueryConstructorModel::GetSourceParameters
 			answer = ibProtocolNode();
 		known = m_known->m_parameters.emplace(text, answer).first;
 	}
-	for (const ibProtocolNode& row : known->second.GetList(qc::Parameters)) {
+	for (const ibProtocolNode& row : known->second.FindChild(qc::Parameters).Children()) {
 		ibQuerySourceParameter parameter;
 		parameter.m_name = row.GetString(qc::Name);
 		parameter.m_condition = row.GetBool(qc::Condition);
