@@ -515,6 +515,12 @@ void ibControlTextEditor::LayoutControls()
 	if (textH > innerH || textH <= 0) textH = innerH;
 	int textY = innerY + (innerH - textH) / 2 + FromDIP(1);
 	if (textY + textH > innerY + innerH) textY = innerY + innerH - textH;
+	// A multiline editor takes the whole inner height: sized to one glyph line it
+	// shows a single, vertically centred line however tall the control is.
+	if (m_multilineMode) {
+		textY = innerY;
+		textH = innerH;
+	}
 	m_text->SetSize(innerX, textY, textW, textH);
 	m_textRect = wxRect(innerX, textY, textW, textH);
 }
