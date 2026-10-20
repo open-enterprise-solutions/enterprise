@@ -325,9 +325,11 @@ GENERATE_REGISTER(wxT(class_name), wxMAKE_UNIQUE_NAME(s_cs_reg_e_), new ibCtorEn
 ENUM_TYPE_REGISTER_3(class_info, class_name, enum_to_clsid(class_name))
 #define ENUM_TYPE_REGISTER(...) IB_DISPATCH(ENUM_TYPE_REGISTER_, __VA_ARGS__)
 
+// A CONTEXT TYPE's object (EnumManager, SystemManager) is MADE for whoever asks — a module manager, for its main module —
+// never kept in here: one object per process was every session's and every configuration's at once, and 1000 sessions
+// raced on it (2026-10-20).
 template <class T>
 class ibCtorContextType : public ibCtorSingleType {
-	T* m_innerObject = nullptr;
 public:
 	ibCtorContextType(const wxString& className, const ibClassID& clsid) :
 		ibCtorSingleType(className, typeid(T), clsid) {
@@ -340,18 +342,15 @@ public:
 		switch (event)
 		{
 		case ibCtorObjectTypeEvent_Register:
-			m_innerObject = new T();
-			m_innerObject->IncrRef();
 			T::OnRegisterObject(GetClassName(), this);
 			break;
 		case ibCtorObjectTypeEvent_UnRegister:
 			T::OnUnRegisterObject(GetClassName());
-			m_innerObject->DecrRef();
 			break;
 		}
 	}
 
-	virtual ibValue CreateObject() const { return m_innerObject; }
+	virtual ibValue CreateObject() const { return new T(); }
 };
 
 // 3-arg (legacy): explicit clsid.

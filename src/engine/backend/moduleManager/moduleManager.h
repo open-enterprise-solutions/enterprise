@@ -292,6 +292,10 @@ protected:
 	// global data manager — the "Data" queryable-source root (L4-2)
 	ibValuePtr<ibValueDataUnit> m_dataManager;
 
+	// the context types' objects (EnumManager / SystemManager) — made for this manager as its main module comes up,
+	// held while it is up: the compile module's context binds only reference them
+	std::vector<ibValue> m_listContextManager;
+
 	friend class ibMetaDataConfiguration;
 	friend class ibMetaDataDataProcessor;
 

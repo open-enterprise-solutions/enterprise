@@ -1,6 +1,8 @@
 #ifndef __CODE_RUNNER_H__
 #define __CODE_RUNNER_H__
 
+#include <vector>
+
 #include <wx/intl.h>
 #include <wx/string.h>
 #include <wx/button.h>
@@ -31,6 +33,10 @@ protected:
 
 	class ibCompileCode* m_compileCode;
 	class ibProcUnit* m_procUnit;
+
+	// the context types' objects (EnumManager, ValueOutput, …) made for this runner — its compile module only
+	// references them
+	std::vector<class ibValue> m_listContextManager;
 
 	ibCodeEditor*     m_codeEditor;
 	wxChoice*         m_syntaxChoice;

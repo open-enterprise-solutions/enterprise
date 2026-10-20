@@ -337,8 +337,10 @@ ibFrameCodeRunner::ibFrameCodeRunner(wxWindow* parent, wxWindowID id, const wxSt
 	// Documents, EnumManager, …) so script can reference them. They
 	// flow through CreateBinder into the runtime binder at Execute time.
 	for (auto ctor : ibValue::GetListCtorsByType(ibCtorObjectType_object_context)) {
-		// A context ctor answers with the object it holds for the whole run, never an empty one.
-		m_compileCode->AddContextVariable(ctor->GetClassName(), ctor->CreateObject());
+		// A context ctor makes the object for whoever asks; this runner holds it for the whole run.
+		const ibValue created = ctor->CreateObject();
+		m_compileCode->AddContextVariable(ctor->GetClassName(), created);
+		m_listContextManager.emplace_back(created);
 	}
 
 	// Connect button events.
