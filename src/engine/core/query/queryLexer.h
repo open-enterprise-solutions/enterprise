@@ -21,6 +21,7 @@
 #include "core/compiler/lexValue.h"   // ibLexValue — a constant as the text wrote it
 #include "core/query/queryKeywords.h"
 
+#include <wx/arrstr.h>   // wxbase exports std::vector<wxString> (wxArrayString's base) — seen here, a unit imports it
 #include <vector>
 
 // What a token IS. (Op = a comparison / arithmetic operator carrying its text;
