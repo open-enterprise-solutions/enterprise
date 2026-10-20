@@ -101,9 +101,37 @@ wxString ibPGCommandSourceProperty::ValueToString(wxVariant& variant, wxPGPropVa
 
 void ibPGCommandSourceProperty::OnSetValue()
 {
-	// No bound command's picture: the desktop resolves it through the owner's command door
-	// (ibFrontendCommandReceiver::ResolveCommand) over the form's commands, which are the server's — text only.
-	m_valueBitmapBundle = wxBitmapBundle();
+	m_valueBitmapBundle = wxBitmapBundle();   // no bound command -> no image (cell shows text only)
+	wxVariant v = GetValue();                 // keep the variant alive so the cast target outlives the read
+	ibVariantDataCommandSource* data = property_cast(v, ibVariantDataCommandSource);
+	if (data == nullptr || !data->GetCommandDesc().IsOk() || !m_hasTree)
+		return;
+
+	// The bound command's OWN picture, so the cell shows WHICH command is pulled. The desktop resolves it through the
+	// owner's command door over the form's commands; here they are the server's, and the row's command tree already
+	// names each command's picture — the row of the bound command wears it. Left empty when the command has no picture
+	// or was deleted.
+	const ibCommandDescription& desc = data->GetCommandDesc();
+	wxString pictureId;
+	std::function<bool(const ibDataNode&)> find = [&](const ibDataNode& node) {
+		for (const ibDataNode& row : node.Children()) {
+			if (!IsCommandRow(row)) {
+				if (find(row))
+					return true;
+				continue;
+			}
+			if (ReadCommand(row) == desc) {
+				pictureId = row.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Picture);
+				return true;
+			}
+		}
+		return false;
+	};
+	if (!find(m_tree) || pictureId.IsEmpty())
+		return;
+	const wxBitmap icon = ibProtocolPicture(pictureId);
+	if (icon.IsOk())
+		m_valueBitmapBundle = icon;
 }
 
 bool ibPGCommandSourceProperty::StringToValue(wxVariant& WXUNUSED(variant), const wxString& WXUNUSED(text),
