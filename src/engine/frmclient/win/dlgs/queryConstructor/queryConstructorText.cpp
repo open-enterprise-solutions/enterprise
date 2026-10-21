@@ -316,8 +316,6 @@ bool ibShowQueryConstructor(wxWindow* parent, wxString& queryText, const ibMetaD
 	// empty query, or leave the text alone. Refusing outright would be worse: the query would be
 	// unopenable with no way forward from inside the window.
 	ibQueryPackage package;
-	// The window's model, made here: the gate's question and the window's are the same text, asked once (request Check).
-	const ibQueryConstructorModel model(metaData);
 	// Asked of a copy: Trim works in place, and the caller's text is theirs until OK hands a new one back.
 	if (!wxString(queryText).Trim(true).Trim(false).IsEmpty()) {
 		wxString complaint;
@@ -328,7 +326,7 @@ bool ibShowQueryConstructor(wxWindow* parent, wxString& queryText, const ibMetaD
 			// …AND THE NAMES IN IT, by the same resolver the execution uses. Parsing only judges the
 			// grammar; a query selecting a field of a table that was deleted parses perfectly.
 			const ibSourceMetaDataScope resolveAgainst(metaData);
-			model.CheckNames(package);
+			ibQueryConstructorModel(metaData).CheckNames(package);
 		}
 		catch (const ibCoreException& e) {
 			complaint = e.GetErrorDescription();
@@ -343,7 +341,7 @@ bool ibShowQueryConstructor(wxWindow* parent, wxString& queryText, const ibMetaD
 		}
 	}
 
-	ibDialogQueryConstructor dialog(parent, package, metaData, readOnly, exclude, &model);
+	ibDialogQueryConstructor dialog(parent, package, metaData, readOnly, exclude);
 	if (dialog.ShowModal() != wxID_OK)
 		return false;
 

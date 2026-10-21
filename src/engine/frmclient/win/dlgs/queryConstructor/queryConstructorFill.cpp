@@ -1762,9 +1762,6 @@ bool ibDialogQueryConstructor::AskEngine(wxString& message) const
 		// it knocks on the global factory, fails to find the metaclass at all, and the check falls
 		// silent by its own "never a false error" rule. Which is exactly how it managed to pass a
 		// query naming a field nothing has. The config was handed to this dialog for precisely this.
-		//
-		// (Here the resolver is the server's: the model asks the tab with the whole text — request Check — once per
-		// text, so the line, OK and the Check button share one answer.)
 		const ibSourceMetaDataScope resolveAgainst(m_metaData);
 		m_model.CheckNames(read);
 		return true;

@@ -12,9 +12,8 @@
 class ibDataNode;
 class ibMetaData;
 
-// A KIND'S CLASS PICTURE, by its id (ibBackendPicture::SendPicture of GetAvailableCtor(kind)->GetClassType()); none:
-// empty. The one road both constructors' kinds are dressed by — the query constructor's Sources and Linq's Kinds.
-wxString ibKindPicture(const wxString& kind, const ibMetaData* metaData);
+// A kind's class picture, by its id; none: empty. Both constructors' Kinds.
+FRMSERVER_API wxString ibKindPicture(const wxString& kind, const ibMetaData* metaData);
 
 // True: the request was one of ibQueryConstructor's, answered in `response`. False: not one of them.
 FRMSERVER_API bool ibFetchQueryConstructorRequest(const ibDataNode& request, ibDataNode& response, const ibMetaData* metaData);

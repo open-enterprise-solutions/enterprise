@@ -1495,27 +1495,22 @@ namespace ibProtocol {
 			inline constexpr const char* ConsumedBySource = "ConsumedBySource";
 			inline constexpr const char* Default          = "Default";
 			inline constexpr const char* Error            = "Error";
-			inline constexpr const char* Kinds            = "Kinds";             // Sources: the kinds' rows {Name, Picture}
-			inline constexpr const char* Picture          = "Picture";           // a kind's class picture (SendPicture)
-			inline constexpr const char* Text             = "Text";              // Check: the whole query text
-			inline constexpr const char* Statement        = "Statement";         // Check: the select a grouping completes —
-			inline constexpr const char* Branch           = "Branch";            // its statement and union branch (-1: none)
-			inline constexpr const char* Ungrouped        = "Ungrouped";         // Check: what that select's GROUP BY lacks
-			inline constexpr const char* Completed        = "Completed";         // Check: {Text, Error} with them added
+			inline constexpr const char* Kinds            = "Kinds";
+			inline constexpr const char* Picture          = "Picture";
+			inline constexpr const char* Text             = "Text";
+			inline constexpr const char* Statement        = "Statement";
+			inline constexpr const char* UnionBranch      = "UnionBranch";
+			inline constexpr const char* UngroupedProjections = "UngroupedProjections";
 
 			enum class ibRequest : int {
 				Sources          = 24,   // {} — every source a query may name: Sources, rows {Path, Presentation, Reference}
-				                         // (GetSources); Kinds, rows {Name, Picture} — each kind's class picture, which its
-				                         // tables wear (the desktop's GetAvailableCtor(kind)->GetClassIcon, as Linq's Kinds)
+				                         // (GetSources); Kinds, rows {Name, Picture} (as Linq's Kinds)
 				Fields           = 25,   // {Source [, Slot]} — its fields: Fields, References, Error (GetFields; with Slot —
 				                         // GetConditionFields)
 				SourceParameters = 26,   // {Source} — what a virtual table takes: Parameters, rows {Name, Condition, Type,
 				                         // Required, Choices, Description, ConsumedBySource, Default} (GetSourceParameters)
-				Check            = 27,   // {Text [, Statement, Branch]} — the engine's verdict on the whole text: Error
-				                         // (CheckNames' words; none — it reads). With Statement: Ungrouped, what that
-				                         // select still has to group by (UngroupedProjections), and when there is any,
-				                         // Completed {Text, Error} — the text with them added, as the window adds them,
-				                         // and its verdict. ONE call per human action, never one per field.
+				Check            = 27,   // {Text} — the whole query text: Error (CheckNames); with Statement, UnionBranch —
+				                         // that select's UngroupedProjections
 			};
 
 		}

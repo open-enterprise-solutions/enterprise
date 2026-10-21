@@ -388,13 +388,12 @@ static void ibDropTotalsFromPackage(ibQueryPackage& package)
 			ibQueryDropTotals(*statement.m_select);
 }
 ibDialogQueryConstructor::ibDialogQueryConstructor(wxWindow* parent, const ibQueryPackage& package,
-                                                   const ibMetaData* metaData, bool readOnly, int exclude,
-                                                   const ibQueryConstructorModel* model)
+                                                   const ibMetaData* metaData, bool readOnly, int exclude)
 	: wxDialog(parent, wxID_ANY, _("Query constructor"), wxDefaultPosition, wxSize(1040, 720),
 		wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
 	, m_package(package)
 	, m_metaData(metaData)
-	, m_model(model != nullptr ? *model : ibQueryConstructorModel(metaData))   // a copy shares the answers
+	, m_model(metaData)
 	// The metadata is asked FIRST, and the caller can only add to its answer. A configuration
 	// opened without the right to change it stays unchangeable through this window too.
 	, m_readOnly(readOnly || IsMetaDataReadOnly(metaData))

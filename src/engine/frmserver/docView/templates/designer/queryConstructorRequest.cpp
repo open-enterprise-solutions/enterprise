@@ -9,7 +9,7 @@
 #include "backend/query/queryable.h"                      // ibSourceMetaDataScope — the names resolve against THIS configuration
 #include "core/clsid.h"                                   // IsReference — a table's own reference type
 #include "core/query/queryParser.h"                       // ibQueryParser — the source as the client wrote it
-#include "core/query/queryRender.h"                       // ibRenderQueryPackage — the completed text, as the window writes it
+#include "core/query/queryRender.h"                       // ibRenderQueryExpr — a projection, as the window reads it back
 #include "core/serialize/dataBuilder.h"
 #include "frmserver/win/dlgs/settings/settingsRequest.h"  // ibWriteSettingsField / References — a field as the windows read it
 #include "protocol/protocol.h"
@@ -98,75 +98,44 @@ void WriteParameters(ibDataNode& response, const std::vector<ibQuerySourceParame
 	}
 }
 
-// THE ENGINE'S VERDICT ON A TEXT — CheckNames' words; empty: it reads.
-wxString VerdictOf(const ibQueryPackage& package)
-{
-	try {
-		ibQueryLowering::CheckNames(package, std::map<wxString, ibValue>());
-	}
-	catch (const ibCoreException& error) {
-		return error.GetErrorDescription();
-	}
-	return wxString();
-}
-
-// THE SELECT A GROUPING COMPLETES — the window's Current(): a statement's select, or one of its union branches.
-ibQuerySelect* SelectAt(ibQueryPackage& package, s32 statement, s32 branch)
+// THE SELECT THE WINDOW IS ON — its Current(): a statement's select, or one of its union branches.
+const ibQuerySelect* SelectAt(const ibQueryPackage& package, s32 statement, s32 unionBranch)
 {
 	if (statement < 0 || static_cast<size_t>(statement) >= package.m_statements.size())
 		return nullptr;
-	ibQuerySelect* const select = package.m_statements[static_cast<size_t>(statement)].m_select.get();
-	if (select == nullptr || branch < 0)
+	const ibQuerySelect* const select = package.m_statements[static_cast<size_t>(statement)].m_select.get();
+	if (select == nullptr || unionBranch < 0)
 		return select;
-	return static_cast<size_t>(branch) < select->m_unions.size()
-		? select->m_unions[static_cast<size_t>(branch)].get() : select;
+	return static_cast<size_t>(unionBranch) < select->m_unions.size()
+		? select->m_unions[static_cast<size_t>(unionBranch)].get() : select;
 }
 
-// ⭐⭐ CHECK — the whole text, asked once per human action (an edit, OK, the Check button), never once per field. With
-// a select named it also answers what that select's GROUP BY lacks, and the verdict on the text once they are added
-// — the desktop's OnAddGrouping, so the verdict line after a grouping asks nothing more.
+// CHECK — the desktop window's two calls into the engine, each answered as it is asked there: the whole text's
+// CheckNames (its verdict line, OK, the Check button), or, with the select named the way Fields names a Slot, that
+// select's UngroupedProjections (OnAddGrouping).
 void WriteCheck(ibDataNode& response, const ibDataNode& request)
 {
 	ibQueryPackage package;
 	try {
 		package = ibQueryParser().ParsePackage(request.GetValue<ibString>(qc::Text));
+		if (request.FindField(qc::Statement) == nullptr) {
+			ibQueryLowering::CheckNames(package, std::map<wxString, ibValue>());
+			return;
+		}
 	}
 	catch (const ibCoreException& error) {
 		response.SetValue(qc::Error, ibString(error.GetErrorDescription()));
 		return;
 	}
 
-	const wxString verdict = VerdictOf(package);
-	if (!verdict.IsEmpty())
-		response.SetValue(qc::Error, ibString(verdict));
-
-	if (request.FindField(qc::Statement) == nullptr)
-		return;
-	const s32 branch = request.FindField(qc::Branch) != nullptr ? request.GetValue<s32>(qc::Branch) : -1;
-	ibQuerySelect* const select = SelectAt(package, request.GetValue<s32>(qc::Statement), branch);
-	if (select == nullptr)
-		return;
-
-	std::vector<ibDataValue> ungrouped;
-	std::vector<ibQueryAstExprPtr> keys;
-	for (const ibQueryAstExprPtr& missing : ibQueryLowering::UngroupedProjections(*select, std::map<wxString, ibValue>())) {
-		if (!missing)
-			continue;
-		const wxString text = ibRenderQueryExpr(*missing);
-		ungrouped.push_back(ibDataValue::String(text));
-		keys.push_back(ibQueryColumnFromPath(text));   // as the window adds them (OnAddGrouping)
-	}
-	response.AddField(qc::Ungrouped, ibDataValue::Array(std::move(ungrouped)));
-	if (keys.empty())
-		return;
-
-	for (ibQueryAstExprPtr& key : keys)
-		select->m_groupBy.push_back(std::move(key));
-	ibDataNode& completed = response.Child(qc::Completed);
-	completed.SetValue(qc::Text, ibString(ibRenderQueryPackage(package)));
-	const wxString completedVerdict = VerdictOf(package);
-	if (!completedVerdict.IsEmpty())
-		completed.SetValue(qc::Error, ibString(completedVerdict));
+	std::vector<ibDataValue> projections;
+	const ibQuerySelect* const select =
+		SelectAt(package, request.GetValue<s32>(qc::Statement), request.GetValue<s32>(qc::UnionBranch));
+	if (select != nullptr)
+		for (const ibQueryAstExprPtr& missing : ibQueryLowering::UngroupedProjections(*select, std::map<wxString, ibValue>()))
+			if (missing)
+				projections.push_back(ibDataValue::String(ibRenderQueryExpr(*missing)));
+	response.AddField(qc::UngroupedProjections, ibDataValue::Array(std::move(projections)));
 }
 
 } // namespace
