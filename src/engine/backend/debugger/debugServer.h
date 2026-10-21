@@ -209,8 +209,8 @@ protected:
 
 	//special functions:
 	// Both take the parked frame explicitly — sourced from the per-session
-	// dbg->m_runContext at the call site (worker owns it in DoDebugLoop; the
-	// SetStack handler resolves + holds dbg->m_mutex). No server-global mirror.
+	// dbg.m_runContext at the call site (worker owns it in DoDebugLoop; the
+	// SetStack handler resolves + holds dbg.m_mutex). No server-global mirror.
 	inline void SendExpressions(ibRunContext* runContext);
 	inline void SendLocalVariables(ibRunContext* runContext);
 	inline void SendStack();

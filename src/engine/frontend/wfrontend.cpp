@@ -1008,9 +1008,7 @@ WFRONTEND_API bool wfrontendSessionPaused(const std::string& sessionId)
 	if (reg == nullptr) return false;
 	auto sess = reg->Find(wxString::FromUTF8(sessionId.c_str())).Share();
 	if (!sess) return false;
-	auto* d = sess->Debug();
-	if (d == nullptr) return false;
-	return d->m_debugLoop.load(std::memory_order_acquire);
+	return sess->Debug().m_debugLoop.load(std::memory_order_acquire);
 }
 
 WFRONTEND_API bool wfrontendHasUsers()

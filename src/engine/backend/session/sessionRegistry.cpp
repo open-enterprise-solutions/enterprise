@@ -131,12 +131,6 @@ void ibSessionRegistry::InstallUser(ibSession* s,
 	s->SetSessionRawPassword(rawPassword);
 }
 
-void ibSessionRegistry::EnableDebugForSession(ibSession* s)
-{
-	if (s == nullptr) return;
-	s->EnableDebug();
-}
-
 ibSessionRegistry::~ibSessionRegistry()
 {
 	// Best-effort — in normal shutdown Stop() should have been called via

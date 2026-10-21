@@ -434,11 +434,10 @@ public:
 
 	// ---- Session-state mutators (single-authority entry points) ----
 	// Registry is the only mutator of ibSession internals. Auth flow
-	// (appData / login dialog) and debug bring-up route through here
-	// instead of poking the session directly — keeps SetUserInfo /
-	// SetSessionRawPassword / EnableDebug under one friend declaration
-	// (friend class ibSessionRegistry) and out of the public ibSession
-	// surface.
+	// (appData / login dialog) routes through here instead of poking the
+	// session directly — keeps SetUserInfo / SetSessionRawPassword under
+	// one friend declaration (friend class ibSessionRegistry) and out of
+	// the public ibSession surface.
 
 	// Install authenticated user identity on a session. Writes the user
 	// info struct + caches the plain-text password for Designer "Start
@@ -448,11 +447,6 @@ public:
 	void InstallUser(ibSession* s,
 	                 const ibUserInfo& info,
 	                 const wxString& rawPassword);
-
-	// Allocate the per-session debug slot. Called from appData's
-	// OnAuthenticated listener when the process started with --debug.
-	// Idempotent — second call is a no-op.
-	void EnableDebugForSession(ibSession* s);
 
 	// ---- Fallback session ----
 	// Returned by Current() when the calling thread is unbound. The

@@ -61,7 +61,8 @@ ibFileBase* ibFileBaseOpen(const std::string& request, wxString& error)
 	const auto create = where.find("Create");
 	opening.m_create = create != where.end() && create->is_boolean() && create->get<bool>();
 	// THE DEBUG SERVER — as enterprise.exe's `--debug`: it comes up with the base's configuration
-	// (ibMetaDataConfiguration::OnInitialize), and every session after it is debuggable.
+	// (ibMetaDataConfiguration::OnInitialize) and listens from the start. Without it the client turns it on
+	// later; a session stops for it either way (ibSession::Debug — made with the session).
 	const auto debug = where.find("Debug");
 	if (debug != where.end() && debug->is_boolean() && debug->get<bool>())
 		opening.m_loadMetadataFlags = _app_start_create_debug_server_flag;

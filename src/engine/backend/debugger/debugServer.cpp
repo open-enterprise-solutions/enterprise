@@ -91,20 +91,19 @@ std::shared_ptr<ibSession> ParkedSession(const wxString& sessionGuid)
 bool IsSessionParked(const wxString& sessionGuid)
 {
 	auto sess = ParkedSession(sessionGuid);
-	auto* dbg = sess ? sess->Debug() : nullptr;
-	return dbg != nullptr && dbg->m_debugLoop.load(std::memory_order_acquire);
+	return sess && sess->Debug().m_debugLoop.load(std::memory_order_acquire);
 }
 
 bool EvalInParkedSession(const wxString& sessionGuid, const wxString& expr, ibValue& vResult, bool compileBlock,
 	ibEvalMode evalMode = eval_watch)
 {
 	auto sess = ParkedSession(sessionGuid);
-	auto* dbg = sess ? sess->Debug() : nullptr;
-	if (dbg == nullptr)
+	if (!sess)
 		return false;
 
-	std::lock_guard<std::mutex> lock(dbg->m_mutex);
-	if (!dbg->m_debugLoop.load(std::memory_order_acquire) || dbg->m_runContext == nullptr)
+	ibSession::ibDebugSession& dbg = sess->Debug();
+	std::lock_guard<std::mutex> lock(dbg.m_mutex);
+	if (!dbg.m_debugLoop.load(std::memory_order_acquire) || dbg.m_runContext == nullptr)
 		return false;
 
 	// ⭐ AND STAND IN THAT SESSION WHILE IT IS WORKED OUT. Evaluate does not take the frame alone — it
@@ -115,7 +114,7 @@ bool EvalInParkedSession(const wxString& sessionGuid, const wxString& expr, ibVa
 	// person's message window, a write refused or allowed by the wrong rule.
 	ibSessionScope scope(sess.get());
 
-	return ibProcUnit::Evaluate(expr, dbg->m_runContext, vResult, compileBlock, evalMode);
+	return ibProcUnit::Evaluate(expr, dbg.m_runContext, vResult, compileBlock, evalMode);
 }
 } // namespace
 
@@ -284,11 +283,10 @@ void ibDebuggerServer::WakeDebugSession(const wxString& sessionGuid)
 	auto sess = target.Share();
 	if (!sess) return;
 
-	auto* d = sess->Debug();
-	if (d == nullptr) return;
-	d->m_debugLoop = false;
-	std::lock_guard<std::mutex> lk(d->m_mutex);
-	d->m_cv.notify_all();
+	ibSession::ibDebugSession& d = sess->Debug();
+	d.m_debugLoop = false;
+	std::lock_guard<std::mutex> lk(d.m_mutex);
+	d.m_cv.notify_all();
 }
 
 void ibDebuggerServer::WakeAllDebugSessions()
@@ -300,11 +298,10 @@ void ibDebuggerServer::WakeAllDebugSessions()
 	for (auto& [tid, s] : ibSession::SnapshotByThread()) {
 		(void)tid;
 		if (s == nullptr) continue;
-		auto* d = s->Debug();
-		if (d == nullptr) continue;
-		d->m_debugLoop = false;
-		std::lock_guard<std::mutex> lk(d->m_mutex);
-		d->m_cv.notify_all();
+		ibSession::ibDebugSession& d = s->Debug();
+		d.m_debugLoop = false;
+		std::lock_guard<std::mutex> lk(d.m_mutex);
+		d.m_cv.notify_all();
 	}
 }
 
@@ -313,11 +310,10 @@ bool ibDebuggerServer::IsDebugLooped() const
 	// Per-session park check. On the debug-server thread ibSession::Current()
 	// redirects to the front-of-queue parked session (session registry's
 	// debug queue), which is the one any incoming Eval/Step command targets.
-	// Advisory only — the eval path re-checks under dbg->m_mutex in
+	// Advisory only — the eval path re-checks under dbg.m_mutex in
 	// EvalInParkedSession; the step path re-routes via WakeDebugSession(sid).
 	ibSession* sess = ibSession::Current();
-	auto* dbg = sess ? sess->Debug() : nullptr;
-	return dbg != nullptr && dbg->m_debugLoop.load(std::memory_order_acquire);
+	return sess != nullptr && sess->Debug().m_debugLoop.load(std::memory_order_acquire);
 }
 
 void ibDebuggerServer::DoDebugLoop(const wxString& strDocPath, const wxString& strModuleName, int numLine, ibRunContext* runContext)
@@ -337,14 +333,14 @@ void ibDebuggerServer::DoDebugLoop(const wxString& strDocPath, const wxString& s
 	// one we'll park on (so concurrent web sessions don't share a global
 	// CV / m_runContext).
 	ibSession* sess = ibSession::Current();
-	ibSession::ibDebugSession* dbg = sess ? sess->Debug() : nullptr;
-	if (dbg == nullptr) {
-		// Session not in debug mode — bail without touching server-global
+	if (sess == nullptr) {
+		// A run no session stands behind has nowhere to park — bail without touching server-global
 		// state. ResetDebugger here would clear breakpoints for everyone.
 		return;
 	}
+	ibSession::ibDebugSession& dbg = sess->Debug();
 
-	dbg->m_runContext = runContext;
+	dbg.m_runContext = runContext;
 
 	// Snapshot the thread pointer once — ShutdownServer nulls m_socketConnectionThread
 	// from another thread and we must not deref the member twice with a concurrent null.
@@ -382,7 +378,7 @@ void ibDebuggerServer::DoDebugLoop(const wxString& strDocPath, const wxString& s
 	SendStack();
 
 	//start debug loop
-	dbg->m_debugLoop = true;
+	dbg.m_debugLoop = true;
 	m_bDebugStopLine = false;
 
 	// Register this session in the registry's debug queue so debug-thread
@@ -390,7 +386,7 @@ void ibDebuggerServer::DoDebugLoop(const wxString& strDocPath, const wxString& s
 	// Multiple sessions can be parked simultaneously — they rotate as
 	// each one resumes and is removed from the queue. Skip when the
 	// registry is gone (post-teardown debug step) — the loop below will
-	// just exit on dbg->m_debugLoop being false anyway.
+	// just exit on dbg.m_debugLoop being false anyway.
 	if (auto* reg = ibApplicationInstance::GetSessionRegistry(GetApplicationInstance()))
 		reg->EnterDebugLoop(sess);
 
@@ -409,10 +405,10 @@ void ibDebuggerServer::DoDebugLoop(const wxString& strDocPath, const wxString& s
 	// wake (WakeAllDebugSessions) reaches the sessions bound to a thread, and a desktop's stopped in its start
 	// (BeforeStart, inside its window's Show) is not one: a designer closed while it stood there left it parked
 	// for good, its window never shown and no designer able to attach (2026-10-21).
-	while (dbg->m_debugLoop.load(std::memory_order_acquire) && m_bUseDebug.load()) {
-		std::unique_lock<std::mutex> lock(dbg->m_mutex);
-		dbg->m_cv.wait_for(lock, std::chrono::milliseconds(250), [this, dbg]() {
-			return !dbg->m_debugLoop.load(std::memory_order_acquire) || !m_bUseDebug.load();
+	while (dbg.m_debugLoop.load(std::memory_order_acquire) && m_bUseDebug.load()) {
+		std::unique_lock<std::mutex> lock(dbg.m_mutex);
+		dbg.m_cv.wait_for(lock, std::chrono::milliseconds(250), [this, &dbg]() {
+			return !dbg.m_debugLoop.load(std::memory_order_acquire) || !m_bUseDebug.load();
 		});
 	}
 
@@ -461,9 +457,9 @@ void ibDebuggerServer::DoDebugLoop(const wxString& strDocPath, const wxString& s
 	// consistent state. Prevents the 0xdd use-after-free hit expanding
 	// `thisForm` as the worker resumed.
 	{
-		std::lock_guard<std::mutex> lock(dbg->m_mutex);
-		dbg->m_debugLoop = false;
-		dbg->m_runContext = nullptr;
+		std::lock_guard<std::mutex> lock(dbg.m_mutex);
+		dbg.m_debugLoop = false;
+		dbg.m_runContext = nullptr;
 	}
 }
 
@@ -1751,11 +1747,11 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 			// the gate a SetStack racing a force-exit / destroy resume would
 			// publish a frame the worker is about to unwind, and the
 			// SendExpressions eval below would dereference it (0xdd UAF).
-			auto* dbg = sess ? sess->Debug() : nullptr;
-			if (dbg != nullptr) {
-				std::lock_guard<std::mutex> lock(dbg->m_mutex);
-				if (dbg->m_debugLoop.load(std::memory_order_acquire)) {
-					dbg->m_runContext = newRunContext;
+			if (sess) {
+				ibSession::ibDebugSession& dbg = sess->Debug();
+				std::lock_guard<std::mutex> lock(dbg.m_mutex);
+				if (dbg.m_debugLoop.load(std::memory_order_acquire)) {
+					dbg.m_runContext = newRunContext;
 					// Send under the per-session lock against the just-published
 					// frame — the worker is parked, so newRunContext stays live
 					// for the duration of these sends.

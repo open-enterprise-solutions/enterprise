@@ -450,12 +450,6 @@ void ibApplicationInstance::WireSessionEvents()
 		// not a failure: the defaults stand, and the defaults are off.
 		if (ownSession && m_mcpServer) m_mcpServer->LoadSettings(s);
 
-		// Enable per-session debug context iff this process was started
-		// with --debug. Marks the session as debugged so ibProcUnit's
-		// breakpoint dispatch + DoDebugLoop's CV wait route through the
-		// session's own state instead of the legacy server-singleton.
-		if ((m_loadMetadataFlags & _app_start_create_debug_server_flag) != 0)
-			registry->EnableDebugForSession(s);
 		if (s->GetMetaData() != nullptr) {
 			// Root mm is allocated by ibSession::EnsureRoot (called by the registry before this listener) for
 			// runtime sessions; the Designer has no root mm (it uses the lightweight designer manager in the
