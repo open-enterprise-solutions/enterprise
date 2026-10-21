@@ -158,7 +158,7 @@ void ibFrontendMainFrameDesigner::EnsureHelpPane()
 	// The corpus speaks the application's language — the desktop's process locale, here the server's (its About).
 	ibProtocolNode params, answer;
 	params.SetValue(ibProtocol::ibSchema::Schema, static_cast<long long>(ibProtocol::ibSchema::ibKind::About));
-	const wxString locale = Call(ibProtocol::ibMethod::Schema, params, answer) ? answer.GetString(ibProtocol::ibSchema::ibAbout::Locale) : wxString();
+	const wxString locale = Call(ibProtocol::ibMethod::Schema, params, answer) ? answer.GetString(ibProtocol::ibSchema::ibAbout::Locale) : ibString();
 
 	m_helpPane = new ibHelpPaneView(this, locale);
 

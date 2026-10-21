@@ -45,6 +45,7 @@
 
 #include <wx/string.h>
 
+#include "core/fstring.h"           // ibString — a call's text and its answer, as the transport holds them
 #include "core/mcp/mcpSettings.h"   // ibMcpSettings — what a person set, the value a settings page hands over
 
 class ibSession;
@@ -250,8 +251,8 @@ private:
 	// an HTTP number. It also spares the caller from reading its own output back:
 	// searching the emitted JSON for `"code":-32020` is a guess about the writer's
 	// spacing, and it was wrong the first time it was tried.
-	wxString Answer(const wxString& request) { return Answer(request, ibMcpWireHeaders(), nullptr); }
-	wxString Answer(const wxString& request, const ibMcpWireHeaders& headers, int* outErrorCode);
+	ibString Answer(const ibString& request) { return Answer(request, ibMcpWireHeaders(), nullptr); }
+	ibString Answer(const ibString& request, const ibMcpWireHeaders& headers, int* outErrorCode);
 	friend class ibMcpListener;
 
 	void Publish(const wxString& method, const wxString& request, const wxString& answer);

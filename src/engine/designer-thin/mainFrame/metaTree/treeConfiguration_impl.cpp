@@ -241,7 +241,7 @@ bool ibMetaTreeBase::IsFound(const ibProtocolNode& row) const
 		return true;
 
 	if (row.GetId() > 0) {
-		const wxString needle = m_search.Lower();
+		const ibString needle = m_search.Lower();
 		if (row.GetString(ibProtocol::ibSchema::ibMetaData::Title).Lower().Find(needle) != wxNOT_FOUND
 			|| row.GetString(ibProtocol::ibSchema::ibMetaData::Synonym).Lower().Find(needle) != wxNOT_FOUND)
 			return true;

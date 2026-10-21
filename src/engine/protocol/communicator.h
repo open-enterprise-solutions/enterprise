@@ -5,7 +5,6 @@
 #include <map>
 #include <memory>
 #include <mutex>
-#include <string>
 #include <vector>
 
 #include "connection.h"
@@ -65,7 +64,7 @@ public:
 	bool Debug(const ibProtocolNode& params, ibProtocolNode& result, ibProtocol::ibRefusal& refusal, wxString& error);
 
 	bool            IsLoggedIn() const { return !m_client.IsEmpty(); }
-	const wxString& GetClient() const { return m_client; }
+	const ibString& GetClient() const { return m_client; }
 	int             GetProtocol() const { return m_protocol; }
 
 	// The frame drawn now, and its number — the last answer's.
@@ -78,9 +77,10 @@ private:
 		ibProtocol::ibRefusal& refusal, wxString& error);
 	// The socket dropped and the server offered to resume: open it again, login {Token} under a new id, and send
 	// `sent` again under the id it already carries. False — the session is gone, or this connection cannot return.
-	bool Resume(const std::string& sent, std::string& answer, ibProtocol::ibRefusal& refusal, wxString& error);
-	// The answer's frame, whole or as a patch, taken into the one kept; an answer that is no frame leaves it.
-	void Take(const ibProtocolNode& answer);
+	bool Resume(const ibString& sent, ibString& answer, ibProtocol::ibRefusal& refusal, wxString& error);
+	// The answer's frame, whole or as a patch, taken into the one kept; an answer that is no frame leaves it. A whole one
+	// is taken OUT of the answer — what it carries beside the frame stays in it.
+	void Take(ibProtocolNode& answer);
 	// The client is gone (logged out, or its session is): nothing of it is kept.
 	void Forget();
 	// debug {…} on the debugger's connection, under m_debugMutex.
@@ -92,8 +92,8 @@ private:
 	// id already used, including across the login {Token} that brings the session back.
 	long long                             m_lastId = 0;
 
-	wxString       m_client;
-	wxString       m_token;    // the bearer, kept here. The server stores only its hash.
+	ibString       m_client;
+	ibString       m_token;    // the bearer, kept here. The server stores only its hash.
 	bool           m_resume = false;   // the server listed `resume` — a dropped socket is asked for again
 	ibProtocol::ibLogin::ibMode m_mode = ibProtocol::ibLogin::ibMode::Runtime;
 	std::atomic<int> m_protocol{ 1 };   // read by Hold on the window's thread while a fetch may be in a call
@@ -112,7 +112,7 @@ private:
 	// their own: a step does not wait for this connection's call. Taken after m_mutex, never before it. Last: it goes
 	// before the connection it was opened beside.
 	std::mutex                            m_debugMutex;
-	wxString                              m_debugClient;
+	ibString                              m_debugClient;
 	long long                             m_debugLastId = 0;
 	std::unique_ptr<ibProtocolConnection> m_debugConnection;
 };

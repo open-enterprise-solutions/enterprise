@@ -15,9 +15,6 @@
 #include "backend/appHost.h"                 // ClientConnections — how many connections at once
 #include "backend/server/serverConfig.h"     // ibAppServerSay — the line a person watching the console sees
 
-#include <wx/mstream.h>
-#include <wx/zstream.h>
-
 namespace {
 
 // The furthest a chosen port goes from where it started looking.
@@ -32,56 +29,29 @@ constexpr std::chrono::seconds kLoginWithin(15);
 // How often the round looks for a socket past that mark.
 constexpr std::chrono::seconds kLoginRoundEvery(1);
 
-// ⭐ THE TRANSPORT DEFLATES, when the client asked for it as it connected (?compress=deflate): an answer of some size
-// goes as a BINARY message holding it deflated — raw, RFC 1951, what a browser's DecompressionStream("deflate-raw")
-// reads — and a small one as text, as before. The protocol never knows: the same JSON either way. A frame is text
-// that repeats itself (names, ids, the same fields on every control) and shrinks several times over.
-constexpr std::size_t kDeflateFrom = 1024;
-
-void SendAnswer(ibWebSocket& socket, std::string text, bool deflate)
-{
-	if (!deflate || text.size() < kDeflateFrom) {
-		socket.Send(std::move(text));
-		return;
-	}
-	wxMemoryOutputStream packed;
-	{
-		wxZlibOutputStream zip(packed, wxZ_DEFAULT_COMPRESSION, wxZLIB_NO_HEADER);
-		zip.Write(text.data(), text.size());
-		if (!zip.Close()) {
-			socket.Send(std::move(text));   // not packed — sent as it is
-			return;
-		}
-	}
-	const wxStreamBuffer* const buffer = packed.GetOutputStreamBuffer();
-	socket.SendBinary(std::string(static_cast<const char*>(buffer->GetBufferStart()),
-		static_cast<std::size_t>(packed.GetLength())));
-}
-
 // A CLIENT'S CONNECTION TO A BASE THIS SERVER HOLDS — the connection its clients log in through, told what the base
-// says to them unasked, and they leave with it.
+// says to them unasked, and they leave with it. The text is the engine's both ways: the socket reads it and writes it
+// (and deflates it, when the client asked).
 class ibHostRelay : public ibWebSocketHandler {
 public:
 
 	ibHostRelay(ibClientHost& host, std::shared_ptr<ibWebSocket> socket) :
-		m_host(host), m_socket(std::move(socket)), m_address(wxString::FromUTF8(m_socket->GetRequest().m_address)),
-		m_deflate(m_socket->GetRequest().GetParameter("compress") == "deflate")
+		m_host(host), m_socket(std::move(socket))
 	{
 		// WHAT THE SERVER SAYS UNASKED goes out on it too — a notification from a session's thread (a client's frame
 		// changed by itself), between the answers. The socket queues both in order, and once it closed sends nothing.
 		const std::weak_ptr<ibWebSocket> told = m_socket;
-		const bool deflate = m_deflate;
-		m_host.SetNotifier(this, [told, deflate](const wxString& text) {
+		m_host.SetNotifier(this, [told](const ibString& text) {
 			if (const std::shared_ptr<ibWebSocket> socket = told.lock())
-				SendAnswer(*socket, std::string(text.utf8_str()), deflate);
+				socket->Send(text);
 		});
 	}
 
-	virtual void OnMessage(std::string text) override
+	virtual void OnMessage(const ibString& text) override
 	{
-		const wxString response = m_host.Call(wxString::FromUTF8(text), this, m_address);
+		const ibString response = m_host.Call(text, this, m_socket->GetRequest().m_address);
 		if (!response.IsEmpty())
-			SendAnswer(*m_socket, std::string(response.utf8_str()), m_deflate);
+			m_socket->Send(response);
 	}
 
 	virtual void OnBinary(std::string) override
@@ -101,8 +71,6 @@ public:
 private:
 	ibClientHost&                m_host;
 	std::shared_ptr<ibWebSocket> m_socket;
-	wxString                     m_address;
-	bool                         m_deflate;
 };
 
 } // namespace
@@ -180,13 +148,12 @@ bool ibClientListener::Start(const wxString& host, unsigned short& port, bool ch
 		const std::string path = "/" + std::string(entry.first.utf8_str()) + "/client";
 
 		m_server->Post(path, [clientHost](const ibHttpRequest& request, ibHttpResponder respond) {
-			const wxString response = clientHost->Call(wxString::FromUTF8(request.m_body), nullptr,
-				wxString::FromUTF8(request.m_address));
+			const ibString response = clientHost->Call(request.GetText(), nullptr, request.m_address);
 			ibHttpResponse answer;
 			if (response.IsEmpty())
 				answer.m_status = 204;   // a notification — no answer wanted
 			else
-				answer.SetContent(std::string(response.utf8_str()), "application/json");
+				answer.SetText(response, "application/json");
 			respond(std::move(answer));
 		});
 

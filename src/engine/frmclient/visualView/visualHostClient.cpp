@@ -287,9 +287,9 @@ void ibVisualHostClient::Send(long long controlId, ibProtocol::ibEvent::ibKind e
 
 	// What it says, as it says it — a sheet handed over whole by its size: written out, it was the sheet again in the
 	// journal at every edit.
-	const std::string said = args.IsNode() ? args.Write() : std::string("{}");
+	const ibString said = args.IsNode() ? args.Write() : ibString(wxT("{}"));
 	ibJournalInfo(wxT("event"), wxT("%d on %lld: %s"), static_cast<int>(event), controlId,
-		said.size() <= 1024 ? wxString::FromUTF8(said) : wxString::Format(wxT("%zu bytes"), said.size()));
+		said.length() <= 1024 ? said : ibString::Format(wxT("%zu characters"), said.length()));
 	m_mainFrame.Post(ibProtocol::ibMethod::Event, EventOf(controlId, event, args));
 }
 

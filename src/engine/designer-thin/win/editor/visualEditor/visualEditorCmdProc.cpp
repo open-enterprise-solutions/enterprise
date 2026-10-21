@@ -9,7 +9,7 @@
 #include <set>
 
 #include "designer-thin/docManager/templates/docViewModuleEditor.h"   // ibModuleEditDocument — Modify, Fetch, Post
-#include "frmclient/backend/serialize/dataProtocol.h"   // ibWriteProtocolNode — a property's value into the control's node
+#include "frmclient/backend/serialize/dataProtocol.h"   // ibReadProtocolValue, ibWriteProtocolNode — a control's values
 #include "frmclient/backend/propertyManager/property/propertySerializable.h"   // a layer's properties — a row's each
 #include "frmclient/mainFrame/objinspect/objinspect.h"
 
@@ -89,7 +89,7 @@ void SetChildren(ibProtocolNode node, const std::vector<ibProtocolNode>& childre
 	for (const ibProtocolNode& child : copies) {
 		ibProtocolNode added = node.AddChild();
 		for (const auto& [name, entry] : child.Entries())
-			added.SetValue(name.c_str(), entry);
+			added.SetValue(name, entry);
 	}
 }
 
@@ -205,35 +205,44 @@ protected:
 	virtual void DoRestore() override;
 
 private:
+	// The property set to that value, the control drawn as it says — both found again by the control's id and the
+	// property's name: the rows the server answers make the control's properties anew (UpdateControl), and a pointer
+	// kept from the edit before pointed at one gone.
+	void SetValue(const wxVariant& value);
+
 	ibVisualEditorNotebook::ibVisualEditor* m_visualEditor;
 
-	ibProperty* m_property;
+	long long m_controlId;
+	wxString m_name;
 	wxVariant m_oldValue, m_newValue;
 };
 
 ibVisualEditorModifyPropertyCmd::ibVisualEditorModifyPropertyCmd(ibVisualEditorNotebook::ibVisualEditor* visualEditor, ibProperty* prop, const wxVariant& oldValue, const wxVariant& newValue) : m_visualEditor(visualEditor),
-m_property(prop), m_oldValue(oldValue), m_newValue(newValue)
+m_controlId(dynamic_cast<ibValueFrame*>(prop->GetPropertyObject())->GetControlID()), m_name(prop->GetName()),
+m_oldValue(oldValue), m_newValue(newValue)
 {
 }
 
 void ibVisualEditorModifyPropertyCmd::DoExecute()
 {
-	// Get the ibValueFrame from the event
-	ibValueFrame* control =
-		dynamic_cast<ibValueFrame*>(m_property->GetPropertyObject());
-
-	m_property->SetValue(m_newValue);
-	m_visualEditor->UpdateControl(control);
-	m_visualEditor->RefreshCurrentElement();
+	SetValue(m_newValue);
 }
 
 void ibVisualEditorModifyPropertyCmd::DoRestore()
 {
-	// Get the ibValueFrame from the event
-	ibValueFrame* control =
-		dynamic_cast<ibValueFrame*>(m_property->GetPropertyObject());
+	SetValue(m_oldValue);
+}
 
-	m_property->SetValue(m_oldValue);
+void ibVisualEditorModifyPropertyCmd::SetValue(const wxVariant& value)
+{
+	ibValueForm* const valueForm = m_visualEditor->GetValueForm();
+	ibValueFrame* const control = valueForm == nullptr ? nullptr
+		: m_controlId == valueForm->GetControlID() ? valueForm : valueForm->FindControlByID(m_controlId);
+	ibProperty* const property = control != nullptr ? control->GetProperty(m_name) : nullptr;
+	if (property == nullptr)
+		return;
+
+	property->SetValue(value);
 	m_visualEditor->UpdateControl(control);
 	m_visualEditor->RefreshCurrentElement();
 }
@@ -610,9 +619,10 @@ void ibVisualEditorNotebook::ibVisualEditor::ModifyProperty(ibProperty* prop, co
 	if (control == nullptr || oldValue == newValue)
 		return;
 
+	// The tree told first: the command makes the control's properties anew from the server's rows (UpdateControl).
 	CallAfter([this, prop, oldValue, newValue]() {
-		Execute(new ibVisualEditorModifyPropertyCmd(this, prop, oldValue, newValue));
 		NotifyPropertyModified(prop);
+		Execute(new ibVisualEditorModifyPropertyCmd(this, prop, oldValue, newValue));
 	});
 }
 
@@ -634,20 +644,14 @@ void ibVisualEditorNotebook::ibVisualEditor::UpdateControl(ibValueFrame* control
 		step = step.AddChild();
 		step.SetValue(ibProtocol::ibNode::Id, id);
 	}
-	ibProtocolNode values = nodes.back().Clone();
-	values.Remove(ibProtocol::ibNode::Children);
-	ibDataNode held;
-	ibReadProtocolNode(values, held);
 	ibDataNode entries;
 	for (unsigned int idx = 0; idx < control->GetPropertyCount(); idx++) {
 		const ibProperty* const property = control->GetPropertyByIndex(idx);
 		ibDataValue value;
 		if (!property->CopyNodeValue(value))
 			continue;
-		const ibDataValue* entry = held.FindProperty(property->GetName());
-		if (entry == nullptr)
-			entry = held.FindField(property->GetName());
-		if (entry != nullptr ? *entry == value : value.IsEmpty())
+		ibDataValue held;
+		if (ibReadProtocolValue(nodes.back(), property->GetName(), held) ? held == value : value.IsEmpty())
 			continue;
 		step.AddItem(ibProtocol::ibNode::Removed, property->GetName());
 		if (!value.IsEmpty())
@@ -669,6 +673,14 @@ void ibVisualEditorNotebook::ibVisualEditor::UpdateControl(ibValueFrame* control
 		PatchState(answer.FindChild(ibProtocol::ibView::ibFormDesigner::Node), step);
 		edited = m_formNode.Clone();
 		edited.Apply(patch);
+
+		// …and its rows as the server wrote them after the edit: a value's words are the server's to say — a source
+		// picked reads as its name only then (it read "<not selected>", 2026-10-21). The control receives them anew.
+		for (const ibProtocolNode& described : answer.FindChild(ibProtocol::ibView::ibFormDesigner::Controls).Children())
+			m_rows[described.GetInt(ibProtocol::ibView::ibFormDesigner::Control)] = described;
+		const auto found = m_rows.find(control->GetControlID());
+		if (found != m_rows.end())
+			control->Receive(found->second);
 	}
 
 	Draw(edited, m_trees, patch, m_selected);
@@ -819,7 +831,8 @@ void ibVisualEditorNotebook::ibVisualEditor::CopyEntry(const char* owner, long l
 void ibVisualEditorNotebook::ibVisualEditor::CopyEntry(const ibProtocolNode& entry, const wxString& format,
 	const wxString& name)
 {
-	const std::string text = entry.Write();
+	// The clipboard's are bytes — UTF-8, made here once, and read back once in PasteEntry.
+	const std::string text = entry.Write().ToUtf8();
 	if (wxTheClipboard->Open()) {
 		wxDataObjectComposite* const composite = new wxDataObjectComposite;
 		wxCustomDataObject* const data = new wxCustomDataObject(wxDataFormat(format));
@@ -840,7 +853,7 @@ ibProtocolNode ibVisualEditorNotebook::ibVisualEditor::PasteEntry(const wxString
 	if (wxTheClipboard->IsSupported(dataFormat)) {
 		wxCustomDataObject data(dataFormat);
 		if (wxTheClipboard->GetData(data))
-			ibProtocolNode::Read(std::string(static_cast<const char*>(data.GetData()), data.GetSize()), copied);
+			ibProtocolNode::Read(ibString::FromUTF8(static_cast<const char*>(data.GetData()), data.GetSize()), copied);
 	}
 	wxTheClipboard->Close();
 	return copied;

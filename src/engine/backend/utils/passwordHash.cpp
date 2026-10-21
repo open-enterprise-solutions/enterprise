@@ -4,9 +4,10 @@
 
 #include "passwordHash.hpp"
 #include "core/crypto/sha256.hpp"
-#include "md5.hpp"
+#include "core/fstring.h"
+#include "core/utils/base64.h"
+#include "core/utils/md5.hpp"
 
-#include <wx/base64.h>
 #include <wx/string.h>
 
 #include <cstdint>
@@ -184,8 +185,9 @@ wxString ibPasswordHash::Hash(const wxString& password)
 	Pbkdf2HmacSha256(reinterpret_cast<const uint8_t*>(pwd_utf8.data()), pwd_utf8.length(),
 	                 salt, kSaltLen, kIterations, derived, kKeyLen);
 
-	const wxString saltB64 = wxBase64Encode(salt, kSaltLen);
-	const wxString hashB64 = wxBase64Encode(derived, kKeyLen);
+	ibString saltB64, hashB64;
+	ibBase64::Append(saltB64, salt, kSaltLen);
+	ibBase64::Append(hashB64, derived, kKeyLen);
 	return wxString::Format("%s%u$%s$%s", kPrefix, kIterations, saltB64, hashB64);
 }
 
@@ -229,9 +231,9 @@ bool ibPasswordHash::Verify(const wxString& password, const wxString& storedHash
 	if (!iterStr.ToULong(&iterations) || iterations == 0 || iterations > 10000000u)
 		return false;
 
-	const wxMemoryBuffer salt = wxBase64Decode(saltB64);
-	const wxMemoryBuffer stored = wxBase64Decode(hashB64);
-	if (salt.GetDataLen() == 0 || stored.GetDataLen() == 0)
+	wxMemoryBuffer salt, stored;
+	if (!ibBase64::Read(saltB64.wc_str(), saltB64.length(), salt) || !ibBase64::Read(hashB64.wc_str(), hashB64.length(), stored)
+		|| salt.GetDataLen() == 0 || stored.GetDataLen() == 0)
 		return false;
 
 	const wxScopedCharBuffer pwd_utf8 = password.utf8_str();

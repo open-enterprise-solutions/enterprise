@@ -29,7 +29,7 @@ wxDllType Library(wxString& path)
 
 } // namespace
 
-bool ibProtocolFileBase::Open(const std::string& request, wxString& error)
+bool ibProtocolFileBase::Open(const ibString& request, wxString& error)
 {
 	Close();
 
@@ -80,8 +80,8 @@ ibProtocolFileBase::~ibProtocolFileBase()
 	Close();
 }
 
-bool ibProtocolFileBase::Call(const std::string& request, const void* connection, const wxString& address,
-	std::string& answer, wxString& error) const
+bool ibProtocolFileBase::Call(const ibString& request, const void* connection, const ibString& address,
+	ibString& answer, wxString& error) const
 {
 	if (m_base == nullptr || m_call == nullptr) {
 		error = wxT("no base is open");
@@ -90,7 +90,7 @@ bool ibProtocolFileBase::Call(const std::string& request, const void* connection
 	return m_call(m_base, request, connection, address, answer, error);
 }
 
-void ibProtocolFileBase::Listen(const void* connection, std::function<void(const std::string& text)> notified) const
+void ibProtocolFileBase::Listen(const void* connection, std::function<void(const ibString& text)> notified) const
 {
 	if (m_base != nullptr && m_listen != nullptr)
 		m_listen(m_base, connection, std::move(notified));
@@ -105,10 +105,10 @@ void ibProtocolFileBase::Disconnect(const void* connection) const
 namespace {
 
 // A request to the base, by this connection — the one door both connections send through.
-bool ExchangeWith(const ibProtocolFileBase& base, const void* connection, const std::string& request, std::string& answer,
+bool ExchangeWith(const ibProtocolFileBase& base, const void* connection, const ibString& request, ibString& answer,
 	ibProtocol::ibRefusal& refusal, wxString& error)
 {
-	if (!base.Call(request, connection, wxEmptyString, answer, error)) {
+	if (!base.Call(request, connection, ibString(), answer, error)) {
 		refusal = ibProtocol::ibRefusal::Failed;
 		if (error.IsEmpty())
 			error = wxT("no base is open");
@@ -124,12 +124,12 @@ public:
 	explicit ibProtocolConnectionFileChannel(std::shared_ptr<ibProtocolFileBase> base) : m_base(std::move(base)) {}
 	virtual ~ibProtocolConnectionFileChannel() { m_base->Disconnect(this); }
 
-	virtual bool Exchange(const std::string& request, std::string& answer,
+	virtual bool Exchange(const ibString& request, ibString& answer,
 		ibProtocol::ibRefusal& refusal, wxString& error) override
 	{
 		return ExchangeWith(*m_base, this, request, answer, refusal, error);
 	}
-	virtual void Listen(std::function<void(const std::string& text)> notified) override
+	virtual void Listen(std::function<void(const ibString& text)> notified) override
 	{
 		m_base->Listen(this, std::move(notified));
 	}
@@ -140,7 +140,7 @@ private:
 
 } // namespace
 
-bool ibProtocolConnectionFile::Open(const std::string& request, wxString& error)
+bool ibProtocolConnectionFile::Open(const ibString& request, wxString& error)
 {
 	return m_base->Open(request, error);
 }
@@ -155,13 +155,13 @@ ibProtocolConnectionFile::~ibProtocolConnectionFile()
 	Close();
 }
 
-bool ibProtocolConnectionFile::Exchange(const std::string& request, std::string& answer,
+bool ibProtocolConnectionFile::Exchange(const ibString& request, ibString& answer,
 	ibProtocol::ibRefusal& refusal, wxString& error)
 {
 	return ExchangeWith(*m_base, this, request, answer, refusal, error);
 }
 
-void ibProtocolConnectionFile::Listen(std::function<void(const std::string& text)> notified)
+void ibProtocolConnectionFile::Listen(std::function<void(const ibString& text)> notified)
 {
 	m_base->Listen(this, std::move(notified));
 }

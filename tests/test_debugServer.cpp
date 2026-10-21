@@ -73,8 +73,7 @@ struct DesignerSocket {
 
 	DesignerSocket(ibIoThreads& threads, std::uint16_t port) {
 		const std::shared_ptr<std::atomic<bool>> closed = m_closed;
-		m_socketClient = std::make_unique<ibWebSocketClient>(threads.GetContext(), nullptr,
-			[](std::uint8_t, std::string) {},
+		m_socketClient = std::make_unique<ibWebSocketClient>(threads.GetContext(), nullptr, nullptr, nullptr,
 			[closed](const std::string&) { closed->store(true); });
 		m_socketClient->Open("127.0.0.1", port, "/debugger");
 	}

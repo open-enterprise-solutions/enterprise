@@ -3,11 +3,11 @@
 #include <map>
 #include <mutex>
 
-#include <wx/base64.h>
 #include <wx/filename.h>
 #include <wx/mstream.h>
 
 #include "core/pictureRegistry.h"   // the registry — each picture kept as the server keeps it
+#include "core/utils/base64.h"      // ibBase64 — a picture's PNG, written into its text and read where it lies
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -321,18 +321,21 @@ std::vector<ibBackendPictureEntry> ibBackendPicture::GetArrayPicture()
 }
 #pragma endregion
 #pragma region __picture_conv_h__
-wxString ibBackendPicture::CreateBase64Image(const wxImage& image) {
+ibString ibBackendPicture::CreateBase64Image(const wxImage& image) {
 	wxMemoryOutputStream outputStream;
+	ibString text;
 	if (image.SaveFile(outputStream, wxBitmapType::wxBITMAP_TYPE_PNG)) {
 		const wxStreamBuffer* buffer =
 			outputStream.GetOutputStreamBuffer();
-		return wxBase64Encode(buffer->GetBufferStart(), buffer->GetLastAccess());
+		ibBase64::Append(text, buffer->GetBufferStart(), buffer->GetLastAccess());
 	}
-	return wxEmptyString;
+	return text;
 }
 
 wxImage ibBackendPicture::GetImageFromBase64(const wxString& src, const wxSize& size) {
-	const wxMemoryBuffer buffer = wxBase64Decode(src);
+	wxMemoryBuffer buffer;
+	if (!ibBase64::Read(src.wc_str(), src.length(), buffer))
+		return wxImage();
 	wxMemoryInputStream stream(buffer.GetData(), buffer.GetDataLen());
 	wxImage image(stream);
 	return size != wxDefaultSize ? image.Scale(

@@ -7,8 +7,8 @@
 #include "backend/system/value/valueTextFile.h"   // ibCreateTextConv - the one door from a TextEncoding to a converter
 
 #include "core/net/httpClient.h"                   // the transport - the core's, with its TLS
+#include "core/utils/base64.h"                     // ibBase64 - the user and password of Basic, in bytes
 
-#include <wx/base64.h>
 #include <wx/ffile.h>
 #include <wx/log.h>
 
@@ -527,7 +527,9 @@ ibValue ibValueHttpConnection::Send(ibHttpMethod method, const ibValueHttpReques
 	// UTF-8 of "user:password").
 	if (!authorized && !m_user.empty()) {
 		const std::string pair = ibHttpUtf8(m_user) + ":" + ibHttpUtf8(m_password);
-		message.m_headers.emplace_back("Authorization", "Basic " + ibHttpUtf8(wxBase64Encode(pair.data(), pair.size())));
+		std::string basic = "Basic ";
+		ibBase64::Append(basic, pair.data(), pair.size());
+		message.m_headers.emplace_back("Authorization", std::move(basic));
 	}
 
 	const bool secure = m_secure != nullptr;

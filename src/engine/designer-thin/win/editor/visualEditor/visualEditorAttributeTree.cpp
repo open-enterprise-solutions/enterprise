@@ -71,7 +71,7 @@ wxString ShapeOf(const ibProtocolNode& rows, const ibProtocolNode& attributes)
 		shape << row.GetId() << wxT(':') << row.GetString(ibProtocol::ibView::ibFormDesigner::Name) << wxT(':')
 			<< row.GetBool(ibProtocol::ibView::ibFormDesigner::Main) << row.GetBool(ibProtocol::ibView::ibFormDesigner::HasComposition)
 			<< row.GetString(ibProtocol::ibView::ibFormDesigner::DropControl) << row.FindChild(ibProtocol::ibView::ibFormDesigner::Menu).IsNode() << wxT(';');
-	shape << wxString::FromUTF8(attributes.Write());
+	shape << attributes.Write();
 	return shape;
 }
 
@@ -367,15 +367,15 @@ bool ibAttributeTree::SelectColumnInInspector(const wxTreeItemId& item)
 	if (data == nullptr || data->GetEntry() != nullptr)   // a root holder is handled by SelectInInspector
 		return false;
 	const std::vector<ibSourceHop>& path = data->GetPath();
-	if (path.size() < 2)                                   // [attrId, columnId] — shallower can't name a column
-		return false;
+	if (path.size() != 2)                                  // [attrId, columnId] — shallower can't name a column, and a
+		return false;                                      // deeper row is a field of the column's type (its Date, 404)
 
 	const long long attributeId = static_cast<long long>(path.front().m_id);
 	const auto head = m_entries.find(attributeId);
 	if (head == m_entries.end() || !FindMenuItem(head->second->GetMenu(), ibProtocol::ibView::ibFormDesigner::Column).Has(ibProtocol::ibView::ibFormDesigner::Name))
 		return false;
 
-	const long long columnId = static_cast<long long>(path.back().m_id);
+	const long long columnId = static_cast<long long>(path[1].m_id);
 	std::unique_ptr<ibFormAttributeValue>& held = m_columns[{ attributeId, columnId }];
 	if (held == nullptr)
 		held.reset(new ibFormAttributeValue(m_formHandler, attributeId, columnId));

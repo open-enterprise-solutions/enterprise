@@ -5,11 +5,11 @@
 #include <mutex>
 #include <set>
 
-#include <wx/base64.h>
 #include <wx/image.h>
 #include <wx/mstream.h>
 
 #include "core/pictureRegistry.h"              // the engine's own pictures, as the core registered them
+#include "core/utils/base64.h"                 // ibBase64 — a picture's PNG, read where its text lies
 #include "frmclient/mainFrame/mainFrame.h"     // ibFrontendMainFrame::Fetch — the pictures asked of the server
 
 namespace {
@@ -51,13 +51,13 @@ void PicturesOf(const ibProtocolNode& node, std::vector<wxString>& ids)
 {
 	for (const auto& [name, value] : node.Entries()) {
 		if (value.IsString()) {
-			if (name == "Icon" || (name.size() >= 7 && name.compare(name.size() - 7, 7, "Picture") == 0))
+			if (name == "Icon" || name.EndsWith(wxT("Picture")))
 				ids.push_back(value.AsString());
 		}
 		else if (value.IsNode())
 			PicturesOf(value, ids);
 		else if (value.IsList()) {
-			for (const ibProtocolNode& item : node.GetList(name.c_str()))
+			for (const ibProtocolNode& item : node.GetList(name))
 				PicturesOf(item, ids);
 		}
 	}
@@ -139,10 +139,10 @@ wxImage ibProtocolImage(const wxString& base64)
 {
 	if (base64.IsEmpty())
 		return wxImage();
-	const wxMemoryBuffer png = wxBase64Decode(base64);
 	// A PNG or nothing — data that is not one reads as no picture, not as a damaged file said to the person.
+	wxMemoryBuffer png;
 	static const char s_signature[] = "\x89PNG\r\n\x1a\n";
-	if (png.GetDataLen() < sizeof(s_signature) - 1 || std::memcmp(png.GetData(), s_signature, sizeof(s_signature) - 1) != 0)
+	if (!ibBase64::Read(base64.wc_str(), base64.length(), png) || png.GetDataLen() < sizeof(s_signature) - 1 || std::memcmp(png.GetData(), s_signature, sizeof(s_signature) - 1) != 0)
 		return wxImage();
 	if (wxImage::FindHandler(wxBITMAP_TYPE_PNG) == nullptr)
 		wxImage::AddHandler(new wxPNGHandler());

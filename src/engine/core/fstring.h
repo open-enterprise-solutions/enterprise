@@ -245,6 +245,12 @@ public:
 	bool operator!=(const wxString& s) const { return !(*this == s); }
 	friend bool operator==(const wxString& a, const ibString& b) { return b == a; }
 	friend bool operator!=(const wxString& a, const ibString& b) { return !(b == a); }
+	// …and against UTF-8 — a protocol's word, a narrow literal: the bytes decoded as they are compared, no text made of
+	// them (either string would make one, and the two of them made the comparison ambiguous).
+	bool operator==(const char* utf8) const noexcept;
+	bool operator!=(const char* utf8) const noexcept { return !(*this == utf8); }
+	friend bool operator==(const char* a, const ibString& b) { return b == a; }
+	friend bool operator!=(const char* a, const ibString& b) { return !(b == a); }
 	bool IsSameAs(const ibString& o, bool caseSensitive = true) const;
 	// …and exact for a literal and for wx's own string (a bytecode's names), read where they lie —
 	// the trio operator== has, and for the same reason.

@@ -129,7 +129,7 @@ bool ibValue::CompareValueEQ(const ibValue& rhs) const
 		return false;
 	const ibDataValue* const left = m_stored->FindField(kValueFieldData);
 	const ibDataValue* const right = rhs.m_stored->FindField(kValueFieldData);
-	return (left != nullptr ? left->AsString() : wxString()) == (right != nullptr ? right->AsString() : wxString());
+	return (left != nullptr ? left->AsString() : ibString()) == (right != nullptr ? right->AsString() : ibString());
 }
 
 bool ibValue::Serialize(ibDataNode& node) const
@@ -188,7 +188,7 @@ ibValue ibValue::FromNode(const ibDataNode& node)
 		}
 		return ibValue(data != nullptr ? data->AsDate() : ibDateTime());
 	}
-	case ibValueTypes::TYPE_STRING:  return ibValue(data != nullptr ? data->AsString() : wxString());
+	case ibValueTypes::TYPE_STRING:  return ibValue(data != nullptr ? data->AsString().ToWxString() : wxString());
 	default:
 		break;
 	}

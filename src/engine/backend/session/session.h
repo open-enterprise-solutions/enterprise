@@ -185,7 +185,7 @@ struct BACKEND_API ibSessionIdentity {
 	wxString     m_userName;          // empty = anonymous phase / technical
 	wxString     m_userGuid;           // sys_user row, empty before Attach
 	wxString     m_computer;          // hostname
-	wxString     m_address;            // "host:port" for web; "" for desktop
+	ibString     m_address;            // "host:port" for web; "" for desktop
 	ibRunMode    m_appMode;            // how its process holds the base: a file base, a server, …
 	ibDateTime   m_started;
 	int          m_pid = 0;            // OS pid — for kick / attach debugger

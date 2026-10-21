@@ -10,11 +10,11 @@
 
 namespace {
 
-using ibEntries = std::vector<std::pair<wxString, ibDataValue>>;
+using ibEntries = std::vector<std::pair<ibString, ibDataValue>>;
 
 bool Diff(const ibDataNode& from, const ibDataNode& to, ibDataNode& patch);
 
-const ibDataValue* FindEntry(const ibEntries& entries, const wxString& name)
+const ibDataValue* FindEntry(const ibEntries& entries, const ibString& name)
 {
 	for (const auto& entry : entries) {
 		if (entry.first == name)

@@ -142,9 +142,6 @@
     <ClInclude Include="databaseLayer\sqllite\engine\sqlite3ext.h">
       <Filter>databaseLayer\sqllite\engine</Filter>
     </ClInclude>
-    <ClInclude Include="utils\md5.hpp">
-      <Filter>utils</Filter>
-    </ClInclude>
     <ClInclude Include="compiler\compileContext.h">
       <Filter>compiler</Filter>
     </ClInclude>
@@ -1155,9 +1152,6 @@
     </ClCompile>
     <ClCompile Include="databaseLayer\sqllite\engine\sqlite3.c">
       <Filter>databaseLayer\sqllite\engine</Filter>
-    </ClCompile>
-    <ClCompile Include="utils\md5.cpp">
-      <Filter>utils</Filter>
     </ClCompile>
     <ClCompile Include="compiler\enumUnit.cpp">
       <Filter>compiler</Filter>

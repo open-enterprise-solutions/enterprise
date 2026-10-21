@@ -55,11 +55,13 @@ public:
 	// or, to a call naming the frame it holds (Since), the Patch to it (clientPatch.h); beside either the events,
 	// Messages (Level, Text) and Clear, and the answer's number, Frame.
 	bool Call(ibProtocol::ibMethod method, const ibDataNode& params, ibDataNode& result, ibProtocol::ibRefusal& refusal,
-		wxString& error, const void* connection = nullptr, const wxString& address = wxEmptyString);
+		wxString& error, const void* connection = nullptr, const ibString& address = ibString());
 
 	// THE PORT'S CALL — one JSON-RPC request as text in, its response as text out (empty for a notification,
 	// which wants none): the envelope read and written around the call above.
-	wxString Call(const wxString& request, const void* connection = nullptr, const wxString& address = wxEmptyString);
+	// The text is the engine's both ways: read where it lies, and the answer handed back as it was written — a client in
+	// this process takes it as it is; a socket makes its bytes once.
+	ibString Call(const ibString& request, const void* connection = nullptr, const ibString& address = ibString());
 
 	// The connection closed: the clients logged in through it are logged out.
 	void Disconnect(const void* connection);
@@ -71,7 +73,7 @@ public:
 	// HOW A CONNECTION IS TOLD SOMETHING — a transport that keeps its connection open (a WebSocket, a file base's
 	// program) hands the host the way it sends a text to it; Disconnect forgets it. A connection without one (an
 	// HTTP request) is never told anything: it asks.
-	void SetNotifier(const void* connection, std::function<void(const wxString& text)> notify);
+	void SetNotifier(const void* connection, std::function<void(const ibString& text)> notify);
 
 	// THE CLIENT'S FRAME CHANGED BY ITSELF — work it did not call settled (a report composed in the background, a
 	// debugger stopping): its connection is sent a notification, `changed {Client}`, and the client asks for its frame.
@@ -113,7 +115,7 @@ private:
 		bool                              hasReply = false;
 		ibDataValue                       replyId;
 		unsigned char                     replyDigest[32] = {};
-		wxString                          reply;
+		ibString                          reply;
 		bool                              replyPending = false;
 		ibDataValue                       pendingId;
 		std::condition_variable           replyWait;
@@ -140,9 +142,9 @@ private:
 		std::atomic<std::int64_t>         resumeDeadlineMs{ 0 };
 	};
 
-	std::shared_ptr<Client> FindClient(const wxString& id) const;
+	std::shared_ptr<Client> FindClient(const ibString& id) const;
 	std::shared_ptr<Client> FindByDigest(const unsigned char* digest) const;
-	void                    RemoveClient(const wxString& id);
+	void                    RemoveClient(const ibString& id);
 	// login {Token} and no User — the same client, no frame drawn.
 	bool                    ResumeByToken(const ibDataNode& params, ibDataNode& result, ibProtocol::ibRefusal& refusal,
 		wxString& error, const void* connection);
@@ -167,9 +169,9 @@ private:
 	ibApplicationInstance* m_applicationInstance;
 
 	mutable std::mutex                             m_mutex;
-	std::map<wxString, std::shared_ptr<Client>>    m_clients;
+	std::map<ibString, std::shared_ptr<Client>>    m_clients;
 	// How each connection is told something (SetNotifier), under m_mutex.
-	std::map<const void*, std::function<void(const wxString& text)>> m_notifiers;
+	std::map<const void*, std::function<void(const ibString& text)>> m_notifiers;
 
 	std::mutex              m_roundMutex;
 	std::condition_variable m_roundSignal;

@@ -11,8 +11,6 @@
 
 #include <cstring>
 
-#include <wx/base64.h>
-
 #include "backend/appData.h"
 #include "backend/appHost.h"
 #include "backend/backend_exception.h"   // ibBackendException — a value the configuration cannot make
@@ -26,6 +24,7 @@
 #include "backend/metaCollection/metaFormObject.h"   // ibBackendCommandItem::Execute
 #include "backend/rpc/rpcMessage.h"
 #include "core/serialize/dataBuilder.h"
+#include "core/utils/base64.h"         // ibBase64 — a file's part, in and out of the call's text
 #include "backend/session/session.h"
 #include "backend/temp/tempStorage.h"   // the client's files
 #include "backend/userInfo.h"           // users — the names the login window offers
@@ -113,7 +112,7 @@ bool AskedResume(const ibDataNode& params)
 	return false;
 }
 
-void FeedText(ibSHA256& sha, const wxString& text);
+void FeedText(ibSHA256& sha, const ibString& text);
 void FeedValue(ibSHA256& sha, const ibDataValue& value);
 
 void FeedNode(ibSHA256& sha, const ibDataNode& node)
@@ -124,12 +123,12 @@ void FeedNode(ibSHA256& sha, const ibDataNode& node)
 	}
 }
 
-// utf8_str() does not own its bytes. Copy them out of the wxString before it dies.
-void FeedText(ibSHA256& sha, const wxString& text)
+// The characters as they lie: a digest is compared with one this process made, never with another's, so it needs no
+// encoding of its own — and the text no copy.
+void FeedText(ibSHA256& sha, const ibString& text)
 {
-	const std::string utf(text.utf8_str());
-	if (!utf.empty())
-		sha.Update(reinterpret_cast<const unsigned char*>(utf.data()), utf.size());
+	if (!text.IsEmpty())
+		sha.Update(reinterpret_cast<const unsigned char*>(text.wc_str()), text.length() * sizeof(wchar_t));
 }
 
 void FeedValue(ibSHA256& sha, const ibDataValue& value)
@@ -161,7 +160,7 @@ void FeedValue(ibSHA256& sha, const ibDataValue& value)
 	}
 }
 
-void CallDigest(const wxString& method, const ibDataNode& params, unsigned char out[32])
+void CallDigest(const ibString& method, const ibDataNode& params, unsigned char out[32])
 {
 	ibSHA256 sha;
 	FeedText(sha, method);
@@ -350,7 +349,7 @@ ibClientHost::~ibClientHost()
 		m_round.join();
 
 	// Every client goes — each its own session's teardown (ibClientInstance::OnExit).
-	std::map<wxString, std::shared_ptr<Client>> clients;
+	std::map<ibString, std::shared_ptr<Client>> clients;
 	{
 		std::lock_guard<std::mutex> lock(m_mutex);
 		clients.swap(m_clients);
@@ -366,14 +365,14 @@ ibClientHost* ibClientHost::Find(const ibApplicationInstance* applicationInstanc
 	return it != s_hosts.end() ? it->second : nullptr;
 }
 
-std::shared_ptr<ibClientHost::Client> ibClientHost::FindClient(const wxString& id) const
+std::shared_ptr<ibClientHost::Client> ibClientHost::FindClient(const ibString& id) const
 {
 	std::lock_guard<std::mutex> lock(m_mutex);
 	auto it = m_clients.find(id);
 	return it != m_clients.end() ? it->second : nullptr;
 }
 
-void ibClientHost::RemoveClient(const wxString& id)
+void ibClientHost::RemoveClient(const ibString& id)
 {
 	std::shared_ptr<Client> client;
 	{
@@ -600,7 +599,7 @@ bool ibClientHost::LoggedIn(const void* connection) const
 	return false;
 }
 
-void ibClientHost::SetNotifier(const void* connection, std::function<void(const wxString& text)> notify)
+void ibClientHost::SetNotifier(const void* connection, std::function<void(const ibString& text)> notify)
 {
 	if (connection == nullptr)
 		return;
@@ -615,7 +614,7 @@ void ibClientHost::NotifyChanged(const ibClientInstance* instance)
 {
 	// The client's id and how its connection is told — sent outside the lock: a transport's send may wait on its socket.
 	wxString id;
-	std::function<void(const wxString& text)> notify;
+	std::function<void(const ibString& text)> notify;
 	{
 		std::lock_guard<std::mutex> lock(m_mutex);
 		for (const auto& [clientId, client] : m_clients) {
@@ -643,7 +642,7 @@ void ibClientHost::NotifyDebug(const ibClientInstance* instance, const ibDataNod
 	// As NotifyChanged — the id and the notifier taken under the lock, sent outside it; the debugger's connection's, and
 	// told whatever call is being answered: the news is no part of a frame.
 	wxString id;
-	std::function<void(const wxString& text)> notify;
+	std::function<void(const ibString& text)> notify;
 	{
 		std::lock_guard<std::mutex> lock(m_mutex);
 		for (const auto& [clientId, client] : m_clients) {
@@ -671,29 +670,33 @@ void ibClientHost::NotifyDebug(const ibClientInstance* instance, const ibDataNod
 //*                                        The door                                         *
 //*******************************************************************************************
 
-wxString ibClientHost::Call(const wxString& text, const void* connection, const wxString& address)
+ibString ibClientHost::Call(const ibString& text, const void* connection, const ibString& address)
 {
 	// ⭐⭐ A CALL'S TYPES ARE ITS SESSION'S (Max, 2026-10-15: the metadata is taken from the session). A node a client hands back
 	// names its type by word (NodeType) — the form editor's form, whole — and the word is a class of the configuration
 	// the CALLER's session works in. This thread works for none yet: the thread's lookup (activeMetaData) threw "works
-	// for no base" at every such call. So the call is read first for who calls (its Client), then read again in the
-	// configuration of that client's session.
+	// for no base" at every such call. So the call is read once, its words kept where it named a type by one, and then
+	// they are looked up in the configuration of that client's session (ibRpcLookupTypes) — the text is not read again:
+	// it was, the whole form a second time on every call of the form editor (40-90 ms of 300, measured 2026-10-21).
+	const std::int64_t reading = NowMs();
 	ibRpcRequest request;
 	wxString error;
-	if (!ibRpcParseRequest(text, request, error, nullptr))
+	bool unknownType = false;
+	if (!ibRpcParseRequest(text, request, error, unknownType))
 		return ibRpcWriteError(ibDataValue(), ibRpcError::Parse, error);
-	if (const std::shared_ptr<Client> caller = FindClient(request.m_params.GetValue<wxString>(ibProtocol::ibLogin::Client))) {
-		if (const std::shared_ptr<ibSession> session = caller->instance->ShareSession()) {
-			if (!ibRpcParseRequest(text, request, error, session->GetMetaData()))
-				return ibRpcWriteError(ibDataValue(), ibRpcError::Parse, error);
+	if (unknownType) {
+		if (const std::shared_ptr<Client> caller = FindClient(request.m_params.GetValue<ibString>(ibProtocol::ibLogin::Client))) {
+			if (const std::shared_ptr<ibSession> session = caller->instance->ShareSession())
+				ibRpcLookupTypes(request.m_params, session->GetMetaData());
 		}
 	}
+	const std::int64_t read = NowMs() - reading;
 
-	const ibProtocol::ibMethod method = ibProtocol::MethodFromName(request.m_method.utf8_str());
+	const ibProtocol::ibMethod method = ibProtocol::MethodFromName(request.m_method.ToUtf8().c_str());
 	if (method == ibProtocol::ibMethod::Unknown) {
 		return request.WantsAnswer()
 			? ibRpcWriteError(request.m_id, ibRpcError::MethodNotFound, wxString::Format(wxT("no method named '%s'"), request.m_method))
-			: wxString();
+			: ibString();
 	}
 
 	// THE LAST ANSWER OF A CLIENT THAT OPTED IN. The same id with the same method and params is the saved text,
@@ -718,7 +721,7 @@ wxString ibClientHost::Call(const wxString& text, const void* connection, const 
 	} slot;
 	unsigned char callDigest[32] = {};
 	if (request.WantsAnswer() && !tokenLogin && method != ibProtocol::ibMethod::Login && method != ibProtocol::ibMethod::Debug) {
-		slot.client = FindClient(request.m_params.GetValue<wxString>(ibProtocol::ibLogin::Client));
+		slot.client = FindClient(request.m_params.GetValue<ibString>(ibProtocol::ibLogin::Client));
 		if (slot.client) {
 			std::unique_lock<std::mutex> lock(slot.client->lock);
 			if (!MayCall(slot.client->connectionless, slot.client->connection.load(std::memory_order_acquire),
@@ -744,7 +747,7 @@ wxString ibClientHost::Call(const wxString& text, const void* connection, const 
 						const bool same = slot.client->hasReply == true
 							&& std::memcmp(callDigest, slot.client->replyDigest, sizeof(callDigest)) == 0;
 						if (same) {
-							const wxString saved = slot.client->reply;
+							const ibString saved = slot.client->reply;
 							return saved;
 						}
 						lock.unlock();
@@ -765,6 +768,7 @@ wxString ibClientHost::Call(const wxString& text, const void* connection, const 
 
 	ibDataNode result;
 	ibProtocol::ibRefusal refusal = ibProtocol::ibRefusal::None;
+	const std::int64_t began = NowMs() - reading;
 	ibJournalStopwatch took;
 	took.Resume();
 	const bool done = Call(method, request.m_params, result, refusal, error, connection, address);
@@ -777,13 +781,18 @@ wxString ibClientHost::Call(const wxString& text, const void* connection, const 
 	else
 		ibJournalWarning(wxT("client"), wxT("%s refused (%d) after %lld ms: %s"), request.m_method,
 			static_cast<int>(refusal), took.Ms(), error);
+	// …and before it, the request: its text read (and the types it named by words looked up in its session's
+	// configuration), then whose it is and whether it was answered already — the call begun that long after the text came in.
+	ibJournalInfo(wxT("client"), wxT("  request read %lld ms%s, %zu chars, the call begun at %lld ms"), read,
+		unknownType ? wxT(", its types looked up") : wxT(""), text.length(), began);
 
 	if (!request.WantsAnswer())
-		return wxString();
+		return ibString();
 
-	// …and the answer written — its text, the part of a call that grows with the frame.
+	// …and the answer written — its text, the part of a call that grows with the frame. The result goes into the
+	// envelope as it is (it is not read again), and the text saved for a repeated call is one more owner of it.
 	const std::int64_t writing = NowMs();
-	const wxString answer = done ? ibRpcWriteResult(request.m_id, result) : ibRpcWriteError(request.m_id, static_cast<s32>(refusal), error);
+	const ibString answer = done ? ibRpcWriteResult(request.m_id, std::move(result)) : ibRpcWriteError(request.m_id, static_cast<s32>(refusal), error);
 	ibJournalInfo(wxT("client"), wxT("  answer written %lld ms, %zu chars"), NowMs() - writing, answer.length());
 	// A detached NoSession was not accepted, so it is not the call's answer. Anything else, including a refusal, is.
 	// Only the call that owns the slot writes it: a lookup that returned the saved text never did.
@@ -798,7 +807,7 @@ wxString ibClientHost::Call(const wxString& text, const void* connection, const 
 }
 
 bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, ibDataNode& result, ibProtocol::ibRefusal& refusal,
-	wxString& error, const void* connection, const wxString& address)
+	wxString& error, const void* connection, const ibString& address)
 {
 	bool done = false;
 	refusal = ibProtocol::ibRefusal::None;
@@ -903,7 +912,7 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 		}
 	}
 	else if (method == ibProtocol::ibMethod::Logout) {
-		const std::shared_ptr<Client> client = FindClient(params.GetValue<wxString>(ibProtocol::ibLogin::Client));
+		const std::shared_ptr<Client> client = FindClient(params.GetValue<ibString>(ibProtocol::ibLogin::Client));
 		if (client == nullptr) {
 			done = true;
 		}
@@ -917,7 +926,7 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 			if (!allowed)
 				refuse(ibProtocol::ibRefusal::NoSession, wxT("the client is not connected"));
 			else {
-				RemoveClient(params.GetValue<wxString>(ibProtocol::ibLogin::Client));
+				RemoveClient(params.GetValue<ibString>(ibProtocol::ibLogin::Client));
 				done = true;
 			}
 		}
@@ -925,14 +934,14 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 	else if (method == ibProtocol::ibMethod::Debug) {
 		// ⭐ BESIDE THE CLIENT'S CALLS, NOT AFTER THEM (protocol 6): not under the client's lock and with no frame — a step
 		// is not queued behind a call waiting on the very stop it would let go.
-		const std::shared_ptr<Client> client = FindClient(params.GetValue<wxString>(ibProtocol::ibLogin::Client));
+		const std::shared_ptr<Client> client = FindClient(params.GetValue<ibString>(ibProtocol::ibLogin::Client));
 		if (client == nullptr)
 			refuse(ibProtocol::ibRefusal::NoSession, wxT("no such client"));
 		else
 			done = Debug(*client, params, result, refusal, error, connection);
 	}
 	else {
-		const std::shared_ptr<Client> client = FindClient(params.GetValue<wxString>(ibProtocol::ibLogin::Client));
+		const std::shared_ptr<Client> client = FindClient(params.GetValue<ibString>(ibProtocol::ibLogin::Client));
 		if (client == nullptr) {
 			refuse(ibProtocol::ibRefusal::NoSession, wxT("no such client"));
 		}
@@ -1167,13 +1176,13 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 				// and is answered with its id, the rest name the id. Into the client's own temporary storage.
 				std::shared_ptr<ibSession> session = client->instance->ShareSession();
 				ibTempStorage* const storage = ibApplicationInstance::GetTempStorage(m_applicationInstance);
-				const wxString text = params.GetValue<wxString>(ibProtocol::ibFile::Data);
-				const wxMemoryBuffer data = wxBase64Decode(text);
+				wxMemoryBuffer data;
+				const bool decoded = ibBase64::Read(params.GetValue<ibString>(ibProtocol::ibFile::Data), data);
 				wxString id = params.GetValue<wxString>(ibProtocol::ibFile::File);
 				if (session == nullptr || storage == nullptr) {
 					refuse(ibProtocol::ibRefusal::NoSession, wxT("the client has no session"));
 				}
-				else if (!text.IsEmpty() && data.GetDataLen() == 0) {
+				else if (!decoded) {
 					refuse(ibProtocol::ibRefusal::BadParameter, wxT("Data is not base64"));
 				}
 				else if (data.GetDataLen() > ibTempStorage::kPartSize) {
@@ -1224,7 +1233,9 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 						result.SetValue(ibProtocol::ibFile::Name, name);
 						result.SetValue(ibProtocol::ibFile::Part, part);
 						result.SetValue(ibProtocol::ibFile::Parts, static_cast<s32>(parts));
-						result.SetValue(ibProtocol::ibFile::Data, wxBase64Encode(data.GetData(), data.GetDataLen()));
+						ibString text;
+						ibBase64::Append(text, data.GetData(), data.GetDataLen());
+						result.SetValue(ibProtocol::ibFile::Data, text);
 						done = true;
 					}
 				}

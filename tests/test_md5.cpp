@@ -1,7 +1,7 @@
 // =============================================================================
 // OES Enterprise — MD5 tests
 //
-// ibMD5 (backend/utils/md5.hpp) is retained for metadata integrity only —
+// ibMD5 (core/utils/md5.hpp) is retained for metadata integrity only —
 // NEVER for passwords (see test_passwordHash.cpp). These tests pin the
 // algorithm to the standard RFC 1321 vectors and guard the cross-platform
 // determinism the macOS port depended on:
@@ -12,7 +12,7 @@
 // =============================================================================
 
 #include <gtest/gtest.h>
-#include "backend/utils/md5.hpp"
+#include "core/utils/md5.hpp"
 
 namespace {
 // Compare case-insensitively so the test does not depend on the hex case the

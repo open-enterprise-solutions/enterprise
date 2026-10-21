@@ -755,7 +755,7 @@ ibValue ibValueSystemFunction::DeserializeValue(const wxString& strJson)
 		ibBackendCoreException::Error(_("There is no open configuration to read this value against"));
 
 	ibJsonProvider provider;
-	provider.SetTypeLookup([](const wxString& name) -> ibClassID {
+	provider.SetTypeLookup([](const ibString& name) -> ibClassID {
 		return activeMetaData != nullptr
 			? activeMetaData->GetIDObjectFromString(name) : ibClassID(0); });
 

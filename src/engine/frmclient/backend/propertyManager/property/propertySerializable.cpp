@@ -19,6 +19,12 @@ u64 ReceiveU64(const ibDataNode& node, const char* name)
 ibClassID RegisterCtor(const ibDataNode& entry, const wxString& name)
 {
 	const ibClassID clsid = ReceiveU64(entry, ibProtocol::ibSchema::ibProperties::Type);
+	// Held already as the server names it — its picture is not made again: every property of every control drawn
+	// registered every type it offers, a GDI icon made of a bitmap each time (two thirds of a property's making,
+	// 2026-10-22).
+	const ibCtorAbstractType* const held = ibValue::GetAvailableCtor(clsid);
+	if (held != nullptr && held->GetClassName() == name)
+		return clsid;
 	const wxBitmap picture = ibProtocolPicture(entry.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Picture));
 	wxIcon icon;
 	if (picture.IsOk())

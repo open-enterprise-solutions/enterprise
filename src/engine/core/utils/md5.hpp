@@ -11,11 +11,15 @@
 #ifndef _WX_MD5_H_
 #define _WX_MD5_H_
 
-#include "backend/backend.h"
+#include "core/core.h"
 
-class BACKEND_API ibMD5 {
+#include <wx/string.h>
+
+class CORE_API ibMD5 {
 public:
 	static wxString ComputeMd5(const wxString& content);
+	// ...the digest of the bytes themselves: a text already in bytes is not made a wxString first.
+	static wxString ComputeMd5(const void* data, size_t size);
 	static wxString ComputeKeyedMd5(const wxString& content, const wxString& key);
 };
 

@@ -705,9 +705,9 @@ private:
 
 	void DoRemoveObject(ibValueFrame* obj, bool cutObject);
 
-	// Each control of the node drawn receives what it holds: its rows (the answers', m_rows) when it was built anew, its
-	// values from the node.
-	void Receive(const ibProtocolNode& node);
+	// Each control of the node drawn receives what it holds: its rows (the answers', m_rows) when it was built anew — or
+	// by no patch (the form drawn whole, as the host draws it), every one — its values from the node.
+	void Receive(const ibProtocolNode& node, const ibProtocolNode& patch);
 
 	// A SOURCE PATH as the attribute tree's rows write it (Path — its hops, items {Id, Type}): what a row is asked
 	// about again (Composition) and what a drop binds (BoundControl).

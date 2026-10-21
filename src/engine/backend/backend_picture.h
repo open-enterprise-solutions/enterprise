@@ -49,7 +49,7 @@ public:
 #pragma endregion 
 
 #pragma region __picture_conv_h__
-	static wxString CreateBase64Image(const wxImage& image);
+	static ibString CreateBase64Image(const wxImage& image);
 	static wxImage GetImageFromBase64(const wxString& src, const wxSize& size = wxDefaultSize);
 	static wxBitmap GetBitmapFromBase64(const wxString& src, const wxSize& size = wxDefaultSize);
 	static wxIcon GetIconFromBase64(const wxString& src, const wxSize& size = wxDefaultSize);

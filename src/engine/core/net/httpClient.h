@@ -33,20 +33,22 @@ public:
 
 	// The socket is open — the server's answer to the opening checked; once, before any message.
 	using ibOpened = std::function<void()>;
-	// A message, whole — its opcode (ibWebSocketOpcode::Text or ::Binary) and its payload.
-	using ibMessage = std::function<void(std::uint8_t opcode, std::string payload)>;
+	// A text message, whole — the engine's text, its bytes read once…
+	using ibText = std::function<void(const ibString& text)>;
+	// …and a binary one, as it came (a deflated text is the protocol's to inflate: ibInflate).
+	using ibBinary = std::function<void(std::string data)>;
 	// The socket is gone — refused, closed by either side, or dropped; once. `reason` — why, for the journal.
 	using ibClosed = std::function<void(const std::string& reason)>;
 
-	ibWebSocketClient(asio::io_context& io, ibOpened opened, ibMessage message, ibClosed closed);
+	ibWebSocketClient(asio::io_context& io, ibOpened opened, ibText text, ibBinary binary, ibClosed closed);
 	// Closes it, as Close: a client let go holds no socket open. `closed` is still told, on the strand — so neither
 	// handler holds what dies with the client.
 	~ibWebSocketClient();
 
 	// `target` — the path and its query, as written on the request line.
 	void Open(const std::string& host, std::uint16_t port, const std::string& target);
-	// A message, queued and sent in order — as ibWebSocket's.
-	void Send(std::string text);
+	// A message, queued and sent in order — as ibWebSocket's: the text's bytes made here, once.
+	void Send(const ibString& text);
 	void SendBinary(std::string data);
 	void Close();
 

@@ -26,7 +26,7 @@ public:
 		if (frame == nullptr || m_document == nullptr || IsReadOnly())
 			return;
 		const ibProtocolNode args = Held();
-		const std::string held = args.Write();
+		const ibString held = args.Write();
 		if (held == m_sent)
 			return;
 		m_sent = held;
@@ -59,7 +59,7 @@ private:
 	}
 
 	ibCompositionDescription& m_edited;
-	std::string m_sent;   // what the server has, as the wire wrote it
+	ibString m_sent;   // what the server has, as the wire wrote it
 	const ibTabDocument* m_document = nullptr;
 	bool m_built = false;
 };

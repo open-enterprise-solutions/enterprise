@@ -45,7 +45,7 @@ wxMemoryBuffer Emit(const ibDataNode& node) {
 // Parse JSON text back into a node. `lookup` maps a type NAME to a clsid — the
 // inverse of the emitter's resolver; unset means a name-form NodeType stays 0.
 ibDataNode Parse(const wxMemoryBuffer& text,
-	std::function<ibClassID(const wxString&)> lookup = nullptr) {
+	std::function<ibClassID(const ibString&)> lookup = nullptr) {
 	ibJsonProvider provider;
 	if (lookup) provider.SetTypeLookup(std::move(lookup));
 	ibReaderMemory reader(text);
@@ -194,8 +194,58 @@ TEST(JsonProvider, NodeType_NameFormNeedsLookup) {
 
 	// with the inverse -> identity restored
 	const ibDataNode back = Parse(w.buffer(),
-		[](const wxString& name) -> ibClassID { return name == wxT("Catalog") ? 1001 : 0; });
+		[](const ibString& name) -> ibClassID { return name == wxT("Catalog") ? 1001 : 0; });
 	EXPECT_EQ(back.GetClsid(), (ibClassID)1001);
+}
+
+// …and without one the word is kept, for whoever holds the configuration to look up after (LookupTypes) — a call is
+// read before its caller is known, and not read again. All the way down; the word gone once it is answered.
+TEST(JsonProvider, NodeType_KeptWordLookedUpAfter) {
+	ibJsonProvider provider;
+	provider.SetTypeResolver([](ibClassID) { return wxString(wxT("Catalog")); });
+	ibWriterMemory w;
+	ibDataNode n(1001, 1);
+	ibDataNode& inner = n.Child(wxT("Inner"));
+	inner.SetClsid(1001);
+	inner.SetMetaId(2);
+	provider.Write(n, w);
+
+	ibDataNode back = Parse(w.buffer());
+	EXPECT_EQ(back.GetClsid(), (ibClassID)0);
+	EXPECT_EQ(back.GetValue<wxString>(wxT("NodeType")), wxT("Catalog"));
+
+	ibJsonProvider lookup;
+	lookup.SetTypeLookup([](const ibString& name) -> ibClassID { return name == wxT("Catalog") ? 1001 : 0; });
+	lookup.LookupTypes(back);
+	EXPECT_EQ(back.GetClsid(), (ibClassID)1001);
+	EXPECT_EQ(back.FindField(wxT("NodeType")), nullptr);
+	const ibDataNode* const innerBack = back.FindChild(wxT("Inner"));
+	ASSERT_TRUE(innerBack != nullptr);
+	EXPECT_EQ(innerBack->GetClsid(), (ibClassID)1001);
+	EXPECT_EQ(innerBack->FindField(wxT("NodeType")), nullptr);
+}
+
+// The rule of a key, for a tree another reader made of the text (the thin client's): the one the text reader keeps — the
+// structural keys the node's own, a node a property, the rest fields; a structural key holding what it cannot refused.
+TEST(JsonProvider, ReadEntry_PlacesKeysAsTheTextReaderDoes) {
+	ibJsonProvider provider;
+	ibDataNode node;
+	EXPECT_TRUE(provider.ReadEntry(node, wxT("NodeType"), ibDataValue::UInt(1001)));
+	EXPECT_TRUE(provider.ReadEntry(node, wxT("NodeId"), ibDataValue::Int(7)));
+	EXPECT_TRUE(provider.ReadEntry(node, wxT("TypeDesc"), ibDataValue::String(wxT("String"))));
+	EXPECT_TRUE(provider.ReadEntry(node, wxT("Name"), ibDataValue::String(wxT("Nomenclature"))));
+	EXPECT_TRUE(provider.ReadEntry(node, wxT("Type"), ibDataValue::Child(std::make_shared<ibDataNode>())));
+	EXPECT_FALSE(provider.ReadEntry(node, wxT("NodeId"), ibDataValue::String(wxT("seven"))));
+
+	EXPECT_EQ(node.GetClsid(), (ibClassID)1001);
+	EXPECT_EQ(node.GetMetaId(), (ibMetaID)7);
+	EXPECT_EQ(node.FindField(wxT("TypeDesc")), nullptr);
+	EXPECT_EQ(node.GetValue<wxString>(wxT("Name")), wxT("Nomenclature"));
+	EXPECT_TRUE(node.FindChild(wxT("Type")) != nullptr);
+
+	// …and a string's: a binary only where Write wrote one.
+	EXPECT_EQ(ibJsonProvider::ReadString(wxT("base64:AQI=")).Kind(), ibDataKind::Binary);
+	EXPECT_EQ(ibJsonProvider::ReadString(wxT("base64 is a word")).Kind(), ibDataKind::String);
 }
 
 // ---------------------------------------------------------------------------
