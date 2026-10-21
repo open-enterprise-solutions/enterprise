@@ -721,7 +721,14 @@ struct ibHttpClientState {
 		if ((flags & ~static_cast<std::uint32_t>(MBEDTLS_X509_BADCERT_CN_MISMATCH)) != 0) {
 			char said[512] = {};
 			mbedtls_x509_crt_verify_info(said, sizeof(said), "", flags);
-			Finish(ibHttpClientError::Verification, Trim(said));
+
+			// A line per failed check, each ended with '\n' — one sentence for the script's refusal.
+			std::string what(said);
+			while (!what.empty() && what.back() == '\n')
+				what.pop_back();
+			for (std::size_t at = what.find('\n'); at != std::string::npos; at = what.find('\n', at))
+				what.replace(at, 1, "; ");
+			Finish(ibHttpClientError::Verification, what);
 			return;
 		}
 		if (flags != 0) {

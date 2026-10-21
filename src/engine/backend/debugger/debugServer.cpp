@@ -402,18 +402,21 @@ void ibDebuggerServer::DoDebugLoop(const wxString& strDocPath, const wxString& s
 	// event-driven wait: woken immediately by Continue/StepInto/StepOver/Detach/Destroy.
 	// CV/mutex live on the per-session ibDebugSession so a sibling tab's
 	// step doesn't unpark this script thread by accident.
-	// 250ms wake-up is a safety tick only. Connection-loss / shutdown
-	// (ResetDebugger / ShutdownServer / Detach / Destroy) all drain via
-	// WakeAllDebugSessions, which flips this session's m_debugLoop and
-	// kicks its CV — the single per-session exit condition below.
-	while (dbg->m_debugLoop.load(std::memory_order_acquire)) {
+	// 250ms wake-up is a safety tick only.
+	//
+	// ⭐ …AND A STOP LASTS ONLY WHILE A DEBUGGER HOLDS IT. Every road that loses the designer — the connection
+	// dropped, Detach, Destroy, the server shut down — clears m_bUseDebug, and the stop ends with it. Their
+	// wake (WakeAllDebugSessions) reaches the sessions bound to a thread, and a desktop's stopped in its start
+	// (BeforeStart, inside its window's Show) is not one: a designer closed while it stood there left it parked
+	// for good, its window never shown and no designer able to attach (2026-10-21).
+	while (dbg->m_debugLoop.load(std::memory_order_acquire) && m_bUseDebug.load()) {
 		std::unique_lock<std::mutex> lock(dbg->m_mutex);
-		dbg->m_cv.wait_for(lock, std::chrono::milliseconds(250), [dbg]() {
-			return !dbg->m_debugLoop.load(std::memory_order_acquire);
+		dbg->m_cv.wait_for(lock, std::chrono::milliseconds(250), [this, dbg]() {
+			return !dbg->m_debugLoop.load(std::memory_order_acquire) || !m_bUseDebug.load();
 		});
 	}
 
-	// (No store here. The loop above exits only once the flag already reads false, and the ONE
+	// (No store here. The loop above exits once the flag reads false or the debugger is gone, and the ONE
 	// authoritative clear is the one below, inside the lock, published together with the run-context
 	// pointer — an unsynchronised write beside it could only make the pair disagree.)
 
@@ -2072,12 +2075,9 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 		// and nothing in a thin client's process, whose session stayed stopped-and-woken with its window up.
 		const std::shared_ptr<ibSession> stopped = ParkedSession(wxString());
 
+		// (A desktop's stopped in its start, whom the sweep below does not reach, leaves its loop on the flag — see
+		// DoDebugLoop.)
 		ms_debugServer->m_bUseDebug = false;
-		// …and woken BY NAME, as Continue wakes it: the sweep below wakes the sessions bound to a thread, and a desktop's
-		// stopped in its start (BeforeStart, inside its window's Show) is not among them yet — it stayed parked, the
-		// process hanging with its session closed.
-		if (stopped)
-			ms_debugServer->WakeDebugSession(stopped->GetId());
 		ms_debugServer->WakeAllDebugSessions();
 
 		ibDebuggerServerConnection::Disconnect();

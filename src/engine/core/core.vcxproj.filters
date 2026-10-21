@@ -184,6 +184,7 @@
     </ClCompile>
     <ClCompile Include="picturePredefined.cpp" />
     <ClCompile Include="pictureRegistry.cpp" />
+    <ClCompile Include="process.cpp" />
     <ClCompile Include="programFolder.cpp" />
     <ClCompile Include="typeName.cpp" />
     <ClCompile Include="query\queryAggregates.cpp">
@@ -364,6 +365,7 @@
     </ClInclude>
     <ClInclude Include="picturePredefined.h" />
     <ClInclude Include="pictureRegistry.h" />
+    <ClInclude Include="process.h" />
     <ClInclude Include="programFolder.h" />
     <ClInclude Include="propertyChoiceMode.h" />
     <ClInclude Include="roleCompositionMode.h" />

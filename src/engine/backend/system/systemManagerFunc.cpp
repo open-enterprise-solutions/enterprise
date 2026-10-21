@@ -855,11 +855,13 @@ wxString ibValueSystemFunction::ComputerName()//ComputerName
 	return wxGetHostName();
 }
 
+#include "core/process.h"   // a script on the server runs on a fiber, where wxExecute asserts
+
 void ibValueSystemFunction::RunApp(const wxString& sCommand)//RunApp
 {
 	if (ibBackendException::IsEvalMode())
 		return;
-	wxExecute(sCommand);
+	ibStartProcess(sCommand);
 }
 
 void ibValueSystemFunction::SetAppTitle(const wxString& sTitle)//SetAppTitle

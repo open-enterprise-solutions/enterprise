@@ -184,7 +184,9 @@ page comes alone.
 
 From protocol 5 a table's `State` may carry `Rows` with a new `Version` — the first page, the same shape as `fetch`
 (rows as children, `End`, `Before`, `Pictures`) — so the client need not fetch to draw the tab; a server that does
-not put `Rows` in the state is answered with `fetch`, as before.
+not put `Rows` in the state is answered with `fetch`, as before. The first page is read from the top (`Before` 0),
+also when the table stands on a row (a choice form opened on a value): the page names that row `CurrentRow`, or the
+state does when the row lies below the page, and the client reads around it.
 
 A later `Version` (a cell's `Change`, a row added, a refresh) may carry `Rows` too, read around the server's current row:
 `Anchor` that row, `Count` the rows from it, `Before` how many came ahead of it (fewer than `Count`: the top was
