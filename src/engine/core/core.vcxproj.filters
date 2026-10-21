@@ -65,7 +65,7 @@
     <ClCompile Include="compiler\blockSyntaxLINQ.cpp">
       <Filter>compiler</Filter>
     </ClCompile>
-    <ClCompile Include="compiler\lexValue.cpp">
+    <ClCompile Include="compiler\literal.cpp">
       <Filter>compiler</Filter>
     </ClCompile>
     <ClCompile Include="compiler\scriptParseCode.cpp">
@@ -130,6 +130,7 @@
       <Filter>diagnostics</Filter>
     </ClCompile>
     <ClCompile Include="exception.cpp" />
+    <ClCompile Include="fboolean.cpp" />
     <ClCompile Include="fdatetime.cpp" />
     <ClCompile Include="fiber\fiber.cpp">
       <Filter>fiber</Filter>
@@ -249,7 +250,7 @@
     <ClInclude Include="compiler\codeDef.h">
       <Filter>compiler</Filter>
     </ClInclude>
-    <ClInclude Include="compiler\lexValue.h">
+    <ClInclude Include="compiler\literal.h">
       <Filter>compiler</Filter>
     </ClInclude>
     <ClInclude Include="compiler\scriptParseCode.h">
@@ -317,6 +318,7 @@
       <Filter>diagnostics</Filter>
     </ClInclude>
     <ClInclude Include="exception.h" />
+    <ClInclude Include="fboolean.h" />
     <ClInclude Include="fdatetime.h" />
     <ClInclude Include="fiber\fiber.h">
       <Filter>fiber</Filter>

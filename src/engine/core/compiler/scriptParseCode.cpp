@@ -75,7 +75,7 @@ bool ibParseCode::ParseModule(const wxString& sModule)
 					nArrayCount = 0;
 					ExpectDelimiter('[');
 					if (!IsNextDelimiter(']')) {
-						const ibLexValue vConst = ExpectConstant();
+						const ibLiteral vConst = ExpectConstant();
 						if (vConst.GetType() != ibValueTypes::TYPE_NUMBER || vConst.GetNumber() < 0)
 							continue;
 						nArrayCount = vConst.GetNumber().ToInt();
@@ -474,7 +474,7 @@ wxString ibParseCode::ExpectIdentifier(bool strRealName)
  *   Consume the next lexem as a (possibly signed) numeric constant.
  *   Handles unary +/- prefix and flips the sign on negation.
  */
-ibLexValue ibParseCode::ExpectConstant()
+ibLiteral ibParseCode::ExpectConstant()
 {
 	ibLexem lex;
 	int sign = 0;
@@ -496,7 +496,7 @@ ibLexValue ibParseCode::ExpectConstant()
 			return lex.m_valData;
 		// change sign for minus
 		if (sign == -1)
-			lex.m_valData = ibLexValue(-lex.m_valData.GetNumber());
+			lex.m_valData = ibLiteral(-lex.m_valData.GetNumber());
 	}
 	return lex.m_valData;
 }

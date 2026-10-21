@@ -12,7 +12,7 @@
 #include "protocol/protocol.h"
 
 ibValue::ibValue(ibValue* pParam)
-	: ibLexValue(pParam != nullptr ? ibValueTypes::TYPE_REFFER : ibValueTypes::TYPE_EMPTY), m_pRef(pParam)
+	: ibLiteral(pParam != nullptr ? ibValueTypes::TYPE_REFFER : ibValueTypes::TYPE_EMPTY), m_pRef(pParam)
 {
 	if (m_pRef != nullptr)
 		m_pRef->IncrRef();
@@ -20,7 +20,7 @@ ibValue::ibValue(ibValue* pParam)
 
 void ibValue::Assign(const ibValue& rhs)
 {
-	ibLexValue::operator=(rhs);   // the primitive, without the count
+	ibLiteral::operator=(rhs);   // the primitive, without the count
 	m_classType = rhs.m_classType;
 	m_stored = rhs.m_stored;
 	m_pRef = rhs.m_pRef;
@@ -72,7 +72,7 @@ ibString ibValue::GetString() const
 {
 	if (m_pRef != nullptr && IsReference())
 		return m_pRef->GetString();
-	return ibLexValue::GetString();
+	return ibLiteral::GetString();
 }
 
 bool ibValue::IsEmpty() const
@@ -88,7 +88,7 @@ bool ibValue::IsEmpty() const
 	case ibValueTypes::TYPE_BOOLEAN:
 	case ibValueTypes::TYPE_NUMBER:
 	case ibValueTypes::TYPE_DATE:
-	case ibValueTypes::TYPE_STRING:  return ibLexValue::IsEmpty();   // a primitive — the base's
+	case ibValueTypes::TYPE_STRING:  return ibLiteral::IsEmpty();   // a primitive — the base's
 	case ibValueTypes::TYPE_ENUM:    return m_number < 0;   // the negative range is "no member" — the engine's
 	default:                         return m_stored == nullptr;
 	}

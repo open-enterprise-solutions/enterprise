@@ -21,10 +21,6 @@
 #include "frmclient/mainFrame/objinspect/objinspect.h"   // the inspector the row's object is shown in
 #include "frmclient/win/picture.h"
 
-// The clipboard's format of a copied metaobject — the desktop's (backend/backend_core.h): the copy's bytes are the
-// engine's either way, so one designer pastes what the other copied.
-#define oes_clipboard_metadata	wxT("oes_clipboard_metadata")
-
 namespace {
 
 // A NEW BLOCK STARTS HERE — the desktop's (designer/mainFrame/metaTree/treeConfiguration_impl.cpp): asked of the MENU,

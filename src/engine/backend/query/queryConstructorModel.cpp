@@ -480,7 +480,7 @@ std::vector<ibQueryConstructorField> ibQueryConstructorModel::GetFields(
 				continue;
 			}
 			if (arg->m_kind == ibQueryAstExprKind::Literal) {
-				args.push_back(ibValue::FromAnyValue(arg->m_literal));
+				args.push_back(ibValue(arg->m_literal));
 				continue;
 			}
 			if (i < declared.size() && !declared[i].m_choices.empty()

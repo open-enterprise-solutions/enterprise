@@ -132,9 +132,9 @@ public:
 	{
 		auto e = ibQueryAstExpr::Make(ibQueryAstExprKind::Literal);
 		switch (Below(3)) {
-		case 0:  e->m_literal = ibAnyValuePtr<ibAnyValue>(new ibLexValue(ibNumber(static_cast<long>(Below(1000))))); break;
-		case 1:  e->m_literal = ibAnyValuePtr<ibAnyValue>(new ibLexValue(SafeName())); break;
-		default: e->m_literal = ibAnyValuePtr<ibAnyValue>(new ibLexValue(Below(2) != 0u)); break;
+		case 0:  e->m_literal = ibLiteral(ibNumber(static_cast<long>(Below(1000)))); break;
+		case 1:  e->m_literal = ibLiteral(SafeName()); break;
+		default: e->m_literal = ibLiteral(Below(2) != 0u); break;
 		}
 		return e;
 	}

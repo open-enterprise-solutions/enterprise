@@ -159,7 +159,7 @@
     <ClCompile Include="anyValue.cpp" />
     <ClCompile Include="build.cpp" />
     <ClCompile Include="compiler\blockSyntaxLINQ.cpp" />
-    <ClCompile Include="compiler\lexValue.cpp" />
+    <ClCompile Include="compiler\literal.cpp" />
     <ClCompile Include="compiler\scriptParseCode.cpp" />
     <ClCompile Include="compiler\translateCode.cpp" />
     <ClCompile Include="composition\compositionTheme.cpp" />
@@ -182,6 +182,7 @@
     <ClCompile Include="diagnostics\journal.cpp" />
     <ClCompile Include="diagnostics\leakTracker.cpp" />
     <ClCompile Include="exception.cpp" />
+    <ClCompile Include="fboolean.cpp" />
     <ClCompile Include="fdatetime.cpp" />
     <ClCompile Include="fiber\fiber.cpp" />
     <ClCompile Include="fiber\fiberLocals.cpp" />
@@ -247,7 +248,7 @@
     <ClInclude Include="clsid.h" />
     <ClInclude Include="compiler\blockSyntaxLINQ.h" />
     <ClInclude Include="compiler\codeDef.h" />
-    <ClInclude Include="compiler\lexValue.h" />
+    <ClInclude Include="compiler\literal.h" />
     <ClInclude Include="compiler\scriptParseCode.h" />
     <ClInclude Include="compiler\translateCode.h" />
     <ClInclude Include="composition\compositionTheme.h" />
@@ -271,6 +272,7 @@
     <ClInclude Include="diagnostics\journal.h" />
     <ClInclude Include="diagnostics\leakTracker.h" />
     <ClInclude Include="exception.h" />
+    <ClInclude Include="fboolean.h" />
     <ClInclude Include="fdatetime.h" />
     <ClInclude Include="fiber\fiber.h" />
     <ClInclude Include="fiber\fiberLocals.h" />

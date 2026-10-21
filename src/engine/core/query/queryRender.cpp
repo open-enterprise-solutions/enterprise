@@ -45,7 +45,7 @@ wxString Join(const std::vector<wxString>& parts, const wxString& separator)
 // through the value's own string form — which is the honest answer for a type
 // the query language has no literal syntax for, and the parser will then refuse
 // it rather than silently accept something else.
-wxString RenderLiteral(const ibAnyValue& value)
+wxString RenderLiteral(const ibLiteral& value)
 {
 	switch (value.GetType())
 	{
@@ -161,7 +161,7 @@ wxString RenderExpr(const ibQueryAstExpr& expr)
 		return Join(expr.m_path, wxT("."));
 
 	case ibQueryAstExprKind::Literal:
-		return expr.m_literal ? RenderLiteral(*expr.m_literal) : Kw(ibQueryKeyword::Undefined);   // an empty slot is the runtime's empty value
+		return RenderLiteral(expr.m_literal);
 
 	case ibQueryAstExprKind::Param:
 		return wxT("&") + expr.m_paramName;
@@ -717,8 +717,8 @@ wxString ibRenderQueryCastTarget(const ibQueryAstExpr& cast)
 	// ⚠ Two returns, not `word ? GetString() : RenderExpr(…)`: an ibString and a wxString convert into
 	// each other, so the conditional has no type of its own — clang refuses it, MSVC picks one quietly.
 	const auto spell = [](const ibQueryAstExpr& q) -> wxString {
-		if (q.m_kind == ibQueryAstExprKind::Literal && q.m_literal && q.m_literal->GetType() == ibValueTypes::TYPE_STRING)
-			return q.m_literal->GetString();
+		if (q.m_kind == ibQueryAstExprKind::Literal && q.m_literal.GetType() == ibValueTypes::TYPE_STRING)
+			return q.m_literal.GetString();
 		return RenderExpr(q);
 	};
 	wxString qualifiers;

@@ -119,7 +119,7 @@ public:
 	// zeroes it again. So whatever member is written next writes over a valid empty one. Never write
 	// a string or a number member over a non-zero word of another kind: its old text would be kept.
 	union {
-		bool          m_bData;  //TYPE_BOOLEAN
+		ibBoolean     m_bData;  //TYPE_BOOLEAN — one byte
 		ibDateTime    m_dData;  //TYPE_DATE — one word, the count of a wall-clock reading
 		ibValue*      m_pRef;   //TYPE_REFFER (+ VALUE/ENUM/OLE/... aliased)
 		// TYPE_CONST_REFFER — read-only view of a NON-owned object (const
@@ -928,7 +928,7 @@ public:
 
 	// A CONSTANT AS THE TRANSLATOR READ IT (ibLexem::m_valData) — the door through which the compiler
 	// puts one into the bytecode. Explicit: a lexem's value is not an engine value until it is asked to be.
-	explicit ibValue(const class ibLexValue& lexValue);
+	explicit ibValue(const class ibLiteral& literal);
 
 	// ⭐⭐ ANY OTHER POINTER IS A MISTAKE, AND IT USED TO BECOME `TRUE`.
 	//
@@ -965,11 +965,12 @@ public:
 		if (m_refCount.fetch_sub(1, std::memory_order_acq_rel) == 1) delete this;
 	}
 
-	// ⭐ THIS VALUE WHERE THE CORE KEEPS ONE (a sheet's parameters, a query's constant) — a copy of it, counted by
-	// its own count — and the value read back out of it: ours when we put it there, else the core's own constant
-	// (an ibLexValue — what a query's text wrote) read as the primitive it is. Empty when nothing is held.
+	// ⭐ THIS VALUE WHERE THE CORE KEEPS ONE (a sheet's parameters) — a copy of it, counted by its own count —
+	// and the value read back out of it: ours, since only we put one in (empty when nothing is held).
 	ibAnyValuePtr<ibValue> ToAnyValue() const { return ibAnyValuePtr<ibValue>(new ibValue(*this)); }
-	static ibValue FromAnyValue(const ibAnyValuePtr<ibAnyValue>& value);
+	static ibValue FromAnyValue(const ibAnyValuePtr<ibAnyValue>& value) {
+		return value ? ibValue(static_cast<const ibValue&>(*value)) : ibValue();
+	}
 
 	// 🛑⭐⭐ THIS OWNERSHIP CANNOT BE FENCED OFF BY ACCESS CONTROL, and the reason is not a detail of
 	// which member to hide — it is what ibValue IS. Three attempts, 2026-09-06, kept so that nobody

@@ -46,13 +46,6 @@ class ibValueCommandBarItem;
 #define wxNOTEBOOK_PAGE_DESIGNER 0
 #define wxNOTEBOOK_PAGE_CODE_EDITOR 1
 
-#define oes_clipboard_frame		wxT("oes_clipboard_frame")
-#define oes_clipboard_attribute	wxT("oes_clipboard_attribute")
-#define oes_clipboard_command	wxT("oes_clipboard_command")
-// A command of a control's command bar — on the system's clipboard as the others are: the desktop held it in its process
-// (commandBar.cpp's s_commandClipboard), out of reach of another window.
-#define oes_clipboard_command_bar_item	wxT("oes_clipboard_command_bar_item")
-
 // wxDropTarget for a node dragged from a form-editor tree — the desktop's (designer visualEditor.h). Shared by the form
 // CANVAS and the OBJECT TREE. It holds the registered draggable KINDS (ibFormDragItem — a source path, a command
 // path); OnData matches the RECEIVED format to a kind, decodes it and enacts the drop. NO per-format branch — adding a
