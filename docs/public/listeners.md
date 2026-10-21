@@ -2,8 +2,9 @@
 
 **What.** A server of this platform listens through one door, `backend/server/listener.h`: TLS when
 `backend.conf` names a certificate, plain HTTP on this machine's own addresses when it names none, and a
-refusal on any other address. The assistant access (MCP) inside the designer and in the application server,
-and `wenterprise-server`, listen through it; the application server's client listener does not yet.
+refusal on any other address. The assistant access (MCP) inside the designer and in the application server
+listens through it; the application server's client listener does not yet. The server itself is the core's
+(`core/net/httpServer.h`), and so is its TLS: Mbed TLS is linked into the core and nowhere else.
 
 **Why.** Three servers listen on a network here, and all three spoke plain HTTP whatever the address:
 the assistant's bearer token, a browser's session cookie and a thin client's password crossed the wire
@@ -26,10 +27,11 @@ one beside the program - one file for every server the process runs. A Windows p
 A key under a password is not taken: there is no word for the password, and the refusal says so.
 
 Relative names are resolved against the file's folder. Both or neither: one without the other is a
-refusal. A file named and not there, or not readable, or a key that is not the certificate's, is a refusal
-that names the file - never a listener in the clear: a server that listens in the clear because its
+refusal. A file named and not there, or not readable, is a refusal that names the file; a certificate or a
+key that is not PEM, or a key that is not the certificate's, is a refusal of the server's start that says
+which of the two - never a listener in the clear: a server that listens in the clear because its
 certificate was mislaid is the failure this door exists to prevent. The files are read by the engine, by
-their names in whatever script, and handed to the library as memory.
+their names in whatever script, and handed to the server as text.
 
 ## The clear
 
@@ -45,12 +47,10 @@ clear does not cross a network.
   `https://`, and the client has to trust the certificate: a self-signed one is given to Claude Code's
   runtime through `NODE_EXTRA_CA_CERTS`, and the address shown is the one bound - with `0.0.0.0` that is
   no address a certificate names, so reach it by the name the certificate carries.
-- **`wenterprise-server`** binds `127.0.0.1` unless `--host` says otherwise, so the designer's web
-  debugging, which starts it without one and opens the browser on the address the manifest reports, is
-  unchanged; `--host=0.0.0.0` without a certificate is a refusal on its console. Over TLS it does not
-  bounce a `Host: localhost` request to `127.0.0.1` as it does in the clear: the certificate names what
-  the browser asked for, so one named for the assistant moves the web debugging to `https://` too, and
-  has to name `localhost` or `127.0.0.1`, whichever the browser is sent to.
+- **`wenterprise-server`** speaks no TLS, whatever `backend.conf` names: it binds this machine's own
+  address only (`127.0.0.1` unless `--host` names another of them), and any other is a refusal on its
+  console. The designer's web debugging, which starts it without `--host`, is unchanged. A browser over
+  `https://`, or on another machine, is the web server's (`webserver`).
 
 ## Where it stops
 
@@ -58,8 +58,9 @@ clear does not cross a network.
 - A base whose assistant access was set to an address off this machine's own, with no certificate named,
   does not start it any more: the designer's settings page says why, the application server's journal
   does. Name a certificate, or set the address back.
-- The listener's timeouts are what they were (a request may take six minutes, a kept connection ten):
-  a caller that opens connections and says nothing holds them that long, authorised or not.
+- The assistant's timeouts: a connection that sends no request within 30 seconds is let go, one kept
+  alive between calls after ten minutes of silence; a call is not cut while it runs (a tool waits its turn
+  on the designer's main thread, five minutes at most).
 - The certificate is the process's, not a base's: one file for every server the process runs.
 - Nothing here checks the certificate's name against the address: that is the client's side, as with any
   TLS server.

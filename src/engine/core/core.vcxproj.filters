@@ -7,6 +7,9 @@
     <Filter Include="composition">
       <UniqueIdentifier>{7b2e4c91-3f58-4a0d-b6e2-9c1d8a5f3e47}</UniqueIdentifier>
     </Filter>
+    <Filter Include="crypto">
+      <UniqueIdentifier>{6e1b3d84-2f7a-4c95-b0d8-3a9e5c1f7b26}</UniqueIdentifier>
+    </Filter>
     <Filter Include="description">
       <UniqueIdentifier>{5fd91569-04e3-42cc-a2eb-ab6104edba35}</UniqueIdentifier>
     </Filter>
@@ -75,6 +78,15 @@
       <Filter>composition</Filter>
     </ClCompile>
     <ClCompile Include="core.cpp" />
+    <ClCompile Include="crypto\fieldCipher.cpp">
+      <Filter>crypto</Filter>
+    </ClCompile>
+    <ClCompile Include="crypto\sessionToken.cpp">
+      <Filter>crypto</Filter>
+    </ClCompile>
+    <ClCompile Include="crypto\sha256.cpp">
+      <Filter>crypto</Filter>
+    </ClCompile>
     <ClCompile Include="description\calcScheduleDescription.cpp">
       <Filter>description</Filter>
     </ClCompile>
@@ -234,6 +246,15 @@
       <Filter>composition</Filter>
     </ClInclude>
     <ClInclude Include="core.h" />
+    <ClInclude Include="crypto\fieldCipher.h">
+      <Filter>crypto</Filter>
+    </ClInclude>
+    <ClInclude Include="crypto\sessionToken.h">
+      <Filter>crypto</Filter>
+    </ClInclude>
+    <ClInclude Include="crypto\sha256.hpp">
+      <Filter>crypto</Filter>
+    </ClInclude>
     <ClInclude Include="description\calcScheduleDescription.h">
       <Filter>description</Filter>
     </ClInclude>

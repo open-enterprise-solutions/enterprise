@@ -92,7 +92,7 @@
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
-      <AdditionalIncludeDirectories>$(oesEngine);$(oes3rdParty)asio\asio\include;$(oes3rdParty)llhttp\include;$(oes3rdParty)mbedtls\include;$(oesEngine)backend\tls;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(oesEngine);$(oes3rdParty)asio\asio\include;$(oes3rdParty)llhttp\include;$(oes3rdParty)mbedtls\include;$(oesEngine)core\tls;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <!-- Asio's templates (net\) make more sections than an object file holds by default. -->
       <AdditionalOptions>/bigobj %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
@@ -164,6 +164,9 @@
     <ClCompile Include="compiler\translateCode.cpp" />
     <ClCompile Include="composition\compositionTheme.cpp" />
     <ClCompile Include="core.cpp" />
+    <ClCompile Include="crypto\fieldCipher.cpp" />
+    <ClCompile Include="crypto\sessionToken.cpp" />
+    <ClCompile Include="crypto\sha256.cpp" />
     <ClCompile Include="description\calcScheduleDescription.cpp" />
     <ClCompile Include="description\choiceLinkDescription.cpp" />
     <ClCompile Include="description\commandDescription.cpp" />
@@ -243,6 +246,9 @@
     <ClInclude Include="compiler\translateCode.h" />
     <ClInclude Include="composition\compositionTheme.h" />
     <ClInclude Include="core.h" />
+    <ClInclude Include="crypto\fieldCipher.h" />
+    <ClInclude Include="crypto\sessionToken.h" />
+    <ClInclude Include="crypto\sha256.hpp" />
     <ClInclude Include="description\calcScheduleDescription.h" />
     <ClInclude Include="description\choiceLinkDescription.h" />
     <ClInclude Include="description\commandDescription.h" />

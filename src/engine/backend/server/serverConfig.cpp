@@ -9,7 +9,7 @@
 #include <sys/stat.h>
 #endif
 
-#include "backend/cipher/fieldCipher.h"
+#include "core/crypto/fieldCipher.h"
 #include "core/guid.h"
 
 namespace {

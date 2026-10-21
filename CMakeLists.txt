@@ -235,29 +235,26 @@ oes_require_submodule(nlohmann single_include/nlohmann/json.hpp)
 # Common to all platforms
 add_compile_definitions(_UNICODE UNICODE)
 
-# cpp-httplib, for every translation unit that includes it (the MCP server, the script's HTTP client,
-# the web server, the tests): its inline functions read these, and two units compiled under two values
-# of one macro are one definition too many - so the whole build says it once. ConfigurationDefs.props
-# says the same for the solution.
+# cpp-httplib, for every translation unit that includes it (wenterprise-server, the tests' reference servers
+# and clients): its inline functions read these, and two units compiled under two values of one macro are
+# one definition too many - so the whole build says it once. ConfigurationDefs.props says the same for the
+# solution.
 #   EXPECT_100_THRESHOLD=0 - the client does not add `Expect: 100-continue` to a body of 1 KB or more by
-#   itself: a server that does not speak it (an older proxy, a cash register's firmware) answers a second
-#   late or not at all, and a script has no header it may set to stop that.
+#   itself: a server that does not speak it answers a second late or not at all.
 #   SEND_FLAGS=MSG_NOSIGNAL - off Windows a write to a peer that hung up raises SIGPIPE, whose default
-#   ends the process; the flag keeps it an error the caller sees. macOS has no such flag and sets
-#   SO_NOSIGPIPE on the socket instead (backend/system/value/valueHttp.cpp).
+#   ends the process; the flag keeps it an error the caller sees.
 add_compile_definitions(CPPHTTPLIB_EXPECT_100_THRESHOLD=0)
 if(NOT WIN32 AND NOT APPLE)
     add_compile_definitions(CPPHTTPLIB_SEND_FLAGS=MSG_NOSIGNAL)
 endif()
 
-# TLS for cpp-httplib: Mbed TLS, a submodule built here - nothing installed, nothing from the system (the tree
+# MBED TLS - THE CORE'S (core/tls): a submodule built here - nothing installed, nothing from the system (the tree
 # holds OpenSSL only as a run-time client of PostgreSQL, without headers). Its tests and programs stay out; the
-# generated files are in the tag, so no Python is needed. One macro for the whole build, for the reason the
-# two above give; the library reads the platform's own trust store by itself (the Windows store, the macOS
-# keychain, /etc/ssl/certs on Linux). Everything that includes httplib.h links the three libraries through
-# backend, which carries them as PUBLIC.
+# generated files are in the tag, so no Python is needed. Linked by the core alone, PRIVATE: a cipher, a random
+# byte, TLS are asked of the core (core/crypto, core/net). The one other user is the test binary, whose
+# reference TLS servers are cpp-httplib's (tests/CMakeLists.txt).
 oes_require_submodule(mbedtls CMakeLists.txt)
-# ⚠ A STATIC LIBRARY THAT GOES INTO A SHARED ONE HAS TO BE POSITION-INDEPENDENT. backend is a shared
+# ⚠ A STATIC LIBRARY THAT GOES INTO A SHARED ONE HAS TO BE POSITION-INDEPENDENT. core is a shared
 # library and Mbed TLS builds static ones, which say nothing about -fPIC; on a Linux whose gcc defaults to
 # PIE that is a link error ("relocation R_X86_64_PC32 ... recompile with -fPIC") and nowhere else. It is the
 # DIRECTORY variable rather than a target property, because the targets do not exist until the subdirectory
@@ -266,8 +263,8 @@ oes_require_submodule(mbedtls CMakeLists.txt)
 # changes: wxWidgets and the executables are compiled exactly as they were.
 set(OES_PIC_WAS ${CMAKE_POSITION_INDEPENDENT_CODE})
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-# ⚠ AND HIDDEN. A copy per module is the design (backend/tls/oes_mbedtls_threading.h): core, backend, frmclient and
-# a test binary each link their own. Compiled with the default visibility, on Linux every shared library also
+# ⚠ AND HIDDEN. A copy per module is the design (core/tls/oes_mbedtls_threading.h): the core and a test binary
+# each link their own. Compiled with the default visibility, on Linux every shared library also
 # EXPORTS its copy, and the loader binds the copies' globals to the first one loaded - one module's state read
 # through another's (ASan: odr-violation on mbedtls_ssl_tls13_labels, oes_protocol_test against libcore.so).
 # Hidden, each copy stays its module's, as Windows and macOS keep them anyway. Put back afterwards, as PIC is.
@@ -277,8 +274,8 @@ set(CMAKE_C_VISIBILITY_PRESET hidden)
 # directory goes on the include path for the whole build because Mbed TLS's OWN sources include
 # threading_alt.h by that name (library/threading.h), and so do the two translation units of ours that hand
 # the mutexes over.
-set(MBEDTLS_USER_CONFIG_FILE "${OES_ENGINE_DIR}/backend/tls/oes_mbedtls_config.h" CACHE FILEPATH "Mbed TLS: what this build adds to its configuration" FORCE)
-include_directories("${OES_ENGINE_DIR}/backend/tls")
+set(MBEDTLS_USER_CONFIG_FILE "${OES_ENGINE_DIR}/core/tls/oes_mbedtls_config.h" CACHE FILEPATH "Mbed TLS: what this build adds to its configuration" FORCE)
+include_directories("${OES_ENGINE_DIR}/core/tls")
 set(ENABLE_TESTING OFF CACHE BOOL "Mbed TLS: its own tests" FORCE)
 set(ENABLE_PROGRAMS OFF CACHE BOOL "Mbed TLS: its sample programs" FORCE)
 set(MBEDTLS_FATAL_WARNINGS OFF CACHE BOOL "Mbed TLS: -Werror" FORCE)
@@ -290,9 +287,8 @@ set(LINK_WITH_PTHREAD ON CACHE BOOL "Mbed TLS: link the thread library it takes 
 add_subdirectory(src/3rdparty/mbedtls EXCLUDE_FROM_ALL)
 set(CMAKE_POSITION_INDEPENDENT_CODE ${OES_PIC_WAS})
 set(CMAKE_C_VISIBILITY_PRESET ${OES_C_VISIBILITY_WAS})
-add_compile_definitions(CPPHTTPLIB_MBEDTLS_SUPPORT)
 
-# THE CORE'S HTTP (core/net) — its own, beside cpp-httplib: llhttp parses the requests, Asio carries the sockets (both
+# THE CORE'S HTTP (core/net) — the engine's: llhttp parses the requests, Asio carries the sockets (both
 # the core's alone). llhttp is built here from the three C files of its release branch, as
 # core/net/llhttp/llhttp.vcxproj builds them: its own CMake writes into the submodule's tree and asks for CMake 3.25.
 # Asio is header-only, compiled once inside the core (core/net/asio.cpp).

@@ -99,7 +99,7 @@
       <!-- library/ is on the path because Mbed TLS's own sources include "common.h" from it; the engine's
            tls/ directory is there because MBED TLS ITSELF includes threading_alt.h by that name, and because
            oes_mbedtls_config.h is reached as <oes_mbedtls_config.h> rather than by a path with quotes in it. -->
-      <AdditionalIncludeDirectories>$(oes3rdParty)mbedtls\include;$(oes3rdParty)mbedtls\library;$(oesEngine)backend\tls;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(oes3rdParty)mbedtls\include;$(oes3rdParty)mbedtls\library;$(oesEngine)core\tls;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <!-- Common.props asks every project for a precompiled header; these are C files from another tree and
            have none, which is 108 x C1010 ("unexpected end of file while looking for precompiled header"). -->
       <PrecompiledHeader>NotUsing</PrecompiledHeader>

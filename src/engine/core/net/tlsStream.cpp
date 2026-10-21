@@ -1,6 +1,9 @@
 #include "tlsStream.h"
 
+#include "httpClient.h"   // ibHttpClientError — which part of a client's TLS is not readable
+
 #include <cstring>
+#include <initializer_list>
 
 #include <asio/error.hpp>
 #include <asio/post.hpp>
@@ -8,6 +11,9 @@
 
 #if defined(_WIN32)
 #include <windows.h>   // the critical sections Mbed TLS's mutexes are, below
+#include <wincrypt.h>  // the system's certificate stores, a client's authorities
+#elif defined(__APPLE__)
+#include <Security/Security.h>   // the keychain's trust settings, a client's authorities
 #endif
 
 #include <mbedtls/error.h>
@@ -36,6 +42,65 @@ std::error_code TlsFailure()
 const char* s_protocols[] = { "http/1.1", nullptr };
 #endif
 
+// THE PLATFORM'S AUTHORITIES, into `chain` — the ones a browser on this machine trusts: the Windows stores (the roots
+// and the intermediates), the macOS keychain's trust settings, a Linux distribution's bundle. False — none was found.
+bool LoadSystemTrust(mbedtls_x509_crt& chain)
+{
+	bool loaded = false;
+#if defined(_WIN32)
+	for (const wchar_t* const name : { L"ROOT", L"CA" }) {
+		const HCERTSTORE store = CertOpenSystemStoreW(0, name);
+		if (store == nullptr)
+			continue;
+		PCCERT_CONTEXT certificate = nullptr;
+		while ((certificate = CertEnumCertificatesInStore(store, certificate)) != nullptr) {
+			if (mbedtls_x509_crt_parse_der(&chain, certificate->pbCertEncoded, certificate->cbCertEncoded) == 0)
+				loaded = true;
+		}
+		CertCloseStore(store, 0);
+	}
+#elif defined(__APPLE__)
+	for (const SecTrustSettingsDomain domain : { kSecTrustSettingsDomainSystem, kSecTrustSettingsDomainAdmin,
+		kSecTrustSettingsDomainUser }) {
+		CFArrayRef certificates = nullptr;
+		if (SecTrustSettingsCopyCertificates(domain, &certificates) != errSecSuccess || certificates == nullptr) {
+			if (certificates != nullptr)
+				CFRelease(certificates);
+			continue;
+		}
+		const CFIndex count = CFArrayGetCount(certificates);
+		for (CFIndex i = 0; i < count; ++i) {
+			const SecCertificateRef certificate = (SecCertificateRef)CFArrayGetValueAtIndex(certificates, i);
+			const CFDataRef data = SecCertificateCopyData(certificate);
+			if (data == nullptr)
+				continue;
+			if (mbedtls_x509_crt_parse_der(&chain, CFDataGetBytePtr(data), static_cast<std::size_t>(CFDataGetLength(data))) == 0)
+				loaded = true;
+			CFRelease(data);
+		}
+		CFRelease(certificates);
+	}
+#else
+	// A distribution's bundle where it keeps one, else its folder of them.
+	for (const char* const file : { "/etc/ssl/certs/ca-certificates.crt", "/etc/pki/tls/certs/ca-bundle.crt",
+		"/etc/ssl/ca-bundle.pem", "/etc/pki/tls/cacert.pem", "/etc/ssl/cert.pem" }) {
+		if (mbedtls_x509_crt_parse_file(&chain, file) >= 0) {
+			loaded = true;
+			break;
+		}
+	}
+	if (!loaded) {
+		for (const char* const folder : { "/etc/ssl/certs", "/etc/pki/tls/certs", "/usr/share/ca-certificates" }) {
+			if (mbedtls_x509_crt_parse_path(&chain, folder) >= 0) {
+				loaded = true;
+				break;
+			}
+		}
+	}
+#endif
+	return loaded;
+}
+
 } // namespace
 
 //*******************************************************************************************
@@ -48,37 +113,44 @@ ibTlsContext::ibTlsContext()
 	mbedtls_ctr_drbg_init(&m_random);
 	mbedtls_x509_crt_init(&m_certificate);
 	mbedtls_pk_init(&m_key);
+	mbedtls_x509_crt_init(&m_trusted);
 	mbedtls_ssl_config_init(&m_config);
 }
 
 ibTlsContext::~ibTlsContext()
 {
 	mbedtls_ssl_config_free(&m_config);
+	mbedtls_x509_crt_free(&m_trusted);
 	mbedtls_pk_free(&m_key);
 	mbedtls_x509_crt_free(&m_certificate);
 	mbedtls_ctr_drbg_free(&m_random);
 	mbedtls_entropy_free(&m_entropy);
 }
 
-bool ibTlsContext::Load(const std::string& certificate, const std::string& privateKey, std::string& error)
+bool ibTlsContext::Prepare(const char* personal, std::string& error)
 {
-	// TLS 1.3's key schedule goes through PSA, whose state is the process's: made before the first handshake.
+	// PSA's state is the process's: made before the first handshake.
 	const psa_status_t psa = psa_crypto_init();
 	if (psa != PSA_SUCCESS) {
 		error = "the crypto library did not start (PSA " + std::to_string(psa) + ")";
 		return false;
 	}
-
-	static const char s_personal[] = "oes-webserver";
-	int code = mbedtls_ctr_drbg_seed(&m_random, mbedtls_entropy_func, &m_entropy,
-		reinterpret_cast<const unsigned char*>(s_personal), sizeof(s_personal) - 1);
+	const int code = mbedtls_ctr_drbg_seed(&m_random, mbedtls_entropy_func, &m_entropy,
+		reinterpret_cast<const unsigned char*>(personal), std::strlen(personal));
 	if (code != 0) {
 		error = "no randomness for TLS: " + Describe(code);
 		return false;
 	}
+	return true;
+}
+
+bool ibTlsContext::Load(const std::string& certificate, const std::string& privateKey, std::string& error)
+{
+	if (!Prepare("oes-webserver", error))
+		return false;
 
 	// PEM is read with its terminating zero counted.
-	code = mbedtls_x509_crt_parse(&m_certificate,
+	int code = mbedtls_x509_crt_parse(&m_certificate,
 		reinterpret_cast<const unsigned char*>(certificate.c_str()), certificate.size() + 1);
 	if (code != 0) {
 		error = "the certificate is not readable: " + Describe(code);
@@ -119,6 +191,66 @@ bool ibTlsContext::Load(const std::string& certificate, const std::string& priva
 	return true;
 }
 
+ibHttpClientError ibTlsContext::LoadClient(const std::string& trusted, const std::string& certificate,
+	const std::string& password, bool verify, std::string& error)
+{
+	// What fails before either file is read is the TLS's itself: said with the trusted certificates, the first asked.
+	if (!Prepare("oes-httpclient", error))
+		return ibHttpClientError::Trusted;
+
+	int code = mbedtls_ssl_config_defaults(&m_config, MBEDTLS_SSL_IS_CLIENT, MBEDTLS_SSL_TRANSPORT_STREAM,
+		MBEDTLS_SSL_PRESET_DEFAULT);
+	if (code != 0) {
+		error = "TLS could not be configured: " + Describe(code);
+		return ibHttpClientError::Trusted;
+	}
+	mbedtls_ssl_conf_rng(&m_config, mbedtls_ctr_drbg_random, &m_random);
+	mbedtls_ssl_conf_min_tls_version(&m_config, MBEDTLS_SSL_VERSION_TLS1_2);
+
+	// Whom to trust: the authorities named, else the platform's. A file that holds none is said, by what is in it.
+	if (!trusted.empty()) {
+		code = mbedtls_x509_crt_parse(&m_trusted, reinterpret_cast<const unsigned char*>(trusted.c_str()), trusted.size() + 1);
+		if (code < 0) {
+			error = "the trusted certificates are not readable: " + Describe(code);
+			return ibHttpClientError::Trusted;
+		}
+	}
+	else if (verify && !LoadSystemTrust(m_trusted)) {
+		error = "the platform's trusted certificates could not be read";
+		return ibHttpClientError::Trusted;
+	}
+	mbedtls_ssl_conf_ca_chain(&m_config, &m_trusted, nullptr);
+	mbedtls_ssl_conf_authmode(&m_config, verify ? MBEDTLS_SSL_VERIFY_REQUIRED : MBEDTLS_SSL_VERIFY_NONE);
+
+	// What it shows, when a server asks: the certificate and its key, one PEM text — each read from it by its own
+	// header; the key opened with the password.
+	if (!certificate.empty()) {
+		code = mbedtls_x509_crt_parse(&m_certificate, reinterpret_cast<const unsigned char*>(certificate.c_str()),
+			certificate.size() + 1);
+		if (code != 0) {
+			error = "the client's certificate is not readable: " + Describe(code);
+			return ibHttpClientError::Certificate;
+		}
+		code = mbedtls_pk_parse_key(&m_key, reinterpret_cast<const unsigned char*>(certificate.c_str()), certificate.size() + 1,
+			password.empty() ? nullptr : reinterpret_cast<const unsigned char*>(password.data()), password.size(),
+			mbedtls_ctr_drbg_random, &m_random);
+		if (code == MBEDTLS_ERR_PK_PASSWORD_REQUIRED || code == MBEDTLS_ERR_PK_PASSWORD_MISMATCH) {
+			error = "the client's key wants its password, and the one given does not open it";
+			return ibHttpClientError::Certificate;
+		}
+		if (code != 0) {
+			error = "the client's key is not readable: " + Describe(code);
+			return ibHttpClientError::Certificate;
+		}
+		code = mbedtls_ssl_conf_own_cert(&m_config, &m_certificate, &m_key);
+		if (code != 0) {
+			error = "the client's certificate could not be taken: " + Describe(code);
+			return ibHttpClientError::Certificate;
+		}
+	}
+	return ibHttpClientError::None;
+}
+
 //*******************************************************************************************
 //*                                      The stream                                         *
 //*******************************************************************************************
@@ -131,9 +263,25 @@ ibTlsStream::ibTlsStream(asio::ip::tcp::socket socket, std::shared_ptr<const ibT
 	mbedtls_ssl_set_bio(&m_ssl, this, &ibTlsStream::Send, &ibTlsStream::Receive, nullptr);
 }
 
+ibTlsStream::ibTlsStream(asio::ip::tcp::socket socket, std::shared_ptr<const ibTlsContext> context, const std::string& host) :
+	ibTlsStream(std::move(socket), std::move(context))
+{
+	if (m_setup == 0)
+		m_setup = mbedtls_ssl_set_hostname(&m_ssl, host.c_str());
+}
+
 ibTlsStream::~ibTlsStream()
 {
 	mbedtls_ssl_free(&m_ssl);
+}
+
+std::uint32_t ibTlsStream::GetVerification() const
+{
+	const std::uint32_t flags = mbedtls_ssl_get_verify_result(&m_ssl);
+	// Not checked (the client said not to) or not reached: nothing to say about the certificate.
+	if (flags == static_cast<std::uint32_t>(-1) || flags == MBEDTLS_X509_BADCERT_SKIP_VERIFY)
+		return 0;
+	return flags;
 }
 
 int ibTlsStream::Send(void* stream, const unsigned char* data, std::size_t size)

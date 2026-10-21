@@ -9,14 +9,14 @@
 //     var mine  = New CertificateFile("C:\certs\client.pem", "pass");  // the certificate to show, with its key, in one file
 //     connection.SecureConnection = New SecureConnection(mine, trust); // both are optional
 //
-// Two values and no library in them: a CertificateFile is a path and a password, a SecureConnection is which
+// Two values and no TLS in them: a CertificateFile is a path and a password, a SecureConnection is which
 // certificate to show, whom to trust, and whether to check. What they mean on the wire is the HTTPConnection's
-// business (valueHttp.cpp), where the TLS library lives.
+// business (valueHttp.cpp), which reads the files and hands them to the core's client.
 //
 // ⚠ VerifyServerCertificate IS TRUE UNLESS SAID. False keeps the encryption and drops the check - the chain AND
 // the name - which is a thing for a test stand and never for a bank; the help says so in those words. The
 // trusted certificates, when none are named, are the platform's own store: the Windows store, the macOS keychain,
-// /etc/ssl/certs on Linux - read by the library itself.
+// /etc/ssl/certs on Linux - read by the core (core/net/tlsStream.cpp).
 
 void ibValueCertificateFile_BindNames(ibValue::ibMemberTable& helper, const ibValue* ctx);
 

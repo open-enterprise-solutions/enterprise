@@ -1,11 +1,11 @@
 // A secure connection for the script's HTTP client - CertificateFile, SecureConnection, and what an
-// HTTPConnection does with them. The first half needs no wire; the second brings the library's own TLS server up
-// on 127.0.0.1 inside the test, with the identities in tests/certs/ (made once, self-signed, good for a century -
-// its README says how), and asks what a client sees: an answer, or a refusal with the reason in the sentence,
-// and never a request that reached a server it should not have trusted.
+// HTTPConnection does with them. The first half needs no wire; the second brings a TLS server up on 127.0.0.1
+// inside the test, with the identities in tests/certs/ (made once, self-signed, good for a century - its README
+// says how), and asks what a client sees: an answer, or a refusal with the reason in the sentence, and never a
+// request that reached a server it should not have trusted.
 //
-// ⚠ The server is the same library as the client. What that proves is that the roads in THIS code lead where
-// they say; that the library's TLS agrees with other servers is what the library's own tests are for.
+// ⚠ The server is cpp-httplib's, the client the core's (core/net/httpClient.h): another library on the other
+// side, so what passes here is two TLS implementations agreeing, not one agreeing with itself.
 
 #include <gtest/gtest.h>
 
@@ -97,7 +97,7 @@ TEST(HttpSecureValues, ThisBuildHasTls)
 #ifdef CPPHTTPLIB_SSL_ENABLED
 	SUCCEED();
 #else
-	FAIL() << "CPPHTTPLIB_MBEDTLS_SUPPORT is not set for this build - the root CMakeLists.txt says it for every target";
+	FAIL() << "CPPHTTPLIB_MBEDTLS_SUPPORT is not set for this binary - tests/CMakeLists.txt says it for its reference servers";
 #endif
 }
 
@@ -442,9 +442,8 @@ TEST_F(HttpSecure, ASecureConnectionChangedInPlaceIsObeyedByTheNextRequest)
 	EXPECT_FALSE(Refusal([&] { Ask(strict); }).empty()) << "the certificate was taken away and went on being shown";
 }
 
-// A certificate file that cannot be read is said once - and said again, because the library loads its trusted
-// certificates under a std::call_once that never fires twice: a transport kept after that failure would go on
-// with an empty chain, refusing every server for a reason its sentence no longer names.
+// A certificate file that cannot be read is said - and said again on the next request: a transport kept after
+// that failure would go on with an empty chain, refusing every server for a reason its sentence no longer names.
 TEST_F(HttpSecure, AFileThatCannotBeReadIsSaidEveryTimeItIsAsked)
 {
 	ibValueHttpConnection connection;

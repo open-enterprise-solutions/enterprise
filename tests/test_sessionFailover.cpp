@@ -31,7 +31,7 @@
 #ifdef OES_USE_FIREBIRD
 #include "backend/databaseLayer/firebird/firebirdDatabaseLayer.h"
 #endif
-#include "backend/utils/sessionToken.h"
+#include "core/crypto/sessionToken.h"
 #include "core/exception.h"
 
 #include "frmserver/client/clientHost.h"

@@ -1,12 +1,13 @@
 #ifndef __CORE_NET_TLS_STREAM_H__
 #define __CORE_NET_TLS_STREAM_H__
 
-// TLS OVER A CONNECTION — Mbed TLS, the build's own (backend/tls), driven without a socket of its own: what it
+// TLS OVER A CONNECTION — Mbed TLS, the build's own (core/tls), driven without a socket of its own: what it
 // writes is collected and handed to the socket, what the socket reads is handed to it, so a connection waiting for
-// its peer holds no thread here either. TLS 1.2 and 1.3; the server's side only — the web server is reached by
-// browsers, and reaches its application servers in the clear, on their own network, as a thin client does
-// (protocol/connectionServer.h).
+// its peer holds no thread here either. TLS 1.2 and 1.3. The server's side — the web server reached by browsers, the
+// assistant's access — and the client's: a script's HTTPS (httpClient.h). The web server reaches its application
+// servers in the clear, on their own network, as a thin client does (protocol/connectionServer.h).
 
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
@@ -18,6 +19,8 @@
 #include <mbedtls/x509_crt.h>
 
 #include "httpStream.h"
+
+enum class ibHttpClientError;   // httpClient.h — why a client was not prepared
 
 // THE SERVER'S CERTIFICATE AND KEY, and the configuration every connection's TLS is made from — read once, shared
 // by all of them (Mbed TLS reads a configuration from many contexts at once; it is not changed after Load).
@@ -34,13 +37,25 @@ public:
 	// is refused: there is no word for the password.
 	bool Load(const std::string& certificate, const std::string& privateKey, std::string& error);
 
+	// THE CLIENT'S — whom it trusts and what it shows. `trusted`: PEM text of the authorities a server's chain must
+	// end in; empty — the platform's own store (the Windows store, the macOS keychain, /etc/ssl/certs). `certificate`:
+	// PEM text holding the client's certificate and its key, one file, the key opened with `password`; empty — none is
+	// shown. `verify` — the server's chain and its name checked; off, any server is spoken to. ::Trusted or
+	// ::Certificate — which of them is not readable, with why in `error`.
+	ibHttpClientError LoadClient(const std::string& trusted, const std::string& certificate, const std::string& password,
+		bool verify, std::string& error);
+
 	const mbedtls_ssl_config* GetConfig() const { return &m_config; }
 
 private:
+	// TLS 1.3's key schedule goes through PSA, and every handshake draws on the random generator: both made first.
+	bool Prepare(const char* personal, std::string& error);
+
 	mbedtls_entropy_context  m_entropy;
 	mbedtls_ctr_drbg_context m_random;
 	mbedtls_x509_crt         m_certificate;
 	mbedtls_pk_context       m_key;
+	mbedtls_x509_crt         m_trusted;   // the client's authorities
 	mbedtls_ssl_config       m_config;
 };
 
@@ -48,7 +63,13 @@ class ibTlsStream : public ibHttpStream {
 public:
 
 	ibTlsStream(asio::ip::tcp::socket socket, std::shared_ptr<const ibTlsContext> context);
+	// …the client's, to `host`: the name sent (SNI) and the name the server's certificate is checked against.
+	ibTlsStream(asio::ip::tcp::socket socket, std::shared_ptr<const ibTlsContext> context, const std::string& host);
 	virtual ~ibTlsStream();
+
+	// After a handshake that failed: why the server's certificate was not taken (MBEDTLS_X509_BADCERT_*), 0 — it was,
+	// or the failure was not about it.
+	std::uint32_t GetVerification() const;
 
 	virtual void Handshake(std::function<void(const std::error_code& error)> done) override;
 	virtual void ReadSome(char* buffer, std::size_t size, ibDone done) override;

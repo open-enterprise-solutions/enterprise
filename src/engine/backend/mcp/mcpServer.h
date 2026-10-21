@@ -219,7 +219,7 @@ public:
 
 private:
 
-	class ibMcpListener;   // the worker thread + its socket, defined in the .cpp
+	class ibMcpListener;   // the HTTP server + its stream, defined in the .cpp
 
 	// WHAT THE HTTP HEADERS SAID, for the parts of the message the transport mirrors
 	// into them. From revision 2025-06-18 a client states the protocol version in a
@@ -228,7 +228,7 @@ private:
 	// load balancer routes on the one and the server executes on the other.
 	//
 	// Carried in a struct of its own rather than by handing Answer an
-	// httplib::Request: the JSON-RPC layer has never known what HTTP is, and the
+	// ibHttpRequest: the JSON-RPC layer has never known what HTTP is, and the
 	// three strings it now needs are not a reason to teach it.
 	struct ibMcpWireHeaders {
 		wxString m_protocolVersion;   // MCP-Protocol-Version, empty when absent

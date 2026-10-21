@@ -29,8 +29,8 @@
 #include "backend/session/session.h"
 #include "backend/temp/tempStorage.h"   // the client's files
 #include "backend/userInfo.h"           // users — the names the login window offers
-#include "backend/utils/sessionToken.h"
-#include "backend/utils/sha256.hpp"
+#include "core/crypto/sessionToken.h"
+#include "core/crypto/sha256.hpp"
 
 #include "frmserver/docView/docManager.h"   // ibDocTemplate — what opens a file
 #include "frmserver/visualView/visualHost.h"

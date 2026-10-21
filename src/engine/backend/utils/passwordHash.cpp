@@ -3,7 +3,7 @@
 /////////////////////////////////////////////////////////////////////////////
 
 #include "passwordHash.hpp"
-#include "sha256.hpp"
+#include "core/crypto/sha256.hpp"
 #include "md5.hpp"
 
 #include <wx/base64.h>
