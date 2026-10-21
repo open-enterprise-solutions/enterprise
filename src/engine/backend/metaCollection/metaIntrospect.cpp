@@ -135,9 +135,9 @@ bool ibConfigurationWritesInWords(const ibMetaData* metaData)
 	return configuration->GetCompileSyntax() == ibProgramSyntax::syntax_ves;
 }
 
-std::function<wxString(ibClassID)> ibMetaTypeResolver(const ibMetaData* metaData)
+std::function<ibString(ibClassID)> ibMetaTypeResolver(const ibMetaData* metaData)
 {
-	return [metaData](ibClassID clsid) -> wxString {
+	return [metaData](ibClassID clsid) -> ibString {
 
 		const ibCtorMetaValueType* typeCtor = metaData != nullptr
 			? metaData->GetTypeCtor(clsid) : nullptr;

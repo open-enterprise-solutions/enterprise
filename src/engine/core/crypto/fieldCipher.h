@@ -15,7 +15,7 @@
 // Its first tenant is the application server's config — the passwords of the bases it serves (multi-base-process.md
 // § 5.4); sys_config and the fields of a configuration come after, on the same floor.
 
-#include "backend/backend.h"
+#include "core/core.h"
 
 #include <cstddef>
 #include <string>
@@ -26,7 +26,7 @@ struct ibCipherContext {
 	std::string                m_field;   // bound into the tag
 };
 
-class BACKEND_API ibFieldCipher {
+class CORE_API ibFieldCipher {
 public:
 	static constexpr std::size_t kKeySize = 32;
 

@@ -415,9 +415,9 @@ bool ibComposeRunSchema::Run(const ibDataNode& request, ibDataNode& result, wxSt
 		// CHILDREN, which live among the properties — and only the fields were asked, so an undeclared
 		// name sent the second way was neither applied nor refused (2026-09-10).
 		if (given != nullptr) {
-			std::vector<std::pair<wxString, ibDataValue>> stated = given->Fields();
+			std::vector<std::pair<ibString, ibDataValue>> stated = given->Fields();
 			stated.insert(stated.end(), given->Properties().begin(), given->Properties().end());
-			for (const std::pair<wxString, ibDataValue>& field : stated) {
+			for (const std::pair<ibString, ibDataValue>& field : stated) {
 				const bool declared = std::any_of(
 					description.m_parameters.begin(), description.m_parameters.end(),
 					// ⚠ CompareString, like every other name lookup here. `==` on wxString is
@@ -425,7 +425,7 @@ bool ibComposeRunSchema::Run(const ibDataNode& request, ibDataNode& result, wxSt
 					// as an unknown name — a refusal naming the very parameter that is right there in
 					// the list it prints.
 					[&field](const ibParameterDescription& p) {
-						return stringUtils::CompareString(p.m_name, field.first);
+						return field.first.IsSameAs(p.m_name, false);
 					});
 				if (!declared) {
 					wxString names;

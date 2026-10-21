@@ -1,6 +1,7 @@
 #include "httpClient.h"
 
 #include <deque>
+#include <optional>
 #include <vector>
 
 #include <asio/connect.hpp>
@@ -12,6 +13,9 @@
 #include <asio/write.hpp>
 
 #include <llhttp.h>
+
+#include "httpStream.h"
+#include "tlsStream.h"
 
 namespace {
 
@@ -40,10 +44,16 @@ std::string Trim(const std::string& text)
 	return text.substr(first, text.find_last_not_of(" \t") - first + 1);
 }
 
-std::string Authority(const std::string& host, std::uint16_t port)
+// The host as a Host header writes it: an IPv6 address in brackets.
+std::string Bracketed(const std::string& host)
 {
 	const bool literal6 = host.find(':') != std::string::npos && host.front() != '[';
-	return (literal6 ? "[" + host + "]" : host) + ":" + std::to_string(port);
+	return literal6 ? "[" + host + "]" : host;
+}
+
+std::string Authority(const std::string& host, std::uint16_t port)
+{
+	return Bracketed(host) + ":" + std::to_string(port);
 }
 
 } // namespace
@@ -58,10 +68,11 @@ std::string Authority(const std::string& host, std::uint16_t port)
 struct ibWebSocketClientState : public std::enable_shared_from_this<ibWebSocketClientState> {
 
 	using ibOpened  = ibWebSocketClient::ibOpened;
-	using ibMessage = ibWebSocketClient::ibMessage;
+	using ibText    = ibWebSocketClient::ibText;
+	using ibBinary  = ibWebSocketClient::ibBinary;
 	using ibClosed  = ibWebSocketClient::ibClosed;
 
-	ibWebSocketClientState(asio::io_context& io, ibOpened opened, ibMessage message, ibClosed closed);
+	ibWebSocketClientState(asio::io_context& io, ibOpened opened, ibText text, ibBinary binary, ibClosed closed);
 
 	void Open(const std::string& host, std::uint16_t port, const std::string& target);
 	// A message — ibWebSocketOpcode::Text or ::Binary.
@@ -73,6 +84,8 @@ struct ibWebSocketClientState : public std::enable_shared_from_this<ibWebSocketC
 	void Opened(std::string leftover);
 	void Read();
 	void OnFrames(const char* data, std::size_t size);
+	// A message whole, to whoever takes its kind — a text made the engine's.
+	void Deliver(std::uint8_t opcode, std::string payload);
 	void SendFrame(std::uint8_t opcode, std::string payload);
 	void Queue(std::string bytes);
 	void Pump();
@@ -82,7 +95,8 @@ struct ibWebSocketClientState : public std::enable_shared_from_this<ibWebSocketC
 	asio::ip::tcp::resolver m_resolver;
 	asio::steady_timer      m_timer;    // the opening's deadline
 	ibOpened                m_opened;
-	ibMessage               m_message;
+	ibText                  m_text;
+	ibBinary                m_binary;
 	ibClosed                m_closed;
 	std::string             m_host;
 	std::uint16_t           m_port = 0;
@@ -105,9 +119,10 @@ struct ibWebSocketClientState : public std::enable_shared_from_this<ibWebSocketC
 	char                    m_buffer[16 * 1024];
 };
 
-ibWebSocketClientState::ibWebSocketClientState(asio::io_context& io, ibOpened opened, ibMessage message, ibClosed closed) :
+ibWebSocketClientState::ibWebSocketClientState(asio::io_context& io, ibOpened opened, ibText text, ibBinary binary,
+	ibClosed closed) :
 	m_socket(asio::make_strand(io)), m_resolver(m_socket.get_executor()), m_timer(m_socket.get_executor()),
-	m_opened(std::move(opened)), m_message(std::move(message)), m_closed(std::move(closed)),
+	m_opened(std::move(opened)), m_text(std::move(text)), m_binary(std::move(binary)), m_closed(std::move(closed)),
 	m_frames(/*masked*/ false, kMaxAnswerBytes)
 {
 }
@@ -264,8 +279,7 @@ void ibWebSocketClientState::OnFrames(const char* data, std::size_t size)
 				return;
 			}
 			if (frame.m_final) {
-				if (m_message)
-					m_message(frame.m_opcode, std::move(frame.m_payload));
+				Deliver(frame.m_opcode, std::move(frame.m_payload));
 				break;
 			}
 			m_assembling = true;
@@ -282,8 +296,7 @@ void ibWebSocketClientState::OnFrames(const char* data, std::size_t size)
 				m_assembling = false;
 				std::string whole;
 				whole.swap(m_assembled);
-				if (m_message)
-					m_message(m_assembledOpcode, std::move(whole));
+				Deliver(m_assembledOpcode, std::move(whole));
 			}
 			break;
 		}
@@ -294,6 +307,17 @@ void ibWebSocketClientState::OnFrames(const char* data, std::size_t size)
 	}
 	if (!m_gone)
 		Read();
+}
+
+void ibWebSocketClientState::Deliver(std::uint8_t opcode, std::string payload)
+{
+	if (opcode == ibWebSocketOpcode::Binary) {
+		if (m_binary)
+			m_binary(std::move(payload));
+	}
+	else if (m_text) {
+		m_text(ibString::FromUTF8(payload.data(), payload.size()));
+	}
 }
 
 void ibWebSocketClientState::Send(std::uint8_t opcode, std::string payload)
@@ -385,13 +409,16 @@ void ibWebSocketClientState::Drop(const std::string& reason)
 	const ibClosed closed = std::move(m_closed);
 	m_closed = nullptr;
 	m_opened = nullptr;
-	m_message = nullptr;
+	m_text = nullptr;
+	m_binary = nullptr;
 	if (closed)
 		closed(reason);
 }
 
-ibWebSocketClient::ibWebSocketClient(asio::io_context& io, ibOpened opened, ibMessage message, ibClosed closed) :
-	m_state(std::make_shared<ibWebSocketClientState>(io, std::move(opened), std::move(message), std::move(closed)))
+ibWebSocketClient::ibWebSocketClient(asio::io_context& io, ibOpened opened, ibText text, ibBinary binary,
+	ibClosed closed) :
+	m_state(std::make_shared<ibWebSocketClientState>(io, std::move(opened), std::move(text), std::move(binary),
+		std::move(closed)))
 {
 }
 
@@ -405,9 +432,9 @@ void ibWebSocketClient::Open(const std::string& host, std::uint16_t port, const 
 	m_state->Open(host, port, target);
 }
 
-void ibWebSocketClient::Send(std::string text)
+void ibWebSocketClient::Send(const ibString& text)
 {
-	m_state->Send(ibWebSocketOpcode::Text, std::move(text));
+	m_state->Send(ibWebSocketOpcode::Text, text.ToUtf8());
 }
 
 void ibWebSocketClient::SendBinary(std::string data)
@@ -555,4 +582,381 @@ void ibHttpPost(asio::io_context& io, const std::string& host, std::uint16_t por
 {
 	const auto exchange = std::make_shared<ibPostExchange>(io, std::move(done));
 	exchange->Start(host, port, target, std::move(body), type, wait);
+}
+
+//*******************************************************************************************
+//*                                       The client                                        *
+//*******************************************************************************************
+
+// ONE CLIENT'S I/O — on its own context, run by the caller's thread for as long as a request is allowed. Every handler
+// carries the turn of the request it was started for, and does nothing for another.
+struct ibHttpClientState {
+
+	ibHttpClientState(const std::string& host, std::uint16_t port) :
+		m_host(host), m_port(port), m_resolver(m_io)
+	{
+		llhttp_settings_init(&m_settings);
+		m_settings.on_header_field     = &ibHttpClientState::OnHeaderField;
+		m_settings.on_header_value     = &ibHttpClientState::OnHeaderValue;
+		m_settings.on_headers_complete = &ibHttpClientState::OnHeadersComplete;
+		m_settings.on_body             = &ibHttpClientState::OnBody;
+		m_settings.on_message_complete = &ibHttpClientState::OnMessageComplete;
+	}
+
+	// A KEPT-ALIVE CONNECTION THE SERVER CLOSED MEANWHILE is let go before it is written to: its end would be read as
+	// the end of the next answer. Asked of the socket without waiting — nothing to read, and not closed: alive.
+	bool IsAlive()
+	{
+		asio::ip::tcp::socket& socket = m_stream->GetSocket();
+		if (!socket.is_open())
+			return false;
+		std::error_code code;
+		socket.non_blocking(true, code);
+		char probe = 0;
+		socket.receive(asio::buffer(&probe, 1), asio::socket_base::message_peek, code);
+		std::error_code ignored;
+		socket.non_blocking(false, ignored);
+		return code == asio::error::would_block;
+	}
+
+	// The connection let go — kept until what it still has outstanding has been told (Drain).
+	void LetGo()
+	{
+		if (!m_stream)
+			return;
+		m_stream->Close();
+		m_dropped.push_back(std::move(m_stream));
+	}
+
+	// What a closed socket and a cancelled lookup still owe their handlers, run here: each finds a request finished.
+	void Drain()
+	{
+		std::error_code ignored;
+		m_resolver.cancel();
+		if (m_connecting)
+			m_connecting->close(ignored);
+		m_io.restart();
+		m_io.poll();
+		m_connecting.reset();
+		m_dropped.clear();
+	}
+
+	void Begin(const ibHttpRequest& request, ibHttpResponse& response)
+	{
+		++m_turn;
+		m_finished = false;
+		m_result = ibHttpClientError::None;
+		m_why.clear();
+		m_response = &response;
+		m_head = request.m_method == "HEAD";
+		m_field.clear();
+		m_value.clear();
+		m_hasValue = false;
+		m_answerBytes = 0;
+		m_complete = false;
+		m_tooLarge = false;
+		m_keep = false;
+		llhttp_init(&m_parser, HTTP_RESPONSE, &m_settings);
+		m_parser.data = this;
+
+		const auto has = [&request](const std::string& name) {
+			for (const auto& header : request.m_headers) {
+				if (Lower(header.first) == name)
+					return true;
+			}
+			return false;
+		};
+		// The port a scheme is spoken on by itself is not written: a server behind a name says it is that name.
+		const bool usual = m_port == (m_tls ? 443 : 80);
+		const std::string& method = request.m_method;
+		m_out = method + " " + (request.m_path.empty() ? std::string("/") : request.m_path)
+			+ (request.m_query.empty() ? std::string() : "?" + request.m_query) + " HTTP/1.1\r\n"
+			"Host: " + (usual ? Bracketed(m_host) : Authority(m_host, m_port)) + "\r\n";
+		for (const auto& header : request.m_headers)
+			m_out += header.first + ": " + header.second + "\r\n";
+		if (!has("accept"))
+			m_out += "Accept: */*\r\n";
+		if (!has("user-agent"))
+			m_out += "User-Agent: OES-Enterprise\r\n";
+		// A body nobody named the type of goes as text, as it always went.
+		if (!request.m_body.empty() && !has("content-type"))
+			m_out += "Content-Type: text/plain\r\n";
+		if (!request.m_body.empty() || method == "POST" || method == "PUT" || method == "PATCH")
+			m_out += "Content-Length: " + std::to_string(request.m_body.size()) + "\r\n";
+		m_out += "\r\n";
+		m_out += request.m_body;
+
+		if (m_stream)
+			Write();
+		else
+			Connect();
+	}
+
+	void Connect()
+	{
+		const unsigned turn = m_turn;
+		m_resolver.async_resolve(m_host, std::to_string(m_port),
+			[this, turn](const std::error_code& error, const asio::ip::tcp::resolver::results_type& found) {
+				if (turn != m_turn || m_finished)
+					return;
+				if (error) {
+					Finish(ibHttpClientError::Connection, "'" + m_host + "' is not found: " + error.message());
+					return;
+				}
+				m_connecting.emplace(m_io);
+				asio::async_connect(*m_connecting, found, [this, turn](const std::error_code& connected, const asio::ip::tcp::endpoint&) {
+					if (turn != m_turn || m_finished)
+						return;
+					if (connected) {
+						Finish(ibHttpClientError::Connection, Authority(m_host, m_port) + " is not reached: " + connected.message());
+						return;
+					}
+					std::error_code ignored;
+					m_connecting->set_option(asio::ip::tcp::no_delay(true), ignored);
+					if (m_tls)
+						m_stream = std::make_unique<ibTlsStream>(std::move(*m_connecting), m_tls, m_host);
+					else
+						m_stream = std::make_unique<ibPlainStream>(std::move(*m_connecting));
+					m_connecting.reset();
+					m_stream->Handshake([this, turn](const std::error_code& shaken) {
+						if (turn != m_turn || m_finished)
+							return;
+						if (shaken)
+							Refused(shaken);
+						else
+							Write();
+					});
+				});
+			});
+	}
+
+	// THE HANDSHAKE FAILED — told apart by what the certificate's check said: a chain nobody vouches for first, the name
+	// after it; neither — the server does not speak TLS, or not this TLS.
+	void Refused(const std::error_code& error)
+	{
+		const std::uint32_t flags = static_cast<ibTlsStream&>(*m_stream).GetVerification();
+		if ((flags & ~static_cast<std::uint32_t>(MBEDTLS_X509_BADCERT_CN_MISMATCH)) != 0) {
+			char said[512] = {};
+			mbedtls_x509_crt_verify_info(said, sizeof(said), "", flags);
+
+			// A line per failed check, each ended with '\n' — one sentence for the script's refusal.
+			std::string what(said);
+			while (!what.empty() && what.back() == '\n')
+				what.pop_back();
+			for (std::size_t at = what.find('\n'); at != std::string::npos; at = what.find('\n', at))
+				what.replace(at, 1, "; ");
+			Finish(ibHttpClientError::Verification, what);
+			return;
+		}
+		if (flags != 0) {
+			Finish(ibHttpClientError::Hostname, "the certificate is not for '" + m_host + "'");
+			return;
+		}
+		Finish(ibHttpClientError::Handshake, "the TLS handshake failed: " + error.message());
+	}
+
+	void Write()
+	{
+		const unsigned turn = m_turn;
+		m_stream->Write(m_out.data(), m_out.size(), [this, turn](const std::error_code& error, std::size_t) {
+			if (turn != m_turn || m_finished)
+				return;
+			if (error) {
+				Finish(ibHttpClientError::Write, "the request did not go whole: " + error.message());
+				return;
+			}
+			Read();
+		});
+	}
+
+	void Read()
+	{
+		const unsigned turn = m_turn;
+		m_stream->ReadSome(m_buffer, sizeof(m_buffer), [this, turn](const std::error_code& error, std::size_t bytes) {
+			if (turn != m_turn || m_finished)
+				return;
+			llhttp_errno_t code = HPE_OK;
+			if (error == asio::error::eof)
+				code = llhttp_finish(&m_parser);   // an answer that runs to the connection's end
+			else if (error) {
+				Finish(ibHttpClientError::Read, "the connection was lost: " + error.message());
+				return;
+			}
+			else
+				code = llhttp_execute(&m_parser, m_buffer, bytes);
+			if (m_complete) {
+				// Bytes past the answer answer nothing that was asked: that connection is not spoken over again.
+				const char* const stop = llhttp_get_error_pos(&m_parser);
+				const bool past = !error && stop != nullptr && stop < m_buffer + bytes;
+				m_keep = !error && !past && llhttp_should_keep_alive(&m_parser) != 0;
+				Finish(ibHttpClientError::None, std::string());
+				return;
+			}
+			if (m_tooLarge) {
+				Finish(ibHttpClientError::Answer, "the answer is larger than " + std::to_string(ibHttpClient::kMaxAnswerBytes) + " bytes");
+				return;
+			}
+			if (error) {
+				Finish(ibHttpClientError::Read, "the connection was closed before the answer was whole");
+				return;
+			}
+			if (code != HPE_OK) {
+				Finish(ibHttpClientError::Answer, "the server's answer is not HTTP");
+				return;
+			}
+			Read();
+		});
+	}
+
+	void Finish(ibHttpClientError result, std::string why)
+	{
+		if (m_finished)
+			return;
+		m_finished = true;
+		m_result = result;
+		m_why = std::move(why);
+		if (result == ibHttpClientError::None)
+			m_response->m_status = llhttp_get_status_code(&m_parser);
+		if (result != ibHttpClientError::None || !m_keep)
+			LetGo();
+		m_io.stop();
+	}
+
+	static ibHttpClientState& Of(llhttp_t* parser) { return *static_cast<ibHttpClientState*>(parser->data); }
+
+	// Counted against the most an answer may be, its head with it; past it — the answer refused.
+	bool Count(std::size_t size)
+	{
+		m_answerBytes += size;
+		m_tooLarge = m_answerBytes > ibHttpClient::kMaxAnswerBytes;
+		return !m_tooLarge;
+	}
+
+	void CommitHeader()
+	{
+		if (m_field.empty() && !m_hasValue)
+			return;
+		m_response->m_headers.emplace_back(m_field, Trim(m_value));
+		m_field.clear();
+		m_value.clear();
+		m_hasValue = false;
+	}
+
+	static int OnHeaderField(llhttp_t* parser, const char* at, std::size_t size)
+	{
+		ibHttpClientState& self = Of(parser);
+		if (!self.Count(size))
+			return -1;
+		if (self.m_hasValue)
+			self.CommitHeader();
+		self.m_field.append(at, size);
+		return 0;
+	}
+
+	static int OnHeaderValue(llhttp_t* parser, const char* at, std::size_t size)
+	{
+		ibHttpClientState& self = Of(parser);
+		if (!self.Count(size))
+			return -1;
+		self.m_value.append(at, size);
+		self.m_hasValue = true;
+		return 0;
+	}
+
+	static int OnHeadersComplete(llhttp_t* parser)
+	{
+		ibHttpClientState& self = Of(parser);
+		self.CommitHeader();
+		return self.m_head ? 1 : 0;   // 1 — the answer to a HEAD has no body, whatever its length says
+	}
+
+	static int OnBody(llhttp_t* parser, const char* at, std::size_t size)
+	{
+		ibHttpClientState& self = Of(parser);
+		if (!self.Count(size))
+			return -1;
+		self.m_response->m_body.append(at, size);
+		return 0;
+	}
+
+	static int OnMessageComplete(llhttp_t* parser)
+	{
+		Of(parser).m_complete = true;
+		return HPE_PAUSED;
+	}
+
+	asio::io_context                           m_io;
+	std::string                                m_host;
+	std::uint16_t                              m_port;
+	asio::ip::tcp::resolver                    m_resolver;
+	std::optional<asio::ip::tcp::socket>       m_connecting;
+	std::shared_ptr<const ibTlsContext>        m_tls;        // null — in the clear
+	std::unique_ptr<ibHttpStream>              m_stream;     // the connection kept alive; null — none yet
+	std::vector<std::unique_ptr<ibHttpStream>> m_dropped;    // let go, until their handlers are told
+
+	// The request under way.
+	unsigned          m_turn = 0;
+	bool              m_finished = false;
+	ibHttpClientError m_result = ibHttpClientError::None;
+	std::string       m_why;
+	std::string       m_out;
+	ibHttpResponse*   m_response = nullptr;
+	bool              m_head = false;
+	llhttp_settings_t m_settings;
+	llhttp_t          m_parser;
+	std::string       m_field;
+	std::string       m_value;
+	bool              m_hasValue = false;
+	std::size_t       m_answerBytes = 0;
+	bool              m_complete = false;
+	bool              m_tooLarge = false;
+	bool              m_keep = false;
+	char              m_buffer[16 * 1024];
+};
+
+ibHttpClient::ibHttpClient(const std::string& host, std::uint16_t port) :
+	m_state(std::make_unique<ibHttpClientState>(host, port))
+{
+}
+
+ibHttpClient::~ibHttpClient()
+{
+	m_state->LetGo();
+	m_state->Drain();
+}
+
+ibHttpClientError ibHttpClient::Secure(const std::string& trusted, const std::string& certificate,
+	const std::string& password, bool verify, std::string& error)
+{
+	auto context = std::make_shared<ibTlsContext>();
+	const ibHttpClientError refused = context->LoadClient(trusted, certificate, password, verify, error);
+	if (refused != ibHttpClientError::None)
+		return refused;
+	// A connection made in the clear is not the one spoken over TLS.
+	m_state->LetGo();
+	m_state->Drain();
+	m_state->m_tls = std::move(context);
+	return ibHttpClientError::None;
+}
+
+ibHttpClientError ibHttpClient::Send(const ibHttpRequest& request, ibHttpResponse& response, std::chrono::seconds wait,
+	std::string& error)
+{
+	ibHttpClientState& state = *m_state;
+	response = ibHttpResponse();
+	if (state.m_stream && !state.IsAlive())
+		state.LetGo();
+
+	state.m_io.restart();
+	state.Begin(request, response);
+	state.m_io.run_until(std::chrono::steady_clock::now() + wait);
+	if (!state.m_finished)
+		state.Finish(ibHttpClientError::Timeout, "nobody answered within " + std::to_string(wait.count()) + " s");
+	state.Drain();
+
+	if (state.m_result != ibHttpClientError::None) {
+		response = ibHttpResponse();
+		error = state.m_why;
+	}
+	return state.m_result;
 }

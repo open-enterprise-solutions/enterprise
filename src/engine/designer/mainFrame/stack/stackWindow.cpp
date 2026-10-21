@@ -85,7 +85,7 @@ void ibStackWindow::SetStack(const ibStackData& stackData)
 			index = m_treeCtrl->InsertItem(static_cast<long>(idx), wxEmptyString);
 		}
 		m_treeCtrl->SetItem(index, 0, stackData.GetModuleLine(idx));
-		m_treeCtrl->SetItem(index, 1, stackData.GetModuleName(idx));
+		m_treeCtrl->SetItem(index, 1, stackData.GetFullName(idx));
 		if (idx == 0) {
 			const long mask = wxLIST_STATE_SELECTED | wxLIST_STATE_FOCUSED;
 			if ((m_treeCtrl->GetItemState(index, mask) & mask) != mask) {

@@ -25,6 +25,7 @@
 #include <asio/thread_pool.hpp>
 
 #include <mbedtls/base64.h>
+#include <mbedtls/platform_util.h>   // mbedtls_platform_zeroize — the key's text wiped once the TLS context has it
 
 #include <llhttp.h>
 
@@ -36,17 +37,16 @@ namespace {
 
 using ibClock = std::chrono::steady_clock;
 
-// THE LIMITS — what one connection may ask of the server before it is refused or let go.
+// THE LIMITS — what one connection may ask of the server before it is refused or let go. A request's body and the
+// silence between two requests are the options' (m_maxBodyBytes, m_idleSeconds).
 constexpr std::size_t kReadChunk         = 16 * 1024;
 constexpr std::size_t kMaxHeadBytes      = 16 * 1024;          // the request line and the headers
 constexpr std::size_t kMaxHeaders        = 100;
-constexpr std::size_t kMaxBodyBytes      = 4 * 1024 * 1024;    // a request is a method and its arguments
-constexpr std::size_t kMaxMessageBytes   = 4 * 1024 * 1024;    // …and so is a WebSocket's message
+constexpr std::size_t kMaxMessageBytes   = 4 * 1024 * 1024;    // a WebSocket's message is a method and its arguments
 constexpr std::size_t kMaxPendingBytes   = 64 * 1024 * 1024;   // sent and not yet taken by the peer
 constexpr std::size_t kMaxQueuedMessages = 32;                 // received and not yet handled — reading waits
 
 constexpr std::chrono::seconds kRequestTime(30);     // a TLS handshake, or a request from its first byte to its last
-constexpr std::chrono::seconds kKeepAlive(60);       // a connection between its requests
 constexpr std::chrono::seconds kWriteTime(60);       // one write the peer does not take
 constexpr std::chrono::seconds kFirstMessage(15);    // a WebSocket that has said nothing yet
 constexpr std::chrono::seconds kPingAfter(30);       // a WebSocket's silence before it is asked whether it is there
@@ -278,6 +278,11 @@ std::string ibHttpRequest::GetParameter(const std::string& name) const
 	return std::string();
 }
 
+ibString ibHttpRequest::GetText() const
+{
+	return ibString::FromUTF8(m_body.data(), m_body.size());
+}
+
 void ibHttpResponse::SetContent(std::string body, const std::string& type)
 {
 	m_body = std::move(body);
@@ -288,6 +293,11 @@ void ibHttpResponse::SetContent(std::string body, const std::string& type)
 		}
 	}
 	m_headers.emplace_back("Content-Type", type);
+}
+
+void ibHttpResponse::SetText(const ibString& text, const std::string& type)
+{
+	SetContent(text.ToUtf8(), type);
 }
 
 //*******************************************************************************************
@@ -320,6 +330,32 @@ ibReply Plain(int status, const std::string& text)
 	reply.m_headers.emplace_back("Content-Type", "text/plain; charset=utf-8");
 	reply.m_body = std::make_shared<const std::string>(text);
 	return reply;
+}
+
+// ONE CHUNK of a body whose length nobody knows ahead (an event stream's): its size in hex, the bytes, CRLF.
+std::string Chunk(const std::string& bytes)
+{
+	char size[24];
+	std::snprintf(size, sizeof(size), "%zx\r\n", bytes.size());
+	return size + bytes + "\r\n";
+}
+
+// ONE EVENT as a stream sends it: a `data:` line for each line of it, and the blank line that ends it.
+std::string EventOf(const std::string& data)
+{
+	std::string event;
+	std::size_t at = 0;
+	for (;;) {
+		const std::size_t end = data.find('\n', at);
+		std::string line = data.substr(at, end == std::string::npos ? std::string::npos : end - at);
+		if (!line.empty() && line.back() == '\r')
+			line.pop_back();
+		event += "data: " + line + "\n";
+		if (end == std::string::npos)
+			break;
+		at = end + 1;
+	}
+	return event + "\n";
 }
 
 // A FILE HELD IN MEMORY — a pack's: its bytes, and its tag made once as it was mounted.
@@ -478,6 +514,7 @@ struct ibHttpServerState {
 	std::map<std::string, ibHttpHandler>      m_get;
 	std::map<std::string, ibHttpHandler>      m_post;
 	std::map<std::string, ibWebSocketOpening> m_sockets;
+	std::map<std::string, ibEventStreamOpening> m_streams;
 	struct ibMount {
 		std::string           m_prefix;
 		std::filesystem::path m_root;   // canonical
@@ -490,14 +527,14 @@ struct ibHttpServerState {
 	std::mutex                                         m_mutex;
 	std::condition_variable                            m_drained;
 	std::map<ibConnection*, std::weak_ptr<ibConnection>> m_connections;
-	std::map<std::string, std::size_t>                 m_perAddress;
+	std::map<ibString, std::size_t>                    m_perAddress;
 	bool                                               m_stopping = false;
 
 	// Bound and listening — false with why in `error`; the port it took is said back in `port`.
 	bool Listen(const asio::ip::address& address, std::uint16_t& port, bool secure, bool redirect, std::string& error);
 	void Accept(ibListener& listener);
 	void Open(const ibListener& listener, asio::ip::tcp::socket socket);
-	void Release(ibConnection* connection, const std::string& address);
+	void Release(ibConnection* connection, const ibString& address);
 };
 
 //*******************************************************************************************
@@ -506,19 +543,46 @@ struct ibHttpServerState {
 
 namespace {
 
+// ⭐ THE TRANSPORT DEFLATES, for a peer that asked for it as it connected (?compress=deflate): a text from this many
+// bytes goes as a binary message holding it deflated, a smaller one as text. What it carries never knows: the same
+// text either way. A frame is text that repeats itself (names, ids, the same fields on every control) and shrinks
+// several times over.
+constexpr std::size_t kDeflateFrom = 1024;
+
 // A WEBSOCKET AS ITS HANDLER HOLDS IT — the connection's, by a weak reference: a handler that keeps it longer than
 // the connection lives holds nothing that sends.
 class ibServerWebSocket : public ibWebSocket {
 public:
 
 	ibServerWebSocket(std::weak_ptr<ibConnection> connection, ibHttpRequest request) :
+		m_connection(std::move(connection)), m_request(std::move(request)),
+		m_deflate(m_request.GetParameter("compress") == "deflate")
+	{
+	}
+
+	virtual void Send(const ibString& text) override;
+	virtual void SendBinary(std::string data) override;
+	virtual void Close(std::uint16_t code, const std::string& reason) override;
+
+	virtual const ibHttpRequest& GetRequest() const override { return m_request; }
+
+private:
+	std::weak_ptr<ibConnection> m_connection;
+	ibHttpRequest               m_request;
+	bool                        m_deflate;   // the peer asked for it as it connected
+};
+
+// AN EVENT STREAM AS ITS HANDLER HOLDS IT — the connection's, by a weak reference, as a WebSocket is.
+class ibServerEventStream : public ibEventStream {
+public:
+
+	ibServerEventStream(std::weak_ptr<ibConnection> connection, ibHttpRequest request) :
 		m_connection(std::move(connection)), m_request(std::move(request))
 	{
 	}
 
-	virtual void Send(std::string text) override;
-	virtual void SendBinary(std::string data) override;
-	virtual void Close(std::uint16_t code, const std::string& reason) override;
+	virtual void Send(std::string data) override;
+	virtual void Close() override;
 
 	virtual const ibHttpRequest& GetRequest() const override { return m_request; }
 
@@ -533,10 +597,10 @@ private:
 class ibConnection : public std::enable_shared_from_this<ibConnection> {
 public:
 
-	ibConnection(ibHttpServerState& server, std::unique_ptr<ibHttpStream> stream, std::string address, bool secure,
+	ibConnection(ibHttpServerState& server, std::unique_ptr<ibHttpStream> stream, const ibString& address, bool secure,
 		bool redirect) :
 		m_server(server), m_stream(std::move(stream)), m_executor(m_stream->GetSocket().get_executor()),
-		m_timer(m_executor), m_writeTimer(m_executor), m_address(std::move(address)), m_secure(secure),
+		m_timer(m_executor), m_writeTimer(m_executor), m_address(address), m_secure(secure),
 		m_redirect(redirect)
 	{
 		llhttp_init(&m_parser, HTTP_REQUEST, &Settings());
@@ -593,6 +657,37 @@ public:
 			}
 			self->SendClose(code, reason);
 			self->Arm(kCloseWithin, [self]() { self->Drop(); });
+		});
+	}
+
+	// The event stream's doors — from any thread.
+	void SendEvent(std::string data)
+	{
+		asio::post(m_executor, [self = shared_from_this(), data = std::move(data)]() mutable {
+			if (self->m_closed || self->m_streamEnded)
+				return;
+			if (!self->m_streaming) {
+				self->m_earlyEvents.push_back(std::move(data));   // said before the stream's head went out
+				return;
+			}
+			self->Queue(std::make_shared<const std::string>(Chunk(EventOf(data))));
+		});
+	}
+
+	void EndStream()
+	{
+		asio::post(m_executor, [self = shared_from_this()]() {
+			if (self->m_closed || self->m_streamEnded)
+				return;
+			if (!self->m_streaming) {
+				self->Drop();
+				return;
+			}
+			self->m_streamEnded = true;
+			self->Disarm();
+			self->Queue(std::make_shared<const std::string>("0\r\n\r\n"));   // the last chunk
+			self->m_closeWhenWritten = true;
+			self->Pump();
 		});
 	}
 
@@ -694,7 +789,7 @@ private:
 			self.m_refusal = 431;
 			return -1;
 		}
-		if (parser->content_length > kMaxBodyBytes) {
+		if (parser->content_length > self.m_server.m_options.m_maxBodyBytes) {
 			self.m_refusal = 413;
 			return -1;
 		}
@@ -724,7 +819,7 @@ private:
 	static int OnBody(llhttp_t* parser, const char* at, std::size_t size)
 	{
 		ibConnection& self = Of(parser);
-		if (self.m_request.m_body.size() + size > kMaxBodyBytes) {
+		if (self.m_request.m_body.size() + size > self.m_server.m_options.m_maxBodyBytes) {
 			self.m_refusal = 413;
 			return -1;
 		}
@@ -751,7 +846,7 @@ private:
 			return;
 		}
 		if (m_answered > 0)
-			Arm(kKeepAlive);
+			Arm(std::chrono::seconds(m_server.m_options.m_idleSeconds));
 		Read();
 	}
 
@@ -764,7 +859,9 @@ private:
 				self->Drop();
 				return;
 			}
-			if (self->m_upgraded)
+			if (self->m_streaming)
+				self->Read();   // a listener says nothing; what it sends anyway is not a request
+			else if (self->m_upgraded)
 				self->OnFrames(self->m_buffer, bytes);
 			else
 				self->Parse(self->m_buffer, bytes);
@@ -808,6 +905,11 @@ private:
 		}
 
 		const std::string& method = m_request.m_method;
+		const auto stream = method == "GET" ? m_server.m_streams.find(m_request.m_path) : m_server.m_streams.end();
+		if (stream != m_server.m_streams.end()) {
+			OpenStream(stream->second);
+			return;
+		}
 		const bool head = method == "HEAD";
 		const std::map<std::string, ibHttpHandler>* routes = nullptr;
 		if (method == "GET" || head)
@@ -1214,10 +1316,11 @@ private:
 		++m_queued;
 		asio::post(*m_work, [self = shared_from_this(), handler = m_handler, binary, message = std::move(message)]() mutable {
 			try {
+				// A text is made the engine's here, on the worker — the one reading of its bytes past the check above.
 				if (binary)
 					handler->OnBinary(std::move(message));
 				else
-					handler->OnMessage(std::move(message));
+					handler->OnMessage(ibString::FromUTF8(message.data(), message.size()));
 			}
 			catch (...) {
 			}
@@ -1282,6 +1385,71 @@ private:
 	}
 
 	//*************************************************************************
+	//*                          The event stream                             *
+	//*************************************************************************
+
+	// ASKED ITS HANDLER on a worker, as a WebSocket is: its handler, or the refusal answered instead.
+	void OpenStream(const ibEventStreamOpening& opening)
+	{
+		m_refused = true;   // whatever is answered here ends the connection: a stream's body runs until its close
+		m_work.emplace(asio::make_strand(*m_server.m_workers));
+		const auto stream = std::make_shared<ibServerEventStream>(weak_from_this(), m_request);
+		asio::post(*m_work, [self = shared_from_this(), stream, opening]() {
+			ibHttpResponse refusal;
+			refusal.m_status = 404;
+			refusal.SetContent("Not Found", "text/plain; charset=utf-8");
+			std::shared_ptr<ibEventStreamHandler> handler;
+			try {
+				handler = opening(stream, refusal);
+			}
+			catch (...) {
+				handler.reset();
+				refusal = ibHttpResponse();
+				refusal.m_status = 500;
+			}
+			asio::post(self->m_executor, [self, handler, refusal = std::move(refusal)]() mutable {
+				self->StreamOpened(handler, std::move(refusal));
+			});
+		});
+	}
+
+	void StreamOpened(const std::shared_ptr<ibEventStreamHandler>& handler, ibHttpResponse refusal)
+	{
+		if (m_closed) {
+			// Gone while the handler was made: it is told, as any other is.
+			if (handler)
+				asio::post(*m_work, [self = shared_from_this(), handler]() { handler->OnClose(); });
+			return;
+		}
+		if (!handler) {
+			Answer(ToReply(std::move(refusal)));
+			return;
+		}
+		m_streamHandler = handler;
+		Queue(std::make_shared<const std::string>("HTTP/1.1 200 OK\r\n"
+			"Content-Type: text/event-stream\r\nCache-Control: no-cache\r\nTransfer-Encoding: chunked\r\n"
+			"X-Content-Type-Options: nosniff\r\nConnection: close\r\n\r\n"));
+		m_streaming = true;
+		for (const std::string& early : m_earlyEvents)
+			Queue(std::make_shared<const std::string>(Chunk(EventOf(early))));
+		m_earlyEvents.clear();
+		Beat();
+		Read();
+	}
+
+	// A LISTENER THAT IS GONE IS FOUND BY WRITING TO IT — a comment line, after a silence: a write the peer does not
+	// take lets the connection go (Pump).
+	void Beat()
+	{
+		Arm(kPingAfter, [this, self = shared_from_this()]() {
+			if (m_streamEnded)
+				return;
+			Queue(std::make_shared<const std::string>(Chunk(":\n\n")));
+			Beat();
+		});
+	}
+
+	//*************************************************************************
 	//*                              The end                                  *
 	//*************************************************************************
 
@@ -1304,6 +1472,15 @@ private:
 				}
 			});
 		}
+		if (m_streamHandler) {
+			asio::post(*m_work, [self = shared_from_this(), handler = m_streamHandler]() {
+				try {
+					handler->OnClose();
+				}
+				catch (...) {
+				}
+			});
+		}
 	}
 
 	ibHttpServerState&            m_server;
@@ -1313,7 +1490,7 @@ private:
 	asio::steady_timer            m_writeTimer;
 	unsigned                      m_turn = 0;
 	unsigned                      m_writeTurn = 0;
-	std::string                   m_address;
+	ibString                      m_address;
 	bool                          m_secure;
 	bool                          m_redirect;   // a page asked for in the clear beyond this machine: sent on to HTTPS
 	bool                          m_closed = false;
@@ -1356,12 +1533,26 @@ private:
 	bool                                                       m_closing = false;   // a close received or failed: nothing more is read
 	ibClock::time_point                                        m_opened;
 	ibClock::time_point                                        m_heard;
+
+	// The event stream — on the WebSocket's worker strand (m_work) too.
+	bool                                  m_streaming = false;     // its head sent: events go out as chunks
+	bool                                  m_streamEnded = false;   // its last chunk queued
+	std::shared_ptr<ibEventStreamHandler> m_streamHandler;
+	std::vector<std::string>              m_earlyEvents;           // sent before its head went out
 };
 
-void ibServerWebSocket::Send(std::string text)
+// Packed on the sender's thread, not the socket's.
+void ibServerWebSocket::Send(const ibString& text)
 {
-	if (const std::shared_ptr<ibConnection> connection = m_connection.lock())
-		connection->SendMessage(ibWebSocketOpcode::Text, std::move(text));
+	const std::shared_ptr<ibConnection> connection = m_connection.lock();
+	if (!connection)
+		return;
+	std::string bytes = text.ToUtf8();
+	std::string packed;
+	if (m_deflate && bytes.size() >= kDeflateFrom && ibDeflate(bytes, packed))
+		connection->SendMessage(ibWebSocketOpcode::Binary, std::move(packed));
+	else
+		connection->SendMessage(ibWebSocketOpcode::Text, std::move(bytes));
 }
 
 void ibServerWebSocket::SendBinary(std::string data)
@@ -1374,6 +1565,18 @@ void ibServerWebSocket::Close(std::uint16_t code, const std::string& reason)
 {
 	if (const std::shared_ptr<ibConnection> connection = m_connection.lock())
 		connection->BeginClose(code, reason);
+}
+
+void ibServerEventStream::Send(std::string data)
+{
+	if (const std::shared_ptr<ibConnection> connection = m_connection.lock())
+		connection->SendEvent(std::move(data));
+}
+
+void ibServerEventStream::Close()
+{
+	if (const std::shared_ptr<ibConnection> connection = m_connection.lock())
+		connection->EndStream();
 }
 
 } // namespace
@@ -1449,7 +1652,8 @@ void ibHttpServerState::Open(const ibListener& listener, asio::ip::tcp::socket s
 	asio::ip::address address = peer.address();
 	if (address.is_v6() && address.to_v6().is_v4_mapped())
 		address = asio::ip::make_address_v4(asio::ip::v4_mapped, address.to_v6());
-	const std::string name = address.to_string();
+	// The engine's text once, here: the connection, each of its requests and whoever serves them hold this one.
+	const ibString name(address.to_string().c_str());
 	socket.set_option(asio::ip::tcp::no_delay(true), error);   // an answer goes out at once, not after Nagle's wait
 
 	{
@@ -1477,7 +1681,7 @@ void ibHttpServerState::Open(const ibListener& listener, asio::ip::tcp::socket s
 	connection->Start();
 }
 
-void ibHttpServerState::Release(ibConnection* connection, const std::string& address)
+void ibHttpServerState::Release(ibConnection* connection, const ibString& address)
 {
 	std::lock_guard<std::mutex> lock(m_mutex);
 	m_connections.erase(connection);
@@ -1517,6 +1721,11 @@ void ibHttpServer::WebSocket(const std::string& path, ibWebSocketOpening opening
 	m_state->m_sockets[path] = std::move(opening);
 }
 
+void ibHttpServer::EventStream(const std::string& path, ibEventStreamOpening opening)
+{
+	m_state->m_streams[path] = std::move(opening);
+}
+
 namespace {
 
 // A mount among the others — the longest prefix first: /app/ before /.
@@ -1554,6 +1763,11 @@ bool ibHttpServer::Start(const ibHttpServerOptions& options, std::string& error)
 {
 	ibHttpServerState& state = *m_state;
 	state.m_options = options;
+	// The key is the TLS context's (below): the server keeps no text of it.
+	std::string& key = state.m_options.m_privateKey;
+	if (!key.empty())
+		mbedtls_platform_zeroize(&key[0], key.size());
+	key.clear();
 
 	// ⭐ THE CLEAR DOES NOT CROSS A NETWORK — see the header. A certificate named and not readable is a refusal,
 	// never a fallback to the clear.

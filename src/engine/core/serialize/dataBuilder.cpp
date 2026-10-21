@@ -18,7 +18,7 @@ void ibDataValue::Expect(ibDataKind expected) const {
 	// The payload stands at the place of its kind — one alternative a kind, in ibDataKind's order (Kind).
 	static_assert(std::variant_size_v<decltype(m_payload)> == static_cast<size_t>(ibDataKind::Array) + 1,
 		"one alternative a kind, in ibDataKind's order");
-	static_assert(std::is_same_v<std::variant_alternative_t<static_cast<size_t>(ibDataKind::String), decltype(m_payload)>, wxString>
+	static_assert(std::is_same_v<std::variant_alternative_t<static_cast<size_t>(ibDataKind::String), decltype(m_payload)>, ibString>
 		&& std::is_same_v<std::variant_alternative_t<static_cast<size_t>(ibDataKind::Array), decltype(m_payload)>, std::vector<ibDataValue>>,
 		"one alternative a kind, in ibDataKind's order");
 
@@ -29,10 +29,11 @@ void ibDataValue::Expect(ibDataKind expected) const {
 			(int)expected, (int)Kind());
 }
 
-wxString ibDataValue::AsString() const {
+const ibString& ibDataValue::AsString() const {
 	Expect(ibDataKind::String);
-	const wxString* const text = std::get_if<wxString>(&m_payload);
-	return text != nullptr ? *text : wxString();
+	static const ibString s_empty;
+	const ibString* const text = std::get_if<ibString>(&m_payload);
+	return text != nullptr ? *text : s_empty;
 }
 
 bool ibDataValue::AsBool() const {
@@ -84,7 +85,7 @@ bool ibDataValue::operator==(const ibDataValue& other) const
 
 	switch (Kind()) {
 	case ibDataKind::Empty:  return true;
-	case ibDataKind::String: return std::get<wxString>(m_payload) == std::get<wxString>(other.m_payload);
+	case ibDataKind::String: return std::get<ibString>(m_payload) == std::get<ibString>(other.m_payload);
 	case ibDataKind::Bool:   return std::get<bool>(m_payload) == std::get<bool>(other.m_payload);
 	case ibDataKind::Number: return std::get<ibNumber>(m_payload) == std::get<ibNumber>(other.m_payload);
 	case ibDataKind::Date:   return std::get<ibDateTime>(m_payload) == std::get<ibDateTime>(other.m_payload);
@@ -123,7 +124,7 @@ bool ibDataNode::operator==(const ibDataNode& other) const
 std::size_t ibDataValue::Weight() const
 {
 	switch (Kind()) {
-	case ibDataKind::String: return std::get<wxString>(m_payload).length() + 2;
+	case ibDataKind::String: return std::get<ibString>(m_payload).length() + 2;
 	case ibDataKind::Binary: return std::get<wxMemoryBuffer>(m_payload).GetDataLen();
 	case ibDataKind::Child: {
 		const std::shared_ptr<ibDataNode>& child = std::get<std::shared_ptr<ibDataNode>>(m_payload);
@@ -153,8 +154,8 @@ std::size_t ibDataNode::Weight() const
 
 // Each payload put in by its own type, never converted into one: a variant holding a bool takes a pointer or a text
 // as a bool if left to choose.
-ibDataValue ibDataValue::String(const wxString& text) {
-	ibDataValue v; v.m_payload.emplace<wxString>(text); return v;
+ibDataValue ibDataValue::String(const ibString& text) {
+	ibDataValue v; v.m_payload.emplace<ibString>(text); return v;
 }
 ibDataValue ibDataValue::Bool(bool value) {
 	ibDataValue v; v.m_payload.emplace<bool>(value); return v;
@@ -185,65 +186,21 @@ ibDataValue ibDataValue::Array(std::vector<ibDataValue>&& items) {
 }
 
 ////////////////////////////////////////////////////////////////////////////
-// ibDataNode — named-field lookup (optimistic cursor) + dual Field
+// ibDataNode — the sub-nodes (the named-field lookup is the header's: FindIn)
 ////////////////////////////////////////////////////////////////////////////
-const ibDataValue* ibDataNode::FindField(const wxString& name) const {
-	const size_t n = m_fields.size();
-	if (n == 0)
-		return nullptr;
-	// fast path: the expected (write-order) position
-	if (m_cursor < n && m_fields[m_cursor].first == name)
-		return &m_fields[m_cursor++].second;
-	// slow path: search from the cursor, wrapping once
-	for (size_t i = 0; i < n; i++) {
-		const size_t idx = (m_cursor + i) % n;
-		if (m_fields[idx].first == name) {
-			m_cursor = idx + 1;
-			return &m_fields[idx].second;
-		}
-	}
-	// absent: cursor unmoved -> the member keeps its default, never an error
-	return nullptr;
-}
-
-const ibDataValue* ibDataNode::FindProperty(const wxString& name) const {
-	const size_t n = m_props.size();
-	if (n == 0)
-		return nullptr;
-	if (m_propCursor < n && m_props[m_propCursor].first == name)
-		return &m_props[m_propCursor++].second;
-	for (size_t i = 0; i < n; i++) {
-		const size_t idx = (m_propCursor + i) % n;
-		if (m_props[idx].first == name) {
-			m_propCursor = idx + 1;
-			return &m_props[idx].second;
-		}
-	}
-	return nullptr;
-}
-
-ibDataNode& ibDataNode::Child(const wxString& name) {
+ibDataNode& ibDataNode::Child(const ibString& name) {
 	// save: a fresh composite sub-node under `name`, returned for the caller to fill
 	auto child = std::make_shared<ibDataNode>();
 	SetProperty(name, ibDataValue::Child(child));
 	return *child;
 }
 
-const ibDataNode* ibDataNode::FindChild(const wxString& name) const {
-	// load: the parsed composite sub-node, or null if absent
-	if (const ibDataValue* v = FindProperty(name)) {
-		if (const std::shared_ptr<ibDataNode>& c = v->AsChild())
-			return c.get();
-	}
-	return nullptr;
-}
-
-// The same lookup for a writer that means to KEEP FILLING a sub-node it may already have made —
-// Child() would replace it. No cast: the value holds a shared_ptr to a node that was never const,
-// so the pointer inside it comes out non-const on its own.
-ibDataNode* ibDataNode::FindChild(const wxString& name) {
-	if (const ibDataValue* v = FindProperty(name)) {
-		if (const std::shared_ptr<ibDataNode>& c = v->AsChild())
+// load: the parsed composite sub-node, or null if absent — and the same for a writer that means to KEEP FILLING a
+// sub-node it may already have made (Child() would replace it). No cast: the value holds a shared_ptr to a node that was
+// never const, so the pointer inside it comes out non-const on its own.
+ibDataNode* ibDataNode::ChildOf(const ibDataValue* value) {
+	if (value != nullptr) {
+		if (const std::shared_ptr<ibDataNode>& c = value->AsChild())
 			return c.get();
 	}
 	return nullptr;
@@ -264,7 +221,7 @@ namespace {
 }
 
 // A named entry = name + value payload (used by the fields / properties areas).
-void ibBinaryProvider::WriteEntry(ibWriter& writer, const wxString& name, const ibDataValue& v) const {
+void ibBinaryProvider::WriteEntry(ibWriter& writer, const ibString& name, const ibDataValue& v) const {
 	writer.w_stringZ(name);
 	WriteValue(writer, v);
 }
@@ -324,7 +281,11 @@ ibDataValue ibBinaryProvider::ReadEntry(ibReader& reader, u32 version) const {
 	RefuseIfBinaryStackLow();
 	const ibDataKind kind = (ibDataKind)reader.r_u8();
 	switch (kind) {
-	case ibDataKind::String: return ibDataValue::String(reader.r_stringZ());
+	case ibDataKind::String: {
+		ibString text;
+		reader.r_stringZ(text);
+		return ibDataValue::String(text);
+	}
 	case ibDataKind::Bool:   return ibDataValue::Bool(reader.r_u8() != 0);
 	case ibDataKind::Date: {
 		// ⭐ THE ONE DOOR A STORED DATE COMES BACK THROUGH, and where an older node is read (the stamp,
@@ -391,7 +352,8 @@ void ibBinaryProvider::WriteFields(const ibDataNode& node, ibWriter& writer) con
 void ibBinaryProvider::ReadFields(ibReader& reader, ibDataNode& node, u32 version) const {
 	const u32 count = reader.r_u32();
 	for (u32 i = 0; i < count; i++) {
-		wxString name = reader.r_stringZ();
+		ibString name;
+		reader.r_stringZ(name);
 		node.AddField(name, ReadEntry(reader, version));
 	}
 }
@@ -406,7 +368,8 @@ void ibBinaryProvider::WriteProps(const ibDataNode& node, ibWriter& writer) cons
 void ibBinaryProvider::ReadProps(ibReader& reader, ibDataNode& node, u32 version) const {
 	const u32 count = reader.r_u32();
 	for (u32 i = 0; i < count; i++) {
-		wxString name = reader.r_stringZ();
+		ibString name;
+		reader.r_stringZ(name);
 		node.SetProperty(name, ReadEntry(reader, version));
 	}
 }

@@ -33,7 +33,7 @@
 #include "backend/compiler/value.h"           // ibValue / ibNumber
 #include "backend/compiler/compileCode.h"     // ibCompileCode — the script lexer feeding the recorder
 #include "backend/compiler/lambdaQueryAST.h"  // ibBuildLambdaQueryAstFromCode (L4-2 recorder)
-#include "backend/query/queryAST.h"           // ibQueryAstExpr
+#include "core/query/queryAST.h"           // ibQueryAstExpr
 
 #include "lambdaRecordFix.h"                  // ibTestRecordLambda — body -> compiled lambda -> AST
 #include "backend/query/queryLowering.h"      // ibQueryLowering::LowerLambdaPredicate (L4-2 lowering)
@@ -257,13 +257,13 @@ TEST_F(LinqExecFix, Bail_UnresolvableColumn)
 // =============================================================================
 namespace {
 
-std::shared_ptr<ibQueryAstExpr> InList(const wxString& column, const std::vector<ibValue>& values, bool negated = false)
+std::shared_ptr<ibQueryAstExpr> InList(const wxString& column, const std::vector<ibLiteral>& values, bool negated = false)
 {
 	auto in = ibQueryAstExpr::Make(ibQueryAstExprKind::In);
 	in->m_negated = negated;
 	in->m_lhs = ibQueryAstExpr::Make(ibQueryAstExprKind::Column);
 	in->m_lhs->m_path = { column };
-	for (const ibValue& v : values) {
+	for (const ibLiteral& v : values) {
 		auto literal = ibQueryAstExpr::Make(ibQueryAstExprKind::Literal);
 		literal->m_literal = v;
 		in->m_list.push_back(literal);
@@ -286,9 +286,9 @@ int DepthOf(const ibQueryPredicatePtr& p)
 // engine's own IN — however long it is.
 TEST_F(LinqExecFix, In_AThousandValuesAreOneLeaf)
 {
-	std::vector<ibValue> values{ ibValue(wxString(wxT("North"))), ibValue(wxString(wxT("East"))) };
+	std::vector<ibLiteral> values{ ibLiteral(wxT("North")), ibLiteral(wxT("East")) };
 	for (int i = 0; i < 1000; ++i)
-		values.push_back(ibValue(wxString::Format(wxT("Nowhere%d"), i)));
+		values.push_back(ibLiteral(wxString::Format(wxT("Nowhere%d"), i)));
 
 	const auto p = ibQueryLowering::LowerLambdaPredicate(&src, *InList(wxT("region"), values), {});
 	ASSERT_TRUE(p != nullptr);
@@ -302,7 +302,7 @@ TEST_F(LinqExecFix, In_AThousandValuesAreOneLeaf)
 TEST_F(LinqExecFix, NotIn_ParityWithSql)
 {
 	const auto p = ibQueryLowering::LowerLambdaPredicate(&src,
-		*InList(wxT("region"), { ibValue(wxString(wxT("North"))), ibValue(wxString(wxT("East"))) }, /*negated*/ true), {});
+		*InList(wxT("region"), { ibLiteral(wxT("North")), ibLiteral(wxT("East")) }, /*negated*/ true), {});
 	ASSERT_TRUE(p != nullptr);
 	EXPECT_EQ(p->m_kind, ibQueryPredicateKind::Not);
 	EXPECT_EQ(RamCount(p.get()), SqlCount(db, wxT("region NOT IN ('North', 'East')")));   // South alone
@@ -311,7 +311,7 @@ TEST_F(LinqExecFix, NotIn_ParityWithSql)
 // One value is an equality, as it always was — nothing that rides an Equal leaf loses it to a set of one.
 TEST_F(LinqExecFix, In_ASingleValueStaysAnEquality)
 {
-	const auto p = ibQueryLowering::LowerLambdaPredicate(&src, *InList(wxT("region"), { ibValue(wxString(wxT("North"))) }), {});
+	const auto p = ibQueryLowering::LowerLambdaPredicate(&src, *InList(wxT("region"), { ibLiteral(wxT("North")) }), {});
 	ASSERT_TRUE(p != nullptr);
 	ASSERT_EQ(p->m_kind, ibQueryPredicateKind::Leaf);
 	EXPECT_EQ(p->m_leaf.m_op, ibQueryFilterOp::Equal);
@@ -323,9 +323,9 @@ TEST_F(LinqExecFix, In_ASingleValueStaysAnEquality)
 // chain comes back.
 TEST_F(LinqExecFix, In_APairwiseFoldIsBalancedNotChained)
 {
-	std::vector<ibValue> values{ ibValue(wxString(wxT("North"))), ibValue(ibValueTypes::TYPE_NULL) };
+	std::vector<ibLiteral> values{ ibLiteral(wxT("North")), ibLiteral(ibValueTypes::TYPE_NULL) };
 	for (int i = 0; i < 1000; ++i)
-		values.push_back(ibValue(wxString::Format(wxT("Nowhere%d"), i)));
+		values.push_back(ibLiteral(wxString::Format(wxT("Nowhere%d"), i)));
 
 	const auto p = ibQueryLowering::LowerLambdaPredicate(&src, *InList(wxT("region"), values), {});
 	ASSERT_TRUE(p != nullptr);

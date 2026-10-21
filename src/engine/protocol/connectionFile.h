@@ -17,7 +17,7 @@ public:
 
 	// `request` — a JSON object saying where the base lives (ibFileBaseOpen says its fields); false with why it was
 	// not opened in `error`.
-	bool Open(const std::string& request, wxString& error);
+	bool Open(const ibString& request, wxString& error);
 	// Its clients go — each its own session's teardown — and then the base. The library stays loaded.
 	void Close();
 
@@ -27,9 +27,9 @@ public:
 	~ibProtocolFileBase();
 
 	// ibFileBaseCall, ibFileBaseListen and ibFileBaseDisconnect — their words, on the base that is open.
-	bool Call(const std::string& request, const void* connection, const wxString& address,
-		std::string& answer, wxString& error) const;
-	void Listen(const void* connection, std::function<void(const std::string& text)> notified) const;
+	bool Call(const ibString& request, const void* connection, const ibString& address,
+		ibString& answer, wxString& error) const;
+	void Listen(const void* connection, std::function<void(const ibString& text)> notified) const;
 	void Disconnect(const void* connection) const;
 
 private:
@@ -46,18 +46,22 @@ class PROTOCOL_API ibProtocolConnectionFile : public ibProtocolConnection {
 public:
 
 	// ibProtocolFileBase::Open and Close — the base this connection is the only one to.
-	bool Open(const std::string& request, wxString& error);
+	bool Open(const ibString& request, wxString& error);
 	void Close();
 
 	virtual ~ibProtocolConnectionFile();
 
-	virtual bool Exchange(const std::string& request, std::string& answer,
+	virtual bool Exchange(const ibString& request, ibString& answer,
 		ibProtocol::ibRefusal& refusal, wxString& error) override;
 	// What the base says unasked — on the base's thread that says it (a session's).
-	virtual void Listen(std::function<void(const std::string& text)> notified) override;
+	virtual void Listen(std::function<void(const ibString& text)> notified) override;
+	// …and a second connection to the same base, the debugger's (protocol 6): a connection of its own to the base's
+	// clients, which goes (Disconnect) when it is dropped. The base stays this one's to close.
+	virtual std::unique_ptr<ibProtocolConnection> OpenChannel(wxString& error) override;
 
 private:
-	ibProtocolFileBase m_base;
+	// Held with the second connections it opened: one dropped after the base was closed finds it closed, not freed.
+	std::shared_ptr<ibProtocolFileBase> m_base = std::make_shared<ibProtocolFileBase>();
 };
 
 #endif

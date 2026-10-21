@@ -46,11 +46,15 @@ if(WIN32)
     set_source_files_properties(${CORE_NET_SOURCES} PROPERTIES COMPILE_DEFINITIONS WIN32_LEAN_AND_MEAN)
 endif()
 target_include_directories(core PRIVATE ${OES_3RDPARTY_DIR}/asio/asio/include)
+# MBED TLS IS THE CORE'S (core/tls declares it): a random byte, a cipher, TLS — whatever else needs one asks the core
+# (crypto/, net/). PRIVATE and hidden (the root CMakeLists.txt), so nothing reaches it past the core.
 target_link_libraries(core PRIVATE llhttp mbedtls mbedx509 mbedcrypto)
 if(WIN32)
+    # crypt32 — the system's certificate store, a client's trust when it names none (net/tlsStream.cpp).
     target_link_libraries(core PRIVATE ws2_32 crypt32 bcrypt)
 endif()
 if(APPLE)
+    # …and the keychain's (SecTrustSettingsCopyCertificates); CoreFoundation is linked below, for the guid.
     target_link_libraries(core PRIVATE "-framework Security")
 endif()
 

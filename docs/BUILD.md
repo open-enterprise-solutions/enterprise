@@ -98,7 +98,9 @@ checkout that fetched less than the tree needs - an older workflow, a partial cl
 
 **A third-party header is named by its library** — `src/3rdparty` is on every include path:
 `<cpp-httplib/httplib.h>`, `<nlohmann/json.hpp>` (from its `single_include`, also on the path), Mbed TLS's
-`<mbedtls/…>` and wx's `<wx/…>` from their own include folders. The core's network (`core/net`) has two more — Asio
+`<mbedtls/…>` and wx's `<wx/…>` from their own include folders. Mbed TLS is the core's: linked into core only
+(`core/tls` declares it), and into the test binary for its reference TLS servers (cpp-httplib's); every other
+module asks the core for a cipher, a random byte, TLS. The core's network (`core/net`) has two more — Asio
 (`<asio.hpp>`, standalone, release `asio-1-36-0`, compiled once in `core/net/asio.cpp`; private to core — no header of
 `core/net` includes it) and llhttp (`<llhttp.h>`, branch `release/v9.3.0`, which
 carries the generated C sources; built as the static `llhttp` target, linked into core only).

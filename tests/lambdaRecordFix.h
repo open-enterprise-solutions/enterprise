@@ -30,7 +30,7 @@
 #include "backend/compiler/compileCode.h"
 #include "backend/compiler/compileContext.h"   // CODE_CES
 #include "backend/compiler/lambdaQueryAST.h"
-#include "backend/query/queryAST.h"
+#include "core/query/queryAST.h"
 
 #include <iostream>
 #include <memory>

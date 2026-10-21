@@ -53,10 +53,7 @@ enum CommandId
 	CommandId_Detach = 10,    // Soft stop: disconnect debug client + reset debug state, listener stays so the debugger can reattach.
 	CommandId_Destroy = 11,    // Hard stop: same as Detach plus ForceExit on desktop (kill enterprise.exe). Web mode skips the ForceExit (wes serves other tabs) — effectively degrades to Detach.
 
-	CommandId_PatchInsertLine = 12,   // Adds a new line of code.
-	CommandId_PatchDeleteLine = 13,   // Deletes a line of code.
-
-	CommandId_PatchComplete = 14,   // Refresh patch line for dataProcessors
+	// 12–14 — the editor's patches (insert, delete, complete), which no runtime read: the edits are the editor's to count.
 
 	CommandId_DeleteAllBreakpoints = 15,// Instructs the backend to clear all breakpoints set
 
@@ -229,11 +226,12 @@ public:
 struct ibStackData {
 
 	struct ibStackRow {
-		wxString m_moduleName;
+		wxString m_moduleName;      // the module's address, as ibDebugData's — what its line is counted in
+		wxString m_fullName;        // the call as the runtime names it: the module, the procedure, its parameters
 		unsigned int m_moduleLine;
 	public:
-		ibStackRow(const wxString& strModuleName, unsigned int moduleLine) :
-			m_moduleName(strModuleName), m_moduleLine(moduleLine) {
+		ibStackRow(const wxString& strModuleName, const wxString& strFullName, unsigned int moduleLine) :
+			m_moduleName(strModuleName), m_fullName(strFullName), m_moduleLine(moduleLine) {
 		}
 	};
 
@@ -241,9 +239,9 @@ struct ibStackData {
 
 public:
 
-	void AppendStack(const wxString& strModuleName, unsigned int moduleLine) {
+	void AppendStack(const wxString& strModuleName, const wxString& strFullName, unsigned int moduleLine) {
 		m_stackData.emplace_back(
-			strModuleName, moduleLine
+			strModuleName, strFullName, moduleLine
 		);
 	}
 
@@ -251,13 +249,13 @@ public:
 		return m_stackData.size();
 	}
 
-	wxString GetModuleName(unsigned int idx) const {
-		if (idx > m_stackData.size()) return wxEmptyString;
-		return m_stackData[idx].m_moduleName;
+	wxString GetFullName(unsigned int idx) const {
+		if (idx >= m_stackData.size()) return wxEmptyString;
+		return m_stackData[idx].m_fullName;
 	}
 
 	wxString GetModuleLine(unsigned int idx) const {
-		if (idx > m_stackData.size()) return wxEmptyString;
+		if (idx >= m_stackData.size()) return wxEmptyString;
 		return std::to_string(m_stackData[idx].m_moduleLine);
 	}
 };
@@ -407,6 +405,9 @@ struct ibWatchedExpression {
 
 /////////////////////////////////////////////////////////////////////////////////////////////
 #define numberOfConnectionAttempts 1
+// A launched child (SearchServer(true)) — it waits 30 s for its designer (ibDebuggerServer::CreateServer), and an attempt
+// on a port nobody listens on yet takes ~2 s on Windows.
+#define numberOfLaunchConnectionAttempts 15
 /////////////////////////////////////////////////////////////////////////////////////////////
 
 #define waitDebuggerTimeout 50 //msec

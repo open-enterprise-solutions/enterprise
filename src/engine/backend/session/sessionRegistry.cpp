@@ -131,12 +131,6 @@ void ibSessionRegistry::InstallUser(ibSession* s,
 	s->SetSessionRawPassword(rawPassword);
 }
 
-void ibSessionRegistry::EnableDebugForSession(ibSession* s)
-{
-	if (s == nullptr) return;
-	s->EnableDebug();
-}
-
 ibSessionRegistry::~ibSessionRegistry()
 {
 	// Best-effort — in normal shutdown Stop() should have been called via
@@ -257,7 +251,7 @@ ibSessionHolder ibSessionRegistry::CreateSessionWithFactory(ibRunMode runMode,
                                                             const wxString& computer,
                                                             ibSessionKind kind,
                                                             const wxString& presetGuid,
-                                                            const wxString& address,
+                                                            const ibString& address,
                                                             ibConnectRequest::SessionFactory factory)
 {
 	// Per-tab variant. The kind is the caller's: a web tab's, a client of the protocol's.

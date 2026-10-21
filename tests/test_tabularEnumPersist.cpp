@@ -38,6 +38,7 @@
 #include <wx/init.h>
 
 #include "backend/appData.h"
+#include "backend/compiler/compileCode.h"   // ibCompileCode::GetCodeStyle — put back as it was found
 #include "backend/tabularModel.h"   // ibValueModel::ibComposerNode
 #include "backend/metadataConfiguration.h"
 #include "backend/metaCollection/metaObject.h"
@@ -65,6 +66,9 @@ struct TabularEnumPersist : ::testing::Test {
 	ibValueMetaObjectEnumeration* vatRates = nullptr;
 	ibValueMetaObjectEnum* vat10 = nullptr;
 	ibValueMetaObjectEnum* vat20 = nullptr;
+	// RunDatabase sets this thread's code style to the configuration's. The binary runs VES (test_compiler.cpp), so
+	// TearDown puts it back, as the other fixtures that run a configuration do (AcceptanceCatalogs, FiberTrust).
+	const short m_codeStyle = ibCompileCode::GetCodeStyle();
 
 	void SetUp() override {
 		if (!m_wxInit.IsOk())
@@ -107,6 +111,7 @@ struct TabularEnumPersist : ::testing::Test {
 	void TearDown() override {
 		if (cfg) cfg->CloseDatabase();
 		cfg.reset();
+		ibCompileCode::SetCodeStyle(m_codeStyle);
 		if (ibApplicationInstance::Get() != nullptr)
 			ibApplicationInstance::DestroyAppDataEnv();
 		if (db) db->Close();

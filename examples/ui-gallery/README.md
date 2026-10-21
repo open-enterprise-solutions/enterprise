@@ -32,6 +32,43 @@ gallery page each, plus a 20th "coming soon" page: `Button`, `Checkbox`,
 than assumed; see the note on `UIComponentGallery` (metaID 1005) in the base
 itself for the per-control findings.
 
+## What each page shows
+
+Every page opens with a heading and a two-line description, then the control's
+variants, each captioned and grouped (mostly in a `Staticboxsizer`), with fixed
+widths so nothing is wider than an 800-1000 px window.
+
+| Page | Contents |
+|---|---|
+| Button | Default, picture and text, picture only, text only; disabled, wide (200 px), tall (40 px), with tooltip. Every button runs the `DemoAction` command (a button with no command bound is hidden by design). |
+| Checkbox | Checked, unchecked, disabled (checked), title on the left - bound to `CheckboxChecked`, `CheckboxDisabled`, `CheckboxLeft`. |
+| Radiobutton | A "Size" group (Small / Medium selected / Large) and a disabled one. |
+| Textbox | An editable 480 x 140 box and a disabled 480 x 80 one (Textbox has no value or text property yet, so it starts empty). |
+| Textctrl | Text, number, date, password, disabled and multiline fields with sample values, in one label column. |
+| Statictext | Plain, bold 14 pt, coloured, italic, disabled and multi-line captions. |
+| Staticline | A horizontal line between two captions, vertical lines between three. |
+| Slider | Default, range 0..10, disabled, vertical - each captioned with its value and range. |
+| Gauge | 0, 30, 75 and 100 of 100. |
+| Tablebox | The `GalleryRows` tabular section with four sample rows (Fruit, Amount). |
+| Gridbox | The `SampleSheet` template (a small price table), through the `SampleSheetValue` attribute it is bound to. |
+| Chartbox | The built-in sample chart (its data is not configurable yet). |
+| Htmlbox | A sample HTML page (heading, inline styles, list, table) set with `SetPage` in `OnOpen`. |
+| Toolbar | New, Edit, Save, a separator, Print, and a disabled tool. |
+| Notebook | A nested notebook with three pages, one with a picture. |
+| Boxsizer | A horizontal and a vertical box sizer. |
+| Gridsizer | A 3-column grid of six buttons. |
+| Staticboxsizer | Framed groups with titles. |
+| Wrapsizer | Twelve buttons that rewrap as the window narrows. |
+| Coming soon | The registered-but-missing controls (Choice, ComboBox, ListBox). |
+
+Supporting metadata on `UIComponentGallery`: the `DemoAction` command (posts
+"Demo action: a gallery button was pressed." to the Messages panel), Boolean
+attributes `CheckboxChecked` / `CheckboxDisabled` / `CheckboxLeft`, text
+attributes `TextString` / `TextNumber` / `TextDate` / `TextPassword` /
+`TextDisabled`, the spreadsheet attribute `SampleSheetValue`, and the
+`SampleSheet` template. The form module's `OnOpen`
+fills the sample values, the table rows and the HTML page.
+
 ## Known gaps
 
 ### `Choice`, `ComboBox`, the unregistered `ListBox` variant
@@ -116,6 +153,41 @@ in `src/engine/frontend/visualView/ctrl/notebook.cpp`:
    `\n`, and the static text's caption is measured line by line
    (`ibControlStaticTextValue::CaptionExtent`), as it was already drawn, so a
    multi-line caption gets the height of all its lines.
+
+### Desktop gaps found while building the showcase
+
+Engine fixes, each on its own branch from `develop` and its own pull request:
+
+- #543 `fix/radiobutton-title-saved` - a Radiobutton's `Title` and `Selected`
+  were not serialised, so every radio button came back untitled and unselected.
+- #544 `fix/htmlbox-setpage-before-create` - `SetPage` called from `OnOpen` was
+  lost, because the window did not exist yet and `Create` always showed the
+  dummy page.
+- #545 `fix/label-column-per-page` - the label-alignment pass treated the whole
+  form as one column (and counted unbound Statictext captions as labels), so on
+  a notebook every field was pushed right by the widest caption on any page and
+  title-left checkboxes ended up past the window edge.
+- #546 `fix/textctrl-multiline-create` - a multiline Textctrl showed one centred
+  line on macOS (`wxTE_MULTILINE` cannot be added after creation there, and the
+  layout sized the editor to one line).
+- #548 `fix/gridbox-object-spreadsheet-source` - a Gridbox bound to a
+  spreadsheet field of the form's object did not resolve its Source at runtime,
+  counted as unbound and was hidden.
+- #549 `fix/tablebox-focus-hidden-page` - the table took the focus on a hidden
+  notebook page, so the gallery opened on its Tablebox page.
+- #550 `fix/wrapsizer-no-extend-last` - a wrap sizer stretched the last control
+  of each line (`wxEXTEND_LAST_ON_EACH_LINE`), whatever its `MaximumSize`.
+- #551 `fix/button-picture-logical-size` - buttons with a picture were sized
+  with the bitmap's physical (2x) pixels on a Retina screen.
+
+Still open:
+
+- Every control's `BackgroundColour` defaults to the cream form colour and has
+  no "unset" state, so captions draw cream boxes on the grey notebook page and
+  inside groups (written up as a proposal; it needs a decision on the property).
+- A vertical `Gauge` draws nothing on macOS, so the page shows horizontal ones only.
+- `Textbox` has no value/text property and `Chartbox` no data binding, so neither
+  can show configured sample content; toolbar tools have no action binding.
 
 ### Protocol divergence
 

@@ -11,11 +11,12 @@
 //   * settings left pointing at a field the source no longer has.
 
 #include <gtest/gtest.h>
+#include "core/query/queryRefusal.h"   // ibQueryRefusal — what the core parser gives back for a text that does not read
 
-#include "backend/query/queryAST.h"
-#include "backend/query/queryParser.h"
-#include "backend/query/queryRender.h"
-#include "backend/query/queryRewrite.h"
+#include "core/query/queryAST.h"
+#include "core/query/queryParser.h"
+#include "core/query/queryRender.h"
+#include "core/query/queryRewrite.h"
 #include "backend/query/queryLowering.h"
 #include "core/query/queryAggregates.h"         // ibQueryAggregatesFor — which folds a type admits
 #include "backend/query/queryConstructorModel.h"
@@ -722,7 +723,7 @@ TEST(QueryCast, ItNeedsAType)
 	// `CAST(x)` is not a shorter cast — it is an unfinished one, and a cast with no type says
 	// nothing at all.
 	ibQueryParser parser;
-	EXPECT_THROW(parser.ParseExpression(wxT("CAST(Recorder)")), ibBackendException);
+	EXPECT_THROW(parser.ParseExpression(wxT("CAST(Recorder)")), ibQueryRefusal);
 }
 
 // ===========================================================================
@@ -862,7 +863,7 @@ TEST(QueryTotalsOverall, TotalsWithNeitherADimensionNorOverallIsRefused)
 	ibQueryParser parser;
 	EXPECT_THROW(parser.ParsePackage(
 		wxT("SELECT Code FROM Catalog.Products AS Products TOTALS SUM(Products.Price) BY")),
-		ibBackendException);
+		ibQueryRefusal);
 }
 
 // ===========================================================================
@@ -1077,7 +1078,7 @@ TEST(QueryDistinctAggregate, DistinctStarIsRefusedWithAReasonNotASyntaxError)
 	// about a star it would otherwise have accepted.
 	ibQueryParser parser;
 	EXPECT_THROW(parser.Parse(wxT("SELECT COUNT(DISTINCT *) FROM Catalog.Actions AS Actions")),
-		ibBackendException);
+		ibQueryRefusal);
 }
 
 TEST(QueryDistinctAggregate, ItSurvivesTheOptimizerClone)

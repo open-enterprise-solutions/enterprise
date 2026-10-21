@@ -153,6 +153,7 @@
   <ItemGroup>
     <ClCompile Include="frmserver.cpp" />
     <ClCompile Include="client\clientChildFrame.cpp" />
+    <ClCompile Include="client\clientDebugger.cpp" />
     <ClCompile Include="client\clientFrame.cpp" />
     <ClCompile Include="client\clientFrameDesigner.cpp" />
     <ClCompile Include="client\propertyInspector.cpp" />
@@ -312,6 +313,7 @@
   <ItemGroup>
     <ClInclude Include="frmserver.h" />
     <ClInclude Include="client\clientChildFrame.h" />
+    <ClInclude Include="client\clientDebugger.h" />
     <ClInclude Include="client\clientFrame.h" />
     <ClInclude Include="client\clientFrameDesigner.h" />
     <ClInclude Include="client\propertyInspector.h" />

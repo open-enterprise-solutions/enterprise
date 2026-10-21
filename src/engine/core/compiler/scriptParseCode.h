@@ -125,7 +125,7 @@ protected:
 	bool           IsNextKeyword(int keyword);
 	void           ExpectKeyword(int keyword);
 	wxString       ExpectIdentifier(bool strRealName = false);
-	ibLexValue     ExpectConstant();
+	ibLiteral      ExpectConstant();
 
 public:
 

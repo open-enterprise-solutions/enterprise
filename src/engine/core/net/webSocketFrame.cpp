@@ -5,6 +5,11 @@
 #include <mbedtls/base64.h>
 #include <mbedtls/sha1.h>
 
+#include <wx/mstream.h>
+#include <wx/zstream.h>
+
+#include "core/fstring.h"   // ibString — the text a deflated message is
+
 namespace {
 
 // Where a frame's head ends and what it says, read off its first bytes.
@@ -231,5 +236,38 @@ bool ibIsUtf8(const std::string& text)
 			return false;
 		at += follow + 1;
 	}
+	return true;
+}
+
+bool ibDeflate(const std::string& bytes, std::string& packed)
+{
+	wxMemoryOutputStream out;
+	{
+		wxZlibOutputStream zip(out, wxZ_DEFAULT_COMPRESSION, wxZLIB_NO_HEADER);
+		zip.Write(bytes.data(), bytes.size());
+		if (!zip.Close())
+			return false;
+	}
+	const wxStreamBuffer* const buffer = out.GetOutputStreamBuffer();
+	packed.assign(static_cast<const char*>(buffer->GetBufferStart()), static_cast<std::size_t>(out.GetLength()));
+	return true;
+}
+
+bool ibInflate(const std::string& packed, ibString& text)
+{
+	wxMemoryInputStream in(packed.data(), packed.size());
+	wxZlibInputStream unzip(in, wxZLIB_NO_HEADER);
+	std::string bytes;
+	char chunk[16384];
+	for (;;) {
+		unzip.Read(chunk, sizeof(chunk));
+		const std::size_t got = unzip.LastRead();
+		if (got == 0)
+			break;
+		bytes.append(chunk, got);
+	}
+	if (unzip.GetLastError() != wxSTREAM_NO_ERROR && unzip.GetLastError() != wxSTREAM_EOF)
+		return false;
+	text.SetUtf8(bytes.data(), bytes.size());
 	return true;
 }

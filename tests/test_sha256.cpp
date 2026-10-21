@@ -1,14 +1,14 @@
 // =============================================================================
 // OES Enterprise — SHA-256 tests
 //
-// ibSHA256 (backend/utils/sha256.hpp) is the primitive under PBKDF2 password
+// ibSHA256 (core/crypto/sha256.hpp) is the primitive under PBKDF2 password
 // hashing (see test_passwordHash.cpp). Pin it to the FIPS 180-4 known vectors,
 // confirm the incremental Update/Final path equals the one-shot Hash, and guard
 // determinism. A drift here silently changes every stored password hash.
 // =============================================================================
 
 #include <gtest/gtest.h>
-#include "backend/utils/sha256.hpp"
+#include "core/crypto/sha256.hpp"
 
 #include <cstdint>
 #include <cstring>

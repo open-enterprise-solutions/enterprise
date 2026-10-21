@@ -10,6 +10,7 @@
 
 #include <gtest/gtest.h>
 #include "core/fnumber.h"
+#include "core/fstring.h"   // ibString — what FromString reads
 
 #include <climits>
 #include <sstream>

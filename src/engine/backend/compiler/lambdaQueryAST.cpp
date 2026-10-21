@@ -5,7 +5,7 @@
 
 #include "lambdaQueryAST.h"
 
-#include "backend/query/queryAST.h"   // ibQueryAstExpr — the L4-1 AST the pushdown lowers
+#include "core/query/queryAST.h"   // ibQueryAstExpr — the L4-1 AST the pushdown lowers
 #include "backend/compiler/byteCode.h"       // the instructions the second recorder reads
 #include "backend/compiler/compileContext.h" // DEF_VAR_CONST / DEF_VAR_NORET — how an operand names a pool
 #include "core/compiler/codeDef.h"    // KEY_* script keyword ids / OPER_* opcodes
@@ -255,6 +255,20 @@ ibQueryAstExprPtr NodeOf(const CodeCur& c, const ibByteUnit& code, int depth)
 	return c.Refuse(wxT("a construct the query subset does not cover"), code.m_numString);
 }
 
+// A POOL CONSTANT AS THE TEXT WROTE IT — the compiler puts nothing in the pool but a lexem's value
+// (FindConst) and a member's spelling (GetConstString), and the cache reads back only those
+// (byteCodeAOT.cpp, ReadConstValue), so each is a primitive — a literal.
+ibLiteral LiteralOf(const ibValue& constant)
+{
+	switch (constant.GetType()) {
+	case ibValueTypes::TYPE_BOOLEAN: return ibLiteral(constant.GetBoolean());
+	case ibValueTypes::TYPE_NUMBER:  return ibLiteral(constant.GetNumber());
+	case ibValueTypes::TYPE_DATE:    return ibLiteral(constant.GetDate());
+	case ibValueTypes::TYPE_STRING:  return ibLiteral(wxString(constant.GetString()));
+	default:                         return ibLiteral(constant.GetType());   // Undefined, Null
+	}
+}
+
 // What wrote this slot, searched backwards inside the lambda's own body.
 ibQueryAstExprPtr ResolveSlot(const CodeCur& c, const ibParamRunUnit& slot, int depth)
 {
@@ -266,7 +280,7 @@ ibQueryAstExprPtr ResolveSlot(const CodeCur& c, const ibParamRunUnit& slot, int 
 		if (slot.m_numIndex < 0 || (size_t)slot.m_numIndex >= c.bc.m_listConst.size())
 			return c.Refuse(wxT("a constant that is not in the pool"), 0);
 		auto e = ibQueryAstExpr::Make(ibQueryAstExprKind::Literal);
-		e->m_literal = c.bc.m_listConst[(size_t)slot.m_numIndex];
+		e->m_literal = LiteralOf(c.bc.m_listConst[(size_t)slot.m_numIndex]);
 		return e;
 	}
 
@@ -455,8 +469,8 @@ wxString DescribeNode(const ibQueryAstExprPtr& e)
 	// the same — the whole point of a canonical form is that two different trees look different.
 	case ibQueryAstExprKind::Literal:
 		return e->m_literal.GetType() == ibValueTypes::TYPE_STRING
-			? wxT("\"") + e->m_literal.GetString() + wxT("\"")
-			: e->m_literal.GetString();
+			? wxString(wxT("\"")) + wxString(e->m_literal.GetString()) + wxT("\"")
+			: wxString(e->m_literal.GetString());
 
 	// A capture shows its ADDRESS, because that is what the fold now reads — and a rendering that
 	// hid it would agree with a tree that still searches for the name.

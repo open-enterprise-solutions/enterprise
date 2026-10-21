@@ -1,6 +1,5 @@
 #include "serverConfig.h"
 
-#include <wx/base64.h>
 #include <wx/ffile.h>
 #include <wx/fileconf.h>
 #include <wx/filename.h>
@@ -9,8 +8,10 @@
 #include <sys/stat.h>
 #endif
 
-#include "backend/cipher/fieldCipher.h"
+#include "core/crypto/fieldCipher.h"
+#include "core/fstring.h"
 #include "core/guid.h"
+#include "core/utils/base64.h"   // ibBase64 — the key's file and a sealed secret, in text
 
 namespace {
 
@@ -53,8 +54,9 @@ bool ibServerConfig::LoadKey(wxString& error)
 			error = wxString::Format(wxT("the key %s cannot be read"), path);
 			return false;
 		}
-		const wxMemoryBuffer raw = wxBase64Decode(text.Trim().Trim(false));
-		if (raw.GetDataLen() != ibFieldCipher::kKeySize) {
+		text.Trim().Trim(false);
+		wxMemoryBuffer raw;
+		if (!ibBase64::Read(text.wc_str(), text.length(), raw) || raw.GetDataLen() != ibFieldCipher::kKeySize) {
 			error = wxString::Format(wxT("the key %s is not a key"), path);
 			return false;
 		}
@@ -71,7 +73,10 @@ bool ibServerConfig::LoadKey(wxString& error)
 	}
 	wxFileName::Mkdir(m_folder, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
 	wxFFile file(path, wxT("wb"));
-	if (!file.IsOpened() || !file.Write(wxBase64Encode(key.data(), key.size()) + wxT("\n"))) {
+	std::string line;
+	ibBase64::Append(line, key.data(), key.size());
+	line += '\n';
+	if (!file.IsOpened() || file.Write(line.data(), line.size()) != line.size()) {
 		error = wxString::Format(wxT("the key %s cannot be written"), path);
 		return false;
 	}
@@ -178,10 +183,11 @@ bool ibServerConfig::OpenSecret(const wxString& base, const wxString& name, cons
 		return false;
 	}
 
-	const wxMemoryBuffer raw = wxBase64Decode(sealed);
+	wxMemoryBuffer raw;
+	const bool decoded = ibBase64::Read(sealed.wc_str(), sealed.length(), raw);
 	const unsigned char* bytes = static_cast<const unsigned char*>(raw.GetData());
 	std::vector<unsigned char> plain;
-	if (!ibFieldCipher::Decrypt(std::vector<unsigned char>(bytes, bytes + raw.GetDataLen()),
+	if (!decoded || !ibFieldCipher::Decrypt(std::vector<unsigned char>(bytes, bytes + raw.GetDataLen()),
 			SecretContext(m_key, base, name), plain)) {
 		error = wxString::Format(wxT("%s/%s does not open with this installation's key"), base, name);
 		return false;
@@ -203,7 +209,9 @@ bool ibServerConfig::SealSecret(const wxString& base, const wxString& name, cons
 	}
 
 	wxFileConfig conf(wxEmptyString, wxEmptyString, m_confPath, wxEmptyString, kConfStyle);
-	conf.Write(wxT("/") + base + wxT("/") + name, kSealed + wxBase64Encode(sealed.data(), sealed.size()));
+	ibString text(kSealed);
+	ibBase64::Append(text, sealed.data(), sealed.size());
+	conf.Write(wxT("/") + base + wxT("/") + name, static_cast<wxString>(text));
 	if (!conf.Flush()) {
 		error = wxString::Format(wxT("the config %s cannot be written"), m_confPath);
 		return false;

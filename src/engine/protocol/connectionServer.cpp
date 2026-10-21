@@ -4,22 +4,18 @@
 #include <string>
 
 #include <wx/intl.h>   // _() — what a refusal says to a person
-#include <wx/mstream.h>
-#include <wx/zstream.h>
 
 // ⚠ PLAIN ws:// ONLY, as the core's client speaks it (core/net/httpClient.h).
 #include "core/net/httpClient.h"
 #include "core/net/ioThreads.h"
-
-#include "protocolNode.h"   // a short message read, to tell a notification from an answer
 
 namespace {
 
 // How long Close waits for the server to be told the socket is closing, before its thread is stopped under it.
 constexpr std::chrono::seconds kCloseWithin(1);
 
-// The longest a notification of the server's is — a line; anything longer is an answer.
-constexpr std::size_t kNotificationMax = 1024;
+// How a notification of the server's begins — the method first, where an answer has its id.
+const ibString kNotificationHead(wxT("{\"jsonrpc\":\"2.0\",\"method\":"));
 
 // A base's name in the path — its UTF-8 bytes, every one but the unreserved escaped.
 std::string EscapeSegment(const wxString& segment)
@@ -40,26 +36,6 @@ std::string EscapeSegment(const wxString& segment)
 		}
 	}
 	return escaped;
-}
-
-// A binary message is the answer deflated — raw, RFC 1951, as the server packs it (appserver/clientListener).
-bool Inflate(std::string& message)
-{
-	wxMemoryInputStream packed(message.data(), message.size());
-	wxZlibInputStream unzip(packed, wxZLIB_NO_HEADER);
-	std::string text;
-	char chunk[16384];
-	for (;;) {
-		unzip.Read(chunk, sizeof(chunk));
-		const std::size_t got = unzip.LastRead();
-		if (got == 0)
-			break;
-		text.append(chunk, got);
-	}
-	if (unzip.GetLastError() != wxSTREAM_NO_ERROR && unzip.GetLastError() != wxSTREAM_EOF)
-		return false;
-	message.swap(text);
-	return true;
 }
 
 } // namespace
@@ -125,38 +101,21 @@ bool ibProtocolConnectionServer::Open(const wxString& address, wxString& error)
 			}
 			m_answered.notify_all();
 		},
-		[this](std::uint8_t opcode, std::string message) {
-			// A deflated answer that does not inflate: the two ends no longer agree, and the socket counts as gone.
-			if (opcode == ibWebSocketOpcode::Binary && !Inflate(message)) {
-				{
-					std::lock_guard<std::mutex> lock(m_mutex);
-					m_closed = true;
-					m_reason = "an answer that does not inflate";
-				}
-				m_answered.notify_all();
+		[this](const ibString& text) {
+			Receive(text);
+		},
+		// A binary message is a text deflated, as the server packs one of some size (ibWebSocket::Send) — one that does
+		// not inflate: the two ends no longer agree, and the socket counts as gone.
+		[this](std::string packed) {
+			ibString text;
+			if (ibInflate(packed, text)) {
+				Receive(text);
 				return;
 			}
-
-			// A NOTIFICATION — a method and no id, said unasked: to whoever listens, here. Only a short message can be one
-			// (the server's notifications are a line), so an answer of a frame is never parsed twice.
-			if (message.size() <= kNotificationMax) {
-				ibProtocolNode node;
-				if (ibProtocolNode::Read(message, node) && node.Has(ibProtocol::ibRpc::Method) && !node.Has(ibProtocol::ibRpc::Id)) {
-					std::function<void(const std::string&)> notified;
-					{
-						std::lock_guard<std::mutex> lock(m_mutex);
-						notified = m_notified;
-					}
-					if (notified)
-						notified(message);
-					return;
-				}
-			}
-
-			// …else the answer to the request waiting.
 			{
 				std::lock_guard<std::mutex> lock(m_mutex);
-				m_answer = std::move(message);
+				m_closed = true;
+				m_reason = "an answer that does not inflate";
 			}
 			m_answered.notify_all();
 		},
@@ -230,7 +189,19 @@ bool ibProtocolConnectionServer::Reconnect(wxString& error)
 	return Open(address, error);
 }
 
-bool ibProtocolConnectionServer::Exchange(const std::string& request, std::string& answer,
+std::unique_ptr<ibProtocolConnection> ibProtocolConnectionServer::OpenChannel(wxString& error)
+{
+	if (m_address.IsEmpty()) {
+		error = wxT("no server to open a second connection to");
+		return nullptr;
+	}
+	auto channel = std::make_unique<ibProtocolConnectionServer>();
+	if (!channel->Open(m_address, error))
+		return nullptr;
+	return channel;
+}
+
+bool ibProtocolConnectionServer::Exchange(const ibString& request, ibString& answer,
 	ibProtocol::ibRefusal& refusal, wxString& error)
 {
 	std::lock_guard<std::mutex> exchanging(m_exchanging);
@@ -261,7 +232,31 @@ bool ibProtocolConnectionServer::Exchange(const std::string& request, std::strin
 	return true;
 }
 
-void ibProtocolConnectionServer::Listen(std::function<void(const std::string& text)> notified)
+void ibProtocolConnectionServer::Receive(const ibString& text)
+{
+	// A NOTIFICATION — a method and no id, said unasked: to whoever listens, here. Told by how it begins: the server
+	// writes a notification's method where an answer's id stands (ibClientHost::NotifyChanged, NotifyDebug), so an
+	// answer of a frame is never parsed twice, and the debugger's news, of any length, is never an answer.
+	if (text.StartsWith(kNotificationHead)) {
+		std::function<void(const ibString&)> notified;
+		{
+			std::lock_guard<std::mutex> lock(m_mutex);
+			notified = m_notified;
+		}
+		if (notified)
+			notified(text);
+		return;
+	}
+
+	// …else the answer to the request waiting.
+	{
+		std::lock_guard<std::mutex> lock(m_mutex);
+		m_answer = text;
+	}
+	m_answered.notify_all();
+}
+
+void ibProtocolConnectionServer::Listen(std::function<void(const ibString& text)> notified)
 {
 	std::lock_guard<std::mutex> lock(m_mutex);
 	m_notified = std::move(notified);

@@ -45,7 +45,7 @@ private:
 
 	ibAuiToolBar*       m_bar = nullptr;   // the parent's window
 	const ibSendCommand m_sendCommand;
-	std::string         m_shape;           // the entries as last built, less what is enabled
+	ibString            m_shape;           // the entries as last built, less what is enabled
 	ibProtocolNode      m_entries;         // a copy — a group's commands are read from it when it is pressed
 };
 

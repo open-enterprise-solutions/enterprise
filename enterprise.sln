@@ -38,7 +38,6 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "frontend", "src\engine\fron
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "backend", "src\engine\backend\backend.vcxproj", "{35245A06-A72D-40B9-92FE-8EF2CCCC9D00}"
 	ProjectSection(ProjectDependencies) = postProject
-		{A1B2C3D4-0003-4E5F-8A9B-C0D1E2F30003} = {A1B2C3D4-0003-4E5F-8A9B-C0D1E2F30003}
 		{A1B2C3D4-0009-4E5F-8A9B-C0D1E2F30009} = {A1B2C3D4-0009-4E5F-8A9B-C0D1E2F30009}
 	EndProjectSection
 EndProject
@@ -68,7 +67,6 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "frmserver", "src\engine\frm
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "frmclient", "src\engine\frmclient\frmclient.vcxproj", "{A1B2C3D4-0005-4E5F-8A9B-C0D1E2F30005}"
 	ProjectSection(ProjectDependencies) = postProject
-		{A1B2C3D4-0003-4E5F-8A9B-C0D1E2F30003} = {A1B2C3D4-0003-4E5F-8A9B-C0D1E2F30003}
 		{A1B2C3D4-0008-4E5F-8A9B-C0D1E2F30008} = {A1B2C3D4-0008-4E5F-8A9B-C0D1E2F30008}
 		{A1B2C3D4-0009-4E5F-8A9B-C0D1E2F30009} = {A1B2C3D4-0009-4E5F-8A9B-C0D1E2F30009}
 	EndProjectSection
@@ -104,7 +102,7 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "wenterprise-server", "src\e
 		{A1B2C3D4-0002-4E5F-8A9B-C0D1E2F30002} = {A1B2C3D4-0002-4E5F-8A9B-C0D1E2F30002}
 	EndProjectSection
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "mbedtls", "src\engine\backend\tls\mbedtls.vcxproj", "{A1B2C3D4-0003-4E5F-8A9B-C0D1E2F30003}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "mbedtls", "src\engine\core\tls\mbedtls.vcxproj", "{A1B2C3D4-0003-4E5F-8A9B-C0D1E2F30003}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "llhttp", "src\engine\core\net\llhttp\llhttp.vcxproj", "{A1B2C3D4-000B-4E5F-8A9B-C0D1E2F3000B}"
 EndProject

@@ -247,12 +247,12 @@ void ibValueModelTableBox::Create(wxWindow* parent, const ibProtocolNode& node)
 					if (entry.first != ibProtocol::ibNode::Children && entry.first != ibProtocol::ibForm::ibTable::Before
 						&& entry.first != ibProtocol::ibForm::ibTable::End && entry.first != ibProtocol::ibForm::ibTable::Anchor
 						&& entry.first != ibProtocol::ibForm::ibTable::Count)
-						page.SetValue(entry.first.c_str(), entry.second);
+						page.SetValue(entry.first, entry.second);
 				}
 				for (std::size_t idx = from; idx < to; ++idx) {
 					ibProtocolNode row = page.AddChild();
 					for (const auto& entry : rows[idx].Entries())
-						row.SetValue(entry.first.c_str(), entry.second);
+						row.SetValue(entry.first, entry.second);
 				}
 				if (request.Has(ibProtocol::ibForm::ibTable::Before))
 					page.SetValue(ibProtocol::ibForm::ibTable::Before, static_cast<long long>(at - from));
@@ -821,9 +821,9 @@ void ibValueModelTableBoxColumn::Update(const ibProtocolNode& node)
 	// The desktop's column OnUpdated. The header and the footer — the captions, the pictures, or both, as its
 	// representation says (the server resolves Auto, and sends no picture for a text one).
 	const bool picture = state.GetInt(ibProtocol::ibForm::ibState::Representation) == static_cast<int>(ibProtocol::ibForm::ibState::ibRepresentation::Picture);
-	m_column->SetTitle(picture ? wxString() : state.GetString(ibProtocol::ibForm::ibState::Caption));
+	m_column->SetTitle(picture ? ibString() : state.GetString(ibProtocol::ibForm::ibState::Caption));
 	m_column->SetBitmap(ibProtocolPicture(state.GetString(ibProtocol::ibForm::ibTable::HeaderPicture)));
-	m_column->SetFooterTitle(picture ? wxString() : state.GetString(ibProtocol::ibForm::ibTable::FooterText));
+	m_column->SetFooterTitle(picture ? ibString() : state.GetString(ibProtocol::ibForm::ibTable::FooterText));
 	m_column->SetFooterBitmap(ibProtocolPicture(state.GetString(ibProtocol::ibForm::ibTable::FooterPicture)));
 
 	m_column->SetWidth(static_cast<int>(node.GetInt(ibProtocol::ibForm::ibTable::Width, 80)));

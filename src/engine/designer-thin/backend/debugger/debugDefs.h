@@ -1,9 +1,9 @@
 #ifndef _DEBUGGER_DEFS_H__
 #define _DEBUGGER_DEFS_H__
 
-// THE DEBUGGER'S WIRE — the engine's (backend/debugger/debugDefs.h) whole: the thin designer's debugger is the engine's
-// client, carried over (debugClient.h), and talks to the runtime over this same socket. What backend_core.h set for it
-// is set here.
+// THE DEBUGGER'S WORDS — the engine's (backend/debugger/debugDefs.h) whole: what the thin designer's listeners are told
+// (debugClientBridge.h) is in the engine's shapes, though the runtime is the server's debugger's to talk to now, and the
+// facade hears it over the protocol (debugClient.h). What backend_core.h set for it is set here.
 
 #include <vector>
 
@@ -64,10 +64,7 @@ enum CommandId
 	CommandId_Detach = 10,    // Soft stop: disconnect debug client + reset debug state, listener stays so the debugger can reattach.
 	CommandId_Destroy = 11,    // Hard stop: same as Detach plus ForceExit on desktop (kill enterprise.exe). Web mode skips the ForceExit (wes serves other tabs) — effectively degrades to Detach.
 
-	CommandId_PatchInsertLine = 12,   // Adds a new line of code.
-	CommandId_PatchDeleteLine = 13,   // Deletes a line of code.
-
-	CommandId_PatchComplete = 14,   // Refresh patch line for dataProcessors
+	// 12–14 — the editor's patches (insert, delete, complete), which no runtime read: the edits are the editor's to count.
 
 	CommandId_DeleteAllBreakpoints = 15,// Instructs the backend to clear all breakpoints set
 
@@ -240,11 +237,12 @@ public:
 struct ibStackData {
 
 	struct ibStackRow {
-		wxString m_moduleName;
+		wxString m_moduleName;      // the module's address, as ibDebugData's — what its line is counted in
+		wxString m_fullName;        // the call as the runtime names it: the module, the procedure, its parameters
 		unsigned int m_moduleLine;
 	public:
-		ibStackRow(const wxString& strModuleName, unsigned int moduleLine) :
-			m_moduleName(strModuleName), m_moduleLine(moduleLine) {
+		ibStackRow(const wxString& strModuleName, const wxString& strFullName, unsigned int moduleLine) :
+			m_moduleName(strModuleName), m_fullName(strFullName), m_moduleLine(moduleLine) {
 		}
 	};
 
@@ -252,9 +250,9 @@ struct ibStackData {
 
 public:
 
-	void AppendStack(const wxString& strModuleName, unsigned int moduleLine) {
+	void AppendStack(const wxString& strModuleName, const wxString& strFullName, unsigned int moduleLine) {
 		m_stackData.emplace_back(
-			strModuleName, moduleLine
+			strModuleName, strFullName, moduleLine
 		);
 	}
 
@@ -262,13 +260,13 @@ public:
 		return m_stackData.size();
 	}
 
-	wxString GetModuleName(unsigned int idx) const {
-		if (idx > m_stackData.size()) return wxEmptyString;
-		return m_stackData[idx].m_moduleName;
+	wxString GetFullName(unsigned int idx) const {
+		if (idx >= m_stackData.size()) return wxEmptyString;
+		return m_stackData[idx].m_fullName;
 	}
 
 	wxString GetModuleLine(unsigned int idx) const {
-		if (idx > m_stackData.size()) return wxEmptyString;
+		if (idx >= m_stackData.size()) return wxEmptyString;
 		return std::to_string(m_stackData[idx].m_moduleLine);
 	}
 };

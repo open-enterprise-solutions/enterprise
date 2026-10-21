@@ -24,7 +24,7 @@
 
 #include "core/core.h"                   // ibMetaID, ibClassID
 #include "core/fdatetime.h"              // ibDateTime — the Date scalar
-#include "core/fstring.h"                // ibString — codec specialization
+#include "core/fstring.h"                // ibString — the String scalar and every entry's name
 #include "core/guid.h"                   // ibGuid — codec specialization
 #include "core/fileSystem/fs.h"          // ibWriter / ibReader, u32/u64, wxMemoryBuffer
 #include "core/fnumber.h"                // ibNumber — codec specialization
@@ -62,11 +62,18 @@ enum class ibDataKind : u8 {
 class CORE_API ibDataValue {
 public:
 	ibDataValue() = default;
+	// ⭐ MOVED WITHOUT A THROW — said, since the payload's buffer (wxMemoryBuffer) has no move of its own and its copy is
+	// not marked so: std::vector moves only what cannot throw, and a node's fields grew by COPYING each one (2026-10-22,
+	// _Uninitialized_copy under AddField). What moves is a count taken, never an allocation.
+	ibDataValue(const ibDataValue&) = default;
+	ibDataValue(ibDataValue&&) noexcept = default;
+	ibDataValue& operator=(const ibDataValue&) = default;
+	ibDataValue& operator=(ibDataValue&&) noexcept = default;
 
 	ibDataKind Kind() const { return static_cast<ibDataKind>(m_payload.index()); }
 	bool IsEmpty() const { return Kind() == ibDataKind::Empty; }
 
-	static ibDataValue String(const wxString& text);
+	static ibDataValue String(const ibString& text);
 	static ibDataValue Bool(bool value);
 	static ibDataValue Number(const ibNumber& value); // exact decimal (the full numeric payload)
 	static ibDataValue Int(s64 value);    // small-int convenience over Number
@@ -81,7 +88,7 @@ public:
 	// a wrong kind, so a mis-read fails loud instead of returning garbage. Callers
 	// that may see another kind must gate on Kind() first (as ReadNodeValue does).
 	// An Empty value (an absent field) reads as the kind's default.
-	wxString                         AsString() const;
+	const ibString&                  AsString() const;
 	bool                             AsBool()   const;
 	const ibNumber&                  AsNumber() const;
 	s64                              AsInt()    const { s64 out = 0; AsNumber().ToInt(out); return out; }
@@ -109,11 +116,13 @@ private:
 	// (Kind). It held every kind's at once: a bool carried a text, a number, a date, a buffer (a kilobyte, by wx's
 	// default) and a list, each made, copied and freed with it — a dozen allocations a field written, ~70 µs a
 	// command entry of a frame in a Debug build.
+	// The text is the engine's string, as every name here: a node copied — into an answer's envelope, out of a
+	// value — is one more owner of each text, not a copy of its characters.
 	std::variant<std::monostate,                 // Empty
 		bool,                                     // Bool
 		ibNumber,                                 // Number (exact decimal, huge-capable)
 		ibDateTime,                               // Date (the wall-clock reading, fdatetime.h) — never mixed with Number
-		wxString,                                 // String
+		ibString,                                 // String
 		wxMemoryBuffer,                           // Binary
 		std::shared_ptr<ibDataNode>,              // Child (composite sub-node)
 		std::vector<ibDataValue>> m_payload;      // Array (ordered list of values)
@@ -176,6 +185,12 @@ class CORE_API ibDataNode {
 public:
 	ibDataNode() = default;
 	ibDataNode(ibClassID clsid, ibMetaID metaId) : m_clsid(clsid), m_metaId(metaId) {}
+	// ⭐ MOVED WITHOUT A THROW — said, as ibDataValue says it: the raw block (wxMemoryBuffer) has no move of its own, and
+	// a vector of children grew by COPYING each child with all of its subtree (2026-10-22, the form editor's rows).
+	ibDataNode(const ibDataNode&) = default;
+	ibDataNode(ibDataNode&&) noexcept = default;
+	ibDataNode& operator=(const ibDataNode&) = default;
+	ibDataNode& operator=(ibDataNode&&) noexcept = default;
 
 	// --- identity ---------------------------------------------------------
 	ibClassID GetClsid()  const { return m_clsid; }
@@ -192,30 +207,30 @@ public:
 	//   load: m_metaId = node.GetValue<s32>("id");     SetName(node.GetProp<wxString>("Name"));
 	// An absent name yields a default-constructed T — forward-compatible with
 	// add / drop / reorder.
-	template<class T> void SetValue(const wxString& name, const T& value) { AddField(name, ibDataCodec<T>::To(value)); }
+	template<class T> void SetValue(const ibString& name, const T& value) { AddField(name, ibDataCodec<T>::To(value)); }
 	// return form: explicit <T>, value inline; out form: T deduced, `out` left at
-	// its default when the name is absent.
-	template<class T> T    GetValue(const wxString& name) const {
+	// its default when the name is absent. The name as it is handed (FindField).
+	template<class T, class Name> T    GetValue(const Name& name) const {
 		if (const ibDataValue* v = FindField(name)) return ibDataCodec<T>::From(*v);
 		return T();
 	}
-	template<class T> void GetValue(const wxString& name, T& out) const {
+	template<class T, class Name> void GetValue(const Name& name, T& out) const {
 		if (const ibDataValue* v = FindField(name)) out = ibDataCodec<T>::From(*v);
 	}
-	template<class T> void SetProp(const wxString& name, const T& value) { SetProperty(name, ibDataCodec<T>::To(value)); }
-	template<class T> T    GetProp(const wxString& name) const {
+	template<class T> void SetProp(const ibString& name, const T& value) { SetProperty(name, ibDataCodec<T>::To(value)); }
+	template<class T, class Name> T    GetProp(const Name& name) const {
 		if (const ibDataValue* v = FindProperty(name)) return ibDataCodec<T>::From(*v);
 		return T();
 	}
-	template<class T> void GetProp(const wxString& name, T& out) const {
+	template<class T, class Name> void GetProp(const Name& name, T& out) const {
 		if (const ibDataValue* v = FindProperty(name)) out = ibDataCodec<T>::From(*v);
 	}
 
 	// --- named-field primitives (internals of Field) ----------------------
-	void AddField(const wxString& name, const ibDataValue& value) {
+	void AddField(const ibString& name, const ibDataValue& value) {
 		m_fields.emplace_back(name, value);
 	}
-	void AddField(const wxString& name, ibDataValue&& value) {
+	void AddField(const ibString& name, ibDataValue&& value) {
 		m_fields.emplace_back(name, std::move(value));
 	}
 
@@ -228,9 +243,9 @@ public:
 	// "object"` and each appending to `required` — so a seven-argument tool published seven `type`
 	// keys and two `required` arrays, and a strict client would have taken the wrong one of them
 	// (found 2026-09-01, reading a schema back off the running server).
-	void SetField(const wxString& name, const ibDataValue& value) {
+	void SetField(const ibString& name, const ibDataValue& value) {
 
-		for (std::pair<wxString, ibDataValue>& field : m_fields) {
+		for (std::pair<ibString, ibDataValue>& field : m_fields) {
 			if (field.first == name) {
 				field.second = value;
 				return;
@@ -239,26 +254,40 @@ public:
 
 		m_fields.emplace_back(name, value);
 	}
+	// …and the field taken out — a word a reader kept for later, once it is answered (ibJsonProvider::LookupTypes). The
+	// cursor stays on the field that followed it.
+	template<class Name> void RemoveField(const Name& name) {
+		for (size_t idx = 0; idx < m_fields.size(); idx++) {
+			if (m_fields[idx].first == name) {
+				m_fields.erase(m_fields.begin() + idx);
+				if (m_cursor > idx)
+					--m_cursor;
+				return;
+			}
+		}
+	}
 	// Optimistic-cursor lookup: try m_cursor first (write-order fast path),
 	// else search from it. Returns nullptr (cursor unmoved) when the name is
 	// absent — a new field against an old blob defaults, never errors.
-	const ibDataValue* FindField(const wxString& name) const;
-	const std::vector<std::pair<wxString, ibDataValue>>& Fields() const { return m_fields; }
+	// ⭐ THE NAME AS IT IS HANDED — a protocol's word, a literal, either string — compared where it lies (ibString's own
+	// comparisons): a lookup makes no text, where an ibString parameter made one of every literal it was asked by.
+	template<class Name> const ibDataValue* FindField(const Name& name) const { return FindIn(m_fields, m_cursor, name); }
+	const std::vector<std::pair<ibString, ibDataValue>>& Fields() const { return m_fields; }
 
 	// --- properties area (the property bag — DISTINCT from plain fields) ---
 	// Filled by the generic property walk (ibPropertyObject::DescribeProperties),
 	// kept separate from m_fields so the structure SHOWS what is a property vs a
 	// plain (hidden / intrinsic) class field. Stored faithfully (the property's
 	// own SaveData bytes); per-property value-decomposition is a later concern.
-	void SetProperty(const wxString& name, const ibDataValue& value) { m_props.emplace_back(name, value); }
-	void SetProperty(const wxString& name, ibDataValue&& value) { m_props.emplace_back(name, std::move(value)); }
-	const ibDataValue* FindProperty(const wxString& name) const; // optimistic cursor over m_props
+	void SetProperty(const ibString& name, const ibDataValue& value) { m_props.emplace_back(name, value); }
+	void SetProperty(const ibString& name, ibDataValue&& value) { m_props.emplace_back(name, std::move(value)); }
+	template<class Name> const ibDataValue* FindProperty(const Name& name) const { return FindIn(m_props, m_propCursor, name); }
 	// value by name (empty if absent) — pass straight into a property's ReadNodeValue
-	ibDataValue GetProperty(const wxString& name) const {
+	template<class Name> ibDataValue GetProperty(const Name& name) const {
 		if (const ibDataValue* v = FindProperty(name)) return *v;
 		return ibDataValue();
 	}
-	const std::vector<std::pair<wxString, ibDataValue>>& Properties() const { return m_props; }
+	const std::vector<std::pair<ibString, ibDataValue>>& Properties() const { return m_props; }
 
 	// …and the same question one storey up: two nodes are equal when their type, identity, fields,
 	// properties, raw block and children all are. The read cursors are not state — they are where the
@@ -284,8 +313,8 @@ public:
 	//   save: ibDataNode& sub = node.Child("Type");      // creates the sub-node
 	//   load: if (const ibDataNode* sub = node.FindChild("Type")) ...   // reads it
 	// The Child value lives in the PROPERTIES area.
-	ibDataNode&       Child(const wxString& name);              // create (save)
-	const ibDataNode* FindChild(const wxString& name) const;   // read (load)
+	ibDataNode&       Child(const ibString& name);              // create (save)
+	template<class Name> const ibDataNode* FindChild(const Name& name) const { return ChildOf(FindProperty(name)); }   // read (load)
 
 	// ⚠ AND THE ONE THAT KEEPS ADDING TO A SUB-NODE THAT MAY ALREADY BE THERE. `Child` is the SAVE
 	// half and always makes a FRESH node, which is right when a writer fills a sub-node once and
@@ -295,7 +324,7 @@ public:
 	// Written as an overload rather than left to the caller, because the alternative is a
 	// const_cast at every such site: a non-const node handing back a const pointer to its own child
 	// is the accident, not the rule.
-	ibDataNode* FindChild(const wxString& name);
+	template<class Name> ibDataNode* FindChild(const Name& name) { return ChildOf(FindProperty(name)); }
 
 	// --- metaobject children (recursion over the object tree) ------------
 	ibDataNode& AddChild(ibClassID clsid, ibMetaID metaId) {
@@ -306,11 +335,36 @@ public:
 	std::vector<ibDataNode>&       Children()       { return m_children; }
 
 private:
+	// The optimistic cursor's walk, over either area.
+	template<class Name>
+	static const ibDataValue* FindIn(const std::vector<std::pair<ibString, ibDataValue>>& entries, size_t& cursor, const Name& name)
+	{
+		const size_t n = entries.size();
+		if (n == 0)
+			return nullptr;
+		// fast path: the expected (write-order) position
+		if (cursor < n && entries[cursor].first == name)
+			return &entries[cursor++].second;
+		// slow path: search from the cursor, wrapping once
+		for (size_t i = 0; i < n; i++) {
+			const size_t idx = (cursor + i) % n;
+			if (entries[idx].first == name) {
+				cursor = idx + 1;
+				return &entries[idx].second;
+			}
+		}
+		// absent: cursor unmoved -> the member keeps its default, never an error
+		return nullptr;
+	}
+	// The sub-node a found value holds — null when none was found or it holds no node. Not const: the value holds a
+	// shared_ptr to a node that was never const.
+	static ibDataNode* ChildOf(const ibDataValue* value);
+
 	ibClassID m_clsid = 0;   // node type == chunk id in the binary layout
 	ibMetaID  m_metaId = 0;  // node identity within its type
 
-	std::vector<std::pair<wxString, ibDataValue>> m_fields;   // plain / hidden / intrinsic fields
-	std::vector<std::pair<wxString, ibDataValue>> m_props;    // the property bag (separate area)
+	std::vector<std::pair<ibString, ibDataValue>> m_fields;   // plain / hidden / intrinsic fields
+	std::vector<std::pair<ibString, ibDataValue>> m_props;    // the property bag (separate area)
 	wxMemoryBuffer                                m_rawData{ 0 };   // transitional un-decomposed block — empty: a default wxMemoryBuffer allocates a kilobyte
 	std::vector<ibDataNode>                       m_children; // metaobject sub-nodes
 
@@ -364,7 +418,7 @@ private:
 	void ReadProps(ibReader& reader, ibDataNode& node, u32 version) const;
 	void WriteChildren(const ibDataNode& node, ibWriter& writer) const; // a Child value's subtree (form control tree)
 	void ReadChildren(ibReader& reader, ibDataNode& node, u32 version) const;   // a Child value's subtree has no stamp of its own: the enclosing node's
-	void WriteEntry(ibWriter& writer, const wxString& name, const ibDataValue& value) const; // name + value payload
+	void WriteEntry(ibWriter& writer, const ibString& name, const ibDataValue& value) const; // name + value payload
 	void WriteValue(ibWriter& writer, const ibDataValue& value) const;                        // kind + value (recurses on Child / Array)
 	ibDataValue ReadEntry(ibReader& reader, u32 version) const;                               // kind + value (name read by the caller)
 };

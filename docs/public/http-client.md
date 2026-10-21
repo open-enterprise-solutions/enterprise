@@ -46,14 +46,17 @@ is text or bytes. JSON in it is read and written by [JSONReader / JSONWriter](js
 - A name that does not exist is only as unknown as the DNS resolver says. Some resolvers answer
   for every name with their own page, so a plain `http://` call to a mistyped host gets a 200.
   Over `https://` such a call is refused.
-- A request that names no `User-Agent` goes out with the library's own (`cpp-httplib/<version>`).
+- A request that names no `User-Agent` goes out as `OES-Enterprise`, and one that names no `Accept` as
+  `*/*`. A compressed answer a script asks for (`Accept-Encoding`) comes back as sent, its
+  `Content-Encoding` saying how: nothing unpacks it.
 - A body is held in memory. A response is not written to a file while it arrives.
 - No proxy.
 - Outbound calls are not restricted by role. A script may call any address the machine can reach.
 
 ## Underneath
 
-The transport is [cpp-httplib](https://github.com/yhirose/cpp-httplib) and the TLS is
-[Mbed TLS](https://github.com/Mbed-TLS/mbedtls) 3.6 (the long-term branch). Both are git submodules
-pinned to a release (`src/3rdparty/`). Updating either one means moving that pin in a single
-commit. TLS is compiled into the whole build, so the same library can also serve `https://`.
+The transport is the core's (`core/net/httpClient.h`): Asio carries the socket, llhttp reads the
+answer, and the TLS is [Mbed TLS](https://github.com/Mbed-TLS/mbedtls) 3.6 (the long-term branch) -
+the same that serves the platform's own `https://` ([listeners](listeners.md)). Mbed TLS is linked
+into the core alone; a git submodule pinned to a release (`src/3rdparty/`), updated by moving that
+pin in a single commit.

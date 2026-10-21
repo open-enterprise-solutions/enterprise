@@ -11,20 +11,11 @@
 #include "core/build.h"   // GetBuildId / GetBuildStamp
 #include "core/guid.h"
 #include "core/core.h"    // the class ids, the ids of the configuration, the kinds of a value
+#include "core/fboolean.h"
 #include "core/fnumber.h"
 #include "core/fdatetime.h"
 #include "core/fstring.h"
 #include "core/stringUtils.h"
-
-//*******************************************************************************************
-
-#define oes_clipboard_metadata	wxT("oes_clipboard_metadata")
-#define oes_clipboard_frame		wxT("oes_clipboard_frame")
-#define oes_clipboard_interface	wxT("oes_clipboard_interface")
-#define oes_clipboard_role		wxT("oes_clipboard_role")
-#define oes_clipboard_template	wxT("oes_clipboard_template")
-#define oes_clipboard_attribute	wxT("oes_clipboard_attribute")
-#define oes_clipboard_command	wxT("oes_clipboard_command")
 
 //*******************************************************************************************
 //*                                 Special structures                                      *
@@ -99,10 +90,7 @@ typedef ibRowValues<ibMetaID, class BACKEND_API ibValue> ibRowMetaValues;
 //use dynamic linking 
 #define _USE_DYNAMIC_DATABASE_LAYER_LINKING 1
 
-//max precision 
-#define MAX_PRECISION_NUMBER 32
-//max precision 
-#define MAX_LENGTH_STRING 1024
+// (MAX_PRECISION_NUMBER / MAX_LENGTH_STRING are the core's: core/core.h — the query's parser reads them too.)
 // (The stack guard — MAX_OBJECTS_LEVEL — is the translator's, in the core: core/compiler/codeDef.h.)
 //max record level
 #define MAX_REC_COUNT 200

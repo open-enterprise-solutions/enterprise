@@ -12,7 +12,7 @@
 
 #include <gtest/gtest.h>
 #include "backend/utils/passwordHash.hpp"
-#include "backend/utils/md5.hpp"
+#include "core/utils/md5.hpp"
 
 // ---------------------------------------------------------------------------
 // Format + round-trip

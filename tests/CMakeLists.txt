@@ -97,6 +97,7 @@ add_executable(oes_tests
     test_queryL3Vocab.cpp
     test_queryL4Lexer.cpp
     test_queryL4Parser.cpp
+    test_queryCoreData.cpp
     test_queryConstructor.cpp
     test_queryNaming.cpp
     test_queryRoundTrip.cpp
@@ -215,6 +216,19 @@ target_compile_definitions(oes_tests PRIVATE OES_TESTING)
 # The cmake that configured this tree: test_byteCodeFormat runs the engine fingerprint script with it, the way the
 # build does, and a machine need not have one on PATH.
 target_compile_definitions(oes_tests PRIVATE OES_CMAKE_COMMAND="${CMAKE_COMMAND}")
+
+# THE REFERENCE SERVERS ARE cpp-httplib's, TLS among them (test_valueHttpSecure, test_listener): another library than
+# the core's client and server they are put against. So this binary is a user of Mbed TLS in its own right, with a copy
+# of its own (core/tls/oes_mbedtls_threading.h) - the one module besides the core. The trust stores httplib reads by
+# itself: the Windows store, the macOS keychain.
+target_compile_definitions(oes_tests PRIVATE CPPHTTPLIB_MBEDTLS_SUPPORT)
+target_link_libraries(oes_tests PRIVATE mbedtls mbedx509 mbedcrypto)
+if(WIN32)
+    target_link_libraries(oes_tests PRIVATE crypt32)
+endif()
+if(APPLE)
+    target_link_libraries(oes_tests PRIVATE "-framework Security" "-framework CoreFoundation")
+endif()
 
 target_include_directories(oes_tests PRIVATE
     "${CMAKE_SOURCE_DIR}/src"

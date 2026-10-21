@@ -1825,7 +1825,7 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 				}
 
 				const long memberId = memberByNumber ? (long)member.AsNumber().ToInt() : 0;
-				const wxString memberWord = memberByNumber ? wxString() : member.AsString();
+				const wxString memberWord = memberByNumber ? wxString() : member.AsString().ToWxString();
 
 				unsigned int index = 0;
 				for (; index < choices.GetCount(); ++index) {

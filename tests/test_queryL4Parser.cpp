@@ -5,16 +5,17 @@
 // GROUP BY / HAVING / ORDER BY / aggregates / &params / LIKE-IN-BETWEEN-IS NULL).
 
 #include <gtest/gtest.h>
+#include "core/query/queryRefusal.h"   // ibQueryRefusal — what the core parser gives back for a text that does not read
 
 #include <functional>
 #include <vector>
 
 #include "backend/backend_exception.h"
-#include "backend/query/queryParser.h"
+#include "core/query/queryParser.h"
 // ⚠ AT THE TOP, not beside the round-trip section further down: a test up here renders an AST back
 // to text (ONTO is written where INTO is), and an include that arrives 200 lines later is not
 // visible to it. MSBuild does not compile tests, so this only ever fails in the CMake tree.
-#include "backend/query/queryRender.h"
+#include "core/query/queryRender.h"
 
 namespace {
 
@@ -343,7 +344,7 @@ TEST(QueryL4Parser, TotalsFieldFromTextRoundTrips)
 	EXPECT_EQ(ibRenderTotalField(bare), wxT("Period PERIODS(Day)"));
 
 	// Text the language does not accept is refused, not half-read.
-	EXPECT_THROW(parser.ParseTotalsField(wxT("Period PERIODS(Month) AND")), ibBackendException);
+	EXPECT_THROW(parser.ParseTotalsField(wxT("Period PERIODS(Month) AND")), ibQueryRefusal);
 }
 
 // The bounds are OPTIONAL — `PERIODS(Month)` alone is the whole of it, and the series is then padded
@@ -408,7 +409,7 @@ TEST(QueryL4Parser, AStatementCanReadANamedResult)
 // nothing — refused with a sentence rather than by quietly ignoring one of the two words.
 TEST(QueryL4Parser, IntoAndOntoTogetherAreRefused)
 {
-	EXPECT_THROW(Parse(wxT("SELECT Client INTO Tmp ONTO Sales FROM Document.Sales")), ibBackendException);
+	EXPECT_THROW(Parse(wxT("SELECT Client INTO Tmp ONTO Sales FROM Document.Sales")), ibQueryRefusal);
 }
 
 // THE UNFOLD BELONGS TO THE FIELD, so a level may take one field through a hierarchy and the next
@@ -426,9 +427,9 @@ TEST(QueryL4Parser, TotalsLevelFieldsKeepTheirOwnUnfold)
 
 TEST(QueryL4Parser, SyntaxErrorThrows)
 {
-	EXPECT_THROW(Parse(wxT("SELECT FROM Catalog.X")), ibBackendException);          // empty select list
-	EXPECT_THROW(Parse(wxT("SELECT Code Catalog.X")),  ibBackendException);         // missing FROM
-	EXPECT_THROW(Parse(wxT("SELECT Code FROM")),       ibBackendException);         // missing source
+	EXPECT_THROW(Parse(wxT("SELECT FROM Catalog.X")), ibQueryRefusal);          // empty select list
+	EXPECT_THROW(Parse(wxT("SELECT Code Catalog.X")),  ibQueryRefusal);         // missing FROM
+	EXPECT_THROW(Parse(wxT("SELECT Code FROM")),       ibQueryRefusal);         // missing source
 }
 
 // --- the extended grammar: arithmetic, CASE, UNION, IN-subquery, source-args, subquery source -------
@@ -573,7 +574,7 @@ TEST(QueryL4Parser, UnionAll_FlagPerBranch)
 // AST does not keep them.
 // ===========================================================================
 
-#include "backend/query/queryRender.h"
+#include "core/query/queryRender.h"
 
 namespace {
 
@@ -645,7 +646,7 @@ TEST(QueryRender, JoinsRoundTrip) {
 // on what the metadata held that day, AND took the syntax a product needed. One shape, one meaning.
 TEST(QueryL4Parser, AJoinWithoutOnIsRefused) {
 	EXPECT_THROW(Parse(wxT("SELECT p.Ref FROM Catalog.Products AS p INNER JOIN Catalog.Units AS u")),
-	             ibBackendException);
+	             ibQueryRefusal);
 }
 
 TEST(QueryRender, GroupHavingOrderRoundTrip) {
@@ -798,7 +799,7 @@ TEST(QueryL4Parser, ForUpdateIsParsedAndIsNotTheDefault)
 
 TEST(QueryL4Parser, ForWithoutUpdateIsASyntaxError)
 {
-	EXPECT_THROW(Parse(wxT("SELECT Ref FROM Catalog.Products FOR")), ibBackendException);
+	EXPECT_THROW(Parse(wxT("SELECT Ref FROM Catalog.Products FOR")), ibQueryRefusal);
 }
 
 TEST(QueryL4Parser, IntoNamesTheTempTable)
@@ -812,7 +813,7 @@ TEST(QueryL4Parser, IntoNamesTheTempTable)
 
 TEST(QueryL4Parser, IntoWithoutANameIsASyntaxError)
 {
-	EXPECT_THROW(Parse(wxT("SELECT Ref INTO FROM Document.Orders")), ibBackendException);
+	EXPECT_THROW(Parse(wxT("SELECT Ref INTO FROM Document.Orders")), ibQueryRefusal);
 }
 
 TEST(QueryL4Parser, ATempTableIsABareNameAsASource)
@@ -863,7 +864,7 @@ TEST(QueryL4Parser, PackageKeepsStatementsInWrittenOrder)
 TEST(QueryL4Parser, SingleQueryDoorRefusesAPackage)
 {
 	EXPECT_THROW(Parse(wxT("SELECT Ref FROM Catalog.Products; SELECT Ref FROM Catalog.Goods")),
-		ibBackendException);
+		ibQueryRefusal);
 }
 
 TEST(QueryL4Parser, ATrailingSeparatorIsPunctuationNotAStatement)
@@ -877,7 +878,7 @@ TEST(QueryL4Parser, ATrailingSeparatorIsPunctuationNotAStatement)
 
 TEST(QueryL4Parser, DropWithoutANameIsASyntaxError)
 {
-	EXPECT_THROW(ParsePkg(wxT("DROP")), ibBackendException);
+	EXPECT_THROW(ParsePkg(wxT("DROP")), ibQueryRefusal);
 }
 
 TEST(QueryL4Parser, AnExpressionParsesOnItsOwn)
@@ -900,8 +901,8 @@ TEST(QueryL4Parser, AnEmptyExpressionIsNullNotAnError)
 TEST(QueryL4Parser, ABrokenExpressionThrowsFromTheEngine)
 {
 	ibQueryParser parser;
-	EXPECT_THROW(parser.ParseExpression(wxT("Price >= ")), ibBackendException);
-	EXPECT_THROW(parser.ParseExpression(wxT("Price 100")), ibBackendException);
+	EXPECT_THROW(parser.ParseExpression(wxT("Price >= ")), ibQueryRefusal);
+	EXPECT_THROW(parser.ParseExpression(wxT("Price 100")), ibQueryRefusal);
 }
 
 TEST(QueryRender, AllowedAndForUpdateRoundTrip) {
@@ -977,13 +978,13 @@ TEST(QueryL4Parser, IntoInsideANestedTableIsRefused)
 	// source it would be a silent no-op — and a silent no-op in something written deliberately is
 	// worse than a refusal.
 	EXPECT_THROW(Parse(wxT("SELECT Code FROM (SELECT Code INTO t FROM Catalog.Products) AS x")),
-		ibBackendException);
+		ibQueryRefusal);
 }
 
 TEST(QueryL4Parser, ForUpdateInsideANestedTableIsRefused)
 {
 	EXPECT_THROW(Parse(wxT("SELECT Code FROM (SELECT Code FROM Catalog.Products FOR UPDATE) AS x")),
-		ibBackendException);
+		ibQueryRefusal);
 }
 
 TEST(QueryL4Parser, ANestedTableWithoutThoseWordsStillParses)
@@ -1011,12 +1012,12 @@ TEST(QueryL4Parser, IndexByWithoutIntoIsRefused)
 {
 	// An index over a table nobody is making could only describe something that does not exist —
 	// a silent no-op, and the loudest kind of wrong in a query written for speed.
-	EXPECT_THROW(Parse(wxT("SELECT Ref FROM Document.Orders INDEX BY Ref")), ibBackendException);
+	EXPECT_THROW(Parse(wxT("SELECT Ref FROM Document.Orders INDEX BY Ref")), ibQueryRefusal);
 }
 
 TEST(QueryL4Parser, IndexByNeedsBy)
 {
-	EXPECT_THROW(Parse(wxT("SELECT Ref INTO Sales FROM Document.Orders INDEX Ref")), ibBackendException);
+	EXPECT_THROW(Parse(wxT("SELECT Ref INTO Sales FROM Document.Orders INDEX Ref")), ibQueryRefusal);
 }
 
 TEST(QueryRender, IndexByRoundTrips) {
@@ -1076,11 +1077,11 @@ TEST(QueryL4Parser, InHierarchyRefusesEverythingButAParameter)
 	// so they have to exist before the read starts — and a subquery does not until it runs. A literal
 	// list and a comma-separated one are refused for the same reason, said once.
 	EXPECT_THROW(Parse(wxT("SELECT Ref FROM Catalog.Products WHERE Parent IN HIERARCHY (SELECT Ref FROM Catalog.Products)")),
-		ibBackendException);
+		ibQueryRefusal);
 	EXPECT_THROW(Parse(wxT("SELECT Ref FROM Catalog.Products WHERE Parent IN HIERARCHY (&A, &B)")),
-		ibBackendException);
+		ibQueryRefusal);
 	EXPECT_THROW(Parse(wxT("SELECT Ref FROM Catalog.Products WHERE Parent IN HIERARCHY (1)")),
-		ibBackendException);
+		ibQueryRefusal);
 
 	// …and a plain IN is untouched by that rule: it still takes a list and a subquery.
 	EXPECT_NO_THROW(Parse(wxT("SELECT Ref FROM Catalog.Products WHERE Parent IN (SELECT Ref FROM Catalog.Products)")));
@@ -1155,7 +1156,7 @@ TEST(QueryL4Parser, Window_RankingCall)
 // layers down as "cannot prepare statement".
 TEST(QueryL4Parser, Window_RankingWithoutOverIsRefused)
 {
-	EXPECT_THROW(Parse(wxT("SELECT ROW_NUMBER() FROM Document.Sales")), ibBackendException);
+	EXPECT_THROW(Parse(wxT("SELECT ROW_NUMBER() FROM Document.Sales")), ibQueryRefusal);
 }
 
 // ⭐⭐ THE ARGUMENT OF A RANKING CALL IS ITS KEY — `RANK(Amount DESC)` (Max, 2026-08-27: *"can we do
@@ -1193,7 +1194,7 @@ TEST(QueryL4Parser, Window_RankingTakesItsKeyAsTheArgument)
 TEST(QueryL4Parser, Window_RankingWithAFrameIsRefused)
 {
 	EXPECT_THROW(Parse(wxT("SELECT RANK(Amount) OVER (ORDER BY Amount ROWS) FROM Document.Sales")),
-	             ibBackendException);
+	             ibQueryRefusal);
 }
 
 // A frame is a position in an ORDER; without one it is about nothing, and quietly ignoring it is how
@@ -1201,7 +1202,7 @@ TEST(QueryL4Parser, Window_RankingWithAFrameIsRefused)
 TEST(QueryL4Parser, Window_FrameWithoutOrderIsRefused)
 {
 	EXPECT_THROW(Parse(wxT("SELECT SUM(Amount) OVER (PARTITION BY Region ROWS) FROM Document.Sales")),
-	             ibBackendException);
+	             ibQueryRefusal);
 }
 
 // ===========================================================================
@@ -1337,10 +1338,10 @@ TEST(QueryL4Parser, PackageLinkWithoutAConditionIsRefused)
 {
 	EXPECT_THROW(ibQueryParser().ParsePackage(
 		wxT("SELECT Partner ONTO Sales FROM Document.Sales;")
-		wxT("LINK Sales JOIN Payments")), ibBackendException);
+		wxT("LINK Sales JOIN Payments")), ibQueryRefusal);
 	EXPECT_THROW(ibQueryParser().ParsePackage(
 		wxT("SELECT Partner ONTO Sales FROM Document.Sales;")
-		wxT("LINK Sales ON Sales.Partner = Payments.Partner")), ibBackendException);
+		wxT("LINK Sales ON Sales.Partner = Payments.Partner")), ibQueryRefusal);
 }
 
 // ⚠ AND THE FORM THIS ONE REPLACED IS REFUSED WHERE IT STANDS. A bare top-level JOIN was the first
@@ -1355,7 +1356,7 @@ TEST(QueryL4Parser, TheOldBarePackageJoinIsRefusedWithASentence)
 			wxT("JOIN Sales AND Payments ON Sales.Partner = Payments.Partner"));
 		FAIL() << "the old package-link form parsed";
 	}
-	catch (const ibBackendException& err) {
+	catch (const ibQueryRefusal& err) {
 		EXPECT_TRUE(err.GetErrorDescription().Contains(wxT("LINK")))
 			<< err.GetErrorDescription().ToStdString();
 	}
@@ -1462,7 +1463,7 @@ TEST(QueryL4Parser, TotalsSplitWithoutAName)
 TEST(QueryL4Parser, TotalsSplitWithoutByIsRefused)
 {
 	EXPECT_THROW(Parse(wxT("SELECT Item FROM Document.Sales TOTALS SUM(Amount) BY Item SPLIT Characteristic")),
-	             ibBackendException);
+	             ibQueryRefusal);
 }
 
 // ============================================================================================
@@ -1520,7 +1521,7 @@ TEST(QueryL4Parser, TotalsAggregateOverAPartitionIsRefused)
 {
 	EXPECT_THROW(Parse(wxT("SELECT Item, Amount FROM Document.Sales "
 	                       "TOTALS SUM(Amount) OVER (PARTITION BY Item) BY Item")),
-	             ibBackendException);
+	             ibQueryRefusal);
 }
 
 // ===========================================================================
@@ -1561,12 +1562,12 @@ TEST(QueryL4Parser, CastToATableIsNotAPrimitive)
 
 TEST(QueryL4Parser, CastQualifiedWronglyIsRefused)
 {
-	EXPECT_THROW(Parse(wxT("SELECT CAST(Qty AS Number(40)) FROM Catalog.X")), ibBackendException);        // too many digits
-	EXPECT_THROW(Parse(wxT("SELECT CAST(Qty AS Number(5, 6)) FROM Catalog.X")), ibBackendException);      // scale beyond them
-	EXPECT_THROW(Parse(wxT("SELECT CAST(Qty AS String(Day)) FROM Catalog.X")), ibBackendException);
-	EXPECT_THROW(Parse(wxT("SELECT CAST(Qty AS Date(Month)) FROM Catalog.X")), ibBackendException);
-	EXPECT_THROW(Parse(wxT("SELECT CAST(Qty AS Boolean(1)) FROM Catalog.X")), ibBackendException);
-	EXPECT_THROW(Parse(wxT("SELECT CAST(Ref AS Document.Order(1)) FROM Catalog.X")), ibBackendException);
+	EXPECT_THROW(Parse(wxT("SELECT CAST(Qty AS Number(40)) FROM Catalog.X")), ibQueryRefusal);        // too many digits
+	EXPECT_THROW(Parse(wxT("SELECT CAST(Qty AS Number(5, 6)) FROM Catalog.X")), ibQueryRefusal);      // scale beyond them
+	EXPECT_THROW(Parse(wxT("SELECT CAST(Qty AS String(Day)) FROM Catalog.X")), ibQueryRefusal);
+	EXPECT_THROW(Parse(wxT("SELECT CAST(Qty AS Date(Month)) FROM Catalog.X")), ibQueryRefusal);
+	EXPECT_THROW(Parse(wxT("SELECT CAST(Qty AS Boolean(1)) FROM Catalog.X")), ibQueryRefusal);
+	EXPECT_THROW(Parse(wxT("SELECT CAST(Ref AS Document.Order(1)) FROM Catalog.X")), ibQueryRefusal);
 }
 
 TEST(QueryRender, CastToAPrimitiveRoundTrips) {
@@ -1628,5 +1629,5 @@ TEST(QueryL4Parser, RoleSaysWhatAFieldIsInABalance)
 	}
 
 	// A period's number is a whole number from 1, below the band a source orders its own periods in.
-	EXPECT_THROW(Parse(wxT("SELECT T.Day ROLE PERIOD 0 AS Day FROM Catalog.X AS T")), ibBackendException);
+	EXPECT_THROW(Parse(wxT("SELECT T.Day ROLE PERIOD 0 AS Day FROM Catalog.X AS T")), ibQueryRefusal);
 }
