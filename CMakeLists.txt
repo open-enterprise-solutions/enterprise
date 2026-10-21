@@ -266,6 +266,13 @@ oes_require_submodule(mbedtls CMakeLists.txt)
 # changes: wxWidgets and the executables are compiled exactly as they were.
 set(OES_PIC_WAS ${CMAKE_POSITION_INDEPENDENT_CODE})
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+# ⚠ AND HIDDEN. A copy per module is the design (backend/tls/oes_mbedtls_threading.h): core, backend, frmclient and
+# a test binary each link their own. Compiled with the default visibility, on Linux every shared library also
+# EXPORTS its copy, and the loader binds the copies' globals to the first one loaded - one module's state read
+# through another's (ASan: odr-violation on mbedtls_ssl_tls13_labels, oes_protocol_test against libcore.so).
+# Hidden, each copy stays its module's, as Windows and macOS keep them anyway. Put back afterwards, as PIC is.
+set(OES_C_VISIBILITY_WAS ${CMAKE_C_VISIBILITY_PRESET})
+set(CMAKE_C_VISIBILITY_PRESET hidden)
 # What this build needs on top of Mbed TLS's own configuration - threads, above all (the file says why). The
 # directory goes on the include path for the whole build because Mbed TLS's OWN sources include
 # threading_alt.h by that name (library/threading.h), and so do the two translation units of ours that hand
@@ -282,6 +289,7 @@ set(GEN_FILES OFF CACHE BOOL "Mbed TLS: regenerate its generated sources" FORCE)
 set(LINK_WITH_PTHREAD ON CACHE BOOL "Mbed TLS: link the thread library it takes its mutexes from" FORCE)
 add_subdirectory(src/3rdparty/mbedtls EXCLUDE_FROM_ALL)
 set(CMAKE_POSITION_INDEPENDENT_CODE ${OES_PIC_WAS})
+set(CMAKE_C_VISIBILITY_PRESET ${OES_C_VISIBILITY_WAS})
 add_compile_definitions(CPPHTTPLIB_MBEDTLS_SUPPORT)
 
 # THE CORE'S HTTP (core/net) — its own, beside cpp-httplib: llhttp parses the requests, Asio carries the sockets (both
