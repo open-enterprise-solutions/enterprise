@@ -327,7 +327,8 @@ namespace ibProtocol {
 
 	// ⭐ A PICTURE IS NAMED BY ITS ID, EVERYWHERE — an answer carries the id alone, and the picture is loaded by this,
 	// apart: picture {Pictures} → Pictures: the pictures of those ids, each {Id, Picture} (PNG, base64) — a backend one by
-	// its number (a registered picture, a class's own: its class id), a configuration's by its guid; several at once,
+	// its number (a registered picture, a class's own: its class id), a configuration's by its guid and its content's
+	// hash, `<guid>#<hash>` (a changed picture is another id); several at once,
 	// asked by a client that has not got them and kept by it. One there is none of comes back empty, not refused.
 	namespace ibPicture {
 
@@ -1128,7 +1129,8 @@ namespace ibProtocol {
 			                                                              // stand in); a source's: its window's tree
 			inline constexpr const char* Default      = "Default";
 			inline constexpr const char* Targets      = "Targets";
-			inline constexpr const char* Pictures     = "Pictures";       // a picture's: those it may be (Guid, Name)
+			inline constexpr const char* Pictures     = "Pictures";       // a picture's: those it may be (Guid, Name; Id —
+			                                                              // the id it is drawn by)
 			inline constexpr const char* Guid         = "Guid";
 			// …a command source's: the desktop's command tree — sections, groups, sub-groups, a row each with its Name;
 			// the command rows Name, Picture, CommandPath, Kind (ibInterfaceCommandType).

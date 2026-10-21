@@ -139,7 +139,7 @@ void ibSchemaSections::Build(const ibSession& session, const ibDataNode& WXUNUSE
 		node.SetValue(ibProtocol::ibSchema::ibSections::Title, section->GetSynonym());
 		// Its own picture, or the configuration's — as its button drew it.
 		node.SetValue(ibProtocol::ibSchema::ibSections::Picture, ibBackendPicture::SendPicture(section->IsEmptyPicture()
-			? ibPictureDescription(g_metaCommonMetadataCLSID) : section->GetPictureDesc()));
+			? ibPictureDescription(g_metaCommonMetadataCLSID) : section->GetPictureDesc(), *metaData));
 
 		ibDataNode& blocks = node.Child(ibProtocol::ibSchema::ibSections::Blocks);
 		for (const ibSectionBlock& block : PageOf(section)) {
@@ -149,7 +149,7 @@ void ibSchemaSections::Build(const ibSession& session, const ibDataNode& WXUNUSE
 				blockNode.SetValue(ibProtocol::ibSchema::ibSections::Title, block.title);
 			if (block.group != nullptr) {
 				if (!block.group->IsEmptyPicture())
-					blockNode.SetValue(ibProtocol::ibSchema::ibSections::Picture, ibBackendPicture::SendPicture(block.group->GetPictureDesc()));
+					blockNode.SetValue(ibProtocol::ibSchema::ibSections::Picture, ibBackendPicture::SendPicture(block.group->GetPictureDesc(), *metaData));
 				const wxString tooltip = block.group->GetToolTip();
 				if (!tooltip.IsEmpty())
 					blockNode.SetValue(ibProtocol::ibSchema::ibSections::Tooltip, tooltip);
@@ -159,7 +159,7 @@ void ibSchemaSections::Build(const ibSession& session, const ibDataNode& WXUNUSE
 				item.SetValue(ibProtocol::ibSchema::ibSections::Item, static_cast<s32>(object->GetMetaID()));
 				item.SetValue(ibProtocol::ibSchema::ibSections::Title, object->GetSynonym());
 				item.SetValue(ibProtocol::ibSchema::ibSections::Type, static_cast<s32>(TypeOf(block.area)));
-				item.SetValue(ibProtocol::ibSchema::ibSections::Icon, ibBackendPicture::SendPicture(object->GetClassType()));
+				item.SetValue(ibProtocol::ibSchema::ibSections::Icon, ibBackendPicture::SendPicture(object->GetClassType(), *metaData));
 			}
 		}
 	}

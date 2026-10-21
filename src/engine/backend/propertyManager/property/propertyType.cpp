@@ -99,10 +99,10 @@ bool ibPropertyType::GetProtocolValue(ibDataNode& row)
 
 	const ibSelectorDataType filter = GetFilterDataType();
 	const ibPropertyObject* const owner = m_owner;   // CONST: the non-const GetMetaData wxFAILs
-	const ibMetaData* const metaData = owner != nullptr ? owner->GetMetaData() : nullptr;
+	const ibMetaData& metaData = *owner->GetMetaData();   // an inspected object is one of a configuration
 
 	std::vector<ibClassID> offered;
-	ibBackendTypeConfigFactory::GetTypesByFilter(filter, metaData, offered);
+	ibBackendTypeConfigFactory::GetTypesByFilter(filter, &metaData, offered);
 	for (const ibClassID& held : GetValueAsTypeDesc().GetClsidList()) {
 		if (std::find(offered.begin(), offered.end(), held) == offered.end())
 			offered.push_back(held);
@@ -110,14 +110,13 @@ bool ibPropertyType::GetProtocolValue(ibDataNode& row)
 
 	row.SetValue(ibProtocol::ibSchema::ibProperties::Multiple, filter != ibSelectorDataType::ibSelectorDataType_table);
 	for (const ibClassID& clsid : offered) {
-		const ibCtorAbstractType* const so = metaData != nullptr
-			? metaData->GetAvailableCtor(clsid) : ibValue::GetAvailableCtor(clsid);
+		const ibCtorAbstractType* const so = metaData.GetAvailableCtor(clsid);
 		if (so == nullptr)
 			continue;
 		ibDataNode& type = row.AddChild(0, static_cast<ibMetaID>(row.Children().size() + 1));
 		type.SetValue(ibProtocol::ibSchema::ibProperties::Type, wxString::Format(wxT("%llu"), static_cast<unsigned long long>(clsid)));
 		type.SetValue(ibProtocol::ibSchema::ibProperties::Title, so->GetClassName());
-		type.SetValue(ibProtocol::ibSchema::ibProperties::Picture, ibBackendPicture::SendPicture(clsid));
+		type.SetValue(ibProtocol::ibSchema::ibProperties::Picture, ibBackendPicture::SendPicture(clsid, metaData));
 	}
 	return true;
 }

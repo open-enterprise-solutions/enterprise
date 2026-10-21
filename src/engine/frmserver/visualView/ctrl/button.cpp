@@ -55,7 +55,7 @@ void ibValueButton::OnUpdate(ibDataNode& state, ibVisualHost* host)
 	state.SetValue(ibProtocol::ibForm::ibState::Caption, title);
 	state.SetValue(ibProtocol::ibForm::ibState::Representation, static_cast<s32>(rep));
 	if (rep != ibRepresentation::ibRepresentation_Text && !picture.IsEmptyPicture())
-		state.SetValue(ibProtocol::ibForm::ibState::Picture, ibBackendPicture::SendPicture(picture));
+		state.SetValue(ibProtocol::ibForm::ibState::Picture, ibBackendPicture::SendPicture(picture, *GetMetaData()));
 
 	// A button carries ONLY a command — with none bound, OR the bound command DELETED (its path no longer resolves
 	// through the door), it has nothing to do, so it is NOT shown. The orphaned control still lives in the object
@@ -85,7 +85,7 @@ void ibValueButton::WalkGroup(const std::vector<ibFrontendCommandReceiver::ibCom
 		if (member != nullptr) {
 			member->SetValue(ibProtocol::ibForm::ibButton::Caption, sub.caption);
 			if (!sub.picture.IsEmptyPicture())
-				member->SetValue(ibProtocol::ibForm::ibButton::Picture, ibBackendPicture::SendPicture(sub.picture));
+				member->SetValue(ibProtocol::ibForm::ibButton::Picture, ibBackendPicture::SendPicture(sub.picture, *GetMetaData()));
 		}
 		std::vector<ibFrontendCommandReceiver::ibCommandSubItem> nested;
 		if (ResolveSubCommands(sub.desc, nested)) {   // a GROUP -> its own submenu

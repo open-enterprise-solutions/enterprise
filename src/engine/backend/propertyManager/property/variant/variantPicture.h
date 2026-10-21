@@ -7,24 +7,31 @@
 
 class BACKEND_API ibVariantDataExternalPicture : public wxVariantData {
 	wxString MakeString() const;
+	static u64 HashContent(const ibExternalPictureDescription& container);
 public:
 
 	bool IsEmptyPicture() const { return m_pictureExternalFile.IsEmptyPicture(); }
 
-	ibExternalPictureDescription& GetExternalPictureDesc() { return m_pictureExternalFile; }
+	const ibExternalPictureDescription& GetExternalPictureDesc() const { return m_pictureExternalFile; }
+	// What it holds as a number, worked out as it is set: what a configuration picture's id carries
+	// (ibBackendPicture::SendPicture).
+	u64 GetContentHash() const { return m_contentHash; }
 
 	wxString GetPictureFileName() const;
 	wxBitmap GetPictureBitmap(const wxSize& size = wxSize(16, 16)) const;
 
-	void SetFromExternalFile(const ibExternalPictureDescription& container) { m_pictureExternalFile = container; }
+	void SetFromExternalFile(const ibExternalPictureDescription& container) {
+		m_pictureExternalFile = container;
+		m_contentHash = HashContent(container);
+	}
 
 	ibVariantDataExternalPicture(const ibExternalPictureDescription& container = ibExternalPictureDescription())
-		: m_pictureExternalFile(container)
+		: m_pictureExternalFile(container), m_contentHash(HashContent(container))
 	{
 	}
 
 	ibVariantDataExternalPicture(const ibVariantDataExternalPicture& src) :
-		wxVariantData(), m_pictureExternalFile(src.m_pictureExternalFile)
+		wxVariantData(), m_pictureExternalFile(src.m_pictureExternalFile), m_contentHash(src.m_contentHash)
 	{
 	}
 
@@ -54,6 +61,7 @@ public:
 protected:
 
 	ibExternalPictureDescription m_pictureExternalFile;
+	u64 m_contentHash = 0;
 };
 
 class BACKEND_API ibVariantDataPicture : public wxVariantData {

@@ -139,7 +139,7 @@ private:
 	ibHomePageCell OpenCell(const ibHomePageItem& item, ibHomePageDocument* homeDoc);
 
 	// The cell's header and its form, into the cell's node.
-	void DrawCell(const ibHomePageCell& cell, ibDataNode& node) const;
+	void DrawCell(const ibHomePageCell& cell, const class ibMetaData& metaData, ibDataNode& node) const;
 
 	// The form metaobject an item points at; null when it was deleted since it was attached.
 	const ibValueMetaObjectFormBase* FindItemForm(const ibHomePageItem& item, const ibHomePageDocument* homeDoc) const;

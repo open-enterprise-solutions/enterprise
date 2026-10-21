@@ -69,6 +69,7 @@ add_executable(oes_tests
     test_metadataPasteIdentity.cpp
     test_propertySerialized.cpp
     test_metadataTree.cpp
+    test_pictureContentHash.cpp
     test_commonAttribute.cpp
     test_roleComposition.cpp
     test_rolePolicyFold.cpp

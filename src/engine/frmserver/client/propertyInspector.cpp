@@ -20,6 +20,11 @@ void ibPropertyInspector::AppendProperty(ibDataNode& parent, ibBackendProperty* 
 		return;
 	}
 
+	// The pictures of the configuration of the object the property is of — an inspected object is one of a configuration
+	// (a metaobject, a form's control, attribute or command).
+	const ibPropertyObject* const owner = property->GetPropertyObject();   // CONST: the non-const GetMetaData wxFAILs
+	const ibMetaData& metaData = *owner->GetMetaData();
+
 	ibPropertyChoiceList choices;
 	if (property->GetValueList(choices) == ibPropertyChoiceMode::Mult)
 		row.SetValue(ibProtocol::ibSchema::ibProperties::Multiple, true);
@@ -30,7 +35,7 @@ void ibPropertyInspector::AppendProperty(ibDataNode& parent, ibBackendProperty* 
 		choice.SetValue(ibProtocol::ibSchema::ibProperties::Title, choices.GetLabel(index));
 		const ibPictureDescription& picture = choices.GetPicture(index);
 		if (!picture.IsEmptyPicture())
-			choice.SetValue(ibProtocol::ibSchema::ibProperties::Picture, ibBackendPicture::SendPicture(picture));
+			choice.SetValue(ibProtocol::ibSchema::ibProperties::Picture, ibBackendPicture::SendPicture(picture, metaData));
 		// Its data, a u64 — past what a JSON number keeps, so as a decimal.
 		if (const u64 data = choices.GetData(index)) {
 			choice.SetValue(ibProtocol::ibSchema::ibProperties::Data, ibString::Format(wxT("%llu"), static_cast<unsigned long long>(data)));
@@ -50,7 +55,7 @@ void ibPropertyInspector::AppendProperty(ibDataNode& parent, ibBackendProperty* 
 			ibDataNode& entry = named.AddChild(0, static_cast<ibMetaID>(named.Children().size() + 1));
 			entry.SetValue(ibProtocol::ibSchema::ibProperties::Type, ibString::Format(wxT("%llu"), static_cast<unsigned long long>(clsid)));
 			entry.SetValue(ibProtocol::ibSchema::ibProperties::Name, ctor->GetClassName());
-			entry.SetValue(ibProtocol::ibSchema::ibProperties::Picture, ibBackendPicture::SendPicture(ibPictureDescription(clsid)));
+			entry.SetValue(ibProtocol::ibSchema::ibProperties::Picture, ibBackendPicture::SendPicture(ibPictureDescription(clsid), metaData));
 		}
 	}
 }

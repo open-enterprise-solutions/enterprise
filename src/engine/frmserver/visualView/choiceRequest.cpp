@@ -3,6 +3,7 @@
 #include "backend/backend_mainFrame.h"
 #include "core/serialize/dataBuilder.h"
 #include "backend/session/session.h"
+#include "backend/metadataConfiguration.h"   // the session's configuration, whose pictures these are
 
 #include "backend/backend_picture.h"   // ibBackendPicture::SendPicture — an item's picture, by its id
 #include "protocol/protocol.h"      // ibProtocol::ibRequest::ibKind::Choice
@@ -10,7 +11,7 @@
 namespace {
 
 // The request a choice is put as — its caption and the items offered.
-ibDataNode ChoiceRequest(const wxString& caption, const std::vector<ibChoiceItem>& items)
+ibDataNode ChoiceRequest(const wxString& caption, const std::vector<ibChoiceItem>& items, const ibMetaData& metaData)
 {
 	ibDataNode request;
 	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<s32>(ibProtocol::ibRequest::ibKind::Choice));
@@ -20,7 +21,7 @@ ibDataNode ChoiceRequest(const wxString& caption, const std::vector<ibChoiceItem
 		node.SetValue(ibProtocol::ibRequest::ibChoice::Id, item.id);
 		node.SetValue(ibProtocol::ibRequest::ibChoice::Caption, item.caption);
 		if (!item.icon.IsEmptyPicture())
-			node.SetValue(ibProtocol::ibRequest::ibChoice::Picture, ibBackendPicture::SendPicture(item.icon));
+			node.SetValue(ibProtocol::ibRequest::ibChoice::Picture, ibBackendPicture::SendPicture(item.icon, metaData));
 		if (item.selected)
 			node.SetValue(ibProtocol::ibRequest::ibChoice::Selected, true);
 	}
@@ -35,7 +36,7 @@ bool ibRequestChoice(const wxString& caption, const std::vector<ibChoiceItem>& i
 	if (frame == nullptr || items.empty())
 		return false;
 
-	ibDataNode request = ChoiceRequest(caption, items);
+	ibDataNode request = ChoiceRequest(caption, items, *frame->GetSession()->GetMetaData());
 	ibDataNode response;
 	if (!frame->Request(request, response))
 		return false;
@@ -56,7 +57,7 @@ bool ibRequestChoice(const wxString& caption, const std::vector<ibChoiceItem>& i
 	if (frame == nullptr || items.empty())
 		return false;
 
-	ibDataNode request = ChoiceRequest(caption, items);
+	ibDataNode request = ChoiceRequest(caption, items, *frame->GetSession()->GetMetaData());
 	request.SetValue(ibProtocol::ibRequest::ibChoice::Multiple, true);
 	ibDataNode response;
 	if (!frame->Request(request, response))

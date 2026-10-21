@@ -290,7 +290,7 @@ void DrawMenu(ibClientFrame* frame, const std::vector<ibClientMenu::Item>& items
 		}
 		// Its own picture, its id alone — the client draws it from the core, as the backend does.
 		if (item.picture != 0)
-			child.SetValue(ibProtocol::ibFrame::ibMenu::Picture, ibBackendPicture::SendPicture(item.picture));
+			child.SetValue(ibProtocol::ibFrame::ibMenu::Picture, ibBackendPicture::SendPicture(item.picture, *frame->GetSession()->GetMetaData()));
 		if (enabled)
 			child.SetValue(ibProtocol::ibFrame::ibMenu::Enabled, true);
 	}
@@ -1136,8 +1136,9 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 			else if (method == ibProtocol::ibMethod::Picture) {
 				// THE PICTURES OF THOSE IDS — an answer names a picture by its id alone (ibBackendPicture::SendPicture), and a
 				// client that has not got it asks for it here, several at once: a backend one by its number, a configuration's
-				// by its guid, of the session's configuration; made on the session's worker. One there is none of comes back
-				// empty — the client keeps that too, and does not ask again.
+				// by the guid before its content's hash (`<guid>#<hash>`), of the session's configuration; made on the
+				// session's worker. One there is none of comes back empty — the client keeps that too, and does not ask
+				// again.
 				std::shared_ptr<ibSession> session = client->instance->ShareSession();
 				const ibDataValue* const asked = params.FindField(ibProtocol::ibPicture::Pictures);
 				if (session == nullptr)
@@ -1152,7 +1153,7 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 							const wxString text = id.AsString();
 							unsigned long long number = 0;
 							const ibPictureDescription picture = text.ToULongLong(&number)
-								? ibPictureDescription(static_cast<ibPictureID>(number)) : ibPictureDescription(ibGuid(text));
+								? ibPictureDescription(static_cast<ibPictureID>(number)) : ibPictureDescription(ibGuid(text.BeforeFirst(wxT('#'))));
 							ibDataNode& sent = pictures.AddChild(0, 0);
 							sent.AddField(ibProtocol::ibPicture::Id, id);
 							sent.SetValue(ibProtocol::ibPicture::Picture, ibBackendPicture::GetServerPicture(picture, metaData).GetData());
@@ -1541,6 +1542,7 @@ void ibClientHost::DrawFrame(ibClientFrame* frame, ibDataNode& state, ibDataNode
 	// …and the base's assistant access by where it listens, empty while it does not — the bottom bar's lamp, the
 	// McpServer schema's Endpoint.
 	const ibApplicationInstance* const applicationInstance = frame->GetSession()->GetApplicationInstance();
+	const ibMetaData& metaData = *frame->GetSession()->GetMetaData();   // a frame is built over a session let in
 	const ibMcpServer* const assistant = applicationInstance != nullptr
 		? ibApplicationInstance::GetMcpServer(applicationInstance) : nullptr;
 	state.SetValue(ibProtocol::ibFrame::Endpoint, assistant != nullptr ? assistant->GetEndpoint() : wxString());
@@ -1568,7 +1570,7 @@ void ibClientHost::DrawFrame(ibClientFrame* frame, ibDataNode& state, ibDataNode
 		node.SetValue(ibProtocol::ibFile::Title, temp->GetDescription());
 		node.SetValue(ibProtocol::ibFile::Mask, temp->GetFileFilter());
 		node.SetValue(ibProtocol::ibFile::Extension, temp->GetDefaultExtension());
-		node.SetValue(ibProtocol::ibFile::Picture, ibBackendPicture::SendPicture(temp->GetPictureID()));
+		node.SetValue(ibProtocol::ibFile::Picture, ibBackendPicture::SendPicture(temp->GetPictureID(), metaData));
 		if ((temp->GetFlags() & ibTEMPLATE_ONLY_OPEN) != 0)
 			node.SetValue(ibProtocol::ibFile::OnlyOpen, true);
 	}
@@ -1598,7 +1600,7 @@ void ibClientHost::DrawFrame(ibClientFrame* frame, ibDataNode& state, ibDataNode
 		ibDataNode& node = tabs.AddChild(0, tab->GetId());
 		node.SetValue(ibProtocol::ibFrame::ibTab::Title, tab->GetTitle());
 		if (!tab->GetIcon().IsEmptyPicture())
-			node.SetValue(ibProtocol::ibFrame::ibTab::Icon, ibBackendPicture::SendPicture(tab->GetIcon()));
+			node.SetValue(ibProtocol::ibFrame::ibTab::Icon, ibBackendPicture::SendPicture(tab->GetIcon(), metaData));
 		if (tab->IsLocked())
 			node.SetValue(ibProtocol::ibFrame::ibTab::Locked, true);
 		// What its view shows, when it is no form — the client draws it with the view of its own it has for that.

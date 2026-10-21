@@ -400,7 +400,7 @@ wxString LinqKindPicture(const wxString& section, const ibMetaData* metaData)
 	if (metaData == nullptr)
 		return wxString();
 	const ibCtorAbstractType* const ctor = metaData->GetAvailableCtor(kind);
-	return ctor != nullptr ? wxString(ibBackendPicture::SendPicture(ctor->GetClassType())) : wxString();
+	return ctor != nullptr ? wxString(ibBackendPicture::SendPicture(ctor->GetClassType(), *metaData)) : wxString();
 }
 
 // Open — the desktop's constructor before its window is drawn: the query the caret stands in, where the block will
