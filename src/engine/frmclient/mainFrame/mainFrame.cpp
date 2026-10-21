@@ -784,6 +784,10 @@ bool ibFrontendMainFrame::Show(bool show)
 		return false;
 	SetFocus();
 	Raise();
+	// …and the messages its start said, opened below — the desktop's (ibFrontendMainFrameEnterprise::Show): drawn before
+	// the window was shown, they took no focus (ibOutputWindow::Output).
+	if (m_outputWindow != nullptr && !m_outputWindow->IsEmpty())
+		m_outputWindow->SetFocus();
 
 	// …and what the login read beside the frame (GetStartSchemas), each shown as a call of its own would have been.
 	for (const ibProtocolNode& read : answer.FindChild(ibProtocol::ibLogin::Read).Children())

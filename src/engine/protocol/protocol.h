@@ -1117,7 +1117,7 @@ namespace ibProtocol {
 			                                                              // a u64 as a decimal
 			inline constexpr const char* Multiple     = "Multiple";
 			inline constexpr const char* Classes      = "Classes";        // the classes its choices' Data names (Type, Name,
-			                                                              // Picture)
+			                                                              // Picture) — a source's, the type it holds
 			inline constexpr const char* Type         = "Type";
 			inline constexpr const char* Args         = "Args";           // an event's: its handler's parameters
 			// …what a property's own editor reads beside them:
@@ -1125,7 +1125,7 @@ namespace ibProtocol {
 			inline constexpr const char* Schedule     = "Schedule";       // a schedule's, in its stored form
 			inline constexpr const char* Sources      = "Sources";        // a choice parameters row's: the fields beside it
 			                                                              // that may supply a value (Title, the holder they
-			                                                              // stand in)
+			                                                              // stand in); a source's: its window's tree
 			inline constexpr const char* Default      = "Default";
 			inline constexpr const char* Targets      = "Targets";
 			inline constexpr const char* Pictures     = "Pictures";       // a picture's: those it may be (Guid, Name)
@@ -1134,10 +1134,12 @@ namespace ibProtocol {
 			// the command rows Name, Picture, CommandPath, Kind (ibInterfaceCommandType).
 			inline constexpr const char* CommandTree  = "CommandTree";
 			inline constexpr const char* CommandPath  = "CommandPath";    // the hops of a command — children Id
-			// …a control's Source: what it may be bound to (SourceDataType, an ibSourceDataType), and for a column the
-			// path of the table its box is bound to (Parent — as a binding is written).
+			// …a control's Source: what it may be bound to (SourceDataType, an ibSourceDataType), the tree its window
+			// offers (Sources — rows as the attribute tree's: the roots «Name (type)», under them «Synonym (type)»); in its
+			// Value, beside the path, the type the binding holds (SourceType — Value as a type is written, Presentation):
+			// the desktop's Type row beneath it; unbound — none.
 			inline constexpr const char* SourceDataType = "SourceDataType";
-			inline constexpr const char* Parent       = "Parent";
+			inline constexpr const char* SourceType   = "SourceType";
 
 			// What a control's Source may be bound to (the server's ibSourceDataType, as its GetFilterSourceDataType
 			// answers); none said: an attribute.

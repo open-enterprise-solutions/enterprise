@@ -153,10 +153,13 @@ parameters' window. A description's `path` is read whether it arrives as a field
 object read from JSON).
 A control's `ibPropertySource` row (its Data source) carries what its source window may offer as optional fields:
 `SourceDataType` — an `ibSourceDataType`, the server's: `Table` 0, `TableColumn` 1 (of the table its table box is
-bound to), `Attribute` 2 — and, for a column, `Parent` — the path of that table, as a binding is written. The tree
-itself is the form's attribute tree the client already holds (and expands with the form editor's Composition). The
-chosen path goes back through the row's `Set`; a cancelled window, or the binding already set, sends nothing. A client
-that reads no `SourceDataType` treats the row as an attribute.
+bound to), `Attribute` 2 — and `Sources`, the window's tree, already filtered by it. The tree's rows are the attribute
+tree's (`Name`, `Path`, `Targets`, `HasComposition`, `TableSection`, `Picture`); a row without a `Path` groups rows and is
+not chosen. A reference's deeper rows come from the form editor's Composition. While bound, the row's `Value` carries
+`SourceType` beside the path: the type the binding holds (`Value` as a type is written, `Presentation`, and `Multiple`
+when it may be composite). `Classes` lists what its Type window offers (`Type`, `Name`, `Picture`). The chosen path
+goes back through the row's `Set`; a cancelled window, or the binding already set, sends nothing. A client that reads
+no `SourceDataType` treats the row as an attribute.
 
 A picture is named by its id everywhere — in the view, a tab's `Icon`, a schema, a request, a list of choices: a
 backend picture's number, as a decimal (a class's own: its class id), or a configuration picture's guid. No answer

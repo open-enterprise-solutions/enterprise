@@ -30,13 +30,13 @@ ibVisualEditorNotebook::ibVisualEditor::ibVisualEditor(ibModuleEditDocument* doc
 {
 	CreateWideGui();
 
-	// THE SOURCE WINDOW — the attribute tree of the form whose control the cell is of (the one the inspector shows).
+	// THE SOURCE WINDOW — opened by the form whose control the cell is of (the one the inspector shows).
 	static const bool picker = (ibSetSourcePicker([](wxWindow* parent, const ibPropertyObject* owner,
 		ibProtocol::ibSchema::ibProperties::ibSourceDataType filter,
-		const ibSourceDescription& table, ibSourceDescription& binding) {
+		const ibDataNode& sources, ibSourceDescription& binding) {
 		for (ibVisualEditor* const editor : OpenEditors()) {
 			if (owner != nullptr && editor->GetCurrentElement() == owner)
-				return editor->GetAttributeTree()->PickSource(parent, filter, table, binding);
+				return editor->GetAttributeTree()->PickSource(parent, filter, sources, binding);
 		}
 		return false;
 	}), true);

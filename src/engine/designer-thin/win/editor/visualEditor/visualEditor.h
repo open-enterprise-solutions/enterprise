@@ -358,11 +358,12 @@ public:
 		// The holder whose property that is — none: no attribute's.
 		ibFormAttributeValue* FindEntry(const ibPropertyObject* owner) const;
 
-		// ⭐ THE SOURCE WINDOW — the desktop's (frontend advpropSource.cpp): these rows, filtered by what a control may be
-		// bound to (`filter`; a column — of `table`), a reference opened as the tree opens it
-		// (Composition), the binding's own row selected; OK — `binding` the row's path. False: cancelled, or nothing.
+		// ⭐ THE SOURCE WINDOW — the desktop's (frontend advpropSource.cpp): the tree the control's Source offers
+		// (`sources`, the server's), a reference opened as the tree opens it (Composition) and filtered by what the
+		// control may be bound to (`filter`), the binding's own row selected; OK — `binding` the row's path. False:
+		// cancelled, or nothing.
 		bool PickSource(wxWindow* parent, ibProtocol::ibSchema::ibProperties::ibSourceDataType filter,
-			const ibSourceDescription& table, ibSourceDescription& binding);
+			const ibDataNode& sources, ibSourceDescription& binding);
 
 	protected:
 
