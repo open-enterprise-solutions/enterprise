@@ -753,7 +753,8 @@ namespace ibProtocol {
 			Database     = 16,   // the designer's base as a whole (Administration → Restore, Dump, Clear database) — shows
 			                     // nothing; commands Load — restored from a file the person is asked for
 			                     // (ibRequest::ibFile), every session of the base closed after; Save — dumped, and taken
-			                     // down where the person chooses; Clear — asked first. Each said to the person by the server
+			                     // down where the person chooses; Clear — asked first; Test {ibDatabase} — a connection tried
+			                     // with these settings, from the server. Each said to the person by the server
 			Assistant    = 17,   // the designer's assistant window (Administration) — shows nothing; command Open opens its
 			                     // tab (ibView::ibKind::Assistant). Allowed while the base's assistant access is running
 			ConfigCompare = 18,  // ibConfigCompare — the walk of two configurations; command Merge applies the ops chosen
@@ -779,7 +780,20 @@ namespace ibProtocol {
 			Load    = 11,
 			Clear   = 12,
 			Merge   = 13,  // ConfigCompare: apply selected Add/Delete/Replace ops
+			Test    = 14,  // Database: a connection tried with the settings in Args (ibDatabase), and how it went said
 		};
+
+		// THE CONNECTION SETTINGS a Database Test is tried with (the desktop's connection dialog): Server, Port, User,
+		// Password — the password as it travels at login. The designer's session only, its data administrator's, and
+		// journaled: the server is what connects, to whatever host it is given.
+		namespace ibDatabase {
+
+			inline constexpr const char* Server   = "Server";
+			inline constexpr const char* Port     = "Port";
+			inline constexpr const char* User     = "User";
+			inline constexpr const char* Password = "Password";
+
+		}
 
 		// THE DESIGNER'S CONFIGURATION COMPARE — Build {Mode, File?, File2?} walks two trees (ibMetaDiffWalker) →
 		// Records (Status, Parent, Depth, Group, Name, Picture, Property, Left, Right, LeftId, RightId). Mode: File —

@@ -118,14 +118,25 @@ void ibDialogConnection::SaveConnectionData()
 	//document.Save(strFileName);
 }
 
-#include <wx/msgdlg.h>
+#include "frmclient/mainFrame/mainFrame.h"
+#include "protocol/protocol.h"
 
 void ibDialogConnection::TestConnectionOnButtonClick(wxCommandEvent& event)
 {
-	// ⚠ NOT HERE YET: the desktop's opened a PostgreSQL driver (ibDatabaseLayerPostgres) with these settings, closed it and
-	// said how it went — the driver's own message on a failure. The drivers are the server's, and no request asks one to
-	// try a connection.
-	wxMessageBox(_("Testing a connection is not in the thin client yet."), _("Test connection"), wxOK | wxICON_INFORMATION, this);
+	// The desktop's opened a PostgreSQL driver (ibDatabaseLayerPostgres) with these settings, closed it and said how it
+	// went. The drivers are the server's: the base's Test tries them there, and the server says how it went.
+	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
+	if (frame != nullptr) {
+		ibProtocolNode params, answer;
+		params.SetValue(ibProtocol::ibSchema::Schema, static_cast<long long>(ibProtocol::ibSchema::ibKind::Database));
+		params.SetValue(ibProtocol::ibSchema::Command, static_cast<long long>(ibProtocol::ibSchema::ibCommand::Test));
+		params.Child(ibProtocol::ibSchema::Args)
+			.SetValue(ibProtocol::ibSchema::ibDatabase::Server, m_textCtrlServer->GetValue())
+			.SetValue(ibProtocol::ibSchema::ibDatabase::Port, m_textCtrlPort->GetValue())
+			.SetValue(ibProtocol::ibSchema::ibDatabase::User, m_textCtrlUser->GetValue())
+			.SetValue(ibProtocol::ibSchema::ibDatabase::Password, m_textCtrlPassword->GetValue());
+		(void)frame->Call(ibProtocol::ibMethod::Schema, params, answer);
+	}
 	event.Skip();
 }
 

@@ -6,9 +6,15 @@
 #include "backend/session/session.h"
 #include "backend/session/sessionRegistry.h"
 #include "backend/temp/tempStorage.h"
+#include "core/diagnostics/journal.h"    // a connection test is written down: the server connects where it is told
 #include "core/exception.h"   // ibCoreException — a restore refused on the way
 #include "core/fileKind.h"
 #include "core/serialize/dataBuilder.h"
+
+#ifdef OES_USE_POSTGRESQL
+#include "backend/databaseLayer/postgres/postgresDatabaseLayer.h"
+#include <memory>   // the probe OWNS its driver, as the desktop's TestConnectionOnButtonClick
+#endif
 
 namespace {
 
@@ -49,7 +55,7 @@ void ibSchemaDatabase::Build(const ibSession& WXUNUSED(session), const ibDataNod
 }
 
 std::function<void()> ibSchemaDatabase::Command(const ibSession& session, s32 command,
-	const ibDataNode& WXUNUSED(args), ibProtocol::ibRefusal& refusal, wxString& error) const
+	const ibDataNode& args, ibProtocol::ibRefusal& refusal, wxString& error) const
 {
 	ibApplicationInstance* const applicationInstance = session.GetApplicationInstance();
 	if (applicationInstance == nullptr) {
@@ -131,6 +137,57 @@ std::function<void()> ibSchemaDatabase::Command(const ibSession& session, s32 co
 				frame->ShowModalMessage(_("Error when trying to clear database!") + wxT("\n\n") + BackendErrorChain(),
 					wxMessageBoxCaptionStr, wxOK | wxCENTRE | wxICON_ERROR);
 		};
+	case ibProtocol::ibSchema::ibCommand::Test: {
+		// THE DESKTOP'S PROBE, run where the base is: a driver opened with these settings, closed, and what happened
+		// said — the driver's own message on a failure, read before Close clears it.
+		const wxString server = args.GetValue<wxString>(ibProtocol::ibSchema::ibDatabase::Server);
+		const wxString port = args.GetValue<wxString>(ibProtocol::ibSchema::ibDatabase::Port);
+		const wxString user = args.GetValue<wxString>(ibProtocol::ibSchema::ibDatabase::User);
+		const wxString password = args.GetValue<wxString>(ibProtocol::ibSchema::ibDatabase::Password);
+		ibJournalInfo(wxT("designer"), wxT("[database] connection test to %s:%s as '%s' (session %s)"),
+			server, port, user, session.Identity().m_guid.str());
+		return [server, port, user, password]() {
+			ibBackendDocFrame* const frame = ibSession::CurrentFrame();
+			if (frame == nullptr)
+				return;
+#ifdef OES_USE_POSTGRESQL
+			// The driver THROWS — when its client library cannot be loaded, and when it cannot connect
+			// (ibDatabaseErrorReporter: what is said is the catch site's) — so it is caught here, where it is said, and
+			// its message is the driver's.
+			bool success = false;
+			wxString failure;
+			try {
+				const std::unique_ptr<ibDatabaseLayerPostgres> postgresDatabaseLayer(new ibDatabaseLayerPostgres);
+				try {
+					success = postgresDatabaseLayer->Open(server, port, wxT(""), user, password);
+				}
+				catch (const ibCoreException& e) {
+					failure = e.GetErrorDescription();
+				}
+				if (!success && failure.IsEmpty())
+					failure = postgresDatabaseLayer->GetErrorMessage();
+				postgresDatabaseLayer->Close();
+			}
+			catch (const ibCoreException& e) {
+				success = false;
+				failure = e.GetErrorDescription();
+			}
+			catch (const std::exception& e) {
+				success = false;
+				failure = wxString::FromUTF8(e.what());
+			}
+			ibJournalInfo(wxT("designer"), wxT("[database] connection test to %s:%s: %s"),
+				server, port, success ? wxString(wxT("established")) : failure);
+			if (success)
+				frame->ShowModalMessage(_("Connection established"), _("Test connection"), wxOK | wxCENTRE | wxICON_INFORMATION);
+			else
+				frame->ShowModalMessage(failure.IsEmpty() ? _("Could not connect with these settings") : failure,
+					_("Test connection"), wxOK | wxCENTRE | wxICON_ERROR);
+#else
+			frame->ShowModalMessage(_("PostgreSQL driver not available"), _("Test connection"), wxOK | wxCENTRE);
+#endif
+		};
+	}
 	default:
 		break;
 	}
