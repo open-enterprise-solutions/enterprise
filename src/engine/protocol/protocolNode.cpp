@@ -1,143 +1,169 @@
 #include "protocolNode.h"
+#include "protocolValue.h"
 #include "protocol/protocol.h"   // ibProtocol::ibNode
-
-#include <nlohmann/json.hpp>
 
 namespace {
 
-using json = nlohmann::json;
+using ibKind = ibProtocolValue::ibKind;
 
 // The entry under the name, when the node is one and has it.
-const json* Entry(const json* node, const char* name)
+template<class Name>
+ibProtocolValue* Entry(ibProtocolBody* node, const Name& name)
 {
-	if (node == nullptr || !node->is_object())
-		return nullptr;
-	const auto found = node->find(name);
-	return found != node->end() ? &*found : nullptr;
+	return node != nullptr && !node->m_list ? node->Find(name) : nullptr;
 }
 
-wxString StringOf(const json* value, const wxString& otherwise)
+ibString StringOf(const ibProtocolValue* value, const ibString& otherwise)
 {
 	if (value == nullptr)
 		return otherwise;
-	if (value->is_string())
-		return wxString::FromUTF8(value->get_ref<const std::string&>());
-	// A number or a flag where text was asked for — as the wire writes it.
-	if (value->is_number() || value->is_boolean())
-		return wxString::FromUTF8(value->dump());
-	return otherwise;
+	switch (value->GetKind()) {
+	case ibKind::Text:
+	case ibKind::Number:
+		return value->AsText();
+	case ibKind::Int:
+	case ibKind::Bool: {
+		// A whole number or a flag where text was asked for — as the wire writes it.
+		ibString text;
+		value->Write(text);
+		return text;
+	}
+	default:
+		return otherwise;
+	}
 }
 
-long long IntOf(const json* value, long long otherwise)
+long long IntOf(const ibProtocolValue* value, long long otherwise)
 {
-	return value != nullptr && (value->is_number_integer() || value->is_number_unsigned())
-		? value->get<long long>() : otherwise;
+	return value != nullptr && value->GetKind() == ibKind::Int ? value->AsInt() : otherwise;
 }
 
-bool BoolOf(const json* value, bool otherwise)
+bool BoolOf(const ibProtocolValue* value, bool otherwise)
 {
-	return value != nullptr && value->is_boolean() ? value->get<bool>() : otherwise;
+	return value != nullptr && value->GetKind() == ibKind::Bool ? value->AsBool() : otherwise;
 }
 
 } // namespace
 
 ibProtocolNode::ibProtocolNode()
-	: ibProtocolNode(json::object())
+	: ibProtocolNode(ibProtocolValue::Node())
 {
 }
 
-ibProtocolNode::ibProtocolNode(std::shared_ptr<nlohmann::json> root, nlohmann::json* node)
-	: m_root(std::move(root)), m_node(node)
+ibProtocolNode::ibProtocolNode(std::shared_ptr<ibProtocolValue> root, ibProtocolValue* value)
+	: m_root(std::move(root)), m_value(value), m_body(value != nullptr ? value->GetBody() : nullptr)
 {
 }
 
-ibProtocolNode::ibProtocolNode(nlohmann::json&& tree)
-	: m_root(std::make_shared<json>(std::move(tree)))
+ibProtocolNode::ibProtocolNode(ibProtocolValue&& tree)
+	: m_root(std::make_shared<ibProtocolValue>(std::move(tree)))
 {
-	m_node = m_root.get();
+	m_value = m_root.get();
+	m_body = m_value->GetBody();
 }
 
-bool ibProtocolNode::Read(const std::string& text, ibProtocolNode& node)
+bool ibProtocolNode::Read(const ibString& text, ibProtocolNode& node)
 {
-	json tree = json::parse(text, nullptr, false);
-	if (tree.is_discarded())
+	ibProtocolValue tree;
+	if (!ibProtocolValue::Read(text.wc_str(), text.length(), tree))
 		return false;
 	node = ibProtocolNode(std::move(tree));
 	return true;
 }
 
-std::string ibProtocolNode::Write() const
+ibString ibProtocolNode::Write() const
 {
-	// A person's text that is not valid UTF-8 is replaced, never thrown about.
-	return m_node != nullptr ? m_node->dump(-1, ' ', false, json::error_handler_t::replace) : std::string("null");
+	ibString text;
+	if (m_body != nullptr)
+		m_body->Write(text);
+	else if (m_value != nullptr)
+		m_value->Write(text);
+	else
+		ibProtocolValue().Write(text);
+	return text;
 }
 
-bool ibProtocolNode::IsEmpty() const { return m_node == nullptr || m_node->is_null(); }
-bool ibProtocolNode::IsNode() const  { return m_node != nullptr && m_node->is_object(); }
-bool ibProtocolNode::IsList() const  { return m_node != nullptr && m_node->is_array(); }
-bool ibProtocolNode::IsString() const { return m_node != nullptr && m_node->is_string(); }
-bool ibProtocolNode::IsInt() const    { return m_node != nullptr && (m_node->is_number_integer() || m_node->is_number_unsigned()); }
-bool ibProtocolNode::IsBool() const   { return m_node != nullptr && m_node->is_boolean(); }
+bool ibProtocolNode::IsEmpty() const  { return m_body == nullptr && (m_value == nullptr || m_value->GetKind() == ibKind::Null); }
+bool ibProtocolNode::IsNode() const   { return m_body != nullptr && !m_body->m_list; }
+bool ibProtocolNode::IsList() const   { return m_body != nullptr && m_body->m_list; }
+bool ibProtocolNode::IsString() const { return m_body == nullptr && m_value != nullptr && m_value->GetKind() == ibKind::Text; }
+bool ibProtocolNode::IsInt() const    { return m_body == nullptr && m_value != nullptr && m_value->GetKind() == ibKind::Int; }
+bool ibProtocolNode::IsBool() const   { return m_body == nullptr && m_value != nullptr && m_value->GetKind() == ibKind::Bool; }
 
 bool ibProtocolNode::Has(const char* name) const
 {
-	return Entry(m_node, name) != nullptr;
+	return Entry(m_body, name) != nullptr;
 }
 
-wxString ibProtocolNode::GetString(const char* name, const wxString& otherwise) const
+ibString ibProtocolNode::GetString(const char* name, const ibString& otherwise) const
 {
-	return StringOf(Entry(m_node, name), otherwise);
+	return StringOf(Entry(m_body, name), otherwise);
 }
 
 long long ibProtocolNode::GetInt(const char* name, long long otherwise) const
 {
-	return IntOf(Entry(m_node, name), otherwise);
+	return IntOf(Entry(m_body, name), otherwise);
 }
 
 bool ibProtocolNode::GetBool(const char* name, bool otherwise) const
 {
-	return BoolOf(Entry(m_node, name), otherwise);
+	return BoolOf(Entry(m_body, name), otherwise);
 }
 
 ibProtocolNode ibProtocolNode::FindChild(const char* name) const
 {
-	const json* const found = Entry(m_node, name);
-	return found != nullptr ? ibProtocolNode(m_root, const_cast<json*>(found)) : ibProtocolNode(nullptr, nullptr);
+	ibProtocolValue* const found = Entry(m_body, name);
+	return found != nullptr ? ibProtocolNode(m_root, found) : ibProtocolNode(nullptr, nullptr);
 }
+
+namespace {
+
+// The list under the name, when the node is one and has it.
+template<class Name>
+ibProtocolBody* ListIn(ibProtocolBody* node, const Name& name)
+{
+	const ibProtocolValue* const list = Entry(node, name);
+	return list != nullptr ? list->GetList() : nullptr;
+}
+
+} // namespace
 
 std::vector<ibProtocolNode> ibProtocolNode::GetList(const char* name) const
 {
-	std::vector<ibProtocolNode> items;
-	const json* const list = Entry(m_node, name);
-	if (list != nullptr && list->is_array()) {
-		items.reserve(list->size());
-		for (const json& item : *list)
-			items.push_back(ibProtocolNode(m_root, const_cast<json*>(&item)));
-	}
-	return items;
+	return Items(ListIn(m_body, name));
 }
 
-std::vector<std::pair<std::string, ibProtocolNode>> ibProtocolNode::Entries() const
+std::vector<ibProtocolNode> ibProtocolNode::GetList(const ibString& name) const
 {
-	std::vector<std::pair<std::string, ibProtocolNode>> entries;
-	if (m_node != nullptr && m_node->is_object()) {
-		entries.reserve(m_node->size());
-		for (auto entry = m_node->begin(); entry != m_node->end(); ++entry)
-			entries.emplace_back(entry.key(), ibProtocolNode(m_root, &entry.value()));
+	return Items(ListIn(m_body, name));
+}
+
+std::vector<std::pair<ibString, ibProtocolNode>> ibProtocolNode::Entries() const
+{
+	std::vector<std::pair<ibString, ibProtocolNode>> entries;
+	if (IsNode()) {
+		entries.reserve(m_body->m_entries.size());
+		for (ibProtocolEntry& entry : m_body->m_entries)
+			entries.emplace_back(entry.m_name, ibProtocolNode(m_root, &entry.m_value));
 	}
 	return entries;
 }
 
-wxString  ibProtocolNode::AsString() const { return StringOf(m_node, wxString()); }
-long long ibProtocolNode::AsInt() const    { return IntOf(m_node, 0); }
-bool      ibProtocolNode::AsBool() const   { return BoolOf(m_node, false); }
+const ibProtocolBody* ibProtocolNode::GetBody() const
+{
+	return m_body;
+}
+
+ibString  ibProtocolNode::AsString() const { return StringOf(m_body == nullptr ? m_value : nullptr, ibString()); }
+long long ibProtocolNode::AsInt() const    { return IntOf(m_body == nullptr ? m_value : nullptr, 0); }
+bool      ibProtocolNode::AsBool() const   { return BoolOf(m_body == nullptr ? m_value : nullptr, false); }
 
 long long ibProtocolNode::GetId() const
 {
 	return GetInt(ibProtocol::ibNode::Id);
 }
 
-wxString ibProtocolNode::GetType() const
+ibString ibProtocolNode::GetType() const
 {
 	return GetString(ibProtocol::ibNode::Type);
 }
@@ -147,19 +173,18 @@ std::vector<ibProtocolNode> ibProtocolNode::Children() const
 	return GetList(ibProtocol::ibNode::Children);
 }
 
-ibProtocolNode& ibProtocolNode::SetValue(const char* name, const wxString& text)
+ibProtocolNode& ibProtocolNode::SetValue(const char* name, const ibString& text)
 {
-	return SetValue(name, ibProtocolNode(json(std::string(text.utf8_str()))));
-}
-
-ibProtocolNode& ibProtocolNode::SetValue(const char* name, const char* text)
-{
-	return SetValue(name, ibProtocolNode(json(std::string(text != nullptr ? text : ""))));
+	if (ibProtocolBody* const node = Node())
+		node->Set(name) = ibProtocolValue(text);
+	return *this;
 }
 
 ibProtocolNode& ibProtocolNode::SetValue(const char* name, long long number)
 {
-	return SetValue(name, ibProtocolNode(json(number)));
+	if (ibProtocolBody* const node = Node())
+		node->Set(name) = ibProtocolValue(number);
+	return *this;
 }
 
 ibProtocolNode& ibProtocolNode::SetValue(const char* name, int number)
@@ -167,97 +192,128 @@ ibProtocolNode& ibProtocolNode::SetValue(const char* name, int number)
 	return SetValue(name, static_cast<long long>(number));
 }
 
-ibProtocolNode& ibProtocolNode::SetValue(const char* name, bool flag)
+ibProtocolNode& ibProtocolNode::SetFlag(const char* name, bool flag)
 {
-	return SetValue(name, ibProtocolNode(json(flag)));
+	if (ibProtocolBody* const node = Node())
+		node->Set(name) = ibProtocolValue(flag);
+	return *this;
 }
 
 ibProtocolNode& ibProtocolNode::SetValue(const char* name, const ibProtocolNode& node)
 {
-	if (m_node == nullptr)
-		return *this;
-	if (!m_node->is_object())
-		*m_node = json::object();
-	(*m_node)[name] = node.m_node != nullptr ? *node.m_node : json();
+	if (ibProtocolBody* const target = Node()) {
+		ibProtocolValue copy = node.Copy();   // first: the node may lie in this one, and its place move
+		target->Set(name) = std::move(copy);
+	}
+	return *this;
+}
+
+ibProtocolNode& ibProtocolNode::SetValue(const ibString& name, const ibProtocolNode& node)
+{
+	if (ibProtocolBody* const target = Node()) {
+		ibProtocolValue copy = node.Copy();
+		target->Set(name) = std::move(copy);
+	}
 	return *this;
 }
 
 ibProtocolNode ibProtocolNode::Child(const char* name)
 {
-	if (m_node == nullptr)
+	ibProtocolBody* const node = Node();
+	if (node == nullptr)
 		return ibProtocolNode(nullptr, nullptr);
-	if (!m_node->is_object())
-		*m_node = json::object();
-	json& child = (*m_node)[name];
-	if (!child.is_object())
-		child = json::object();
+	ibProtocolValue& child = node->Set(name);
+	if (child.GetNode() == nullptr)
+		child = ibProtocolValue::Node();
 	return ibProtocolNode(m_root, &child);
 }
 
 ibProtocolNode ibProtocolNode::AddChild()
 {
-	if (m_node == nullptr)
-		return ibProtocolNode(nullptr, nullptr);
-	if (!m_node->is_object())
-		*m_node = json::object();
-	json& children = (*m_node)[ibProtocol::ibNode::Children];
-	if (!children.is_array())
-		children = json::array();
-	children.push_back(json::object());
-	return ibProtocolNode(m_root, &children.back());
+	return AddItem(ibProtocol::ibNode::Children);
 }
 
 ibProtocolNode ibProtocolNode::AddItem(const char* name)
 {
-	if (m_node == nullptr)
+	ibProtocolBody* const list = ListOf(name);
+	if (list == nullptr)
 		return ibProtocolNode(nullptr, nullptr);
-	if (!m_node->is_object())
-		*m_node = json::object();
-	json& items = (*m_node)[name];
-	if (!items.is_array())
-		items = json::array();
-	items.push_back(json::object());
-	return ibProtocolNode(m_root, &items.back());
+	ibProtocolValue& item = list->Add();
+	item = ibProtocolValue::Node();
+	return ibProtocolNode(m_root, &item);
 }
 
 void ibProtocolNode::AddItem(const char* name, long long number)
 {
-	if (m_node == nullptr)
-		return;
-	if (!m_node->is_object())
-		*m_node = json::object();
-	json& items = (*m_node)[name];
-	if (!items.is_array())
-		items = json::array();
-	items.push_back(number);
+	if (ibProtocolBody* const list = ListOf(name))
+		list->Add() = ibProtocolValue(number);
 }
 
-void ibProtocolNode::AddItem(const char* name, const wxString& text)
+void ibProtocolNode::AddItem(const char* name, const ibString& text)
 {
-	if (m_node == nullptr)
-		return;
-	if (!m_node->is_object())
-		*m_node = json::object();
-	json& items = (*m_node)[name];
-	if (!items.is_array())
-		items = json::array();
-	items.push_back(std::string(text.utf8_str()));
+	if (ibProtocolBody* const list = ListOf(name))
+		list->Add() = ibProtocolValue(text);
 }
 
 void ibProtocolNode::Remove(const char* name)
 {
-	if (m_node != nullptr && m_node->is_object())
-		m_node->erase(name);
+	if (IsNode())
+		m_body->Remove(name);
 }
 
 ibProtocolNode ibProtocolNode::Clone() const
 {
-	return m_node != nullptr ? ibProtocolNode(json(*m_node)) : ibProtocolNode(nullptr, nullptr);
+	return m_body != nullptr || m_value != nullptr ? ibProtocolNode(Copy()) : ibProtocolNode(nullptr, nullptr);
 }
 
 bool ibProtocolNode::operator==(const ibProtocolNode& other) const
 {
-	if (m_node == nullptr || other.m_node == nullptr)
+	if (m_body != nullptr || other.m_body != nullptr)
+		return m_body != nullptr && other.m_body != nullptr && *m_body == *other.m_body;
+	if (m_value == nullptr || other.m_value == nullptr)
 		return IsEmpty() && other.IsEmpty();
-	return *m_node == *other.m_node;
+	return *m_value == *other.m_value;
+}
+
+std::vector<ibProtocolNode> ibProtocolNode::Items(ibProtocolBody* list) const
+{
+	std::vector<ibProtocolNode> items;
+	if (list != nullptr) {
+		items.reserve(list->m_entries.size());
+		for (ibProtocolEntry& item : list->m_entries)
+			items.push_back(ibProtocolNode(m_root, &item.m_value));
+	}
+	return items;
+}
+
+ibProtocolValue ibProtocolNode::Copy() const
+{
+	if (m_body != nullptr) {
+		ibProtocolValue copy = m_body->m_list ? ibProtocolValue::List() : ibProtocolValue::Node();
+		*copy.GetBody() = *m_body;
+		return copy;
+	}
+	return m_value != nullptr ? *m_value : ibProtocolValue();
+}
+
+ibProtocolBody* ibProtocolNode::Node()
+{
+	if (m_body != nullptr)
+		return m_body->m_list ? nullptr : m_body;
+	if (m_value == nullptr)
+		return nullptr;
+	*m_value = ibProtocolValue::Node();
+	m_body = m_value->GetBody();
+	return m_body;
+}
+
+ibProtocolBody* ibProtocolNode::ListOf(const char* name)
+{
+	ibProtocolBody* const node = Node();
+	if (node == nullptr)
+		return nullptr;
+	ibProtocolValue& items = node->Set(name);
+	if (items.GetList() == nullptr)
+		items = ibProtocolValue::List();
+	return items.GetList();
 }

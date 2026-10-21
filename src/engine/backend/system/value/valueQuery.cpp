@@ -3,8 +3,9 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "valueQuery.h"
+#include "backend/query/queryException.h"   // ibBackendQuerySyntaxException::Raise — the engine's door for the core parser
 
-#include "backend/query/queryParser.h"
+#include "core/query/queryParser.h"
 #include "core/diagnostics/crashGuard.h"  // ibJournal — the technology journal
 #include "valueArray.h"                  // ibValueArray — a package answers with results BY POSITION
 #include "backend/compiler/typeCtor.h"   // VALUE_TYPE_REGISTER / SYSTEM_TYPE_REGISTER / ENUM_TYPE_REGISTER
@@ -107,7 +108,9 @@ bool ibValueQueryExec::Init(ibValue** paParams, const long lSizeArray)
 		return true;
 	}
 
-	m_package = ibQueryParser().ParsePackage(m_text);
+	// The engine's door: the core parser's refusal is raised as the engine's (ibBackendQuerySyntaxException).
+	try { m_package = ibQueryParser().ParsePackage(m_text); }
+	catch (const ibQueryRefusal& refusal) { ibBackendQuerySyntaxException::Raise(refusal); }
 	return !m_package.m_statements.empty();
 }
 

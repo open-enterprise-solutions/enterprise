@@ -2,10 +2,10 @@
 #define __DEBUGGER_CLIENT_H__
 
 #include <wx/thread.h>
-#include <atomic>   // std::atomic<short> m_number_connection_attempts (MSVC pulled it in transitively)
+#include <atomic>   // the flags a connection's thread sets and any thread reads
 #include <functional>   // std::function — the deferred call the pack below is wrapped in
 #include <memory>   // the adapter owns its bridges
-#include <mutex>    // the connection's socket slot
+#include <mutex>    // the connection's socket slot, the client's lists
 #include <vector>
 
 // Lifecycle: owned by ibMetaDataConfigurationStorage as a unique_ptr
@@ -61,6 +61,7 @@ class BACKEND_API ibDebuggerClient {
 		// `new` and destroyed here, which is what the single-bridge version did
 		// and the only arrangement in which nobody has to outlive anybody.
 		void SetBridge(ibDebuggerClientBridge* bridge) {
+			std::lock_guard<std::recursive_mutex> lock(m_bridgesMutex);
 			m_debugBridges.clear();
 			AddBridge(bridge);
 		}
@@ -75,6 +76,7 @@ class BACKEND_API ibDebuggerClient {
 		// The first one installed — the IDE's, in the process that has one. Kept
 		// because callers ask "is anybody bridged", not "which".
 		ibDebuggerClientBridge* GetBridge() const {
+			std::lock_guard<std::recursive_mutex> lock(m_bridgesMutex);
 			return m_debugBridges.empty() ? nullptr : m_debugBridges.front().get();
 		}
 
@@ -122,6 +124,11 @@ class BACKEND_API ibDebuggerClient {
 
 	private:
 		std::vector<std::unique_ptr<ibDebuggerClientBridge> > m_debugBridges;
+		// 🛑 THE LIST UNDER A LOCK — a listener is put in and taken out on its own thread (the assistant's, a thin
+		// designer's frame going with its client), while the fan-out walks the list on the worker: a listener taken out
+		// mid-walk was destroyed under the walk. Recursive: a listener told something may ask who is bridged (BridgeId),
+		// and SetBridge puts one in under it.
+		mutable std::recursive_mutex m_bridgesMutex;
 
 		// ⚠ WHOSE WORKER — one answer for the whole fan-out, not one per listener. Every bridge in a
 		// process is installed by the same person in the same session, so a session held per bridge
@@ -273,9 +280,13 @@ public:
 		const wxString& hostName = defaultHost,
 		unsigned short startPort = defaultDebuggerPort, unsigned short endPort = defaultDebuggerPort + diapasonDebuggerPort)
 	{
-		if (run_debug_server)
+		if (run_debug_server) {
 			m_connectionSuccess = false;
+			m_numberOfConnectionAttempts = numberOfLaunchConnectionAttempts;
+		}
 
+		// A new connection puts itself in the list (AppendConnection) — under this same lock, on this thread.
+		std::lock_guard<std::recursive_mutex> lock(m_connectionsMutex);
 		for (unsigned short port = startPort; port < endPort; port++) {
 
 			auto iterator = std::find_if(m_listConnection.begin(), m_listConnection.end(),
@@ -310,6 +321,7 @@ public:
 
 	void AttachConnection(const wxString& hostName, unsigned short port) const {
 
+		std::lock_guard<std::recursive_mutex> lock(m_connectionsMutex);
 		auto iterator = std::find_if(m_listConnection.begin(), m_listConnection.end(),
 			[hostName, port](ibDebuggerClientConnection* client) { return client->m_hostName == hostName && client->m_port == port; }
 		);
@@ -325,6 +337,7 @@ public:
 	// → AttachConnection), this hook does the same for the
 	// programmatic spawn-then-attach flow.
 	void AttachAllVerified() const {
+		std::lock_guard<std::recursive_mutex> lock(m_connectionsMutex);
 		for (auto* conn : m_listConnection) {
 			if (conn != nullptr) conn->AttachConnection();
 		}
@@ -332,6 +345,7 @@ public:
 
 	void DetachConnection(const wxString& hostName, unsigned short port, bool kill = false) {
 
+		std::lock_guard<std::recursive_mutex> lock(m_connectionsMutex);
 		auto iterator = std::find_if(m_listConnection.begin(), m_listConnection.end(),
 			[hostName, port](ibDebuggerClientConnection* client) { return client->m_hostName == hostName && client->m_port == port; }
 		);
@@ -339,14 +353,13 @@ public:
 		if (iterator != m_listConnection.end()) (*iterator)->DetachConnection(kill);
 	}
 
-	const std::vector<ibDebuggerClientConnection*>& GetListConnection() {
-		wxCriticalSectionLocker enter(ms_criticalSectionConnection1);
-		return m_listConnection;
-	}
-
-	const unsigned int GetCountConnection() const {
-		wxCriticalSectionLocker enter(ms_criticalSectionConnection1);
-		return m_listConnection.size();
+	// ⭐ EACH CONNECTION, VISITED UNDER THE LIST'S LOCK — a connection is a thread that deletes itself when it is done,
+	// and its going waits on this lock (DeleteConnection): a connection visited is one alive. It was the list itself,
+	// handed out by reference with the lock already let go, and walked on any thread while its entries died.
+	template <typename Fn> void ForEachConnection(Fn&& visit) const {
+		std::lock_guard<std::recursive_mutex> lock(m_connectionsMutex);
+		for (const ibDebuggerClientConnection* connection : m_listConnection)
+			visit(*connection);
 	}
 
 	// ⭐⭐ A WATCH QUESTION CARRIES WHO ASKED IT, IN THE PACKET.
@@ -450,7 +463,7 @@ public:
 
 	bool HasConnections() const {
 
-		wxCriticalSectionLocker enter(ms_criticalSectionConnection1);
+		std::lock_guard<std::recursive_mutex> lock(m_connectionsMutex);
 
 		// ANY of them. It answered for the FIRST debugger connection in the list, so with two applications
 		// attached the answer was whichever one happened to come first.
@@ -508,15 +521,7 @@ public:
 		}
 	}
 
-	void SetConnectionSuccess(bool started) {
-		wxCriticalSectionLocker enter(ms_criticalSectionConnection3);
-		m_connectionSuccess = started;
-	}
-
-	bool GetConnectionSuccess() const {
-		wxCriticalSectionLocker enter(ms_criticalSectionConnection3);
-		return m_connectionSuccess;
-	}
+	bool GetConnectionSuccess() const { return m_connectionSuccess; }
 
 protected:
 
@@ -540,12 +545,12 @@ protected:
 
 	//commands:
 	void AppendConnection(ibDebuggerClientConnection* client) {
-		wxCriticalSectionLocker enter(ms_criticalSectionConnection1);
+		std::lock_guard<std::recursive_mutex> lock(m_connectionsMutex);
 		m_listConnection.push_back(client);
 	}
 
 	void DeleteConnection(ibDebuggerClientConnection* client) {
-		wxCriticalSectionLocker enter(ms_criticalSectionConnection1);
+		std::lock_guard<std::recursive_mutex> lock(m_connectionsMutex);
 		if (m_activeSocket == client) m_activeSocket = nullptr;
 		m_listConnection.erase(
 			std::remove(m_listConnection.begin(), m_listConnection.end(), client), m_listConnection.end()
@@ -555,6 +560,7 @@ protected:
 
 	void RecvCommand(void* pointer, unsigned int length) {}
 	void SendCommand(void* pointer, unsigned int length) {
+		std::lock_guard<std::recursive_mutex> lock(m_connectionsMutex);
 		if (m_activeSocket != nullptr) {
 			m_activeSocket->SendCommand(pointer, length);
 		}
@@ -569,7 +575,7 @@ private:
 
 	int GetLineOffset(const wxString& strModuleName, const int current_line) const {
 
-		wxCriticalSectionLocker enter(ms_criticalSectionConnection2);
+		std::lock_guard<std::recursive_mutex> lock(m_breakpointsMutex);
 
 		auto iterator_module_offset = std::find_if(
 			m_listOffsetBreakpoint.begin(),
@@ -593,19 +599,29 @@ private:
 
 	class ibMetaDataConfigurationBase* const m_metaData;
 
-	ibDebuggerClientConnection* m_activeSocket = nullptr;
 	ibDebuggerClientAdapter* m_adapter = nullptr;
 
 	// THE THREAD EVERY CONNECTION'S SOCKET GOES BY — one, for the scanners of every port; a connection's own thread
 	// reads what arrived. Outlives them all: the destructor lets the connections go first.
 	ibIoThreads m_ioThreads;
 
-	static wxCriticalSection ms_criticalSectionConnection1;
-	static wxCriticalSection ms_criticalSectionConnection2;
-	static wxCriticalSection ms_criticalSectionConnection3;
+	// 🛑 THE CONNECTIONS AND THE STOP, UNDER ONE LOCK — the list, the connection a runtime is parked on and its session:
+	// each connection's thread puts itself in, takes itself out and parks the stop, while the designer, the assistant
+	// and the server's listeners walk the list. Taken on every touch of the three, the walk included. Recursive, as the
+	// bridges' lock is: a call made under it may tell a listener at once (Defer with no session), who asks
+	// HasConnections. Taken after m_breakpointsMutex, never before it.
+	mutable std::recursive_mutex             m_connectionsMutex;
+	std::vector<ibDebuggerClientConnection*> m_listConnection;
+	ibDebuggerClientConnection*              m_activeSocket = nullptr;   // the one a runtime is parked on
+	// Session guid of the runtime currently parked at a breakpoint.
+	// Updated on each CommandId_EnterLoop receive; tagged onto every
+	// outgoing Continue/Step/Pause/Detach so the server can route the
+	// command to the right ibSession in a multi-tab wes process.
+	wxString                                 m_currentSessionGuid;
 
-	std::vector<ibDebuggerClientConnection*>	m_listConnection;
-
+	// 🛑 THE BREAKPOINTS, THE LINES THE EDITS MOVED, WHAT IS WATCHED — set on the designer's thread, read on a
+	// connection's (a stop's line, everything told again on a reconnect). Recursive: a module saved is initialised under it.
+	mutable std::recursive_mutex m_breakpointsMutex;
 	std::map <wxString, std::map<unsigned int, ibBreakpoint>> m_listBreakpoint; //list of points: committed line -> offset + condition
 	std::map <wxString, std::map<unsigned int, int>> m_listOffsetBreakpoint; //list of changed transitions
 
@@ -618,13 +634,12 @@ private:
 	std::map <unsigned int, ibWatchedExpression> m_listExpression;
 #endif  
 
-	bool	m_enterLoop, m_connectionSuccess;
+	// Set by a connection's thread, read by any.
+	std::atomic<bool> m_enterLoop, m_connectionSuccess;
 
-	// Session guid of the runtime currently parked at a breakpoint.
-	// Updated on each CommandId_EnterLoop receive; tagged onto every
-	// outgoing Continue/Step/Pause/Detach so the server can route the
-	// command to the right ibSession in a multi-tab wes process.
-	wxString m_currentSessionGuid;
+	// How many times a connection tries a port before its thread ends — more while a launched child boots
+	// (SearchServer(true)), the usual again once a runtime is verified.
+	std::atomic<short> m_numberOfConnectionAttempts;
 };
 
 #endif

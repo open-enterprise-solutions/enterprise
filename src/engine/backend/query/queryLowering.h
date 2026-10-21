@@ -23,7 +23,7 @@
 //
 // See docs/private/query-language-arc.md §14 / §22 / §23.
 
-#include "queryAST.h"
+#include "core/query/queryAST.h"
 #include "dataQueryBuilder.h"   // ibDataQueryResult / ibDataQueryBuilder
 #include "queryable.h"          // ibBackendQueryColumn
 

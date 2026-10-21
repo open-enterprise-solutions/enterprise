@@ -73,7 +73,7 @@ constexpr int kQueryPlacedWordIndicator = 9;
 // MARK WHAT THE LEXER CANNOT — call after the pane's text changes, since the marks go with the text they
 // marked. Every `&name`: a parameter is a value handed in from outside, and reading exactly like a column
 // of the query is how somebody spends a while wondering why "that field" cannot be found. And every word
-// that is the language's by its place (kQueryPlacedWordIndicator) — ⚠ not here yet, see queryConstructor.cpp.
+// that is the language's by its place (kQueryPlacedWordIndicator).
 FRMCLIENT_API void ibMarkQueryText(class wxStyledTextCtrl* text);
 
 #endif

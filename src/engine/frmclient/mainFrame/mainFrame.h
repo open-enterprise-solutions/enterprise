@@ -350,7 +350,7 @@ private:
 	wxMenu*       m_menuEdit = nullptr;           // …and its Edit
 
 	std::map<int, ibMenuItem>             m_menuItems;     // the server's commands and schemas, by their wx ids (MenuIdOf)
-	std::string                           m_menuShape;     // the server's menu as last built, less what is enabled
+	ibString                              m_menuShape;     // the server's menu as last built, less what is enabled
 	std::deque<ibPostedCall>              m_posted;        // the calls posted, not made yet
 	std::set<long long>                   m_tabsClosing;   // the tabs a close was posted for and not answered yet
 	std::map<long long, ibTabDocument*>   m_documents;   // the tabs' documents the frame raised (DrawTabs), by their ids

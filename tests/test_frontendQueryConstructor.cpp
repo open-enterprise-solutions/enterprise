@@ -23,8 +23,8 @@
 #include "frontend/win/dlgs/queryConstructor/queryConstructor.h"
 #include "frontend/win/dlgs/queryConstructor/queryCaseDialog.h"
 #include "frontend/win/dlgs/queryConstructor/querySelectionLinkModel.h"   // ibQueryResectionLinks
-#include "backend/query/queryRender.h"
-#include "backend/query/queryParser.h"
+#include "core/query/queryRender.h"
+#include "core/query/queryParser.h"
 
 #include <wx/frame.h>
 

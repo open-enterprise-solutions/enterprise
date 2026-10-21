@@ -8,7 +8,7 @@
 
 #include "core/diagnostics/journal.h"
 #include "designer-thin/docManager/templates/docViewModuleEditor.h"
-#include "frmclient/backend/serialize/dataProtocol.h"   // ibReadProtocolNode — a control's values, as its node has them
+#include "frmclient/backend/serialize/dataProtocol.h"   // ibReadProtocolValue — a control's values, as its node has them
 #include "frmclient/mainFrame/objinspect/objinspect.h"
 #include "frmclient/propertyManager/property/advprop/advpropSource.h"   // ibSetSourcePicker — a control's Source cell
 
@@ -30,13 +30,13 @@ ibVisualEditorNotebook::ibVisualEditor::ibVisualEditor(ibModuleEditDocument* doc
 {
 	CreateWideGui();
 
-	// THE SOURCE WINDOW — the attribute tree of the form whose control the cell is of (the one the inspector shows).
+	// THE SOURCE WINDOW — opened by the form whose control the cell is of (the one the inspector shows).
 	static const bool picker = (ibSetSourcePicker([](wxWindow* parent, const ibPropertyObject* owner,
 		ibProtocol::ibSchema::ibProperties::ibSourceDataType filter,
-		const ibSourceDescription& table, ibSourceDescription& binding) {
+		const ibDataNode& sources, ibSourceDescription& binding) {
 		for (ibVisualEditor* const editor : OpenEditors()) {
 			if (owner != nullptr && editor->GetCurrentElement() == owner)
-				return editor->GetAttributeTree()->PickSource(parent, filter, table, binding);
+				return editor->GetAttributeTree()->PickSource(parent, filter, sources, binding);
 		}
 		return false;
 	}), true);
@@ -197,7 +197,7 @@ void ibVisualEditorNotebook::ibVisualEditor::Draw(const ibProtocolNode& form, co
 		ibJournalWarning(wxT("designer"), wxT("form editor: the form was not drawn"));
 		return;
 	}
-	Receive(m_formNode);
+	Receive(m_formNode, drawn);
 
 	m_visualEditor->Thaw();
 
@@ -224,16 +224,18 @@ void ibVisualEditorNotebook::ibVisualEditor::Draw(const ibProtocolNode& form, co
 	}
 }
 
-void ibVisualEditorNotebook::ibVisualEditor::Receive(const ibProtocolNode& node)
+void ibVisualEditorNotebook::ibVisualEditor::Receive(const ibProtocolNode& node, const ibProtocolNode& patch)
 {
 	ibValueForm* const valueForm = GetValueForm();
 	const long long controlId = node.GetInt(ibProtocol::ibForm::ControlId);
 	ibValueFrame* const control = controlId == valueForm->GetControlID() ? valueForm : valueForm->FindControlByID(controlId);
 
 	if (control != nullptr) {
-		// Built anew — its rows received again (the client's controls declare none).
+		// Its rows as the server last wrote them — built anew (the client's controls declare none), or by no patch: the
+		// host keeps a control of the same shape, and an attribute's edit changes what it offers (the picker showed the
+		// attributes it was made with, 2026-10-21; the inspector let go of the shown one). By a patch, the rest keep theirs.
 		const auto found = m_rows.find(controlId);
-		if (control->GetPropertyCount() == 0 && found != m_rows.end())
+		if (found != m_rows.end() && (control->GetPropertyCount() == 0 || !patch.IsNode()))
 			control->Receive(found->second);
 
 		// …and its values as its node has them now — what a command left; open in the tree too, the header's (SaveNode).
@@ -242,23 +244,17 @@ void ibVisualEditorNotebook::ibVisualEditor::Receive(const ibProtocolNode& node)
 	}
 
 	for (const ibProtocolNode& child : node.Children())
-		Receive(child);
+		Receive(child, patch);
 }
 
 void ibVisualEditorNotebook::ibVisualEditor::Receive(ibPropertyObject* object, const ibProtocolNode& node)
 {
-	// A property's, as WriteData wrote it; the wire brings a scalar back a field.
-	ibProtocolNode values = node.Clone();
-	values.Remove(ibProtocol::ibNode::Children);
-	ibDataNode entries;
-	ibReadProtocolNode(values, entries);
+	// A property's, as WriteData wrote it — read off the node by its name, the node's children not copied nor read with it.
 	for (unsigned int idx = 0; idx < object->GetPropertyCount(); idx++) {
 		ibProperty* const prop = object->GetProperty(idx);
-		const ibDataValue* value = entries.FindProperty(prop->GetName());
-		if (value == nullptr)
-			value = entries.FindField(prop->GetName());
-		if (value != nullptr)
-			prop->SetNodeValue(*value);
+		ibDataValue value;
+		if (ibReadProtocolValue(node, prop->GetName(), value))
+			prop->SetNodeValue(value);
 	}
 }
 

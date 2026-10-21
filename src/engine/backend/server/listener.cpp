@@ -15,17 +15,6 @@
 #include <initializer_list>
 #include <string>
 
-// As in mcp/mcpServer.cpp, which says why: wx and cpp-httplib both alias ssize_t, and MSVC refuses the second.
-#if defined(_WIN32) && !defined(_SSIZE_T_DEFINED)
-#	define _SSIZE_T_DEFINED
-#endif
-
-#include <cpp-httplib/httplib.h>
-
-#ifdef CPPHTTPLIB_SSL_ENABLED
-#	include <mbedtls/platform_util.h>   // mbedtls_platform_zeroize - the key's bytes wiped after the server took them
-#endif
-
 namespace {
 
 // Longer than any certificate chain with its key; a file past it is not one, and is not read into memory.
@@ -43,9 +32,8 @@ wxString Resolved(const wxString& value, const wxString& folder)
 	return name.GetFullPath();
 }
 
-// The file's bytes into `bytes`, or a refusal naming it. Read HERE and handed to the library as memory:
-// the library would open the path itself with fopen, which on Windows takes the ANSI code page - a
-// certificate under a profile folder spelled in another script would be "not PEM" by that road.
+// The file's bytes into `bytes`, or a refusal naming it. Read HERE, by the name in whatever script, and handed
+// to the server as text: the server is the core's and reads no file of backend.conf's.
 void ReadWhole(const wxString& file, std::string& bytes)
 {
 	// wxFFile reports a file it cannot open through wxLog, which in the designer is a pane that pops up; the
@@ -82,14 +70,13 @@ bool IsLoopbackIPv4(const wxString& address)
 	return count == 4 && parts[0] == 127;
 }
 
-// This machine's own addresses, as a listener binds them: 127.0.0.0/8 by number, ::1, localhost.
-bool IsLoopback(const wxString& address)
+} // namespace
+
+bool ibIsLoopback(const wxString& address)
 {
 	const wxString own = wxString(address).Trim(true).Trim(false).Lower();
 	return own == wxT("localhost") || own == wxT("::1") || IsLoopbackIPv4(own);
 }
-
-} // namespace
 
 ibTlsFiles ibTlsFiles::FromConf(const wxConfigBase& conf, const wxString& folder)
 {
@@ -102,12 +89,15 @@ ibTlsFiles ibTlsFiles::FromConf(const wxConfigBase& conf, const wxString& folder
 	return files;
 }
 
-std::unique_ptr<httplib::Server> ibMakeListener(const wxString& address, const ibTlsFiles& tls)
+ibHttpServerOptions ibListenerOptions(const wxString& address, std::uint16_t port, const ibTlsFiles& tls)
 {
+	ibHttpServerOptions options;
+	options.m_host = std::string(address.utf8_str());
 	if (!tls.IsNamed()) {
-		if (!IsLoopback(address))
+		if (!ibIsLoopback(address))
 			ibBackendCoreException::Error(_("%s is not this machine's own address, and backend.conf names no certificate: the server would listen in the clear. Name Certificate and PrivateKey there, or keep the address at 127.0.0.1."), address);
-		return std::unique_ptr<httplib::Server>(new httplib::Server());
+		options.m_httpPort = port;
+		return options;
 	}
 	if (tls.m_certificate.IsEmpty() || tls.m_privateKey.IsEmpty())
 		ibBackendCoreException::Error(_("backend.conf names a Certificate without a PrivateKey, or the key without the certificate: the two go together."));
@@ -115,28 +105,9 @@ std::unique_ptr<httplib::Server> ibMakeListener(const wxString& address, const i
 		if (!wxFileName::FileExists(file))
 			ibBackendCoreException::Error(_("The file %s named in backend.conf is not there."), file);
 	}
-#ifdef CPPHTTPLIB_SSL_ENABLED
-	// Both read here, or the whole listener is refused: httplib's server made over a certificate it could not
-	// read answers is_valid() false and nothing else.
-	std::string certificate, privateKey;
-	// The key's bytes are wiped on every way out: the server has its own copy by then.
-	struct ibWiped {
-		std::string& m_bytes;
-		~ibWiped() { if (!m_bytes.empty()) mbedtls_platform_zeroize(&m_bytes[0], m_bytes.size()); }
-	} const wiped{ privateKey };
-	ReadWhole(tls.m_certificate, certificate);
-	ReadWhole(tls.m_privateKey, privateKey);
-	httplib::SSLServer::PemMemory pem{};
-	pem.cert_pem = certificate.data();
-	pem.cert_pem_len = certificate.size();
-	pem.key_pem = privateKey.data();
-	pem.key_pem_len = privateKey.size();
-	std::unique_ptr<httplib::SSLServer> server(new httplib::SSLServer(pem));
-	if (!server->is_valid())
-		ibBackendCoreException::Error(_("The certificate %s or its key %s could not be read: not PEM, a key under a password, or the key is not the certificate's."), tls.m_certificate, tls.m_privateKey);
-	return server;
-#else
-	ibBackendCoreException::Error(_("backend.conf names a certificate, and this build has no TLS."));
-	return nullptr;
-#endif
+	// Both read here, or the whole listener is refused.
+	ReadWhole(tls.m_certificate, options.m_certificate);
+	ReadWhole(tls.m_privateKey, options.m_privateKey);
+	options.m_httpsPort = port;
+	return options;
 }

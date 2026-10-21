@@ -3,8 +3,9 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "dataComposerInternal.h"
+#include "backend/query/queryException.h"   // ibBackendQuerySyntaxException::Raise — the engine's door for the core parser
 
-#include "backend/query/queryParser.h"        // ibQueryParser — text -> AST
+#include "core/query/queryParser.h"        // ibQueryParser — text -> AST
 #include "backend/query/queryable.h"          // ibBackendQueryable / ibBackendQueryColumn
 #include "backend/query/queryableFactory.h"   // the source factory — the column dictionary
 #include "backend/query/dataQueryBuilder.h"   // ibDataQueryResult / ibSelectKind
@@ -13,9 +14,9 @@
 #include "backend/metaData.h"                 // ibMetaData::GetSourceFactory — resolve by-name sources per-config
 #include "backend/backend_exception.h"        // ibBackendCoreException
 #include "backend/query/queryReadState.h"  // ibQueryReadState — one build, one state of the data
-#include "backend/query/queryRender.h"        // ibQueryColumnFromPath — a dotted path becomes a column, once
+#include "core/query/queryRender.h"        // ibQueryColumnFromPath — a dotted path becomes a column, once
 #include "core/query/queryKeywords.h"         // ibQueryKeywordText — a grouping line is written in the query's own words
-#include "backend/query/queryLexer.h"         // ibQueryLexer::IsIdentifier — what a NAME is, asked of the tier that defines it
+#include "core/query/queryLexer.h"         // ibQueryLexer::IsIdentifier — what a NAME is, asked of the tier that defines it
 #include "backend/query/queryConstructorModel.h"   // ibQueryFieldsOfText / WalkPath — the author's fields and a path's walk, as the pickers read them
 #include "backend/functionalOption/functionalOptionGate.h"   // AnyUnavailable, AsApplication — a run shows what the base uses
 #include "backend/system/value/valueType.h"   // ibValueTypeDescription::AdjustValue — the empty value of a type, for «filled»
@@ -1841,7 +1842,9 @@ void ibDataDBComposer::EnsureTempTables() const
 ibQuerySelectPtr ibDataDBComposer::ParseComposed(const wxString& text, ibQueryPackage& package,
 	std::map<wxString, const ibQuerySelect*>& named) const
 {
-	package = ibQueryParser().ParsePackage(text);
+	// The engine's door: the core parser's refusal is raised as the engine's (ibBackendQuerySyntaxException).
+	try { package = ibQueryParser().ParsePackage(text); }
+	catch (const ibQueryRefusal& refusal) { ibBackendQuerySyntaxException::Raise(refusal); }
 	named.clear();
 	if (package.m_statements.empty())
 		return nullptr;

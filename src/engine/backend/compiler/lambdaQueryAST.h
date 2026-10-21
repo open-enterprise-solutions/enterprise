@@ -28,7 +28,7 @@
 #include <memory>
 #include <vector>
 
-struct ibQueryAstExpr;   // backend/query/queryAST.h — fwd only (the .cpp includes it)
+struct ibQueryAstExpr;   // core/query/queryAST.h — fwd only (the .cpp includes it)
 
 // Record the body span [from, to) of a single-parameter lambda into the L4
 // query AST. rowParamName = the lambda's first parameter (the row variable);

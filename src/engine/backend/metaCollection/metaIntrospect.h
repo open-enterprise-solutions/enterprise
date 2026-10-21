@@ -90,7 +90,7 @@ BACKEND_API bool ibConfigurationWritesInWords(const ibMetaData* metaData);
 // printing a number that means nothing outside this process. Bound to the
 // configuration it was asked about: the same id names different types in two
 // open trees.
-BACKEND_API std::function<wxString(ibClassID)> ibMetaTypeResolver(const ibMetaData* metaData);
+BACKEND_API std::function<ibString(ibClassID)> ibMetaTypeResolver(const ibMetaData* metaData);
 
 // The node, rendered. ⚠ READ ONLY: the JSON view is lossy BY DESIGN (see
 // serialize/jsonProvider.h) — it is a readable rendering, not a way back in.

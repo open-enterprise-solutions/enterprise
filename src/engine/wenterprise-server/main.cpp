@@ -28,8 +28,7 @@
 #include <nlohmann/json.hpp>
 #include "backend/backend_exception.h"
 #include "backend/databaseLayer/databaseLayerException.h"
-#include "backend/appHost.h"           // the process: its backend.conf, read once
-#include "backend/server/listener.h"   // the listener: TLS when backend.conf names a certificate
+#include "backend/server/listener.h"   // ibIsLoopback - the clear does not cross a network
 #include "frontend/diagnostics/oesConsole.h"
 
 #if defined(_WIN32)
@@ -107,8 +106,8 @@ struct CmdArgs {
 	// (bind_to_any_port). Operator sees the actual bound port in the
 	// startup banner. Explicit `--port=N` forces N; conflict kills
 	// startup rather than silently coexisting on the same port.
-	// This machine's own address unless said otherwise: any other needs
-	// the certificate backend.conf names (backend/server/listener.h).
+	// This machine's own address, and no other: the server speaks no TLS
+	// (a browser elsewhere is the web server's).
 	std::string host = "127.0.0.1";
 	int         port = 0;
 
@@ -417,20 +416,20 @@ int main(int argc, char** argv)
 		return 1;
 	}
 
-	// The transport is the process's (backend/server/listener.h): TLS over the certificate backend.conf names,
-	// plain on this machine's own address only - an address off it without a certificate is a refusal.
-	const ibTlsFiles& tls = ibApplicationHost::Get()->GetTlsFiles();
-	std::unique_ptr<httplib::Server> listener;
-	try {
-		listener = ibMakeListener(wxString::FromUTF8(args.host), tls);
-	}
-	catch (const ibBackendException& err) {
-		std::cerr << "OES wenterprise-server did not start: " << err.GetErrorDescription().utf8_str() << std::endl;
+	// PLAIN HTTP, ON THIS MACHINE'S OWN ADDRESS ONLY. This server speaks no TLS: a browser's HTTPS, and a browser on
+	// another machine, are the web server's (webserver/, the core's transport). The clear does not cross a network
+	// (backend/server/listener.h) - an address off this machine is a refusal; backend.conf's certificate is the
+	// network-facing servers', not this one's.
+	if (!ibIsLoopback(wxString::FromUTF8(args.host))) {
+		std::cerr << "OES wenterprise-server did not start: it speaks plain HTTP on this machine's own address only "
+			"(127.0.0.1, ::1, localhost), and " << args.host << " is not one - a browser on another machine is the web "
+			"server's (webserver)." << std::endl;
 		wfrontendShutdown();
 		return 1;
 	}
-	const char* const scheme = tls.IsNamed() ? "https://" : "http://";
-	httplib::Server& svr = *listener;
+	const char* const scheme = "http://";
+	httplib::Server listener;
+	httplib::Server& svr = listener;
 	g_svr = &svr;
 	svr.new_task_queue = [] { return new ServedTaskQueue(); };
 #if defined(_WIN32)
@@ -503,7 +502,7 @@ int main(int argc, char** argv)
 		res.set_content(body, "application/json; charset=utf-8");
 	});
 
-	svr.Get(prefix + "/", [prefix, scheme, &tls](const httplib::Request& req, httplib::Response& res) {
+	svr.Get(prefix + "/", [prefix, scheme](const httplib::Request& req, httplib::Response& res) {
 		// Windows IPv6-first "localhost" fallback adds ~200ms cold
 		// connect per request, which stacks up on every tab switch /
 		// click. If the browser came in via `Host: localhost...`,
@@ -511,10 +510,8 @@ int main(int argc, char** argv)
 		// IPv4 literal skips the ::1 try. One-time 302 on GET /; the
 		// new origin then services all subsequent resource fetches
 		// with millisecond connect times.
-		// Not over TLS: the certificate names what the browser asked for, and a bounce to another name
-		// is a bounce to a name it may not carry.
 		const std::string host = req.get_header_value("Host");
-		if (!tls.IsNamed() && host.size() >= 9 && host.compare(0, 9, "localhost") == 0
+		if (host.size() >= 9 && host.compare(0, 9, "localhost") == 0
 			&& (host.size() == 9 || host[9] == ':')) {
 			std::string target = scheme + ("127.0.0.1" + host.substr(9) + prefix + "/");
 			res.status = 302;

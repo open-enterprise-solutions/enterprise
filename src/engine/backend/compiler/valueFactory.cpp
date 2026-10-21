@@ -253,18 +253,12 @@ wxString ibValue::GetNameObjectFromID(const ibClassID& clsid, bool upper)
 
 wxString ibValue::GetNameObjectFromVT(ibValueTypes valueType, bool upper)
 {
-	if (valueType > ibValueTypes::TYPE_REFFER || CtorRegistry() == nullptr)
+	// THE CORE'S TABLE — the one the primitives are registered by (value.cpp) and the query's parser reads.
+	const char* const name = ::GetNameObjectFromVT(valueType);
+	if (name == nullptr)
 		return wxEmptyString;
-	wxString result;
-	CtorRegistry()->ForEach([&](ibCtorAbstractType* typeCtor) {
-		if (!result.IsEmpty())
-			return;
-		const ibCtorSingleType* simpleSingleObject = dynamic_cast<ibCtorSingleType*>(typeCtor);
-		if (simpleSingleObject != nullptr &&
-			valueType == simpleSingleObject->GetValueType())
-			result = upper ? typeCtor->GetClassName().Upper() : typeCtor->GetClassName();
-	});
-	return result;
+	const wxString result(name);
+	return upper ? result.Upper() : result;
 }
 
 ibValueTypes ibValue::GetVTByID(const ibClassID& clsid)

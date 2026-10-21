@@ -14,11 +14,9 @@
  * it). Two inclusions in one module would hand the mutexes over twice and leak the first set. Whether there is
  * anything to hand over is the configuration's to say (MBEDTLS_THREADING_ALT, oes_mbedtls_config.h).
  *
- * Today that is valueHttp.cpp (the engine), core/net/tlsStream.cpp (the core, which links its own copy) and
- * tests/test_valueHttpSecure.cpp (the test binary). wenterprise-server compiles httplib.h too and
- * links Mbed TLS through the engine, and its TLS listener - as the assistant's - is made INSIDE the engine
- * (server/listener.cpp), on the engine's copy, whose mutexes are already given; it needs no copy of this
- * header until it makes a TLS context of its own.
+ * Today that is core/net/tlsStream.cpp (the core - Mbed TLS is its alone: every other module asks the core for
+ * a cipher, a random byte, TLS) and tests/test_valueHttpSecure.cpp (the test binary, whose reference TLS
+ * servers are cpp-httplib's, on a copy of its own).
  */
 
 #if defined(_WIN32)

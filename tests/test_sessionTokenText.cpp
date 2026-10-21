@@ -1,5 +1,5 @@
 ////////////////////////////////////////////////////////////////////////////
-//	Description : a presented token against the expected one (utils/sessionToken.h TextEqual) - what is
+//	Description : a presented token against the expected one (core/crypto/sessionToken.h TextEqual) - what is
 //	accepted and what is refused. That the compare takes the same time either way is the library's word
 //	(mbedtls_ct_memcmp); what is checked here is that nothing wrong slips through on the way to it.
 ////////////////////////////////////////////////////////////////////////////
@@ -8,7 +8,7 @@
 
 #include <string>
 
-#include "backend/utils/sessionToken.h"
+#include "core/crypto/sessionToken.h"
 
 TEST(SessionTokenText, TheSameTextIsAcceptedAndNothingElseIs)
 {

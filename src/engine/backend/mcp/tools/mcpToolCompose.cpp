@@ -54,7 +54,7 @@
 #include "backend/settings/settingsComposer.h"                   // saved settings, restored INTO a composer
 #include "backend/userInfo.h"                                    // ibUserInfo - WHOSE setting
 #include "backend/system/value/valueDataComposition.h"           // ibSyncParametersWithQuery - what the TEXT asks for
-#include "backend/query/queryLexer.h"                            // a text that does not tokenize is refused as such
+#include "core/query/queryLexer.h"                            // a text that does not tokenize is refused as such
 #include "backend/mcp/mcpDebugBridge.h"                          // the figures are asked for over the wire
 #include "backend/debugger/debugClient.h"                        // …and there has to BE one to ask over
 
@@ -669,7 +669,7 @@ public:
 
 		// What came back IS the answer - the tables, built where the rows are. Nothing is
 		// reinterpreted here; a second reading of the same bytes would be a second road.
-		for (const std::pair<wxString, ibDataValue>& field : answer.Fields())
+		for (const std::pair<ibString, ibDataValue>& field : answer.Fields())
 			result.AddField(field.first, field.second);
 		return true;
 	}

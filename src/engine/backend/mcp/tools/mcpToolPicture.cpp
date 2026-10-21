@@ -20,6 +20,7 @@
 
 #include "backend/backend_picture.h"                        // ibBackendPicture — engine registry + resolver
 #include "core/description/pictureDescription.h"            // ibPictureDescription — the tagged value
+#include "core/utils/base64.h"                              // ibBase64 — the image handed over in `data`
 #include "backend/propertyManager/property/propertyPicture.h"
 #include "backend/metaCollection/metaObject.h"              // ibValueMetaObject::GetGuid
 #include "backend/metaCollection/metaIntrospect.h"          // ibListMetaObjectNames / ibFindMetaObject — the shared road
@@ -29,7 +30,6 @@
 // The metatype's own name, resolved through ibResolveMetaKind like every other kind.
 static const wxChar* const kPictureKind = wxT("Picture");
 
-#include <wx/base64.h>
 #include <wx/mstream.h>
 #include <wx/image.h>
 #include <wx/bmpbndl.h>   // wxBitmapBundle::FromSVG — the SVG reader the platform already carries
@@ -580,9 +580,9 @@ public:
 					return false;
 			}
 			else {
-				const wxMemoryBuffer bytes = wxBase64Decode(fromData);
+				wxMemoryBuffer bytes;
 
-				if (bytes.GetDataLen() == 0) {
+				if (!ibBase64::Read(fromData.wc_str(), fromData.length(), bytes) || bytes.GetDataLen() == 0) {
 					refusal = ibMcpText("`data` did not decode as base64, or decoded to nothing. "
 						"Nothing was set.");
 					return false;

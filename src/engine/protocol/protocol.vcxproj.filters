@@ -6,6 +6,7 @@
     <ClCompile Include="connectionServer.cpp" />
     <ClCompile Include="framePatch.cpp" />
     <ClCompile Include="protocolNode.cpp" />
+    <ClCompile Include="protocolValue.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="communicator.h" />
@@ -15,6 +16,7 @@
     <ClInclude Include="protocol.h" />
     <ClInclude Include="protocolApi.h" />
     <ClInclude Include="protocolNode.h" />
+    <ClInclude Include="protocolValue.h" />
     <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>

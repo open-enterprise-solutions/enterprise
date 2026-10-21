@@ -1070,7 +1070,7 @@ public:
 			// object with neither, and the answer carried no refusal to say so, because nothing had
 			// been refused: nothing had been SEEN (2026-09-22, giving a command group its caption and
 			// its printer, then finding both empty).
-			std::vector<std::pair<wxString, ibDataValue>> asked = wanted->Fields();
+			std::vector<std::pair<ibString, ibDataValue>> asked = wanted->Fields();
 			asked.insert(asked.end(), wanted->Properties().begin(), wanted->Properties().end());
 
 			for (const auto& field : asked) {
@@ -2439,7 +2439,7 @@ public:
 					wxString fits;
 					ibPropertyChoiceList fields;
 					property->GetScheduleFieldList(dimension, fields);
-					const ibMetaID field = Named(fields, link.second.Kind() == ibDataKind::String ? link.second.AsString() : wxString(), fits);
+					const ibMetaID field = Named(fields, link.second.Kind() == ibDataKind::String ? link.second.AsString().ToWxString() : wxString(), fits);
 					if (field == 0) {
 						refusal = fits.IsEmpty()
 							? wxString::Format(ibMcpText("'%s' has no dimension whose type meets '%s' - a dimension of the schedule links to a dimension."), object->GetName(), link.first)
@@ -2732,7 +2732,7 @@ public:
 						parameter, object->GetName());
 					return false;
 				}
-				const wxString from = said != nullptr ? said->AsString() : wxString();
+				const wxString from = said != nullptr ? said->AsString().ToWxString() : wxString();
 
 				// An empty source removes the row rather than writing a condition over nothing.
 				if (from.IsEmpty())

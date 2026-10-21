@@ -35,6 +35,7 @@ class ibValueForm;
 class ibValueMetaObject;
 class ibMetaData;
 class ibClientChildFrame;
+class ibClientDebugger;
 class ibClientInstance;
 class ibClientSession;
 
@@ -63,6 +64,10 @@ public:
 	// THE MODE'S OWN PART OF THE FRAME, beside its tabs — the designer's configuration tree: written into the frame's
 	// state with every answer (ibClientHost::DrawFrame), as a view writes its own (ibView::OnDraw). Nothing by default.
 	virtual void OnDraw(ibDataNode& WXUNUSED(state)) {}
+
+	// …and THE MODE'S DEBUGGER — the designer's, a listener of the engine's (ibClientDebugger): what the client's debug
+	// calls go to (ibClientHost::Debug). None by default.
+	virtual ibClientDebugger* GetDebugger() const { return nullptr; }
 
 	//***************************************************************************************
 	//*           ibBackendDocFrame — the backend's door into this client                   *

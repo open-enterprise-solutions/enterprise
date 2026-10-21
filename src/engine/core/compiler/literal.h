@@ -1,8 +1,8 @@
-#ifndef _CORE_LEX_VALUE_H__
-#define _CORE_LEX_VALUE_H__
+#ifndef _CORE_LITERAL_H__
+#define _CORE_LITERAL_H__
 
 ////////////////////////////////////////////////////////////////////////////
-// ibLexValue — A VALUE AS TEXT WRITES ONE: Undefined, Null, a flag, a number, a date, a text. Nothing it
+// ibLiteral — A VALUE AS TEXT WRITES ONE: Undefined, Null, a flag, a number, a date, a text. Nothing it
 // holds is an object, so nothing in it is counted or referred to.
 ////////////////////////////////////////////////////////////////////////////
 //
@@ -14,27 +14,28 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "core/anyValue.h"
+#include "core/fboolean.h"   // g_booleanTrue / g_booleanFalse — the flag's words
 
-class CORE_API ibLexValue : public ibAnyValue {
+class CORE_API ibLiteral : public ibAnyValue {
 public:
 
-	ibLexValue() = default;
-	ibLexValue(const wxString& text) : m_typeClass(ibValueTypes::TYPE_STRING), m_text(text) {}
-	ibLexValue(const wxChar* text) : m_typeClass(ibValueTypes::TYPE_STRING), m_text(text) {}
-	// A narrow literal is a text too — without this one `ibLexValue("x")` is the flag TRUE (pointer-to-bool
+	ibLiteral() = default;
+	ibLiteral(const wxString& text) : m_typeClass(ibValueTypes::TYPE_STRING), m_text(text) {}
+	ibLiteral(const wxChar* text) : m_typeClass(ibValueTypes::TYPE_STRING), m_text(text) {}
+	// A narrow literal is a text too — without this one `ibLiteral("x")` is the flag TRUE (pointer-to-bool
 	// beats the conversion to wxString).
-	ibLexValue(const char* text) : m_typeClass(ibValueTypes::TYPE_STRING), m_text(text) {}
-	ibLexValue(bool flag) : m_typeClass(ibValueTypes::TYPE_BOOLEAN), m_text(flag ? wxT("True") : wxT("False")), m_number(flag ? 1 : 0) {}
-	ibLexValue(const ibNumber& number);
-	ibLexValue(const ibDateTime& date);
+	ibLiteral(const char* text) : m_typeClass(ibValueTypes::TYPE_STRING), m_text(text) {}
+	ibLiteral(bool flag) : m_typeClass(ibValueTypes::TYPE_BOOLEAN), m_text(flag ? g_booleanTrue : g_booleanFalse), m_number(flag ? 1 : 0) {}
+	ibLiteral(const ibNumber& number);
+	ibLiteral(const ibDateTime& date);
 	// Undefined or Null — the kinds that hold nothing.
-	explicit ibLexValue(ibValueTypes type) : m_typeClass(type) {}
+	explicit ibLiteral(ibValueTypes type) : m_typeClass(type) {}
 
 	// Copied without the count — a copy is not held by whoever held the original.
-	ibLexValue(const ibLexValue& rhs);
-	ibLexValue(ibLexValue&& rhs) noexcept;
-	ibLexValue& operator=(const ibLexValue& rhs);
-	ibLexValue& operator=(ibLexValue&& rhs) noexcept;
+	ibLiteral(const ibLiteral& rhs);
+	ibLiteral(ibLiteral&& rhs) noexcept;
+	ibLiteral& operator=(const ibLiteral& rhs);
+	ibLiteral& operator=(ibLiteral&& rhs) noexcept;
 
 	virtual ibValueTypes GetType() const override { return m_typeClass; }
 	virtual bool IsEmpty() const override;

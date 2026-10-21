@@ -37,14 +37,19 @@ public:
 
 	virtual ~ibProtocolConnectionServer();
 
-	virtual bool Exchange(const std::string& request, std::string& answer,
+	virtual bool Exchange(const ibString& request, ibString& answer,
 		ibProtocol::ibRefusal& refusal, wxString& error) override;
 	// The same address, opened again. False when Open has never succeeded.
 	virtual bool Reconnect(wxString& error) override;
+	// …and a second socket to it, the debugger's (protocol 6).
+	virtual std::unique_ptr<ibProtocolConnection> OpenChannel(wxString& error) override;
 	// What the server says unasked — on the thread that reads the socket.
-	virtual void Listen(std::function<void(const std::string& text)> notified) override;
+	virtual void Listen(std::function<void(const ibString& text)> notified) override;
 
 private:
+
+	// A message the socket hands over — an answer, or a notification.
+	void Receive(const ibString& text);
 
 	// THE SOCKET AND THE THREAD IT GOES BY — made by Open, gone in Close: once the thread has stopped, nothing of the
 	// socket is called. Its messages come as they arrive, for as long as it is open — an answer handed to the request
@@ -59,11 +64,11 @@ private:
 	// whoever listens.
 	std::mutex                                 m_mutex;
 	std::condition_variable                    m_answered;
-	std::optional<std::string>                 m_answer;
+	std::optional<ibString>                    m_answer;
 	bool                                       m_opened = false;
 	bool                                       m_closed = true;
 	std::string                                m_reason;
-	std::function<void(const std::string&)>    m_notified;
+	std::function<void(const ibString&)>       m_notified;
 
 	// The address Open succeeded with — what Reconnect opens again.
 	wxString                                   m_address;

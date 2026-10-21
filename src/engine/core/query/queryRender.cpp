@@ -5,10 +5,10 @@
 #include "queryRender.h"
 
 #include "core/query/queryKeywords.h"
+#include <wx/intl.h>   // _() — the renderer's own refusals are translated
 
 #include <set>   // which levels open a branch — read while the BY list is joined
 
-#include "backend/compiler/value.h"
 
 namespace {
 
@@ -45,7 +45,7 @@ wxString Join(const std::vector<wxString>& parts, const wxString& separator)
 // through the value's own string form — which is the honest answer for a type
 // the query language has no literal syntax for, and the parser will then refuse
 // it rather than silently accept something else.
-wxString RenderLiteral(const ibValue& value)
+wxString RenderLiteral(const ibLiteral& value)
 {
 	switch (value.GetType())
 	{

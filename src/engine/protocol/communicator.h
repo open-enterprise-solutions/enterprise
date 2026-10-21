@@ -5,7 +5,6 @@
 #include <map>
 #include <memory>
 #include <mutex>
-#include <string>
 #include <vector>
 
 #include "connection.h"
@@ -54,8 +53,18 @@ public:
 	// called on the connection's thread, never the window's, and the client asks for its frame. Empty — told nothing.
 	void Listen(std::function<void()> changed);
 
+	// ⭐ THE DEBUGGER, ON A CONNECTION OF ITS OWN (protocol 6) — a second one opened to the same place
+	// (ibProtocolConnection::OpenChannel) and bound to this client by the key debug {Channel} asks for on this one; `told`
+	// is handed the params of each `debug` notification of this client, on that connection's thread. Asked right after
+	// the login: the key is asked on this connection, and a call in flight would hold it up. False with why — a server
+	// below 6, a client with no debugger. Empty `told` — that connection closed, nothing more told.
+	bool ListenDebug(std::function<void(const ibProtocolNode& news)> told, ibProtocol::ibRefusal& refusal, wxString& error);
+	// debug {Command, …} on that connection — answered at once, beside this one's calls, never with a frame. False — none
+	// is bound, or refused.
+	bool Debug(const ibProtocolNode& params, ibProtocolNode& result, ibProtocol::ibRefusal& refusal, wxString& error);
+
 	bool            IsLoggedIn() const { return !m_client.IsEmpty(); }
-	const wxString& GetClient() const { return m_client; }
+	const ibString& GetClient() const { return m_client; }
 	int             GetProtocol() const { return m_protocol; }
 
 	// The frame drawn now, and its number — the last answer's.
@@ -68,11 +77,14 @@ private:
 		ibProtocol::ibRefusal& refusal, wxString& error);
 	// The socket dropped and the server offered to resume: open it again, login {Token} under a new id, and send
 	// `sent` again under the id it already carries. False — the session is gone, or this connection cannot return.
-	bool Resume(const std::string& sent, std::string& answer, ibProtocol::ibRefusal& refusal, wxString& error);
-	// The answer's frame, whole or as a patch, taken into the one kept; an answer that is no frame leaves it.
-	void Take(const ibProtocolNode& answer);
+	bool Resume(const ibString& sent, ibString& answer, ibProtocol::ibRefusal& refusal, wxString& error);
+	// The answer's frame, whole or as a patch, taken into the one kept; an answer that is no frame leaves it. A whole one
+	// is taken OUT of the answer — what it carries beside the frame stays in it.
+	void Take(ibProtocolNode& answer);
 	// The client is gone (logged out, or its session is): nothing of it is kept.
 	void Forget();
+	// debug {…} on the debugger's connection, under m_debugMutex.
+	bool DebugLocked(const ibProtocolNode& params, ibProtocolNode& result, ibProtocol::ibRefusal& refusal, wxString& error);
 
 	std::unique_ptr<ibProtocolConnection> m_connection;
 	std::mutex                            m_mutex;
@@ -80,8 +92,8 @@ private:
 	// id already used, including across the login {Token} that brings the session back.
 	long long                             m_lastId = 0;
 
-	wxString       m_client;
-	wxString       m_token;    // the bearer, kept here. The server stores only its hash.
+	ibString       m_client;
+	ibString       m_token;    // the bearer, kept here. The server stores only its hash.
 	bool           m_resume = false;   // the server listed `resume` — a dropped socket is asked for again
 	ibProtocol::ibLogin::ibMode m_mode = ibProtocol::ibLogin::ibMode::Runtime;
 	std::atomic<int> m_protocol{ 1 };   // read by Hold on the window's thread while a fetch may be in a call
@@ -95,6 +107,14 @@ private:
 	// window's, and must not wait for a fetch's exchange.
 	std::mutex                  m_pendingMutex;
 	std::vector<ibProtocolNode> m_pending;
+
+	// (protocol 6) THE DEBUGGER'S CONNECTION (ListenDebug), the client it is bound for, and its calls' ids — a lock of
+	// their own: a step does not wait for this connection's call. Taken after m_mutex, never before it. Last: it goes
+	// before the connection it was opened beside.
+	std::mutex                            m_debugMutex;
+	ibString                              m_debugClient;
+	long long                             m_debugLastId = 0;
+	std::unique_ptr<ibProtocolConnection> m_debugConnection;
 };
 
 #endif

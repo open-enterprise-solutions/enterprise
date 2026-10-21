@@ -8,10 +8,10 @@
 #ifndef _IB_SHA256_H_
 #define _IB_SHA256_H_
 
-#include "backend/backend.h"
+#include "core/core.h"
 #include <cstdint>
 
-class BACKEND_API ibSHA256 {
+class CORE_API ibSHA256 {
 public:
 	static constexpr size_t DIGEST_SIZE = 32;
 	static constexpr size_t BLOCK_SIZE  = 64;

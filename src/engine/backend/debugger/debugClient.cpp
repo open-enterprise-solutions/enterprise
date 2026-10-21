@@ -22,12 +22,6 @@
 ibDebuggerClient* ibDebuggerClient::ms_debugClient = nullptr;
 ///////////////////////////////////////////////////////////////////////
 
-///////////////////////////////////////////////////////////////////////
-wxCriticalSection ibDebuggerClient::ms_criticalSectionConnection1;
-wxCriticalSection ibDebuggerClient::ms_criticalSectionConnection2;
-wxCriticalSection ibDebuggerClient::ms_criticalSectionConnection3;
-///////////////////////////////////////////////////////////////////////
-
 namespace {
 
 // The offset in either map's entry: the offset map holds it bare, the breakpoint map beside a condition.
@@ -81,9 +75,8 @@ static void ShiftLineMap(std::map<unsigned int, Entry>& lines, unsigned int line
 
 ibDebuggerClient::ibDebuggerClient(ibMetaDataConfigurationBase* metaData) :
 	m_metaData(metaData),
-	m_activeSocket(nullptr),
 	m_adapter(new ibDebuggerClientAdapter),
-	m_enterLoop(false), m_connectionSuccess(false)
+	m_enterLoop(false), m_connectionSuccess(false), m_numberOfConnectionAttempts(numberOfConnectionAttempts)
 {
 	// Always: it creates the table when it is missing and adds the condition column to one from before it.
 	ibDebuggerClient::CreateBreakpointDatabase();
@@ -92,8 +85,19 @@ ibDebuggerClient::ibDebuggerClient(ibMetaDataConfigurationBase* metaData) :
 
 ibDebuggerClient::~ibDebuggerClient()
 {
-	while (m_listConnection.size()) {
-		m_listConnection[m_listConnection.size() - 1]->Delete();
+	// Each connection told to stop, and waited for — taken from the list under its lock, waited for outside it: a
+	// connection on its way out tells its listeners and takes itself out of the list, both under that lock. (Delete keeps
+	// the thread's object alive while it waits — wxThreadKeepAlive; a thread that ends by itself between the pick and the
+	// Delete is the self-deleting thread's own window.)
+	for (;;) {
+		ibDebuggerClientConnection* connection = nullptr;
+		{
+			std::lock_guard<std::recursive_mutex> lock(m_connectionsMutex);
+			if (m_listConnection.empty())
+				break;
+			connection = m_listConnection.back();
+		}
+		connection->Delete();
 	}
 	wxDELETE(m_adapter);
 
@@ -101,9 +105,10 @@ ibDebuggerClient::~ibDebuggerClient()
 		ms_debugClient = nullptr;
 }
 
-//special functions:
+//special functions — each names the stop it is about, read under the lock it is parked under:
 void ibDebuggerClient::Continue()
 {
+	std::lock_guard<std::recursive_mutex> lock(m_connectionsMutex);
 	ibWriterMemory commandChannel;
 	commandChannel.w_u16(CommandId_Continue);
 	commandChannel.w_stringZ(m_currentSessionGuid);
@@ -112,6 +117,7 @@ void ibDebuggerClient::Continue()
 
 void ibDebuggerClient::StepOver()
 {
+	std::lock_guard<std::recursive_mutex> lock(m_connectionsMutex);
 	ibWriterMemory commandChannel;
 	commandChannel.w_u16(CommandId_StepOver);
 	commandChannel.w_stringZ(m_currentSessionGuid);
@@ -120,6 +126,7 @@ void ibDebuggerClient::StepOver()
 
 void ibDebuggerClient::StepInto()
 {
+	std::lock_guard<std::recursive_mutex> lock(m_connectionsMutex);
 	ibWriterMemory commandChannel;
 	commandChannel.w_u16(CommandId_StepInto);
 	commandChannel.w_stringZ(m_currentSessionGuid);
@@ -128,6 +135,7 @@ void ibDebuggerClient::StepInto()
 
 void ibDebuggerClient::StepOut()
 {
+	std::lock_guard<std::recursive_mutex> lock(m_connectionsMutex);
 	ibWriterMemory commandChannel;
 	commandChannel.w_u16(CommandId_StepOut);
 	commandChannel.w_stringZ(m_currentSessionGuid);
@@ -136,6 +144,7 @@ void ibDebuggerClient::StepOut()
 
 void ibDebuggerClient::Pause()
 {
+	std::lock_guard<std::recursive_mutex> lock(m_connectionsMutex);
 	ibWriterMemory commandChannel;
 	commandChannel.w_u16(CommandId_Pause);
 	commandChannel.w_stringZ(m_currentSessionGuid);
@@ -146,6 +155,7 @@ std::map<wxString, std::map<unsigned int, wxString>> ibDebuggerClient::GetBreakp
 {
 	std::map<wxString, std::map<unsigned int, wxString>> out;
 
+	std::lock_guard<std::recursive_mutex> lock(m_breakpointsMutex);
 	for (const auto& module : m_listBreakpoint) {
 
 		std::map<unsigned int, wxString>& lines = out[module.first];
@@ -169,6 +179,7 @@ std::map<wxString, std::map<unsigned int, wxString>> ibDebuggerClient::GetBreakp
 
 void ibDebuggerClient::Stop(bool kill)
 {
+	std::lock_guard<std::recursive_mutex> lock(m_connectionsMutex);
 	for (auto connection : m_listConnection) {
 		connection->DetachConnection(kill);
 	}
@@ -176,6 +187,7 @@ void ibDebuggerClient::Stop(bool kill)
 
 void ibDebuggerClient::InitializeModule(const wxString& strModuleName, unsigned int line_count)
 {
+	std::lock_guard<std::recursive_mutex> lock(m_breakpointsMutex);
 	m_listOffsetBreakpoint[strModuleName].clear();
 	for (unsigned int i = 0; i < line_count; i++)
 		m_listOffsetBreakpoint[strModuleName].emplace(i, 0);
@@ -187,26 +199,22 @@ void ibDebuggerClient::PatchModule(const wxString& strModuleName, unsigned int l
 {
 	// Two maps shift the same way for this edit, differing only in collision handling:
 	// breakpoints collapse onto one line; the dense committed<->editor offset map keeps all lines.
+	std::lock_guard<std::recursive_mutex> lock(m_breakpointsMutex);
 	if (auto* breakpoints = FindModuleLines(m_listBreakpoint, strModuleName))
 		ShiftLineMap(*breakpoints, line, line_offset, atLineStart, /*collapseCollisions*/ true);
 
 	if (auto* offsets = FindModuleLines(m_listOffsetBreakpoint, strModuleName))
 		ShiftLineMap(*offsets, line, line_offset, atLineStart, /*collapseCollisions*/ false);
 
-	// Patch notification to the server — kept as-is (server-side handling lives there).
-	ibWriterMemory commandChannel;
-
-	commandChannel.w_u16(line_offset > 0 ? CommandId_PatchInsertLine : CommandId_PatchDeleteLine);
-	commandChannel.w_stringZ(strModuleName);
-	commandChannel.w_u32(line);
-	commandChannel.w_s32(line_offset);
-
-	SendCommand(commandChannel.pointer(), commandChannel.size());
+	// …and nothing to the runtime: it counts the committed lines (CommandId_ToggleBreakpoint), and the edits since are
+	// the editor's to count (Max, 2026-10-21: *"the designer keeps the patches, so as not to clutter the runtime"*).
 }
 
 bool ibDebuggerClient::SaveModule(const wxString& strModuleName, unsigned int line_count)
 {
-	//initialize breakpoint 
+	std::lock_guard<std::recursive_mutex> lock(m_breakpointsMutex);
+
+	//initialize breakpoint
 	auto breakpoint_iterator = std::find_if(m_listBreakpoint.begin(), m_listBreakpoint.end(),
 		[&strModuleName](const auto& pair) { return stringUtils::CompareString(pair.first, strModuleName); });
 
@@ -231,17 +239,12 @@ bool ibDebuggerClient::SaveModule(const wxString& strModuleName, unsigned int li
 
 	InitializeModule(module_offset_iterator != m_listOffsetBreakpoint.end() ? module_offset_iterator->first : strModuleName,
 		line_count);
-
-	ibWriterMemory commandChannel;
-	commandChannel.w_u16(CommandId_PatchComplete);
-	commandChannel.w_stringZ(strModuleName);
-
-	SendCommand(commandChannel.pointer(), commandChannel.size());
 	return true;
 }
 
 void ibDebuggerClient::RemoveModule(const wxString& strModuleName)
 {
+	std::lock_guard<std::recursive_mutex> lock(m_breakpointsMutex);
 	auto breakpoint_iterator = std::find_if(m_listBreakpoint.begin(), m_listBreakpoint.end(),
 		[&strModuleName](const auto& pair) { return stringUtils::CompareString(pair.first, strModuleName); });
 	if (breakpoint_iterator != m_listBreakpoint.end())
@@ -255,7 +258,9 @@ void ibDebuggerClient::RemoveModule(const wxString& strModuleName)
 
 bool ibDebuggerClient::SaveAllBreakpoints()
 {
-	//initialize breakpoint 
+	std::lock_guard<std::recursive_mutex> lock(m_breakpointsMutex);
+
+	//initialize breakpoint
 	for (auto breakpoint_iterator = m_listBreakpoint.begin(); breakpoint_iterator != m_listBreakpoint.end(); breakpoint_iterator++) {
 		std::map<unsigned int, ibBreakpoint>& list_breakpoint = breakpoint_iterator->second, moduleBreakpointsNew;
 		for (auto it = list_breakpoint.begin(); it != list_breakpoint.end(); it++) {
@@ -276,14 +281,6 @@ bool ibDebuggerClient::SaveAllBreakpoints()
 		else {
 			InitializeModule(module_offset_iterator->first, 1);
 		}
-	}
-
-	for (auto breakpoint_iterator = m_listBreakpoint.begin();
-		breakpoint_iterator != m_listBreakpoint.end(); breakpoint_iterator++) {
-		ibWriterMemory commandChannel;
-		commandChannel.w_u16(CommandId_PatchComplete);
-		commandChannel.w_stringZ(breakpoint_iterator->first);
-		SendCommand(commandChannel.pointer(), commandChannel.size());
 	}
 
 	return true;
@@ -317,6 +314,7 @@ std::map<unsigned int, int>::iterator ibDebuggerClient::ResolveOriginalLine(
 bool ibDebuggerClient::ToggleBreakpoint(const wxString& strModuleName, unsigned int line,
 	wxString* refusal, const wxString& condition)
 {
+	std::lock_guard<std::recursive_mutex> lock(m_breakpointsMutex);
 	std::map<unsigned int, int>& list_module_offset = m_listOffsetBreakpoint[strModuleName];
 	std::map<unsigned int, int>::iterator itOffset = ResolveOriginalLine(list_module_offset, line);
 	if (itOffset == list_module_offset.end() || line != (itOffset->first + itOffset->second)) {
@@ -368,6 +366,7 @@ bool ibDebuggerClient::ToggleBreakpoint(const wxString& strModuleName, unsigned 
 
 bool ibDebuggerClient::RemoveBreakpoint(const wxString& strModuleName, unsigned int line)
 {
+	std::lock_guard<std::recursive_mutex> lock(m_breakpointsMutex);
 	std::map<unsigned int, int>& list_module_offset = m_listOffsetBreakpoint[strModuleName];
 	std::map<unsigned int, int>::iterator itOffset = ResolveOriginalLine(list_module_offset, line);
 	if (itOffset == list_module_offset.end())
@@ -407,7 +406,10 @@ bool ibDebuggerClient::RemoveAllBreakpoint(wxString* refusal)
 	SendCommand(commandChannel.pointer(), commandChannel.size());
 
 	if (RemoveAllBreakpointInDB()) {
-		m_listBreakpoint.clear();
+		{
+			std::lock_guard<std::recursive_mutex> lock(m_breakpointsMutex);
+			m_listBreakpoint.clear();
+		}
 		if (auto* frame = ibSession::CurrentFrame())
 			frame->RefreshFrame();
 		return true;
@@ -434,23 +436,27 @@ void ibDebuggerClient::AddExpression(const wxString& strExpression, unsigned int
 	ibWriterMemory commandChannel;
 
 	commandChannel.w_u16(CommandId_AddExpression);
-	// ⭐⭐ WHICH STOP THIS IS ABOUT — the session that parked, as the loop-entry packet named it and this
-	// end has kept it since. Every step already says it (Continue / StepInto / …); an evaluation is a
-	// question about the same stop and has to say it too, or the far end works the answer out in whichever
-	// session happens to be first in its queue. See ParkedSession in debugServer.cpp.
-	commandChannel.w_stringZ(m_currentSessionGuid);
-	// WHO ASKED — written here, echoed back with the answer, read by nobody in between.
-	commandChannel.w_stringZ(asker);
-	commandChannel.w_stringZ(strExpression);
+	{
+		std::lock_guard<std::recursive_mutex> lock(m_connectionsMutex);
+		// ⭐⭐ WHICH STOP THIS IS ABOUT — the session that parked, as the loop-entry packet named it and this
+		// end has kept it since. Every step already says it (Continue / StepInto / …); an evaluation is a
+		// question about the same stop and has to say it too, or the far end works the answer out in whichever
+		// session happens to be first in its queue. See ParkedSession in debugServer.cpp.
+		commandChannel.w_stringZ(m_currentSessionGuid);
+		// WHO ASKED — written here, echoed back with the answer, read by nobody in between.
+		commandChannel.w_stringZ(asker);
+		commandChannel.w_stringZ(strExpression);
 #if _USE_64_BIT_POINT_IN_DEBUGGER == 1
-	commandChannel.w_u64(id);
-#else 
-	commandChannel.w_u32(id);
-#endif 
+		commandChannel.w_u64(id);
+#else
+		commandChannel.w_u32(id);
+#endif
 
-	SendCommand(commandChannel.pointer(), commandChannel.size());
+		SendCommand(commandChannel.pointer(), commandChannel.size());
+	}
 
 	//set expression in map
+	std::lock_guard<std::recursive_mutex> lock(m_breakpointsMutex);
 	m_listExpression.insert_or_assign(id, ibWatchedExpression{ asker, strExpression });
 }
 
@@ -460,6 +466,7 @@ void ibDebuggerClient::ExpandExpression(const wxString& strExpression, unsigned 
 void ibDebuggerClient::ExpandExpression(const wxString& strExpression, unsigned int id, const wxString& asker)
 #endif
 {
+	std::lock_guard<std::recursive_mutex> lock(m_connectionsMutex);
 	ibWriterMemory commandChannel;
 
 	commandChannel.w_u16(CommandId_ExpandExpression);
@@ -493,12 +500,14 @@ void ibDebuggerClient::RemoveExpression(unsigned int id)
 	SendCommand(commandChannel.pointer(), commandChannel.size());
 
 	//delete expression from map
+	std::lock_guard<std::recursive_mutex> lock(m_breakpointsMutex);
 	m_listExpression.erase(id);
 }
 
 void ibDebuggerClient::SetLevelStack(unsigned int level)
 {
 	if (ibDebuggerClient::IsEnterLoop()) {
+		std::lock_guard<std::recursive_mutex> lock(m_connectionsMutex);
 		ibWriterMemory commandChannel;
 		commandChannel.w_u16(CommandId_SetStack);
 		commandChannel.w_stringZ(m_currentSessionGuid);   // which stop — see AddExpression
@@ -510,6 +519,7 @@ void ibDebuggerClient::SetLevelStack(unsigned int level)
 void ibDebuggerClient::EvaluateToolTip(const wxString& strFileName, const wxString& strModuleName, const wxString& strExpression)
 {
 	if (ibDebuggerClient::IsEnterLoop()) {
+		std::lock_guard<std::recursive_mutex> lock(m_connectionsMutex);
 		ibWriterMemory commandChannel;
 		commandChannel.w_u16(CommandId_EvalToolTip);
 		commandChannel.w_stringZ(m_currentSessionGuid);   // which stop — see AddExpression
@@ -528,6 +538,7 @@ void ibDebuggerClient::EvaluateToolTip(const wxString& strFileName, const wxStri
 void ibDebuggerClient::RunSandbox(const wxString& code)
 {
 	if (ibDebuggerClient::IsEnterLoop()) {
+		std::lock_guard<std::recursive_mutex> lock(m_connectionsMutex);
 		ibWriterMemory commandChannel;
 		commandChannel.w_u16(CommandId_RunSandbox);
 		commandChannel.w_stringZ(m_currentSessionGuid);   // which stop — see AddExpression
@@ -599,6 +610,7 @@ void ibDebuggerClient::RequestCompose(const wxMemoryBuffer& request)
 void ibDebuggerClient::EvaluateAutocomplete(const wxString& strFileName, const wxString& strModuleName, const wxString& strExpression, const wxString& keyWord, int currline)
 {
 	if (ibDebuggerClient::IsEnterLoop()) {
+		std::lock_guard<std::recursive_mutex> lock(m_connectionsMutex);
 		ibWriterMemory commandChannel;
 		commandChannel.w_u16(CommandId_EvalAutocomplete);
 		commandChannel.w_stringZ(m_currentSessionGuid);   // which stop — see AddExpression
@@ -614,6 +626,7 @@ void ibDebuggerClient::EvaluateAutocomplete(const wxString& strFileName, const w
 std::map<unsigned int, wxString> ibDebuggerClient::GetDebugList(const wxString& strModuleName)
 {
 	std::map<unsigned int, wxString> listBreakpoint;
+	std::lock_guard<std::recursive_mutex> lock(m_breakpointsMutex);
 	if (auto* breakpoints = FindModuleLines(m_listBreakpoint, strModuleName))
 		for (const auto& breakpoint : *breakpoints)
 			listBreakpoint[breakpoint.first + breakpoint.second.m_offset] = breakpoint.second.m_condition;
@@ -640,11 +653,11 @@ bool ibDebuggerClient::ibDebuggerClientConnection::IsConnected() const
 std::shared_ptr<ibDebugCommandQueue> ibDebuggerClient::ibDebuggerClientConnection::OpenConnection()
 {
 	const std::shared_ptr<ibDebugCommandQueue> commandQueue = std::make_shared<ibDebugCommandQueue>();
+	// The runtime speaks binary (debugServer.cpp); a text message is nobody's command.
 	const std::shared_ptr<ibWebSocketClient> socketClient = std::make_shared<ibWebSocketClient>(ms_debugClient->m_ioThreads.GetContext(), nullptr,
-		[commandQueue](std::uint8_t opcode, std::string payload) {
-			// The runtime speaks binary (debugServer.cpp); a text message is nobody's command.
-			if (opcode == ibWebSocketOpcode::Binary)
-				commandQueue->Push(std::move(payload));
+		nullptr,
+		[commandQueue](std::string payload) {
+			commandQueue->Push(std::move(payload));
 		},
 		[commandQueue](const std::string& reason) {
 			commandQueue->Stop(reason);
@@ -756,7 +769,7 @@ void ibDebuggerClient::ibDebuggerClientConnection::EntryClient()
 
 	while (!TestDestroy()) {
 
-		if (m_number_connection_attempts > numberOfConnectionAttempts) {
+		if (ms_debugClient == nullptr || m_number_connection_attempts > ms_debugClient->m_numberOfConnectionAttempts) {
 			m_number_connection_attempts = -1;
 			break;
 		}
@@ -807,6 +820,7 @@ void ibDebuggerClient::ibDebuggerClientConnection::EntryClient()
 			if (m_verifiedConnection) {
 
 				ms_debugClient->m_connectionSuccess = true;
+				ms_debugClient->m_numberOfConnectionAttempts = numberOfConnectionAttempts;
 
 				if (m_connectionType == ConnectionType::ConnectionType_Debugger) {
 					// Send the start event message to the UI.
@@ -963,6 +977,7 @@ void ibDebuggerClient::ibDebuggerClientConnection::RecvCommand(void* pointer, un
 		// first. 🛑 The name was left out here, so the runtime read the expression's text as the asker
 		// and the id's bytes as the expression, then asked for an id past the end of the frame: an
 		// exception on its connection thread, which is the thread the whole debug session lives on.
+		std::lock_guard<std::recursive_mutex> lock(ms_debugClient->m_breakpointsMutex);
 		for (const auto& watched : ms_debugClient->m_listExpression) {
 			ibWriterMemory commandChannel;
 			commandChannel.w_u16(CommandId_AddExpression);
@@ -999,9 +1014,6 @@ void ibDebuggerClient::ibDebuggerClientConnection::RecvCommand(void* pointer, un
 	}
 	else if (commandFromServer == CommandId_EnterLoop) {
 
-		ms_debugClient->m_enterLoop = true;
-		ms_debugClient->m_activeSocket = this;
-
 		// New first field: sessionGuid (which session in wenterprise-server
 		// hit the breakpoint). On desktop enterprise.exe this is the main
 		// session's guid; on wes one of the per-tab WebClient sessions.
@@ -1015,7 +1027,14 @@ void ibDebuggerClient::ibDebuggerClientConnection::RecvCommand(void* pointer, un
 		data.m_moduleName = strModuleName;
 		data.m_line = ms_debugClient->GetLineOffset(strModuleName, commandReader.r_s32());
 
-		ms_debugClient->m_currentSessionGuid = sessionGuid;
+		// THE STOP PARKED — on this connection, in that session, under the lock the list is under; the listeners are
+		// told with it let go.
+		{
+			std::lock_guard<std::recursive_mutex> lock(ms_debugClient->m_connectionsMutex);
+			ms_debugClient->m_activeSocket = this;
+			ms_debugClient->m_currentSessionGuid = sessionGuid;
+		}
+		ms_debugClient->m_enterLoop = true;
 
 		ms_debugClient->CallAfter(
 			&ibDebuggerClient::ibDebuggerClientAdapter::OnEnterLoop, data
@@ -1024,7 +1043,10 @@ void ibDebuggerClient::ibDebuggerClientConnection::RecvCommand(void* pointer, un
 	else if (commandFromServer == CommandId_LeaveLoop) {
 
 		ms_debugClient->m_enterLoop = false;
-		ms_debugClient->m_activeSocket = nullptr;
+		{
+			std::lock_guard<std::recursive_mutex> lock(ms_debugClient->m_connectionsMutex);
+			ms_debugClient->m_activeSocket = nullptr;
+		}
 
 		wxString sessionGuid;          commandReader.r_stringZ(sessionGuid);
 		const wxString& strFileName    = commandReader.r_stringZ();
@@ -1240,7 +1262,7 @@ void ibDebuggerClient::ibDebuggerClientConnection::RecvCommand(void* pointer, un
 			const wxString& strModuleName = commandReader.r_stringZ();
 			const wxString& strFullName = commandReader.r_stringZ();
 			stackData.AppendStack(
-				strFullName,
+				strModuleName, strFullName,
 				ms_debugClient->GetLineOffset(strModuleName, commandReader.r_u32())
 			);
 		}

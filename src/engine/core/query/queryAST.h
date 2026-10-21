@@ -5,7 +5,7 @@
 // L4-2: the LINQ lambda recorder builds the SAME expr nodes — compiler/lambdaQueryAST — and
 // lowers them through the same builders. `ibQuerySelect` below is L4-1-only.)
 //
-// A POD tree, L2/L3-FREE (it names ibValue + wxString only, like the L2 IR names
+// A POD tree, L2/L3-FREE (it names ibLiteral + wxString only, like the L2 IR names
 // no metadata). The parser (queryParser.{h,cpp}) builds it; names are NOT yet
 // resolved against metadata — resolution happens in lowering (queryLowering.{h,cpp})
 // at Execute time, when &parameter values are known. So one parse → many executes
@@ -17,12 +17,14 @@
 //
 // See docs/private/query-language-arc.md §14 / §23.
 
-#include "backend/compiler/value.h"   // ibValue
+#include "core/core.h"   // CORE_API
+#include "core/compiler/literal.h"   // ibLiteral — a constant as the text writes one
 #include "core/query/queryKeywords.h"     // ibQueryKeyword (aggregate func tag)
 #include "core/query/queryUnfold.h"       // ibQueryDimUnfold — the three unfold words, shared with L3
 #include "core/query/queryBalanceRole.h"  // ibBalanceRole — what a projected field is in a balance (ROLE)
 #include "core/query/queryAstExpr.h"      // ibQueryAstExprPtr — the expression's name, which every side hands about
 
+#include <wx/arrstr.h>   // wxbase exports std::vector<wxString> (wxArrayString's base) — seen here, a unit imports it
 #include <vector>
 #include <memory>
 
@@ -35,7 +37,7 @@ struct ibQuerySelect;   // an Expr may hold a nested SELECT (IN (subquery)); def
 enum class ibQueryAstExprKind
 {
 	Column,    // dotted path a.b.c  (m_path)
-	Literal,   // ibValue constant   (m_literal)
+	Literal,   // constant           (m_literal)
 	Param,     // &Name              (m_paramName)
 	Value,     // value(<Kind>.<Name>.<Member>) — a literal reference / enum / predefined constant, resolved AT
 	           // LOWERING against the config (m_path = the dotted meta-path). Behaves like a Param once resolved:
@@ -91,7 +93,9 @@ struct ibQueryAstExpr
 	ibQueryAstExprKind m_kind = ibQueryAstExprKind::Literal;
 
 	std::vector<wxString> m_path;        // Column: dotted segments
-	ibValue               m_literal;     // Literal
+	// Literal — a constant as the text writes one (Undefined, Null, a flag, a number, a date, a text). No run puts
+	// a value here: a captured one goes to the lowering as a parameter, by the Param's name.
+	ibLiteral             m_literal;
 	wxString              m_paramName;   // Param
 
 	// ⭐⭐ WHERE A CAPTURED LOCAL LIVES — the address the compiler already worked out.

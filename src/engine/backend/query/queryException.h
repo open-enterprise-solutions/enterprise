@@ -31,6 +31,7 @@
 //     Not an error at all.
 
 #include "backend/backend_exception.h"
+#include "core/query/queryRefusal.h"   // ibQueryRefusal — what the core parser gives back
 
 // ibBackendQueryException — the query layer could not do its job.
 //
@@ -124,6 +125,9 @@ public:
 	// use, so a callsite reads like every other raise in the codebase.
 	WX_DEFINE_VARARG_FUNC(static void, ErrorAt, 3, (unsigned int, unsigned int, const wxFormatErrorString&),
 		DoErrorAtWchar, DoErrorAtUtf8);
+
+	// The core parser's refusal (core/query/queryRefusal.h), raised at the engine's door: its span and its words.
+	[[noreturn]] static void Raise(const ibQueryRefusal& refusal);
 
 private:
 	ibBackendQuerySyntaxException(const wxString& msg, unsigned int line, unsigned int col)

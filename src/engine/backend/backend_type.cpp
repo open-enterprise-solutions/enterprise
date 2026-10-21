@@ -42,6 +42,24 @@ bool ibBackendMetaDescriptionMemory::WriteNode(ibDataValue& value, const ibMetaD
 }
 
 //***********************************************************************
+//*                         Type description                            *
+//***********************************************************************
+
+bool ibBackendTypeDescriptionMemory::WriteNode(ibDataValue& value, const ibTypeDescription& typeDesc,
+	const ibMetaData* metaData)
+{
+	if (metaData == nullptr)
+		return ibTypeDescriptionMemory::WriteNode(value, typeDesc);
+
+	ibTypeDescription standing = typeDesc;
+	for (const ibClassID& clsid : typeDesc.GetClsidList()) {
+		if (metaData->GetAvailableCtor(clsid) == nullptr)
+			standing.ClearMetaType(clsid);
+	}
+	return ibTypeDescriptionMemory::WriteNode(value, standing);
+}
+
+//***********************************************************************
 //*                         Type factory                                *
 //***********************************************************************
 

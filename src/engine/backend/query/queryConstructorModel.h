@@ -27,7 +27,7 @@
 //
 ////////////////////////////////////////////////////////////////////////////
 
-#include "queryAST.h"
+#include "core/query/queryAST.h"
 #include "queryableFactory.h"
 #include "core/query/queryConstructorField.h"   // ibQueryConstructorField — one field, as every window reads it
 

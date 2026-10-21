@@ -637,15 +637,10 @@ public:
 		// debugger"*).
 		wxString running;
 		if (debugClient != nullptr) {
-			for (const auto* connection : debugClient->GetListConnection()) {
-				if (connection == nullptr)
-					continue;
-				const wxString digest = connection->GetConfigMD5();
-				if (!digest.IsEmpty()) {
-					running = digest;
-					break;
-				}
-			}
+			debugClient->ForEachConnection([&running](const auto& connection) {
+				if (running.IsEmpty())
+					running = connection.GetConfigMD5();
+			});
 		}
 
 		// ⭐⭐ THE SAME PAIR THE DESIGNER'S OWN CAPTION PAINTS, and asked the same way round — so the

@@ -21,7 +21,7 @@ std::int64_t NowMs()
 
 } // namespace
 
-ibClientInstance::ibClientInstance(ibApplicationInstance* applicationInstance, const wxString& id, const wxString& address,
+ibClientInstance::ibClientInstance(ibApplicationInstance* applicationInstance, const wxString& id, const ibString& address,
 	ibProtocol::ibLogin::ibMode mode)
 	: m_applicationInstance(applicationInstance), m_id(id), m_address(address), m_mode(mode), m_lastActiveMs(NowMs())
 {

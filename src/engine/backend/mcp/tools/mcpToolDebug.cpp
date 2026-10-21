@@ -762,36 +762,34 @@ public:
 		std::vector<ibDataValue> sessions;
 		int attached = 0;
 
-		// ⚠ `auto`, NOT THE TYPE'S NAME. GetListConnection is public and hands the list out, but
+		// ⚠ `auto`, NOT THE TYPE'S NAME. ForEachConnection is public and shows each connection, but
 		// the connection class itself is private to ibDebuggerClient - so the name cannot be
 		// written here even though the objects can be read. Deducing the type asks nothing of the
 		// name, and the alternative was widening a debugger header for a spelling.
-		for (const auto* connection : debugClient->GetListConnection()) {
+		//
+		// 🛑 A SESSION IS A RUNTIME THAT ANSWERED, as this configuration's (ibMcpDebugBridge::GetStop): a scanner's
+		// socket dialling a port nobody listens on was listed as one, "seen", with nothing behind it.
+		debugClient->ForEachConnection([&sessions, &attached](const auto& connection) {
 
-			if (connection == nullptr || !connection->IsConnected())
-				continue;
+			if (!connection.IsVerifiedConnection())
+				return;
 
 			std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
 
-			entry->SetValue(wxT("host"), connection->GetHostName());
-			entry->AddField(wxT("port"), ibDataValue::Int((s64)connection->GetPort()));
-			entry->SetValue(wxT("state"), ConnectionWord(connection->GetConnectionType()));
+			entry->SetValue(wxT("host"), connection.GetHostName());
+			entry->AddField(wxT("port"), ibDataValue::Int((s64)connection.GetPort()));
+			entry->SetValue(wxT("state"), ConnectionWord(connection.GetConnectionType()));
 
 			// WHOSE RUN THIS IS. On one machine it is noise; the moment two developers debug the
 			// same base it is the only thing telling their runtimes apart.
-			entry->SetValue(wxT("computer"), connection->GetComputerName());
-			entry->SetValue(wxT("user"), connection->GetUserName());
+			entry->SetValue(wxT("computer"), connection.GetComputerName());
+			entry->SetValue(wxT("user"), connection.GetUserName());
 
-			// ⚠ VERIFIED is not the same as connected: a socket that answered is not yet a
-			// runtime that proved it speaks this protocol, and only a verified one can be
-			// attached to.
-			entry->AddField(wxT("ready"), ibDataValue::Bool(connection->IsVerifiedConnection()));
-
-			if (connection->GetConnectionType() == ConnectionType_Debugger)
+			if (connection.GetConnectionType() == ConnectionType_Debugger)
 				attached++;
 
 			sessions.push_back(ibDataValue::Child(entry));
-		}
+		});
 
 		result.AddField(wxT("count"), ibDataValue::Int((s64)sessions.size()));
 		result.AddField(wxT("attached"), ibDataValue::Int((s64)attached));

@@ -101,6 +101,7 @@ class BACKEND_API ibDebuggerServer {
 		std::shared_ptr<ibDebugCommandQueue> m_commandQueue;
 
 		friend class ibDebuggerServer;
+		friend class ibStandaloneDebuggerServer;   // the port the system chose for a test (test_debugServer.cpp)
 	};
 
 	// metaData — the configuration that made it and owns it; the debugger asks ITS base through it, never
@@ -209,8 +210,8 @@ protected:
 
 	//special functions:
 	// Both take the parked frame explicitly — sourced from the per-session
-	// dbg->m_runContext at the call site (worker owns it in DoDebugLoop; the
-	// SetStack handler resolves + holds dbg->m_mutex). No server-global mirror.
+	// dbg.m_runContext at the call site (worker owns it in DoDebugLoop; the
+	// SetStack handler resolves + holds dbg.m_mutex). No server-global mirror.
 	inline void SendExpressions(ibRunContext* runContext);
 	inline void SendLocalVariables(ibRunContext* runContext);
 	inline void SendStack();

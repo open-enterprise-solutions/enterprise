@@ -30,9 +30,9 @@
 
 #include <gtest/gtest.h>
 
-#include "backend/query/queryAST.h"
-#include "backend/query/queryParser.h"
-#include "backend/query/queryRender.h"
+#include "core/query/queryAST.h"
+#include "core/query/queryParser.h"
+#include "core/query/queryRender.h"
 #include "backend/backend_exception.h"
 
 namespace {
@@ -132,9 +132,9 @@ public:
 	{
 		auto e = ibQueryAstExpr::Make(ibQueryAstExprKind::Literal);
 		switch (Below(3)) {
-		case 0:  e->m_literal = ibValue(ibNumber(static_cast<long>(Below(1000)))); break;
-		case 1:  e->m_literal = ibValue(SafeName()); break;
-		default: e->m_literal = ibValue(Below(2) != 0u); break;
+		case 0:  e->m_literal = ibLiteral(ibNumber(static_cast<long>(Below(1000)))); break;
+		case 1:  e->m_literal = ibLiteral(SafeName()); break;
+		default: e->m_literal = ibLiteral(Below(2) != 0u); break;
 		}
 		return e;
 	}

@@ -393,14 +393,17 @@ void hmac_md5(
 
 wxString ibMD5::ComputeMd5(const wxString& content)
 {
+	const wxScopedCharBuffer utf8 = content.utf8_str();
+	return ComputeMd5(utf8.data(), utf8.length());
+}
+
+wxString ibMD5::ComputeMd5(const void* data, size_t size)
+{
 	struct MD5Context md5c;
 	unsigned char signature[16];
 
 	MD5Init(&md5c);
-
-	const wxScopedCharBuffer utf8 = content.utf8_str();
-	MD5Update(&md5c, (const unsigned char*)utf8.data(), utf8.length());
-
+	MD5Update(&md5c, static_cast<const unsigned char*>(data), static_cast<unsigned>(size));
 	MD5Final(signature, &md5c);
 
 	wxString result;

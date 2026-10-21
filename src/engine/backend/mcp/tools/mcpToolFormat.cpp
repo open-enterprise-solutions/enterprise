@@ -161,7 +161,7 @@ public:
 		}
 
 		if (const ibDataNode* set = NodeArgument(params, ArgSet().Name())) {
-			for (const std::pair<wxString, ibDataValue>& field : set->Fields()) {
+			for (const std::pair<ibString, ibDataValue>& field : set->Fields()) {
 				ibFormatCode code = ibFormatCode::NumberDigits;
 				if (!ibFormatString::FindCode(field.first, code)) {
 					refusal = wxString::Format(ibMcpText("'%s' is not a code Format reads, so setting it would "
@@ -230,8 +230,8 @@ public:
 				Sample(format, wxT("2026-09-15 14:05:07"), ibValue(2026, 9, 15, 14, 5, 7)),
 				Sample(format, wxT("empty date"), ibValue(ibValueTypes::TYPE_DATE)) }));
 			samples->AddField(wxT("boolean"), ibDataValue::Array({
-				Sample(format, wxT("True"), ibValue(true)),
-				Sample(format, wxT("False"), ibValue(false)) }));
+				Sample(format, g_booleanTrue, ibValue(true)),
+				Sample(format, g_booleanFalse, ibValue(false)) }));
 		}
 		result.AddField(wxT("samples"), ibDataValue::Child(samples));
 

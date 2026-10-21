@@ -4,14 +4,17 @@
 ////////////////////////////////////////////////////////////////////////////
 
 // THE DESKTOP'S FILE (frontend/win/dlgs/queryConstructor/queryConstructor.cpp), so far the query pane's styling
-// (ibStyleQueryText, ibMarkQueryText): the keyword set is the language's own table (core/query/queryKeywords.h) and
-// the colours are the engine's defaults, so it runs on the client as it is and asks the server nothing.
+// (ibStyleQueryText, ibMarkQueryText): the keyword set is the language's own table (core/query/queryKeywords.h), the
+// placed words are read off the language's lexer (core/query/queryLexer.h) and the colours are the engine's
+// defaults, so it runs on the client as it is and asks the server nothing.
 //
 // ⚠ NOT HERE YET: the constructor window itself (ibDialogQueryConstructor) — see queryConstructor.h.
 
 #include "queryConstructor.h"
 
 #include "core/query/queryKeywords.h"                        // ibAllQueryKeywords — the highlighter's word set
+#include "core/query/queryLexer.h"                           // ibQueryLexer — the placed words are read off the language's tokens
+#include "core/exception.h"                                  // ibCoreException — a text the lexer refuses marks no words
 #include "frmclient/mainFrame/settings/fontcolorsettings.h"  // the engine's own font + colours, as the code editor
 
 #include <wx/stc/stc.h>
@@ -108,16 +111,72 @@ void ibStyleQueryText(wxStyledTextCtrl* text)
 	});
 }
 
-// ⭐ THE WORDS ONLY A PLACE MAKES THE LANGUAGE'S — on the desktop read off the ENGINE'S tokens, so the pane and the
-// parser agree on what a word is: `Date` after the AS of a CAST is a type, `YEAR` with a bracket after it is a call.
+// ⭐ THE WORDS ONLY A PLACE MAKES THE LANGUAGE'S — read off the ENGINE'S tokens, so the pane and the parser
+// agree on what a word is. `Date` is a type after the AS of a CAST (and a qualifier inside its brackets:
+// `Date(Date)`), and a field everywhere else; `YEAR` is a call with a bracket after it and a name without
+// one. The C lexer colours by the word alone and cannot tell the two apart, so these are marked here.
 //
-// ⚠ NOT HERE YET: those tokens are the query lexer's (backend/query/queryLexer.h), and the client does not link the
-// backend. Until the lexer has a road here such words read as the C lexer colours them; the parameters below and the
-// keyword set above are the language's own all the same.
+// A text the lexer refuses — a string still being typed — marks no words: the parameters above still stand.
 static void MarkPlacedWords(wxStyledTextCtrl* text)
 {
 	text->SetIndicatorCurrent(kQueryPlacedWordIndicator);
 	text->IndicatorClearRange(0, text->GetTextLength());
+
+	std::vector<ibQueryToken> tokens;
+	try {
+		ibQueryLexer lexer;
+		tokens = lexer.Tokenize(text->GetText());
+	}
+	catch (const ibCoreException&) {
+		return;
+	}
+
+	// The lexer counts CHARACTERS and Scintilla BYTES — a Cyrillic name before the word is two bytes a letter.
+	auto mark = [text](const ibQueryToken& token) {
+		const int from = text->PositionRelative(0, static_cast<int>(token.m_col));
+		const int to   = text->PositionRelative(from, static_cast<int>(token.m_text.length()));
+		if (from >= 0 && to > from)
+			text->IndicatorFillRange(from, to - from);
+	};
+	auto word = [](const ibQueryToken& token) {
+		return token.m_kind == ibQueryTokenKind::Ident || token.m_kind == ibQueryTokenKind::Keyword;
+	};
+
+	std::vector<bool> castBracket;   // one entry per open bracket: is it a CAST's own
+	for (size_t i = 0; i < tokens.size(); ++i) {
+		const ibQueryToken& token = tokens[i];
+		const bool bracketNext = i + 1 < tokens.size() && tokens[i + 1].IsPunct(wxT('('));
+		if (token.IsPunct(wxT('('))) {
+			castBracket.push_back(i > 0 && tokens[i - 1].IsKeyword(ibQueryKeyword::Cast));
+			continue;
+		}
+		if (token.IsPunct(wxT(')'))) {
+			if (!castBracket.empty())
+				castBracket.pop_back();
+			continue;
+		}
+		// A CALL — a name the scalar table knows, with its bracket.
+		if (token.m_kind == ibQueryTokenKind::Ident && bracketNext
+		    && ibFindQueryScalarFn(token.m_text.Upper()) != ibQueryScalarFn::None) {
+			mark(token);
+			continue;
+		}
+		// A TYPE — what follows the AS of a CAST: its dotted name, and the words among its qualifiers.
+		if (token.IsKeyword(ibQueryKeyword::As) && !castBracket.empty() && castBracket.back()) {
+			size_t j = i + 1;
+			for (; j < tokens.size() && (word(tokens[j]) || tokens[j].IsPunct(wxT('.'))); ++j)
+				if (word(tokens[j]))
+					mark(tokens[j]);
+			if (j < tokens.size() && tokens[j].IsPunct(wxT('('))) {
+				for (++j; j < tokens.size() && !tokens[j].IsPunct(wxT(')')); ++j)
+					if (word(tokens[j]))
+						mark(tokens[j]);
+				if (j < tokens.size())
+					++j;   // past the qualifiers' own `)`, so the CAST's bracket stays open
+			}
+			i = j - 1;
+		}
+	}
 }
 
 // MARK EVERY `&name` IN THE PANE. Called after the text is set — the indicator has to be re-applied
