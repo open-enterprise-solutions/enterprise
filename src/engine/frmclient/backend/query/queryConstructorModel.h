@@ -133,6 +133,22 @@ public:
 	// the metaclass kind, so the tree's top level is whatever the factory actually holds.
 	std::vector<ibQueryConstructorSource> GetSources() const;
 
+	// ⭐ A KIND'S CLASS PICTURE, as the server named it (ibBackendPicture::SendPicture) — the desktop's
+	// GetAvailableCtor(kind)->GetClassIcon, carried on the kind's row of the same Sources answer, as the LINQ
+	// constructor's Kinds carry it (m_kindPictures). A table wears its kind's. Empty: none.
+	wxString KindPicture(const wxString& kind) const;
+
+	// ⭐⭐ THE ENGINE'S VERDICT — the desktop's ibQueryLowering::CheckNames and UngroupedProjections, run by the server
+	// over the configuration's tables (request Check, 27) on the WHOLE text. Kept by the text for the model's life: a
+	// text is asked once, whatever asks it (the verdict line, OK, the Check button), and never once per field.
+	// Raises ibCoreException with the engine's words when the names do not resolve.
+	void CheckNames(const ibQueryPackage& package) const;
+	// …what the select at `statement` (its union `branch`, -1: the statement's own) still has to group by — asked
+	// with the whole text, in the same call; the answer also carries the verdict on the text once they are added, so
+	// the verdict line after a grouping asks nothing. Empty when it does not group, is sound, or cannot be verified.
+	std::vector<ibQueryAstExprPtr> UngroupedProjections(const ibQueryPackage& package, size_t statement,
+	                                                    int branch) const;
+
 	// WHAT ARGUMENTS THIS SOURCE TAKES, in order — empty for an ordinary table, non-empty for a
 	// virtual one (a register's balance / turnovers, an information register's slice). The shell
 	// shows a parameter window only when this answers something, so a table that takes none never

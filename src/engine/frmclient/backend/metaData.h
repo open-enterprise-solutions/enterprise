@@ -26,11 +26,12 @@ public:
 	void GetOwner(ibMetaData*& owner) const { owner = nullptr; }
 
 	ibCtorAbstractType* GetAvailableCtor(const ibClassID& WXUNUSED(clsid)) const { return nullptr; }
-	// ⚠ NOT HERE YET — a metaclass by its name (the query constructor's tree, the picture of a kind); the configuration's.
+	// A metaclass by its name is the configuration's: no client window reads it. The query constructor's kind pictures come
+	// with its Sources answer (ibQueryConstructorModel::KindPicture), as the LINQ constructor's come with its opening.
 	ibCtorAbstractType* GetAvailableCtor(const wxString& WXUNUSED(className)) const { return nullptr; }
 
 	// ⚠ NOT HERE YET — whether the configuration may be changed is the server's word, and it does not come with the tab
-	// yet (not one of the three requests; a question for Max). Until then the client's windows edit, and the server refuses what it must.
+	// yet (a stub, as Max decided 2026-10-21). Until then the client's windows edit, and the server refuses what it must.
 	bool IsEditable() const { return true; }
 
 	std::vector<const ibValueMetaObject*> GetAnyArrayObject(const std::initializer_list<ibClassID> WXUNUSED(classes)) const { return {}; }

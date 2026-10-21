@@ -4,6 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "queryConstructorInternal.h"
+#include "frmclient/win/picture.h"   // ibProtocolPicture — a kind's picture, as the server named it
 #include "frmclient/backend/backend_picture.h"   // ibBackendPicture::GetPictureAsIcon — a field's picture made an icon of this tree's
 
 using namespace queryctor;
@@ -937,11 +938,18 @@ int ibDialogQueryConstructor::KindIcon(TreeIcons& icons, const wxString& kind) c
 		if (picture.IsOk())
 			index = icons.m_images->Add(picture);
 	}
-	else if (m_metaData != nullptr) {
-		if (const ibCtorAbstractType* ctor = m_metaData->GetAvailableCtor(kind)) {
-			const wxIcon icon = ctor->GetClassIcon();
-			if (icon.IsOk())
-				index = icons.m_images->Add(icon);
+	else {
+		// The kind's registration is the server's (the desktop's GetAvailableCtor(kind)->GetClassIcon): the Sources
+		// answer carries each kind's picture on the kind's row, drawn as the LINQ constructor draws its kinds.
+		const wxString picture = m_model.KindPicture(kind);
+		if (!picture.IsEmpty()) {
+			const wxBitmap bitmap = ibProtocolPicture(picture);
+			if (bitmap.IsOk()) {
+				wxIcon icon;
+				icon.CopyFromBitmap(bitmap);
+				if (icon.IsOk())
+					index = icons.m_images->Add(icon);
+			}
 		}
 	}
 
@@ -1754,8 +1762,11 @@ bool ibDialogQueryConstructor::AskEngine(wxString& message) const
 		// it knocks on the global factory, fails to find the metaclass at all, and the check falls
 		// silent by its own "never a false error" rule. Which is exactly how it managed to pass a
 		// query naming a field nothing has. The config was handed to this dialog for precisely this.
+		//
+		// (Here the resolver is the server's: the model asks the tab with the whole text — request Check — once per
+		// text, so the line, OK and the Check button share one answer.)
 		const ibSourceMetaDataScope resolveAgainst(m_metaData);
-		ibQueryLowering::CheckNames(read, std::map<wxString, ibValue>());
+		m_model.CheckNames(read);
 		return true;
 	}
 	catch (const ibCoreException& e) {

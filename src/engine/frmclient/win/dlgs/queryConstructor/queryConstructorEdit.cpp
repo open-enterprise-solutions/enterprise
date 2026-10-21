@@ -2348,10 +2348,13 @@ void ibDialogQueryConstructor::OnAddGrouping(wxCommandEvent&)
 	// is the same call CheckNames reads as a refusal. One door, two readings — the check says "this
 	// is wrong and here is the field", this says "then here is the field to add". Written twice, the
 	// two would drift, and the drift is a window offering a query its own engine then rejects.
+	//
+	// (Here the engine is the server's: the WHOLE text goes in one call — request Check — which names this select, and
+	// the answer also carries the verdict on the text once these are added, so FillAll's verdict line asks nothing.)
 	{
 		const ibSourceMetaDataScope resolveAgainst(m_metaData);
 		for (const ibQueryAstExprPtr& missing
-		     : ibQueryLowering::UngroupedProjections(*select, std::map<wxString, ibValue>()))
+		     : m_model.UngroupedProjections(m_package, m_statement, m_unionBranch))
 			if (missing)
 				select->m_groupBy.push_back(ibQueryColumnFromPath(ibRenderQueryExpr(*missing)));
 	}

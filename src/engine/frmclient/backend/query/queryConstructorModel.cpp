@@ -4,6 +4,8 @@
 #include "frmclient/docView/tabDocument.h"                                  // a tab's fetch — the fields of its text
 #include "frmclient/mainFrame/mainFrame.h"
 #include "frmclient/win/dlgs/settings/settingsFieldTree.h"   // ibReadSettingsFields — a field as the server writes it
+#include "frmclient/win/picture.h"   // ibProtocolPictureReceive — the kinds' pictures, at once
+#include "core/exception.h"          // ibCoreException — the engine's verdict, in its words
 #include "protocol/protocol.h"
 #include "core/query/queryParser.h"   // ibQueryParser — the package is read here, as the desktop reads it
 #include "core/query/queryRender.h"   // ibRenderQueryPackage — …and written back
@@ -169,6 +171,7 @@ struct ibQueryModelAnswers {
 	std::map<wxString, ibProtocolNode>     m_fields;       // by the source as written (and its slot)
 	std::map<wxString, ibProtocolNode>     m_parameters;   // by the source as written
 	std::map<ibMetaID, ibProtocolNode>     m_expanded;     // by a reference's target
+	std::map<wxString, wxString>           m_checked;      // the engine's verdict (empty: it reads), by the text
 };
 
 namespace {
@@ -274,6 +277,8 @@ std::vector<ibQueryConstructorSource> ibQueryConstructorModel::GetSources() cons
 		request.SetValue(qc::Kind, static_cast<long long>(qc::ibRequest::Sources));
 		if (!AskTab(m_metaData, request, m_known->m_sources))
 			m_known->m_sources = ibProtocolNode();
+		else
+			ibProtocolPictureReceive(m_known->m_sources.FindChild(qc::Kinds));   // at once, not a call per kind
 	}
 	std::vector<ibQueryConstructorSource> out;
 	for (const ibProtocolNode& row : m_known->m_sources.FindChild(qc::Sources).Children()) {
@@ -283,6 +288,74 @@ std::vector<ibQueryConstructorSource> ibQueryConstructorModel::GetSources() cons
 		source.m_presentation = row.GetString(qc::Presentation);
 		if (!source.m_path.empty())
 			out.push_back(std::move(source));
+	}
+	return out;
+}
+
+// THE KIND'S ROW of the same answer (request Sources) — its picture is the kind's, and every table of it wears it.
+wxString ibQueryConstructorModel::KindPicture(const wxString& kind) const
+{
+	GetSources();   // asked once, for the model's life
+	for (const ibProtocolNode& row : m_known->m_sources.FindChild(qc::Kinds).Children())
+		if (row.GetString(qc::Name).IsSameAs(kind, false))
+			return row.GetString(qc::Picture);
+	return wxString();
+}
+
+namespace {
+
+// THE TEXT A VERDICT IS KEPT BY — and asked with: the package as the window writes it.
+wxString CheckedText(const ibQueryPackage& package)
+{
+	return ibRenderQueryPackage(package);
+}
+
+// …AND WHAT THE ANSWER SAID, kept: the text's verdict, and the completed text's when a grouping was asked.
+void KeepVerdicts(std::map<wxString, wxString>& checked, const wxString& text, const ibProtocolNode& answer)
+{
+	checked[text] = answer.GetString(qc::Error);
+	const ibProtocolNode& completed = answer.FindChild(qc::Completed);
+	const wxString completedText = completed.GetString(qc::Text);
+	if (!completedText.IsEmpty())
+		checked[completedText] = completed.GetString(qc::Error);
+}
+
+} // namespace
+
+// ⚠ OFF A TAB, NOBODY TO ASK: silence — the desktop's own answer for what it cannot verify, never a false error.
+void ibQueryConstructorModel::CheckNames(const ibQueryPackage& package) const
+{
+	const wxString text = CheckedText(package);
+	auto known = m_known->m_checked.find(text);
+	if (known == m_known->m_checked.end()) {
+		ibProtocolNode request, answer;
+		request.SetValue(qc::Kind, static_cast<long long>(qc::ibRequest::Check)).SetValue(qc::Text, text);
+		if (!AskTab(m_metaData, request, answer))
+			answer = ibProtocolNode();
+		KeepVerdicts(m_known->m_checked, text, answer);
+		known = m_known->m_checked.find(text);
+	}
+	if (!known->second.IsEmpty())
+		ibCoreException::Error(wxT("%s"), known->second);
+}
+
+std::vector<ibQueryAstExprPtr> ibQueryConstructorModel::UngroupedProjections(const ibQueryPackage& package,
+	size_t statement, int branch) const
+{
+	const wxString text = CheckedText(package);
+	ibProtocolNode request, answer;
+	request.SetValue(qc::Kind, static_cast<long long>(qc::ibRequest::Check)).SetValue(qc::Text, text)
+		.SetValue(qc::Statement, static_cast<long long>(statement)).SetValue(qc::Branch, static_cast<long long>(branch));
+	if (!AskTab(m_metaData, request, answer))
+		return {};
+	KeepVerdicts(m_known->m_checked, text, answer);
+
+	// The server's words for each missing projection, read back the way the window renders and re-reads a field.
+	std::vector<ibQueryAstExprPtr> out;
+	for (const ibProtocolNode& missing : answer.GetList(qc::Ungrouped)) {
+		ibQueryAstExprPtr column = ibQueryColumnFromPath(missing.AsString());
+		if (column)
+			out.push_back(std::move(column));
 	}
 	return out;
 }

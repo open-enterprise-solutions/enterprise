@@ -1,38 +1,6 @@
 #include "queryLowering.h"
 
-#include "frmclient/backend/compiler/value.h"
 #include "core/query/queryKeywords.h"   // ibIsAggregateKeyword
-
-#include <wx/msgdlg.h>
-
-namespace {
-
-// ⚠ NOT HERE YET — said ONCE: the window checks at every edit, and a box at every keystroke would be noise.
-void SayLoweringNotHereYet()
-{
-	static bool s_said = false;
-	if (s_said)
-		return;
-	s_said = true;
-	wxMessageBox(_("The query constructor in this client does not check the names and the grouping of a query against "
-		"the configuration yet. The query is checked when it runs."), _("Query constructor"), wxOK | wxICON_INFORMATION);
-}
-
-} // namespace
-
-// ⚠ NOT HERE YET — the engine's name check runs the lowering over the configuration's tables, which no request carries
-// (query-constructor-doors.md, question 4). Unverifiable is silence, as on the desktop.
-void ibQueryLowering::CheckNames(const ibQueryPackage& /*package*/, const std::map<wxString, ibValue>& /*params*/)
-{
-	SayLoweringNotHereYet();
-}
-
-// ⚠ NOT HERE YET — the same lowering (query-constructor-doors.md, question 4). Unverifiable is empty, as on the desktop.
-std::vector<ibQueryAstExprPtr> ibQueryLowering::UngroupedProjections(const ibQuerySelect& /*ast*/,
-	const std::map<wxString, ibValue>& /*params*/)
-{
-	return {};
-}
 
 namespace {
 

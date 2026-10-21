@@ -399,10 +399,7 @@ wxString LinqKindPicture(const wxString& section, const ibMetaData* metaData)
 		kind = wxT("ChartOf") + kind.Mid(8);
 	else if (kind.EndsWith(wxT("s")))
 		kind.RemoveLast();
-	if (metaData == nullptr)
-		return wxString();
-	const ibCtorAbstractType* const ctor = metaData->GetAvailableCtor(kind);
-	return ctor != nullptr ? wxString(ibBackendPicture::SendPicture(ctor->GetClassType())) : wxString();
+	return ibKindPicture(kind, metaData);
 }
 
 // Open — the desktop's constructor before its window is drawn: the query the caret stands in, where the block will

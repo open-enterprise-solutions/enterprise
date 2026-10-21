@@ -114,9 +114,10 @@ public:
 	// ⚠ The parameter only ever ADDS the restriction. Read-only is ASKED OF THE METADATA first
 	// (IsMetaDataReadOnly below) — a configuration opened without the right to change it already
 	// says so, and a window that could be told "no, it is editable" would be a way around that.
+	// `model` — one already asked for this configuration (the opening gate's): its answers are the window's too.
 	ibDialogQueryConstructor(wxWindow* parent, const ibQueryPackage& package,
 	                         const ibMetaData* metaData, bool readOnly = false,
-	                         int exclude = ibQueryExclude_None);
+	                         int exclude = ibQueryExclude_None, const ibQueryConstructorModel* model = nullptr);
 
 	// Does this configuration allow its structure to be changed? The answer lives on the metadata's
 	// own configuration (ibMetaData::IsEditable) — the same question the designer asks before it
