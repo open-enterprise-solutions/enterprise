@@ -7,7 +7,8 @@
 
 #include "backend/backend_exception.h"
 
-#include <wx/base64.h>
+#include "core/utils/base64.h"   // ibBase64 — the value as text, and back
+
 #include <wx/ffile.h>
 #include <wx/log.h>
 
@@ -50,14 +51,7 @@ bool ibValueBinaryData::Init(ibValue** paParams, const long lSizeArray)
 	// back keeps its bytes. Anything that is not valid base64 is a refusal rather than a silent
 	// empty: bytes nobody can reconstruct are not the same thing as no bytes.
 	if (paParams[0]->GetType() == ibValueTypes::TYPE_STRING) {
-		size_t posError = wxCONV_FAILED;
-		const std::string text = paParams[0]->GetString().ToUtf8();   // base64 is ASCII
-		const wxMemoryBuffer decoded = wxBase64Decode(text.c_str(), text.size(),
-			wxBase64DecodeMode_Strict, &posError);
-		if (posError != wxCONV_FAILED)
-			return false;
-		m_data = decoded;
-		return true;
+		return ibBase64::Read(paParams[0]->GetString(), m_data);
 	}
 
 	// From another BINARY value — a copy, by the same door a caller would expect assignment to take.
@@ -156,9 +150,9 @@ bool ibValueBinaryData::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue,
 
 ibString ibValueBinaryData::GetString() const
 {
-	if (m_data.GetDataLen() == 0)
-		return wxEmptyString;
-	return wxBase64Encode(m_data.GetData(), m_data.GetDataLen());
+	ibString text;
+	ibBase64::Append(text, m_data.GetData(), m_data.GetDataLen());
+	return text;
 }
 
 // Equality is over the BYTES, never over their text: two buffers are the same value when they hold

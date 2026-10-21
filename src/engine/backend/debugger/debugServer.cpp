@@ -890,7 +890,7 @@ public:
 	{
 	}
 
-	virtual void OnMessage(std::string) override
+	virtual void OnMessage(const ibString&) override
 	{
 		m_socket->Close(ibWebSocketClose::Unsupported, "the debugger speaks binary");
 	}

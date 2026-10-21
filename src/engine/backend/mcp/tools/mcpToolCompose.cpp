@@ -669,7 +669,7 @@ public:
 
 		// What came back IS the answer - the tables, built where the rows are. Nothing is
 		// reinterpreted here; a second reading of the same bytes would be a second road.
-		for (const std::pair<wxString, ibDataValue>& field : answer.Fields())
+		for (const std::pair<ibString, ibDataValue>& field : answer.Fields())
 			result.AddField(field.first, field.second);
 		return true;
 	}

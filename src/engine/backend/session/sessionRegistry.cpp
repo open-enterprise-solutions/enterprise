@@ -251,7 +251,7 @@ ibSessionHolder ibSessionRegistry::CreateSessionWithFactory(ibRunMode runMode,
                                                             const wxString& computer,
                                                             ibSessionKind kind,
                                                             const wxString& presetGuid,
-                                                            const wxString& address,
+                                                            const ibString& address,
                                                             ibConnectRequest::SessionFactory factory)
 {
 	// Per-tab variant. The kind is the caller's: a web tab's, a client of the protocol's.

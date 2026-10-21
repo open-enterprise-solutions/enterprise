@@ -13,6 +13,7 @@
 
 class ibReaderMemory; // core/fileSystem/fs.h
 class ibWriterMemory; // core/fileSystem/fs.h
+class ibString;       // core/fstring.h
 
 // ibNumber — exact-decimal number, 8 bytes total.
 //
@@ -229,6 +230,8 @@ public:
 
 	wxString     ToString()  const;
 	std::wstring ToWString() const;
+	// …the same text, written into the engine's string — no wxString on the way.
+	void ToString(ibString& out) const;
 
 	// Formatted decimal output. Pass field-by-field; defaults give the same
 	// result as the bare ToString() above. Defined below the class.
@@ -265,7 +268,7 @@ public:
 	// Parses a decimal string ("123", "-1.5", "1.2e3"). Returns false if the
 	// input has no digits or is otherwise unparseable; on failure value is
 	// reset to zero.
-	bool FromString(const wxString& s);
+	bool FromString(const ibString& s);
 
 	// 128-bit raw integer extraction / loading. Bytes are little-endian
 	// two's-complement. Used by DB layers (e.g. Firebird SQL_INT128). Caller is
@@ -446,6 +449,9 @@ private:
 	// …and the same for a value the caller is done with: on the heap its limbs MOVE in rather than being
 	// copied — one allocation fewer for every result that does not fit the immediate tier.
 	void StoreBig(BigImpl&& src);
+
+	// The plain text, appended to `out` — every ToString without a format writes through it, whichever string it fills.
+	template<class Text> void AppendText(Text& out) const;
 
 	uint64_t m_payload;
 };

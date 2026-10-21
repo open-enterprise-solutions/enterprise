@@ -197,7 +197,7 @@ void ibVisualEditorNotebook::ibVisualEditor::Draw(const ibProtocolNode& form, co
 		ibJournalWarning(wxT("designer"), wxT("form editor: the form was not drawn"));
 		return;
 	}
-	Receive(m_formNode);
+	Receive(m_formNode, drawn);
 
 	m_visualEditor->Thaw();
 
@@ -224,16 +224,18 @@ void ibVisualEditorNotebook::ibVisualEditor::Draw(const ibProtocolNode& form, co
 	}
 }
 
-void ibVisualEditorNotebook::ibVisualEditor::Receive(const ibProtocolNode& node)
+void ibVisualEditorNotebook::ibVisualEditor::Receive(const ibProtocolNode& node, const ibProtocolNode& patch)
 {
 	ibValueForm* const valueForm = GetValueForm();
 	const long long controlId = node.GetInt(ibProtocol::ibForm::ControlId);
 	ibValueFrame* const control = controlId == valueForm->GetControlID() ? valueForm : valueForm->FindControlByID(controlId);
 
 	if (control != nullptr) {
-		// Built anew — its rows received again (the client's controls declare none).
+		// Its rows as the server last wrote them — built anew (the client's controls declare none), or by no patch: the
+		// host keeps a control of the same shape, and an attribute's edit changes what it offers (the picker showed the
+		// attributes it was made with, 2026-10-21; the inspector let go of the shown one). By a patch, the rest keep theirs.
 		const auto found = m_rows.find(controlId);
-		if (control->GetPropertyCount() == 0 && found != m_rows.end())
+		if (found != m_rows.end() && (control->GetPropertyCount() == 0 || !patch.IsNode()))
 			control->Receive(found->second);
 
 		// …and its values as its node has them now — what a command left; open in the tree too, the header's (SaveNode).
@@ -242,7 +244,7 @@ void ibVisualEditorNotebook::ibVisualEditor::Receive(const ibProtocolNode& node)
 	}
 
 	for (const ibProtocolNode& child : node.Children())
-		Receive(child);
+		Receive(child, patch);
 }
 
 void ibVisualEditorNotebook::ibVisualEditor::Receive(ibPropertyObject* object, const ibProtocolNode& node)

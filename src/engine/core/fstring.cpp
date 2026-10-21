@@ -757,6 +757,42 @@ size_t ibString::Replace(const ibString& fromText, const ibString& toText, bool 
 
 bool ibString::operator==(const wxString& s) const { return View().compare(0, npos, s.wc_str(), s.length()) == 0; }
 
+// Decoded as SetUtf8 decodes — the text the bytes would make — and compared a character at a time; an ASCII word, every
+// protocol's, is a byte against a character.
+bool ibString::operator==(const char* utf8) const noexcept
+{
+	const wchar_t* chars = wc_str();
+	const wchar_t* const end = chars + Len();
+	const unsigned char* p = reinterpret_cast<const unsigned char*>(utf8 != nullptr ? utf8 : "");
+	while (*p != 0) {
+		const unsigned char b = *p++;
+		uint32_t cp; int extra;
+		if      (b < 0x80)        { cp = b;        extra = 0; }
+		else if ((b >> 5) == 0x6) { cp = b & 0x1F; extra = 1; }
+		else if ((b >> 4) == 0xE) { cp = b & 0x0F; extra = 2; }
+		else if ((b >> 3) == 0x1E){ cp = b & 0x07; extra = 3; }
+		else                      { cp = 0xFFFD;   extra = 0; }  // invalid lead
+		for (int k = 0; k < extra && *p != 0; ++k) {
+			if ((*p >> 6) != 0x2) break;                       // invalid continuation
+			cp = (cp << 6) | (*p++ & 0x3F);
+		}
+		if constexpr (sizeof(wchar_t) == 2) {            // UTF-16: an astral character is a surrogate pair
+			if (cp > 0xFFFF) {
+				cp -= 0x10000;
+				if (end - chars < 2 || chars[0] != static_cast<wchar_t>(0xD800 + (cp >> 10))
+					|| chars[1] != static_cast<wchar_t>(0xDC00 + (cp & 0x3FF)))
+					return false;
+				chars += 2;
+				continue;
+			}
+		}
+		if (chars == end || *chars != static_cast<wchar_t>(cp))
+			return false;
+		++chars;
+	}
+	return chars == end;
+}
+
 bool ibString::IsSameAs(const ibString& o, bool caseSensitive) const
 {
 	if (m_impl == o.m_impl) return true;   // one text

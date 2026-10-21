@@ -146,7 +146,7 @@ bool ibJsonNumberFromToken(const std::string& token, ibNumber& number, wxString&
 		return false;
 	}
 
-	if (!number.FromString(wxString::FromAscii(plain.c_str()))) {
+	if (!number.FromString(ibString(plain.c_str()))) {
 		refusal = wxString::Format(_("a number that cannot be read exactly: %s"), wxString::FromAscii(plain.c_str()));
 		return false;
 	}

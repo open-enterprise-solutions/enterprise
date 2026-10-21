@@ -25,15 +25,15 @@ constexpr long long kSeparatorId = -1;
 
 // The entries as a list of what they are made of — the ids, captions, pictures, kinds, a group's commands — less
 // whether they are enabled: two bars of one shape differ only in what may be pressed, and that is set, not built.
-std::string ShapeOf(const ibProtocolNode& commandBar)
+ibString ShapeOf(const ibProtocolNode& commandBar)
 {
-	std::string shape;
+	ibString shape;
 	for (const ibProtocolNode& entry : commandBar.Children()) {
-		shape += std::to_string(entry.GetInt(ibProtocol::ibForm::ibCommandBar::Id)) + '|';
-		shape += std::string(entry.GetString(ibProtocol::ibForm::ibCommandBar::Caption).utf8_str()) + '|';
-		shape += std::to_string(std::hash<std::string>()(std::string(entry.GetString(ibProtocol::ibForm::ibCommandBar::Picture).utf8_str()))) + '|';
-		shape += std::to_string(entry.GetInt(ibProtocol::ibForm::ibCommandBar::Kind)) + '|';
-		shape += std::to_string(entry.Children().size()) + ';';
+		shape << entry.GetInt(ibProtocol::ibForm::ibCommandBar::Id) << wxT('|')
+			<< entry.GetString(ibProtocol::ibForm::ibCommandBar::Caption) << wxT('|')
+			<< static_cast<unsigned long long>(std::hash<ibString>()(entry.GetString(ibProtocol::ibForm::ibCommandBar::Picture)))
+			<< wxT('|') << entry.GetInt(ibProtocol::ibForm::ibCommandBar::Kind) << wxT('|')
+			<< static_cast<unsigned long long>(entry.Children().size()) << wxT(';');
 	}
 	return shape;
 }
@@ -77,7 +77,7 @@ void ibViewCommandBar::Update(const ibProtocolNode& commandBar)
 	const std::vector<ibProtocolNode> entries = commandBar.Children();
 
 	// One of the same shape — only what may be pressed is set.
-	const std::string shape = ShapeOf(commandBar);
+	const ibString shape = ShapeOf(commandBar);
 	if (shape == m_shape) {
 		for (std::size_t idx = 0; idx < entries.size(); ++idx) {
 			if (entries[idx].GetInt(ibProtocol::ibForm::ibCommandBar::Id) != kSeparatorId)

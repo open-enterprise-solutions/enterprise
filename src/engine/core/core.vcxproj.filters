@@ -58,6 +58,9 @@
     <Filter Include="tabular">
       <UniqueIdentifier>{9c3f5e21-7a4d-4b86-8e1f-2d6b0a9c4f73}</UniqueIdentifier>
     </Filter>
+    <Filter Include="utils">
+      <UniqueIdentifier>{aee12374-94c8-4629-ad37-42f5f8911ad6}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="anyValue.cpp" />
@@ -238,6 +241,12 @@
     </ClCompile>
     <ClCompile Include="tabular\tabularModelView.cpp">
       <Filter>tabular</Filter>
+    </ClCompile>
+    <ClCompile Include="utils\base64.cpp">
+      <Filter>utils</Filter>
+    </ClCompile>
+    <ClCompile Include="utils\md5.cpp">
+      <Filter>utils</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -470,6 +479,12 @@
     </ClInclude>
     <ClInclude Include="tabular\tabularModelView.h">
       <Filter>tabular</Filter>
+    </ClInclude>
+    <ClInclude Include="utils\base64.h">
+      <Filter>utils</Filter>
+    </ClInclude>
+    <ClInclude Include="utils\md5.hpp">
+      <Filter>utils</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

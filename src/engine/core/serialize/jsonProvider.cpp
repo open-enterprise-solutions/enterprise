@@ -1,22 +1,78 @@
 #include "core/serialize/jsonProvider.h"
 #include "core/serialize/jsonText.h"  // ibJsonText — how a string is spelled in JSON, said once
+#include "core/utils/base64.h"        // ibBase64 — a binary's text, into the output and read in place
 #include "core/exception.h"           // ibCoreException — malformed-JSON throw
 #include "core/fiber/fiber.h"         // StackLow — the depth count's backstop when the reserve runs out first
-#include <wx/base64.h>
-#include <cstring>                     // strlen / strncmp — the JSON literal match
+#include <algorithm>                   // std::all_of — a whole number's digits
+#include <charconv>                    // std::to_chars — a whole number's digits, on the stack
+#include <cstdio>                      // std::snprintf — a date's digits
+#include <cstring>                     // strlen — the JSON literal match
 
 ////////////////////////////////////////////////////////////////////////////
 
 namespace {
 
-// JSON string literal: quote + escape. HOW is said in one place for the whole backend (ibJsonText) - the same
-// rule the script's JSONWriter writes by.
-std::string JsonString(const wxString& s) {
-	return ibJsonText::QuotedUtf8(s);
+// WHAT THE VIEW WRITES OF ITS OWN — punctuation, digits, the structural keys: ASCII, appended as it is to bytes and a
+// character a byte to the engine's text. Neither text is made on the way.
+void Put(std::string& out, const char* ascii, size_t n) { out.append(ascii, n); }
+void Put(ibString& out, const char* ascii, size_t n)
+{
+	wchar_t chunk[64];
+	while (n != 0) {
+		const size_t k = n < 64 ? n : 64;
+		for (size_t i = 0; i < k; ++i)
+			chunk[i] = static_cast<wchar_t>(static_cast<unsigned char>(ascii[i]));
+		out.append(chunk, k);
+		ascii += k;
+		n -= k;
+	}
+}
+template<class Text> void Put(Text& out, const char* ascii) { Put(out, ascii, std::strlen(ascii)); }
+// …and a decimal's text, in characters: a character a byte to bytes, as they are to the engine's text.
+void Put(std::string& out, const wchar_t* ascii, size_t n)
+{
+	for (size_t i = 0; i < n; ++i)
+		out += static_cast<char>(ascii[i]);
+}
+void Put(ibString& out, const wchar_t* ascii, size_t n) { out.append(ascii, n); }
+
+// A text quoted — the value's own, or a resolved type's name. HOW is said in one place for the whole backend
+// (ibJsonText) - the same rule the script's JSONWriter writes by.
+template<class Text> void Quote(Text& out, const ibString& s) { ibJsonText::AppendQuoted(out, s.wc_str(), s.length()); }
+
+template<class Text> void PutInteger(Text& out, long long value)
+{
+	char digits[24];
+	const std::to_chars_result written = std::to_chars(digits, digits + sizeof(digits), value);
+	Put(out, digits, static_cast<size_t>(written.ptr - digits));
+}
+template<class Text> void PutInteger(Text& out, unsigned long long value)
+{
+	char digits[24];
+	const std::to_chars_result written = std::to_chars(digits, digits + sizeof(digits), value);
+	Put(out, digits, static_cast<size_t>(written.ptr - digits));
 }
 
-std::string Base64(const wxMemoryBuffer& b) {
-	return JsonString(wxT("base64:") + wxBase64Encode(b.GetData(), b.GetDataLen()));
+// A number as its exact decimal. A whole one — every id and count the protocol carries — from the stack; any other
+// through the decimal's own text.
+template<class Text> void PutNumber(Text& out, const ibNumber& number)
+{
+	long long whole = 0;
+	if (number.ToInt(whole) == 0 && ibNumber(whole) == number) {
+		PutInteger(out, whole);
+		return;
+	}
+	ibString text;
+	number.ToString(text);   // digits, a sign and a point — ASCII
+	Put(out, text.wc_str(), text.length());
+}
+
+// A binary as the view writes it — "base64:<...>", ASCII all through.
+template<class Text> void PutBase64(Text& out, const wxMemoryBuffer& b)
+{
+	Put(out, "\"base64:");
+	ibBase64::Append(out, b.GetData(), b.GetDataLen());
+	Put(out, "\"");
 }
 
 } // namespace
@@ -25,69 +81,89 @@ std::string Base64(const wxMemoryBuffer& b) {
 
 // The injected resolver's answer — the registry is the engine's (SetTypeResolver). Empty when there is none, or the
 // clsid is no registered type.
-wxString ibJsonProvider::ResolveType(ibClassID clsid) const
+ibString ibJsonProvider::ResolveType(ibClassID clsid) const
 {
-	return m_resolveType ? m_resolveType(clsid) : wxString();
+	return m_resolveType ? m_resolveType(clsid) : ibString();
 }
 
-void ibJsonProvider::EmitValue(const ibDataValue& v, std::string& out, int depth) const
+template<class Text>
+void ibJsonProvider::Pad(Text& out, int depth) const
+{
+	if (m_compact)
+		return;
+	static const char kSpaces[] = "                                                                ";
+	for (size_t n = static_cast<size_t>(depth) * 2; n != 0; ) {
+		const size_t k = n < sizeof(kSpaces) - 1 ? n : sizeof(kSpaces) - 1;
+		Put(out, kSpaces, k);
+		n -= k;
+	}
+}
+
+template<class Text>
+void ibJsonProvider::EmitValue(const ibDataValue& v, Text& out, int depth) const
 {
 	switch (v.Kind()) {
-	case ibDataKind::Empty:  out += "null"; break;
-	case ibDataKind::Bool:   out += v.AsBool() ? "true" : "false"; break;
-	case ibDataKind::Number: out += std::string(v.AsNumber().ToString().utf8_str()); break; // exact decimal
+	case ibDataKind::Empty:  Put(out, "null"); break;
+	case ibDataKind::Bool:   Put(out, v.AsBool() ? "true" : "false"); break;
+	case ibDataKind::Number: PutNumber(out, v.AsNumber()); break; // exact decimal
 	case ibDataKind::Date: {
 		const ibDateTime date = v.AsDate();   // the wall-clock reading (fdatetime.h); the empty date is ""
 		ibDateTimeParts p;
 		date.ToParts(p);
-		out += JsonString(!date.IsEmpty() ? wxString::Format(wxT("%04d-%02u-%02u %02u:%02u:%02u"), p.m_year, p.m_month, p.m_day, p.m_hour, p.m_minute, p.m_second)
-		                                  : wxString()); // readable ISO
+		// readable ISO — digits only
+		char text[32] = "";
+		if (!date.IsEmpty())
+			std::snprintf(text, sizeof(text), "%04d-%02u-%02u %02u:%02u:%02u", p.m_year, p.m_month, p.m_day, p.m_hour, p.m_minute, p.m_second);
+		Put(out, "\"");
+		Put(out, text);
+		Put(out, "\"");
 		break;
 	}
-	case ibDataKind::String: out += JsonString(v.AsString()); break;
-	case ibDataKind::Binary: out += Base64(v.AsBinary()); break;
+	case ibDataKind::String: Quote(out, v.AsString()); break;
+	case ibDataKind::Binary: PutBase64(out, v.AsBinary()); break;
 	case ibDataKind::Child: {
 		const std::shared_ptr<ibDataNode>& c = v.AsChild();
 		if (c) EmitNode(*c, out, depth);
-		else   out += "null";
+		else   Put(out, "null");
 		break;
 	}
 	case ibDataKind::Array: {
 		const std::vector<ibDataValue>& a = v.AsArray();
-		if (a.empty()) { out += "[]"; break; }
-		out += m_compact ? "[" : "[\n";
+		if (a.empty()) { Put(out, "[]"); break; }
+		Put(out, m_compact ? "[" : "[\n");
 		for (size_t i = 0; i < a.size(); i++) {
 			Pad(out, depth + 1);
 			EmitValue(a[i], out, depth + 1);
-			out += (i + 1 < a.size()) ? (m_compact ? "," : ",\n") : (m_compact ? "" : "\n");
+			Put(out, (i + 1 < a.size()) ? (m_compact ? "," : ",\n") : (m_compact ? "" : "\n"));
 		}
 		Pad(out, depth);
-		out += "]";
+		Put(out, "]");
 		break;
 	}
 	}
 }
 
-void ibJsonProvider::EmitNode(const ibDataNode& node, std::string& out, int depth) const
+template<class Text>
+void ibJsonProvider::EmitNode(const ibDataNode& node, Text& out, int depth) const
 {
-	out += m_compact ? "{" : "{\n";
+	Put(out, m_compact ? "{" : "{\n");
 	bool first = true;
 	const int inner = depth + 1;
 
 	auto key = [&](const char* keyLiteral) {
-		if (!first) out += m_compact ? "," : ",\n";
+		if (!first) Put(out, m_compact ? "," : ",\n");
 		first = false;
 		Pad(out, inner);
-		out += "\"";
-		out += keyLiteral;
-		out += m_compact ? "\":" : "\": ";
+		Put(out, "\"");
+		Put(out, keyLiteral);
+		Put(out, m_compact ? "\":" : "\": ");
 	};
-	auto namedKey = [&](const wxString& name) {
-		if (!first) out += m_compact ? "," : ",\n";
+	auto namedKey = [&](const ibString& name) {
+		if (!first) Put(out, m_compact ? "," : ",\n");
 		first = false;
 		Pad(out, inner);
-		out += JsonString(name);
-		out += m_compact ? ":" : ": ";
+		Quote(out, name);
+		Put(out, m_compact ? ":" : ": ");
 	};
 
 	// identity (only when meaningful — keeps Child sub-nodes clean). NodeType is the
@@ -96,16 +172,16 @@ void ibJsonProvider::EmitNode(const ibDataNode& node, std::string& out, int dept
 	// properties (which may legitimately be named Type / Id / Predefined / …).
 	if (node.GetClsid() != 0) {
 		key("NodeType");
-		const wxString name = ResolveType(node.GetClsid());
-		if (!name.IsEmpty()) out += JsonString(name);
-		else                 out += std::to_string((unsigned long long)node.GetClsid());
+		const ibString name = ResolveType(node.GetClsid());
+		if (!name.IsEmpty()) Quote(out, name);
+		else                 PutInteger(out, (unsigned long long)node.GetClsid());
 	}
-	if (node.GetMetaId() != 0) { key("NodeId"); out += std::to_string((long long)node.GetMetaId()); }
+	if (node.GetMetaId() != 0) { key("NodeId"); PutInteger(out, (long long)node.GetMetaId()); }
 
 	// data — fields then properties, each a direct key (areas don't collide in practice).
 	// "typeId" holds a clsid (unsigned); right after it we inject a readable "TypeDesc"
 	// = the resolved type name, so an entry reads { TypeId: <num>, TypeDesc: "String", … }.
-	auto emitEntry = [&](const wxString& k, const ibDataValue& v) {
+	auto emitEntry = [&](const ibString& k, const ibDataValue& v) {
 		namedKey(k);
 
 		// ⭐ THE SAME COURTESY FOR A PACKED VALUE'S TYPE. A value writes its clsid under `t`
@@ -124,8 +200,8 @@ void ibJsonProvider::EmitNode(const ibDataNode& node, std::string& out, int dept
 				v.AsString().ToULongLong(&clsid);
 
 			if (clsid != 0) {
-				const wxString name = ResolveType((ibClassID)clsid);
-				if (!name.IsEmpty()) { namedKey(wxT("type")); out += JsonString(name); }
+				const ibString name = ResolveType((ibClassID)clsid);
+				if (!name.IsEmpty()) { key("type"); Quote(out, name); }
 			}
 		}
 		// ⚠ AND THE ID ARRIVES AS TEXT NOW, NOT ONLY AS A NUMBER — so the courtesy has to know both
@@ -141,15 +217,15 @@ void ibJsonProvider::EmitNode(const ibDataNode& node, std::string& out, int dept
 			if (v.Kind() == ibDataKind::Number) {
 				clsid = (unsigned long long)v.AsUInt();
 				// Written out in full rather than through EmitValue - the digits are the identity.
-				out += std::to_string(clsid);
+				PutInteger(out, clsid);
 			}
 			else {
 				v.AsString().ToULongLong(&clsid);
 				EmitValue(v, out, inner);
 			}
 
-			const wxString name = ResolveType((ibClassID)clsid);
-			if (!name.IsEmpty()) { namedKey(wxT("TypeDesc")); out += JsonString(name); }
+			const ibString name = ResolveType((ibClassID)clsid);
+			if (!name.IsEmpty()) { key("TypeDesc"); Quote(out, name); }
 		}
 		else {
 			EmitValue(v, out, inner);
@@ -159,37 +235,50 @@ void ibJsonProvider::EmitNode(const ibDataNode& node, std::string& out, int dept
 	for (const auto& p : node.Properties())  emitEntry(p.first, p.second);
 
 	// transitional opaque remainder
-	if (node.HasRawData()) { key("NodeRaw"); out += Base64(node.RawData()); }
+	if (node.HasRawData()) { key("NodeRaw"); PutBase64(out, node.RawData()); }
 
 	// metaobject children (recursion)
 	const std::vector<ibDataNode>& children = node.Children();
 	if (!children.empty()) {
 		key("NodeChildren");
-		out += m_compact ? "[" : "[\n";
+		Put(out, m_compact ? "[" : "[\n");
 		for (size_t i = 0; i < children.size(); i++) {
 			Pad(out, inner + 1);
 			EmitNode(children[i], out, inner + 1);
-			out += (i + 1 < children.size()) ? (m_compact ? "," : ",\n") : (m_compact ? "" : "\n");
+			Put(out, (i + 1 < children.size()) ? (m_compact ? "," : ",\n") : (m_compact ? "" : "\n"));
 		}
 		Pad(out, inner);
-		out += "]";
+		Put(out, "]");
 	}
 
 	if (!m_compact)
-		out += "\n";
+		Put(out, "\n");
 	Pad(out, depth);
-	out += "}";
+	Put(out, "}");
 }
 
 ////////////////////////////////////////////////////////////////////////////
 
+// The room asked once, for what the tree weighs (ibDataNode::Weight): a text that grows as it is written is copied
+// every time it does.
 bool ibJsonProvider::Write(const ibDataNode& root, ibWriter& writer) const
 {
 	std::string out;
+	out.reserve(root.Weight());
 	EmitNode(root, out, 0);
 	if (!m_compact)
-		out += "\n";
+		Put(out, "\n");
 	writer.w(out.data(), (u32)out.size());
+	return true;
+}
+
+bool ibJsonProvider::Write(const ibDataNode& root, ibString& text) const
+{
+	text.Clear();
+	text.reserve(root.Weight());
+	EmitNode(root, text, 0);
+	if (!m_compact)
+		Put(text, "\n");
 	return true;
 }
 
@@ -199,26 +288,32 @@ bool ibJsonProvider::Write(const ibDataNode& root, ibWriter& writer) const
 
 namespace {
 
-// A small recursive-descent JSON reader over a contiguous buffer. Deliberately
-// self-contained: the tree is the only thing that crosses out of here, so no
+// A decimal the fast road does not take, as the decimal reads it.
+ibString NumberText(const char* p, size_t n) { return ibString::FromUTF8(p, n); }
+ibString NumberText(const wchar_t* p, size_t n) { return ibString(p, n); }
+
+// A small recursive-descent JSON reader over a contiguous buffer — of bytes (UTF-8, a socket's) or of the engine's
+// characters (a text that never left the process): the same reading over either, and a text with no escape in it is
+// taken from where it lies. Deliberately self-contained: the tree is the only thing that crosses out of here, so no
 // third-party JSON dependency enters backend.dll for one provider.
 //
 // Errors are POSITIONAL and fatal — a half-parsed tree is worse than none, so
 // every failure path returns false and the provider reports where it stopped.
+template<class Char>
 class ibJsonReader {
 public:
-	ibJsonReader(const char* begin, size_t size) : m_start(begin), m_p(begin), m_end(begin + size) {}
+	ibJsonReader(const Char* begin, size_t size) : m_start(begin), m_p(begin), m_end(begin + size) {}
 
 	size_t Offset() const { return (size_t)(m_p - m_start); }
 
 	// The top level is one object = the root node.
 	bool ParseNode(ibDataNode& node,
-		const std::function<ibClassID(const wxString&)>& lookupType);
+		const std::function<ibClassID(const ibString&)>& lookupType);
 
 private:
-	const char* m_start;
-	const char* m_p;
-	const char* m_end;
+	const Char* m_start;
+	const Char* m_p;
+	const Char* m_end;
 	int m_depth = 0;
 
 	// One container on this path. The destructor releases it on every return,
@@ -249,99 +344,66 @@ private:
 	};
 
 	bool Eof() const { return m_p >= m_end; }
-	char Peek() const { return Eof() ? '\0' : *m_p; }
+	Char Peek() const { return Eof() ? Char(0) : *m_p; }
 
 	void SkipWs() {
 		while (!Eof() && (*m_p == ' ' || *m_p == '\t' || *m_p == '\n' || *m_p == '\r'))
 			++m_p;
 	}
-	bool Accept(char c) { SkipWs(); if (Peek() == c) { ++m_p; return true; } return false; }
+	bool Accept(char c) { SkipWs(); if (Peek() == Char(c)) { ++m_p; return true; } return false; }
 	bool Expect(char c) { return Accept(c); }
 
-	bool ParseString(wxString& out);
+	bool ParseString(ibString& out);
 	bool ParseNumber(ibNumber& out);
-	bool ParseValue(ibDataValue& out, const std::function<ibClassID(const wxString&)>& lookupType);
-	bool ParseArray(ibDataValue& out, const std::function<ibClassID(const wxString&)>& lookupType);
+	bool ParseValue(ibDataValue& out, const std::function<ibClassID(const ibString&)>& lookupType);
+	bool ParseArray(ibDataValue& out, const std::function<ibClassID(const ibString&)>& lookupType);
 	bool ParseScalar(ibDataValue& out);
 	bool ParseLiteral(const char* text) {
 		SkipWs();
-		const size_t n = strlen(text);
-		if ((size_t)(m_end - m_p) < n || strncmp(m_p, text, n) != 0) return false;
+		const size_t n = std::strlen(text);
+		if ((size_t)(m_end - m_p) < n) return false;
+		for (size_t i = 0; i < n; ++i)
+			if (m_p[i] != Char(text[i])) return false;
 		m_p += n;
 		return true;
 	}
 };
 
-// JSON string -> wxString, unescaping the same set JsonString escapes (plus \/ and \b\f,
-// which a hand-edited file may carry). \uXXXX is decoded as a UTF-16 code unit, with the
-// surrogate pair joined — the emitter only ever produces \u for control characters, but a
-// human-edited view may hold anything.
-bool ibJsonReader::ParseString(wxString& out)
+// JSON string -> the engine's text, as JSON's spelling is read back for the whole backend (ibJsonText).
+template<class Char>
+bool ibJsonReader<Char>::ParseString(ibString& out)
 {
-	if (!Accept('\"')) return false;
-	std::string utf8;
-	while (!Eof()) {
-		const char c = *m_p++;
-		if (c == '\"') {
-			out = wxString::FromUTF8(utf8.data(), utf8.size());
-			return true;
-		}
-		if (c != '\\') { utf8 += c; continue; }
-		if (Eof()) return false;
-		const char e = *m_p++;
-		switch (e) {
-		case '\"': utf8 += '\"'; break;
-		case '\\': utf8 += '\\'; break;
-		case '/':  utf8 += '/';  break;
-		case 'b':  utf8 += '\b'; break;
-		case 'f':  utf8 += '\f'; break;
-		case 'n':  utf8 += '\n'; break;
-		case 'r':  utf8 += '\r'; break;
-		case 't':  utf8 += '\t'; break;
-		case 'u': {
-			if ((size_t)(m_end - m_p) < 4) return false;
-			auto hex4 = [this]() -> int {
-				int v = 0;
-				for (int i = 0; i < 4; i++) {
-					const char h = *m_p++;
-					v <<= 4;
-					if      (h >= '0' && h <= '9') v |= (h - '0');
-					else if (h >= 'a' && h <= 'f') v |= (h - 'a' + 10);
-					else if (h >= 'A' && h <= 'F') v |= (h - 'A' + 10);
-					else return -1;
-				}
-				return v;
-			};
-			const int hi = hex4();
-			if (hi < 0) return false;
-			wxUniChar ch((wxChar32)hi);
-			if (hi >= 0xD800 && hi <= 0xDBFF && (size_t)(m_end - m_p) >= 6 && m_p[0] == '\\' && m_p[1] == 'u') {
-				m_p += 2;
-				const int lo = hex4();
-				if (lo < 0) return false;
-				ch = wxUniChar((wxChar32)(0x10000 + ((hi - 0xD800) << 10) + (lo - 0xDC00)));
-			}
-			utf8 += wxString(ch).utf8_str().data();
-			break;
-		}
-		default: return false;
-		}
-	}
-	return false;   // unterminated
+	SkipWs();
+	return ibJsonText::ReadQuoted(m_p, m_end, out);
 }
 
 // Numbers go through ibNumber::FromString — the emitter writes the EXACT decimal
 // (ibNumber::ToString), so parsing it back through the same type is lossless.
-bool ibJsonReader::ParseNumber(ibNumber& out)
+template<class Char>
+bool ibJsonReader<Char>::ParseNumber(ibNumber& out)
 {
 	SkipWs();
-	const char* start = m_p;
+	const Char* start = m_p;
 	if (!Eof() && (*m_p == '-' || *m_p == '+')) ++m_p;
 	while (!Eof() && ((*m_p >= '0' && *m_p <= '9') || *m_p == '.' || *m_p == 'e' || *m_p == 'E'
 		|| ((*m_p == '-' || *m_p == '+') && (m_p[-1] == 'e' || m_p[-1] == 'E'))))
 		++m_p;
 	if (m_p == start) return false;
-	return out.FromString(wxString::FromUTF8(start, (size_t)(m_p - start)));
+
+	// A whole number that fits — an id, a count, a flag of the protocol's — is read where it lies; a fraction, an
+	// exponent or a longer one goes the decimal's way.
+	const Char* digits = start;
+	const bool negative = *digits == '-';
+	if (negative || *digits == '+') ++digits;
+	if (m_p - digits > 0 && m_p - digits <= 18
+		&& std::all_of(digits, m_p, [](Char c) { return c >= '0' && c <= '9'; })) {
+		long long whole = 0;
+		for (const Char* d = digits; d != m_p; ++d)
+			whole = whole * 10 + (*d - '0');
+		out = ibNumber(negative ? -whole : whole);
+		return true;
+	}
+	return out.FromString(NumberText(start, (size_t)(m_p - start)));
 }
 
 // ⭐ A LEVEL OF THE DESCENT WEIGHS WHAT A CONTAINER NEEDS, NOT WHAT EVERY KIND NEEDS. Without the
@@ -349,10 +411,11 @@ bool ibJsonReader::ParseNumber(ibNumber& out)
 // branch, taken or not; when the scalars were read in here, each level of [[[…]]] carried a string, a
 // number and the literals' values, and the deepest legal text no longer fit a 512 KB thread once
 // the stack check kept its slack (CI, Linux Debug + ASan, 2026-10-13). So the kinds are read apart.
-bool ibJsonReader::ParseValue(ibDataValue& out, const std::function<ibClassID(const wxString&)>& lookupType)
+template<class Char>
+bool ibJsonReader<Char>::ParseValue(ibDataValue& out, const std::function<ibClassID(const ibString&)>& lookupType)
 {
 	SkipWs();
-	const char c = Peek();
+	const Char c = Peek();
 
 	if (c == '{') {
 		std::shared_ptr<ibDataNode> child = std::make_shared<ibDataNode>();
@@ -365,7 +428,8 @@ bool ibJsonReader::ParseValue(ibDataValue& out, const std::function<ibClassID(co
 	return ParseScalar(out);
 }
 
-bool ibJsonReader::ParseArray(ibDataValue& out, const std::function<ibClassID(const wxString&)>& lookupType)
+template<class Char>
+bool ibJsonReader<Char>::ParseArray(ibDataValue& out, const std::function<ibClassID(const ibString&)>& lookupType)
 {
 	Depth depth(*this);
 	if (!Accept('[')) return false;
@@ -385,20 +449,27 @@ bool ibJsonReader::ParseArray(ibDataValue& out, const std::function<ibClassID(co
 }
 
 // A string, a literal or a number — a value with nothing inside it.
-bool ibJsonReader::ParseScalar(ibDataValue& out)
+template<class Char>
+bool ibJsonReader<Char>::ParseScalar(ibDataValue& out)
 {
 	SkipWs();
 	if (Peek() == '\"') {
-		wxString s;
+		ibString s;
 		if (!ParseString(s)) return false;
 		// "base64:<...>" is how EmitValue renders Binary — the one string shape that is
 		// NOT a String. Everything else stays a String, INCLUDING an emitted Date (see
-		// the header): an ISO string and a string that looks like one are the same text.
-		static const wxString kB64 = wxT("base64:");
-		if (s.StartsWith(kB64))
-			out = ibDataValue::Binary(wxBase64Decode(s.Mid(kB64.length())));
-		else
-			out = ibDataValue::String(s);
+		// the header): an ISO string and a string that looks like one are the same text —
+		// and so does one after the prefix that is not base64: EmitValue did not write it.
+		// The buffer only for that shape: a wxMemoryBuffer takes a kilobyte from the heap as it is made.
+		static const ibString kB64 = wxT("base64:");
+		if (s.StartsWith(kB64)) {
+			wxMemoryBuffer bytes;
+			if (ibBase64::Read(s.wc_str() + kB64.length(), s.length() - kB64.length(), bytes)) {
+				out = ibDataValue::Binary(bytes);
+				return true;
+			}
+		}
+		out = ibDataValue::String(s);
 		return true;
 	}
 	if (ParseLiteral("true"))  { out = ibDataValue::Bool(true);  return true; }
@@ -411,7 +482,8 @@ bool ibJsonReader::ParseScalar(ibDataValue& out)
 	return true;
 }
 
-bool ibJsonReader::ParseNode(ibDataNode& node, const std::function<ibClassID(const wxString&)>& lookupType)
+template<class Char>
+bool ibJsonReader<Char>::ParseNode(ibDataNode& node, const std::function<ibClassID(const ibString&)>& lookupType)
 {
 	Depth depth(*this);
 
@@ -419,7 +491,7 @@ bool ibJsonReader::ParseNode(ibDataNode& node, const std::function<ibClassID(con
 	if (Accept('}')) return true;   // {} — a legitimately empty node
 
 	for (;;) {
-		wxString key;
+		ibString key;
 		if (!ParseString(key)) return false;
 		if (!Expect(':')) return false;
 
@@ -427,12 +499,14 @@ bool ibJsonReader::ParseNode(ibDataNode& node, const std::function<ibClassID(con
 		if (key == wxT("NodeType")) {
 			SkipWs();
 			if (Peek() == '\"') {
-				wxString name;
+				ibString name;
 				if (!ParseString(name)) return false;
 				// The emitter wrote the RESOLVED NAME. Turning it back into a clsid needs the
-				// same knowledge in reverse; without a lookup the node keeps clsid 0 rather
-				// than inventing one.
-				if (lookupType) node.SetClsid(lookupType(name));
+				// same knowledge in reverse; without it the node keeps clsid 0 rather than
+				// inventing one — and the word, as its field, for a later lookup (LookupTypes).
+				const ibClassID clsid = lookupType ? lookupType(name) : ibClassID(0);
+				if (clsid != ibClassID(0)) node.SetClsid(clsid);
+				else                       node.AddField(key, ibDataValue::String(name));
 			}
 			else {
 				ibNumber n;
@@ -506,7 +580,7 @@ bool ibJsonProvider::Read(ibReader& reader, ibDataNode& root) const
 		return false;
 
 	const char* text = static_cast<const char*>(reader.pointer());
-	ibJsonReader parser(text, (size_t)size);
+	ibJsonReader<char> parser(text, (size_t)size);
 	if (!parser.ParseNode(root, m_lookupType)) {
 		ibCoreException::Error(_("ibJsonProvider: malformed JSON at byte %d"),
 			(int)parser.Offset());
@@ -514,4 +588,67 @@ bool ibJsonProvider::Read(ibReader& reader, ibDataNode& root) const
 	}
 	reader.advance(size);
 	return true;
+}
+
+// …and from the characters themselves: the reader walks the text's own buffer.
+bool ibJsonProvider::Read(const ibString& text, ibDataNode& root) const
+{
+	if (text.IsEmpty())
+		return false;
+
+	ibJsonReader<wchar_t> parser(text.wc_str(), text.length());
+	if (!parser.ParseNode(root, m_lookupType)) {
+		ibCoreException::Error(_("ibJsonProvider: malformed JSON at character %d"),
+			(int)parser.Offset());
+		return false;   // not reached — Error throws
+	}
+	return true;
+}
+
+namespace {
+
+using ibTypeLookup = std::function<ibClassID(const ibString&)>;
+
+void LookupKept(ibDataNode& node, const ibTypeLookup& lookupType);
+
+// A value's nodes: the one it is, or those of its list.
+void LookupKept(const ibDataValue& value, const ibTypeLookup& lookupType)
+{
+	if (value.Kind() == ibDataKind::Child) {
+		if (value.AsChild())
+			LookupKept(*value.AsChild(), lookupType);
+	}
+	else if (value.Kind() == ibDataKind::Array) {
+		for (const ibDataValue& item : value.AsArray())
+			LookupKept(item, lookupType);
+	}
+}
+
+// The word a reading kept, looked up — known: the node's type, the field gone; not known: kept on, written back as read.
+void LookupKept(ibDataNode& node, const ibTypeLookup& lookupType)
+{
+	if (node.GetClsid() == ibClassID(0)) {
+		const ibDataValue* const word = node.FindField(wxT("NodeType"));
+		if (word != nullptr && word->Kind() == ibDataKind::String) {
+			const ibClassID clsid = lookupType(word->AsString());
+			if (clsid != ibClassID(0)) {
+				node.SetClsid(clsid);
+				node.RemoveField(wxT("NodeType"));
+			}
+		}
+	}
+	for (const auto& field : node.Fields())
+		LookupKept(field.second, lookupType);
+	for (const auto& property : node.Properties())
+		LookupKept(property.second, lookupType);
+	for (ibDataNode& child : node.Children())
+		LookupKept(child, lookupType);
+}
+
+} // namespace
+
+void ibJsonProvider::LookupTypes(ibDataNode& node) const
+{
+	if (m_lookupType)
+		LookupKept(node, m_lookupType);
 }

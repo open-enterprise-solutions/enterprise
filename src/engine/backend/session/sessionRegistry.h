@@ -97,7 +97,7 @@ struct BACKEND_API ibRegistryRequest {
 // -------------------------------------------------------------------
 struct BACKEND_API ibConnectRequest {
 	wxString  m_computer;
-	wxString  m_address;           // "host:port" for web; "" for desktop
+	ibString  m_address;           // "host:port" for web; "" for desktop
 	// Process-level run mode — how the process holds the base, the same
 	// for every session in it.
 	ibRunMode m_appMode = eUNKNOWN_MODE;
@@ -229,7 +229,7 @@ public:
 	                                         const wxString& computer,
 	                                         ibSessionKind kind,
 	                                         const wxString& presetGuid,
-	                                         const wxString& address,
+	                                         const ibString& address,
 	                                         ibConnectRequest::SessionFactory factory);
 
 	// UNLISTED — a session the registry never takes in: no sys_session row, no cluster
@@ -857,7 +857,7 @@ ibSessionHolder ibApplicationInstance::CreateSession(ibSessionKind kind)
 template<class SessionT>
 ibSessionHolder ibApplicationInstance::CreateSession(ibSessionKind kind,
                                                  const wxString& presetGuid,
-                                                 const wxString& address)
+                                                 const ibString& address)
 {
 	static_assert(std::is_base_of<ibSession, SessionT>::value,
 		"CreateSession<T>: T must derive from ibSession");

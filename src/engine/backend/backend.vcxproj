@@ -400,7 +400,6 @@
     <ClInclude Include="plugin\pluginApi.h" />
     <ClInclude Include="plugin\pluginHost.h" />
     <ClInclude Include="plugin\pluginManager.h" />
-    <ClInclude Include="utils\md5.hpp" />
     <ClInclude Include="utils\passwordHash.hpp" />
     <ClInclude Include="utils\dataVersion.hpp" />
     <ClInclude Include="valueInfo.h" />
@@ -941,7 +940,6 @@
     <ClCompile Include="vcs\gitService.cpp" />
     <ClCompile Include="plugin\pluginManager.cpp" />
     <ClCompile Include="plugin\pluginHost.cpp" />
-    <ClCompile Include="utils\md5.cpp" />
     <ClCompile Include="utils\passwordHash.cpp" />
     <ClCompile Include="utils\dataVersion.cpp" />
     <ClCompile Include="value_cast.cpp" />

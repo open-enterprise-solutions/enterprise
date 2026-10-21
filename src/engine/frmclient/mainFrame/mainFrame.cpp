@@ -9,7 +9,6 @@
 #include <functional>
 #include <set>
 
-#include <wx/base64.h>
 #include <wx/choicdlg.h>
 #include <wx/config.h>
 #include <wx/file.h>
@@ -22,6 +21,8 @@
 #include "output/outputWindow.h"
 #include "objinspect/objinspect.h"
 #include "settings/settingsxml.h"
+
+#include "core/utils/base64.h"   // ibBase64 — a file's part, in and out of the call's text
 
 #include "frmclient/docView/docManager.h"
 #include "frmclient/docView/templates/docViewFile.h"
@@ -135,20 +136,19 @@ ibProtocol::ibFrame::ibMessage::ibLevel LevelOf(long long level)
 
 // A menu of the frame, as a list of what it is made of — the titles, the keys, what each item does — less whether an
 // item is enabled: two menus of one shape differ only in what may be pressed, and that is set, not built.
-void ShapeOf(const ibProtocolNode& menu, std::string& shape)
+void ShapeOf(const ibProtocolNode& menu, ibString& shape)
 {
 	for (const ibProtocolNode& item : menu.Children()) {
-		shape += '[';
+		shape << wxT('[');
 		if (item.GetBool(ibProtocol::ibFrame::ibMenu::Separator))
-			shape += '-';
-		shape += std::string(item.GetString(ibProtocol::ibFrame::ibMenu::Title).utf8_str());
-		shape += '|';
-		shape += std::string(item.GetString(ibProtocol::ibFrame::ibMenu::Shortcut).utf8_str());
-		shape += '|';
-		shape += std::to_string(item.GetInt(ibProtocol::ibFrame::ibMenu::Command, -1)) + '|' + std::to_string(item.GetInt(ibProtocol::ibFrame::ibMenu::Schema, -1));
-		shape += '|' + std::to_string(item.GetInt(ibProtocol::ibFrame::ibMenu::StockPicture));
+			shape << wxT('-');
+		shape << item.GetString(ibProtocol::ibFrame::ibMenu::Title) << wxT('|')
+			<< item.GetString(ibProtocol::ibFrame::ibMenu::Shortcut) << wxT('|')
+			<< item.GetInt(ibProtocol::ibFrame::ibMenu::Command, -1) << wxT('|')
+			<< item.GetInt(ibProtocol::ibFrame::ibMenu::Schema, -1) << wxT('|')
+			<< item.GetInt(ibProtocol::ibFrame::ibMenu::StockPicture);
 		ShapeOf(item, shape);
-		shape += ']';
+		shape << wxT(']');
 	}
 }
 
@@ -990,7 +990,7 @@ void ibFrontendMainFrame::Draw(const ibProtocolNode& answer)
 void ibFrontendMainFrame::DrawMenu(const ibProtocolNode& menu)
 {
 	// One of the same shape — only what may be pressed is set.
-	std::string shape;
+	ibString shape;
 	ShapeOf(menu, shape);
 	if (shape == m_menuShape) {
 		std::function<void(const ibProtocolNode&)> enable = [this, &enable](const ibProtocolNode& items) {
@@ -1592,7 +1592,9 @@ bool ibFrontendMainFrame::UploadFile(const wxString& path, wxString& file)
 			params.SetValue(ibProtocol::ibFile::Name, wxFileName(path).GetFullName());
 		else
 			params.SetValue(ibProtocol::ibFile::File, file);
-		params.SetValue(ibProtocol::ibFile::Data, wxBase64Encode(part.data(), static_cast<std::size_t>(read)));
+		ibString text;
+		ibBase64::Append(text, part.data(), static_cast<std::size_t>(read));
+		params.SetValue(ibProtocol::ibFile::Data, text);
 
 		ibProtocol::ibRefusal refusal = ibProtocol::ibRefusal::None;
 		wxString error;
@@ -1624,7 +1626,9 @@ bool ibFrontendMainFrame::DownloadFile(const wxString& file, const wxString& pat
 			return false;
 		}
 		parts = answer.GetInt(ibProtocol::ibFile::Parts);
-		const wxMemoryBuffer data = wxBase64Decode(answer.GetString(ibProtocol::ibFile::Data));
+		wxMemoryBuffer data;
+		if (!ibBase64::Read(answer.GetString(ibProtocol::ibFile::Data), data))
+			return false;
 		if (data.GetDataLen() != 0 && target.Write(data.GetData(), data.GetDataLen()) != data.GetDataLen())
 			return false;
 	}

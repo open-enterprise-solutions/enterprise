@@ -27,6 +27,7 @@
 #include <vector>
 
 #include "core/core.h"
+#include "core/fstring.h"   // ibString — the peer's address, made once for its connection
 
 namespace asio { class io_context; }
 
@@ -40,13 +41,15 @@ struct CORE_API ibHttpRequest {
 	std::string m_query;     // as written, after the '?'
 	std::vector<std::pair<std::string, std::string>> m_headers;   // names lower-cased, in their order
 	std::string m_body;
-	std::string m_address;   // the peer's IP
+	ibString    m_address;   // the peer's IP — its connection's, every request and handler one more owner of it
 	bool        m_secure = false;   // came over TLS
 
 	// The first header of that lower-case name; empty when there is none.
 	std::string GetHeader(const std::string& name) const;
 	// One parameter of the query, decoded; empty when there is none.
 	std::string GetParameter(const std::string& name) const;
+	// The body as the engine's text — a text protocol's request (JSON-RPC), its bytes read once.
+	ibString GetText() const;
 };
 
 struct CORE_API ibHttpResponse {
@@ -54,8 +57,10 @@ struct CORE_API ibHttpResponse {
 	std::vector<std::pair<std::string, std::string>> m_headers;
 	std::string m_body;
 
-	// The body and its Content-Type.
+	// The body and its Content-Type…
 	void SetContent(std::string body, const std::string& type);
+	// …and as the engine's text, its bytes made once — the pair of the request's GetText.
+	void SetText(const ibString& text, const std::string& type);
 };
 
 // THE ANSWER TO A REQUEST — given once, from any thread: at once, or when what it waits for has come. The request a
@@ -69,8 +74,9 @@ class ibWebSocket {
 public:
 	virtual ~ibWebSocket() = default;
 
-	// A message, queued and sent in order.
-	virtual void Send(std::string text) = 0;
+	// A message, queued and sent in order. The engine's text has its bytes made here, once — and, for a peer that asked
+	// for it as it connected (?compress=deflate), one of some size goes deflated in a binary message (ibDeflate).
+	virtual void Send(const ibString& text) = 0;
 	virtual void SendBinary(std::string data) = 0;
 	// The closing handshake begun, with `code` and `reason` (RFC 6455 § 7.4); OnClose follows.
 	virtual void Close(std::uint16_t code, const std::string& reason) = 0;
@@ -84,8 +90,8 @@ class ibWebSocketHandler {
 public:
 	virtual ~ibWebSocketHandler() = default;
 
-	// One text message, whole.
-	virtual void OnMessage(std::string text) = 0;
+	// One text message, whole — the engine's text, its bytes read once.
+	virtual void OnMessage(const ibString& text) = 0;
 	// One binary message, whole — a protocol that speaks text closes the socket (ibWebSocketClose::Unsupported).
 	virtual void OnBinary(std::string data) = 0;
 	// The socket is gone — closed by either side, dropped, or the server stopping: once, after the last OnMessage.

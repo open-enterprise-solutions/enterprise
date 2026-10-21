@@ -1,4 +1,5 @@
 #include "communicator.h"
+#include "protocolValue.h"
 
 #include <algorithm>
 #include <chrono>
@@ -7,8 +8,6 @@
 #include <set>
 #include <thread>
 
-#include <nlohmann/json.hpp>
-
 #include <wx/scopeguard.h>   // wxMakeGuard — a call's line, however it returns
 #include <wx/time.h>
 
@@ -16,16 +15,16 @@
 
 namespace {
 
-using json = nlohmann::json;
-
-// What an answer carries beside the frame — its number and how it was made, the login's own, and the events; none of
-// it is the frame (frmserver/client/clientHost.cpp: Call, Run, DrawFrame).
-bool IsAnswerWord(const std::string& name)
+// The frame's own words — what the server draws its frame's state in (frmserver/client/clientHost.cpp: DrawFrame, its
+// `state`). Everything else an answer carries is not the frame: its number and how it was made, the login's own, the
+// events (Messages, Clear, Exit, Properties — DrawFrame's `events`) and the method's own result beside it.
+bool IsFrameWord(const ibString& name)
 {
-	return name == ibProtocol::ibFrame::Frame || name == ibProtocol::ibLogin::Since || name == ibProtocol::ibFrame::Patch
-		|| name == ibProtocol::ibFrame::Messages || name == ibProtocol::ibFrame::Clear
-		|| name == ibProtocol::ibLogin::Client || name == ibProtocol::ibLogin::Protocol || name == ibProtocol::ibLogin::Features
-		|| name == ibProtocol::ibLogin::Token;
+	return name == ibProtocol::ibFrame::Title || name == ibProtocol::ibFrame::Status || name == ibProtocol::ibFrame::Endpoint
+		|| name == ibProtocol::ibFrame::Language || name == ibProtocol::ibFrame::ActiveTab
+		|| name == ibProtocol::ibFrame::Schemas || name == ibProtocol::ibFrame::Templates || name == ibProtocol::ibFrame::Menu
+		|| name == ibProtocol::ibFrame::MetaData || name == ibProtocol::ibFrame::View || name == ibProtocol::ibFrame::Tabs
+		|| name == ibProtocol::ibFrame::Request;
 }
 
 // The envelope's own refusals — JSON-RPC's numbers, said by the port for a message that is not JSON-RPC or a method
@@ -44,7 +43,7 @@ ibProtocol::ibRefusal RefusalOf(long long code)
 
 // AN ANSWER READ — the result of the call of that id, or its refusal: one call is in flight on a connection at a time,
 // and an envelope with no id is the server refusing a request it could not read — still that one's.
-bool ReadAnswer(const std::string& answer, long long id, ibProtocolNode& result, ibProtocol::ibRefusal& refusal,
+bool ReadAnswer(const ibString& answer, long long id, ibProtocolNode& result, ibProtocol::ibRefusal& refusal,
 	wxString& error)
 {
 	ibProtocolNode root;
@@ -113,35 +112,33 @@ int ExchangeDelay()
 // Password, Token and the debugger's Channel key are bearer secrets. The debug journal records the exchange; the release
 // build's macro is empty. Only a text that names one is read again: a login's, the key's. Every frame read a second time
 // for the journal cost more than reading it for the client (a Debug profile, 2026-10-20: 535 ms against 387).
-std::string Redacted(const std::string& text)
+ibString Redacted(const ibString& text)
 {
-	static const std::string password = std::string("\"") + ibProtocol::ibLogin::Password + "\"";
-	static const std::string token = std::string("\"") + ibProtocol::ibLogin::Token + "\"";
-	static const std::string channel = std::string("\"") + ibProtocol::ibDebug::Channel + "\"";
-	if (text.find(password) == std::string::npos && text.find(token) == std::string::npos
-		&& text.find(channel) == std::string::npos)
+	static const ibString password = ibString(wxT("\"")) + ibString(ibProtocol::ibLogin::Password) + wxT("\"");
+	static const ibString token = ibString(wxT("\"")) + ibString(ibProtocol::ibLogin::Token) + wxT("\"");
+	static const ibString channel = ibString(wxT("\"")) + ibString(ibProtocol::ibDebug::Channel) + wxT("\"");
+	if (!text.Contains(password) && !text.Contains(token) && !text.Contains(channel))
 		return text;
 
-	json node = json::parse(text, nullptr, false);
-	if (!node.is_object())
+	ibProtocolValue node;
+	if (!ibProtocolValue::Read(text.wc_str(), text.length(), node) || node.GetNode() == nullptr)
 		return text;
-	const auto hide = [](json& object) {
-		if (!object.is_object())
+	const auto hide = [](const ibProtocolValue* object) {
+		ibProtocolBody* const entries = object != nullptr ? object->GetNode() : nullptr;
+		if (entries == nullptr)
 			return;
 		for (const char* name : { ibProtocol::ibLogin::Password, ibProtocol::ibLogin::Token, ibProtocol::ibDebug::Channel }) {
-			const auto found = object.find(name);
-			if (found != object.end() && found->is_string())
-				*found = "***";
+			ibProtocolValue* const found = entries->Find(name);
+			if (found != nullptr && found->GetKind() == ibProtocolValue::ibKind::Text)
+				*found = ibProtocolValue(ibString(wxT("***")));
 		}
 	};
-	hide(node);
-	const auto params = node.find(ibProtocol::ibRpc::Params);
-	if (params != node.end())
-		hide(*params);
-	const auto result = node.find(ibProtocol::ibRpc::Result);
-	if (result != node.end())
-		hide(*result);
-	return node.dump();
+	hide(&node);
+	hide(node.GetNode()->Find(ibProtocol::ibRpc::Params));
+	hide(node.GetNode()->Find(ibProtocol::ibRpc::Result));
+	ibString hidden;
+	node.Write(hidden);
+	return hidden;
 }
 
 } // namespace
@@ -168,7 +165,7 @@ bool ibCommunicator::Login(const wxString& user, const wxString& password, ibPro
 		.SetValue(ibProtocol::ibLogin::Mode, static_cast<int>(mode))
 		.SetValue(ibProtocol::ibLogin::Protocol, ibProtocol::Version);
 	// Opt into the slot. A server that does not offer `resume` ignores it.
-	params.AddItem(ibProtocol::ibLogin::Features, wxString::FromUTF8(ibProtocol::ibLogin::FeatureResume));
+	params.AddItem(ibProtocol::ibLogin::Features, ibProtocol::ibLogin::FeatureResume);
 	for (const ibProtocol::ibSchema::ibKind schema : schemas)
 		params.AddItem(ibProtocol::ibLogin::Read).SetValue(ibProtocol::ibLogin::Schema, static_cast<long long>(schema));
 	if (!CallLocked(ibProtocol::ibMethod::Login, params, result, refusal, error))
@@ -181,7 +178,7 @@ bool ibCommunicator::Login(const wxString& user, const wxString& password, ibPro
 	m_token = result.GetString(ibProtocol::ibLogin::Token);
 	m_resume = false;
 	for (const ibProtocolNode& feature : result.GetList(ibProtocol::ibLogin::Features)) {
-		if (feature.AsString() == wxString::FromUTF8(ibProtocol::ibLogin::FeatureResume))
+		if (feature.AsString() == ibProtocol::ibLogin::FeatureResume)
 			m_resume = true;
 	}
 	Take(result);
@@ -224,8 +221,8 @@ void ibCommunicator::Listen(std::function<void()> changed)
 	}
 
 	// Of this client, as logged in now — a connection may carry more than one, and each is told of its own.
-	const wxString client = GetClient();
-	m_connection->Listen([client, changed = std::move(changed)](const std::string& text) {
+	const ibString client = GetClient();
+	m_connection->Listen([client, changed = std::move(changed)](const ibString& text) {
 		ibProtocolNode node;
 		if (!ibProtocolNode::Read(text, node) || node.GetString(ibProtocol::ibRpc::Method) != ibProtocol::ibRpc::Changed)
 			return;
@@ -266,8 +263,8 @@ bool ibCommunicator::ListenDebug(std::function<void(const ibProtocolNode& news)>
 		return false;
 
 	// Told before it is bound, so news the moment it is bound is not lost — of this client only.
-	const wxString client = GetClient();
-	channel->Listen([client, told = std::move(told)](const std::string& text) {
+	const ibString client = GetClient();
+	channel->Listen([client, told = std::move(told)](const ibString& text) {
 		ibProtocolNode node;
 		if (!ibProtocolNode::Read(text, node) || node.GetString(ibProtocol::ibRpc::Method) != ibProtocol::ibRpc::Debug)
 			return;
@@ -313,16 +310,15 @@ bool ibCommunicator::DebugLocked(const ibProtocolNode& params, ibProtocolNode& r
 	}
 
 	// The client named, as every call names it; nothing held goes with it, and no frame is asked for.
-	ibProtocolNode named = params.IsNode() ? params.Clone() : ibProtocolNode();
-	named.SetValue(ibProtocol::ibLogin::Client, m_debugClient);
 	const long long id = ++m_debugLastId;
 	ibProtocolNode request;
 	request.SetValue(ibProtocol::ibRpc::Version, "2.0")
 		.SetValue(ibProtocol::ibRpc::Id, id)
 		.SetValue(ibProtocol::ibRpc::Method, ibProtocol::MethodName(ibProtocol::ibMethod::Debug))
-		.SetValue(ibProtocol::ibRpc::Params, named);
+		.SetValue(ibProtocol::ibRpc::Params, params.IsNode() ? params : ibProtocolNode());
+	request.Child(ibProtocol::ibRpc::Params).SetValue(ibProtocol::ibLogin::Client, m_debugClient);
 
-	std::string answer;
+	ibString answer;
 	if (!m_debugConnection->Exchange(request.Write(), answer, refusal, error))
 		return false;
 	return ReadAnswer(answer, id, result, refusal, error);
@@ -393,9 +389,15 @@ bool ibCommunicator::CallLocked(ibProtocol::ibMethod method, const ibProtocolNod
 		return false;
 	}
 
-	// The client, and the frame it holds — a frame answer is then the patch from it. A field a method does not
-	// read is skipped by the server.
-	ibProtocolNode named = params.IsNode() ? params.Clone() : ibProtocolNode();
+	// The params copied once, into the request — and the client and the frame it holds named in them: a frame answer is
+	// then the patch from it. A field a method does not read is skipped by the server.
+	const long long id = ++m_lastId;
+	ibProtocolNode request;
+	request.SetValue(ibProtocol::ibRpc::Version, "2.0")
+		.SetValue(ibProtocol::ibRpc::Id, id)
+		.SetValue(ibProtocol::ibRpc::Method, ibProtocol::MethodName(method))
+		.SetValue(ibProtocol::ibRpc::Params, params.IsNode() ? params : ibProtocolNode());
+	ibProtocolNode named = request.Child(ibProtocol::ibRpc::Params);
 	if (!beforeLogin) {
 		named.SetValue(ibProtocol::ibLogin::Client, m_client);
 		if (m_number != 0)
@@ -404,29 +406,28 @@ bool ibCommunicator::CallLocked(ibProtocol::ibMethod method, const ibProtocolNod
 	// ⭐ WHAT WAS HELD GOES WITH ANY CALL — the server applies it before the call itself, so the code a press runs reads the
 	// row the cursor stands on. Taken once: a call that does not get through loses it with the session it was of. A
 	// client going says nothing more of where it was, and the debugger's call is no work of the client's (the server
-	// would drop it).
+	// would drop it). Each held event owns its tree (Hold): moved in, not copied.
 	if (!beforeLogin && method != ibProtocol::ibMethod::Logout && method != ibProtocol::ibMethod::Debug) {
 		std::vector<ibProtocolNode> pending;
 		{
 			std::lock_guard<std::mutex> lock(m_pendingMutex);
 			pending.swap(m_pending);
 		}
-		for (const ibProtocolNode& event : pending)
-			(*named.Json())[ibProtocol::ibLogin::Pending].push_back(*event.Json());
+		if (!pending.empty()) {
+			ibProtocolBody* const held = named.ListOf(ibProtocol::ibLogin::Pending);
+			for (ibProtocolNode& event : pending) {
+				if (event.m_root)
+					held->Add() = std::move(*event.m_root);
+			}
+		}
 	}
-	const long long id = ++m_lastId;
-	ibProtocolNode request;
-	request.SetValue(ibProtocol::ibRpc::Version, "2.0")
-		.SetValue(ibProtocol::ibRpc::Id, id)
-		.SetValue(ibProtocol::ibRpc::Method, ibProtocol::MethodName(method))
-		.SetValue(ibProtocol::ibRpc::Params, named);
 
 	// THE WHOLE EXCHANGE, beside the call's own line — what went, and what came back with how long it took: the debug
 	// build's journal (the macro is nothing in a release one).
-	const std::string sent = request.Write();
-	ibJournalInfo(wxT("protocol"), wxT("%s sent: %s"), ibProtocol::MethodName(method), wxString::FromUTF8(Redacted(sent)));
+	const ibString sent = request.Write();
+	ibJournalInfo(wxT("protocol"), wxT("%s sent: %s"), ibProtocol::MethodName(method), Redacted(sent));
 
-	std::string answer;
+	ibString answer;
 	const wxLongLong exchanging = wxGetUTCTimeMillis();
 	if (ExchangeDelay() > 0)
 		std::this_thread::sleep_for(std::chrono::milliseconds(ExchangeDelay()));
@@ -434,13 +435,13 @@ bool ibCommunicator::CallLocked(ibProtocol::ibMethod method, const ibProtocolNod
 		return false;
 	exchanged = wxGetUTCTimeMillis() - exchanging;
 
-	ibJournalInfo(wxT("protocol"), wxT("%s answered in %lld ms, %zu bytes: %s"), ibProtocol::MethodName(method),
-		(wxGetUTCTimeMillis() - began).GetValue(), answer.size(), wxString::FromUTF8(Redacted(answer)));
+	ibJournalInfo(wxT("protocol"), wxT("%s answered in %lld ms, %zu characters: %s"), ibProtocol::MethodName(method),
+		(wxGetUTCTimeMillis() - began).GetValue(), answer.length(), Redacted(answer));
 
 	return ReadAnswer(answer, id, result, refusal, error);
 }
 
-bool ibCommunicator::Resume(const std::string& sent, std::string& answer, ibProtocol::ibRefusal& refusal, wxString& error)
+bool ibCommunicator::Resume(const ibString& sent, ibString& answer, ibProtocol::ibRefusal& refusal, wxString& error)
 {
 	// A transport failure of a session the server offered to keep. One try. The unanswered request keeps its id;
 	// the login that precedes it takes a newer one, so the counter never goes backwards and never back to 0.
@@ -454,19 +455,18 @@ bool ibCommunicator::Resume(const std::string& sent, std::string& answer, ibProt
 	}
 
 	const long long loginId = ++m_lastId;
-	ibProtocolNode params;
-	params.SetValue(ibProtocol::ibLogin::Token, m_token)
-		.SetValue(ibProtocol::ibLogin::Mode, static_cast<int>(m_mode))
-		.SetValue(ibProtocol::ibLogin::Protocol, ibProtocol::Version);
 	ibProtocolNode request;
 	request.SetValue(ibProtocol::ibRpc::Version, "2.0")
 		.SetValue(ibProtocol::ibRpc::Id, loginId)
-		.SetValue(ibProtocol::ibRpc::Method, ibProtocol::MethodName(ibProtocol::ibMethod::Login))
-		.SetValue(ibProtocol::ibRpc::Params, params);
-	const std::string loginSent = request.Write();
-	ibJournalInfo(wxT("protocol"), wxT("login sent: %s"), wxString::FromUTF8(Redacted(loginSent)));
+		.SetValue(ibProtocol::ibRpc::Method, ibProtocol::MethodName(ibProtocol::ibMethod::Login));
+	request.Child(ibProtocol::ibRpc::Params)
+		.SetValue(ibProtocol::ibLogin::Token, m_token)
+		.SetValue(ibProtocol::ibLogin::Mode, static_cast<int>(m_mode))
+		.SetValue(ibProtocol::ibLogin::Protocol, ibProtocol::Version);
+	const ibString loginSent = request.Write();
+	ibJournalInfo(wxT("protocol"), wxT("login sent: %s"), Redacted(loginSent));
 
-	std::string loginAnswer;
+	ibString loginAnswer;
 	ibProtocol::ibRefusal loginRefusal = ibProtocol::ibRefusal::None;
 	wxString loginError;
 	if (!m_connection->Exchange(loginSent, loginAnswer, loginRefusal, loginError)) {
@@ -485,13 +485,13 @@ bool ibCommunicator::Resume(const std::string& sent, std::string& answer, ibProt
 		return false;
 	}
 
-	ibJournalInfo(wxT("protocol"), wxT("sent again: %s"), wxString::FromUTF8(Redacted(sent)));
+	ibJournalInfo(wxT("protocol"), wxT("sent again: %s"), Redacted(sent));
 	if (!m_connection->Exchange(sent, answer, refusal, error))
 		return false;
 	return true;
 }
 
-void ibCommunicator::Take(const ibProtocolNode& answer)
+void ibCommunicator::Take(ibProtocolNode& answer)
 {
 	if (!answer.Has(ibProtocol::ibFrame::Frame))
 		return;   // not a frame — a fetch's rows, a schema's tree, a file's part
@@ -503,14 +503,14 @@ void ibCommunicator::Take(const ibProtocolNode& answer)
 		// of is patched from the view held, as protocol 1 has it.
 		const long long was = m_frame.GetInt(ibProtocol::ibFrame::ActiveTab);
 		const long long active = patch.GetInt(ibProtocol::ibFrame::ActiveTab, was);
-		if (m_protocol >= 2 && active != was) {
-			json& frame = *m_frame.Json();
+		if (m_protocol >= 2 && active != was && m_frame.IsNode()) {
+			ibProtocolBody& frame = *m_frame.m_body;
 			const auto own = m_views.find(active);
-			const auto held = frame.find(ibProtocol::ibFrame::View);
-			if (held != frame.end()) {
-				json leaving = std::move(*held);
+			ibProtocolValue* const held = frame.Find(ibProtocol::ibFrame::View);
+			if (held != nullptr) {
+				ibProtocolValue leaving = std::move(*held);
 				if (own != m_views.end()) {
-					*held = std::move(*own->second.Json());
+					*held = std::move(*own->second.m_root);
 					m_views.erase(own);
 				}
 				else {
@@ -519,20 +519,24 @@ void ibCommunicator::Take(const ibProtocolNode& answer)
 				m_views[was] = ibProtocolNode(std::move(leaving));
 			}
 			else if (own != m_views.end()) {
-				frame[ibProtocol::ibFrame::View] = std::move(*own->second.Json());
+				frame.Set(ibProtocol::ibFrame::View) = std::move(*own->second.m_root);
 				m_views.erase(own);
 			}
 		}
 		m_frame.Apply(patch);
 	}
 	else {
-		// Whole: the answer less what is not the frame — and the views kept begin again with it.
-		json frame = json::object();
-		const json& whole = *answer.Json();
-		for (auto entry = whole.begin(); entry != whole.end(); ++entry) {
-			if (!IsAnswerWord(entry.key()))
-				frame[entry.key()] = *entry;
+		// Whole: the frame's own entries TAKEN out of the answer, not copied — what it says beside the frame stays in it
+		// for the caller (Draw reads the events there, a door its own result). The views kept begin again with it.
+		ibProtocolValue frame = ibProtocolValue::Node();
+		std::vector<ibProtocolEntry> beside;
+		for (ibProtocolEntry& entry : answer.m_body->m_entries) {
+			if (IsFrameWord(entry.m_name))
+				frame.GetNode()->m_entries.push_back(std::move(entry));
+			else
+				beside.push_back(std::move(entry));
 		}
+		answer.m_body->m_entries.swap(beside);
 		m_frame = ibProtocolNode(std::move(frame));
 		m_views.clear();
 	}

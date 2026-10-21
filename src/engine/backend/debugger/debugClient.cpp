@@ -653,11 +653,11 @@ bool ibDebuggerClient::ibDebuggerClientConnection::IsConnected() const
 std::shared_ptr<ibDebugCommandQueue> ibDebuggerClient::ibDebuggerClientConnection::OpenConnection()
 {
 	const std::shared_ptr<ibDebugCommandQueue> commandQueue = std::make_shared<ibDebugCommandQueue>();
+	// The runtime speaks binary (debugServer.cpp); a text message is nobody's command.
 	const std::shared_ptr<ibWebSocketClient> socketClient = std::make_shared<ibWebSocketClient>(ms_debugClient->m_ioThreads.GetContext(), nullptr,
-		[commandQueue](std::uint8_t opcode, std::string payload) {
-			// The runtime speaks binary (debugServer.cpp); a text message is nobody's command.
-			if (opcode == ibWebSocketOpcode::Binary)
-				commandQueue->Push(std::move(payload));
+		nullptr,
+		[commandQueue](std::string payload) {
+			commandQueue->Push(std::move(payload));
 		},
 		[commandQueue](const std::string& reason) {
 			commandQueue->Stop(reason);

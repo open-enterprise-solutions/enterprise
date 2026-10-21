@@ -211,15 +211,14 @@ public:
 	// or not an assistant is connected.
 	//
 	// Sent under the lock: what two threads say reaches the stream in the order it was said.
-	void WriteToStream(const wxString& json)
+	void WriteToStream(const ibString& json)
 	{
 		std::lock_guard<std::mutex> lock(m_streamMutex);
 
 		if (!m_stream)
 			return;   // nobody is listening — dropped
 
-		const wxScopedCharBuffer utf8 = json.utf8_str();
-		m_stream->Send(std::string(utf8.data(), utf8.length()));
+		m_stream->Send(json.ToUtf8());
 	}
 
 private:
@@ -366,11 +365,8 @@ private:
 
 		// No id: the refusal happens before the body has been read, so there is no call to
 		// answer — which is the shape JSON-RPC allows for exactly this.
-		const wxString text = ibRpcWriteError(ibDataValue(), ibRpcError::UnsupportedVersion,
-			wxT("Unsupported protocol version"), &data);
-
-		const wxScopedCharBuffer utf8 = text.utf8_str();
-		return std::string(utf8.data(), utf8.length());
+		return ibRpcWriteError(ibDataValue(), ibRpcError::UnsupportedVersion,
+			wxT("Unsupported protocol version"), &data).ToUtf8();
 	}
 
 	// What the transport saw in the header, for the refusal to quote back.
@@ -447,7 +443,7 @@ private:
 			wire.m_method          = headerOf("mcp-method");
 			wire.m_name            = headerOf("mcp-name");
 
-			const wxString request = wxString::FromUTF8(req.m_body.data(), req.m_body.size());
+			const ibString request = req.GetText();
 
 			// 🛑 THE VERDICT IS ASKED FOR, NOT RECOGNISED. The first version read the status out
 			// of the emitted JSON by looking for `"code":-32020` — and got 200 on every refusal,
@@ -455,7 +451,7 @@ private:
 			// fact you already had is a guess about the writer's formatting dressed up as a
 			// decision; the layer that decided the refusal is the one that says so.
 			int refusalCode = 0;
-			const wxString answer = m_owner->Answer(request, wire, &refusalCode);
+			const ibString answer = m_owner->Answer(request, wire, &refusalCode);
 
 			// ⭐ THE HTTP STATUS IS PART OF THE REFUSAL, not decoration on it. The modern
 			// transport asks a client to tell a version refusal from a header refusal from an
@@ -473,10 +469,8 @@ private:
 			// the transport still needs a reply, or the client waits for one.
 			if (answer.IsEmpty())
 				res.m_status = 202;
-			else {
-				const wxScopedCharBuffer utf8 = answer.utf8_str();
-				res.SetContent(std::string(utf8.data(), utf8.length()), "application/json");
-			}
+			else
+				res.SetText(answer, "application/json");
 			respond(std::move(res));
 		});
 
@@ -2327,7 +2321,7 @@ wxString BuildOrientation(const ibApplicationInstance* applicationInstance)
 
 } // namespace
 
-wxString ibMcpServer::Answer(const wxString& request, const ibMcpWireHeaders& headers, int* outErrorCode)
+ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& headers, int* outErrorCode)
 {
 	// THE VERDICT THE TRANSPORT WILL ASK FOR — recorded where the refusal is decided,
 	// which is the only place that knows. Reading it back out of the emitted JSON was
@@ -2335,7 +2329,7 @@ wxString ibMcpServer::Answer(const wxString& request, const ibMcpWireHeaders& he
 	// and the search looked for `"code":-32020`.
 	if (outErrorCode != nullptr) *outErrorCode = 0;
 	const auto refuse = [&](const ibDataValue& id, ibRpcError code, const wxString& text,
-		const ibDataNode* data = nullptr) -> wxString {
+		const ibDataNode* data = nullptr) -> ibString {
 		if (outErrorCode != nullptr) *outErrorCode = (int)code;
 		return ibRpcWriteError(id, code, text, data);
 	};
@@ -2346,7 +2340,7 @@ wxString ibMcpServer::Answer(const wxString& request, const ibMcpWireHeaders& he
 	// an answer to our own question.
 	{
 		ibDataValue answeringId;
-		wxString    payload;
+		ibString    payload;
 		bool        wasError = false;
 
 		if (ibRpcParseResponse(request, answeringId, payload, wasError)) {
@@ -2450,7 +2444,7 @@ wxString ibMcpServer::Answer(const wxString& request, const ibMcpWireHeaders& he
 		return ibRpcWriteResult(parsed.m_id, result);
 	}
 
-	wxString answer;
+	ibString answer;
 
 	// THE OUTCOME OF A TOOL CALL, carried out to where the record is written. The call itself is
 	// made deep inside the branch below; the journal line is written once, at the bottom, for every
@@ -3009,9 +3003,9 @@ wxString ibMcpServer::Answer(const wxString& request, const ibMcpWireHeaders& he
 			// Rendered against the configuration this server serves, so a type
 			// reads as "CatalogRef.Goods" rather than as a number that means
 			// nothing on the other side of the socket.
-			wxString text = ok
+			const ibString text = ok
 				? ibRpcRenderNode(payload, ibMetaTypeResolver(GetMetaData()))
-				: refusal;
+				: ibString(refusal);
 
 			// ⭐⭐ SAID ONCE IS NOT SAID. The orientation asks a client to introduce itself in the
 			// assistant window before any work, in as many words — and it is handed over exactly

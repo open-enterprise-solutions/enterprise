@@ -45,7 +45,7 @@ wxMemoryBuffer Emit(const ibDataNode& node) {
 // Parse JSON text back into a node. `lookup` maps a type NAME to a clsid — the
 // inverse of the emitter's resolver; unset means a name-form NodeType stays 0.
 ibDataNode Parse(const wxMemoryBuffer& text,
-	std::function<ibClassID(const wxString&)> lookup = nullptr) {
+	std::function<ibClassID(const ibString&)> lookup = nullptr) {
 	ibJsonProvider provider;
 	if (lookup) provider.SetTypeLookup(std::move(lookup));
 	ibReaderMemory reader(text);
@@ -194,8 +194,35 @@ TEST(JsonProvider, NodeType_NameFormNeedsLookup) {
 
 	// with the inverse -> identity restored
 	const ibDataNode back = Parse(w.buffer(),
-		[](const wxString& name) -> ibClassID { return name == wxT("Catalog") ? 1001 : 0; });
+		[](const ibString& name) -> ibClassID { return name == wxT("Catalog") ? 1001 : 0; });
 	EXPECT_EQ(back.GetClsid(), (ibClassID)1001);
+}
+
+// …and without one the word is kept, for whoever holds the configuration to look up after (LookupTypes) — a call is
+// read before its caller is known, and not read again. All the way down; the word gone once it is answered.
+TEST(JsonProvider, NodeType_KeptWordLookedUpAfter) {
+	ibJsonProvider provider;
+	provider.SetTypeResolver([](ibClassID) { return wxString(wxT("Catalog")); });
+	ibWriterMemory w;
+	ibDataNode n(1001, 1);
+	ibDataNode& inner = n.Child(wxT("Inner"));
+	inner.SetClsid(1001);
+	inner.SetMetaId(2);
+	provider.Write(n, w);
+
+	ibDataNode back = Parse(w.buffer());
+	EXPECT_EQ(back.GetClsid(), (ibClassID)0);
+	EXPECT_EQ(back.GetValue<wxString>(wxT("NodeType")), wxT("Catalog"));
+
+	ibJsonProvider lookup;
+	lookup.SetTypeLookup([](const ibString& name) -> ibClassID { return name == wxT("Catalog") ? 1001 : 0; });
+	lookup.LookupTypes(back);
+	EXPECT_EQ(back.GetClsid(), (ibClassID)1001);
+	EXPECT_EQ(back.FindField(wxT("NodeType")), nullptr);
+	const ibDataNode* const innerBack = back.FindChild(wxT("Inner"));
+	ASSERT_TRUE(innerBack != nullptr);
+	EXPECT_EQ(innerBack->GetClsid(), (ibClassID)1001);
+	EXPECT_EQ(innerBack->FindField(wxT("NodeType")), nullptr);
 }
 
 // ---------------------------------------------------------------------------

@@ -2,8 +2,6 @@
 
 #include <memory>
 
-#include <nlohmann/json.hpp>
-
 #include <wx/filename.h>
 #include <wx/stdpaths.h>
 
@@ -11,6 +9,9 @@
 #include "backend/appHost.h"            // ibApplicationInstanceScope
 #include "backend/backend_exception.h"
 #include "core/diagnostics/crashGuard.h"   // ibCrashGuard::Install — the journal and the dumps of the process
+#include "core/serialize/jsonProvider.h"   // the request read, as the port's are
+
+#include "protocol/protocol.h"          // ibProtocol::ibFileBase — the request's words
 
 #include "frmserver/client/clientHost.h"
 
@@ -33,38 +34,38 @@ void ReleaseProcess()
 
 } // namespace
 
-ibFileBase* ibFileBaseOpen(const std::string& request, wxString& error)
+ibFileBase* ibFileBaseOpen(const ibString& request, wxString& error)
 {
 	// THE PROCESS'S JOURNAL, AND ITS CRASH GUARD — the engine runs in this process now, and every application of the
 	// tree installs both as its first act; a client that loads a file base is one too. Named by the process, as theirs.
 	ibCrashGuard::Install(wxFileName(wxStandardPaths::Get().GetExecutablePath()).GetName());
 
-	const nlohmann::json where = nlohmann::json::parse(request, nullptr, false);
-	if (!where.is_object()) {
+	// Read as the port's requests are read — the text where it lies.
+	ibDataNode where;
+	bool read = false;
+	try {
+		read = ibJsonProvider().Read(request, where);
+	}
+	catch (const ibCoreException&) {
+	}
+	if (!read) {
 		error = wxT("the request to open a file base is not a JSON object");
 		return nullptr;
 	}
-	const auto text = [&where](const char* name) {
-		const auto found = where.find(name);
-		return found != where.end() && found->is_string()
-			? wxString::FromUTF8(found->get<std::string>()) : wxString();
-	};
 	ibFileInstanceRequest opening;
-	opening.m_name      = text("Name");
-	opening.m_locale    = text("Locale");
-	opening.m_directory = text("Directory");
-	opening.m_server    = text("Server");
-	opening.m_port      = text("Port");
-	opening.m_user      = text("User");
-	opening.m_password  = text("Password");
-	opening.m_database  = text("Database");
-	const auto create = where.find("Create");
-	opening.m_create = create != where.end() && create->is_boolean() && create->get<bool>();
+	opening.m_name      = where.GetValue<wxString>(ibProtocol::ibFileBase::Name);
+	opening.m_locale    = where.GetValue<wxString>(ibProtocol::ibFileBase::Locale);
+	opening.m_directory = where.GetValue<wxString>(ibProtocol::ibFileBase::Directory);
+	opening.m_server    = where.GetValue<wxString>(ibProtocol::ibFileBase::Server);
+	opening.m_port      = where.GetValue<wxString>(ibProtocol::ibFileBase::Port);
+	opening.m_user      = where.GetValue<wxString>(ibProtocol::ibFileBase::User);
+	opening.m_password  = where.GetValue<wxString>(ibProtocol::ibFileBase::Password);
+	opening.m_database  = where.GetValue<wxString>(ibProtocol::ibFileBase::Database);
+	opening.m_create    = where.GetValue<bool>(ibProtocol::ibFileBase::Create);
 	// THE DEBUG SERVER — as enterprise.exe's `--debug`: it comes up with the base's configuration
 	// (ibMetaDataConfiguration::OnInitialize) and listens from the start. Without it the client turns it on
 	// later; a session stops for it either way (ibSession::Debug — made with the session).
-	const auto debug = where.find("Debug");
-	if (debug != where.end() && debug->is_boolean() && debug->get<bool>())
+	if (where.GetValue<bool>(ibProtocol::ibFileBase::Debug))
 		opening.m_loadMetadataFlags = _app_start_create_debug_server_flag;
 
 	// THE THREAD COMES BACK AS IT WAS. Opening leaves it working for the base — and the client's thread works for
@@ -97,29 +98,23 @@ ibFileBase* ibFileBaseOpen(const std::string& request, wxString& error)
 	return base.release();
 }
 
-bool ibFileBaseCall(ibFileBase* base, const std::string& request, const void* connection,
-	const wxString& address, std::string& answer, wxString& error)
+bool ibFileBaseCall(ibFileBase* base, const ibString& request, const void* connection,
+	const ibString& address, ibString& answer, wxString& error)
 {
 	if (base == nullptr || !base->host) {
 		error = wxT("no base is open");
 		return false;
 	}
 	// The port's door: the envelope read, the call made, the answer written — as a server's client is answered.
-	answer = std::string(base->host->Call(wxString::FromUTF8(request.data(), request.size()), connection, address).utf8_str());
+	answer = base->host->Call(request, connection, address);
 	return true;
 }
 
-void ibFileBaseListen(ibFileBase* base, const void* connection, std::function<void(const std::string& text)> notified)
+void ibFileBaseListen(ibFileBase* base, const void* connection, std::function<void(const ibString& text)> notified)
 {
 	if (base == nullptr || !base->host)
 		return;
-	if (!notified) {
-		base->host->SetNotifier(connection, nullptr);
-		return;
-	}
-	base->host->SetNotifier(connection, [notified = std::move(notified)](const wxString& text) {
-		notified(std::string(text.utf8_str()));
-	});
+	base->host->SetNotifier(connection, std::move(notified));
 }
 
 void ibFileBaseDisconnect(ibFileBase* base, const void* connection)

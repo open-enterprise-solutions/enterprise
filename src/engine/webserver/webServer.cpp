@@ -6,18 +6,14 @@
 #include <csignal>
 #include <thread>
 
-#include <nlohmann/json.hpp>
-
 #include <wx/dir.h>
 #include <wx/file.h>
 #include <wx/fileconf.h>
 #include <wx/filename.h>
-#include <wx/mstream.h>
 #include <wx/tokenzr.h>
 #include <wx/utils.h>   // wxGetFullHostName — the server named in an address
 #include <wx/wfstream.h>
 #include <wx/zipstrm.h>
-#include <wx/zstream.h>
 
 #ifdef __WXMSW__
 #include <windows.h>   // SetConsoleCtrlHandler — the console window closing
@@ -25,6 +21,7 @@
 
 #include "protocol/connectionFile.h"
 #include "protocol/connectionServer.h"   // the oes:// address and the path of a base's clients — the protocol's
+#include "protocol/protocolNode.h"       // the request a file base is opened by
 
 #include "core/net/httpClient.h"
 #include "core/net/webSocketFrame.h"
@@ -125,65 +122,40 @@ bool ReadPack(const wxString& path, std::map<std::string, std::string>& files, w
 	return true;
 }
 
-// ⭐ THE TRANSPORT DEFLATES, when the browser asked for it as it connected (?compress=deflate) — the application
-// server's rule (appserver/clientListener.cpp), kept by this transport for the bases it holds: an answer of some size
-// goes as a BINARY message holding it deflated, raw (RFC 1951, what DecompressionStream("deflate-raw") reads), a small
-// one as text.
-constexpr std::size_t kDeflateFrom = 1024;
-
-void SendAnswer(ibWebSocket& socket, std::string text, bool deflate)
-{
-	if (!deflate || text.size() < kDeflateFrom) {
-		socket.Send(std::move(text));
-		return;
-	}
-	wxMemoryOutputStream packed;
-	{
-		wxZlibOutputStream zip(packed, wxZ_DEFAULT_COMPRESSION, wxZLIB_NO_HEADER);
-		zip.Write(text.data(), text.size());
-		if (!zip.Close()) {
-			socket.Send(std::move(text));   // not packed — sent as it is
-			return;
-		}
-	}
-	const wxStreamBuffer* const buffer = packed.GetOutputStreamBuffer();
-	socket.SendBinary(std::string(static_cast<const char*>(buffer->GetBufferStart()),
-		static_cast<std::size_t>(packed.GetLength())));
-}
-
+// The browser asked for answers of some size deflated, as it connected — what the socket to an application server asks
+// for it too, so they come through as they are.
 bool WantsDeflate(const ibHttpRequest& request)
 {
 	return request.GetParameter("compress") == "deflate";
 }
 
 // A BROWSER'S SOCKET TO A FILE BASE — the base is the server here: the relay is the connection its clients log in
-// through, told what the base says to them, and they leave with it.
+// through, told what the base says to them, and they leave with it. The text is the engine's both ways: the base's
+// own, and the socket reads it and writes it (and deflates it, when the browser asked).
 class ibFileRelay : public ibWebSocketHandler {
 public:
 
 	ibFileRelay(const ibProtocolFileBase& base, std::shared_ptr<ibWebSocket> socket) :
-		m_base(base), m_socket(std::move(socket)), m_address(wxString::FromUTF8(m_socket->GetRequest().m_address)),
-		m_deflate(WantsDeflate(m_socket->GetRequest()))
+		m_base(base), m_socket(std::move(socket))
 	{
 		const std::weak_ptr<ibWebSocket> told = m_socket;
-		const bool deflate = m_deflate;
-		m_base.Listen(this, [told, deflate](const std::string& text) {
+		m_base.Listen(this, [told](const ibString& text) {
 			if (const std::shared_ptr<ibWebSocket> socket = told.lock())
-				SendAnswer(*socket, text, deflate);
+				socket->Send(text);
 		});
 	}
 
-	virtual void OnMessage(std::string text) override
+	virtual void OnMessage(const ibString& text) override
 	{
-		std::string answer;
+		ibString answer;
 		wxString error;
-		if (!m_base.Call(text, this, m_address, answer, error)) {
+		if (!m_base.Call(text, this, m_socket->GetRequest().m_address, answer, error)) {
 			ibWebServerSay(ibJournalMark::Error, wxT("a browser's call did not reach its base: %s"), error);
 			m_socket->Close(ibWebSocketClose::ServerError, "the base is not open");
 			return;
 		}
-		if (!answer.empty())
-			SendAnswer(*m_socket, std::move(answer), m_deflate);
+		if (!answer.IsEmpty())
+			m_socket->Send(answer);
 	}
 
 	virtual void OnBinary(std::string) override
@@ -199,8 +171,6 @@ public:
 private:
 	const ibProtocolFileBase&    m_base;
 	std::shared_ptr<ibWebSocket> m_socket;
-	wxString                     m_address;
-	bool                         m_deflate;
 };
 
 // A BROWSER'S SOCKET TO AN APPLICATION SERVER'S BASE — a socket of the web server's own to the server for each, the
@@ -214,14 +184,13 @@ public:
 	{
 		const std::weak_ptr<ibWebSocket> told = m_socket;
 		m_upstream = std::make_shared<ibWebSocketClient>(io, nullptr,
-			[told](std::uint8_t opcode, std::string payload) {
-				const std::shared_ptr<ibWebSocket> socket = told.lock();
-				if (!socket)
-					return;
-				if (opcode == ibWebSocketOpcode::Binary)
-					socket->SendBinary(std::move(payload));
-				else
-					socket->Send(std::move(payload));
+			[told](const ibString& text) {
+				if (const std::shared_ptr<ibWebSocket> socket = told.lock())
+					socket->Send(text);
+			},
+			[told](std::string packed) {
+				if (const std::shared_ptr<ibWebSocket> socket = told.lock())
+					socket->SendBinary(std::move(packed));
 			},
 			[told, publication](const std::string& reason) {
 				if (!reason.empty())
@@ -234,9 +203,9 @@ public:
 		m_upstream->Open(host, port, target);
 	}
 
-	virtual void OnMessage(std::string text) override
+	virtual void OnMessage(const ibString& text) override
 	{
-		m_upstream->Send(std::move(text));
+		m_upstream->Send(text);
 	}
 
 	virtual void OnBinary(std::string) override
@@ -360,14 +329,16 @@ bool ibWebServer::Publish(const ibWebPublication& publication)
 
 	if (publication.m_kind == wxT("firebird")) {
 		// THE FILE BASE, OPENED HERE — the request ibFileBaseOpen reads.
-		nlohmann::json request = { { "Directory", Utf8(publication.m_directory) }, { "Name", Utf8(name) } };
+		ibProtocolNode request;
+		request.SetValue(ibProtocol::ibFileBase::Directory, ibString(publication.m_directory))
+			.SetValue(ibProtocol::ibFileBase::Name, ibString(name));
 		if (!publication.m_locale.IsEmpty())
-			request["Locale"] = Utf8(publication.m_locale);
+			request.SetValue(ibProtocol::ibFileBase::Locale, ibString(publication.m_locale));
 		if (publication.m_debug)
-			request["Debug"] = true;
+			request.SetValue(ibProtocol::ibFileBase::Debug, true);
 		auto base = std::make_unique<ibProtocolFileBase>();
 		wxString error;
-		if (!base->Open(request.dump(), error)) {
+		if (!base->Open(request.Write(), error)) {
 			ibWebServerSay(ibJournalMark::Error, wxT("publication '%s': the file base at %s did not open: %s"), name,
 				publication.m_directory, error);
 			return false;
@@ -380,15 +351,15 @@ bool ibWebServer::Publish(const ibWebPublication& publication)
 		});
 		m_http.Post(path, [held](const ibHttpRequest& request, ibHttpResponder respond) {
 			// A request on its own — no connection, as an application server answers a POST.
-			std::string answer;
+			ibString answer;
 			wxString error;
 			ibHttpResponse response;
-			if (!held->Call(request.m_body, nullptr, wxString::FromUTF8(request.m_address), answer, error))
+			if (!held->Call(request.GetText(), nullptr, request.m_address, answer, error))
 				response.m_status = 503;
-			else if (answer.empty())
+			else if (answer.IsEmpty())
 				response.m_status = 204;   // a notification — no answer wanted
 			else
-				response.SetContent(std::move(answer), "application/json");
+				response.SetText(answer, "application/json");
 			respond(std::move(response));
 		});
 		return true;

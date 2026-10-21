@@ -1851,6 +1851,7 @@ namespace ibProtocol {
 	// WHERE A FILE BASE LIVES — what fileserver opens it by (fileserver/fileBase.h).
 	namespace ibFileBase {
 
+		inline constexpr const char* Name      = "Name";     // the base's — a web server's publication
 		inline constexpr const char* Locale    = "Locale";
 		inline constexpr const char* Directory = "Directory";
 		inline constexpr const char* Server    = "Server";

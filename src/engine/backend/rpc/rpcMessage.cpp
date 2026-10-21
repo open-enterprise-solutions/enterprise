@@ -5,7 +5,6 @@
 #include "backend/rpc/rpcMessage.h"
 
 #include "backend/backend_exception.h"
-#include "core/fileSystem/fs.h"            // ibReaderMemory / ibWriterMemory
 #include "core/serialize/jsonProvider.h"
 #include "backend/compiler/value.h"            // ibValue::GetAvailableCtor — a built-in's name
 #include "backend/objCtor.h"                   // ibCtorAbstractType::GetClassName
@@ -25,7 +24,7 @@
 // FLOOR under it. Asking only one of the two is how a lookup exists and never fires.
 namespace {
 
-ibClassID LookupType(const wxString& name, const ibMetaData* metaData)
+ibClassID LookupType(const ibString& name, const ibMetaData* metaData)
 {
 	// ⚠ THE COMPOSITION'S OWN PARTS FIRST, AND NOT ONLY FOR SPEED. A lookup runs INSIDE the JSON
 	// parse, and `GetIDObjectFromString` does not answer 0 for a name it does not know — it
@@ -62,15 +61,10 @@ ibClassID LookupType(const wxString& name, const ibMetaData* metaData)
 
 void ibRpcInstallTypeLookup(ibJsonProvider& provider)
 {
-	provider.SetTypeLookup([](const wxString& name) -> ibClassID { return LookupType(name, activeMetaData); });
+	provider.SetTypeLookup([](const ibString& name) -> ibClassID { return LookupType(name, activeMetaData); });
 }
 
-void ibRpcInstallTypeLookup(ibJsonProvider& provider, const ibMetaData* metaData)
-{
-	provider.SetTypeLookup([metaData](const wxString& name) -> ibClassID { return LookupType(name, metaData); });
-}
-
-wxString ibRpcRenderNode(const ibDataNode& node, const std::function<wxString(ibClassID)>& typeResolver)
+ibString ibRpcRenderNode(const ibDataNode& node, const std::function<ibString(ibClassID)>& typeResolver)
 {
 	ibJsonProvider provider;
 	// A message on the wire is one line: a program reads it, and the readable view's breaks and indents were bytes.
@@ -86,9 +80,9 @@ wxString ibRpcRenderNode(const ibDataNode& node, const std::function<wxString(ib
 	// at all: every tool answer is rendered with the metadata resolver (mcpServer), which knows
 	// registered types and says nothing about a composition's parts — the exact ids this exists for.
 	// Written as "the caller's own resolver still wins" in the comment and as `? :` in the code.
-	provider.SetTypeResolver([typeResolver](ibClassID clsid) -> wxString {
+	provider.SetTypeResolver([typeResolver](ibClassID clsid) -> ibString {
 		if (typeResolver) {
-			const wxString named = typeResolver(clsid);
+			const ibString named = typeResolver(clsid);
 			if (!named.IsEmpty())
 				return named;
 		}
@@ -101,23 +95,22 @@ wxString ibRpcRenderNode(const ibDataNode& node, const std::function<wxString(ib
 		return ctor != nullptr ? ctor->GetClassName() : wxString();
 	});
 
-	ibWriterMemory writer;
-	if (!provider.Write(node, writer))
-		return wxEmptyString;
-
-	return wxString::FromUTF8(reinterpret_cast<const char*>(writer.pointer()), writer.size());
+	ibString text;
+	if (!provider.Write(node, text))
+		return ibString();
+	return text;
 }
 
 namespace {
 
-wxString EmitNode(const ibDataNode& node) { return ibRpcRenderNode(node); }
+ibString EmitNode(const ibDataNode& node) { return ibRpcRenderNode(node); }
 
 // The envelope every answer shares. Written by hand rather than by a helper
 // object because there are exactly two shapes and both are three lines.
 ibDataNode Envelope(const ibDataValue& id)
 {
 	ibDataNode root;
-	root.SetValue(wxT("jsonrpc"), wxString(wxT("2.0")));
+	root.SetValue(wxT("jsonrpc"), ibString(wxT("2.0")));
 	// The id goes back VERBATIM — a number stays a number, a string stays a
 	// string. Rendering it through a type of our choosing would break the one
 	// thing the protocol uses to pair an answer with its call.
@@ -126,20 +119,12 @@ ibDataNode Envelope(const ibDataValue& id)
 }
 
 // One request read by a provider whose type lookup is installed already — whose types it knows is the caller's.
-bool ReadRequest(const wxString& text, ibJsonProvider& provider, ibRpcRequest& request, wxString& error)
+bool ReadRequest(const ibString& text, ibJsonProvider& provider, ibRpcRequest& request, wxString& error)
 {
-	const wxScopedCharBuffer utf8 = text.utf8_str();
-
-	// ⚠ A READER BORROWS ITS BYTES (fileSystem/fs.h): the buffer must outlive it,
-	// so it is a named local and not a temporary in the call.
-	wxMemoryBuffer buffer;
-	buffer.AppendData(utf8.data(), utf8.length());
-
 	ibDataNode root;
 
 	try {
-		ibReaderMemory reader(buffer);
-		if (!provider.Read(reader, root)) {
+		if (!provider.Read(text, root)) {
 			error = wxT("the request could not be read as JSON");
 			return false;
 		}
@@ -157,7 +142,7 @@ bool ReadRequest(const wxString& text, ibJsonProvider& provider, ibRpcRequest& r
 
 	// A scalar key lands in the FIELD area; `params`, being an object, lands in
 	// the properties area as a Child.
-	request.m_method = root.GetValue<wxString>(wxT("method"));
+	request.m_method = root.GetValue<ibString>(wxT("method"));
 	if (request.m_method.IsEmpty()) {
 		error = wxT("no method named");
 		return false;
@@ -166,42 +151,51 @@ bool ReadRequest(const wxString& text, ibJsonProvider& provider, ibRpcRequest& r
 	if (const ibDataValue* id = root.FindField(wxT("id")))
 		request.m_id = *id;
 
-	if (const ibDataNode* params = root.FindChild(wxT("params")))
-		request.m_params = *params;
+	// The params node is the request's to give up: it is moved out of the tree just read, not copied.
+	if (ibDataNode* params = root.FindChild(wxT("params")))
+		request.m_params = std::move(*params);
 
 	return true;
 }
 
 } // namespace
 
-bool ibRpcParseRequest(const wxString& text, ibRpcRequest& request, wxString& error)
+bool ibRpcParseRequest(const ibString& text, ibRpcRequest& request, wxString& error)
 {
 	ibJsonProvider provider;
 	ibRpcInstallTypeLookup(provider);
 	return ReadRequest(text, provider, request, error);
 }
 
-bool ibRpcParseRequest(const wxString& text, ibRpcRequest& request, wxString& error, const ibMetaData* metaData)
+bool ibRpcParseRequest(const ibString& text, ibRpcRequest& request, wxString& error, bool& unknownType)
 {
+	// By no configuration, not the thread's — a thread that works for no base has none to ask.
+	unknownType = false;
 	ibJsonProvider provider;
-	ibRpcInstallTypeLookup(provider, metaData);
+	provider.SetTypeLookup([&unknownType](const ibString& name) -> ibClassID {
+		const ibClassID clsid = LookupType(name, nullptr);
+		if (clsid == ibClassID(0))
+			unknownType = true;
+		return clsid;
+	});
 	return ReadRequest(text, provider, request, error);
 }
 
-bool ibRpcParseResponse(const wxString& text, ibDataValue& id, wxString& payload, bool& isError)
+void ibRpcLookupTypes(ibDataNode& node, const ibMetaData* metaData)
 {
-	const wxScopedCharBuffer utf8 = text.utf8_str();
+	ibJsonProvider provider;
+	provider.SetTypeLookup([metaData](const ibString& name) -> ibClassID { return LookupType(name, metaData); });
+	provider.LookupTypes(node);
+}
 
-	wxMemoryBuffer buffer;
-	buffer.AppendData(utf8.data(), utf8.length());
-
+bool ibRpcParseResponse(const ibString& text, ibDataValue& id, ibString& payload, bool& isError)
+{
 	ibDataNode root;
 
 	try {
-		ibReaderMemory reader(buffer);
 		ibJsonProvider provider;
 		ibRpcInstallTypeLookup(provider);
-		if (!provider.Read(reader, root))
+		if (!provider.Read(text, root))
 			return false;
 	}
 	catch (...) {
@@ -209,7 +203,7 @@ bool ibRpcParseResponse(const wxString& text, ibDataValue& id, wxString& payload
 	}
 
 	// ONE FACT TELLS THEM APART: a request names a method, an answer does not.
-	if (!root.GetValue<wxString>(wxT("method")).IsEmpty())
+	if (!root.GetValue<ibString>(wxT("method")).IsEmpty())
 		return false;
 
 	const ibDataNode* result = root.FindChild(wxT("result"));
@@ -226,20 +220,20 @@ bool ibRpcParseResponse(const wxString& text, ibDataValue& id, wxString& payload
 	return true;
 }
 
-wxString ibRpcWriteResult(const ibDataValue& id, const ibDataNode& result)
+ibString ibRpcWriteResult(const ibDataValue& id, ibDataNode result)
 {
 	ibDataNode root = Envelope(id);
-	root.Child(wxT("result")) = result;
+	root.Child(wxT("result")) = std::move(result);
 	return EmitNode(root);
 }
 
-wxString ibRpcWriteError(const ibDataValue& id, ibRpcError code, const wxString& message)
+ibString ibRpcWriteError(const ibDataValue& id, ibRpcError code, const wxString& message)
 {
 	return ibRpcWriteError(id, code, message, nullptr);
 }
 
 // The error answer, whoever numbers the code — JSON-RPC's own, or the application's.
-static wxString WriteError(const ibDataValue& id, s64 code, const wxString& message, const ibDataNode* data)
+static ibString WriteError(const ibDataValue& id, s64 code, const wxString& message, const ibDataNode* data)
 {
 	ibDataNode root = Envelope(id);
 
@@ -261,13 +255,13 @@ static wxString WriteError(const ibDataValue& id, s64 code, const wxString& mess
 	return EmitNode(root);
 }
 
-wxString ibRpcWriteError(const ibDataValue& id, ibRpcError code, const wxString& message,
+ibString ibRpcWriteError(const ibDataValue& id, ibRpcError code, const wxString& message,
 	const ibDataNode* data)
 {
 	return WriteError(id, static_cast<s64>(code), message, data);
 }
 
-wxString ibRpcWriteError(const ibDataValue& id, s32 code, const wxString& message)
+ibString ibRpcWriteError(const ibDataValue& id, s32 code, const wxString& message)
 {
 	return WriteError(id, code, message, nullptr);
 }

@@ -216,7 +216,7 @@ public:
 	template<class SessionT>
 	ibSessionHolder CreateSession(ibSessionKind kind,
 	                              const wxString& presetGuid,
-	                              const wxString& address);
+	                              const ibString& address);
 
 private:
 	// Register the session-lifecycle event listeners that drive

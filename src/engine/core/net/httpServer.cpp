@@ -278,6 +278,11 @@ std::string ibHttpRequest::GetParameter(const std::string& name) const
 	return std::string();
 }
 
+ibString ibHttpRequest::GetText() const
+{
+	return ibString::FromUTF8(m_body.data(), m_body.size());
+}
+
 void ibHttpResponse::SetContent(std::string body, const std::string& type)
 {
 	m_body = std::move(body);
@@ -288,6 +293,11 @@ void ibHttpResponse::SetContent(std::string body, const std::string& type)
 		}
 	}
 	m_headers.emplace_back("Content-Type", type);
+}
+
+void ibHttpResponse::SetText(const ibString& text, const std::string& type)
+{
+	SetContent(text.ToUtf8(), type);
 }
 
 //*******************************************************************************************
@@ -517,14 +527,14 @@ struct ibHttpServerState {
 	std::mutex                                         m_mutex;
 	std::condition_variable                            m_drained;
 	std::map<ibConnection*, std::weak_ptr<ibConnection>> m_connections;
-	std::map<std::string, std::size_t>                 m_perAddress;
+	std::map<ibString, std::size_t>                    m_perAddress;
 	bool                                               m_stopping = false;
 
 	// Bound and listening — false with why in `error`; the port it took is said back in `port`.
 	bool Listen(const asio::ip::address& address, std::uint16_t& port, bool secure, bool redirect, std::string& error);
 	void Accept(ibListener& listener);
 	void Open(const ibListener& listener, asio::ip::tcp::socket socket);
-	void Release(ibConnection* connection, const std::string& address);
+	void Release(ibConnection* connection, const ibString& address);
 };
 
 //*******************************************************************************************
@@ -533,17 +543,24 @@ struct ibHttpServerState {
 
 namespace {
 
+// ⭐ THE TRANSPORT DEFLATES, for a peer that asked for it as it connected (?compress=deflate): a text from this many
+// bytes goes as a binary message holding it deflated, a smaller one as text. What it carries never knows: the same
+// text either way. A frame is text that repeats itself (names, ids, the same fields on every control) and shrinks
+// several times over.
+constexpr std::size_t kDeflateFrom = 1024;
+
 // A WEBSOCKET AS ITS HANDLER HOLDS IT — the connection's, by a weak reference: a handler that keeps it longer than
 // the connection lives holds nothing that sends.
 class ibServerWebSocket : public ibWebSocket {
 public:
 
 	ibServerWebSocket(std::weak_ptr<ibConnection> connection, ibHttpRequest request) :
-		m_connection(std::move(connection)), m_request(std::move(request))
+		m_connection(std::move(connection)), m_request(std::move(request)),
+		m_deflate(m_request.GetParameter("compress") == "deflate")
 	{
 	}
 
-	virtual void Send(std::string text) override;
+	virtual void Send(const ibString& text) override;
 	virtual void SendBinary(std::string data) override;
 	virtual void Close(std::uint16_t code, const std::string& reason) override;
 
@@ -552,6 +569,7 @@ public:
 private:
 	std::weak_ptr<ibConnection> m_connection;
 	ibHttpRequest               m_request;
+	bool                        m_deflate;   // the peer asked for it as it connected
 };
 
 // AN EVENT STREAM AS ITS HANDLER HOLDS IT — the connection's, by a weak reference, as a WebSocket is.
@@ -579,10 +597,10 @@ private:
 class ibConnection : public std::enable_shared_from_this<ibConnection> {
 public:
 
-	ibConnection(ibHttpServerState& server, std::unique_ptr<ibHttpStream> stream, std::string address, bool secure,
+	ibConnection(ibHttpServerState& server, std::unique_ptr<ibHttpStream> stream, const ibString& address, bool secure,
 		bool redirect) :
 		m_server(server), m_stream(std::move(stream)), m_executor(m_stream->GetSocket().get_executor()),
-		m_timer(m_executor), m_writeTimer(m_executor), m_address(std::move(address)), m_secure(secure),
+		m_timer(m_executor), m_writeTimer(m_executor), m_address(address), m_secure(secure),
 		m_redirect(redirect)
 	{
 		llhttp_init(&m_parser, HTTP_REQUEST, &Settings());
@@ -1298,10 +1316,11 @@ private:
 		++m_queued;
 		asio::post(*m_work, [self = shared_from_this(), handler = m_handler, binary, message = std::move(message)]() mutable {
 			try {
+				// A text is made the engine's here, on the worker — the one reading of its bytes past the check above.
 				if (binary)
 					handler->OnBinary(std::move(message));
 				else
-					handler->OnMessage(std::move(message));
+					handler->OnMessage(ibString::FromUTF8(message.data(), message.size()));
 			}
 			catch (...) {
 			}
@@ -1471,7 +1490,7 @@ private:
 	asio::steady_timer            m_writeTimer;
 	unsigned                      m_turn = 0;
 	unsigned                      m_writeTurn = 0;
-	std::string                   m_address;
+	ibString                      m_address;
 	bool                          m_secure;
 	bool                          m_redirect;   // a page asked for in the clear beyond this machine: sent on to HTTPS
 	bool                          m_closed = false;
@@ -1522,10 +1541,18 @@ private:
 	std::vector<std::string>              m_earlyEvents;           // sent before its head went out
 };
 
-void ibServerWebSocket::Send(std::string text)
+// Packed on the sender's thread, not the socket's.
+void ibServerWebSocket::Send(const ibString& text)
 {
-	if (const std::shared_ptr<ibConnection> connection = m_connection.lock())
-		connection->SendMessage(ibWebSocketOpcode::Text, std::move(text));
+	const std::shared_ptr<ibConnection> connection = m_connection.lock();
+	if (!connection)
+		return;
+	std::string bytes = text.ToUtf8();
+	std::string packed;
+	if (m_deflate && bytes.size() >= kDeflateFrom && ibDeflate(bytes, packed))
+		connection->SendMessage(ibWebSocketOpcode::Binary, std::move(packed));
+	else
+		connection->SendMessage(ibWebSocketOpcode::Text, std::move(bytes));
 }
 
 void ibServerWebSocket::SendBinary(std::string data)
@@ -1625,7 +1652,8 @@ void ibHttpServerState::Open(const ibListener& listener, asio::ip::tcp::socket s
 	asio::ip::address address = peer.address();
 	if (address.is_v6() && address.to_v6().is_v4_mapped())
 		address = asio::ip::make_address_v4(asio::ip::v4_mapped, address.to_v6());
-	const std::string name = address.to_string();
+	// The engine's text once, here: the connection, each of its requests and whoever serves them hold this one.
+	const ibString name(address.to_string().c_str());
 	socket.set_option(asio::ip::tcp::no_delay(true), error);   // an answer goes out at once, not after Nagle's wait
 
 	{
@@ -1653,7 +1681,7 @@ void ibHttpServerState::Open(const ibListener& listener, asio::ip::tcp::socket s
 	connection->Start();
 }
 
-void ibHttpServerState::Release(ibConnection* connection, const std::string& address)
+void ibHttpServerState::Release(ibConnection* connection, const ibString& address)
 {
 	std::lock_guard<std::mutex> lock(m_mutex);
 	m_connections.erase(connection);

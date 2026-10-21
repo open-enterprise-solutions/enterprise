@@ -161,7 +161,7 @@ public:
 		}
 
 		if (const ibDataNode* set = NodeArgument(params, ArgSet().Name())) {
-			for (const std::pair<wxString, ibDataValue>& field : set->Fields()) {
+			for (const std::pair<ibString, ibDataValue>& field : set->Fields()) {
 				ibFormatCode code = ibFormatCode::NumberDigits;
 				if (!ibFormatString::FindCode(field.first, code)) {
 					refusal = wxString::Format(ibMcpText("'%s' is not a code Format reads, so setting it would "

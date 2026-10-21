@@ -173,7 +173,7 @@ bool ibValueMetaObjectAccountingRegister::ReadData(const ibDataNode& node)
 	// (`Dr1391`, `Cr1391`), not by their names: a side is named after its field, and a field renamed
 	// between two saves would otherwise leave its sides unfindable and re-created under new ids.
 	if (const ibDataNode* saved = node.FindChild(wxT("FieldSides"))) {
-		for (const std::pair<wxString, ibDataValue>& entry : saved->Properties()) {
+		for (const std::pair<ibString, ibDataValue>& entry : saved->Properties()) {
 			const bool credit = entry.first.StartsWith(wxT("Cr"));
 			long long field = 0;
 			// A metaID is an `int`: a number past it is not an id this configuration could have written.

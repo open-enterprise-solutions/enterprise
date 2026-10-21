@@ -9,14 +9,12 @@ bool ibReadProtocolNode(const ibProtocolNode& wire, ibDataNode& node)
 	if (!wire.IsNode())
 		return false;
 
-	std::string text = wire.Write();
-	ibReader reader(text.data(), static_cast<int>(text.size()));
 	// A NODE'S TYPE COMES BACK BY ITS NAME where the server named it in words — a composition's parts are written so
 	// (ibRpcRenderNode's floor: "CompositionAppearance") — and is read back as the server reads it (ibRpcInstallTypeLookup):
 	// unread, it stayed 0, and a setting's appearance was not recognised for one.
 	ibJsonProvider provider;
-	provider.SetTypeLookup([](const wxString& name) { return ibCompositionNodeClsid(name); });
-	return provider.Read(reader, node);
+	provider.SetTypeLookup([](const ibString& name) { return ibCompositionNodeClsid(name); });
+	return provider.Read(wire.Write(), node);
 }
 
 void ibWriteProtocolNode(const ibDataNode& node, ibProtocolNode wire)
@@ -24,12 +22,12 @@ void ibWriteProtocolNode(const ibDataNode& node, ibProtocolNode wire)
 	ibJsonProvider provider;
 	provider.SetCompact(true);
 
-	ibWriterMemory writer;
-	provider.Write(node, writer);
+	ibString text;
+	provider.Write(node, text);
 
 	ibProtocolNode written;
-	if (!ibProtocolNode::Read(std::string(reinterpret_cast<const char*>(writer.pointer()), writer.size()), written))
+	if (!ibProtocolNode::Read(text, written))
 		return;
 	for (const auto& [name, entry] : written.Entries())
-		wire.SetValue(name.c_str(), entry);
+		wire.SetValue(name, entry);
 }

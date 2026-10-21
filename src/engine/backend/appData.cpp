@@ -1608,7 +1608,7 @@ wxString ibApplicationInstance::GetDatabaseDescription() const
 
 ///////////////////////////////////////////////////////////////////////////////
 
-#include "backend/utils/md5.hpp"
+#include "core/utils/md5.hpp"
 
 wxString ibApplicationInstance::ComputeMd5(const wxString& userPassword) const
 {

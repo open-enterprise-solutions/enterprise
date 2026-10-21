@@ -1070,7 +1070,7 @@ public:
 			// object with neither, and the answer carried no refusal to say so, because nothing had
 			// been refused: nothing had been SEEN (2026-09-22, giving a command group its caption and
 			// its printer, then finding both empty).
-			std::vector<std::pair<wxString, ibDataValue>> asked = wanted->Fields();
+			std::vector<std::pair<ibString, ibDataValue>> asked = wanted->Fields();
 			asked.insert(asked.end(), wanted->Properties().begin(), wanted->Properties().end());
 
 			for (const auto& field : asked) {

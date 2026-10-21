@@ -29,7 +29,7 @@ if(WIN32)
     target_compile_definitions(protocol PRIVATE PROTOCOL_EXPORTS)
 endif()
 
-# Nothing of the server: a side speaks the wire's text (its tree is nlohmann's, behind protocolNode.h), and a file base
+# Nothing of the server: a side speaks the wire's text (its tree is its own, ibString all through: protocolValue.h), and a file base
 # is opened by fileserver, LOADED when one is (connectionFile). The connection to a server is the core's WebSocket
 # client (core/net), and its sockets are the core's.
 target_link_libraries(protocol
