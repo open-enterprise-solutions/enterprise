@@ -2,6 +2,7 @@
 #define __PROTOCOL_CONNECTION_H__
 
 #include <functional>
+#include <memory>
 #include <string>
 
 #include <wx/string.h>
@@ -25,6 +26,15 @@ public:
 	// Open this connection again after it has closed. False when there is nowhere to return to — a file base has
 	// no socket. The default is false, so a connection that cannot return does not pretend to.
 	virtual bool Reconnect(wxString& error) { (void)error; return false; }
+
+	// A SECOND CONNECTION TO THE SAME PLACE (protocol 6) — the debugger's, so what it carries is not queued behind this
+	// one's calls: the same server's address, the same file base. Null, with why in `error`, when there is none — the
+	// default, so a connection that cannot open one does not pretend to.
+	virtual std::unique_ptr<ibProtocolConnection> OpenChannel(wxString& error)
+	{
+		error = wxT("this connection opens no second one");
+		return nullptr;
+	}
 
 	// WHAT THE SERVER SAYS UNASKED — a JSON-RPC notification (`changed {Client}`: a client's frame changed by itself),
 	// handed to `notified` as text on the connection's thread, not the window's; empty — told nothing.

@@ -55,9 +55,13 @@ public:
 		ibProtocol::ibRefusal& refusal, wxString& error) override;
 	// What the base says unasked — on the base's thread that says it (a session's).
 	virtual void Listen(std::function<void(const std::string& text)> notified) override;
+	// …and a second connection to the same base, the debugger's (protocol 6): a connection of its own to the base's
+	// clients, which goes (Disconnect) when it is dropped. The base stays this one's to close.
+	virtual std::unique_ptr<ibProtocolConnection> OpenChannel(wxString& error) override;
 
 private:
-	ibProtocolFileBase m_base;
+	// Held with the second connections it opened: one dropped after the base was closed finds it closed, not freed.
+	std::shared_ptr<ibProtocolFileBase> m_base = std::make_shared<ibProtocolFileBase>();
 };
 
 #endif

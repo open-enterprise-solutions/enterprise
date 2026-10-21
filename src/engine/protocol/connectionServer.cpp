@@ -11,15 +11,13 @@
 #include "core/net/httpClient.h"
 #include "core/net/ioThreads.h"
 
-#include "protocolNode.h"   // a short message read, to tell a notification from an answer
-
 namespace {
 
 // How long Close waits for the server to be told the socket is closing, before its thread is stopped under it.
 constexpr std::chrono::seconds kCloseWithin(1);
 
-// The longest a notification of the server's is — a line; anything longer is an answer.
-constexpr std::size_t kNotificationMax = 1024;
+// How a notification of the server's begins — the method first, where an answer has its id.
+const std::string kNotificationHead = "{\"jsonrpc\":\"2.0\",\"method\":";
 
 // A base's name in the path — its UTF-8 bytes, every one but the unreserved escaped.
 std::string EscapeSegment(const wxString& segment)
@@ -137,20 +135,18 @@ bool ibProtocolConnectionServer::Open(const wxString& address, wxString& error)
 				return;
 			}
 
-			// A NOTIFICATION — a method and no id, said unasked: to whoever listens, here. Only a short message can be one
-			// (the server's notifications are a line), so an answer of a frame is never parsed twice.
-			if (message.size() <= kNotificationMax) {
-				ibProtocolNode node;
-				if (ibProtocolNode::Read(message, node) && node.Has(ibProtocol::ibRpc::Method) && !node.Has(ibProtocol::ibRpc::Id)) {
-					std::function<void(const std::string&)> notified;
-					{
-						std::lock_guard<std::mutex> lock(m_mutex);
-						notified = m_notified;
-					}
-					if (notified)
-						notified(message);
-					return;
+			// A NOTIFICATION — a method and no id, said unasked: to whoever listens, here. Told by how it begins: the
+			// server writes a notification's method where an answer's id stands (ibClientHost::NotifyChanged, NotifyDebug),
+			// so an answer of a frame is never parsed twice, and the debugger's news, of any length, is never an answer.
+			if (message.compare(0, kNotificationHead.size(), kNotificationHead) == 0) {
+				std::function<void(const std::string&)> notified;
+				{
+					std::lock_guard<std::mutex> lock(m_mutex);
+					notified = m_notified;
 				}
+				if (notified)
+					notified(message);
+				return;
 			}
 
 			// …else the answer to the request waiting.
@@ -228,6 +224,18 @@ bool ibProtocolConnectionServer::Reconnect(wxString& error)
 		return false;
 	}
 	return Open(address, error);
+}
+
+std::unique_ptr<ibProtocolConnection> ibProtocolConnectionServer::OpenChannel(wxString& error)
+{
+	if (m_address.IsEmpty()) {
+		error = wxT("no server to open a second connection to");
+		return nullptr;
+	}
+	auto channel = std::make_unique<ibProtocolConnectionServer>();
+	if (!channel->Open(m_address, error))
+		return nullptr;
+	return channel;
 }
 
 bool ibProtocolConnectionServer::Exchange(const std::string& request, std::string& answer,

@@ -220,7 +220,6 @@
       <PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <ClCompile Include="pictureRegistry.cpp" />
-    <ClCompile Include="process.cpp" />
     <ClCompile Include="programFolder.cpp" />
     <ClCompile Include="query\queryAggregates.cpp" />
     <ClCompile Include="query\queryKeywords.cpp" />
@@ -229,6 +228,7 @@
     <ClCompile Include="serialize\jsonText.cpp" />
     <ClCompile Include="spreadsheet\sheetFormat.cpp" />
     <ClCompile Include="spreadsheet\spreadsheetObject.cpp" />
+    <ClCompile Include="startProcess.cpp" />
     <ClCompile Include="syntaxHelper\helpCorpus.cpp" />
     <ClCompile Include="syntaxHelper\helpLoader.cpp" />
     <ClCompile Include="syntaxHelper\helpResolver.cpp" />
@@ -293,7 +293,6 @@
     <ClInclude Include="net\tlsStream.h" />
     <ClInclude Include="net\webSocketFrame.h" />
     <ClInclude Include="pictureRegistry.h" />
-    <ClInclude Include="process.h" />
     <ClInclude Include="programFolder.h" />
     <ClInclude Include="propertyChoiceMode.h" />
     <ClInclude Include="query\queryAggregates.h" />
@@ -311,6 +310,7 @@
     <ClInclude Include="settings\settingsShelf.h" />
     <ClInclude Include="spreadsheet\sheetFormat.h" />
     <ClInclude Include="spreadsheet\spreadsheetObject.h" />
+    <ClInclude Include="startProcess.h" />
     <ClInclude Include="stringUtils.h" />
     <ClInclude Include="syntaxHelper\helpCategory.h" />
     <ClInclude Include="syntaxHelper\helpCorpus.h" />

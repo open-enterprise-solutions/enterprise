@@ -1782,16 +1782,17 @@ void ibMcpDescribePlatform(const ibApplicationInstance* applicationInstance, ibD
 		int seen = 0;
 		int attached = 0;
 
-		for (const auto* connection : debugClient->GetListConnection()) {
+		// A runtime that answered — not a scanner's socket dialling a port (ibMcpDebugBridge::GetStop).
+		debugClient->ForEachConnection([&seen, &attached](const auto& connection) {
 
-			if (connection == nullptr || !connection->IsConnected())
-				continue;
+			if (!connection.IsVerifiedConnection())
+				return;
 
 			seen++;
 
-			if (connection->GetConnectionType() == ConnectionType_Debugger)
+			if (connection.GetConnectionType() == ConnectionType_Debugger)
 				attached++;
-		}
+		});
 
 		ibDataNode& debugger = into.Child(wxT("debugger"));
 		debugger.AddField(wxT("runtimes"), ibDataValue::Int((s64)seen));

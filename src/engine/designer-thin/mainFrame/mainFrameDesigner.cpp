@@ -130,6 +130,18 @@ void ibFrontendMainFrameDesigner::Debugger_OnStateChanged()
 	if (m_menuDebug != nullptr)
 		m_menuDebug->UpdateUI();
 }
+
+bool ibFrontendMainFrameDesigner::ListenDebug(std::function<void(const ibProtocolNode& news)> told,
+	ibProtocol::ibRefusal& refusal, wxString& error)
+{
+	return GetCommunicator().ListenDebug(std::move(told), refusal, error);
+}
+
+bool ibFrontendMainFrameDesigner::Debug(const ibProtocolNode& params, ibProtocolNode& result,
+	ibProtocol::ibRefusal& refusal, wxString& error)
+{
+	return GetCommunicator().Debug(params, result, refusal, error);
+}
 #pragma endregion
 
 #include "designer-thin/docManager/templates/docViewMetaFile.h"

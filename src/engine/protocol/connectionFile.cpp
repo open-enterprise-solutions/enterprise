@@ -102,14 +102,52 @@ void ibProtocolFileBase::Disconnect(const void* connection) const
 		m_disconnect(m_base, connection);
 }
 
+namespace {
+
+// A request to the base, by this connection — the one door both connections send through.
+bool ExchangeWith(const ibProtocolFileBase& base, const void* connection, const std::string& request, std::string& answer,
+	ibProtocol::ibRefusal& refusal, wxString& error)
+{
+	if (!base.Call(request, connection, wxEmptyString, answer, error)) {
+		refusal = ibProtocol::ibRefusal::Failed;
+		if (error.IsEmpty())
+			error = wxT("no base is open");
+		return false;
+	}
+	return true;
+}
+
+// THE SECOND CONNECTION to a base another connection opened — its own to the base's clients, the base not its to close.
+class ibProtocolConnectionFileChannel : public ibProtocolConnection {
+public:
+
+	explicit ibProtocolConnectionFileChannel(std::shared_ptr<ibProtocolFileBase> base) : m_base(std::move(base)) {}
+	virtual ~ibProtocolConnectionFileChannel() { m_base->Disconnect(this); }
+
+	virtual bool Exchange(const std::string& request, std::string& answer,
+		ibProtocol::ibRefusal& refusal, wxString& error) override
+	{
+		return ExchangeWith(*m_base, this, request, answer, refusal, error);
+	}
+	virtual void Listen(std::function<void(const std::string& text)> notified) override
+	{
+		m_base->Listen(this, std::move(notified));
+	}
+
+private:
+	std::shared_ptr<ibProtocolFileBase> m_base;
+};
+
+} // namespace
+
 bool ibProtocolConnectionFile::Open(const std::string& request, wxString& error)
 {
-	return m_base.Open(request, error);
+	return m_base->Open(request, error);
 }
 
 void ibProtocolConnectionFile::Close()
 {
-	m_base.Close();
+	m_base->Close();
 }
 
 ibProtocolConnectionFile::~ibProtocolConnectionFile()
@@ -120,16 +158,15 @@ ibProtocolConnectionFile::~ibProtocolConnectionFile()
 bool ibProtocolConnectionFile::Exchange(const std::string& request, std::string& answer,
 	ibProtocol::ibRefusal& refusal, wxString& error)
 {
-	if (!m_base.Call(request, this, wxEmptyString, answer, error)) {
-		refusal = ibProtocol::ibRefusal::Failed;
-		if (error.IsEmpty())
-			error = wxT("no base is open");
-		return false;
-	}
-	return true;
+	return ExchangeWith(*m_base, this, request, answer, refusal, error);
 }
 
 void ibProtocolConnectionFile::Listen(std::function<void(const std::string& text)> notified)
 {
-	m_base.Listen(this, std::move(notified));
+	m_base->Listen(this, std::move(notified));
+}
+
+std::unique_ptr<ibProtocolConnection> ibProtocolConnectionFile::OpenChannel(wxString& /*error*/)
+{
+	return std::make_unique<ibProtocolConnectionFileChannel>(m_base);
 }

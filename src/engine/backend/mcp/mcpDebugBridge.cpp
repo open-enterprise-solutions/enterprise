@@ -77,15 +77,17 @@ ibMcpDebugBridge::Stop ibMcpDebugBridge::GetStop() const
 	// connections — went on answering "1 attached, ready" in the same breath, and `compose_run`
 	// refused with "no application is running" against an application that was running perfectly
 	// well (measured 2026-09-07 with two clients on one base).
+	//
+	// 🛑 AND A RUNTIME IS ONE THAT ANSWERED. IsConnected is a socket in the slot, which a scanner holds while
+	// it dials a port nobody listens on — about four seconds a try on Windows — so the runtime just stopped
+	// was still "connected" seconds after its process had gone (2026-10-21).
 	answer.m_connected = false;
 
 	if (debugClient != nullptr) {
-		for (const auto* connection : debugClient->GetListConnection()) {
-			if (connection != nullptr && connection->IsConnected()) {
+		debugClient->ForEachConnection([&answer](const auto& connection) {
+			if (connection.IsVerifiedConnection())
 				answer.m_connected = true;
-				break;
-			}
-		}
+		});
 	}
 
 	return answer;
@@ -640,7 +642,7 @@ void ibMcpDebugBridge::OnSetStack(const ibStackData& stackData)
 	m_stop.m_stack.clear();
 	for (const ibStackData::ibStackRow& row : stackData.m_stackData) {
 		Frame frame;
-		frame.m_module = row.m_moduleName;
+		frame.m_module = row.m_fullName;
 		frame.m_line = row.m_moduleLine;
 		m_stop.m_stack.push_back(frame);
 	}

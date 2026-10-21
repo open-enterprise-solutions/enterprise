@@ -41,6 +41,8 @@ public:
 		ibProtocol::ibRefusal& refusal, wxString& error) override;
 	// The same address, opened again. False when Open has never succeeded.
 	virtual bool Reconnect(wxString& error) override;
+	// …and a second socket to it, the debugger's (protocol 6).
+	virtual std::unique_ptr<ibProtocolConnection> OpenChannel(wxString& error) override;
 	// What the server says unasked — on the thread that reads the socket.
 	virtual void Listen(std::function<void(const std::string& text)> notified) override;
 

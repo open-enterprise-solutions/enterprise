@@ -1,5 +1,8 @@
-#ifndef __CORE_PROCESS_H__
-#define __CORE_PROCESS_H__
+#ifndef __CORE_START_PROCESS_H__
+#define __CORE_START_PROCESS_H__
+
+// ⚠ NOT process.h: the core's folder is on the include path of the modules, and a file of that name stood in for the
+// CRT's <process.h> that <thread> includes — `_beginthreadex` was not found in the first file to recompile (2026-10-21).
 
 #include "core/core.h"
 
@@ -15,4 +18,4 @@
 // a thread waits for it, so it does not stay a zombie that wxProcess::Exists reports as running.
 CORE_API long ibStartProcess(const wxString& command);
 
-#endif // __CORE_PROCESS_H__
+#endif // __CORE_START_PROCESS_H__

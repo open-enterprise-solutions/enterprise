@@ -50,6 +50,7 @@ deflate (RFC 1951 — a browser's `DecompressionStream("deflate-raw")`). A text 
 | `command` | `Client`, `Command` | the frame — the command done on the active tab's document |
 | `presentation` | `Client`, `Value`, `Format` | `Text` — the value as a person reads it, formatted by the server (`Format`: the codes `Format()` takes) |
 | `picture` | `Client`, `Pictures` — the ids | `Pictures` — each `Id`, `Picture` (PNG, base64; empty when there is none of that id) |
+| `debug` | `Client`, `Command` and its fields (protocol 6) | at once, never the frame — [The debugger](#the-debugger) |
 
 `login`'s `Read` saves the start's own reads: the designer names the debugger's store (`Schema` 15), which was a
 call of its own at every start. A schema the server does not know, the person has no right to, or that could not be
@@ -361,6 +362,48 @@ What a call's own work changes is not told: its answer carries it. A question th
 answered — a confirmation answered No — comes in that answer, with no `changed` and no empty frame after it; a change
 made after the answer's frame was drawn (a report composed in the background) is told as before.
 
+A notification begins `{"jsonrpc":"2.0","method":` — where an answer has its `id` — and a client tells the two apart
+by that, whatever the length.
+
+## The debugger
+
+From protocol 6 a designer debugs through the server's debugger — the one connected to the runtimes. The client's
+windows listen to it, as the assistant does. It goes on a second connection of the same client, so a step is not
+queued behind a call waiting on the stop it would let go:
+
+1. `debug {Client, Command: 1}` on the client's connection → `Channel`, a key for one use.
+2. A second connection to the same place (a WebSocket; a file base's second connection in process):
+   `debug {Client, Command: 2, Channel}` on it binds it.
+
+From then on that connection takes the commands, each answered at once and never with a frame, and is sent the news,
+`debug {Client, Event, …}`. Its closing ends nothing: the client is no longer told.
+
+| Command | Params | Answer |
+|---|---|---|
+| 3 Search | — | — the runtimes of the server's machine looked for; a debug run just started is waited for |
+| 4 Connections | — | `Rows` — `Host`, `Port`, `Type`, `Verified`, `Connected`, `User`, `Computer` |
+| 5 Attach, 6 Detach | `Host`, `Port`; Detach `Kill` | — |
+| 7 Continue, 8 Step over, 9 Step into, 10 Step out, 11 Pause | — | — |
+| 12 Stop | `Kill` — the runtime ended too | — |
+| 13 ToolTip | `File`, `Module`, `Expression` | — news 6 |
+| 14 Add expression, 15 Expand expression | `Expression`, `Item`, `Asker` | — news 9, 10 |
+| 16 Remove expression | `Item` | — |
+| 17 Stack | `Level` | — the locals of that call, news 8 |
+
+| Event | Fields |
+|---|---|
+| 1 Session start, 2 Session end | `Connected` — a runtime still attached |
+| 3 Enter loop, 4 Leave loop | `Session`, `File`, `Module`, `Line` |
+| 5 Message | the same, `Text` |
+| 6 ToolTip | `Session`, `File`, `Module`, `Expression`, `Text` |
+| 7 Stack | `Rows` — `Module`, `Name` — the call, `Line` |
+| 8 Locals | `Rows` — `Name`, `Value`, `Type`, `Attributes` |
+| 9 Variable, 10 Expanded | `Item`, `Asker`, `Rows` — `Item`, `Name`, `Value`, `Type`, `Attributes` |
+
+- Lines are the committed ones. What the editor's unapplied edits moved is the client's to count.
+- Breakpoints are the debugger's store, schema 15 (Debugger).
+- `Item` is the asker's own number, said back. `Asker` is who asked: an answer is the asker's only.
+
 ## Files
 
 A file the client hands over is kept in the session's temporary storage, in parts of at most 1 MB, and named by an
@@ -475,4 +518,6 @@ session included.
 - HTTP `POST` is not bound to a connection. The `Client` id remains its bearer. The window and the token are not
   offered there.
 - A file travels in base64 inside JSON.
+- The debugger reaches the runtimes on the server's own machine. An application server brings up no debug server, so
+  its clients are not debugged.
 - The platform's own captions are in the server's language, not the session's.

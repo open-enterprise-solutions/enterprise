@@ -64,6 +64,9 @@
     <ClCompile Include="client\clientChildFrame.cpp">
       <Filter>client</Filter>
     </ClCompile>
+    <ClCompile Include="client\clientDebugger.cpp">
+      <Filter>client</Filter>
+    </ClCompile>
     <ClCompile Include="client\clientFrame.cpp">
       <Filter>client</Filter>
     </ClCompile>
@@ -533,6 +536,9 @@
   <ItemGroup>
     <ClInclude Include="frmserver.h" />
     <ClInclude Include="client\clientChildFrame.h">
+      <Filter>client</Filter>
+    </ClInclude>
+    <ClInclude Include="client\clientDebugger.h">
       <Filter>client</Filter>
     </ClInclude>
     <ClInclude Include="client\clientFrame.h">

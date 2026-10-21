@@ -42,6 +42,34 @@ ibProtocol::ibRefusal RefusalOf(long long code)
 	return ibProtocol::ibRefusal::BadParameter;
 }
 
+// AN ANSWER READ — the result of the call of that id, or its refusal: one call is in flight on a connection at a time,
+// and an envelope with no id is the server refusing a request it could not read — still that one's.
+bool ReadAnswer(const std::string& answer, long long id, ibProtocolNode& result, ibProtocol::ibRefusal& refusal,
+	wxString& error)
+{
+	ibProtocolNode root;
+	if (!ibProtocolNode::Read(answer, root) || !root.IsNode()) {
+		refusal = ibProtocol::ibRefusal::Failed;
+		error = wxT("the server's answer could not be read");
+		return false;
+	}
+	if (root.GetInt(ibProtocol::ibRpc::Id, id) != id) {
+		refusal = ibProtocol::ibRefusal::Failed;
+		error = wxT("the server answered another call");
+		return false;
+	}
+	const ibProtocolNode failed = root.FindChild(ibProtocol::ibRpc::Error);
+	if (failed.IsNode()) {
+		refusal = RefusalOf(failed.GetInt(ibProtocol::ibRpc::Code));
+		error = failed.GetString(ibProtocol::ibRpc::Message);
+		return false;
+	}
+	const ibProtocolNode done = root.FindChild(ibProtocol::ibRpc::Result);
+	if (!done.IsEmpty())
+		result = done;
+	return true;
+}
+
 // Two held events of one kind — the later stands for both: the same event of the same control of the same view; a
 // column's place and width are each the column's own.
 bool IsSameState(const ibProtocolNode& one, const ibProtocolNode& other)
@@ -82,14 +110,16 @@ int ExchangeDelay()
 #endif
 }
 
-// Password and Token are bearer secrets. The debug journal records the exchange; the release build's macro is empty.
-// Only a text that names one is read again: a login's. Every frame read a second time for the journal cost more than
-// reading it for the client (a Debug profile, 2026-10-20: 535 ms against 387).
+// Password, Token and the debugger's Channel key are bearer secrets. The debug journal records the exchange; the release
+// build's macro is empty. Only a text that names one is read again: a login's, the key's. Every frame read a second time
+// for the journal cost more than reading it for the client (a Debug profile, 2026-10-20: 535 ms against 387).
 std::string Redacted(const std::string& text)
 {
 	static const std::string password = std::string("\"") + ibProtocol::ibLogin::Password + "\"";
 	static const std::string token = std::string("\"") + ibProtocol::ibLogin::Token + "\"";
-	if (text.find(password) == std::string::npos && text.find(token) == std::string::npos)
+	static const std::string channel = std::string("\"") + ibProtocol::ibDebug::Channel + "\"";
+	if (text.find(password) == std::string::npos && text.find(token) == std::string::npos
+		&& text.find(channel) == std::string::npos)
 		return text;
 
 	json node = json::parse(text, nullptr, false);
@@ -98,7 +128,7 @@ std::string Redacted(const std::string& text)
 	const auto hide = [](json& object) {
 		if (!object.is_object())
 			return;
-		for (const char* name : { ibProtocol::ibLogin::Password, ibProtocol::ibLogin::Token }) {
+		for (const char* name : { ibProtocol::ibLogin::Password, ibProtocol::ibLogin::Token, ibProtocol::ibDebug::Channel }) {
 			const auto found = object.find(name);
 			if (found != object.end() && found->is_string())
 				*found = "***";
@@ -205,6 +235,99 @@ void ibCommunicator::Listen(std::function<void()> changed)
 	});
 }
 
+bool ibCommunicator::ListenDebug(std::function<void(const ibProtocolNode& news)> told, ibProtocol::ibRefusal& refusal,
+	wxString& error)
+{
+	refusal = ibProtocol::ibRefusal::None;
+	error.clear();
+	if (!told) {
+		std::lock_guard<std::mutex> lock(m_debugMutex);
+		if (m_debugConnection)
+			m_debugConnection->Listen(nullptr);
+		m_debugConnection.reset();
+		return true;
+	}
+	if (m_protocol < 6) {
+		refusal = ibProtocol::ibRefusal::NotFound;
+		error = wxT("the server speaks no protocol with the debugger in it");
+		return false;
+	}
+
+	// The second connection, and the key that binds it — asked on this one, outside the debugger's lock (the order the
+	// two locks are taken in is this one's first).
+	std::unique_ptr<ibProtocolConnection> channel = m_connection ? m_connection->OpenChannel(error) : nullptr;
+	if (!channel) {
+		refusal = ibProtocol::ibRefusal::Failed;
+		return false;
+	}
+	ibProtocolNode params, key;
+	params.SetValue(ibProtocol::ibDebug::Command, static_cast<int>(ibProtocol::ibDebug::ibCommand::Channel));
+	if (!Call(ibProtocol::ibMethod::Debug, params, key, refusal, error))
+		return false;
+
+	// Told before it is bound, so news the moment it is bound is not lost — of this client only.
+	const wxString client = GetClient();
+	channel->Listen([client, told = std::move(told)](const std::string& text) {
+		ibProtocolNode node;
+		if (!ibProtocolNode::Read(text, node) || node.GetString(ibProtocol::ibRpc::Method) != ibProtocol::ibRpc::Debug)
+			return;
+		const ibProtocolNode news = node.FindChild(ibProtocol::ibRpc::Params);
+		if (news.GetString(ibProtocol::ibLogin::Client) != client)
+			return;
+		told(news);
+	});
+
+	std::lock_guard<std::mutex> lock(m_debugMutex);
+	if (m_debugConnection)
+		m_debugConnection->Listen(nullptr);
+	m_debugConnection = std::move(channel);
+	m_debugClient = client;
+
+	ibProtocolNode listen, bound;
+	listen.SetValue(ibProtocol::ibDebug::Command, static_cast<int>(ibProtocol::ibDebug::ibCommand::Listen))
+		.SetValue(ibProtocol::ibDebug::Channel, key.GetString(ibProtocol::ibDebug::Channel));
+	if (DebugLocked(listen, bound, refusal, error))
+		return true;
+	m_debugConnection->Listen(nullptr);
+	m_debugConnection.reset();
+	return false;
+}
+
+bool ibCommunicator::Debug(const ibProtocolNode& params, ibProtocolNode& result, ibProtocol::ibRefusal& refusal,
+	wxString& error)
+{
+	std::lock_guard<std::mutex> lock(m_debugMutex);
+	return DebugLocked(params, result, refusal, error);
+}
+
+bool ibCommunicator::DebugLocked(const ibProtocolNode& params, ibProtocolNode& result, ibProtocol::ibRefusal& refusal,
+	wxString& error)
+{
+	refusal = ibProtocol::ibRefusal::None;
+	error.clear();
+	result = ibProtocolNode();
+	if (!m_debugConnection) {
+		refusal = ibProtocol::ibRefusal::NoSession;
+		error = wxT("no debugger is listening");
+		return false;
+	}
+
+	// The client named, as every call names it; nothing held goes with it, and no frame is asked for.
+	ibProtocolNode named = params.IsNode() ? params.Clone() : ibProtocolNode();
+	named.SetValue(ibProtocol::ibLogin::Client, m_debugClient);
+	const long long id = ++m_debugLastId;
+	ibProtocolNode request;
+	request.SetValue(ibProtocol::ibRpc::Version, "2.0")
+		.SetValue(ibProtocol::ibRpc::Id, id)
+		.SetValue(ibProtocol::ibRpc::Method, ibProtocol::MethodName(ibProtocol::ibMethod::Debug))
+		.SetValue(ibProtocol::ibRpc::Params, named);
+
+	std::string answer;
+	if (!m_debugConnection->Exchange(request.Write(), answer, refusal, error))
+		return false;
+	return ReadAnswer(answer, id, result, refusal, error);
+}
+
 bool ibCommunicator::Call(ibProtocol::ibMethod method, const ibProtocolNode& params, ibProtocolNode& result,
 	ibProtocol::ibRefusal& refusal, wxString& error)
 {
@@ -280,8 +403,9 @@ bool ibCommunicator::CallLocked(ibProtocol::ibMethod method, const ibProtocolNod
 	}
 	// ⭐ WHAT WAS HELD GOES WITH ANY CALL — the server applies it before the call itself, so the code a press runs reads the
 	// row the cursor stands on. Taken once: a call that does not get through loses it with the session it was of. A
-	// client going says nothing more of where it was.
-	if (!beforeLogin && method != ibProtocol::ibMethod::Logout) {
+	// client going says nothing more of where it was, and the debugger's call is no work of the client's (the server
+	// would drop it).
+	if (!beforeLogin && method != ibProtocol::ibMethod::Logout && method != ibProtocol::ibMethod::Debug) {
 		std::vector<ibProtocolNode> pending;
 		{
 			std::lock_guard<std::mutex> lock(m_pendingMutex);
@@ -313,29 +437,7 @@ bool ibCommunicator::CallLocked(ibProtocol::ibMethod method, const ibProtocolNod
 	ibJournalInfo(wxT("protocol"), wxT("%s answered in %lld ms, %zu bytes: %s"), ibProtocol::MethodName(method),
 		(wxGetUTCTimeMillis() - began).GetValue(), answer.size(), wxString::FromUTF8(Redacted(answer)));
 
-	ibProtocolNode root;
-	if (!ibProtocolNode::Read(answer, root) || !root.IsNode()) {
-		refusal = ibProtocol::ibRefusal::Failed;
-		error = wxT("the server's answer could not be read");
-		return false;
-	}
-	// The answer to THIS call — one is in flight at a time. An envelope with no id is the server refusing a request it
-	// could not read: still this one's.
-	if (root.GetInt(ibProtocol::ibRpc::Id, id) != id) {
-		refusal = ibProtocol::ibRefusal::Failed;
-		error = wxT("the server answered another call");
-		return false;
-	}
-	const ibProtocolNode failed = root.FindChild(ibProtocol::ibRpc::Error);
-	if (failed.IsNode()) {
-		refusal = RefusalOf(failed.GetInt(ibProtocol::ibRpc::Code));
-		error = failed.GetString(ibProtocol::ibRpc::Message);
-		return false;
-	}
-	const ibProtocolNode done = root.FindChild(ibProtocol::ibRpc::Result);
-	if (!done.IsEmpty())
-		result = done;
-	return true;
+	return ReadAnswer(answer, id, result, refusal, error);
 }
 
 bool ibCommunicator::Resume(const std::string& sent, std::string& answer, ibProtocol::ibRefusal& refusal, wxString& error)
@@ -372,25 +474,10 @@ bool ibCommunicator::Resume(const std::string& sent, std::string& answer, ibProt
 		error = loginError;
 		return false;
 	}
-	ibProtocolNode root;
-	if (!ibProtocolNode::Read(loginAnswer, root) || !root.IsNode()) {
-		refusal = ibProtocol::ibRefusal::Failed;
-		error = wxT("the server's answer could not be read");
+	// A refusal — 401 is the session gone — closes the window as any other lost session does.
+	ibProtocolNode done;
+	if (!ReadAnswer(loginAnswer, loginId, done, refusal, error))
 		return false;
-	}
-	if (root.GetInt(ibProtocol::ibRpc::Id, loginId) != loginId) {
-		refusal = ibProtocol::ibRefusal::Failed;
-		error = wxT("the server answered another call");
-		return false;
-	}
-	const ibProtocolNode failed = root.FindChild(ibProtocol::ibRpc::Error);
-	if (failed.IsNode()) {
-		// 401 is the session gone — the window closes as it does for any other lost session.
-		refusal = RefusalOf(failed.GetInt(ibProtocol::ibRpc::Code));
-		error = failed.GetString(ibProtocol::ibRpc::Message);
-		return false;
-	}
-	const ibProtocolNode done = root.FindChild(ibProtocol::ibRpc::Result);
 	if (done.GetString(ibProtocol::ibLogin::Client) != m_client) {
 		// A new Client is another server's session (stage 2). This return is the same process, the same id.
 		refusal = ibProtocol::ibRefusal::NoSession;
@@ -464,6 +551,14 @@ void ibCommunicator::Take(const ibProtocolNode& answer)
 
 void ibCommunicator::Forget()
 {
+	// The debugger's connection goes with the client it was bound for.
+	{
+		std::lock_guard<std::mutex> lock(m_debugMutex);
+		if (m_debugConnection)
+			m_debugConnection->Listen(nullptr);
+		m_debugConnection.reset();
+		m_debugClient.clear();
+	}
 	m_client.clear();
 	m_token.clear();
 	m_resume = false;

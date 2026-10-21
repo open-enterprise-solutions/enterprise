@@ -855,7 +855,7 @@ wxString ibValueSystemFunction::ComputerName()//ComputerName
 	return wxGetHostName();
 }
 
-#include "core/process.h"   // a script on the server runs on a fiber, where wxExecute asserts
+#include "core/startProcess.h"   // a script on the server runs on a fiber, where wxExecute asserts
 
 void ibValueSystemFunction::RunApp(const wxString& sCommand)//RunApp
 {

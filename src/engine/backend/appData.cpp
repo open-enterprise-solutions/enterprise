@@ -1005,7 +1005,7 @@ bool ibApplicationInstance::DestroyAppDataEnv()
 
 ///////////////////////////////////////////////////////////////////////////////
 #include "backend/debugger/debugClient.h"
-#include "core/process.h"   // ibStartProcess — a launch is asked for from a fiber too (app_run on the server)
+#include "core/startProcess.h"   // ibStartProcess — a launch is asked for from a fiber too (app_run on the server)
 
 #pragma region execute 
 long ibApplicationInstance::RunApplication(const wxString& strAppName, bool searchDebug, bool useManifest) const

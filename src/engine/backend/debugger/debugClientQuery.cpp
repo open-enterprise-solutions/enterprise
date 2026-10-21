@@ -57,6 +57,7 @@ bool ibDebuggerClient::CreateBreakpointDatabase()
 //db support
 void ibDebuggerClient::LoadBreakpointCollection(const wxString& strModuleName)
 {
+	std::lock_guard<std::recursive_mutex> lock(m_breakpointsMutex);
 	m_listBreakpoint[strModuleName].clear();
 
 	// SELECT moduleLine, lineCondition FROM sys_dbg WHERE moduleName = <strModuleName>

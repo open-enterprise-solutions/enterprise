@@ -36,6 +36,7 @@
 #include "frmserver/visualView/visualHost.h"
 
 #include "clientChildFrame.h"
+#include "clientDebugger.h"
 #include "clientFrame.h"
 #include "clientInstance.h"
 #include "protocol/protocol.h"
@@ -526,6 +527,9 @@ void ibClientHost::Disconnect(const void* connection)
 		for (const auto& entry : m_clients) {
 			if (entry.second->connection.load(std::memory_order_acquire) == connection)
 				matched.push_back(entry.second);
+			// A debugger's connection takes nobody with it: its client is no longer told the debugger's news.
+			if (entry.second->debugConnection.load(std::memory_order_acquire) == connection)
+				entry.second->debugConnection.store(nullptr, std::memory_order_release);
 		}
 	}
 
@@ -589,7 +593,7 @@ bool ibClientHost::LoggedIn(const void* connection) const
 
 	std::lock_guard<std::mutex> lock(m_mutex);
 	for (const auto& it : m_clients) {
-		if (it.second->connection == connection)
+		if (it.second->connection == connection || it.second->debugConnection == connection)
 			return true;
 	}
 	return false;
@@ -633,6 +637,35 @@ void ibClientHost::NotifyChanged(const ibClientInstance* instance)
 	notify(wxString::Format(wxT("{\"jsonrpc\":\"2.0\",\"method\":\"changed\",\"params\":{\"Client\":\"%s\"}}"), id));
 }
 
+void ibClientHost::NotifyDebug(const ibClientInstance* instance, const ibDataNode& event)
+{
+	// As NotifyChanged — the id and the notifier taken under the lock, sent outside it; the debugger's connection's, and
+	// told whatever call is being answered: the news is no part of a frame.
+	wxString id;
+	std::function<void(const wxString& text)> notify;
+	{
+		std::lock_guard<std::mutex> lock(m_mutex);
+		for (const auto& [clientId, client] : m_clients) {
+			if (client->instance.get() != instance)
+				continue;
+			const auto found = m_notifiers.find(client->debugConnection.load(std::memory_order_acquire));
+			if (found != m_notifiers.end()) {
+				id = clientId;
+				notify = found->second;
+			}
+			break;
+		}
+	}
+	if (!notify)
+		return;
+
+	// The envelope written as NotifyChanged's — the method where an answer's id stands, which is how a connection tells
+	// the news from an answer, whatever its length (ibProtocolConnectionServer).
+	ibDataNode params = event;
+	params.SetValue(ibProtocol::ibLogin::Client, id);
+	notify(wxT("{\"jsonrpc\":\"2.0\",\"method\":\"debug\",\"params\":") + ibRpcRenderNode(params) + wxT("}"));
+}
+
 //*******************************************************************************************
 //*                                        The door                                         *
 //*******************************************************************************************
@@ -666,6 +699,7 @@ wxString ibClientHost::Call(const wxString& text, const void* connection, const 
 	// and it is not run again. A different call under that id, or an older id, is refused and not run. A login
 	// does not take the slot: the lost call is retried after login {Token}, with its own id. Who may call is
 	// decided before the slot is read, so a detached client does not hand its last answer to whoever names it.
+	// Nor does the debugger's: answered at once beside the client's calls, by a connection of its own (Debug).
 	const bool tokenLogin = method == ibProtocol::ibMethod::Login
 		&& request.m_params.FindField(ibProtocol::ibLogin::User) == nullptr
 		&& request.m_params.FindField(ibProtocol::ibLogin::Token) != nullptr;
@@ -682,7 +716,7 @@ wxString ibClientHost::Call(const wxString& text, const void* connection, const 
 		}
 	} slot;
 	unsigned char callDigest[32] = {};
-	if (request.WantsAnswer() && !tokenLogin && method != ibProtocol::ibMethod::Login) {
+	if (request.WantsAnswer() && !tokenLogin && method != ibProtocol::ibMethod::Login && method != ibProtocol::ibMethod::Debug) {
 		slot.client = FindClient(request.m_params.GetValue<wxString>(ibProtocol::ibLogin::Client));
 		if (slot.client) {
 			std::unique_lock<std::mutex> lock(slot.client->lock);
@@ -886,6 +920,15 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 				done = true;
 			}
 		}
+	}
+	else if (method == ibProtocol::ibMethod::Debug) {
+		// ⭐ BESIDE THE CLIENT'S CALLS, NOT AFTER THEM (protocol 6): not under the client's lock and with no frame — a step
+		// is not queued behind a call waiting on the very stop it would let go.
+		const std::shared_ptr<Client> client = FindClient(params.GetValue<wxString>(ibProtocol::ibLogin::Client));
+		if (client == nullptr)
+			refuse(ibProtocol::ibRefusal::NoSession, wxT("no such client"));
+		else
+			done = Debug(*client, params, result, refusal, error, connection);
 	}
 	else {
 		const std::shared_ptr<Client> client = FindClient(params.GetValue<wxString>(ibProtocol::ibLogin::Client));
@@ -1267,6 +1310,77 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 	if (!done && refusal == ibProtocol::ibRefusal::None)
 		refuse(ibProtocol::ibRefusal::Failed, error.IsEmpty() ? wxString(wxT("the call was not done")) : error);
 	return done;
+}
+
+bool ibClientHost::Debug(Client& client, const ibDataNode& params, ibDataNode& result, ibProtocol::ibRefusal& refusal,
+	wxString& error, const void* connection)
+{
+	const auto refuse = [&refusal, &error](ibProtocol::ibRefusal why, const wxString& text) { refusal = why; error = text; };
+	const ibProtocol::ibDebug::ibCommand command = static_cast<ibProtocol::ibDebug::ibCommand>(params.GetValue<s32>(ibProtocol::ibDebug::Command));
+
+	// The frame's debugger, the designer's — a client of another mode has none, and nothing of this is its.
+	ibClientFrame* const frame = client.instance->GetFrame();
+	ibClientDebugger* const debugger = frame != nullptr ? frame->GetDebugger() : nullptr;
+	if (debugger == nullptr) {
+		refuse(ibProtocol::ibRefusal::NotFound, wxT("the client has no debugger"));
+		return false;
+	}
+
+	// Who holds the client — its login connection, as every call of it is let in (MayCall).
+	const bool holder = MayCall(client.connectionless, client.connection.load(std::memory_order_acquire),
+		client.resumeDeadlineMs.load(std::memory_order_acquire), connection);
+
+	if (command == ibProtocol::ibDebug::ibCommand::Channel) {
+		// THE KEY, drawn for the one who holds the client — what binds a connection to it is never given to whoever names it.
+		// Its SHA-256 is kept until Listen takes it; the key itself goes on this answer, once.
+		if (!holder) {
+			refuse(ibProtocol::ibRefusal::NoSession, wxT("the client is not connected"));
+			return false;
+		}
+		const std::vector<unsigned char> raw = ibSessionToken::Generate();
+		unsigned char digest[ibSessionToken::kDigest];
+		if (raw.size() != ibSessionToken::kBytes || !ibSessionToken::Hash(raw.data(), raw.size(), digest)) {
+			refuse(ibProtocol::ibRefusal::Failed, wxT("the key could not be drawn"));
+			return false;
+		}
+		{
+			std::lock_guard<std::mutex> lock(m_mutex);
+			std::memcpy(client.channelDigest, digest, ibSessionToken::kDigest);
+			client.hasChannelKey = true;
+		}
+		result.SetValue(ibProtocol::ibDebug::Channel, ibSessionToken::Hex(raw.data(), raw.size()));
+		return true;
+	}
+
+	if (command == ibProtocol::ibDebug::ibCommand::Listen) {
+		// THE KEY PRESENTED, on the connection it binds — compared as its digest, in constant time, and taken: a key binds
+		// once. A connection without a notifier is bound all the same, and is told nothing.
+		unsigned char raw[ibSessionToken::kBytes];
+		unsigned char digest[ibSessionToken::kDigest];
+		const bool read = connection != nullptr
+			&& ibSessionToken::ParseHex(params.GetValue<wxString>(ibProtocol::ibDebug::Channel), raw)
+			&& ibSessionToken::Hash(raw, ibSessionToken::kBytes, digest);
+		bool bound = false;
+		{
+			std::lock_guard<std::mutex> lock(m_mutex);
+			if (read && client.hasChannelKey && ibSessionToken::DigestEqual(client.channelDigest, digest)) {
+				client.hasChannelKey = false;
+				client.debugConnection.store(connection, std::memory_order_release);
+				bound = true;
+			}
+		}
+		if (!bound)
+			refuse(ibProtocol::ibRefusal::LoginRefused, wxT("the channel was refused"));
+		return bound;
+	}
+
+	// …the rest by the connection the debugger listens on, or by the client's own.
+	if (!holder && (connection == nullptr || client.debugConnection.load(std::memory_order_acquire) != connection)) {
+		refuse(ibProtocol::ibRefusal::NoSession, wxT("the client is not connected"));
+		return false;
+	}
+	client.instance->Touch();
+	return debugger->Command(command, params, result, refusal, error);
 }
 
 //*******************************************************************************************
