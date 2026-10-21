@@ -47,7 +47,8 @@ namespace {
 std::mutex                                                s_hostsMutex;
 std::map<const ibApplicationInstance*, ibClientHost*>     s_hosts;
 
-// An instance nobody has heard from for this long is taken down.
+// A connectionless instance (an HTTP login) nobody has heard from for this long is taken down. A client with a
+// connection is ended when its connection drops (Disconnect), not by this limit.
 constexpr std::chrono::minutes kIdleLimit(30);
 
 std::int64_t NowMs()
@@ -1700,7 +1701,9 @@ void ibClientHost::RoundBody()
 				RemoveClient(entry.first);
 				continue;
 			}
-			const bool idle = deadline == 0
+			// Only a connectionless client is idle: one whose socket is alive is someone at a window, however long
+			// they think; a dropped socket already went through Disconnect (a window or removal).
+			const bool idle = deadline == 0 && entry.second->connectionless
 				&& now - instance->LastActiveMs() > std::chrono::duration_cast<std::chrono::milliseconds>(kIdleLimit).count();
 			if (instance->IsCloseRequested() || idle) {
 				RemoveClient(entry.first);
