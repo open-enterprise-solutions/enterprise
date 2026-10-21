@@ -149,6 +149,11 @@ std::vector<std::pair<ibString, ibProtocolNode>> ibProtocolNode::Entries() const
 	return entries;
 }
 
+const ibProtocolBody* ibProtocolNode::GetBody() const
+{
+	return m_body;
+}
+
 ibString  ibProtocolNode::AsString() const { return StringOf(m_body == nullptr ? m_value : nullptr, ibString()); }
 long long ibProtocolNode::AsInt() const    { return IntOf(m_body == nullptr ? m_value : nullptr, 0); }
 bool      ibProtocolNode::AsBool() const   { return BoolOf(m_body == nullptr ? m_value : nullptr, false); }

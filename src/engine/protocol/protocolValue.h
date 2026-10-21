@@ -6,6 +6,8 @@
 
 #include "core/fstring.h"   // ibString — every text of the tree
 
+#include "protocol/protocolApi.h"
+
 struct ibProtocolBody;
 
 // ONE VALUE OF THE WIRE, as the client holds it — what ibProtocolNode is a handle into, and what the library's own
@@ -15,7 +17,8 @@ struct ibProtocolBody;
 //
 // A node's entries and a list's items are held apart from the value (ibProtocolBody), and say which of the two they
 // are: a value moves as entries are added beside it, and what a handle to a node holds on to stays where it is.
-class ibProtocolValue {
+// Exported with its body: the client reads the engine's nodes off this tree where it lies (ibReadProtocolNode).
+class PROTOCOL_API ibProtocolValue {
 public:
 
 	enum class ibKind : unsigned char { Null, Bool, Int, Text, Number, Node, List };
@@ -72,7 +75,7 @@ struct ibProtocolEntry {
 };
 
 // …and the entries of a node, the items of a list, in the order they were written.
-struct ibProtocolBody {
+struct PROTOCOL_API ibProtocolBody {
 	bool                         m_list = false;
 	std::vector<ibProtocolEntry> m_entries;
 

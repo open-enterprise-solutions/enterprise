@@ -62,6 +62,13 @@ enum class ibDataKind : u8 {
 class CORE_API ibDataValue {
 public:
 	ibDataValue() = default;
+	// ⭐ MOVED WITHOUT A THROW — said, since the payload's buffer (wxMemoryBuffer) has no move of its own and its copy is
+	// not marked so: std::vector moves only what cannot throw, and a node's fields grew by COPYING each one (2026-10-22,
+	// _Uninitialized_copy under AddField). What moves is a count taken, never an allocation.
+	ibDataValue(const ibDataValue&) = default;
+	ibDataValue(ibDataValue&&) noexcept = default;
+	ibDataValue& operator=(const ibDataValue&) = default;
+	ibDataValue& operator=(ibDataValue&&) noexcept = default;
 
 	ibDataKind Kind() const { return static_cast<ibDataKind>(m_payload.index()); }
 	bool IsEmpty() const { return Kind() == ibDataKind::Empty; }
@@ -178,6 +185,12 @@ class CORE_API ibDataNode {
 public:
 	ibDataNode() = default;
 	ibDataNode(ibClassID clsid, ibMetaID metaId) : m_clsid(clsid), m_metaId(metaId) {}
+	// ⭐ MOVED WITHOUT A THROW — said, as ibDataValue says it: the raw block (wxMemoryBuffer) has no move of its own, and
+	// a vector of children grew by COPYING each child with all of its subtree (2026-10-22, the form editor's rows).
+	ibDataNode(const ibDataNode&) = default;
+	ibDataNode(ibDataNode&&) noexcept = default;
+	ibDataNode& operator=(const ibDataNode&) = default;
+	ibDataNode& operator=(ibDataNode&&) noexcept = default;
 
 	// --- identity ---------------------------------------------------------
 	ibClassID GetClsid()  const { return m_clsid; }

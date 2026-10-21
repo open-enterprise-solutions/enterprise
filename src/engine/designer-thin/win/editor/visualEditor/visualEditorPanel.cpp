@@ -8,7 +8,7 @@
 
 #include "core/diagnostics/journal.h"
 #include "designer-thin/docManager/templates/docViewModuleEditor.h"
-#include "frmclient/backend/serialize/dataProtocol.h"   // ibReadProtocolNode — a control's values, as its node has them
+#include "frmclient/backend/serialize/dataProtocol.h"   // ibReadProtocolValue — a control's values, as its node has them
 #include "frmclient/mainFrame/objinspect/objinspect.h"
 #include "frmclient/propertyManager/property/advprop/advpropSource.h"   // ibSetSourcePicker — a control's Source cell
 
@@ -249,18 +249,12 @@ void ibVisualEditorNotebook::ibVisualEditor::Receive(const ibProtocolNode& node,
 
 void ibVisualEditorNotebook::ibVisualEditor::Receive(ibPropertyObject* object, const ibProtocolNode& node)
 {
-	// A property's, as WriteData wrote it; the wire brings a scalar back a field.
-	ibProtocolNode values = node.Clone();
-	values.Remove(ibProtocol::ibNode::Children);
-	ibDataNode entries;
-	ibReadProtocolNode(values, entries);
+	// A property's, as WriteData wrote it — read off the node by its name, the node's children not copied nor read with it.
 	for (unsigned int idx = 0; idx < object->GetPropertyCount(); idx++) {
 		ibProperty* const prop = object->GetProperty(idx);
-		const ibDataValue* value = entries.FindProperty(prop->GetName());
-		if (value == nullptr)
-			value = entries.FindField(prop->GetName());
-		if (value != nullptr)
-			prop->SetNodeValue(*value);
+		ibDataValue value;
+		if (ibReadProtocolValue(node, prop->GetName(), value))
+			prop->SetNodeValue(value);
 	}
 }
 

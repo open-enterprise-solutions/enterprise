@@ -45,6 +45,10 @@ public:
 	// The same ceiling the script's JSONReader already uses (valueJson.cpp, kMaxDepth).
 	static constexpr int kMaxNesting = 256;
 
+	// A JSON string as a value: a Binary where Write wrote one ("base64:…"), a String otherwise — for this provider's
+	// text and for a tree another reader made of the same text (the thin client's, ibReadProtocolNode).
+	static ibDataValue ReadString(const ibString& text);
+
 	bool Write(const ibDataNode& root, ibWriter& writer) const override;
 	bool Read(ibReader& reader, ibDataNode& root) const override;  // messages, before any login (see above)
 
@@ -53,6 +57,10 @@ public:
 	// encoded to bytes and decoded again, and handing it on is one more owner of it. Bytes are the socket's business.
 	bool Write(const ibDataNode& root, ibString& text) const;
 	bool Read(const ibString& text, ibDataNode& root) const;
+	// …and what one key of an object is to its node, its value read by whoever read the text: the structural keys
+	// (NodeType — by the lookup below, NodeId, NodeRaw; TypeDesc dropped), a node a property, the rest fields. False when
+	// a structural key holds what it cannot. NodeChildren are not one: the reader descends into them itself.
+	bool ReadEntry(ibDataNode& node, const ibString& key, ibDataValue value) const;
 
 	// clsid -> readable type name. The names are the registry's — a configuration's own
 	// (CatalogRef.X, DocumentRef.Y) and the built-in ones (Number, String) alike — so the

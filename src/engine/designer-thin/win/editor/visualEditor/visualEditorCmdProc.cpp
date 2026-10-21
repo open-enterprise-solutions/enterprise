@@ -9,7 +9,7 @@
 #include <set>
 
 #include "designer-thin/docManager/templates/docViewModuleEditor.h"   // ibModuleEditDocument — Modify, Fetch, Post
-#include "frmclient/backend/serialize/dataProtocol.h"   // ibWriteProtocolNode — a property's value into the control's node
+#include "frmclient/backend/serialize/dataProtocol.h"   // ibReadProtocolValue, ibWriteProtocolNode — a control's values
 #include "frmclient/backend/propertyManager/property/propertySerializable.h"   // a layer's properties — a row's each
 #include "frmclient/mainFrame/objinspect/objinspect.h"
 
@@ -644,20 +644,14 @@ void ibVisualEditorNotebook::ibVisualEditor::UpdateControl(ibValueFrame* control
 		step = step.AddChild();
 		step.SetValue(ibProtocol::ibNode::Id, id);
 	}
-	ibProtocolNode values = nodes.back().Clone();
-	values.Remove(ibProtocol::ibNode::Children);
-	ibDataNode held;
-	ibReadProtocolNode(values, held);
 	ibDataNode entries;
 	for (unsigned int idx = 0; idx < control->GetPropertyCount(); idx++) {
 		const ibProperty* const property = control->GetPropertyByIndex(idx);
 		ibDataValue value;
 		if (!property->CopyNodeValue(value))
 			continue;
-		const ibDataValue* entry = held.FindProperty(property->GetName());
-		if (entry == nullptr)
-			entry = held.FindField(property->GetName());
-		if (entry != nullptr ? *entry == value : value.IsEmpty())
+		ibDataValue held;
+		if (ibReadProtocolValue(nodes.back(), property->GetName(), held) ? held == value : value.IsEmpty())
 			continue;
 		step.AddItem(ibProtocol::ibNode::Removed, property->GetName());
 		if (!value.IsEmpty())

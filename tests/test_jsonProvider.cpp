@@ -225,6 +225,29 @@ TEST(JsonProvider, NodeType_KeptWordLookedUpAfter) {
 	EXPECT_EQ(innerBack->FindField(wxT("NodeType")), nullptr);
 }
 
+// The rule of a key, for a tree another reader made of the text (the thin client's): the one the text reader keeps — the
+// structural keys the node's own, a node a property, the rest fields; a structural key holding what it cannot refused.
+TEST(JsonProvider, ReadEntry_PlacesKeysAsTheTextReaderDoes) {
+	ibJsonProvider provider;
+	ibDataNode node;
+	EXPECT_TRUE(provider.ReadEntry(node, wxT("NodeType"), ibDataValue::UInt(1001)));
+	EXPECT_TRUE(provider.ReadEntry(node, wxT("NodeId"), ibDataValue::Int(7)));
+	EXPECT_TRUE(provider.ReadEntry(node, wxT("TypeDesc"), ibDataValue::String(wxT("String"))));
+	EXPECT_TRUE(provider.ReadEntry(node, wxT("Name"), ibDataValue::String(wxT("Nomenclature"))));
+	EXPECT_TRUE(provider.ReadEntry(node, wxT("Type"), ibDataValue::Child(std::make_shared<ibDataNode>())));
+	EXPECT_FALSE(provider.ReadEntry(node, wxT("NodeId"), ibDataValue::String(wxT("seven"))));
+
+	EXPECT_EQ(node.GetClsid(), (ibClassID)1001);
+	EXPECT_EQ(node.GetMetaId(), (ibMetaID)7);
+	EXPECT_EQ(node.FindField(wxT("TypeDesc")), nullptr);
+	EXPECT_EQ(node.GetValue<wxString>(wxT("Name")), wxT("Nomenclature"));
+	EXPECT_TRUE(node.FindChild(wxT("Type")) != nullptr);
+
+	// …and a string's: a binary only where Write wrote one.
+	EXPECT_EQ(ibJsonProvider::ReadString(wxT("base64:AQI=")).Kind(), ibDataKind::Binary);
+	EXPECT_EQ(ibJsonProvider::ReadString(wxT("base64 is a word")).Kind(), ibDataKind::String);
+}
+
 // ---------------------------------------------------------------------------
 // What deliberately does NOT survive — pinned so a future change is a decision,
 // not an accident.

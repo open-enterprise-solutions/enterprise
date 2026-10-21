@@ -2349,8 +2349,8 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 			// the window, through Reply — rather than back to whoever asked, who by design did not
 			// sit waiting on a socket for it (see AskModel in the header).
 			Reply(wasError
-				? wxString::Format(_("The assistant could not answer: %s"), payload)
-				: payload);
+				? wxString::Format(_("The assistant could not answer: %s"), payload.ToWxString())
+				: payload.ToWxString());
 
 			// A response is answered with nothing: it IS the answer.
 			return wxEmptyString;
@@ -3044,7 +3044,7 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 					picture->SetValue(wxT("data"), image->AsString());
 					picture->SetValue(wxT("mimeType"),
 						type != nullptr && type->Kind() == ibDataKind::String && !type->AsString().IsEmpty()
-							? type->AsString() : wxString(wxT("image/png")));
+							? type->AsString().ToWxString() : wxString(wxT("image/png")));
 
 					blocks.push_back(ibDataValue::Child(picture));
 

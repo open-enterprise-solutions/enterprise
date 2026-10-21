@@ -302,15 +302,16 @@ ibString NumberText(const wchar_t* p, size_t n) { return ibString(p, n); }
 template<class Char>
 class ibJsonReader {
 public:
-	ibJsonReader(const Char* begin, size_t size) : m_start(begin), m_p(begin), m_end(begin + size) {}
+	ibJsonReader(const ibJsonProvider& provider, const Char* begin, size_t size)
+		: m_provider(provider), m_start(begin), m_p(begin), m_end(begin + size) {}
 
 	size_t Offset() const { return (size_t)(m_p - m_start); }
 
 	// The top level is one object = the root node.
-	bool ParseNode(ibDataNode& node,
-		const std::function<ibClassID(const ibString&)>& lookupType);
+	bool ParseNode(ibDataNode& node);
 
 private:
+	const ibJsonProvider& m_provider;   // what a key is to its node (ReadEntry)
 	const Char* m_start;
 	const Char* m_p;
 	const Char* m_end;
@@ -355,8 +356,8 @@ private:
 
 	bool ParseString(ibString& out);
 	bool ParseNumber(ibNumber& out);
-	bool ParseValue(ibDataValue& out, const std::function<ibClassID(const ibString&)>& lookupType);
-	bool ParseArray(ibDataValue& out, const std::function<ibClassID(const ibString&)>& lookupType);
+	bool ParseValue(ibDataValue& out);
+	bool ParseArray(ibDataValue& out);
 	bool ParseScalar(ibDataValue& out);
 	bool ParseLiteral(const char* text) {
 		SkipWs();
@@ -412,24 +413,24 @@ bool ibJsonReader<Char>::ParseNumber(ibNumber& out)
 // number and the literals' values, and the deepest legal text no longer fit a 512 KB thread once
 // the stack check kept its slack (CI, Linux Debug + ASan, 2026-10-13). So the kinds are read apart.
 template<class Char>
-bool ibJsonReader<Char>::ParseValue(ibDataValue& out, const std::function<ibClassID(const ibString&)>& lookupType)
+bool ibJsonReader<Char>::ParseValue(ibDataValue& out)
 {
 	SkipWs();
 	const Char c = Peek();
 
 	if (c == '{') {
 		std::shared_ptr<ibDataNode> child = std::make_shared<ibDataNode>();
-		if (!ParseNode(*child, lookupType)) return false;
+		if (!ParseNode(*child)) return false;
 		out = ibDataValue::Child(child);
 		return true;
 	}
 	if (c == '[')
-		return ParseArray(out, lookupType);
+		return ParseArray(out);
 	return ParseScalar(out);
 }
 
 template<class Char>
-bool ibJsonReader<Char>::ParseArray(ibDataValue& out, const std::function<ibClassID(const ibString&)>& lookupType)
+bool ibJsonReader<Char>::ParseArray(ibDataValue& out)
 {
 	Depth depth(*this);
 	if (!Accept('[')) return false;
@@ -437,7 +438,7 @@ bool ibJsonReader<Char>::ParseArray(ibDataValue& out, const std::function<ibClas
 	if (!Accept(']')) {
 		for (;;) {
 			ibDataValue item;
-			if (!ParseValue(item, lookupType)) return false;
+			if (!ParseValue(item)) return false;
 			items.push_back(std::move(item));
 			if (Accept(',')) continue;
 			if (Accept(']')) break;
@@ -456,20 +457,7 @@ bool ibJsonReader<Char>::ParseScalar(ibDataValue& out)
 	if (Peek() == '\"') {
 		ibString s;
 		if (!ParseString(s)) return false;
-		// "base64:<...>" is how EmitValue renders Binary — the one string shape that is
-		// NOT a String. Everything else stays a String, INCLUDING an emitted Date (see
-		// the header): an ISO string and a string that looks like one are the same text —
-		// and so does one after the prefix that is not base64: EmitValue did not write it.
-		// The buffer only for that shape: a wxMemoryBuffer takes a kilobyte from the heap as it is made.
-		static const ibString kB64 = wxT("base64:");
-		if (s.StartsWith(kB64)) {
-			wxMemoryBuffer bytes;
-			if (ibBase64::Read(s.wc_str() + kB64.length(), s.length() - kB64.length(), bytes)) {
-				out = ibDataValue::Binary(bytes);
-				return true;
-			}
-		}
-		out = ibDataValue::String(s);
+		out = ibJsonProvider::ReadString(s);
 		return true;
 	}
 	if (ParseLiteral("true"))  { out = ibDataValue::Bool(true);  return true; }
@@ -483,7 +471,7 @@ bool ibJsonReader<Char>::ParseScalar(ibDataValue& out)
 }
 
 template<class Char>
-bool ibJsonReader<Char>::ParseNode(ibDataNode& node, const std::function<ibClassID(const ibString&)>& lookupType)
+bool ibJsonReader<Char>::ParseNode(ibDataNode& node)
 {
 	Depth depth(*this);
 
@@ -495,38 +483,9 @@ bool ibJsonReader<Char>::ParseNode(ibDataNode& node, const std::function<ibClass
 		if (!ParseString(key)) return false;
 		if (!Expect(':')) return false;
 
-		// --- the structural keys EmitNode writes (see the emitter for each) ------------
-		if (key == wxT("NodeType")) {
-			SkipWs();
-			if (Peek() == '\"') {
-				ibString name;
-				if (!ParseString(name)) return false;
-				// The emitter wrote the RESOLVED NAME. Turning it back into a clsid needs the
-				// same knowledge in reverse; without it the node keeps clsid 0 rather than
-				// inventing one — and the word, as its field, for a later lookup (LookupTypes).
-				const ibClassID clsid = lookupType ? lookupType(name) : ibClassID(0);
-				if (clsid != ibClassID(0)) node.SetClsid(clsid);
-				else                       node.AddField(key, ibDataValue::String(name));
-			}
-			else {
-				ibNumber n;
-				if (!ParseNumber(n)) return false;
-				u64 raw = 0; n.ToInt(raw);
-				node.SetClsid((ibClassID)raw);
-			}
-		}
-		else if (key == wxT("NodeId")) {
-			ibNumber n;
-			if (!ParseNumber(n)) return false;
-			s64 raw = 0; n.ToInt(raw);
-			node.SetMetaId((ibMetaID)raw);
-		}
-		else if (key == wxT("NodeRaw")) {
-			ibDataValue v;
-			if (!ParseValue(v, lookupType)) return false;
-			if (v.Kind() == ibDataKind::Binary) node.SetRawData(v.AsBinary());
-		}
-		else if (key == wxT("NodeChildren")) {
+		// The children are the reader's to descend into; every other key is the provider's rule (ReadEntry).
+		static const ibString kNodeChildren = wxT("NodeChildren");
+		if (key == kNodeChildren) {
 			if (!Expect('[')) return false;
 			if (!Accept(']')) {
 				for (;;) {
@@ -534,7 +493,7 @@ bool ibJsonReader<Char>::ParseNode(ibDataNode& node, const std::function<ibClass
 					// Parse into a scratch node and move it onto the vector instead — same result,
 					// no throwaway default-constructed slot.
 					ibDataNode scratch;
-					if (!ParseNode(scratch, lookupType)) return false;
+					if (!ParseNode(scratch)) return false;
 					node.Children().emplace_back(std::move(scratch));
 					if (Accept(',')) continue;
 					if (Accept(']')) break;
@@ -542,22 +501,10 @@ bool ibJsonReader<Char>::ParseNode(ibDataNode& node, const std::function<ibClass
 				}
 			}
 		}
-		else if (key == wxT("TypeDesc")) {
-			// SYNTHETIC — injected next to typeId purely so a reader sees "String" beside the
-			// number. There is no node entry behind it; parse and drop.
-			ibDataValue discard;
-			if (!ParseValue(discard, lookupType)) return false;
-		}
-		// --- ordinary data ------------------------------------------------------------
 		else {
 			ibDataValue v;
-			if (!ParseValue(v, lookupType)) return false;
-			// Which AREA a key came from is not in the text (EmitNode flattens Fields and
-			// Properties into one key set). Child values are placed back into the property
-			// area because that is where ibDataNode::Child puts them by construction; every
-			// other key lands in Fields. See the header.
-			if (v.Kind() == ibDataKind::Child) node.SetProperty(key, std::move(v));
-			else                               node.AddField(key, std::move(v));
+			if (!ParseValue(v)) return false;
+			if (!m_provider.ReadEntry(node, key, std::move(v))) return false;
 		}
 
 		if (Accept(',')) continue;
@@ -580,8 +527,8 @@ bool ibJsonProvider::Read(ibReader& reader, ibDataNode& root) const
 		return false;
 
 	const char* text = static_cast<const char*>(reader.pointer());
-	ibJsonReader<char> parser(text, (size_t)size);
-	if (!parser.ParseNode(root, m_lookupType)) {
+	ibJsonReader<char> parser(*this, text, (size_t)size);
+	if (!parser.ParseNode(root)) {
 		ibCoreException::Error(_("ibJsonProvider: malformed JSON at byte %d"),
 			(int)parser.Offset());
 		return false;   // not reached — Error throws
@@ -596,13 +543,75 @@ bool ibJsonProvider::Read(const ibString& text, ibDataNode& root) const
 	if (text.IsEmpty())
 		return false;
 
-	ibJsonReader<wchar_t> parser(text.wc_str(), text.length());
-	if (!parser.ParseNode(root, m_lookupType)) {
+	ibJsonReader<wchar_t> parser(*this, text.wc_str(), text.length());
+	if (!parser.ParseNode(root)) {
 		ibCoreException::Error(_("ibJsonProvider: malformed JSON at character %d"),
 			(int)parser.Offset());
 		return false;   // not reached — Error throws
 	}
 	return true;
+}
+
+bool ibJsonProvider::ReadEntry(ibDataNode& node, const ibString& key, ibDataValue value) const
+{
+	// The keys as the engine's strings: a key is told from one by its length first — against a literal each was measured
+	// and walked, every key of every node (ibString::operator==, 2026-10-22).
+	static const ibString kNodeType = wxT("NodeType"), kNodeId = wxT("NodeId"), kNodeRaw = wxT("NodeRaw"),
+		kTypeDesc = wxT("TypeDesc");
+
+	// --- the structural keys EmitNode writes (see the emitter for each) ------------
+	if (key == kNodeType) {
+		if (value.Kind() == ibDataKind::String) {
+			// The emitter wrote the RESOLVED NAME. Turning it back into a clsid needs the
+			// same knowledge in reverse; without it the node keeps clsid 0 rather than
+			// inventing one — and the word, as its field, for a later lookup (LookupTypes).
+			const ibClassID clsid = m_lookupType ? m_lookupType(value.AsString()) : ibClassID(0);
+			if (clsid != ibClassID(0)) node.SetClsid(clsid);
+			else                       node.AddField(key, std::move(value));
+			return true;
+		}
+		if (value.Kind() != ibDataKind::Number) return false;
+		node.SetClsid((ibClassID)value.AsUInt());
+		return true;
+	}
+	if (key == kNodeId) {
+		if (value.Kind() != ibDataKind::Number) return false;
+		node.SetMetaId((ibMetaID)value.AsInt());
+		return true;
+	}
+	if (key == kNodeRaw) {
+		if (value.Kind() == ibDataKind::Binary) node.SetRawData(value.AsBinary());
+		return true;
+	}
+	// SYNTHETIC — injected next to typeId purely so a reader sees "String" beside the
+	// number. There is no node entry behind it; dropped.
+	if (key == kTypeDesc)
+		return true;
+
+	// --- ordinary data ------------------------------------------------------------
+	// Which AREA a key came from is not in the text (EmitNode flattens Fields and
+	// Properties into one key set). Child values are placed back into the property
+	// area because that is where ibDataNode::Child puts them by construction; every
+	// other key lands in Fields. See the header.
+	if (value.Kind() == ibDataKind::Child) node.SetProperty(key, std::move(value));
+	else                                   node.AddField(key, std::move(value));
+	return true;
+}
+
+ibDataValue ibJsonProvider::ReadString(const ibString& text)
+{
+	// "base64:<...>" is how EmitValue renders Binary — the one string shape that is
+	// NOT a String. Everything else stays a String, INCLUDING an emitted Date (see
+	// the header): an ISO string and a string that looks like one are the same text —
+	// and so does one after the prefix that is not base64: EmitValue did not write it.
+	// The buffer only for that shape: a wxMemoryBuffer takes a kilobyte from the heap as it is made.
+	static const ibString kB64 = wxT("base64:");
+	if (text.StartsWith(kB64)) {
+		wxMemoryBuffer bytes;
+		if (ibBase64::Read(text.wc_str() + kB64.length(), text.length() - kB64.length(), bytes))
+			return ibDataValue::Binary(bytes);
+	}
+	return ibDataValue::String(text);
 }
 
 namespace {

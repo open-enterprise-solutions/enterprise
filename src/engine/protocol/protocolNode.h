@@ -54,6 +54,9 @@ public:
 	std::vector<ibProtocolNode> GetList(const ibString& name) const;
 	// All of its entries, by name as the wire has it — what SetValue takes back — a node read whole (ibDataValue::Read).
 	std::vector<std::pair<ibString, ibProtocolNode>> Entries() const;
+	// …and where they stay — a node's entries, a list's items (ibProtocolValue::GetBody): what a reader of the whole tree
+	// walks without a handle per entry (the client's ibReadProtocolNode). Null when it is neither.
+	const ibProtocolBody* GetBody() const;
 	// The node itself as a value — a list's item.
 	ibString  AsString() const;
 	long long AsInt() const;

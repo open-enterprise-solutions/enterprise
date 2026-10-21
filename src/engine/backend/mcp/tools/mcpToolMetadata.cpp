@@ -2439,7 +2439,7 @@ public:
 					wxString fits;
 					ibPropertyChoiceList fields;
 					property->GetScheduleFieldList(dimension, fields);
-					const ibMetaID field = Named(fields, link.second.Kind() == ibDataKind::String ? link.second.AsString() : wxString(), fits);
+					const ibMetaID field = Named(fields, link.second.Kind() == ibDataKind::String ? link.second.AsString().ToWxString() : wxString(), fits);
 					if (field == 0) {
 						refusal = fits.IsEmpty()
 							? wxString::Format(ibMcpText("'%s' has no dimension whose type meets '%s' - a dimension of the schedule links to a dimension."), object->GetName(), link.first)
@@ -2732,7 +2732,7 @@ public:
 						parameter, object->GetName());
 					return false;
 				}
-				const wxString from = said != nullptr ? said->AsString() : wxString();
+				const wxString from = said != nullptr ? said->AsString().ToWxString() : wxString();
 
 				// An empty source removes the row rather than writing a condition over nothing.
 				if (from.IsEmpty())

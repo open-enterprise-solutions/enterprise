@@ -102,7 +102,7 @@ std::function<void()> ibSchemaUserList::Command(const ibSession& session, s32 co
 			// has none stored, and starts without a password, as the desktop's copy did.
 			const ibDataValue* const password = args.FindField(ibProtocol::ibSchema::ibUserList::Password);
 			userInfo.m_strUserPassword = ibPasswordHash::PasswordToStore(ibUserInfo::Read(userGuid).m_strUserPassword,
-				password != nullptr, password != nullptr ? password->AsString() : wxString());
+				password != nullptr, password != nullptr ? password->AsString().ToWxString() : wxString());
 
 			const ibValueMetaObjectConfiguration* commonObject = metaData->GetCommonMetaObject();
 			wxASSERT(commonObject);
