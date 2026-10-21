@@ -56,6 +56,7 @@ enterprise/
 ├── docs/                     # PUBLIC documentation — start with README.md
 │   ├── README.md             # map of the public documents
 │   ├── development.md        # HOW WE WORK — pull requests, commits, code and design rules, tests
+│   ├── writing-code.md       # HOW WE WRITE CODE — names, classes, holders, refusals, the diff
 │   ├── ai-context.md         # READ FIRST if you are an AI generating metadata / scripts
 │   ├── ARCHITECTURE.md
 │   ├── BUILD.md
@@ -403,7 +404,7 @@ under the debugger as well as for the designer itself.
 | `master` | Release-tagged commits; stable |
 | `develop` | Active development; target branch for all PRs |
 
-All feature work happens on branches cut from `develop`. Pull requests target `develop`. Releases are merged from `develop` to `master` and tagged. How a pull request is taken, and the rules a change is reviewed against: [docs/development.md](docs/development.md).
+All feature work happens on branches cut from `develop`. Pull requests target `develop`. Releases are merged from `develop` to `master` and tagged. How a pull request is taken, and the rules a change is reviewed against: [docs/development.md](docs/development.md); how the code itself is written: [docs/writing-code.md](docs/writing-code.md).
 
 ---
 
