@@ -295,12 +295,6 @@ int ibAppDesigner::OnExit()
 
 	appDataDestroy();
 
-	// The socket layer goes LAST, after everything that owns a socket — see the note in
-	// enterprise/mainApp.cpp (#155). The designer's debugger CLIENT closes its connections' sockets
-	// with appData, and on macOS Shutdown() nulls the run loop those sockets' sources are removed from.
-	if (wxSocketBase::IsInitialized())
-		wxSocketBase::Shutdown();
-
 	// Why the session was closed from outside, if it was — said once everything is let go: the session,
 	// its heartbeat and the connection pool (appDataDestroy). A box shown while any of them stood held it.
 	ibFrontendMainFrame::SayExitNotice();

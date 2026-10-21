@@ -49,5 +49,5 @@ target_include_directories(enterprise PRIVATE
 target_link_libraries(enterprise PRIVATE
     backend
     frontend
-    wx::core wx::aui wx::html wx::propgrid wx::adv wx::stc wx::xrc wx::qa wx::base wx::net wx::xml
+    wx::core wx::aui wx::html wx::propgrid wx::adv wx::stc wx::xrc wx::qa wx::base wx::xml
 )

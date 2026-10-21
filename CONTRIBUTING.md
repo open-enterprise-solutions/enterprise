@@ -84,7 +84,8 @@ contribute anything back.
 ## What a change should look like
 
 The short version is below. The whole of it — how a pull request is taken, the design rules a
-change is reviewed against, tests and CI — is [docs/development.md](docs/development.md).
+change is reviewed against, tests and CI — is [docs/development.md](docs/development.md); how
+the code itself is written is [docs/writing-code.md](docs/writing-code.md).
 
 **Branch from `develop`, pull-request into `develop`.** `master` carries release-tagged
 commits only.

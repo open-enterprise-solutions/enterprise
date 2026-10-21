@@ -90,10 +90,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" />
   <ItemDefinitionGroup>
     <ClCompile>
-      <PreprocessorDefinitions>ASIO_STANDALONE;ASIO_SEPARATE_COMPILATION;ASIO_NO_DEPRECATED;_WIN32_WINNT=0x0A00;WIN32_LEAN_AND_MEAN;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(oes3rdParty)asio\asio\include;$(oes3rdParty)llhttp\include;$(oes3rdParty)mbedtls\include;$(oesEngine)backend\tls;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <!-- Asio's templates make more sections than an object file holds by default. -->
-      <AdditionalOptions>/bigobj %(AdditionalOptions)</AdditionalOptions>
+      <PreprocessorDefinitions>_WIN32_WINNT=0x0A00;WIN32_LEAN_AND_MEAN;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -112,7 +109,7 @@
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll;$(oesLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>wxbase33ud_net.lib;wxbase33ud.lib;ws2_32.lib;crypt32.lib;mbedtls.lib;bcrypt.lib;llhttp.lib;core.lib;protocol.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>wxbase33ud.lib;ws2_32.lib;core.lib;protocol.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -130,7 +127,7 @@
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_x64_dll;$(oesLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>wxbase33ud_net.lib;wxbase33ud.lib;ws2_32.lib;crypt32.lib;mbedtls.lib;bcrypt.lib;llhttp.lib;core.lib;protocol.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>wxbase33ud.lib;ws2_32.lib;core.lib;protocol.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -156,7 +153,7 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>DebugFastLink</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_dll;$(oesLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>wxbase33u_net.lib;wxbase33u.lib;ws2_32.lib;crypt32.lib;mbedtls.lib;bcrypt.lib;llhttp.lib;core.lib;protocol.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>wxbase33u.lib;ws2_32.lib;core.lib;protocol.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -182,28 +179,28 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>DebugFastLink</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(oes3rdParty)wxWidgets\lib\vc_x64_dll;$(oesLibDir);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>wxbase33u_net.lib;wxbase33u.lib;ws2_32.lib;crypt32.lib;mbedtls.lib;bcrypt.lib;llhttp.lib;core.lib;protocol.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>wxbase33u.lib;ws2_32.lib;core.lib;protocol.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="http\asio.cpp" />
-    <ClCompile Include="http\httpClient.cpp" />
-    <ClCompile Include="http\httpServer.cpp" />
-    <ClCompile Include="http\httpStream.cpp" />
-    <ClCompile Include="http\tlsStream.cpp" />
-    <ClCompile Include="http\webSocketFrame.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="webServer.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="http\httpClient.h" />
-    <ClInclude Include="http\httpServer.h" />
-    <ClInclude Include="http\httpStream.h" />
-    <ClInclude Include="http\tlsStream.h" />
-    <ClInclude Include="http\webSocketFrame.h" />
     <ClInclude Include="webServer.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
+  <!--
+    The site's stage: www\ packed into $(OutDir)web\www.wpk (zip), the way syntaxHelper\(locale)\ becomes
+    help\(locale).hlk (backend.vcxproj) - one file a release carries beside the program. A run whose web.conf names
+    the folder itself (Root=) serves it as it is and needs no build.
+  -->
+  <Target Name="StageWebSite" AfterTargets="Build"
+          Inputs="$(ProjectDir)www\**\*"
+          Outputs="$(OutDir)web\www.wpk">
+    <MakeDir Directories="$(OutDir)web" />
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -Command &quot;Add-Type -A 'System.IO.Compression.FileSystem'; if (Test-Path '$(OutDir)web\www.wpk') { Remove-Item '$(OutDir)web\www.wpk' -Force }; [IO.Compression.ZipFile]::CreateFromDirectory('$(ProjectDir)www', '$(OutDir)web\www.wpk', 'Optimal', 0)&quot;" />
+  </Target>
 </Project>

@@ -153,10 +153,10 @@ public:
 	void Running();
 
 	// ibDebuggerClientBridge
-	void OnSessionStart(wxSocketClient* sock) override;
-	void OnSessionEnd(wxSocketClient* sock) override;
-	void OnEnterLoop(wxSocketClient* sock, const ibDebugLineData& data) override;
-	void OnLeaveLoop(wxSocketClient* sock, const ibDebugLineData& data) override;
+	void OnSessionStart() override;
+	void OnSessionEnd() override;
+	void OnEnterLoop(const ibDebugLineData& data) override;
+	void OnLeaveLoop(const ibDebugLineData& data) override;
 	void OnAutoComplete(const ibDebugAutoCompleteData& data) override;
 	void OnMessageFromServer(const ibDebugLineData& data, const wxString& message) override;
 	void OnSetToolTip(const ibDebugExpressionData& data, const wxString& resultStr) override;

@@ -267,7 +267,7 @@ ibNumber ibDatabaseResultSetPostgres::GetResultNumber(int nField)
 		if (m_pInterface->GetPQgetisnull()(m_pResult, m_nCurrentRow, nField - 1) != 1)
 		{
 			wxString strValue = ConvertFromUnicodeStream(m_pInterface->GetPQgetvalue()(m_pResult, m_nCurrentRow, nField - 1));
-			dblValue.FromString(strValue.wchar_str());
+			dblValue.FromString(strValue);
 		}
 	}
 

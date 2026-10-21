@@ -2,7 +2,7 @@
 #include "core/serialize/dataBuilder.h"   // ibDataNode — readable String node value
 
 
-//base property for "string" — held as its node (ibBackendProperty::ReadNodeValue)
+//base property for "string" — held as its node (ibPropertySerializable::ReadNodeValue)
 wxString ibPropertyStringBase::GetValueAsString() const
 {
 	return GetNodeValue().AsString();
@@ -10,7 +10,7 @@ wxString ibPropertyStringBase::GetValueAsString() const
 
 void ibPropertyStringBase::SetValue(const wxString& strValue)
 {
-	ibProperty::ReadNodeValue(ibDataValue::String(strValue));
+	ibPropertySerializable::ReadNodeValue(ibDataValue::String(strValue));
 }
 
 bool ibPropertyStringBase::ReadNodeValue(const ibDataValue& value)

@@ -16,7 +16,7 @@
 #include "backend/databaseLayer/databaseResultSet.h"
 #include "backend/databaseLayer/databaseQueryBuilder.h"   // L2 door: descriptor pilot
 #include "core/fileSystem/fs.h"
-#include "backend/utils/md5.hpp"   // the key is digested to the width its column declares
+#include "core/utils/md5.hpp"      // the key is digested to the width its column declares
 #include "backend/compiler/byteCodeFormat.h"   // kAOTFormatVersion — one half of the engine key
 #include "engineFingerprintBuild.h"            // kEngineFingerprint — the other, generated at build
 

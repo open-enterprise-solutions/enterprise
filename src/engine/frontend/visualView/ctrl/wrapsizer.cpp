@@ -19,7 +19,10 @@ wxObject* ibValueWrapSizer::Create(ibFrontendWindow* /*parent*/, ibVisualHost* /
 #ifdef OES_USE_WEB
 	return new ibWebWrapSizer(m_propertyOrient->GetValueAsInteger());
 #else
-	return new wxWrapSizer(m_propertyOrient->GetValueAsInteger(), wxWRAPSIZER_DEFAULT_FLAGS);
+	// Not wxWRAPSIZER_DEFAULT_FLAGS: its wxEXTEND_LAST_ON_EACH_LINE stretches the last control of every
+	// line to the line's end, whatever its own sizer item and MaximumSize say. A control is as wide as it
+	// asks to be; leading spaces at a line's start are still dropped.
+	return new wxWrapSizer(m_propertyOrient->GetValueAsInteger(), wxREMOVE_LEADING_SPACES);
 #endif
 }
 

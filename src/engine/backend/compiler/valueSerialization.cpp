@@ -129,7 +129,7 @@ bool ibValue::DoSerialize(ibDataNode& node) const
 		// Nothing to write: the type in the header is the whole value.
 		return true;
 	case ibValueTypes::TYPE_BOOLEAN:
-		node.SetValue(kFieldData, m_bData);
+		node.SetValue<bool>(kFieldData, m_bData);
 		return true;
 	case ibValueTypes::TYPE_NUMBER:
 		// Through the node's ibNumber codec — exact decimal, no double anywhere

@@ -1,7 +1,7 @@
 #include "backend/lock/lockKeyHash.h"
 
 #include "backend/backend_exception.h"
-#include "backend/utils/sha256.hpp"
+#include "core/crypto/sha256.hpp"
 #include "backend/metaCollection/partial/reference/reference.h"
 #include "backend/metaCollection/partial/commonObject.h"   // ibValueMetaObjectRecordDataRef::GetDocPath()
 

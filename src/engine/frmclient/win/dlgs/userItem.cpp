@@ -28,10 +28,16 @@ bool ibDialogUserItem::ReadUserData(const ibGuid& userGuid, bool copy)
 			auto iterator = std::find_if(m_languageArray.begin(), m_languageArray.end(),
 				[userInfo](const auto& pair) { return userInfo.m_strLanguageGuid == pair.second.m_strLanguageGuid; });
 
-			// A language the configuration no longer has: the first one — the desktop's tried the configuration's own
-			// language first, which is the server's to know.
+			// A language the configuration no longer has: the configuration's own language, as the desktop's; none
+			// marked, the first one.
 			if (iterator != m_languageArray.end()) {
 				m_choiceLanguage->SetSelection(iterator->first);
+			}
+			else if (!m_strDefaultLanguageCode.IsEmpty()) {
+				const wxString& strLanguageCode = m_strDefaultLanguageCode;
+				auto iterator_active_metadata = std::find_if(m_languageArray.begin(), m_languageArray.end(),
+					[strLanguageCode](const auto& pair) { return strLanguageCode == pair.second.m_strLanguageCode; });
+				m_choiceLanguage->SetSelection(iterator_active_metadata != m_languageArray.end() ? iterator_active_metadata->first : 0);
 			}
 			else {
 				m_choiceLanguage->SetSelection(0);
@@ -146,6 +152,8 @@ ibDialogUserItem::ibDialogUserItem(wxWindow* parent, wxWindowID id, const wxStri
 		ibDataUserLanguageItem entry;
 		entry.m_strLanguageGuid = language.m_strLanguageGuid;
 		entry.m_strLanguageCode = language.m_strLanguageCode;
+		if (language.m_default)
+			m_strDefaultLanguageCode = language.m_strLanguageCode;
 
 		const int index = m_choiceLanguage->Append(language.m_strLanguageTitle);
 		m_languageArray.insert_or_assign(index, std::move(entry));

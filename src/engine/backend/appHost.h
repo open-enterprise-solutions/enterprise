@@ -65,8 +65,8 @@ public:
 
 	// How many client connections the application server will hold at once — backend.conf
 	// (ClientConnections). Left out, or 0, that is kDefaultClientConnections, not "no limit".
-	// Above kMostClientConnections the most is used, and the journal says so. Each one keeps a
-	// thread until the network core is asynchronous.
+	// Above kMostClientConnections the most is used, and the journal says so. Each one is a socket's
+	// buffer, not a thread (appserver/clientListener.cpp).
 	static constexpr std::size_t kDefaultClientConnections = 1000;
 	static constexpr std::size_t kMostClientConnections    = 10000;
 	std::size_t      GetClientConnections() const { return m_configClientConnections; }

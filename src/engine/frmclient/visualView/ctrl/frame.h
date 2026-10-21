@@ -154,6 +154,9 @@ protected:
 
 	ibValueFrame(ibVisualHostClient& host, long long controlId) : m_host(host), m_controlId(controlId) {}
 
+	// …each of its rows, the server's property (ibPropertySerializable).
+	virtual ibProperty* CreateProperty(ibPropertyCategory* cat, const ibDataNode& row) override;
+
 	// The host it is drawn in — the desktop's visualHost its Create was given.
 	ibVisualHostClient& GetVisualHost() const { return m_host; }
 

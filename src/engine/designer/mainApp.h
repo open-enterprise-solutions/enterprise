@@ -3,7 +3,6 @@
 
 #include <wx/app.h>
 #include <wx/aui/framemanager.h>
-#include <wx/socket.h>
 
 #include <memory>
 
@@ -38,7 +37,7 @@ public:
 	// ibWxApp pre-wires Install / WrapStartup / 3 exception overrides.
 	wxString GetExeName() const override { return wxT("designer"); }
 
-	// DoOnInit defaulted on the base (wxSocketBase::Initialize + wxApp::OnInit).
+	// DoOnInit defaulted on the base (wxApp::OnInit).
 	int DoOnRun() override;
 
 	int OnExit() override;

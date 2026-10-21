@@ -9,7 +9,7 @@ long ibPropertyEnumBase::GetValueAsInteger() const
 
 void ibPropertyEnumBase::SetValue(const long& i)
 {
-	ibProperty::ReadNodeValue(ibDataValue::Int(i));
+	ibPropertySerializable::ReadNodeValue(ibDataValue::Int(i));
 }
 
 //load & save object in control

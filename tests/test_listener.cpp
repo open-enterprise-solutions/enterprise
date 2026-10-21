@@ -1,16 +1,15 @@
 ////////////////////////////////////////////////////////////////////////////
 //	Description : the listener of a server of this platform (backend/server/listener.h) - TLS over the files
 //	backend.conf names, plain on this machine's own addresses otherwise, refused off them. The identities are
-//	tests/certs/ (self-signed, made once); the servers come up on 127.0.0.1.
+//	tests/certs/ (self-signed, made once); the servers - the core's (core/net/httpServer.h) - come up on
+//	127.0.0.1, and cpp-httplib's clients, another library, are what speaks to them.
 ////////////////////////////////////////////////////////////////////////////
 
 #include <gtest/gtest.h>
 
 #include <cstddef>
 #include <initializer_list>
-#include <memory>
 #include <string>
-#include <thread>
 #include <utility>
 
 #include <wx/ffile.h>
@@ -30,6 +29,7 @@
 
 #include "backend/backend_exception.h"
 #include "backend/server/listener.h"
+#include "core/net/httpServer.h"
 
 namespace {
 
@@ -51,11 +51,11 @@ ibTlsFiles TestIdentity()
 	return files;
 }
 
-// The door's refusal for `address` over `files` - empty when it made the listener.
+// The door's refusal for `address` over `files` - empty when it gave the options.
 wxString Refusal(const wxString& address, const ibTlsFiles& files)
 {
 	try {
-		ibMakeListener(address, files);
+		ibListenerOptions(address, 0, files);
 	}
 	catch (const ibBackendException& err) {
 		return err.GetErrorDescription();
@@ -63,24 +63,24 @@ wxString Refusal(const wxString& address, const ibTlsFiles& files)
 	return wxString();
 }
 
-// A listener brought up on a free port of 127.0.0.1, answering "ok" at /, and taken down with the test.
+// A server started with the door's options, on a port the system chooses, answering "ok" at /; m_port is 0 and
+// m_error says why when it did not start. Stopped with the test, so a fatal assertion does not end the binary.
 struct Up {
-	std::unique_ptr<httplib::Server> m_server;
-	std::thread m_thread;
-	int m_port = 0;
-	explicit Up(std::unique_ptr<httplib::Server> server) : m_server(std::move(server)) {
-		m_server->Get("/", [](const httplib::Request&, httplib::Response& res) { res.set_content("ok", "text/plain"); });
-		m_port = m_server->bind_to_any_port("127.0.0.1");
-		m_thread = std::thread([this] { m_server->listen_after_bind(); });
-		if (m_port > 0)
-			m_server->wait_until_ready();
+	ibHttpServer m_server;
+	std::string  m_error;
+	int          m_port = 0;
+	explicit Up(ibHttpServerOptions options) {
+		m_server.Get("/", [](const ibHttpRequest&, ibHttpResponder respond) {
+			ibHttpResponse response;
+			response.SetContent("ok", "text/plain");
+			respond(std::move(response));
+		});
+		options.m_threads = 1;
+		options.m_workers = 2;
+		if (m_server.Start(options, m_error))
+			m_port = m_server.GetHttpsPort() != 0 ? m_server.GetHttpsPort() : m_server.GetHttpPort();
 	}
-	// Stopped and joined here, so that a fatal assertion in a test returns from it and does not end the binary.
-	~Up() {
-		m_server->stop();
-		if (m_thread.joinable())
-			m_thread.join();
-	}
+	~Up() { m_server.Stop(); }
 };
 
 } // namespace
@@ -89,11 +89,11 @@ struct Up {
 TEST(Listener, NamedFilesMakeATlsListener)
 {
 	wxInitializer init;
-	const Up up(ibMakeListener(wxT("127.0.0.1"), TestIdentity()));
-	ASSERT_GT(up.m_port, 0);
+	const Up up(ibListenerOptions(wxT("127.0.0.1"), 0, TestIdentity()));
+	ASSERT_GT(up.m_port, 0) << up.m_error;
 
-	// The TLS server was made in backend.dll and is served through it (its virtuals), the client here is this
-	// binary's own copy of the library - two copies of Mbed TLS, each given its mutexes by its own module.
+	// The TLS server is the core's, the client here is cpp-httplib over this binary's own copy of Mbed TLS - two
+	// copies, each given its mutexes by its own module.
 	httplib::SSLClient client("127.0.0.1", up.m_port);
 	client.set_ca_cert_path(std::string(CertPath(wxT("server.pem")).utf8_str()).c_str());
 	client.enable_server_certificate_verification(true);
@@ -113,8 +113,8 @@ TEST(Listener, NamedFilesMakeATlsListener)
 TEST(Listener, NoFilesMakeAPlainListenerOnLoopback)
 {
 	wxInitializer init;
-	const Up up(ibMakeListener(wxT("127.0.0.1"), ibTlsFiles()));
-	ASSERT_GT(up.m_port, 0);
+	const Up up(ibListenerOptions(wxT("127.0.0.1"), 0, ibTlsFiles()));
+	ASSERT_GT(up.m_port, 0) << up.m_error;
 	httplib::Client client("127.0.0.1", up.m_port);
 	const auto answer = client.Get("/");
 	ASSERT_TRUE(answer);
@@ -152,18 +152,24 @@ TEST(Listener, MislaidFilesAreARefusalNotAFallback)
 	why = Refusal(wxT("127.0.0.1"), half);
 	EXPECT_TRUE(why.Contains(wxT("PrivateKey"))) << why.ToStdString();
 
-	// A key that is there, well formed, and not the certificate's: refused by the one who reads the pair.
+	// A key that is there, well formed, and not the certificate's: refused by the server that reads the pair -
+	// it does not start, and nothing listens in the clear in its place.
 	ibTlsFiles wrong = TestIdentity();
 	wrong.m_privateKey = CertPath(wxT("stranger.key"));
-	why = Refusal(wxT("127.0.0.1"), wrong);
-	EXPECT_TRUE(why.Contains(wxT("stranger.key"))) << why.ToStdString();
-	EXPECT_TRUE(why.Contains(wxT("not the certificate's"))) << why.ToStdString();
+	{
+		const Up up(ibListenerOptions(wxT("127.0.0.1"), 0, wrong));
+		EXPECT_EQ(0, up.m_port);
+		EXPECT_NE(std::string::npos, up.m_error.find("not the certificate's")) << up.m_error;
+	}
 
 	// A file that is there and is not a key at all: refused the same way.
 	ibTlsFiles notAKey = TestIdentity();
 	notAKey.m_privateKey = CertPath(wxT("other.pem"));
-	why = Refusal(wxT("127.0.0.1"), notAKey);
-	EXPECT_TRUE(why.Contains(wxT("other.pem"))) << why.ToStdString();
+	{
+		const Up up(ibListenerOptions(wxT("127.0.0.1"), 0, notAKey));
+		EXPECT_EQ(0, up.m_port);
+		EXPECT_NE(std::string::npos, up.m_error.find("private key")) << up.m_error;
+	}
 
 	// A file longer than any certificate is - not read into memory, refused by name.
 	struct ibTempFile {
@@ -249,7 +255,8 @@ TEST(Listener, TheConfFileIsReadAsWritten)
 	EXPECT_EQ(CertPath(wxT("server.pem")), files.m_certificate);
 	EXPECT_EQ(CertPath(wxT("server.key")), files.m_privateKey);
 
-	// And the listener made over what the file names is the TLS one.
+	// And the listener started over what the file names is the TLS one.
 	const wxString why = Refusal(wxT("0.0.0.0"), files);
 	EXPECT_TRUE(why.IsEmpty()) << why.ToStdString();
+	EXPECT_TRUE(ibListenerOptions(wxT("0.0.0.0"), 0, files).m_httpsPort.has_value());
 }

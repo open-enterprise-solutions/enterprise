@@ -1,13 +1,13 @@
 ﻿#ifndef __PROPERTY_COLOUR_H__
 #define __PROPERTY_COLOUR_H__
 
-#include "frmclient/backend/propertyManager/propertyObject.h"
+#include "frmclient/backend/propertyManager/property/propertySerializable.h"
 
 //base property for "colour"
-class FRMCLIENT_API ibPropertyColour : public ibProperty {
+class FRMCLIENT_API ibPropertyColour : public ibPropertySerializable {
 public:
 
-	// …held as its node, the colour's text (ibBackendProperty::ReadNodeValue).
+	// …held as its node, the colour's text (ibPropertySerializable::ReadNodeValue).
 	wxColour GetValueAsColour() const { return typeConv::StringToColour(GetValueAsString()); }
 	wxString GetValueAsString() const;
 
@@ -15,19 +15,19 @@ public:
 	void SetValue(const wxString& val);
 
 	ibPropertyColour(ibPropertyCategory* cat, const wxString& name, const wxColour& c = wxNullColour)
-		: ibProperty(cat, name, wxNullVariant)
+		: ibPropertySerializable(cat, name, wxNullVariant)
 	{
 		SetValue(c);
 	}
 
 	ibPropertyColour(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxColour& c = wxNullColour)
-		: ibProperty(cat, name, label, wxNullVariant)
+		: ibPropertySerializable(cat, name, label, wxNullVariant)
 	{
 		SetValue(c);
 	}
 
 	ibPropertyColour(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString, const wxColour& c = wxNullColour)
-		: ibProperty(cat, name, label, helpString, wxNullVariant)
+		: ibPropertySerializable(cat, name, label, helpString, wxNullVariant)
 	{
 		SetValue(c);
 	}

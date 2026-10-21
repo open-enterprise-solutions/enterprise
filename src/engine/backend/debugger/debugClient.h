@@ -2,13 +2,11 @@
 #define __DEBUGGER_CLIENT_H__
 
 #include <wx/thread.h>
-#include <atomic>   // std::atomic<short> m_number_connection_attempts (MSVC pulled it in transitively)
+#include <atomic>   // the flags a connection's thread sets and any thread reads
 #include <functional>   // std::function — the deferred call the pack below is wrapped in
 #include <memory>   // the adapter owns its bridges
-#include <mutex>    // ibSocketLock
+#include <mutex>    // the connection's socket slot, the client's lists
 #include <vector>
-
-#include <wx/socket.h>
 
 // Lifecycle: owned by ibMetaDataConfigurationStorage as a unique_ptr
 // field (private ctor + friend). Same cache-pointer pattern as
@@ -18,77 +16,9 @@
 
 #include "debugClientBridge.h"
 #include "backend/session/sessionHolder.h"   // ibSessionWatch — whose worker a reply goes to, watched
+#include "core/net/ioThreads.h"              // the threads every connection's socket goes by
 
-// ⭐⭐ A SOCKET THAT MORE THAN ONE THREAD MAY WANT TO CLOSE — and wxSocketBase::Close() is not written
-// to be called twice at once.
-//
-// wxSocketImpl::Close() is `if (m_fd != INVALID_SOCKET) { DoClose(); m_fd = INVALID_SOCKET; }`: a check,
-// then the work, with nothing between them. Two threads that both pass the check both run DoClose().
-// On Windows and Linux that is a second closesocket() on a dead descriptor. On macOS DoClose() removes
-// the socket's source from the run loop and RELEASES it, so the second thread would hand
-// CFRunLoopRemoveSource a source that is already gone — which is the shape of the designer's crash in
-// #155 (`CFRunLoopRemoveSource -> CFSetContainsValue -> CFHash`, on the connection's own thread).
-//
-// ⚠ THAT IS AN INFERENCE FROM THE STACK, NOT A REPRODUCTION. Two threads calling Close() on one
-// loopback socket, 6000 rounds on macOS 15.6 / arm64, did not crash (tests/test_socketLock.cpp keeps the
-// control): the window is a few instructions wide. What is certain is that the debugger's client
-// connection DOES close one socket from two threads — the designer's main thread ends a session
-// (DetachConnection, from the Debug menu or `app_run restart`) while the connection's own thread,
-// having just watched the far end go away, closes it on its way out — and that closing twice at once
-// is not something wx promises to survive.
-//
-// The lock takes them in turn: the second Close finds the descriptor already invalid and does nothing.
-// Destroy takes the pointer OUT of its slot under the lock, so a Close that arrives after it finds the
-// slot empty instead of a socket that is being freed — and only one thread ever calls Destroy on it.
-//
-// ⚠ IT SERIALISES CLOSING, NOT USING. A thread that is blocked in WaitForRead on the socket while
-// another closes it is a separate hazard, and this does not remove it; the slot is what the owning
-// thread reads through, and only the owner should be doing anything but Close with it.
-//
-// It lives HERE, beside the one class that holds such a socket, rather than in a header of its own.
-class ibSocketLock {
-public:
-
-	// Close the socket in `slot`, if there is one. Any thread; two at once are taken in turn.
-	// `slot` is read UNDER the lock — take it by reference, never by value at the call site.
-	template <class Socket>
-	void Close(Socket* const& slot) {
-		const std::lock_guard<std::mutex> hold(m_mutex);
-		if (slot != nullptr)
-			slot->Close();
-	}
-
-	// Empty `slot` and destroy what was in it, once. Whoever gets here first destroys; everyone after
-	// finds it empty.
-	template <class Socket>
-	void Destroy(Socket*& slot) {
-		Socket* taken = nullptr;
-		{
-			const std::lock_guard<std::mutex> hold(m_mutex);
-			taken = slot;
-			slot = nullptr;
-		}
-		if (taken != nullptr)
-			taken->Destroy();
-	}
-
-	// Put a new socket into `slot`. Under the lock so a concurrent Close sees the old one or the new
-	// one, never a half-written pointer.
-	template <class Socket>
-	void Assign(Socket*& slot, Socket* socket) {
-		const std::lock_guard<std::mutex> hold(m_mutex);
-		slot = socket;
-	}
-
-	// For a reader that must look at the slot and the socket in one step (IsConnected) — the socket
-	// cannot be destroyed between the null check and the call while this is held.
-	std::unique_lock<std::mutex> Hold() const {
-		return std::unique_lock<std::mutex>(m_mutex);
-	}
-
-private:
-	mutable std::mutex m_mutex;
-};
+class ibWebSocketClient;
 
 class BACKEND_API ibDebuggerClient {
 
@@ -131,6 +61,7 @@ class BACKEND_API ibDebuggerClient {
 		// `new` and destroyed here, which is what the single-bridge version did
 		// and the only arrangement in which nobody has to outlive anybody.
 		void SetBridge(ibDebuggerClientBridge* bridge) {
+			std::lock_guard<std::recursive_mutex> lock(m_bridgesMutex);
 			m_debugBridges.clear();
 			AddBridge(bridge);
 		}
@@ -145,17 +76,18 @@ class BACKEND_API ibDebuggerClient {
 		// The first one installed — the IDE's, in the process that has one. Kept
 		// because callers ask "is anybody bridged", not "which".
 		ibDebuggerClientBridge* GetBridge() const {
+			std::lock_guard<std::recursive_mutex> lock(m_bridgesMutex);
 			return m_debugBridges.empty() ? nullptr : m_debugBridges.front().get();
 		}
 
 		virtual ~ibDebuggerClientAdapter() {}
 
-		//commands 
-		void OnSessionStart(wxSocketClient* sock);
-		void OnSessionEnd(wxSocketClient* sock);
+		//commands
+		void OnSessionStart();
+		void OnSessionEnd();
 
-		void OnEnterLoop(wxSocketClient* sock, const ibDebugLineData& data);
-		void OnLeaveLoop(wxSocketClient* sock, const ibDebugLineData& data);
+		void OnEnterLoop(const ibDebugLineData& data);
+		void OnLeaveLoop(const ibDebugLineData& data);
 
 		void OnAutoComplete(const ibDebugAutoCompleteData& data);
 		void OnMessageFromServer(const ibDebugLineData& data, const wxString& message);
@@ -192,6 +124,11 @@ class BACKEND_API ibDebuggerClient {
 
 	private:
 		std::vector<std::unique_ptr<ibDebuggerClientBridge> > m_debugBridges;
+		// 🛑 THE LIST UNDER A LOCK — a listener is put in and taken out on its own thread (the assistant's, a thin
+		// designer's frame going with its client), while the fan-out walks the list on the worker: a listener taken out
+		// mid-walk was destroyed under the walk. Recursive: a listener told something may ask who is bridged (BridgeId),
+		// and SetBridge puts one in under it.
+		mutable std::recursive_mutex m_bridgesMutex;
 
 		// ⚠ WHOSE WORKER — one answer for the whole fan-out, not one per listener. Every bridge in a
 		// process is installed by the same person in the same session, so a session held per bridge
@@ -211,22 +148,8 @@ class BACKEND_API ibDebuggerClient {
 			return m_verifiedConnection && IsConnected();
 		}
 
-		bool IsConnected() const {
-			// The pointer and the socket behind it are read in ONE step: the connection's own thread
-			// destroys the socket on its way out, and a check that ran before that with a call that ran
-			// after it was a use of freed memory (see ibSocketLock).
-			const auto hold = m_socketLock.Hold();
-			if (m_socketClient == nullptr)
-				return false;
-			if (!m_socketClient->IsConnected())
-				return false;
-			if (!m_socketClient->IsOk())
-				return false;
-			wxSocketError error =
-				m_socketClient->LastError();
-			return error == wxSOCKET_NOERROR ||
-				error == wxSOCKET_WOULDBLOCK;
-		}
+		// A socket in the slot, and not gone.
+		bool IsConnected() const;
 
 		wxString GetHostName() const { return m_hostName; }
 		unsigned short GetPort() const { return m_port; }
@@ -256,7 +179,6 @@ class BACKEND_API ibDebuggerClient {
 			m_verifiedConnection(false),
 			m_hostName(hostName),
 			m_port(port),
-			m_socketClient(nullptr),
 			m_number_connection_attempts(-1),
 			m_connectionType(ConnectionType::ConnectionType_Scanner) {
 
@@ -266,13 +188,7 @@ class BACKEND_API ibDebuggerClient {
 			wxThread::SetPriority(wxPRIORITY_MIN);
 		}
 
-		~ibDebuggerClientConnection() {
-
-			if (debugClient != nullptr)
-				debugClient->DeleteConnection(this);
-
-			m_socketLock.Destroy(m_socketClient);
-		}
+		virtual ~ibDebuggerClientConnection();
 
 		// entry point for the thread - called by Run() and executes in the context
 		// of this thread.
@@ -299,28 +215,23 @@ class BACKEND_API ibDebuggerClient {
 
 	private:
 
+		// A socket to the port, in the slot, and the queue what it says goes to — this thread's, for one try.
+		std::shared_ptr<ibDebugCommandQueue> OpenConnection();
+		// The socket out of the slot, and closed. Any thread: the designer's main thread ends a session
+		// (DetachConnection) while this connection's own thread lets the socket go on its way out.
+		void CloseConnection();
+
 		bool			m_verifiedConnection;
 
 		wxString		m_hostName;
 		unsigned short	m_port;
 
-		wxSocketClient* m_socketClient;
-
-		// Every Close / Destroy / assignment of m_socketClient goes through this: the designer's main
-		// thread ends a session while this connection's own thread closes the same socket.
-		mutable ibSocketLock m_socketLock;
-
-		// ⭐⭐ …AND ONE THREAD AT A TIME USES IT. A separate lock from the one above, deliberately: that
-		// one guards the SLOT and must never be held while waiting for bytes, or a Close would queue
-		// behind a read that is waiting for a frame nobody is sending. This one is held for exactly one
-		// frame in or out.
-		//
-		// 🛑 THERE WAS NONE. The window's thread sends a step while the connection's thread reads the
-		// answer to the last one, and wxSocketBase keeps its blocking FLAGS on the object — a read raises
-		// WAITALL for its own duration, a write does the same, and each restores what it found. Overlap
-		// them and a read obliged to wait for every byte comes back SHORT, on a socket that is connected
-		// and healthy. The far end has had this lock for its writes all along (debugServer.h).
-		std::mutex m_socketMutex;
+		// ⭐ A MESSAGE IS WHOLE, so the socket needs no lock of its own: the reads that came back short while a
+		// write restored the blocking flags under them (2026-09-25) were wxSocketBase's. This lock only guards
+		// the slot — which socket is this connection's, and its queue.
+		mutable std::mutex                   m_socketMutex;
+		std::shared_ptr<ibWebSocketClient>   m_socketClient;
+		std::shared_ptr<ibDebugCommandQueue> m_commandQueue;
 
 		wxString		m_confGuid;
 		wxString		m_md5Hash;
@@ -369,9 +280,13 @@ public:
 		const wxString& hostName = defaultHost,
 		unsigned short startPort = defaultDebuggerPort, unsigned short endPort = defaultDebuggerPort + diapasonDebuggerPort)
 	{
-		if (run_debug_server)
+		if (run_debug_server) {
 			m_connectionSuccess = false;
+			m_numberOfConnectionAttempts = numberOfLaunchConnectionAttempts;
+		}
 
+		// A new connection puts itself in the list (AppendConnection) — under this same lock, on this thread.
+		std::lock_guard<std::recursive_mutex> lock(m_connectionsMutex);
 		for (unsigned short port = startPort; port < endPort; port++) {
 
 			auto iterator = std::find_if(m_listConnection.begin(), m_listConnection.end(),
@@ -406,6 +321,7 @@ public:
 
 	void AttachConnection(const wxString& hostName, unsigned short port) const {
 
+		std::lock_guard<std::recursive_mutex> lock(m_connectionsMutex);
 		auto iterator = std::find_if(m_listConnection.begin(), m_listConnection.end(),
 			[hostName, port](ibDebuggerClientConnection* client) { return client->m_hostName == hostName && client->m_port == port; }
 		);
@@ -421,6 +337,7 @@ public:
 	// → AttachConnection), this hook does the same for the
 	// programmatic spawn-then-attach flow.
 	void AttachAllVerified() const {
+		std::lock_guard<std::recursive_mutex> lock(m_connectionsMutex);
 		for (auto* conn : m_listConnection) {
 			if (conn != nullptr) conn->AttachConnection();
 		}
@@ -428,6 +345,7 @@ public:
 
 	void DetachConnection(const wxString& hostName, unsigned short port, bool kill = false) {
 
+		std::lock_guard<std::recursive_mutex> lock(m_connectionsMutex);
 		auto iterator = std::find_if(m_listConnection.begin(), m_listConnection.end(),
 			[hostName, port](ibDebuggerClientConnection* client) { return client->m_hostName == hostName && client->m_port == port; }
 		);
@@ -435,14 +353,13 @@ public:
 		if (iterator != m_listConnection.end()) (*iterator)->DetachConnection(kill);
 	}
 
-	const std::vector<ibDebuggerClientConnection*>& GetListConnection() {
-		wxCriticalSectionLocker enter(ms_criticalSectionConnection1);
-		return m_listConnection;
-	}
-
-	const unsigned int GetCountConnection() const {
-		wxCriticalSectionLocker enter(ms_criticalSectionConnection1);
-		return m_listConnection.size();
+	// ⭐ EACH CONNECTION, VISITED UNDER THE LIST'S LOCK — a connection is a thread that deletes itself when it is done,
+	// and its going waits on this lock (DeleteConnection): a connection visited is one alive. It was the list itself,
+	// handed out by reference with the lock already let go, and walked on any thread while its entries died.
+	template <typename Fn> void ForEachConnection(Fn&& visit) const {
+		std::lock_guard<std::recursive_mutex> lock(m_connectionsMutex);
+		for (const ibDebuggerClientConnection* connection : m_listConnection)
+			visit(*connection);
 	}
 
 	// ⭐⭐ A WATCH QUESTION CARRIES WHO ASKED IT, IN THE PACKET.
@@ -546,7 +463,7 @@ public:
 
 	bool HasConnections() const {
 
-		wxCriticalSectionLocker enter(ms_criticalSectionConnection1);
+		std::lock_guard<std::recursive_mutex> lock(m_connectionsMutex);
 
 		// ANY of them. It answered for the FIRST debugger connection in the list, so with two applications
 		// attached the answer was whichever one happened to come first.
@@ -604,15 +521,7 @@ public:
 		}
 	}
 
-	void SetConnectionSuccess(bool started) {
-		wxCriticalSectionLocker enter(ms_criticalSectionConnection3);
-		m_connectionSuccess = started;
-	}
-
-	bool GetConnectionSuccess() const {
-		wxCriticalSectionLocker enter(ms_criticalSectionConnection3);
-		return m_connectionSuccess;
-	}
+	bool GetConnectionSuccess() const { return m_connectionSuccess; }
 
 protected:
 
@@ -636,12 +545,12 @@ protected:
 
 	//commands:
 	void AppendConnection(ibDebuggerClientConnection* client) {
-		wxCriticalSectionLocker enter(ms_criticalSectionConnection1);
+		std::lock_guard<std::recursive_mutex> lock(m_connectionsMutex);
 		m_listConnection.push_back(client);
 	}
 
 	void DeleteConnection(ibDebuggerClientConnection* client) {
-		wxCriticalSectionLocker enter(ms_criticalSectionConnection1);
+		std::lock_guard<std::recursive_mutex> lock(m_connectionsMutex);
 		if (m_activeSocket == client) m_activeSocket = nullptr;
 		m_listConnection.erase(
 			std::remove(m_listConnection.begin(), m_listConnection.end(), client), m_listConnection.end()
@@ -651,6 +560,7 @@ protected:
 
 	void RecvCommand(void* pointer, unsigned int length) {}
 	void SendCommand(void* pointer, unsigned int length) {
+		std::lock_guard<std::recursive_mutex> lock(m_connectionsMutex);
 		if (m_activeSocket != nullptr) {
 			m_activeSocket->SendCommand(pointer, length);
 		}
@@ -665,7 +575,7 @@ private:
 
 	int GetLineOffset(const wxString& strModuleName, const int current_line) const {
 
-		wxCriticalSectionLocker enter(ms_criticalSectionConnection2);
+		std::lock_guard<std::recursive_mutex> lock(m_breakpointsMutex);
 
 		auto iterator_module_offset = std::find_if(
 			m_listOffsetBreakpoint.begin(),
@@ -689,15 +599,29 @@ private:
 
 	class ibMetaDataConfigurationBase* const m_metaData;
 
-	ibDebuggerClientConnection* m_activeSocket = nullptr;
 	ibDebuggerClientAdapter* m_adapter = nullptr;
 
-	static wxCriticalSection ms_criticalSectionConnection1;
-	static wxCriticalSection ms_criticalSectionConnection2;
-	static wxCriticalSection ms_criticalSectionConnection3;
+	// THE THREAD EVERY CONNECTION'S SOCKET GOES BY — one, for the scanners of every port; a connection's own thread
+	// reads what arrived. Outlives them all: the destructor lets the connections go first.
+	ibIoThreads m_ioThreads;
 
-	std::vector<ibDebuggerClientConnection*>	m_listConnection;
+	// 🛑 THE CONNECTIONS AND THE STOP, UNDER ONE LOCK — the list, the connection a runtime is parked on and its session:
+	// each connection's thread puts itself in, takes itself out and parks the stop, while the designer, the assistant
+	// and the server's listeners walk the list. Taken on every touch of the three, the walk included. Recursive, as the
+	// bridges' lock is: a call made under it may tell a listener at once (Defer with no session), who asks
+	// HasConnections. Taken after m_breakpointsMutex, never before it.
+	mutable std::recursive_mutex             m_connectionsMutex;
+	std::vector<ibDebuggerClientConnection*> m_listConnection;
+	ibDebuggerClientConnection*              m_activeSocket = nullptr;   // the one a runtime is parked on
+	// Session guid of the runtime currently parked at a breakpoint.
+	// Updated on each CommandId_EnterLoop receive; tagged onto every
+	// outgoing Continue/Step/Pause/Detach so the server can route the
+	// command to the right ibSession in a multi-tab wes process.
+	wxString                                 m_currentSessionGuid;
 
+	// 🛑 THE BREAKPOINTS, THE LINES THE EDITS MOVED, WHAT IS WATCHED — set on the designer's thread, read on a
+	// connection's (a stop's line, everything told again on a reconnect). Recursive: a module saved is initialised under it.
+	mutable std::recursive_mutex m_breakpointsMutex;
 	std::map <wxString, std::map<unsigned int, ibBreakpoint>> m_listBreakpoint; //list of points: committed line -> offset + condition
 	std::map <wxString, std::map<unsigned int, int>> m_listOffsetBreakpoint; //list of changed transitions
 
@@ -710,13 +634,12 @@ private:
 	std::map <unsigned int, ibWatchedExpression> m_listExpression;
 #endif  
 
-	bool	m_enterLoop, m_connectionSuccess;
+	// Set by a connection's thread, read by any.
+	std::atomic<bool> m_enterLoop, m_connectionSuccess;
 
-	// Session guid of the runtime currently parked at a breakpoint.
-	// Updated on each CommandId_EnterLoop receive; tagged onto every
-	// outgoing Continue/Step/Pause/Detach so the server can route the
-	// command to the right ibSession in a multi-tab wes process.
-	wxString m_currentSessionGuid;
+	// How many times a connection tries a port before its thread ends — more while a launched child boots
+	// (SearchServer(true)), the usual again once a runtime is verified.
+	std::atomic<short> m_numberOfConnectionAttempts;
 };
 
 #endif

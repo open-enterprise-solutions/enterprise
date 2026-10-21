@@ -1,11 +1,12 @@
 // =============================================================================
 // OES Enterprise — the application server's client connections
 //
-// cpp-httplib's own pool grows to 4 * max(8, cores - 1) and then queues. A
-// WebSocket holds its thread until the socket closes, so the client past that
-// ceiling is accepted and never answered. ClientConnections raises the ceiling
-// (1000 when backend.conf leaves it out). This opens more sockets than the old
-// ceiling and requires a reply on every one.
+// The listener is the core's HTTP (core/net), asynchronous: a socket waiting for
+// its client costs a buffer, not a thread. Under cpp-httplib a WebSocket held a
+// pool thread until it closed, and the client past 4 * max(8, cores - 1) was
+// accepted and never answered. ClientConnections is the ceiling (1000 when
+// backend.conf leaves it out). This opens more sockets than the old pool held
+// and requires a reply on every one, and a burst of them adds no thread.
 // =============================================================================
 
 #include <gtest/gtest.h>
@@ -118,12 +119,14 @@ bool Answered(httplib::ws::WebSocketClient& client)
 	return reply.find("no method named") != std::string::npos;
 }
 
-// Connected, and a reply has come back, so a pool thread is inside the socket rather than idle.
+// Connected, and a reply has come back, so the server holds the socket and has answered on it.
 bool Hold(std::unique_ptr<httplib::ws::WebSocketClient>& client, const std::string& url)
 {
 	client = std::make_unique<httplib::ws::WebSocketClient>(url);
 	client->set_connection_timeout(8);
 	client->set_read_timeout(8);
+	// No heartbeat: cpp-httplib pings from a thread of each socket's own, and the threads counted here are the server's.
+	client->set_websocket_ping_interval(0);
 	if (!client->connect())
 		return false;
 	return Answered(*client);
@@ -353,12 +356,11 @@ TEST(ClientListener, RefusesTheConnectionOnceTheCeilingIsBusy) {
 	wxRmdir(dir);
 }
 
-TEST(ClientListener, RetiresTheThreadsABurstNoLongerNeeds) {
+TEST(ClientListener, ABurstOfConnectionsAddsNoThread) {
 	WxReady();
 	ASSERT_EQ(ibApplicationHost::Get(), nullptr);
-	const unsigned base = static_cast<unsigned>(CPPHTTPLIB_THREAD_POOL_COUNT);
-	const unsigned surplus = 4;
-	ASSERT_LT(base + surplus, 1000u);
+	const unsigned count = OldClientCeiling() + 4;
+	ASSERT_LT(count, 1000u);
 
 	ibClientHost host(nullptr);
 	ibClientListener listener;
@@ -369,24 +371,16 @@ TEST(ClientListener, RetiresTheThreadsABurstNoLongerNeeds) {
 	const unsigned before = CountThreads();
 	ASSERT_GT(before, 0u);
 
-	std::vector<std::unique_ptr<httplib::ws::WebSocketClient>> clients(base + surplus);
+	// Each one answered, so each is a socket the server is inside of rather than one still in its backlog.
+	std::vector<std::unique_ptr<httplib::ws::WebSocketClient>> clients(count);
 	for (unsigned i = 0; i < clients.size(); ++i)
 		ASSERT_TRUE(Hold(clients[i], url)) << "connection " << i;
 	const unsigned during = CountThreads();
-	EXPECT_GE(during, before + surplus);
+
+	// One thread of noise is room for a helper that came and went. A thread per socket fails by the burst.
+	EXPECT_LE(during, before + 1);
 
 	clients.clear();
-	// The extra threads wait the same few seconds httplib waits, then leave the pool. They are joined on the
-	// next enqueue — a thread does not join itself — which is when they stop counting.
-	std::this_thread::sleep_for(std::chrono::seconds(CPPHTTPLIB_THREAD_POOL_IDLE_TIMEOUT + 2));
-	std::unique_ptr<httplib::ws::WebSocketClient> probe;
-	ASSERT_TRUE(Hold(probe, url));
-	probe.reset();
-
-	const unsigned after = CountThreads();
-	// One thread of noise is room for a helper that came and went. A pool that kept the burst fails by the surplus.
-	EXPECT_LE(after + surplus, during + 1);
-
 	listener.Stop();
 }
 
@@ -452,8 +446,8 @@ TEST(ClientListener, ASocketThatNeverLogsInClosesFifteenSecondsAfterItOpened) {
 	listener.Stop();
 }
 
-// A message more often than the one-second read timeout never takes the timeout branch. The deadline
-// still counts from the open, so the socket closes at about fifteen seconds anyway.
+// A message every 200 ms does not move the mark: the deadline counts from the open, so the socket closes at
+// about fifteen seconds anyway.
 TEST(ClientListener, ASocketThatKeepsSendingClosesFifteenSecondsAfterItOpened) {
 	WxReady();
 	ASSERT_EQ(ibApplicationHost::Get(), nullptr);

@@ -15,11 +15,11 @@ public:
 	virtual ~ibDebuggerClientBridgeDesigner();
 
 	//commands
-	virtual void OnSessionStart(wxSocketClient* sock);
-	virtual void OnSessionEnd(wxSocketClient* sock);
+	virtual void OnSessionStart();
+	virtual void OnSessionEnd();
 
-	virtual void OnEnterLoop(wxSocketClient* sock, const ibDebugLineData& data);
-	virtual void OnLeaveLoop(wxSocketClient* sock, const ibDebugLineData& data);
+	virtual void OnEnterLoop(const ibDebugLineData& data);
+	virtual void OnLeaveLoop(const ibDebugLineData& data);
 
 	virtual void OnAutoComplete(const ibDebugAutoCompleteData& data);
 	virtual void OnMessageFromServer(const ibDebugLineData& data, const wxString& message);

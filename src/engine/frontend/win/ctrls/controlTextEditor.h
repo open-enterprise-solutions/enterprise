@@ -307,6 +307,10 @@ public:
 
 		SetBackgroundStyle(wxBG_STYLE_PAINT);
 
+		// wxTE_MULTILINE cannot be toggled on a live native text control outside MSW
+		// (SetWindowStyleFlag only re-creates the HWND there), so a multiline editor
+		// must get the flag at construction.
+		m_multilineMode = (style & wxTE_MULTILINE) != 0;
 		m_text = new ibControlCustomTextEditor(this, val, style);
 
 		return true;

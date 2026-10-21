@@ -12,7 +12,8 @@
 // backend/query/queryException.h); a window shows the message.
 //
 // It is thrown, because a parse cannot read on past it, and it is an ibCoreException, so a window that shows any
-// refusal of the core's in one handler shows this one too.
+// refusal of the core's in one handler shows this one too — and the sentence a person reads, with the place in it, is
+// the exception's own (GetErrorDescription).
 //
 ////////////////////////////////////////////////////////////////////////////
 
@@ -22,7 +23,7 @@ class CORE_API ibQueryRefusal : public ibCoreException {
 public:
 
 	ibQueryRefusal(unsigned int currPos, unsigned int currLine, const wxString& errorDesc) :
-		ibCoreException(errorDesc), m_currPos(currPos), m_currLine(currLine), m_errorDesc(errorDesc)
+		ibCoreException(errorDesc), m_currPos(currPos), m_currLine(currLine)
 	{
 	}
 
@@ -30,7 +31,6 @@ public:
 
 	unsigned int m_currPos;    // the character offset the token starts at
 	unsigned int m_currLine;   // 1-based
-	wxString     m_errorDesc;  // the sentence a person reads, with the place in it
 };
 
 #endif

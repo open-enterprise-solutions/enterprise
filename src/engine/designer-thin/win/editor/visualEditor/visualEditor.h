@@ -46,13 +46,6 @@ class ibValueCommandBarItem;
 #define wxNOTEBOOK_PAGE_DESIGNER 0
 #define wxNOTEBOOK_PAGE_CODE_EDITOR 1
 
-#define oes_clipboard_frame		wxT("oes_clipboard_frame")
-#define oes_clipboard_attribute	wxT("oes_clipboard_attribute")
-#define oes_clipboard_command	wxT("oes_clipboard_command")
-// A command of a control's command bar — on the system's clipboard as the others are: the desktop held it in its process
-// (commandBar.cpp's s_commandClipboard), out of reach of another window.
-#define oes_clipboard_command_bar_item	wxT("oes_clipboard_command_bar_item")
-
 // wxDropTarget for a node dragged from a form-editor tree — the desktop's (designer visualEditor.h). Shared by the form
 // CANVAS and the OBJECT TREE. It holds the registered draggable KINDS (ibFormDragItem — a source path, a command
 // path); OnData matches the RECEIVED format to a kind, decodes it and enacts the drop. NO per-format branch — adding a
@@ -358,11 +351,12 @@ public:
 		// The holder whose property that is — none: no attribute's.
 		ibFormAttributeValue* FindEntry(const ibPropertyObject* owner) const;
 
-		// ⭐ THE SOURCE WINDOW — the desktop's (frontend advpropSource.cpp): these rows, filtered by what a control may be
-		// bound to (`filter`; a column — of `table`), a reference opened as the tree opens it
-		// (Composition), the binding's own row selected; OK — `binding` the row's path. False: cancelled, or nothing.
+		// ⭐ THE SOURCE WINDOW — the desktop's (frontend advpropSource.cpp): the tree the control's Source offers
+		// (`sources`, the server's), a reference opened as the tree opens it (Composition) and filtered by what the
+		// control may be bound to (`filter`), the binding's own row selected; OK — `binding` the row's path. False:
+		// cancelled, or nothing.
 		bool PickSource(wxWindow* parent, ibProtocol::ibSchema::ibProperties::ibSourceDataType filter,
-			const ibSourceDescription& table, ibSourceDescription& binding);
+			const ibDataNode& sources, ibSourceDescription& binding);
 
 	protected:
 
@@ -711,9 +705,9 @@ private:
 
 	void DoRemoveObject(ibValueFrame* obj, bool cutObject);
 
-	// Each control of the node drawn receives what it holds: its rows (the answers', m_rows) when it was built anew, its
-	// values from the node.
-	void Receive(const ibProtocolNode& node);
+	// Each control of the node drawn receives what it holds: its rows (the answers', m_rows) when it was built anew — or
+	// by no patch (the form drawn whole, as the host draws it), every one — its values from the node.
+	void Receive(const ibProtocolNode& node, const ibProtocolNode& patch);
 
 	// A SOURCE PATH as the attribute tree's rows write it (Path — its hops, items {Id, Type}): what a row is asked
 	// about again (Composition) and what a drop binds (BoundControl).
@@ -958,6 +952,9 @@ public:
 
 private:
 
+	// …each of its rows, the server's property (ibPropertySerializable).
+	virtual ibProperty* CreateProperty(ibPropertyCategory* cat, const ibDataNode& row) override;
+
 	ibVisualEditorNotebook::ibVisualEditor* m_formHandler;
 	const long long m_attributeId;
 	const long long m_columnId;
@@ -994,6 +991,9 @@ public:
 	void ReadRow(const ibProtocolNode& row);
 
 private:
+
+	// …each of its rows, the server's property (ibPropertySerializable).
+	virtual ibProperty* CreateProperty(ibPropertyCategory* cat, const ibDataNode& row) override;
 
 	ibVisualEditorNotebook::ibVisualEditor* m_formHandler;
 	const long long m_commandId;
@@ -1039,6 +1039,9 @@ public:
 	ibProtocolNode GetNode() const;
 
 protected:
+
+	// …each of its rows, the server's property (ibPropertySerializable).
+	virtual ibProperty* CreateProperty(ibPropertyCategory* cat, const ibDataNode& row) override;
 
 	// The form as it stands with the command bar of this control given those commands — drawn by the server, a command
 	// the editor's; then the one at `selected` shown (wxNOT_FOUND: none).

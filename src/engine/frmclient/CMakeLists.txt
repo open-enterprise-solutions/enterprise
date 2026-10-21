@@ -48,7 +48,7 @@ if(WIN32)
 endif()
 
 # Nothing of the server — not even the backend: the client talks through the protocol's library (protocol/), which
-# carries the wire's tree, the connections and their TLS; and it speaks the core's meanings (core/), as the engine does.
+# carries the wire's tree and the connections; and it speaks the core's meanings (core/), as the engine does.
 target_link_libraries(frmclient
     PUBLIC
         protocol
@@ -63,24 +63,14 @@ target_link_libraries(frmclient
         wx::xrc
         wx::base
         wx::xml
-        mbedtls
-        mbedx509
-        mbedcrypto
 )
-if(WIN32)
-    target_link_libraries(frmclient PRIVATE crypt32 ws2_32)
-endif()
-if(APPLE)
-    target_link_libraries(frmclient PRIVATE "-framework Security" "-framework CoreFoundation")
-endif()
 
 find_package(Threads REQUIRED)
 target_link_libraries(frmclient PRIVATE Threads::Threads)
 
 # WHAT IT EXPORTS, AND NOTHING ELSE — as a DLL does. A file base loads the backend into this process, and on an ELF
 # system a name two libraries export is ONE: the backend's own calls would land in this library's copies (the model
-# view, wx's event names, Mbed TLS linked in here as well as there). Hidden by default, FRMCLIENT_API shows what is
-# meant to be seen; the static Mbed TLS is kept in as well.
+# view, wx's event names). Hidden by default, FRMCLIENT_API shows what is meant to be seen.
 set_target_properties(frmclient PROPERTIES
     CXX_STANDARD 17
     CXX_STANDARD_REQUIRED ON
@@ -88,6 +78,3 @@ set_target_properties(frmclient PROPERTIES
     CXX_VISIBILITY_PRESET hidden
     OUTPUT_NAME "frmclient"
 )
-if(UNIX AND NOT APPLE)
-    target_link_options(frmclient PRIVATE "LINKER:--exclude-libs,ALL")
-endif()

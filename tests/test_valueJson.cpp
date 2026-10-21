@@ -410,8 +410,13 @@ TEST(JsonText, OneSpellingForTheWholeBackend) {
 	ibJsonText::AppendQuoted(nul, withNul);
 	EXPECT_EQ(nul, wxString(wxT("\"a\\u0000b\""))) << "a NUL is a character, not the end of the text";
 
-	EXPECT_EQ(ibJsonText::QuotedUtf8(U("\xD0\x91")), std::string("\"\xD0\x91\""));
-	EXPECT_EQ(ibJsonText::QuotedUtf8(wxString()), std::string("\"\""));
+	const wxString be = U("\xD0\x91");
+	std::string utf8;
+	ibJsonText::AppendQuoted(utf8, be.wc_str(), be.length());
+	EXPECT_EQ(utf8, std::string("\"\xD0\x91\""));
+	std::string empty;
+	ibJsonText::AppendQuoted(empty, L"", 0);
+	EXPECT_EQ(empty, std::string("\"\""));
 }
 
 TEST(JsonWriter, ADateIsIso8601) {

@@ -1,10 +1,11 @@
 #ifndef __SCHEMA_DEBUGGER_H__
 #define __SCHEMA_DEBUGGER_H__
 
-// THE DESIGNER'S DEBUGGER'S STORE — the breakpoints the thin designer's debugger keeps (its engine's client, carried
-// over: designer-thin/backend/debugger), in the base the configuration is in: the rows of its session's ibDebuggerClient,
-// by the verbs that client writes them with (ibProtocol::ibSchema::ibDebugger::ibCommand). The debugger itself — the runtimes, the stops,
-// the watches — is the client's own. The designer's own.
+// THE DESIGNER'S DEBUGGER'S STORE — the breakpoints of the designer's session's ibDebuggerClient, in the base the
+// configuration is in, by the verbs that client writes them with (ibProtocol::ibSchema::ibDebugger::ibCommand): the
+// committed lines — the editor's edits since are the client's to count (designer-thin/backend/debugger). The debugger
+// itself — the runtimes, the stops, the watches — is that same engine's client, heard over its own connection
+// (ibClientDebugger, ibProtocol::ibDebug).
 
 #include "frmserver/schema/clientSchema.h"
 

@@ -79,8 +79,12 @@ bool ibFormDesignView::Fetch(const ibDataNode& request, ibDataNode& response)
 {
 	// Asked about the form as the client holds it — it is loaded first.
 	if (const ibDataNode* const form = request.FindChild(ibProtocol::ibView::ibFormDesigner::Form)) {
+		ibJournalStopwatch loading;
+		loading.Resume();
 		if (!LoadForm(*form))
 			return false;
+		loading.Pause();
+		ibJournalInfo(wxT("client"), wxT("      the form handed back loaded %lld ms"), loading.Ms());
 	}
 
 	const s32 kind = request.GetValue<s32>(ibProtocol::ibView::ibFormDesigner::Kind);
@@ -176,7 +180,7 @@ bool ibFormDesignView::SetProperty(ibPropertyObject* object, const ibDataNode& r
 	if (ibEvent* const event = object->GetEvent(name)) {
 		ibPropertyObject* const owner = event->GetPropertyObject();
 		const wxVariant oldValue = event->GetValue();
-		if (value->Kind() == ibDataKind::String && !owner->OnEventChanging(event, wxVariant(value->AsString())))
+		if (value->Kind() == ibDataKind::String && !owner->OnEventChanging(event, wxVariant(value->AsString().ToWxString())))
 			return false;
 		if (!event->SetNodeValue(*value))
 			return false;
@@ -191,7 +195,7 @@ bool ibFormDesignView::SetProperty(ibPropertyObject* object, const ibDataNode& r
 		return false;
 	ibPropertyObject* const owner = property->GetPropertyObject();
 	const wxVariant oldValue = property->GetValue();
-	if (value->Kind() == ibDataKind::String && !owner->OnPropertyChanging(property, wxVariant(value->AsString())))
+	if (value->Kind() == ibDataKind::String && !owner->OnPropertyChanging(property, wxVariant(value->AsString().ToWxString())))
 		return false;
 	if (!property->SetNodeValue(*value))
 		return false;
@@ -295,11 +299,20 @@ void ibFormDesignView::WriteForm(ibDataNode& response, const std::set<ibFormID>&
 
 	// Each control's rows, as the designer's inspector shows them — what its state hides not sent (OnRefresh); no Tab:
 	// an edit of them is the client's. Those it holds already not again.
+	ibJournalStopwatch rows, attributes, commands;
+	rows.Resume();
 	WriteRows(m_valueForm, response.Child(ibProtocol::ibView::ibFormDesigner::Controls), held);
+	rows.Pause();
 
 	// …and the trees beside it — its attributes, its commands.
+	attributes.Resume();
 	FillAttributeTree(response.Child(ibProtocol::ibView::ibFormDesigner::AttributeTree));
+	attributes.Pause();
+	commands.Resume();
 	FillCommandTree(response.Child(ibProtocol::ibView::ibFormDesigner::CommandTree));
+	commands.Pause();
+	ibJournalInfo(wxT("client"), wxT("      the form's rows written %lld ms, its attribute tree %lld ms, its command tree %lld ms"),
+		rows.Ms(), attributes.Ms(), commands.Ms());
 }
 
 namespace {
@@ -451,8 +464,8 @@ void ibFormDesignView::RestoreProperties(ibDataNode& node)
 {
 	// The wire does not say which area a key came from (ibJsonProvider — a scalar comes back a field): every field is
 	// put back as a property too, so a property's reader finds it where WriteData put it; the header's fields stay.
-	const std::vector<std::pair<wxString, ibDataValue>> fields = node.Fields();
-	for (const std::pair<wxString, ibDataValue>& field : fields) {
+	const std::vector<std::pair<ibString, ibDataValue>> fields = node.Fields();
+	for (const std::pair<ibString, ibDataValue>& field : fields) {
 		if (node.FindProperty(field.first) == nullptr)
 			node.SetProperty(field.first, field.second);
 	}
@@ -460,7 +473,7 @@ void ibFormDesignView::RestoreProperties(ibDataNode& node)
 		RestoreProperties(child);
 	// …and a node held in a property too: the form's Attributes, its FormCommands — an entry's Name read back a field
 	// was no Name to its reader, the attribute renamed to nothing on the next load (2026-10-15).
-	for (const std::pair<wxString, ibDataValue>& property : node.Properties()) {
+	for (const std::pair<ibString, ibDataValue>& property : node.Properties()) {
 		if (property.second.Kind() == ibDataKind::Child && property.second.AsChild() != nullptr)
 			RestoreProperties(*property.second.AsChild());
 	}

@@ -31,7 +31,10 @@ namespace ibProtocol {
 	//   5  …and a table's State may carry Rows with the Version: the first page, as fetch would give it (rows as children,
 	//      End, Before, Pictures), so the frame that opens the tab need not be followed by a fetch. A server below 5, or
 	//      one that omits Rows, is answered with fetch, as before.
-	inline constexpr int Version = 5;
+	//   6  …and the designer's debugger rides the protocol (ibDebug): a second connection of the same client, bound to it by
+	//      the key the first asks for, carries the debugger's commands, answered at once, and the server's `debug`
+	//      notifications — a stop, the stack, the locals — sent as they happen, not as a frame.
+	inline constexpr int Version = 6;
 
 	// WHAT A CLIENT ASKS THE SERVER. On the wire a method is a name, as JSON-RPC has it; in code it is a type: the server
 	// reads the name once (MethodFromName) and nothing past it compares strings. A name is never changed; a new method
@@ -57,6 +60,7 @@ namespace ibProtocol {
 		                // (Command: ibFrame::ibCommand); one not enabled now is refused
 		Presentation,   // ibPresentation
 		Picture,        // ibPicture
+		Debug,          // ibDebug — answered at once, never the frame
 	};
 
 	// The name a method goes by on the wire.
@@ -81,6 +85,7 @@ namespace ibProtocol {
 		case ibMethod::Command:      return "command";
 		case ibMethod::Presentation: return "presentation";
 		case ibMethod::Picture:      return "picture";
+		case ibMethod::Debug:        return "debug";
 		}
 		return "";
 	}
@@ -88,7 +93,7 @@ namespace ibProtocol {
 	// …and the method a name means; Unknown for a name the protocol does not have.
 	inline ibMethod MethodFromName(const char* name)
 	{
-		for (int method = static_cast<int>(ibMethod::Login); method <= static_cast<int>(ibMethod::Picture); ++method) {
+		for (int method = static_cast<int>(ibMethod::Login); method <= static_cast<int>(ibMethod::Debug); ++method) {
 			if (std::strcmp(name, MethodName(static_cast<ibMethod>(method))) == 0)
 				return static_cast<ibMethod>(method);
 		}
@@ -128,6 +133,8 @@ namespace ibProtocol {
 
 		// What the server says unasked — a notification's method: a client's frame changed by itself (params: Client).
 		inline constexpr const char* Changed = "changed";
+		// …and the debugger's news, to the client's debug connection (params: Client, Event and its fields — ibDebug).
+		inline constexpr const char* Debug   = "debug";
 
 	}
 
@@ -356,6 +363,77 @@ namespace ibProtocol {
 		inline constexpr const char* Control = "Control";
 		inline constexpr const char* Form    = "Form";      // the Key of the form drawn, when it is not the tab's own
 		inline constexpr const char* Request = "Request";
+
+	}
+
+	// THE DESIGNER'S DEBUGGER (protocol 6) — the server's, the one connected to the runtimes: the designer's windows are its
+	// listeners over the wire, beside the assistant. On a connection of its own, so a step is not queued behind a frame:
+	// debug {Command: Channel} on the client's connection → Channel, a key; debug {Command: Listen, Channel} on a second
+	// connection of the same client binds that one — from then on it is answered the debugger's commands and is sent its
+	// news, `debug {Client, Event, …}`, as they happen. A command is answered at once, never with the frame. Where a
+	// breakpoint is kept is the debugger's store, a schema (ibSchema::ibDebugger).
+	namespace ibDebug {
+
+		inline constexpr const char* Command    = "Command";
+		inline constexpr const char* Channel    = "Channel";      // Channel's answer, Listen's key
+		inline constexpr const char* Event      = "Event";        // a notification's: ibEvent
+		inline constexpr const char* Host       = "Host";
+		inline constexpr const char* Port       = "Port";
+		inline constexpr const char* Kill       = "Kill";         // Detach, Stop: the runtime is ended too
+		inline constexpr const char* Rows       = "Rows";
+		inline constexpr const char* Type       = "Type";         // a connection's (the runtime's ConnectionType), a value's type
+		inline constexpr const char* Verified   = "Verified";     // a connection's: the runtime is of this configuration
+		inline constexpr const char* Connected  = "Connected";    // a connection's: its socket is open; a session's news: a
+		                                                          // runtime is still attached
+		inline constexpr const char* User       = "User";
+		inline constexpr const char* Computer   = "Computer";
+		inline constexpr const char* Session    = "Session";      // the runtime's session the news is of
+		inline constexpr const char* File       = "File";
+		inline constexpr const char* Module     = "Module";
+		inline constexpr const char* Line       = "Line";
+		inline constexpr const char* Expression = "Expression";
+		inline constexpr const char* Item       = "Item";         // a watched row — the asker's own number, said back
+		inline constexpr const char* Asker      = "Asker";        // the listener that asked: its answer is its own
+		inline constexpr const char* Level      = "Level";        // Stack: the call the locals are read in
+		inline constexpr const char* Name       = "Name";
+		inline constexpr const char* Value      = "Value";
+		inline constexpr const char* Attributes = "Attributes";   // a value that unfolds
+		inline constexpr const char* Text       = "Text";         // ToolTip's value, Message's line
+
+		// What a client asks of the debugger — numbered of their own, as a schema's commands.
+		enum class ibCommand : int {
+			Channel          = 1,    // → Channel
+			Listen           = 2,    // {Channel}
+			Search           = 3,    // the runtimes of this machine looked for: a debug run just started waits for one
+			Connections      = 4,    // → Rows {Host, Port, Type, Verified, Connected, User, Computer}
+			Attach           = 5,    // {Host, Port}
+			Detach           = 6,    // {Host, Port, Kill}
+			Continue         = 7,
+			StepOver         = 8,
+			StepInto         = 9,
+			StepOut          = 10,
+			Pause            = 11,
+			Stop             = 12,   // {Kill}
+			ToolTip          = 13,   // {File, Module, Expression} → news ToolTip
+			AddExpression    = 14,   // {Expression, Item, Asker} → news Variable
+			ExpandExpression = 15,   // {Expression, Item, Asker} → news Expanded
+			RemoveExpression = 16,   // {Item}
+			Stack            = 17,   // {Level}
+		};
+
+		// …and what it tells — the listener's own words (ibDebuggerClientBridge).
+		enum class ibEvent : int {
+			SessionStart = 1,    // {Connected}
+			SessionEnd   = 2,    // {Connected}
+			EnterLoop    = 3,    // {Session, File, Module, Line}
+			LeaveLoop    = 4,    // the same
+			Message      = 5,    // {Session, File, Module, Line, Text}
+			ToolTip      = 6,    // {Session, File, Module, Expression, Text}
+			Stack        = 7,    // Rows {Module, Name — the call as the runtime names it, Line}
+			Locals       = 8,    // Rows {Name, Value, Type, Attributes}
+			Variable     = 9,    // {Item, Asker}, Rows {Item, Name, Value, Type, Attributes}
+			Expanded     = 10,   // the same
+		};
 
 	}
 
@@ -1039,7 +1117,7 @@ namespace ibProtocol {
 			                                                              // a u64 as a decimal
 			inline constexpr const char* Multiple     = "Multiple";
 			inline constexpr const char* Classes      = "Classes";        // the classes its choices' Data names (Type, Name,
-			                                                              // Picture)
+			                                                              // Picture) — a source's, the type it holds
 			inline constexpr const char* Type         = "Type";
 			inline constexpr const char* Args         = "Args";           // an event's: its handler's parameters
 			// …what a property's own editor reads beside them:
@@ -1047,7 +1125,7 @@ namespace ibProtocol {
 			inline constexpr const char* Schedule     = "Schedule";       // a schedule's, in its stored form
 			inline constexpr const char* Sources      = "Sources";        // a choice parameters row's: the fields beside it
 			                                                              // that may supply a value (Title, the holder they
-			                                                              // stand in)
+			                                                              // stand in); a source's: its window's tree
 			inline constexpr const char* Default      = "Default";
 			inline constexpr const char* Targets      = "Targets";
 			inline constexpr const char* Pictures     = "Pictures";       // a picture's: those it may be (Guid, Name)
@@ -1056,10 +1134,12 @@ namespace ibProtocol {
 			// the command rows Name, Picture, CommandPath, Kind (ibInterfaceCommandType).
 			inline constexpr const char* CommandTree  = "CommandTree";
 			inline constexpr const char* CommandPath  = "CommandPath";    // the hops of a command — children Id
-			// …a control's Source: what it may be bound to (SourceDataType, an ibSourceDataType), and for a column the
-			// path of the table its box is bound to (Parent — as a binding is written).
+			// …a control's Source: what it may be bound to (SourceDataType, an ibSourceDataType), the tree its window
+			// offers (Sources — rows as the attribute tree's: the roots «Name (type)», under them «Synonym (type)»); in its
+			// Value, beside the path, the type the binding holds (SourceType — Value as a type is written, Presentation):
+			// the desktop's Type row beneath it; unbound — none.
 			inline constexpr const char* SourceDataType = "SourceDataType";
-			inline constexpr const char* Parent       = "Parent";
+			inline constexpr const char* SourceType   = "SourceType";
 
 			// What a control's Source may be bound to (the server's ibSourceDataType, as its GetFilterSourceDataType
 			// answers); none said: an attribute.
@@ -1071,8 +1151,9 @@ namespace ibProtocol {
 
 		}
 
-		// Both modes': the configuration's Languages (Guid, Title, Code) — what a translated text is written in (the
-		// translation window's boxes, a user's record's choice).
+		// Both modes': the configuration's Languages (Guid, Title, Code[, Default — true on the configuration's own
+		// language, its DefaultLanguage; absent elsewhere]) — what a translated text is written in (the translation
+		// window's boxes, a user's record's choice).
 		namespace ibLanguages {
 
 			inline constexpr const char* Tab       = "Tab";
@@ -1080,6 +1161,7 @@ namespace ibProtocol {
 			inline constexpr const char* Guid      = "Guid";
 			inline constexpr const char* Title     = "Title";
 			inline constexpr const char* Code      = "Code";
+			inline constexpr const char* Default   = "Default";
 
 		}
 
@@ -1137,10 +1219,10 @@ namespace ibProtocol {
 
 		}
 
-		// The designer's debugger's store — the debugger is the thin designer's own, the engine's client carried over; the
-		// configuration and its sys_dbg are here: shows the configuration's Guid and Rows (Module — a module by its address,
-		// Count — its lines, Breakpoints (Line, Condition)); `Args: {Module}` — that module's Breakpoints. A module view's
-		// State says its Module too (ibView::ibModule).
+		// The designer's debugger's store — the debugger is the server's (ibDebug), and the configuration and its sys_dbg
+		// are here: shows the configuration's Guid and Rows (Module — a module by its address, Count — its lines,
+		// Breakpoints (Line, Condition)); `Args: {Module}` — that module's Breakpoints. A module view's State says its
+		// Module too (ibView::ibModule).
 		namespace ibDebugger {
 
 			inline constexpr const char* Guid        = "Guid";
@@ -1814,6 +1896,7 @@ namespace ibProtocol {
 	// WHERE A FILE BASE LIVES — what fileserver opens it by (fileserver/fileBase.h).
 	namespace ibFileBase {
 
+		inline constexpr const char* Name      = "Name";     // the base's — a web server's publication
 		inline constexpr const char* Locale    = "Locale";
 		inline constexpr const char* Directory = "Directory";
 		inline constexpr const char* Server    = "Server";

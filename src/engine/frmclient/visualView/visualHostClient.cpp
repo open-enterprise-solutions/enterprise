@@ -143,6 +143,12 @@ void CalculateLabels(const ibValueFrame* control, wxBoxSizer* parentSizer, int& 
 	if (parentSizer->GetOrientation() == wxHORIZONTAL)
 		return;
 
+	// A PAGE stops it too — a window that lays out what is in it with a sizer of its own (a notebook's page, the one
+	// control that is both): its labels are a column of their own, which ApplyLabels measures when it reaches the page.
+	// Walked on, every page of a notebook was one column with the form, and the widest caption anywhere set every label.
+	if (control->GetWindow() != nullptr && control->GetSizer() != nullptr)
+		return;
+
 	wxBoxSizer* const childSizer = dynamic_cast<wxBoxSizer*>(control->GetSizer());
 	wxBoxSizer* const nextParent = childSizer != nullptr ? childSizer : parentSizer;
 	for (unsigned int idx = 0; idx < control->GetChildCount(); idx++)
@@ -153,6 +159,18 @@ void ApplyLabels(const ibValueFrame* control, wxBoxSizer* parentSizer, int& maxL
 {
 	wxBoxSizer* const childSizer = dynamic_cast<wxBoxSizer*>(control->GetSizer());
 	ibControlDynamicBorder* const label = dynamic_cast<ibControlDynamicBorder*>(control->GetWindow());
+
+	// A page starts a column of its own (see CalculateLabels): measured in its sizer, from nothing.
+	if (control->GetWindow() != nullptr && childSizer != nullptr) {
+		int pageMax = 0;
+		if (childSizer->GetOrientation() == wxVERTICAL) {
+			for (unsigned int idx = 0; idx < control->GetChildCount(); idx++)
+				CalculateLabels(control->GetChild(idx), childSizer, pageMax);
+		}
+		for (unsigned int idx = 0; idx < control->GetChildCount(); idx++)
+			ApplyLabels(control->GetChild(idx), childSizer, pageMax);
+		return;
+	}
 
 	// What is in it sees a copy of the width: what it changes stays with it.
 	int subtreeMax = maxLabelWidth;
@@ -269,9 +287,9 @@ void ibVisualHostClient::Send(long long controlId, ibProtocol::ibEvent::ibKind e
 
 	// What it says, as it says it — a sheet handed over whole by its size: written out, it was the sheet again in the
 	// journal at every edit.
-	const std::string said = args.IsNode() ? args.Write() : std::string("{}");
+	const ibString said = args.IsNode() ? args.Write() : ibString(wxT("{}"));
 	ibJournalInfo(wxT("event"), wxT("%d on %lld: %s"), static_cast<int>(event), controlId,
-		said.size() <= 1024 ? wxString::FromUTF8(said) : wxString::Format(wxT("%zu bytes"), said.size()));
+		said.length() <= 1024 ? said : ibString::Format(wxT("%zu characters"), said.length()));
 	m_mainFrame.Post(ibProtocol::ibMethod::Event, EventOf(controlId, event, args));
 }
 

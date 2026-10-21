@@ -450,12 +450,6 @@ void ibApplicationInstance::WireSessionEvents()
 		// not a failure: the defaults stand, and the defaults are off.
 		if (ownSession && m_mcpServer) m_mcpServer->LoadSettings(s);
 
-		// Enable per-session debug context iff this process was started
-		// with --debug. Marks the session as debugged so ibProcUnit's
-		// breakpoint dispatch + DoDebugLoop's CV wait route through the
-		// session's own state instead of the legacy server-singleton.
-		if ((m_loadMetadataFlags & _app_start_create_debug_server_flag) != 0)
-			registry->EnableDebugForSession(s);
 		if (s->GetMetaData() != nullptr) {
 			// Root mm is allocated by ibSession::EnsureRoot (called by the registry before this listener) for
 			// runtime sessions; the Designer has no root mm (it uses the lightweight designer manager in the
@@ -1005,6 +999,7 @@ bool ibApplicationInstance::DestroyAppDataEnv()
 
 ///////////////////////////////////////////////////////////////////////////////
 #include "backend/debugger/debugClient.h"
+#include "core/startProcess.h"   // ibStartProcess — a launch is asked for from a fiber too (app_run on the server)
 
 #pragma region execute 
 long ibApplicationInstance::RunApplication(const wxString& strAppName, bool searchDebug, bool useManifest) const
@@ -1060,7 +1055,7 @@ long ibApplicationInstance::RunApplication(const wxString& strAppName, const wxS
 #endif
 
 	// The bare name stays the fallback, so a layout this does not recognise behaves as before.
-	// Quoted because a resolved path can contain a space and wxExecute splits on those.
+	// Quoted because a resolved path can contain a space and the command is split on those.
 	wxString executeCmd = binary.FileExists()
 		? (wxT('"') + binary.GetFullPath() + wxT("\" "))
 		: (strAppName + wxT(' '));
@@ -1079,7 +1074,7 @@ long ibApplicationInstance::RunApplication(const wxString& strAppName, const wxS
 			executeCmd += wxString::Format(wxT(" --password=%s"), m_strPassword);
 	}
 	else {
-		// QUOTED, for the same reason the binary above is: wxExecute splits the command on spaces, so
+		// QUOTED, for the same reason the binary above is: the command is split on spaces, so
 		// a base under "C:\My Bases\…" reached the child as two arguments and the second one was not a
 		// flag anything declared. The path is the one thing here a person chooses, so it is the one
 		// most likely to carry a space (2026-08-20).
@@ -1104,7 +1099,7 @@ long ibApplicationInstance::RunApplication(const wxString& strAppName, const wxS
 	if (useManifest)
 		return SpawnWebServerWithManifest(executeCmd, searchDebug);
 
-	const long execute = wxExecute(executeCmd);
+	const long execute = ibStartProcess(executeCmd);
 
 	if (searchDebug) {
 		// Scan in rounds, the same way the manifest path below does, and for the same
@@ -1142,7 +1137,7 @@ long ibApplicationInstance::SpawnWebServerWithManifest(wxString cmd, bool search
 	cmd += wxString::Format(wxT(" --port=0 --manifest=\"%s\""), manifestPath);
 
 	// Spawn detached so the caller can exit without killing the server.
-	const long pid = wxExecute(cmd, wxEXEC_ASYNC);
+	const long pid = ibStartProcess(cmd);
 	if (pid == 0) {
 		wxRemoveFile(manifestPath);
 		return 0;
@@ -1613,7 +1608,7 @@ wxString ibApplicationInstance::GetDatabaseDescription() const
 
 ///////////////////////////////////////////////////////////////////////////////
 
-#include "backend/utils/md5.hpp"
+#include "core/utils/md5.hpp"
 
 wxString ibApplicationInstance::ComputeMd5(const wxString& userPassword) const
 {

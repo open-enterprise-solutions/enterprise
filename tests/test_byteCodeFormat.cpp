@@ -19,7 +19,7 @@
 
 #include "backend/compiler/byteCodeFormat.h"
 #include "backend/compiler/cache/byteCodeCache.h"
-#include "backend/utils/md5.hpp"
+#include "core/utils/md5.hpp"
 
 #include <wx/filename.h>
 #include <wx/stdpaths.h>

@@ -595,10 +595,20 @@ void ibDialogLinqConstructor::AskAll(const std::vector<wxString>& probes, const 
 	ibProtocolNode request;
 	bool asking = false;
 	for (const wxString& probe : probes) {
-		if (m_asked.find(probe) != m_asked.end())
-			continue;
+		const bool isDeep = std::find(deep.begin(), deep.end(), probe) != deep.end();
+		const auto known = m_asked.find(probe);
+		if (known != m_asked.end()) {
+			// A place answered before (the opening's Visible here) is asked again only when it is asked deep and its
+			// members are not known yet: AddPlace asks each member next, and one question answers them all.
+			if (!isDeep)
+				continue;
+			const std::vector<wxString>& names = known->second.m_names;
+			if (std::all_of(names.begin(), names.end(),
+				[this, &probe](const wxString& name) { return m_asked.find(probe + name + wxT(".")) != m_asked.end(); }))
+				continue;
+		}
 		request.AddItem(linq::Probes, probe);
-		if (std::find(deep.begin(), deep.end(), probe) != deep.end())
+		if (isDeep)
 			request.AddItem(linq::Deep, probe);
 		asking = true;
 	}

@@ -28,7 +28,7 @@ void Ballast(ibDataNode& node)
 ibProtocolNode Wire(const ibDataNode& node)
 {
 	ibProtocolNode read;
-	EXPECT_TRUE(ibProtocolNode::Read(std::string(ibRpcRenderNode(node).utf8_str()), read));
+	EXPECT_TRUE(ibProtocolNode::Read(ibRpcRenderNode(node), read));
 	return read;
 }
 
@@ -41,7 +41,7 @@ void ExpectApplied(const ibDataNode& from, const ibDataNode& to)
 	ibProtocolNode held = Wire(from);
 	held.Apply(Wire(patch));
 	const ibProtocolNode drawn = Wire(to);
-	EXPECT_TRUE(held == drawn) << "made:  " << held.Write() << "\ndrawn: " << drawn.Write();
+	EXPECT_TRUE(held == drawn) << "made:  " << held.Write().ToUtf8() << "\ndrawn: " << drawn.Write().ToUtf8();
 }
 
 ibDataNode& Control(ibDataNode& parent, ibMetaID id, const wxString& caption)
@@ -163,7 +163,7 @@ TEST(ClientFrameApply, ChildrenWithoutIdsComeWhole)
 // comes with a patch, and a patch takes it away — the form modified, its fields no longer listen to Input.
 TEST(ClientFrameApply, SubscriptionComesAndGoes)
 {
-	const wxString subscribed = wxString::FromUTF8(ibProtocol::ibForm::ibState::Subscribed);
+	const ibString subscribed(ibProtocol::ibForm::ibState::Subscribed);
 	const auto subscribedOf = [](const ibProtocolNode& frame) {
 		std::vector<long long> events;
 		const ibProtocolNode state = frame.Children()[0].FindChild(ibProtocol::ibForm::ibState::State);
@@ -205,7 +205,7 @@ TEST(ClientFrameApply, NodeFilledAndRead)
 	const char* const goods = "\xD0\xA2\xD0\xBE\xD0\xB2\xD0\xB0\xD1\x80";
 
 	ibProtocolNode node;
-	node.SetValue("Title", wxString::FromUTF8(goods))
+	node.SetValue("Title", ibString(goods))
 		.SetValue("ActiveTab", 3)
 		.SetValue("Locked", true);
 	node.Child("View").SetValue("Key", "form-1");
@@ -213,7 +213,7 @@ TEST(ClientFrameApply, NodeFilledAndRead)
 
 	ibProtocolNode read;
 	ASSERT_TRUE(ibProtocolNode::Read(node.Write(), read));
-	EXPECT_EQ(read.GetString("Title"), wxString::FromUTF8(goods));
+	EXPECT_TRUE(read.GetString("Title") == goods);
 	EXPECT_EQ(read.GetInt("ActiveTab"), 3);
 	EXPECT_TRUE(read.GetBool("Locked"));
 	EXPECT_EQ(read.FindChild("View").GetString("Key"), wxString(wxT("form-1")));

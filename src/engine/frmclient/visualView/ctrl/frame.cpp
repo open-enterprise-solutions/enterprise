@@ -13,6 +13,7 @@
 #include "widgets.h"
 
 #include "core/stringUtils.h"   // stringUtils::CompareString — a name found as the desktop's finds it
+#include "frmclient/backend/propertyManager/property/propertySerializable.h"   // its properties — a row's each
 #include "frmclient/win/typeconv.h"
 
 namespace {
@@ -85,6 +86,11 @@ bool ibValueFrame::ChangeChildPosition(ibValueFrame* obj, unsigned int pos)
 void ibValueFrame::OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue)
 {
 	m_host.ModifyProperty(property, oldValue, newValue);
+}
+
+ibProperty* ibValueFrame::CreateProperty(ibPropertyCategory* cat, const ibDataNode& row)
+{
+	return ibPropertyObject::CreateProperty<ibPropertySerializable>(cat, row);
 }
 
 ibValueFrame* ibValueFrame::DoFindControlByName(const wxString& controlName, ibValueFrame* top) const

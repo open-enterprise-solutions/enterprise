@@ -1,16 +1,15 @@
 #ifndef __PROTOCOL_CONNECTION_SERVER_H__
 #define __PROTOCOL_CONNECTION_SERVER_H__
 
-#include <atomic>
 #include <condition_variable>
 #include <memory>
 #include <mutex>
 #include <optional>
-#include <thread>
 
 #include "connection.h"
 
-namespace httplib { namespace ws { class WebSocketClient; } }
+class ibIoThreads;
+class ibWebSocketClient;
 
 // AN APPLICATION SERVER — over its port: one WebSocket to `oes://server[:port]/<base>`, one text message per request,
 // its answer the next answer on it. Asked for compressed, as the protocol offers it: an answer of some size comes as a
@@ -38,33 +37,38 @@ public:
 
 	virtual ~ibProtocolConnectionServer();
 
-	virtual bool Exchange(const std::string& request, std::string& answer,
+	virtual bool Exchange(const ibString& request, ibString& answer,
 		ibProtocol::ibRefusal& refusal, wxString& error) override;
 	// The same address, opened again. False when Open has never succeeded.
 	virtual bool Reconnect(wxString& error) override;
+	// …and a second socket to it, the debugger's (protocol 6).
+	virtual std::unique_ptr<ibProtocolConnection> OpenChannel(wxString& error) override;
 	// What the server says unasked — on the thread that reads the socket.
-	virtual void Listen(std::function<void(const std::string& text)> notified) override;
+	virtual void Listen(std::function<void(const ibString& text)> notified) override;
 
 private:
 
-	// THE SOCKET'S MESSAGES, read on a thread of their own for as long as it is open — an answer handed to the request
-	// waiting for it (Exchange), a notification to whoever listens: the server says one between the answers, unasked,
-	// and a socket read only while a request waits would keep it there until the next one.
-	void ReadMessages();
+	// A message the socket hands over — an answer, or a notification.
+	void Receive(const ibString& text);
 
-	std::unique_ptr<httplib::ws::WebSocketClient> m_socket;
-	std::thread                                   m_reader;
-	std::atomic<bool>                             m_stopping{ false };
+	// THE SOCKET AND THE THREAD IT GOES BY — made by Open, gone in Close: once the thread has stopped, nothing of the
+	// socket is called. Its messages come as they arrive, for as long as it is open — an answer handed to the request
+	// waiting for it (Exchange), a notification to whoever listens: the server says one between the answers, unasked.
+	std::unique_ptr<ibIoThreads>       m_ioThreads;
+	std::shared_ptr<ibWebSocketClient> m_socketClient;
 
 	// One request on the socket at a time.
 	std::mutex m_exchanging;
 
-	// What the reader hands over, under m_mutex: the answer to the request waiting, the socket gone, whoever listens.
+	// What the socket hands over, under m_mutex: its opening, the answer to the request waiting, its going and why,
+	// whoever listens.
 	std::mutex                                 m_mutex;
 	std::condition_variable                    m_answered;
-	std::optional<std::string>                 m_answer;
+	std::optional<ibString>                    m_answer;
+	bool                                       m_opened = false;
 	bool                                       m_closed = true;
-	std::function<void(const std::string&)>    m_notified;
+	std::string                                m_reason;
+	std::function<void(const ibString&)>       m_notified;
 
 	// The address Open succeeded with — what Reconnect opens again.
 	wxString                                   m_address;

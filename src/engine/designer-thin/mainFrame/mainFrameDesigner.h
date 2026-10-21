@@ -1,6 +1,8 @@
 #ifndef _MAINFRAME_DESIGNER_H__
 #define _MAINFRAME_DESIGNER_H__
 
+#include <functional>
+
 #include "frmclient/mainFrame/mainFrame.h"
 
 #if defined(mainFrame)
@@ -120,6 +122,11 @@ public:
 	// The debugger's state changed (attached, detached, stopped, running): the Debug menu asks again
 	// (OnUpdateDebugCommand) - it does not carry a state of its own.
 	void Debugger_OnStateChanged();
+
+	// …and the debugger's own connection, the window's doors to it (ibCommunicator::ListenDebug, Debug): the server's
+	// debugger heard — `told` on that connection's thread — and asked, answered at once beside the window's call.
+	bool ListenDebug(std::function<void(const ibProtocolNode& news)> told, ibProtocol::ibRefusal& refusal, wxString& error);
+	bool Debug(const ibProtocolNode& params, ibProtocolNode& result, ibProtocol::ibRefusal& refusal, wxString& error);
 
 protected:
 

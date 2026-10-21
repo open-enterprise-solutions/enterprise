@@ -25,6 +25,13 @@ class ibValueHTMLBox : public ibValueWindow {
 	//load & save object in control 
 	virtual bool ReadData(const ibDataNode& node);
 	virtual bool WriteData(ibDataNode& node) const;
+
+private:
+
+	// Set from code only, never saved: the page lives as long as the form is open - the thin server's
+	// copy keeps it the same way. Held here because a form's OnOpen calls SetPage BEFORE the window is
+	// created, and a page handed only to the window was dropped on the floor.
+	wxString m_page;
 };
 
 #endif // ! _HTMLBOX_H__

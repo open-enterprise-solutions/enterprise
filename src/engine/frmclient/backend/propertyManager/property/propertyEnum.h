@@ -1,27 +1,27 @@
 ﻿#ifndef __PROPERTY_ENUM_H__
 #define __PROPERTY_ENUM_H__
 
-#include "frmclient/backend/propertyManager/propertyObject.h"
+#include "frmclient/backend/propertyManager/property/propertySerializable.h"
 
 //base property for "enum"
-class FRMCLIENT_API ibPropertyEnumBase : public ibProperty {
+class FRMCLIENT_API ibPropertyEnumBase : public ibPropertySerializable {
 public:
 
-	// …held as its node, the chosen one's id (ibBackendProperty::ReadNodeValue) — set by the enumeration it is.
+	// …held as its node, the chosen one's id (ibPropertySerializable::ReadNodeValue) — set by the enumeration it is.
 	long GetValueAsInteger() const;
 	void SetValue(const long& i);
 
-	ibPropertyEnumBase(ibPropertyCategory* cat, const wxString& name) : ibProperty(cat, name, wxNullVariant)
+	ibPropertyEnumBase(ibPropertyCategory* cat, const wxString& name) : ibPropertySerializable(cat, name, wxNullVariant)
 	{
 	}
 
 	ibPropertyEnumBase(ibPropertyCategory* cat, const wxString& name, const wxString& label)
-		: ibProperty(cat, name, label, wxNullVariant)
+		: ibPropertySerializable(cat, name, label, wxNullVariant)
 	{
 	}
 
 	ibPropertyEnumBase(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString)
-		: ibProperty(cat, name, label, helpString, wxNullVariant)
+		: ibPropertySerializable(cat, name, label, helpString, wxNullVariant)
 	{
 	}
 

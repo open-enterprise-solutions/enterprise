@@ -69,6 +69,9 @@ public:
 
 private:
 
+	// …each of its rows, the server's property (ibPropertySerializable).
+	virtual ibProperty* CreateProperty(ibPropertyCategory* cat, const ibDataNode& row) override;
+
 	const ibMetaID m_metaId;
 	ibMetaData m_metaData;
 };

@@ -733,18 +733,13 @@ void ibValueQueryable::DispatchLinqMethod(ibLinqMethod method, ibValue& ret, ibV
 
 namespace {
 
-// ⭐⭐ A CAPTURED VALUE IS PUT IN PLACE, NOT CARRIED IN A MAP.
-//
-// The old road passed `std::map<wxString, ibValue>` from the fold down to the lowering, which then
-// looked each value up BY NAME — a container and a string compare to move something the tree already
-// pointed at. Both existed only because the capture used to be known by name.
-//
-// It is known by ADDRESS now (queryAST.h, m_capturedFrame / m_capturedSlot), and this tree is
-// transient — built here, lowered here, dropped here — so the value simply REPLACES the node. No
-// container, no keys, no lookup, and the lowering sees a literal, which it already knew how to read.
+// …AND A LOOP'S: the value is read where the compiler put it — this frame, this cell (queryAST.h,
+// m_capturedFrame / m_capturedSlot) — and goes to the lowering as the lambda's do, a parameter by the
+// Param's name. The tree is the core's and holds constants as the text writes them, so a run's value
+// (a reference among them) is not put in it.
 //
 // False = something is not readable from here, and the caller leaves the filter to the loop.
-bool ResolveCapturesInPlace(ibQueryAstExpr& e, const ibRunContext* frame)
+bool CollectCaptured(const ibQueryAstExpr& e, const ibRunContext* frame, std::map<wxString, ibValue>& out)
 {
 	if (e.m_kind == ibQueryAstExprKind::Param) {
 		if (frame == nullptr || frame->m_pRefLocVars == nullptr)
@@ -756,17 +751,16 @@ bool ResolveCapturesInPlace(ibQueryAstExpr& e, const ibRunContext* frame)
 		const ibValue* const cell = frame->m_pRefLocVars[e.m_capturedSlot];
 		if (cell == nullptr)
 			return false;
-		e.m_kind    = ibQueryAstExprKind::Literal;
-		e.m_literal = cell->ToAnyValue();
+		out.emplace(e.m_paramName, *cell);
 		return true;
 	}
-	ibQueryAstExprPtr* children[] = { &e.m_arg, &e.m_lhs, &e.m_rhs, &e.m_low, &e.m_high, &e.m_else };
-	for (ibQueryAstExprPtr* c : children)
-		if (*c && !ResolveCapturesInPlace(**c, frame)) return false;
-	for (ibQueryAstExprPtr& i : e.m_list)
-		if (i && !ResolveCapturesInPlace(*i, frame)) return false;
-	for (ibQueryAstExprPtr& i : e.m_args)
-		if (i && !ResolveCapturesInPlace(*i, frame)) return false;
+	const ibQueryAstExprPtr* children[] = { &e.m_arg, &e.m_lhs, &e.m_rhs, &e.m_low, &e.m_high, &e.m_else };
+	for (const ibQueryAstExprPtr* c : children)
+		if (*c && !CollectCaptured(**c, frame, out)) return false;
+	for (const ibQueryAstExprPtr& i : e.m_list)
+		if (i && !CollectCaptured(*i, frame, out)) return false;
+	for (const ibQueryAstExprPtr& i : e.m_args)
+		if (i && !CollectCaptured(*i, frame, out)) return false;
 	return true;
 }
 
@@ -793,12 +787,13 @@ bool ibValueQueryable::NarrowByInstructions(const ibByteCode& byteCode, long fro
 		return false;
 	}
 
-	// A capture is read where the compiler put it and PUT IN PLACE — no map, no name, no lookup.
-	if (!ResolveCapturesInPlace(*ast, frame))
+	// A capture is read where the compiler put it, and handed to the lowering as a parameter.
+	std::map<wxString, ibValue> captured;
+	if (!CollectCaptured(*ast, frame, captured))
 		return false;
 
 	const ibQueryPredicatePtr pred =
-		ibQueryLowering::LowerLambdaPredicate(m_queryable, *ast, {});
+		ibQueryLowering::LowerLambdaPredicate(m_queryable, *ast, captured);
 	if (!pred) {
 		ibJournalInfo(wxT("linq"), wxT("%s: the loop's filter does not lower to SQL"), m_sourceName);
 		return false;

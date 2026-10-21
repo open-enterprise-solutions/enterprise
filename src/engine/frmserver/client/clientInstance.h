@@ -19,6 +19,7 @@
 #include <wx/string.h>
 
 #include "core/fileSystem/types.h"   // s32
+#include "core/fstring.h"            // ibString — the address the client called from, as the call carried it
 #include "backend/session/sessionHolder.h"
 #include "frmserver/frmserver.h"
 
@@ -33,12 +34,13 @@ public:
 
 	// The base is handed in: a process serves several, and the session belongs to one of them. The mode says which
 	// application's frame the client gets (ibClientFrame::Create).
-	ibClientInstance(ibApplicationInstance* applicationInstance, const wxString& id, const wxString& address,
+	ibClientInstance(ibApplicationInstance* applicationInstance, const wxString& id, const ibString& address,
 		ibProtocol::ibLogin::ibMode mode);
 	~ibClientInstance();
 
 	// Opens a session in the base as `user`, on the session's own worker. False: refused (the reason is
-	// journalled where it happened).
+	// journalled where it happened). Throws (ibCoreException) what refuses the session before any login — another
+	// designer at work — so the person is told why, not asked to log in again.
 	bool Login(const wxString& user, const wxString& password);
 
 	// ON THE SESSION'S WORKER, after Login: the frame of the client's mode first — a start may already open forms or
@@ -74,7 +76,7 @@ private:
 	ibApplicationInstance* m_applicationInstance;
 	wxString               m_id;
 	wxString               m_user;
-	wxString               m_address;
+	ibString               m_address;
 	ibProtocol::ibLogin::ibMode           m_mode;
 
 	mutable std::mutex m_mutex;          // the activity time

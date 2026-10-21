@@ -6,8 +6,6 @@
 #include "propertyObject.h"
 #include "core/serialize/dataBuilder.h"   // ibDataValue — property node serialization
 #include "core/typeName.h"                // ibTypeInfoName — a property's class, named as the server names one
-#include "frmclient/backend/propertyManager/property/propertySerializable.h"          // a row's property
-#include "frmclient/backend/propertyManager/property/variant/variantSerializable.h"   // every property's value
 #include "frmclient/backend/serialize/dataProtocol.h"                         // ibReadProtocolNode — the answer's rows
 #include "frmclient/win/picture.h"                                            // ibProtocolPictureReceive — the choices' pictures
 #include "protocol/protocol.h"                                                // ibProtocol::ibSchema::ibProperties — the rows' keys
@@ -230,20 +228,6 @@ bool ibBackendProperty::SetNodeValue(const ibDataValue& value)
 		return false;
 
 	return ReadNodeValue(value);
-}
-
-bool ibBackendProperty::ReadNodeValue(const ibDataValue& value)
-{
-	// A node arriving (a typed setter's, the gate's), held as it comes, named by the property's class. A node has no
-	// words: what reads here is the old ones until the rows come back.
-	m_propValue = wxVariant(new ibVariantDataSerializable(GetType(), value, m_propValue.GetString()));
-	return true;
-}
-
-bool ibBackendProperty::WriteNodeValue(ibDataValue& value) const
-{
-	value = ibVariantDataSerializable::GetNodeValue(m_propValue);
-	return true;
 }
 
 // by-value convenience — delegates to the virtual out-param getter (so it dispatches
@@ -530,7 +514,7 @@ void ibPropertyObject::Receive(ibPropertyCategory* category, const ibDataNode& r
 			Receive(CreatePropertyCategory(category, row.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Name),
 				row.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Title)), row);
 		else
-			CreateProperty<ibPropertySerializable>(category, row);
+			CreateProperty(category, row);
 	}
 }
 

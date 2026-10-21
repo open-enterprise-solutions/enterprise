@@ -1,10 +1,6 @@
 #include "debugClient.h"
 
-#include "core/diagnostics/journal.h"
-
 #include <algorithm>
-
-#include <wx/app.h>   // wxTheApp — the window's loop, the worker a reply is handed to
 
 // ONE EVENT, EVERY BRIDGE. Nothing here decides who cares about what; a bridge
 // that is not interested simply does nothing with it.
@@ -13,8 +9,8 @@
 // the fan-out is the SAME in every case, and a hand-copied fan-out is where the
 // twelfth event quietly reaches only half the list.
 //
-// ⚠ IT RUNS AFTER THE HOP, not before it: CallAfter defers ONE call, and the list is walked here, on
-// the delivery thread. So a listener that RemoveBridge destroyed while a reply was in flight is
+// ⚠ IT RUNS AFTER THE HOP, not before it: the news is handed to the window's loop once (ibDebuggerClient::Listen), and
+// the list is walked here, on that loop. So a listener that RemoveBridge destroyed while the news was in flight is
 // simply not in the list — where deferring per listener would have had to capture a pointer to one.
 #define IB_DEBUG_FANOUT(call)                                                   \
 	do {                                                                        \
@@ -38,40 +34,6 @@ void ibDebuggerClient::ibDebuggerClientAdapter::AddBridge(ibDebuggerClientBridge
 		m_debugBridges.emplace_back(bridge);
 }
 
-// ⭐⭐ THE ONE PLACE A REPLY CHANGES THREADS. The engine's says "later" and its session's worker decides what later
-// means; the thin designer has no session, and its window's loop is the worker the desktop designer's session answered
-// with — so later is the window's CallAfter.
-//
-// ⚠ AND IT DOES NOT CARE HOW MANY LISTENERS THERE ARE. One hop, then the fan-out — deferring per listener would hop
-// twice for one event.
-//
-// ⚠ NOT WAITED FOR, on purpose. This is a notification, not a call anybody waits on; waiting would park the socket
-// thread on the main loop, which is the opposite of deferring.
-void ibDebuggerClient::ibDebuggerClientAdapter::Defer(std::function<void()> call)
-{
-	if (!call)
-		return;
-
-	if (wxTheApp == nullptr)
-		return;
-	// Not waited for — so what the reply throws is said here, nobody holding its future. And the client may be gone by
-	// then — it goes with the frame: a reply that finds no debugger has nobody left to reach (the engine's watched
-	// session answered the same "gone").
-	wxTheApp->CallAfter([call = std::move(call)]() {
-		if (debugClient == nullptr)
-			return;
-		try {
-			call();
-		}
-		catch (const std::exception& err) {
-			ibJournalWarning(wxT("debugger"), wxT("a debugger's reply ended with an exception: %s"), wxString::FromUTF8(err.what()));
-		}
-		catch (...) {
-			ibJournalWarning(wxT("debugger"), wxT("a debugger's reply ended with an exception"));
-		}
-	});
-}
-
 void ibDebuggerClient::ibDebuggerClientAdapter::RemoveBridge(ibDebuggerClientBridge* bridge)
 {
 	// Erasing destroys it — the list owns what it holds.
@@ -83,29 +45,24 @@ void ibDebuggerClient::ibDebuggerClientAdapter::RemoveBridge(ibDebuggerClientBri
 		m_debugBridges.end());
 }
 
-void ibDebuggerClient::ibDebuggerClientAdapter::OnSessionStart(wxSocketClient* sock)
+void ibDebuggerClient::ibDebuggerClientAdapter::OnSessionStart()
 {
-	IB_DEBUG_FANOUT(OnSessionStart(sock));
+	IB_DEBUG_FANOUT(OnSessionStart());
 }
 
-void ibDebuggerClient::ibDebuggerClientAdapter::OnSessionEnd(wxSocketClient* sock)
+void ibDebuggerClient::ibDebuggerClientAdapter::OnSessionEnd()
 {
-	IB_DEBUG_FANOUT(OnSessionEnd(sock));
+	IB_DEBUG_FANOUT(OnSessionEnd());
 }
 
-void ibDebuggerClient::ibDebuggerClientAdapter::OnEnterLoop(wxSocketClient* sock, const ibDebugLineData& data)
+void ibDebuggerClient::ibDebuggerClientAdapter::OnEnterLoop(const ibDebugLineData& data)
 {
-	IB_DEBUG_FANOUT(OnEnterLoop(sock, data));
+	IB_DEBUG_FANOUT(OnEnterLoop(data));
 }
 
-void ibDebuggerClient::ibDebuggerClientAdapter::OnLeaveLoop(wxSocketClient* sock, const ibDebugLineData& data)
+void ibDebuggerClient::ibDebuggerClientAdapter::OnLeaveLoop(const ibDebugLineData& data)
 {
-	IB_DEBUG_FANOUT(OnLeaveLoop(sock, data));
-}
-
-void ibDebuggerClient::ibDebuggerClientAdapter::OnAutoComplete(const ibDebugAutoCompleteData& data)
-{
-	IB_DEBUG_FANOUT(OnAutoComplete(data));
+	IB_DEBUG_FANOUT(OnLeaveLoop(data));
 }
 
 void ibDebuggerClient::ibDebuggerClientAdapter::OnMessageFromServer(const ibDebugLineData& data, const wxString& message)
@@ -121,34 +78,6 @@ void ibDebuggerClient::ibDebuggerClientAdapter::OnSetToolTip(const ibDebugExpres
 void ibDebuggerClient::ibDebuggerClientAdapter::OnSetStack(const ibStackData& data)
 {
 	IB_DEBUG_FANOUT(OnSetStack(data));
-}
-
-void ibDebuggerClient::ibDebuggerClientAdapter::OnScreenshot(const wxMemoryBuffer& png, const wxString& focus)
-{
-	IB_DEBUG_FANOUT(OnScreenshot(png, focus));
-}
-
-void ibDebuggerClient::ibDebuggerClientAdapter::OnEvalMessage(const wxString& message, MessageType type)
-{
-	IB_DEBUG_FANOUT(OnEvalMessage(message, type));
-}
-
-void ibDebuggerClient::ibDebuggerClientAdapter::OnSandboxResult(bool ran, const wxString& answer,
-	const wxString& json, wxLongLong_t microseconds)
-{
-	IB_DEBUG_FANOUT(OnSandboxResult(ran, answer, json, microseconds));
-}
-
-void ibDebuggerClient::ibDebuggerClientAdapter::OnJobState(unsigned int which,
-	const struct ibJobRunByteCodeState& state)
-{
-	IB_DEBUG_FANOUT(OnJobState(which, state));
-}
-
-void ibDebuggerClient::ibDebuggerClientAdapter::OnComposed(bool answered, const wxString& refusal,
-	const wxMemoryBuffer& result)
-{
-	IB_DEBUG_FANOUT(OnComposed(answered, refusal, result));
 }
 
 void ibDebuggerClient::ibDebuggerClientAdapter::OnSetLocalVariable(const ibLocalWindowData& data)

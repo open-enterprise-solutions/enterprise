@@ -891,13 +891,13 @@ public:
 		if (details != nullptr && details->Kind() == ibDataKind::Child) {
 			const std::shared_ptr<ibDataNode> sent = details->AsChild();
 			ibValueStructure* const built = new ibValueStructure();
-			for (const std::pair<wxString, ibDataValue>& field : sent->Fields()) {
+			for (const std::pair<ibString, ibDataValue>& field : sent->Fields()) {
 				// Scalars only, and deliberately: a nested object in a journal line is a report, not
 				// a note, and quietly flattening one would store something the caller did not write.
 				switch (field.second.Kind()) {
-					case ibDataKind::Bool:   built->Insert(field.first, ibValue(field.second.AsBool())); break;
-					case ibDataKind::Number: built->Insert(field.first, ibValue(ibNumber(field.second.AsInt()))); break;
-					case ibDataKind::String: built->Insert(field.first, ibValue(field.second.AsString())); break;
+					case ibDataKind::Bool:   built->Insert(ibValue(field.first), ibValue(field.second.AsBool())); break;
+					case ibDataKind::Number: built->Insert(ibValue(field.first), ibValue(ibNumber(field.second.AsInt()))); break;
+					case ibDataKind::String: built->Insert(ibValue(field.first), ibValue(field.second.AsString())); break;
 					default: break;
 				}
 			}

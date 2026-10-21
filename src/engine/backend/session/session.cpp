@@ -1383,10 +1383,9 @@ void ibSession::WakeDebugLoop()
 	// returns immediately. Mirrors the per-session wake performed by
 	// ibDebuggerServer::WakeDebugSession on designer disconnect — same
 	// graceful LeaveLoop is sent on the wire when the loop unwinds.
-	if (m_debug == nullptr) return;
-	m_debug->m_debugLoop = false;
-	std::lock_guard<std::mutex> lk(m_debug->m_mutex);
-	m_debug->m_cv.notify_all();
+	m_debug.m_debugLoop = false;
+	std::lock_guard<std::mutex> lk(m_debug.m_mutex);
+	m_debug.m_cv.notify_all();
 }
 
 bool ibSession::OnClose(bool /*force*/)

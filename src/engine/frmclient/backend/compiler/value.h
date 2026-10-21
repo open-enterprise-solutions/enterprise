@@ -9,7 +9,7 @@
 #include <wx/icon.h>
 
 #include "frmclient/backend/backend_core.h"   // …as the engine's value.h brings it to those who include it
-#include "core/compiler/lexValue.h"   // ibLexValue — the primitive a value of the client's is, and holds
+#include "core/compiler/literal.h"   // ibLiteral — the primitive a value of the client's is, and holds
 #include "core/fileSystem/types.h"
 #include "core/core.h"    // kValueFieldClsid / kValueFieldData — the fields a value is written into a node by
 
@@ -19,30 +19,30 @@ class ibCtorAbstractType;
 
 // THE VALUE — the engine's ibValue (backend/compiler/value.h) as the client holds one. There is no runtime here: a
 // PRIMITIVE — a text, a number, a date, a flag — is data a person types, and is held as the lexer holds a constant (its
-// base, ibLexValue: the fields, the reading of a text as a number or a date, the count); a value of a type the SERVER has
+// base, ibLiteral: the fields, the reading of a text as a number or a date, the count); a value of a type the SERVER has
 // (a reference, an enum member) is held as the server wrote it — its node, carried and given back untouched — and read
 // as the server presents it. An object of the client's own a property reads its choices from (an enumeration) is one
 // too. What it answers is what every value answers (core/anyValue.h); what it holds beyond a primitive, its own.
-class ibValue : public ibLexValue {
+class ibValue : public ibLiteral {
 public:
 
 	ibValue() = default;
-	ibValue(const wxString& text) : ibLexValue(text) {}
-	ibValue(const wxChar* text) : ibLexValue(text) {}
+	ibValue(const wxString& text) : ibLiteral(text) {}
+	ibValue(const wxChar* text) : ibLiteral(text) {}
 	// A narrow literal is a text too — without this one `ibValue("x")` is the flag TRUE (pointer-to-bool beats the
 	// conversion to wxString), the trap the engine's ctors name.
-	ibValue(const char* text) : ibLexValue(text) {}
-	ibValue(bool flag) : ibLexValue(flag) {}
-	ibValue(int number) : ibLexValue(ibNumber(number)) {}
-	ibValue(long number) : ibLexValue(ibNumber(number)) {}
-	ibValue(unsigned int number) : ibLexValue(ibNumber(number)) {}
-	ibValue(const ibNumber& number) : ibLexValue(number) {}
-	ibValue(const ibDateTime& date) : ibLexValue(date) {}
+	ibValue(const char* text) : ibLiteral(text) {}
+	ibValue(bool flag) : ibLiteral(flag) {}
+	ibValue(int number) : ibLiteral(ibNumber(number)) {}
+	ibValue(long number) : ibLiteral(ibNumber(number)) {}
+	ibValue(unsigned int number) : ibLiteral(ibNumber(number)) {}
+	ibValue(const ibNumber& number) : ibLiteral(number) {}
+	ibValue(const ibDateTime& date) : ibLiteral(date) {}
 	// AN OBJECT HELD — the engine's TYPE_REFFER: a value of the client's own kind (a field of a composition) carried in a
 	// value, counted while it is.
 	ibValue(ibValue* pParam);
 	// …and the base of such an object, of its kind.
-	ibValue(ibValueTypes nType, bool WXUNUSED(readOnly) = false) : ibLexValue(nType) {}
+	ibValue(ibValueTypes nType, bool WXUNUSED(readOnly) = false) : ibLiteral(nType) {}
 	ibValue(const ibValue& rhs) { Assign(rhs); }
 	ibValue& operator=(const ibValue& rhs) { Release(); Assign(rhs); return *this; }
 	virtual ~ibValue() { Release(); }
@@ -152,7 +152,7 @@ protected:
 
 	// A member of an enumeration — the base of one (ibValueEnumerationVariant, enumUnit.h).
 	ibValue(const ibClassID& enumClass, long member, const wxString& word)
-		: ibLexValue(ibValueTypes::TYPE_ENUM), m_classType(enumClass)
+		: ibLiteral(ibValueTypes::TYPE_ENUM), m_classType(enumClass)
 	{
 		m_text = word;
 		m_number = member;

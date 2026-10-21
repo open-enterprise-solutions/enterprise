@@ -6,7 +6,7 @@
 // every handler that catches ibBackendQuerySyntaxException by type, and reads its span, still does.
 void ibBackendQuerySyntaxException::Raise(const ibQueryRefusal& refusal)
 {
-	throw ibBackendQuerySyntaxException(refusal.m_errorDesc, refusal.m_currLine, refusal.m_currPos);
+	throw ibBackendQuerySyntaxException(refusal.GetErrorDescription(), refusal.m_currLine, refusal.m_currPos);
 }
 
 void ibBackendQueryException::Throw(Kind kind, const wxString& message)

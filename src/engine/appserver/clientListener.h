@@ -10,12 +10,16 @@
 //
 // HTTP only opens the door: a browser speaks nothing else, and a WebSocket is an HTTP request that became a
 // stream — the frames that follow carry no headers. One port for all of it, and TLS, when it comes, on it.
+//
+// The HTTP is the core's (core/net/httpServer.h): asynchronous, so a connection waiting for its client costs a buffer,
+// not a thread.
 
 #include <map>
 #include <memory>
-#include <thread>
 
 #include <wx/string.h>
+
+#include "core/net/httpServer.h"
 
 class ibClientListener {
 public:
@@ -34,11 +38,11 @@ public:
 
 private:
 
-	// cpp-httplib, kept in one translation unit.
-	class ibServer;
+	// The fifteen seconds a socket has to log in (clientListener.cpp).
+	class ibLoginRound;
 
-	std::unique_ptr<ibServer> m_server;
-	std::thread               m_thread;
+	std::unique_ptr<ibHttpServer> m_server;
+	std::unique_ptr<ibLoginRound> m_loginRound;
 };
 
 #endif

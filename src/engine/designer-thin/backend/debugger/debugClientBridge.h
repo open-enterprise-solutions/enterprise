@@ -2,7 +2,6 @@
 #define _DEBUG_CLIENT_BRIDGE_H__
 
 #include <wx/wx.h>
-#include <wx/socket.h>
 
 #include "debugDefs.h"
 
@@ -40,11 +39,11 @@ public:
 	//  Max, 2026-09-06: *"remove the sessions from the bridges, they duplicate"*.)
 
 	//commands 
-	virtual void OnSessionStart(wxSocketClient* sock) = 0;
-	virtual void OnSessionEnd(wxSocketClient* sock) = 0;
+	virtual void OnSessionStart() = 0;
+	virtual void OnSessionEnd() = 0;
 
-	virtual void OnEnterLoop(wxSocketClient* sock, const ibDebugLineData& data) = 0;
-	virtual void OnLeaveLoop(wxSocketClient* sock, const ibDebugLineData& data) = 0;
+	virtual void OnEnterLoop(const ibDebugLineData& data) = 0;
+	virtual void OnLeaveLoop(const ibDebugLineData& data) = 0;
 
 	virtual void OnAutoComplete(const ibDebugAutoCompleteData& data) = 0;
 	// ⚠ THE LEVEL IS NOT A SEVERITY OF THE PLATFORM. A document refusing to post says so at

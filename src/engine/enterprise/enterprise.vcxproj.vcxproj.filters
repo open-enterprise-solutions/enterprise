@@ -39,9 +39,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="mainApp.h" />
-    <ClInclude Include="resource.h">
-      <Filter>res</Filter>
-    </ClInclude>
+    <ClInclude Include="resource.h" />
     <ClInclude Include="mainFrame\mainFrameEnterprise.h">
       <Filter>mainFrame</Filter>
     </ClInclude>
@@ -65,9 +63,6 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <Filter Include="res">
-      <UniqueIdentifier>{d3f4bf29-6f86-43b3-b079-064ad3a64eb7}</UniqueIdentifier>
-    </Filter>
     <Filter Include="mainFrame">
       <UniqueIdentifier>{bd02bd41-d4ef-4e04-ab63-bc8c625942ca}</UniqueIdentifier>
     </Filter>
@@ -88,13 +83,9 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <Image Include="enterprise.ico">
-      <Filter>res</Filter>
-    </Image>
+    <Image Include="enterprise.ico" />
   </ItemGroup>
   <ItemGroup>
-    <ResourceCompile Include="enterprise.rc">
-      <Filter>res</Filter>
-    </ResourceCompile>
+    <ResourceCompile Include="enterprise.rc" />
   </ItemGroup>
 </Project>

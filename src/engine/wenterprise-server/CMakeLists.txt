@@ -26,14 +26,13 @@ target_link_libraries(wenterprise-server
         wfrontend
         backend
         wx::base
-        wx::net
         wx::xml
 )
 
-# cpp-httplib's sockets; the console subsystem so the banner and the shutdown
-# lines have somewhere to go.
+# cpp-httplib's sockets (plain: the server speaks no TLS); the console subsystem so
+# the banner and the shutdown lines have somewhere to go.
 if(WIN32)
-    target_link_libraries(wenterprise-server PRIVATE ws2_32 crypt32)
+    target_link_libraries(wenterprise-server PRIVATE ws2_32)
     set_target_properties(wenterprise-server PROPERTIES WIN32_EXECUTABLE FALSE)
 endif()
 

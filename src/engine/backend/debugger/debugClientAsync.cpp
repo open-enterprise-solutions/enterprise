@@ -14,8 +14,10 @@
 // ⚠ IT RUNS AFTER THE HOP, not before it: CallAfter defers ONE call, and the list is walked here, on
 // the delivery thread. So a listener that RemoveBridge destroyed while a reply was in flight is
 // simply not in the list — where deferring per listener would have had to capture a pointer to one.
+// …and walked under the list's lock, so one taken out on another thread goes after the walk, not under it.
 #define IB_DEBUG_FANOUT(call)                                                   \
 	do {                                                                        \
+		std::lock_guard<std::recursive_mutex> lock(m_bridgesMutex);             \
 		for (const std::unique_ptr<ibDebuggerClientBridge>& bridge : m_debugBridges) \
 			if (bridge) bridge->call;                                           \
 	} while (false)
@@ -24,6 +26,8 @@ void ibDebuggerClient::ibDebuggerClientAdapter::AddBridge(ibDebuggerClientBridge
 {
 	if (bridge == nullptr)
 		return;
+
+	std::lock_guard<std::recursive_mutex> lock(m_bridgesMutex);
 
 	// Adding the same bridge twice would deliver every event twice, which reads
 	// downstream as the runtime having stopped twice.
@@ -124,6 +128,7 @@ void ibDebuggerClient::ibDebuggerClientAdapter::Defer(std::function<void()> call
 void ibDebuggerClient::ibDebuggerClientAdapter::RemoveBridge(ibDebuggerClientBridge* bridge)
 {
 	// Erasing destroys it — the list owns what it holds.
+	std::lock_guard<std::recursive_mutex> lock(m_bridgesMutex);
 	m_debugBridges.erase(
 		std::remove_if(m_debugBridges.begin(), m_debugBridges.end(),
 			[bridge](const std::unique_ptr<ibDebuggerClientBridge>& held) {
@@ -132,24 +137,24 @@ void ibDebuggerClient::ibDebuggerClientAdapter::RemoveBridge(ibDebuggerClientBri
 		m_debugBridges.end());
 }
 
-void ibDebuggerClient::ibDebuggerClientAdapter::OnSessionStart(wxSocketClient* sock)
+void ibDebuggerClient::ibDebuggerClientAdapter::OnSessionStart()
 {
-	IB_DEBUG_FANOUT(OnSessionStart(sock));
+	IB_DEBUG_FANOUT(OnSessionStart());
 }
 
-void ibDebuggerClient::ibDebuggerClientAdapter::OnSessionEnd(wxSocketClient* sock)
+void ibDebuggerClient::ibDebuggerClientAdapter::OnSessionEnd()
 {
-	IB_DEBUG_FANOUT(OnSessionEnd(sock));
+	IB_DEBUG_FANOUT(OnSessionEnd());
 }
 
-void ibDebuggerClient::ibDebuggerClientAdapter::OnEnterLoop(wxSocketClient* sock, const ibDebugLineData& data)
+void ibDebuggerClient::ibDebuggerClientAdapter::OnEnterLoop(const ibDebugLineData& data)
 {
-	IB_DEBUG_FANOUT(OnEnterLoop(sock, data));
+	IB_DEBUG_FANOUT(OnEnterLoop(data));
 }
 
-void ibDebuggerClient::ibDebuggerClientAdapter::OnLeaveLoop(wxSocketClient* sock, const ibDebugLineData& data)
+void ibDebuggerClient::ibDebuggerClientAdapter::OnLeaveLoop(const ibDebugLineData& data)
 {
-	IB_DEBUG_FANOUT(OnLeaveLoop(sock, data));
+	IB_DEBUG_FANOUT(OnLeaveLoop(data));
 }
 
 void ibDebuggerClient::ibDebuggerClientAdapter::OnAutoComplete(const ibDebugAutoCompleteData& data)

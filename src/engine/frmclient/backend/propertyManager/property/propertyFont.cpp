@@ -9,7 +9,7 @@ wxString ibPropertyFont::GetValueAsString() const
 
 void ibPropertyFont::SetValue(const wxString& val)
 {
-	ibProperty::ReadNodeValue(ibDataValue::String(val));
+	ibPropertySerializable::ReadNodeValue(ibDataValue::String(val));
 }
 
 bool ibPropertyFont::ReadNodeValue(const ibDataValue& value)

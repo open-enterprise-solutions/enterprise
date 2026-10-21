@@ -1,7 +1,7 @@
 #include "fs.h"
 #include "lz/lzhuf.h"
 
-#include "core/fstring.h"          // ibString — r_stringZ(ibString&)
+#include "core/fstring.h"          // ibString — w_stringZ / r_stringZ(ibString&)
 #include "core/exception.h"      // a read past the end of a block is refused, not asserted
 
 #include <cstring>
@@ -57,6 +57,16 @@ void	ibWriter::w_chunk(u64 type, void* data, u32 size)
 	open_chunk(type);
 	w(data, size);
 	close_chunk();
+}
+
+void	ibWriter::w_stringZ(const ibString& p)
+{
+	w_stringZ(p.ToUtf8());
+}
+
+void	ibWriter::w_stringZ(const wchar_t* p)
+{
+	w_stringZ(ibString(p));
 }
 
 void ibWriter::w_chunk(u64 type, const wxMemoryBuffer& data)

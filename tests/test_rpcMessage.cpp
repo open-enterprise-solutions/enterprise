@@ -275,7 +275,7 @@ TEST(RpcMessage,AnAnswer_IsReadableAsOne)
 	const wxString written = ibRpcWriteResult(ibDataValue::Int(11), result);
 
 	ibDataValue id;
-	wxString payload;
+	ibString payload;
 	bool isError = true;
 
 	ASSERT_TRUE(ibRpcParseResponse(written, id, payload, isError)) << written.ToStdString();
@@ -289,7 +289,7 @@ TEST(RpcMessage,AnAnswer_IsReadableAsOne)
 TEST(RpcMessage,ARequest_IsNotMistakenForAnAnswer)
 {
 	ibDataValue id;
-	wxString payload;
+	ibString payload;
 	bool isError = false;
 
 	EXPECT_FALSE(ibRpcParseResponse(
