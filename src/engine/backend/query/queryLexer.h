@@ -17,7 +17,8 @@
 // See docs/private/query-language-arc.md §14 / §23.
 
 #include "core/compiler/translateCode.h"   // ibTranslateCode (char primitives)
-#include "backend/compiler/value.h"
+#include "backend/backend.h"               // BACKEND_API
+#include "core/compiler/lexValue.h"   // ibLexValue — a constant as the text wrote it
 #include "core/query/queryKeywords.h"
 
 #include <vector>
@@ -31,13 +32,13 @@ enum class ibQueryTokenKind
 
 // One lexer token. Identifiers carry their ORIGINAL case in m_text (metaobject /
 // attribute name resolution is case-insensitive but the original is preserved);
-// literals carry a ready ibValue in m_literal.
+// literals carry a ready constant in m_literal (ibLexValue — the core's, so no runtime is under it).
 struct ibQueryToken
 {
 	ibQueryTokenKind m_kind    = ibQueryTokenKind::End;
 	ibQueryKeyword   m_keyword = ibQueryKeyword::None;   // kind == Keyword
 	wxString         m_text;        // Ident / Param name (original case); Op / Punct text
-	ibValue          m_literal;     // Number / String / Date constant
+	ibLexValue       m_literal;     // Number / String / Date constant
 	unsigned int     m_line    = 0; // 1-based source line (diagnostics)
 	unsigned int     m_col     = 0; // character offset of the token start (diagnostics)
 

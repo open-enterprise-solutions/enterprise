@@ -266,7 +266,7 @@ ibQueryAstExprPtr ResolveSlot(const CodeCur& c, const ibParamRunUnit& slot, int 
 		if (slot.m_numIndex < 0 || (size_t)slot.m_numIndex >= c.bc.m_listConst.size())
 			return c.Refuse(wxT("a constant that is not in the pool"), 0);
 		auto e = ibQueryAstExpr::Make(ibQueryAstExprKind::Literal);
-		e->m_literal = c.bc.m_listConst[(size_t)slot.m_numIndex];
+		e->m_literal = c.bc.m_listConst[(size_t)slot.m_numIndex].ToAnyValue();
 		return e;
 	}
 
@@ -454,9 +454,11 @@ wxString DescribeNode(const ibQueryAstExprPtr& e)
 	// A literal is quoted when it IS a string, so `x.Code = "100"` and `x.Code = 100` do not render
 	// the same — the whole point of a canonical form is that two different trees look different.
 	case ibQueryAstExprKind::Literal:
-		return e->m_literal.GetType() == ibValueTypes::TYPE_STRING
-			? wxT("\"") + e->m_literal.GetString() + wxT("\"")
-			: e->m_literal.GetString();
+		if (!e->m_literal)
+			return wxEmptyString;
+		return e->m_literal->GetType() == ibValueTypes::TYPE_STRING
+			? wxString(wxT("\"")) + wxString(e->m_literal->GetString()) + wxT("\"")
+			: wxString(e->m_literal->GetString());
 
 	// A capture shows its ADDRESS, because that is what the fold now reads — and a rendering that
 	// hid it would agree with a tree that still searches for the name.

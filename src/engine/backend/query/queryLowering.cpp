@@ -1447,7 +1447,7 @@ std::map<wxString, ibValue> WithEveryParameter(const wxString& text, const std::
 ibValue EvalValue(const ibQueryAstExpr& e, const std::map<wxString, ibValue>& params)
 {
 	RefuseIfQueryStackLow(e.m_line, e.m_col);
-	if (e.m_kind == ibQueryAstExprKind::Literal) return e.m_literal;
+	if (e.m_kind == ibQueryAstExprKind::Literal) return ibValue::FromAnyValue(e.m_literal);
 	if (e.m_kind == ibQueryAstExprKind::Param) {
 		const ibValue* v = FindParam(params, e.m_paramName);
 		if (v == nullptr) {
@@ -2811,7 +2811,7 @@ ibQueryColumnExprPtr BuildColumnExprFromAst(const std::vector<ibSourceBinding>& 
 		return ibQueryColumnExpr::Col(cols[0]);
 	}
 	case ibQueryAstExprKind::Literal:
-		return ibQueryColumnExpr::Const(e.m_literal);
+		return ibQueryColumnExpr::Const(ibValue::FromAnyValue(e.m_literal));
 	case ibQueryAstExprKind::Param:
 	case ibQueryAstExprKind::Value:   // value(...) resolves to a constant, exactly like a &parameter
 		return ibQueryColumnExpr::Const(EvalValue(e, params));
@@ -5713,7 +5713,7 @@ void BuildSourceTree(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 		if (qi != resolved)
 			owner.push_back(qi);
 		sources.push_back({ alias, qi.get(), qi });
-		if (j.m_on && j.m_on->m_kind == ibQueryAstExprKind::Literal && j.m_on->m_literal.GetBoolean()) {
+		if (j.m_on && j.m_on->m_kind == ibQueryAstExprKind::Literal && j.m_on->m_literal && j.m_on->m_literal->GetBoolean()) {
 			b.CrossJoin(qi, kind, alias);   // ON TRUE -> cross join (cartesian)
 		}
 		else if (j.m_on) {

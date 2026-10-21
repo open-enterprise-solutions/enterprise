@@ -757,7 +757,7 @@ bool ResolveCapturesInPlace(ibQueryAstExpr& e, const ibRunContext* frame)
 		if (cell == nullptr)
 			return false;
 		e.m_kind    = ibQueryAstExprKind::Literal;
-		e.m_literal = *cell;
+		e.m_literal = cell->ToAnyValue();
 		return true;
 	}
 	ibQueryAstExprPtr* children[] = { &e.m_arg, &e.m_lhs, &e.m_rhs, &e.m_low, &e.m_high, &e.m_else };

@@ -99,10 +99,7 @@ typedef ibRowValues<ibMetaID, class BACKEND_API ibValue> ibRowMetaValues;
 //use dynamic linking 
 #define _USE_DYNAMIC_DATABASE_LAYER_LINKING 1
 
-//max precision 
-#define MAX_PRECISION_NUMBER 32
-//max precision 
-#define MAX_LENGTH_STRING 1024
+// (MAX_PRECISION_NUMBER / MAX_LENGTH_STRING are the core's: core/core.h — the query's parser reads them too.)
 // (The stack guard — MAX_OBJECTS_LEVEL — is the translator's, in the core: core/compiler/codeDef.h.)
 //max record level
 #define MAX_REC_COUNT 200

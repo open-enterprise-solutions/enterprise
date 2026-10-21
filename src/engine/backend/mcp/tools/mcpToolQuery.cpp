@@ -396,7 +396,9 @@ public:
 
 		try {
 			ibQueryParser parser;
-			package = parser.ParsePackage(text);
+			// The engine's door: the core parser's refusal is raised as the engine's, so the syntax handler below reads its span.
+			try { package = parser.ParsePackage(text); }
+			catch (const ibQueryRefusal& refusal) { ibBackendQuerySyntaxException::Raise(refusal); }
 
 			// AGAINST THIS CONFIGURATION, and said so explicitly. A query in a
 			// module sets no scope of its own and still means the tree it lives in;
