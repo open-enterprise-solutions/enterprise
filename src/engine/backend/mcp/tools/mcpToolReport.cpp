@@ -47,7 +47,7 @@
 #include "backend/query/queryConstructorModel.h"   // ibQueryFieldsOfText — what the TEXT offers
 #include "backend/query/queryException.h"          // …and the judge that refuses one
 #include "backend/query/queryLowering.h"
-#include "backend/query/queryParser.h"
+#include "core/query/queryParser.h"
 #include "backend/query/queryable.h"
 
 #include <algorithm>   // std::remove_if — taking a grouping level back out

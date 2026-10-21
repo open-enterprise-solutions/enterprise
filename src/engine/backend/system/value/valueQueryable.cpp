@@ -14,7 +14,7 @@
 #include "backend/query/querySelector.h"         // ibSelector::Snapshot — ToTable's rows as the fast table
 #include "backend/system/value/valueType.h"      // ibValueTypeDescription::AdjustValue — an empty value of a declared type
 #include "backend/query/queryReadState.h"        // ibQueryReadState — one state for a whole pipeline
-#include "backend/query/queryAST.h"              // ibQueryAstExpr — the tree a predicate lowers from
+#include "core/query/queryAST.h"              // ibQueryAstExpr — the tree a predicate lowers from
 #include "backend/compiler/lambdaQueryAST.h"    // it is READ off the instructions, never stored
 #include "backend/query/queryLowering.h"         // LowerLambdaPredicate / LowerLambdaColumnPath
 #include "backend/query/tempTableQueryable.h"    // ibTempTableQueryable — wrap a RAM value-table Join argument

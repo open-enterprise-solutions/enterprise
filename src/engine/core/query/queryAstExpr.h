@@ -5,9 +5,9 @@
 //	Description : AN EXPRESSION OF A PARSED QUERY, BY NAME - what every side hands about
 ////////////////////////////////////////////////////////////////////////////
 //
-// The tree itself is the engine's (backend/query/queryAST.h): it holds values, and the parser and the
-// lowering that build and read it are the server's. What the other sides name of it is the pointer — an
-// expression editor is handed one and gives one back — so the name lives here and the body stays there.
+// The tree itself is core/query/queryAST.h, with the parser that builds it; the lowering that runs it is the
+// engine's. What a side that only hands an expression about names of it is the pointer — an expression editor is
+// handed one and gives one back — so the name lives here, apart from the tree.
 
 #include <memory>
 

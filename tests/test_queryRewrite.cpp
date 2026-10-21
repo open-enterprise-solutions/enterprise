@@ -12,8 +12,8 @@
 
 #include <gtest/gtest.h>
 
-#include "backend/query/queryParser.h"
-#include "backend/query/queryRewrite.h"
+#include "core/query/queryParser.h"
+#include "core/query/queryRewrite.h"
 
 #include <algorithm>   // std::find — what the rows one level down carry
 

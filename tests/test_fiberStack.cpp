@@ -7,7 +7,7 @@
 #include "backend/backend_exception.h"
 #include "backend/compiler/compileCode.h"
 #include "backend/compiler/procUnit.h"
-#include "backend/query/queryParser.h"
+#include "core/query/queryParser.h"
 #include "backend/session/session.h"
 #include "core/exception.h"
 #include "core/fiber/fiber.h"

@@ -193,6 +193,18 @@
     <ClCompile Include="query\queryKeywords.cpp">
       <Filter>query</Filter>
     </ClCompile>
+    <ClCompile Include="query\queryLexer.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
+    <ClCompile Include="query\queryRender.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
+    <ClCompile Include="query\queryParser.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
+    <ClCompile Include="query\queryRewrite.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
     <ClCompile Include="query\queryRefusal.cpp">
       <Filter>query</Filter>
     </ClCompile>
@@ -390,6 +402,21 @@
       <Filter>query</Filter>
     </ClInclude>
     <ClInclude Include="query\queryPeriodUnits.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\queryLexer.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\queryAST.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\queryRender.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\queryParser.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\queryRewrite.h">
       <Filter>query</Filter>
     </ClInclude>
     <ClInclude Include="query\queryRefusal.h">

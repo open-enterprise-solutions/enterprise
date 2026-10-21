@@ -5,9 +5,9 @@
 
 #include "queryConditionModel.h"
 
-#include "backend/query/queryRender.h"
-#include "backend/query/queryRewrite.h"   // ibQueryFlattenAnd / ibQueryFoldAnd — the AND chain, in one place
-#include "backend/query/queryParser.h"   // a condition typed into a cell is read by the ENGINE
+#include "core/query/queryRender.h"
+#include "core/query/queryRewrite.h"   // ibQueryFlattenAnd / ibQueryFoldAnd — the AND chain, in one place
+#include "core/query/queryParser.h"   // a condition typed into a cell is read by the ENGINE
 
 #include "core/exception.h"   // ibCoreException — what a refused condition throws
 

@@ -33,7 +33,7 @@
 
 #include "queryAST.h"
 
-class BACKEND_API ibQueryRewrite
+class CORE_API ibQueryRewrite
 {
 public:
 	// Deep-clone + apply all rules (recursing into FROM/JOIN subqueries, UNION
@@ -60,8 +60,8 @@ public:
 //
 // Written out three times before this (the conditions model, the constructor, the lowering), which
 // is three chances for "what counts as one condition" to drift apart.
-BACKEND_API void ibQueryFlattenAnd(const ibQueryAstExprPtr& expr, std::vector<ibQueryAstExprPtr>& out);
-BACKEND_API ibQueryAstExprPtr ibQueryFoldAnd(const std::vector<ibQueryAstExprPtr>& rows);
+CORE_API void ibQueryFlattenAnd(const ibQueryAstExprPtr& expr, std::vector<ibQueryAstExprPtr>& out);
+CORE_API ibQueryAstExprPtr ibQueryFoldAnd(const std::vector<ibQueryAstExprPtr>& rows);
 
 // A CONDITION RUNS WHERE THE VALUE IT NAMES EXISTS — deal the AND-terms of WHERE and HAVING back
 // out by what each one needs, in place. A term that mentions an aggregate becomes a HAVING wherever
@@ -75,7 +75,7 @@ BACKEND_API ibQueryAstExprPtr ibQueryFoldAnd(const std::vector<ibQueryAstExprPtr
 // shows the author's own AST, so the condition it had just written stayed visibly in WHERE while
 // the engine quietly ran it as HAVING. A window that shows a different query from the one that runs
 // teaches people to distrust it. Same rule, one spelling, applied by whoever holds the AST.
-BACKEND_API void ibQuerySortConditionsByFold(ibQuerySelect& select);
+CORE_API void ibQuerySortConditionsByFold(ibQuerySelect& select);
 
 // …AND THE QUESTION THAT RULE TURNS ON: does this expression FOLD — is an aggregate call anywhere
 // inside it (a nested SELECT excepted, it folds its own rows)?
@@ -85,7 +85,7 @@ BACKEND_API void ibQuerySortConditionsByFold(ibQuerySelect& select);
 // groups by itself, while one built from the fold (`ISNULL(SUM(Qty), 0)`) can only be evaluated
 // after it. Different decisions, one fact about the tree — kept in one place for the reason
 // ibQueryFlattenAnd's note gives.
-BACKEND_API bool ibQueryMentionsAggregate(const ibQueryAstExprPtr& expr);
+CORE_API bool ibQueryMentionsAggregate(const ibQueryAstExprPtr& expr);
 
 // ⭐⭐ "NO LINK" IS SPELLED `TRUE`, and that is why these are here rather than written out wherever
 // somebody needs a boolean.
@@ -100,7 +100,7 @@ BACKEND_API bool ibQueryMentionsAggregate(const ibQueryAstExprPtr& expr);
 //
 // (The maker — `ibQueryTrueLiteral()` — is gone: nothing built one. What writes `ON TRUE` is the
 //  PARSER, from the keyword; only the READING side had a caller, and that is this one.)
-BACKEND_API bool ibQueryIsTrueLiteral(const ibQueryAstExprPtr& expr);
+CORE_API bool ibQueryIsTrueLiteral(const ibQueryAstExprPtr& expr);
 
 // ===========================================================================
 //  NAMING — the other half of ibQueryLowering::CheckNames
@@ -135,7 +135,7 @@ BACKEND_API bool ibQueryIsTrueLiteral(const ibQueryAstExprPtr& expr);
 //
 // It takes the SELECT because that is where the answer lives: whether the first segment names a
 // SOURCE, or is the first hop of a walk, is a fact about the query and not about the projection.
-BACKEND_API wxString ibQueryProposedName(const ibQuerySelect& select, const ibQueryProjection& projection);
+CORE_API wxString ibQueryProposedName(const ibQuerySelect& select, const ibQueryProjection& projection);
 
 // EVERY OUTPUT COLUMN GETS A NAME, and no two get the same one.
 //
@@ -148,13 +148,13 @@ BACKEND_API wxString ibQueryProposedName(const ibQuerySelect& select, const ibQu
 //
 // ⚠ `projection` is excluded from its own search: called on a projection already in the list, a
 // plain scan finds itself, decides its own name is taken, and renumbers it — every time.
-BACKEND_API void ibQueryEnsureUniqueName(ibQuerySelect& select, ibQueryProjection& projection);
+CORE_API void ibQueryEnsureUniqueName(ibQuerySelect& select, ibQueryProjection& projection);
 
 // A NAME NO OTHER SOURCE IN THIS QUERY IS USING. `except` is the source being renamed, so its own
 // current name does not count as taken — otherwise renaming a table to what it already is would
 // number it. Two tables answering to one name makes every qualified field ambiguous, and the engine
 // would be right to refuse the text; numbering the second is what a DBMS does.
-BACKEND_API wxString ibQueryUniqueSourceAlias(const ibQuerySelect& select, const wxString& wanted,
+CORE_API wxString ibQueryUniqueSourceAlias(const ibQuerySelect& select, const wxString& wanted,
                                               const ibQuerySource* except = nullptr);
 
 #endif
