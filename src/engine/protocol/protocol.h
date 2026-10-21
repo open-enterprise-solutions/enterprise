@@ -1151,8 +1151,9 @@ namespace ibProtocol {
 
 		}
 
-		// Both modes': the configuration's Languages (Guid, Title, Code) — what a translated text is written in (the
-		// translation window's boxes, a user's record's choice).
+		// Both modes': the configuration's Languages (Guid, Title, Code[, Default — true on the configuration's own
+		// language, its DefaultLanguage; absent elsewhere]) — what a translated text is written in (the translation
+		// window's boxes, a user's record's choice).
 		namespace ibLanguages {
 
 			inline constexpr const char* Tab       = "Tab";
@@ -1160,6 +1161,7 @@ namespace ibProtocol {
 			inline constexpr const char* Guid      = "Guid";
 			inline constexpr const char* Title     = "Title";
 			inline constexpr const char* Code      = "Code";
+			inline constexpr const char* Default   = "Default";
 
 		}
 
