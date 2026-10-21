@@ -32,6 +32,14 @@ public:
 	static bool IsConnected(const ibDebuggerServer& server) {
 		return server.m_socketConnectionThread != nullptr && server.m_socketConnectionThread->IsConnected();
 	}
+
+	// The port it listens on — 0 while it is not up yet.
+	static std::uint16_t GetHttpPort(const ibDebuggerServer& server) {
+		const ibDebuggerServer::ibDebuggerServerConnection* thread = server.m_socketConnectionThread;
+		if (thread == nullptr || !thread->m_bindReady.load(std::memory_order_acquire) || thread->m_socketServer == nullptr)
+			return 0;
+		return thread->m_socketServer->GetHttpPort();
+	}
 };
 
 namespace {
@@ -98,17 +106,20 @@ TEST_F(DebugServerFix, ServerShutdown_WhileWaitingForClient_IsBounded)
 // port going lets its designer go.
 TEST_F(DebugServerFix, AcceptConnection_SecondDesigner_IsRefusedAndTheFirstStays)
 {
-	constexpr std::uint16_t kPort = 49180;
-
+	// A PORT THE SYSTEM CHOOSES, and the designer knocks where the server listens: a port named here may be held by a
+	// socket of the tests before it — on Windows the ports from 49152 are the ones handed to outgoing connections — and
+	// the server takes the next one while the designer knocks on the first (CI, 2026-10-21).
 	auto server = ibStandaloneDebuggerServer::Make();
-	ASSERT_TRUE(server->CreateServer(wxT("127.0.0.1"), kPort, false));
+	ASSERT_TRUE(server->CreateServer(wxT("127.0.0.1"), 0, false));
+	ASSERT_TRUE(Within(5s, [&]() { return ibStandaloneDebuggerServer::GetHttpPort(*server) != 0; }));
+	const std::uint16_t port = ibStandaloneDebuggerServer::GetHttpPort(*server);
 
 	ibIoThreads threads;
 
-	DesignerSocket first(threads, kPort);
+	DesignerSocket first(threads, port);
 	ASSERT_TRUE(Within(5s, [&]() { return ibStandaloneDebuggerServer::IsConnected(*server); }));
 
-	DesignerSocket second(threads, kPort);
+	DesignerSocket second(threads, port);
 	EXPECT_TRUE(Within(5s, [&]() { return second.m_closed->load(); })) << "a second designer is refused";
 	EXPECT_FALSE(first.m_closed->load());
 	EXPECT_TRUE(ibStandaloneDebuggerServer::IsConnected(*server));
@@ -117,7 +128,7 @@ TEST_F(DebugServerFix, AcceptConnection_SecondDesigner_IsRefusedAndTheFirstStays
 	EXPECT_TRUE(Within(5s, [&]() { return !ibStandaloneDebuggerServer::IsConnected(*server); }))
 		<< "the first designer going empties the slot";
 
-	DesignerSocket third(threads, kPort);
+	DesignerSocket third(threads, port);
 	EXPECT_TRUE(Within(5s, [&]() { return ibStandaloneDebuggerServer::IsConnected(*server); }))
 		<< "the next designer is taken";
 

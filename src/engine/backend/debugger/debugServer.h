@@ -101,6 +101,7 @@ class BACKEND_API ibDebuggerServer {
 		std::shared_ptr<ibDebugCommandQueue> m_commandQueue;
 
 		friend class ibDebuggerServer;
+		friend class ibStandaloneDebuggerServer;   // the port the system chose for a test (test_debugServer.cpp)
 	};
 
 	// metaData — the configuration that made it and owns it; the debugger asks ITS base through it, never
