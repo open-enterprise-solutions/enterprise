@@ -12,7 +12,6 @@
 
 #include <wx/dataobj.h>   // wxDataObjectComposite — accept every registered drag kind on one target
 #include <wx/utils.h>     // wxFindWindowAtPoint (point -> widget hit-test)
-#include <wx/aui/auibook.h>   // a selected page shown in its notebook
 
 // Form-editor drop target: receives a node dragged from a form-editor tree and enacts it on the form. It registers
 // the draggable KINDS (ibFormDragItem — a source path → a bound control, a command → a command button); OnData
@@ -243,17 +242,10 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::SetObjectSelect
 		return;
 	}
 
-	// A PAGE SELECTED IS SHOWN — it, or the page a selected control sits on: the desktop's ibValueNotebookPage::OnSelected,
-	// fired by its SetObjectSelect for the control and its parents, switched the notebook to the page. Switched without
-	// the page-changed event: that event selects the page, and the selection is being made here.
-	for (ibValueFrame* page = obj; page != nullptr; page = page->GetParent()) {
-		if (page->GetClassName() != ibProtocol::ibForm::ibType::NotebookPage || page->GetParent() == nullptr)
-			continue;
-		wxAuiNotebook* const notebook = wxDynamicCast(page->GetParent()->GetWindow(), wxAuiNotebook);
-		const int pos = notebook != nullptr && page->GetWindow() != nullptr ? notebook->GetPageIndex(page->GetWindow()) : wxNOT_FOUND;
-		if (pos != wxNOT_FOUND && pos != notebook->GetSelection())
-			notebook->ChangeSelection(pos);
-	}
+	// THE CONTROL AND ITS PARENTS HEAR IT, as the desktop's SetObjectSelect said it to them (OnSelected): a page, or the
+	// page a selected control sits on, shows itself in its notebook.
+	for (ibValueFrame* selected = obj; selected != nullptr; selected = selected->GetParent())
+		selected->OnSelected();
 
 	// The first of it and its parents that is drawn — a column has no window of its own, its table has.
 	ibValueFrame* drawn = obj;
