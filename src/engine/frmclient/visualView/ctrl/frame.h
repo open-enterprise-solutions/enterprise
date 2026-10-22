@@ -130,6 +130,9 @@ public:
 	// …and only what the frame's patch changed in it (`patch` — its node there): drawn whole, unless the control knows
 	// which of its parts a patch names.
 	virtual void Update(const ibProtocolNode& node, const ibProtocolNode& /*patch*/) { Update(node); }
+	// Selected in the designer — it, or a control inside it (the desktop's OnSelected, said by the editor's host to the
+	// control and its parents): a page shows itself in its notebook. Nothing goes to the server.
+	virtual void OnSelected() {}
 
 	// What it is in the layout — a window or a sizer.
 	virtual wxWindow* GetWindow() const { return nullptr; }

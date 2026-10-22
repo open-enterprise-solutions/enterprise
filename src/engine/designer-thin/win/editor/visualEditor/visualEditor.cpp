@@ -242,6 +242,11 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::SetObjectSelect
 		return;
 	}
 
+	// THE CONTROL AND ITS PARENTS HEAR IT, as the desktop's SetObjectSelect said it to them (OnSelected): a page, or the
+	// page a selected control sits on, shows itself in its notebook.
+	for (ibValueFrame* selected = obj; selected != nullptr; selected = selected->GetParent())
+		selected->OnSelected();
+
 	// The first of it and its parents that is drawn — a column has no window of its own, its table has.
 	ibValueFrame* drawn = obj;
 	while (drawn != nullptr && drawn->GetWindow() == nullptr && drawn->GetSizer() == nullptr)

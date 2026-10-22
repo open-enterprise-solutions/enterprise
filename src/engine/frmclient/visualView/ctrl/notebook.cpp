@@ -180,6 +180,17 @@ void ibValueNotebookPage::Update(const ibProtocolNode& node)
 	owner->SelectActivePage();
 }
 
+void ibValueNotebookPage::OnSelected()
+{
+	// The desktop's: selected in the designer, or a control on it is — its notebook shows it, through the one door that
+	// brings a page up (SelectActivePage), as a tab clicked in the designer makes it the active one (OnPageChanged).
+	ibValueNotebook* const owner = GetNotebook();
+	if (owner == nullptr)
+		return;
+	owner->m_activePage = GetControlID();
+	owner->SelectActivePage();
+}
+
 wxWindow* ibValueNotebookPage::GetWindow() const
 {
 	return m_page;
