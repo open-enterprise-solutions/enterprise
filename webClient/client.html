@@ -163,6 +163,11 @@ li:hover{background:#e3e9f0}
 .form-host{border:1px solid #ddd;border-radius:4px;padding:10px;
   display:flex;flex-direction:column;min-height:0;flex:1 1 auto}
 .form-host > .boxsizer{flex:1;min-height:0}
+/* A panel (ibWebPanel) is a window holding its own box sizer; the sizer
+   fills it, as it fills the form host. Visible=false arrives as shown:false
+   and applyCommon hides it like any other node. */
+.panel{display:flex;flex-direction:column;min-height:0}
+.panel > .boxsizer{flex:1;min-height:0}
 /* align-items:flex-start so children stay at their natural cross-axis
    size by default. wxSizer semantics: a vertical sizer does NOT stretch
    children across the panel unless wxEXPAND is set — the default flex
@@ -1595,6 +1600,9 @@ class BaseControl{
 class HostControl extends BaseControl{
   render(){ const el=document.createElement('div');el.className='form-host';return el; }
 }
+class Panel extends BaseControl{
+  render(){ const el=document.createElement('div');el.className='panel';return el; }
+}
 class BoxSizer extends BaseControl{
   // orient: wxHORIZONTAL=4, wxVERTICAL=8.
   render(node){
@@ -1891,6 +1899,7 @@ class CheckBox extends BaseControl{
 const renderers={
   'visualHost':    new HostControl(),
   'mdiChild':      new HostControl(),
+  'panel':         new Panel(),
   'boxsizer':      new BoxSizer(),
   'wrapsizer':     new WrapSizer(),
   'staticboxsizer':new StaticBoxSizer(),

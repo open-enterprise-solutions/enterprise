@@ -177,6 +177,7 @@ set(WFRONTEND_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/visualView/ctrl/staticboxsizer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/visualView/ctrl/gridsizer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/visualView/ctrl/itemsizer.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/visualView/ctrl/panel.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/visualView/ctrl/form.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/visualView/ctrl/formAttribute.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/visualView/ctrl/formAttributeProperty.cpp

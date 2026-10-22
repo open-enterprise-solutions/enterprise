@@ -90,7 +90,7 @@ Grepping `visualView/ctrl/*.cpp` for `new ibWeb` shows only:
 
 **Have a web implementation:** `Button`, `Checkbox`, `Textctrl`, `Toolbar` (+
 item/separator), `Statictext`, `Boxsizer`, `Staticboxsizer`, `Gridsizer`,
-`Wrapsizer`, and `Tablebox` (stub only — placeholder, not a real grid).
+`Wrapsizer`, `Panel`, and `Tablebox` (stub only — placeholder, not a real grid).
 
 **Have none at all** — under a web build their `Create()` still constructs a real
 native wx widget, which isn't an `ibWebWindow` and can't be walked into JSON, so

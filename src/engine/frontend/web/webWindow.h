@@ -57,6 +57,7 @@ wxDECLARE_EVENT(wxEVT_CONTROL_TEXT_CLEAR,    wxCommandEvent);
 #endif
 
 class ibWebSizer;
+class ibWebBoxSizer;
 
 class ibWebWindow : public wxEvtHandler {
 public:
@@ -252,6 +253,21 @@ public:
 		: ibWebWindow(id) { SetLabel(caption); }
 
 	virtual wxString GetControlType() const override { return wxT("statictext"); }
+};
+
+// Mirrors ibPanelPage (visualView/pageWindow.h): a plain window that lays its
+// controls out in its own box sizer. The sizer is set with SetSizer, so ToJSON
+// appends it as the panel's last child and the browser lays it out as any box.
+class ibWebPanel : public ibWebWindow {
+public:
+	explicit ibWebPanel(int id = 0);
+
+	virtual wxString GetControlType() const override { return wxT("panel"); }
+
+	void SetOrientation(int orient);
+
+private:
+	ibWebBoxSizer* m_boxSizer = nullptr;   // owned through SetSizer
 };
 
 class ibWebButton : public ibWebWindow {

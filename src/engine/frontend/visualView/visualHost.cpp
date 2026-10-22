@@ -143,8 +143,11 @@ void AppendChildControls(ibValueFrame* node,
 				parentSizer->Add(win,
 					pendingParams ? *pendingParams : ibWebSizer::AddParams{});
 			host->AppendInnerControl(child, win);   // windows only
-			nextWindow = win;
-			nextSizer  = nullptr;
+			// A window that lays its controls out in a sizer of its own (a panel) says so,
+			// as it does to a sizer item on desktop (itemsizer.cpp's ResolveParentSizer asks
+			// the parent's GetSizer); its children go into that sizer, not beside it.
+			nextSizer  = child->GetSizer(win);
+			nextWindow = nextSizer != nullptr ? nullptr : win;
 			break;
 		}
 		case COMPONENT_TYPE_SIZER: {

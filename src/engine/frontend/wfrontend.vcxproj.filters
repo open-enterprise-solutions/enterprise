@@ -91,6 +91,7 @@
     <ClCompile Include="visualView\ctrl\staticboxsizer.cpp">    <Filter>visualView\ctrl</Filter></ClCompile>
     <ClCompile Include="visualView\ctrl\gridsizer.cpp">         <Filter>visualView\ctrl</Filter></ClCompile>
     <ClCompile Include="visualView\ctrl\itemsizer.cpp">         <Filter>visualView\ctrl</Filter></ClCompile>
+    <ClCompile Include="visualView\ctrl\panel.cpp">             <Filter>visualView\ctrl</Filter></ClCompile>
     <ClCompile Include="visualView\ctrl\form.cpp">              <Filter>visualView\ctrl</Filter></ClCompile>
     <ClCompile Include="visualView\ctrl\formControl.cpp">       <Filter>visualView\ctrl</Filter></ClCompile>
     <ClCompile Include="visualView\ctrl\formObject.cpp">        <Filter>visualView\ctrl</Filter></ClCompile>

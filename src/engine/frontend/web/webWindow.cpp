@@ -165,3 +165,15 @@ nlohmann::json ibWebWindow::ToJSON() const
 	}
 	return node;
 }
+
+// Same shape as ibPanelPage's ctor: a horizontal box sizer, set as the window's own.
+ibWebPanel::ibWebPanel(int id) : ibWebWindow(id)
+{
+	m_boxSizer = new ibWebBoxSizer(wxHORIZONTAL);
+	SetSizer(m_boxSizer);
+}
+
+void ibWebPanel::SetOrientation(int orient)
+{
+	m_boxSizer->SetOrientation(orient);
+}

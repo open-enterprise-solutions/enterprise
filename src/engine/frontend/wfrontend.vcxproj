@@ -223,6 +223,7 @@
     <ClCompile Include="visualView\ctrl\staticboxsizer.cpp" />
     <ClCompile Include="visualView\ctrl\gridsizer.cpp" />
     <ClCompile Include="visualView\ctrl\itemsizer.cpp" />
+    <ClCompile Include="visualView\ctrl\panel.cpp" />
     <ClCompile Include="visualView\ctrl\form.cpp" />
     <ClCompile Include="visualView\ctrl\formAttribute.cpp" />
     <ClCompile Include="visualView\ctrl\formAttributeProperty.cpp" />
