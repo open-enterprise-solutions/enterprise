@@ -737,9 +737,6 @@
     <ClCompile Include="visualView\ctrl\notebookPage_res.cpp">
       <Filter>visualView\ctrl</Filter>
     </ClCompile>
-    <ClCompile Include="visualView\ctrl\panel.cpp">
-      <Filter>visualView\ctrl</Filter>
-    </ClCompile>
     <ClCompile Include="visualView\ctrl\radiobutton.cpp">
       <Filter>visualView\ctrl</Filter>
     </ClCompile>
@@ -1731,9 +1728,6 @@
       <Filter>visualView\ctrl</Filter>
     </ClInclude>
     <ClInclude Include="visualView\ctrl\notebook.h">
-      <Filter>visualView\ctrl</Filter>
-    </ClInclude>
-    <ClInclude Include="visualView\ctrl\panel.h">
       <Filter>visualView\ctrl</Filter>
     </ClInclude>
     <ClInclude Include="visualView\ctrl\sizer.h">

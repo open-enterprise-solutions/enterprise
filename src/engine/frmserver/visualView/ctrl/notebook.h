@@ -72,8 +72,8 @@ private:
 
 	ibPropertyCategory* m_categoryNotebook = ibPropertyObject::CreatePropertyCategory(wxT("Notebook"), _("Notebook"));
 	ibPropertyEnum<ibValueEnumOrientNotebookPage>* m_propertyOrient = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumOrientNotebookPage>>(m_categoryNotebook, wxT("OrientPage"), _("Orient page"),
-		_("Where the page tabs are drawn: above the pages (the default) or below them."),
-		wxAUI_NB_TOP);
+		_("Where the page tabs are drawn: above the pages (the default), below them, or nowhere - then the notebook is a panel: only the active page shows, and code switches it (ActivePage)."),
+		ibTabLocation_Top);
 	ibPropertyCategory* m_categoryEvent = ibPropertyObject::CreatePropertyCategory(wxT("Event"), _("Event"));
 	ibEventControl* m_eventOnPageChanged = ibPropertyObject::CreateEvent<ibEventControl>(m_categoryEvent, wxT("OnPageChanged"), _("Page changed"), wxArrayString{ wxT("Page") });
 

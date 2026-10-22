@@ -12,12 +12,19 @@
 
 namespace {
 
+// Where the form put the tabs (OrientPage) - none: the notebook is a panel.
+ibProtocol::ibForm::ibNotebook::ibTabLocation TabLocationOf(const ibProtocolNode& node)
+{
+	return static_cast<ibProtocol::ibForm::ibNotebook::ibTabLocation>(node.GetInt(ibProtocol::ibForm::ibNotebook::OrientPage,
+		static_cast<long long>(ibProtocol::ibForm::ibNotebook::ibTabLocation::Top)));
+}
+
 // The desktop's style of a notebook: its tabs where the form put them, moved and scrolled; split at runtime only, as
 // the desktop's (ibValueNotebook::Create) - with a split, wxAuiNotebook ends a drag inside its own tabs before it says
 // DRAG_DONE, so the designer would never hear that a page was moved.
 long NotebookStyleOf(const ibProtocolNode& node, const ibVisualHostClient& host)
 {
-	long style = static_cast<long>(node.GetInt(ibProtocol::ibForm::ibNotebook::OrientPage, wxAUI_NB_TOP)) |
+	long style = (TabLocationOf(node) == ibProtocol::ibForm::ibNotebook::ibTabLocation::Bottom ? wxAUI_NB_BOTTOM : wxAUI_NB_TOP) |
 		wxAUI_NB_TAB_MOVE |
 		wxAUI_NB_SCROLL_BUTTONS;
 	if (!host.IsDesignerHost())
@@ -45,6 +52,11 @@ void ibValueNotebook::Update(const ibProtocolNode& node)
 	const ibProtocolNode state = node.FindChild(ibProtocol::ibForm::ibState::State);
 
 	m_notebook->SetWindowStyle(NotebookStyleOf(node, GetVisualHost()));
+	// …and its tabs nowhere when OrientPage is None: a panel, the active page alone, switched by the server
+	// (ActivePage). The designer keeps them, as the desktop's (ibValueNotebook::OnUpdated).
+	const bool tabs = GetVisualHost().IsDesignerHost() ||
+		TabLocationOf(node) != ibProtocol::ibForm::ibNotebook::ibTabLocation::None;
+	m_notebook->SetTabCtrlHeight(tabs ? -1 : 0);
 
 	m_activePage = state.GetInt(ibProtocol::ibForm::ibNotebook::ActivePage);
 	SelectActivePage();

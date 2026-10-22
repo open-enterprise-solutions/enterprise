@@ -1777,9 +1777,17 @@ namespace ibProtocol {
 		// A notebook: where its tabs are; its State's page selected; a page's State shows a picture on its tab.
 		namespace ibNotebook {
 
-			inline constexpr const char* OrientPage     = "OrientPage";       // wxAUI_NB_TOP, _BOTTOM
+			inline constexpr const char* OrientPage     = "OrientPage";       // ibTabLocation
 			inline constexpr const char* ActivePage     = "ActivePage";       // by its control id; 0 — none
 			inline constexpr const char* PictureVisible = "PictureVisible";
+
+			// Where the tabs are — the numbers a saved form holds (the server's ibTabLocation). None: no tabs, the
+			// notebook is a panel showing its active page alone.
+			enum class ibTabLocation : int {
+				None   = 0,
+				Top    = 1,
+				Bottom = 8,
+			};
 
 		}
 
