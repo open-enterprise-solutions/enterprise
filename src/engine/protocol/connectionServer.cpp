@@ -3,10 +3,11 @@
 #include <chrono>
 #include <string>
 
+#include <wx/ffile.h>
 #include <wx/intl.h>   // _() — what a refusal says to a person
+#include <wx/log.h>
 
-// ⚠ PLAIN ws:// ONLY, as the core's client speaks it (core/net/httpClient.h).
-#include "core/net/httpClient.h"
+#include "core/net/httpClient.h"   // ws:// — and wss://, the client's TLS (ibTlsClientContext)
 #include "core/net/ioThreads.h"
 
 namespace {
@@ -40,10 +41,12 @@ std::string EscapeSegment(const wxString& segment)
 
 } // namespace
 
-bool ibProtocolConnectionServer::ParseAddress(const wxString& address, wxString& host, int& port, wxString& base)
+bool ibProtocolConnectionServer::ParseAddress(const wxString& address, wxString& host, int& port, wxString& base,
+	bool& secure)
 {
 	wxString rest;
-	if (!address.StartsWith(wxT("oes://"), &rest))
+	secure = address.StartsWith(wxT("oess://"), &rest);
+	if (!secure && !address.StartsWith(wxT("oes://"), &rest))
 		return false;
 	const int slash = rest.Find(wxT('/'));
 	if (slash == wxNOT_FOUND)
@@ -71,16 +74,47 @@ std::string ibProtocolConnectionServer::ClientPath(const wxString& base)
 	return "/" + EscapeSegment(base) + "/client";
 }
 
+bool ibProtocolConnectionServer::ClientTls(const wxString& trusted, std::shared_ptr<const ibTlsContext>& tls,
+	wxString& error)
+{
+	std::string pem, refused;
+	if (!trusted.IsEmpty()) {
+		// wxFFile reports a file it cannot open through wxLog — a box in a window's process; the refusal below says it.
+		wxLogNull quiet;
+		wxFFile in(trusted, wxT("rb"));
+		wxString text;
+		if (!in.IsOpened() || !in.ReadAll(&text, wxConvUTF8)) {
+			error = wxString::Format(_("the trusted certificates %s could not be read"), trusted);
+			return false;
+		}
+		pem = std::string(text.utf8_str());
+	}
+	if (ibTlsClientContext(pem, std::string(), std::string(), /*verify*/ true, tls, refused) != ibHttpClientError::None) {
+		error = wxString::FromUTF8(refused);
+		return false;
+	}
+	return true;
+}
+
 ibProtocolConnectionServer::ibProtocolConnectionServer() = default;
 
-bool ibProtocolConnectionServer::Open(const wxString& address, wxString& error)
+bool ibProtocolConnectionServer::Open(const wxString& address, const wxString& trusted, wxString& error)
 {
 	Close();
 
 	wxString host, base;
 	int port = kDefaultPort;
-	if (!ParseAddress(address, host, port, base)) {
-		error = wxString::Format(_("'%s' is not the address of a base: oes://server[:port]/<base>"), address);
+	bool secure = false;
+	if (!ParseAddress(address, host, port, base, secure)) {
+		error = wxString::Format(_("'%s' is not the address of a base: oes://server[:port]/<base> or oess://…"), address);
+		return false;
+	}
+
+	// OVER TLS — whom the client trusts (ClientTls).
+	std::shared_ptr<const ibTlsContext> tls;
+	wxString refused;
+	if (secure && !ClientTls(trusted, tls, refused)) {
+		error = wxString::Format(_("The connection to the server at %s:%d is not prepared: %s."), host, port, refused);
 		return false;
 	}
 
@@ -132,6 +166,8 @@ bool ibProtocolConnectionServer::Open(const wxString& address, wxString& error)
 	std::string name(host.utf8_str());
 	if (name.size() > 2 && name.front() == '[' && name.back() == ']')
 		name = name.substr(1, name.size() - 2);
+	if (tls)
+		m_socketClient->Secure(std::move(tls));
 	// Compressed, as the protocol offers it: an answer of some size comes as a binary message.
 	m_socketClient->Open(name, static_cast<std::uint16_t>(port), ClientPath(base) + "?compress=deflate");
 
@@ -143,6 +179,7 @@ bool ibProtocolConnectionServer::Open(const wxString& address, wxString& error)
 		m_answered.wait(lock, [this]() { return m_opened || m_closed; });
 		if (!m_closed) {
 			m_address = address;
+			m_trusted = trusted;
 			return true;
 		}
 		reason = m_reason;
@@ -180,13 +217,13 @@ ibProtocolConnectionServer::~ibProtocolConnectionServer()
 
 bool ibProtocolConnectionServer::Reconnect(wxString& error)
 {
-	// A copy: Open closes the socket first, and the address it parses must not be the member it may clear.
-	const wxString address = m_address;
+	// Copies: Open closes the socket first, and what it parses must not be the members it may clear.
+	const wxString address = m_address, trusted = m_trusted;
 	if (address.IsEmpty()) {
 		error = wxT("no server to return to");
 		return false;
 	}
-	return Open(address, error);
+	return Open(address, trusted, error);
 }
 
 std::unique_ptr<ibProtocolConnection> ibProtocolConnectionServer::OpenChannel(wxString& error)
@@ -196,7 +233,7 @@ std::unique_ptr<ibProtocolConnection> ibProtocolConnectionServer::OpenChannel(wx
 		return nullptr;
 	}
 	auto channel = std::make_unique<ibProtocolConnectionServer>();
-	if (!channel->Open(m_address, error))
+	if (!channel->Open(m_address, m_trusted, error))
 		return nullptr;
 	return channel;
 }

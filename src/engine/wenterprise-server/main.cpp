@@ -433,7 +433,7 @@ int main(int argc, char** argv)
 
 	// PLAIN HTTP, ON THIS MACHINE'S OWN ADDRESS ONLY. This server speaks no TLS: a browser's HTTPS, and a browser on
 	// another machine, are the web server's (webserver/, the core's transport). The clear does not cross a network
-	// (backend/server/listener.h) - an address off this machine is a refusal; backend.conf's certificate is the
+	// (core/server/listener.h) - an address off this machine is a refusal; backend.conf's certificate is the
 	// network-facing servers', not this one's.
 	if (!ibIsLoopback(ibString::FromUTF8(args.host.data(), args.host.size()))) {
 		std::cerr << "OES wenterprise-server did not start: it speaks plain HTTP on this machine's own address only "

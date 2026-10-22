@@ -1,15 +1,21 @@
 ////////////////////////////////////////////////////////////////////////////
-//	Description : the listener of a server of this platform (backend/server/listener.h) - TLS over the files
+//	Description : the listener of a server of this platform (core/server/listener.h) - TLS over the files
 //	backend.conf names, plain on this machine's own addresses otherwise, refused off them. The identities are
 //	tests/certs/ (self-signed, made once); the servers - the core's (core/net/httpServer.h) - come up on
-//	127.0.0.1, and cpp-httplib's clients, another library, are what speaks to them.
+//	127.0.0.1, and cpp-httplib's clients, another library, are what speaks to them - and the core's own WebSocket
+//	client over TLS (core/net/httpClient.h), as an oess:// address opens it.
 ////////////////////////////////////////////////////////////////////////////
 
 #include <gtest/gtest.h>
 
+#include <atomic>
+#include <chrono>
 #include <cstddef>
 #include <initializer_list>
+#include <memory>
+#include <mutex>
 #include <string>
+#include <thread>
 #include <utility>
 
 #include <wx/ffile.h>
@@ -27,9 +33,11 @@
 
 #include <cpp-httplib/httplib.h>
 
-#include "backend/backend_exception.h"
-#include "backend/server/listener.h"
+#include "core/exception.h"
+#include "core/net/httpClient.h"
 #include "core/net/httpServer.h"
+#include "core/net/ioThreads.h"
+#include "core/server/listener.h"
 
 namespace {
 
@@ -57,14 +65,26 @@ wxString Refusal(const wxString& address, const ibTlsFiles& files)
 	try {
 		ibListenerOptions(address, 0, files);
 	}
-	catch (const ibBackendException& err) {
+	catch (const ibCoreException& err) {
 		return err.GetErrorDescription();
 	}
 	return wxString();
 }
 
-// A server started with the door's options, on a port the system chooses, answering "ok" at /; m_port is 0 and
-// m_error says why when it did not start. Stopped with the test, so a fatal assertion does not end the binary.
+// A WebSocket that answers each message with itself.
+class Echo : public ibWebSocketHandler {
+public:
+	explicit Echo(std::shared_ptr<ibWebSocket> socket) : m_socket(std::move(socket)) {}
+	virtual void OnMessage(const ibString& text) override { m_socket->Send(text); }
+	virtual void OnBinary(std::string) override {}
+	virtual void OnClose() override {}
+private:
+	std::shared_ptr<ibWebSocket> m_socket;
+};
+
+// A server started with the door's options, on a port the system chooses, answering "ok" at / and echoing at
+// /echo; m_port is 0 and m_error says why when it did not start. Stopped with the test, so a fatal assertion does
+// not end the binary.
 struct Up {
 	ibHttpServer m_server;
 	std::string  m_error;
@@ -75,6 +95,9 @@ struct Up {
 			response.SetContent("ok", "text/plain");
 			respond(std::move(response));
 		});
+		m_server.WebSocket("/echo", [](const std::shared_ptr<ibWebSocket>& socket) {
+			return std::make_shared<Echo>(socket);
+		});
 		options.m_threads = 1;
 		options.m_workers = 2;
 		if (m_server.Start(options, m_error))
@@ -82,6 +105,48 @@ struct Up {
 	}
 	~Up() { m_server.Stop(); }
 };
+
+// What a client's socket was told: the echo, or why it went. Held by its handlers too, which may be told after the
+// socket was let go.
+struct Told {
+	std::mutex  m_mutex;
+	std::string m_text;
+	std::string m_reason;
+	bool        m_closed = false;
+};
+
+// The core's WebSocket client to the server at `port`, over `tls` — "ping" sent, and what came back, or why the socket
+// went, within five seconds.
+std::shared_ptr<Told> Ping(int port, std::shared_ptr<const ibTlsContext> tls)
+{
+	const std::shared_ptr<Told> told = std::make_shared<Told>();
+	ibIoThreads threads;
+	{
+		ibWebSocketClient client(threads.GetContext(), nullptr,
+			[told](const ibString& text) {
+				std::lock_guard<std::mutex> lock(told->m_mutex);
+				told->m_text = text.ToUtf8();
+			},
+			nullptr,
+			[told](const std::string& reason) {
+				std::lock_guard<std::mutex> lock(told->m_mutex);
+				told->m_closed = true;
+				told->m_reason = reason;
+			});
+		client.Secure(std::move(tls));
+		client.Open("127.0.0.1", static_cast<std::uint16_t>(port), "/echo");
+		client.Send(ibString(wxT("ping")));
+		for (int waited = 0; waited < 5000; waited += 10) {
+			{
+				std::lock_guard<std::mutex> lock(told->m_mutex);
+				if (!told->m_text.empty() || told->m_closed)
+					break;
+			}
+			std::this_thread::sleep_for(std::chrono::milliseconds(10));
+		}
+	}
+	return told;
+}
 
 } // namespace
 
@@ -107,6 +172,38 @@ TEST(Listener, NamedFilesMakeATlsListener)
 	plain.set_connection_timeout(2);
 	plain.set_read_timeout(2);
 	EXPECT_FALSE(plain.Get("/"));
+}
+
+// AN oess:// SOCKET — the core's own client over TLS to the listener the files make: it opens and is echoed when it
+// trusts the server's certificate; when it trusts another, it is refused at the handshake, with why, and nothing is
+// said on it.
+TEST(Listener, AWebSocketClientSpeaksTlsToTheListener)
+{
+	wxInitializer init;
+	const Up up(ibListenerOptions(wxT("127.0.0.1"), 0, TestIdentity()));
+	ASSERT_GT(up.m_port, 0) << up.m_error;
+
+	const auto readPem = [](const wxChar* name) {
+		wxFFile in(CertPath(name), wxT("rb"));
+		wxString text;
+		in.ReadAll(&text, wxConvUTF8);
+		return std::string(text.utf8_str());
+	};
+
+	std::shared_ptr<const ibTlsContext> trusting;
+	std::string error;
+	ASSERT_EQ(ibHttpClientError::None, ibTlsClientContext(readPem(wxT("server.pem")), std::string(), std::string(),
+		/*verify*/ true, trusting, error)) << error;
+	const std::shared_ptr<Told> echoed = Ping(up.m_port, trusting);
+	EXPECT_EQ("ping", echoed->m_text) << echoed->m_reason;
+
+	std::shared_ptr<const ibTlsContext> stranger;
+	ASSERT_EQ(ibHttpClientError::None, ibTlsClientContext(readPem(wxT("other.pem")), std::string(), std::string(),
+		/*verify*/ true, stranger, error)) << error;
+	const std::shared_ptr<Told> refused = Ping(up.m_port, stranger);
+	EXPECT_TRUE(refused->m_closed);
+	EXPECT_TRUE(refused->m_text.empty());
+	EXPECT_FALSE(refused->m_reason.empty());
 }
 
 // Nothing named: a plain listener, on this machine's own address.

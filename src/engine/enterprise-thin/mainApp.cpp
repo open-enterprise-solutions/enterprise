@@ -26,7 +26,8 @@ wxIMPLEMENT_APP(ibAppEnterprise);
 
 void ibAppEnterprise::OnInitCmdLine(wxCmdLineParser& parser)
 {
-	parser.AddOption(wxT("address"), wxT("address"), "Application server: oes://server[:port]/<base>", wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL);
+	parser.AddOption(wxT("address"), wxT("address"), "Application server: oes://server[:port]/<base>, oess:// over TLS", wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL);
+	parser.AddOption(wxT("trusted"), wxT("trusted"), "oess://: the authorities trusted, a PEM file (default: the system's store)", wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL);
 	parser.AddOption(wxT("file"),   wxT("file"),     "Database file path",      wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL);
 	parser.AddOption(wxT("srv"),    wxT("server"),   "Database server address", wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL);
 	parser.AddOption(wxT("p"),      wxT("dbport"),   "Database server port",    wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL);
@@ -44,6 +45,7 @@ void ibAppEnterprise::OnInitCmdLine(wxCmdLineParser& parser)
 bool ibAppEnterprise::OnCmdLineParsed(wxCmdLineParser& parser)
 {
 	parser.Found(wxT("address"), &m_strAddress);
+	parser.Found(wxT("trusted"), &m_strTrusted);
 
 	parser.Found(wxT("file"), &m_strFile);
 
@@ -102,7 +104,7 @@ bool ibAppEnterprise::OnInit()
 	if (!m_strAddress.IsEmpty()) {
 		// An application server — over its port.
 		auto server = std::make_unique<ibProtocolConnectionServer>();
-		if (!server->Open(m_strAddress, error)) {
+		if (!server->Open(m_strAddress, m_strTrusted, error)) {
 			splash.reset();
 			wxMessageBox(error, _("OES Enterprise - startup error"), wxOK | wxICON_ERROR);
 			return false;
@@ -138,7 +140,7 @@ bool ibAppEnterprise::OnInit()
 		wxMessageBox(
 			_("Cannot start enterprise-thin.exe - no infobase specified.\n\n"
 			  "Provide one of:\n"
-			  "  --address=oes://<server>[:port]/<base>   (an application server)\n"
+			  "  --address=oes://<server>[:port]/<base>   (an application server; oess:// over TLS)\n"
 			  "  --file=<path>          (Firebird embedded / SQLite file)\n"
 			  "  --server=<host> --db=<name> [--dbport=...] [--user=...]"),
 			_("OES Enterprise"),

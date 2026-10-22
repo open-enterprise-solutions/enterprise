@@ -13,7 +13,7 @@
 // move (m_maxBodyBytes, m_idleSeconds): an assistant's request is larger, and its pauses are for thinking.
 //
 // HTTP AND HTTPS, either or both, each on its own port. ⭐ THE CLEAR DOES NOT CROSS A NETWORK — the rule of
-// backend/server/listener.h too: on this machine's own addresses (ibIsLoopback) HTTP serves; on any other it only sends
+// core/server/listener.h too: on this machine's own addresses (ibIsLoopback) HTTP serves; on any other it only sends
 // a browser on to HTTPS, and with no HTTPS to send it to it is refused.
 
 #include <cstdint>
@@ -139,8 +139,8 @@ struct ibHttpServerOptions {
 	std::optional<std::uint16_t> m_httpPort;
 	std::optional<std::uint16_t> m_httpsPort;
 
-	// ⚠ HTTP SERVED IN THE CLEAR BEYOND THIS MACHINE TOO — the application server's alone, until oess://: its thin
-	// clients speak ws:// only (protocol/connectionServer.cpp), and the web server reaches it the same way.
+	// ⚠ HTTP SERVED IN THE CLEAR BEYOND THIS MACHINE TOO — the debug server's alone, until its port speaks TLS: the
+	// designer reaches a runtime's debugger over ws:// only (backend/debugger/debugClient.cpp).
 	bool          m_clearBeyondMachine = false;
 
 	// PEM text — the certificate (its chain after it) and its key: what HTTPS is spoken over, and only it.
@@ -180,8 +180,8 @@ public:
 
 	// Listening, with the threads up — or false, with why in `error`.
 	bool Start(const ibHttpServerOptions& options, std::string& error);
-	// …on the first free HTTP port among `tries` from the options' own (GetHttpPort says which) — or false, with why
-	// the last one was refused.
+	// …on the first free port among `tries` from the options' own — HTTPS's when it is given one, HTTP's otherwise
+	// (GetHttpsPort, GetHttpPort say which) — or false, with why the last one was refused.
 	bool Start(ibHttpServerOptions options, unsigned int tries, std::string& error);
 	// The port closed and every connection let go: each WebSocket's handler is told OnClose before Stop returns.
 	void Stop();

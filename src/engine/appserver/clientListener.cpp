@@ -8,6 +8,7 @@
 #include <thread>
 #include <vector>
 
+#include "core/exception.h"                   // ibCoreException — the listener refused, with the reason
 #include "core/net/webSocketFrame.h"         // ibWebSocketClose — what a socket that did not log in is told
 
 #include "frmserver/client/clientHost.h"
@@ -133,9 +134,18 @@ ibClientListener::~ibClientListener()
 	Stop();
 }
 
-bool ibClientListener::Start(const wxString& host, unsigned short& port, bool choose,
+bool ibClientListener::Start(const wxString& host, unsigned short& port, bool choose, const ibTlsFiles& tls,
 	std::map<wxString, ibClientHost*> hosts, wxString& refusal)
 {
+	ibHttpServerOptions options;
+	try {
+		options = ibListenerOptions(host, port, tls);
+	}
+	catch (const ibCoreException& err) {
+		refusal = err.GetErrorDescription();
+		return false;
+	}
+
 	m_server = std::make_unique<ibHttpServer>();
 	m_loginRound = std::make_unique<ibLoginRound>();
 	ibLoginRound* const round = m_loginRound.get();
@@ -167,26 +177,22 @@ bool ibClientListener::Start(const wxString& host, unsigned short& port, bool ch
 		? ibApplicationHost::Get()->GetClientConnections()
 		: ibApplicationHost::kDefaultClientConnections;
 
-	ibHttpServerOptions options;
-	options.m_host = std::string(host.utf8_str());
-	options.m_clearBeyondMachine = true;   // the thin clients speak ws:// only — see the option
 	options.m_maxConnections = std::max<std::size_t>(connections, 1);
 
 	const std::string address = host.IsEmpty() ? std::string("0.0.0.0") : options.m_host;
 	const unsigned int first = port;
-	options.m_httpPort = port;
 	std::string error;
 	if (m_server->Start(options, choose ? ibServerConfig::s_choosePorts : 1, error)) {
-		port = m_server->GetHttpPort();
+		port = options.m_httpsPort ? m_server->GetHttpsPort() : m_server->GetHttpPort();
 		ibAppServerSay(ibJournalMark::Info, wxT("client connections: up to %u"),
 			static_cast<unsigned>(options.m_maxConnections));
 		return true;
 	}
 
 	refusal = choose
-		? wxString::Format(wxT("no free port from %u to %u on %s"), first, first + ibServerConfig::s_choosePorts - 1,
-			wxString::FromUTF8(address))
-		: wxString::Format(wxT("port %u on %s is taken - another application server is probably holding it (%s)"),
+		? wxString::Format(wxT("no free port from %u to %u on %s (%s)"), first, first + ibServerConfig::s_choosePorts - 1,
+			wxString::FromUTF8(address), wxString::FromUTF8(error))
+		: wxString::Format(wxT("port %u on %s did not open - another application server is probably holding it (%s)"),
 			first, wxString::FromUTF8(address), wxString::FromUTF8(error));
 	m_server.reset();
 	m_loginRound.reset();

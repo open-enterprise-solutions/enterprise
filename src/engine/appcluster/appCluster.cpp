@@ -9,8 +9,11 @@
 #include <wx/cmdline.h>
 
 #include "core/diagnostics/crashGuard.h"   // ibCrashGuard::Install — the process's journal and dumps
+#include "core/exception.h"                // ibCoreException — the listener refused, with the reason
 #include "core/net/webSocketRelay.h"
+#include "core/programFolder.h"            // ibBackendConfPath — the certificate the port speaks TLS over
 #include "core/server/clusterControl.h"
+#include "core/server/listener.h"
 
 #include "clusterService.h"
 #include "clusterWorker.h"
@@ -152,16 +155,16 @@ bool ibAppCluster::OnInit()
 		m_workers.push_back(std::make_unique<ibClusterWorker>(*this, instance.m_name));
 
 	// EACH BASE'S CLIENTS — every socket carried on to the server of its base, on this machine, as it was asked for (the
-	// path and its query). A server not serving — starting, fallen — is not reached: the client is told so and comes
-	// again (the communicator logs in anew).
+	// path and its query), in the clear: TLS ends here, at the port. A server not serving — starting, fallen — is not
+	// reached: the client is told so and comes again (the communicator logs in anew).
 	asio::io_context& io = m_http.GetContext();
 	for (const std::unique_ptr<ibClusterWorker>& worker : m_workers) {
 		const ibClusterWorker* const held = worker.get();
 		const std::string path = "/" + held->GetBase().ToUtf8() + "/client";
 		m_http.WebSocket(path, [&io, held](const std::shared_ptr<ibWebSocket>& socket) {
 			const ibString base = held->GetBase();
-			return std::make_shared<ibWebSocketRelay>(io, "127.0.0.1", held->GetPort(), socket->GetRequest().GetTarget(),
-				socket, [base](const ibString& reason) {
+			return std::make_shared<ibWebSocketRelay>(io, "127.0.0.1", held->GetPort(), nullptr,
+				socket->GetRequest().GetTarget(), socket, [base](const ibString& reason) {
 					ibAppClusterSay(ibJournalMark::Warning, wxT("base '%s': %s"), base, reason);
 				});
 		});
@@ -194,7 +197,8 @@ bool ibAppCluster::OnInit()
 
 	// THE PORT THE CLIENTS COME IN BY — the config's, as the application server takes it alone (appserver,
 	// ibClientListener): the one written, or, at the first start, the first free one from the server's own, written back.
-	// A written port that is taken is refused, never moved off.
+	// A written port that is taken is refused, never moved off. Its transport is the listener's (core/server/listener.h):
+	// TLS over the certificate backend.conf names, else plain on this machine's own address only.
 	unsigned short port = 0;
 	if (!m_config->ReadPort(port, error))
 		return Refuse(error);
@@ -202,18 +206,21 @@ bool ibAppCluster::OnInit()
 	if (choose)
 		port = ibServerConfig::s_defaultPort;
 	ibHttpServerOptions options;
-	options.m_host = m_config->ReadHost().ToUtf8();
-	options.m_clearBeyondMachine = true;   // the thin clients speak ws:// only — see the option
-	options.m_httpPort = port;
+	try {
+		options = ibListenerOptions(m_config->ReadHost(), port, ibTlsFiles::FromConf(ibBackendConfPath()));
+	}
+	catch (const ibCoreException& err) {
+		return Refuse(err.GetErrorDescription());
+	}
 	std::string refused;
 	if (!m_http.Start(options, choose ? ibServerConfig::s_choosePorts : 1, refused)) {
 		return Refuse(choose
-			? ibString::Format(wxT("no free port from %u to %u"), static_cast<unsigned>(port),
-				static_cast<unsigned>(port + ibServerConfig::s_choosePorts - 1))
-			: ibString::Format(wxT("port %u is taken - another server is probably holding it (%s)"),
+			? ibString::Format(wxT("no free port from %u to %u (%s)"), static_cast<unsigned>(port),
+				static_cast<unsigned>(port + ibServerConfig::s_choosePorts - 1), ibString::FromUTF8(refused.data(), refused.size()))
+			: ibString::Format(wxT("port %u did not open - another server is probably holding it (%s)"),
 				static_cast<unsigned>(port), ibString::FromUTF8(refused.data(), refused.size())));
 	}
-	m_port = m_http.GetHttpPort();
+	m_port = options.m_httpsPort ? m_http.GetHttpsPort() : m_http.GetHttpPort();
 	if (choose)
 		m_config->WritePort(m_port);
 
@@ -223,8 +230,9 @@ bool ibAppCluster::OnInit()
 	m_timer.Bind(wxEVT_TIMER, &ibAppCluster::OnTimer, this);
 	m_timer.Start(kTimerMs);
 
-	ibAppClusterSay(ibJournalMark::Info, wxT("serving %s on port %u: %u base(s)"), m_config->GetFolder(),
-		static_cast<unsigned>(m_port), static_cast<unsigned>(m_workers.size()));
+	ibAppClusterSay(ibJournalMark::Info, wxT("serving %s on port %u (%s): %u base(s)"), m_config->GetFolder(),
+		static_cast<unsigned>(m_port), options.m_httpsPort ? wxT("oess://, TLS") : wxT("oes://, this machine only"),
+		static_cast<unsigned>(m_workers.size()));
 	return true;
 }
 

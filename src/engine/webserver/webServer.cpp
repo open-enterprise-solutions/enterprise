@@ -239,6 +239,9 @@ bool ibWebConfig::Read(const wxString& folder, wxString& error)
 		publication.m_locale = conf.Read(wxT("Locale"), wxEmptyString).Strip(wxString::both);
 		conf.Read(wxT("Debug"), &publication.m_debug, false);
 		publication.m_address = conf.Read(wxT("Address"), wxEmptyString).Strip(wxString::both);
+		const wxString trusted = conf.Read(wxT("Trusted"), wxEmptyString).Strip(wxString::both);
+		if (!trusted.IsEmpty())
+			publication.m_trusted = Beside(folder, trusted);
 		conf.SetPath(wxT("/"));
 		if (publication.m_kind != wxT("firebird") && publication.m_kind != wxT("server")) {
 			error = wxString::Format(wxT("%s: [%s] Kind=%s - a publication is firebird (a file base) or server"),
@@ -319,9 +322,17 @@ bool ibWebServer::Publish(const ibWebPublication& publication)
 	// AN APPLICATION SERVER'S BASE — reached over its port, for each browser.
 	wxString host, base;
 	int port = ibProtocolConnectionServer::kDefaultPort;
-	if (!ibProtocolConnectionServer::ParseAddress(publication.m_address, host, port, base)) {
-		ibWebServerSay(ibJournalMark::Error, wxT("publication '%s': '%s' is not the address of a base: oes://server[:port]/<base>"),
+	bool secure = false;
+	if (!ibProtocolConnectionServer::ParseAddress(publication.m_address, host, port, base, secure)) {
+		ibWebServerSay(ibJournalMark::Error, wxT("publication '%s': '%s' is not the address of a base: oes://server[:port]/<base> or oess://…"),
 			name, publication.m_address);
+		return false;
+	}
+	// OVER TLS — whom the web server trusts there (ClientTls), made once for every browser's socket to that server.
+	std::shared_ptr<const ibTlsContext> tls;
+	wxString refused;
+	if (secure && !ibProtocolConnectionServer::ClientTls(publication.m_trusted, tls, refused)) {
+		ibWebServerSay(ibJournalMark::Error, wxT("publication '%s': %s"), name, refused);
 		return false;
 	}
 	const std::string server = Utf8(host);
@@ -329,15 +340,15 @@ bool ibWebServer::Publish(const ibWebPublication& publication)
 	const std::string target = ibProtocolConnectionServer::ClientPath(base);
 	asio::io_context& io = m_http.GetContext();
 	// A browser's socket to the base — a socket of the web server's own to the server for each (ibWebSocketRelay).
-	m_http.WebSocket(path, [&io, server, serverPort, target, name](const std::shared_ptr<ibWebSocket>& socket) {
+	m_http.WebSocket(path, [&io, server, serverPort, tls, target, name](const std::shared_ptr<ibWebSocket>& socket) {
 		const std::string asked = WantsDeflate(socket->GetRequest()) ? target + "?compress=deflate" : target;
-		return std::make_shared<ibWebSocketRelay>(io, server, serverPort, asked, socket,
+		return std::make_shared<ibWebSocketRelay>(io, server, serverPort, tls, asked, socket,
 			[name](const ibString& reason) {
 				ibWebServerSay(ibJournalMark::Warning, wxT("publication '%s': %s"), name, reason);
 			});
 	});
-	m_http.Post(path, [&io, server, serverPort, target, name](const ibHttpRequest& request, ibHttpResponder respond) {
-		ibHttpPost(io, server, serverPort, target, request.m_body, "application/json", kPostWait,
+	m_http.Post(path, [&io, server, serverPort, tls, target, name](const ibHttpRequest& request, ibHttpResponder respond) {
+		ibHttpPost(io, server, serverPort, tls, target, request.m_body, "application/json", kPostWait,
 			[respond, name](int status, std::string body, const std::string& error) {
 				ibHttpResponse response;
 				if (status == 0) {

@@ -3,8 +3,8 @@
 
 // A SOCKET CARRIED ON TO A SERVER — a socket of the carrier's own to the server for each one that came in, the messages
 // carried both ways as they are: a deflated answer stays deflated, if the peer asked for it as it connected (the target
-// says so). The web server's: a browser's to an application server's base; the cluster's (appcluster): a client's to
-// the server of its base.
+// says so). The web server's: a browser's to an application server's base, over TLS when its address says oess://; the
+// cluster's (appcluster): a client's to the server of its base, on this machine, in the clear.
 
 #include <cstdint>
 #include <functional>
@@ -22,8 +22,9 @@ public:
 	// socket is closed. A server that closed the socket itself is no loss and is not told.
 	using ibLost = std::function<void(const ibString& reason)>;
 
-	ibWebSocketRelay(asio::io_context& io, const std::string& host, std::uint16_t port, const std::string& target,
-		std::shared_ptr<ibWebSocket> socket, ibLost lost) :
+	// `tls` — the carrier's TLS to the server (ibTlsClientContext), made once for all its sockets; null — in the clear.
+	ibWebSocketRelay(asio::io_context& io, const std::string& host, std::uint16_t port,
+		std::shared_ptr<const ibTlsContext> tls, const std::string& target, std::shared_ptr<ibWebSocket> socket, ibLost lost) :
 		m_socket(std::move(socket))
 	{
 		const std::weak_ptr<ibWebSocket> told = m_socket;
@@ -43,6 +44,8 @@ public:
 					socket->Close(reason.empty() ? ibWebSocketClose::GoingAway : ibWebSocketClose::BadGateway,
 						reason.empty() ? "the server closed the connection" : "the server is not reached");
 			});
+		if (tls)
+			m_upstream->Secure(std::move(tls));
 		m_upstream->Open(host, port, target);
 	}
 

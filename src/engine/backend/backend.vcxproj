@@ -62,7 +62,6 @@
     <ClInclude Include="settings\settingsStorage.h" />
     <ClInclude Include="settings\settingsComposer.h" />
     <ClInclude Include="temp\tempStorage.h" />
-    <ClInclude Include="server\listener.h" />
     <ClInclude Include="sheetFormat\sheetFormat.h" />
     <ClInclude Include="sheetFormat\sheetFormatXlsx.h" />
     <ClInclude Include="sheetFormat\sheetFormatNative.h" />
@@ -481,7 +480,6 @@
     <ClCompile Include="settings\settingsStorage.cpp" />
     <ClCompile Include="settings\settingsComposer.cpp" />
     <ClCompile Include="temp\tempStorage.cpp" />
-    <ClCompile Include="server\listener.cpp" />
     <ClCompile Include="sheetFormat\sheetFormat.cpp" />
     <ClCompile Include="sheetFormat\sheetFormatNative.cpp" />
     <ClCompile Include="sheetFormat\sheetFormatDocx.cpp" />

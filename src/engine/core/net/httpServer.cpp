@@ -1636,7 +1636,7 @@ bool ibHttpServerState::Listen(const asio::ip::address& address, std::uint16_t& 
 		acceptor.listen(asio::socket_base::max_listen_connections, code);
 	if (code) {
 		error = std::string(secure ? "HTTPS" : "HTTP") + " port " + std::to_string(port) + " on "
-			+ address.to_string() + " did not open: " + code.message();
+			+ address.to_string() + " did not open: " + ibErrorText(code);
 		return false;
 	}
 	port = acceptor.local_endpoint(code).port();
@@ -1812,7 +1812,7 @@ bool ibHttpServer::Start(const ibHttpServerOptions& options, std::string& error)
 		error = "a certificate is named and HTTPS is given no port";
 		return false;
 	}
-	// Where HTTP listens it serves in the clear: on this machine's own addresses, or wherever the application server's
+	// Where HTTP listens it serves in the clear: on this machine's own addresses, or wherever the debug server's
 	// exception says (the header).
 	const bool clear = ibIsLoopback(ibString::FromUTF8(options.m_host.data(), options.m_host.size()))
 		|| options.m_clearBeyondMachine;
@@ -1888,10 +1888,11 @@ bool ibHttpServer::Start(const ibHttpServerOptions& options, std::string& error)
 
 bool ibHttpServer::Start(ibHttpServerOptions options, unsigned int tries, std::string& error)
 {
-	const unsigned int first = options.m_httpPort.value_or(0);
+	std::optional<std::uint16_t>& port = options.m_httpsPort ? options.m_httpsPort : options.m_httpPort;
+	const unsigned int first = port.value_or(0);
 	const unsigned int last = std::min(first + std::max(tries, 1u) - 1, 65535u);
 	for (unsigned int candidate = first; candidate <= last; ++candidate) {
-		options.m_httpPort = static_cast<std::uint16_t>(candidate);
+		port = static_cast<std::uint16_t>(candidate);
 		if (Start(options, error))
 			return true;
 	}

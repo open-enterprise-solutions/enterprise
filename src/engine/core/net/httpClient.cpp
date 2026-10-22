@@ -56,7 +56,43 @@ std::string Authority(const std::string& host, std::uint16_t port)
 	return Bracketed(host) + ":" + std::to_string(port);
 }
 
+// THE HANDSHAKE FAILED — told apart by what the certificate's check said: a chain nobody vouches for first, the name
+// after it; neither — the server does not speak TLS, or not this TLS. Why, into `why`.
+ibHttpClientError HandshakeRefusal(const ibTlsStream& stream, const std::string& host, const std::error_code& error,
+	std::string& why)
+{
+	const std::uint32_t flags = stream.GetVerification();
+	if ((flags & ~static_cast<std::uint32_t>(MBEDTLS_X509_BADCERT_CN_MISMATCH)) != 0) {
+		char said[512] = {};
+		mbedtls_x509_crt_verify_info(said, sizeof(said), "", flags);
+
+		// A line per failed check, each ended with '\n' — one sentence for the refusal.
+		why = said;
+		while (!why.empty() && why.back() == '\n')
+			why.pop_back();
+		for (std::size_t at = why.find('\n'); at != std::string::npos; at = why.find('\n', at))
+			why.replace(at, 1, "; ");
+		return ibHttpClientError::Verification;
+	}
+	if (flags != 0) {
+		why = "the certificate is not for '" + host + "'";
+		return ibHttpClientError::Hostname;
+	}
+	why = "the TLS handshake failed: " + ibErrorText(error);
+	return ibHttpClientError::Handshake;
+}
+
 } // namespace
+
+ibHttpClientError ibTlsClientContext(const std::string& trusted, const std::string& certificate,
+	const std::string& password, bool verify, std::shared_ptr<const ibTlsContext>& context, std::string& error)
+{
+	auto made = std::make_shared<ibTlsContext>();
+	const ibHttpClientError refused = made->LoadClient(trusted, certificate, password, verify, error);
+	if (refused == ibHttpClientError::None)
+		context = std::move(made);
+	return refused;
+}
 
 //*******************************************************************************************
 //*                                     The WebSocket                                       *
@@ -79,7 +115,9 @@ struct ibWebSocketClientState : public std::enable_shared_from_this<ibWebSocketC
 	void Send(std::uint8_t opcode, std::string payload);
 	void Close();
 
-	void Connected();
+	// The connection made: its bytes go by the stream from here — TLS's handshake first, when it is secure.
+	void Connected(asio::ip::tcp::socket socket);
+	void Upgrade();
 	void ReadHead();
 	void Opened(std::string leftover);
 	void Read();
@@ -91,9 +129,12 @@ struct ibWebSocketClientState : public std::enable_shared_from_this<ibWebSocketC
 	void Pump();
 	void Drop(const std::string& reason);
 
-	asio::ip::tcp::socket   m_socket;   // on a strand of its own — the resolver and the timer go by its executor
+	asio::strand<asio::io_context::executor_type> m_strand;   // the socket's, the resolver's, the timer's
 	asio::ip::tcp::resolver m_resolver;
 	asio::steady_timer      m_timer;    // the opening's deadline
+	std::optional<asio::ip::tcp::socket> m_connecting;   // until it is connected…
+	std::unique_ptr<ibHttpStream>        m_stream;       // …and its bytes from then on: plain, or TLS over m_tls
+	std::shared_ptr<const ibTlsContext>  m_tls;          // null — in the clear
 	ibOpened                m_opened;
 	ibText                  m_text;
 	ibBinary                m_binary;
@@ -121,7 +162,7 @@ struct ibWebSocketClientState : public std::enable_shared_from_this<ibWebSocketC
 
 ibWebSocketClientState::ibWebSocketClientState(asio::io_context& io, ibOpened opened, ibText text, ibBinary binary,
 	ibClosed closed) :
-	m_socket(asio::make_strand(io)), m_resolver(m_socket.get_executor()), m_timer(m_socket.get_executor()),
+	m_strand(asio::make_strand(io)), m_resolver(m_strand), m_timer(m_strand),
 	m_opened(std::move(opened)), m_text(std::move(text)), m_binary(std::move(binary)), m_closed(std::move(closed)),
 	m_frames(/*masked*/ false, kMaxAnswerBytes)
 {
@@ -129,7 +170,7 @@ ibWebSocketClientState::ibWebSocketClientState(asio::io_context& io, ibOpened op
 
 void ibWebSocketClientState::Open(const std::string& host, std::uint16_t port, const std::string& target)
 {
-	asio::post(m_socket.get_executor(), [self = shared_from_this(), host, port, target]() {
+	asio::post(m_strand, [self = shared_from_this(), host, port, target]() {
 		self->m_host = host;
 		self->m_port = port;
 		self->m_target = target;
@@ -141,27 +182,51 @@ void ibWebSocketClientState::Open(const std::string& host, std::uint16_t port, c
 		self->m_resolver.async_resolve(host, std::to_string(port),
 			[self](const std::error_code& error, const asio::ip::tcp::resolver::results_type& found) {
 				if (error) {
-					self->Drop("'" + self->m_host + "' is not found: " + error.message());
+					self->Drop("'" + self->m_host + "' is not found: " + ibErrorText(error));
 					return;
 				}
-				asio::async_connect(self->m_socket, found,
+				if (self->m_gone)
+					return;
+				self->m_connecting.emplace(self->m_strand);
+				asio::async_connect(*self->m_connecting, found,
 					[self](const std::error_code& connected, const asio::ip::tcp::endpoint&) {
 						if (connected) {
-							self->Drop(Authority(self->m_host, self->m_port) + " is not reached: " + connected.message());
+							self->Drop(Authority(self->m_host, self->m_port) + " is not reached: " + ibErrorText(connected));
 							return;
 						}
-						std::error_code ignored;
-						self->m_socket.set_option(asio::ip::tcp::no_delay(true), ignored);
-						self->Connected();
+						asio::ip::tcp::socket socket = std::move(*self->m_connecting);
+						self->m_connecting.reset();
+						self->Connected(std::move(socket));
 					});
 			});
 	});
 }
 
-void ibWebSocketClientState::Connected()
+void ibWebSocketClientState::Connected(asio::ip::tcp::socket socket)
 {
 	if (m_gone)
 		return;
+	std::error_code ignored;
+	socket.set_option(asio::ip::tcp::no_delay(true), ignored);
+	if (m_tls)
+		m_stream = std::make_unique<ibTlsStream>(std::move(socket), m_tls, m_host);
+	else
+		m_stream = std::make_unique<ibPlainStream>(std::move(socket));
+	m_stream->Handshake([self = shared_from_this()](const std::error_code& shaken) {
+		if (self->m_gone)
+			return;
+		if (shaken) {
+			std::string why;
+			HandshakeRefusal(static_cast<const ibTlsStream&>(*self->m_stream), self->m_host, shaken, why);
+			self->Drop(why);
+			return;
+		}
+		self->Upgrade();
+	});
+}
+
+void ibWebSocketClientState::Upgrade()
+{
 	m_key = ibWebSocketKey();
 	Queue("GET " + m_target + " HTTP/1.1\r\n"
 		"Host: " + Authority(m_host, m_port) + "\r\n"
@@ -174,10 +239,10 @@ void ibWebSocketClientState::Connected()
 
 void ibWebSocketClientState::ReadHead()
 {
-	m_socket.async_read_some(asio::buffer(m_buffer, sizeof(m_buffer)),
+	m_stream->ReadSome(m_buffer, sizeof(m_buffer),
 		[self = shared_from_this()](const std::error_code& error, std::size_t bytes) {
 			if (error) {
-				self->Drop("the server closed the opening: " + error.message());
+				self->Drop("the server closed the opening: " + ibErrorText(error));
 				return;
 			}
 			self->m_head.append(self->m_buffer, bytes);
@@ -245,10 +310,10 @@ void ibWebSocketClientState::Opened(std::string leftover)
 
 void ibWebSocketClientState::Read()
 {
-	m_socket.async_read_some(asio::buffer(m_buffer, sizeof(m_buffer)),
+	m_stream->ReadSome(m_buffer, sizeof(m_buffer),
 		[self = shared_from_this()](const std::error_code& error, std::size_t bytes) {
 			if (error) {
-				self->Drop(error == asio::error::eof ? std::string() : "the server's socket dropped: " + error.message());
+				self->Drop(error == asio::error::eof ? std::string() : "the server's socket dropped: " + ibErrorText(error));
 				return;
 			}
 			self->OnFrames(self->m_buffer, bytes);
@@ -322,7 +387,7 @@ void ibWebSocketClientState::Deliver(std::uint8_t opcode, std::string payload)
 
 void ibWebSocketClientState::Send(std::uint8_t opcode, std::string payload)
 {
-	asio::post(m_socket.get_executor(), [self = shared_from_this(), opcode, payload = std::move(payload)]() mutable {
+	asio::post(m_strand, [self = shared_from_this(), opcode, payload = std::move(payload)]() mutable {
 		if (self->m_gone || self->m_closeSent)
 			return;
 		if (!self->m_open) {
@@ -335,7 +400,7 @@ void ibWebSocketClientState::Send(std::uint8_t opcode, std::string payload)
 
 void ibWebSocketClientState::Close()
 {
-	asio::post(m_socket.get_executor(), [self = shared_from_this()]() {
+	asio::post(m_strand, [self = shared_from_this()]() {
 		if (self->m_gone || self->m_closeSent)
 			return;
 		self->m_closeSent = true;
@@ -382,11 +447,11 @@ void ibWebSocketClientState::Pump()
 	}
 	m_writing = true;
 	// The front stays where it is while it is written: a deque's push_back moves no element.
-	asio::async_write(m_socket, asio::buffer(m_out.front()),
+	m_stream->Write(m_out.front().data(), m_out.front().size(),
 		[self = shared_from_this()](const std::error_code& error, std::size_t) {
 			self->m_writing = false;
 			if (error) {
-				self->Drop("the server's socket dropped: " + error.message());
+				self->Drop("the server's socket dropped: " + ibErrorText(error));
 				return;
 			}
 			self->m_outBytes -= self->m_out.front().size();
@@ -402,9 +467,12 @@ void ibWebSocketClientState::Drop(const std::string& reason)
 	m_gone = true;
 	m_timer.cancel();
 	m_resolver.cancel();
+	// Closed, not let go: what is still outstanding on the stream is told, and finds the socket gone.
 	std::error_code ignored;
-	m_socket.shutdown(asio::ip::tcp::socket::shutdown_both, ignored);
-	m_socket.close(ignored);
+	if (m_connecting)
+		m_connecting->close(ignored);
+	if (m_stream)
+		m_stream->Close();
 	// Told once; and what was handed over is let go here, so nothing it holds outlives the socket.
 	const ibClosed closed = std::move(m_closed);
 	m_closed = nullptr;
@@ -425,6 +493,12 @@ ibWebSocketClient::ibWebSocketClient(asio::io_context& io, ibOpened opened, ibTe
 ibWebSocketClient::~ibWebSocketClient()
 {
 	m_state->Close();
+}
+
+void ibWebSocketClient::Secure(std::shared_ptr<const ibTlsContext> context)
+{
+	// Read by the strand only once Open has posted to it: said before Open, as the header asks.
+	m_state->m_tls = std::move(context);
 }
 
 void ibWebSocketClient::Open(const std::string& host, std::uint16_t port, const std::string& target)
@@ -458,8 +532,8 @@ public:
 
 	using ibDone = std::function<void(int status, std::string body, const std::string& error)>;
 
-	ibPostExchange(asio::io_context& io, ibDone done) :
-		m_socket(asio::make_strand(io)), m_resolver(m_socket.get_executor()), m_timer(m_socket.get_executor()),
+	ibPostExchange(asio::io_context& io, std::shared_ptr<const ibTlsContext> tls, ibDone done) :
+		m_strand(asio::make_strand(io)), m_resolver(m_strand), m_timer(m_strand), m_tls(std::move(tls)),
 		m_done(std::move(done))
 	{
 		llhttp_settings_init(&m_settings);
@@ -477,7 +551,7 @@ public:
 			"Content-Type: " + type + "\r\n"
 			"Content-Length: " + std::to_string(body.size()) + "\r\n"
 			"Connection: close\r\n\r\n" + body;
-		asio::post(m_socket.get_executor(), [self = shared_from_this(), host, port, wait]() {
+		asio::post(m_strand, [self = shared_from_this(), host, port, wait]() {
 			self->m_timer.expires_after(wait);
 			self->m_timer.async_wait([self, wait](const std::error_code& error) {
 				if (!error)
@@ -486,22 +560,42 @@ public:
 			self->m_resolver.async_resolve(host, std::to_string(port),
 				[self, host, port](const std::error_code& error, const asio::ip::tcp::resolver::results_type& found) {
 					if (error) {
-						self->Finish(0, "'" + host + "' is not found: " + error.message());
+						self->Finish(0, "'" + host + "' is not found: " + ibErrorText(error));
 						return;
 					}
-					asio::async_connect(self->m_socket, found,
+					if (!self->m_done)
+						return;
+					self->m_connecting.emplace(self->m_strand);
+					asio::async_connect(*self->m_connecting, found,
 						[self, host, port](const std::error_code& connected, const asio::ip::tcp::endpoint&) {
 							if (connected) {
-								self->Finish(0, Authority(host, port) + " is not reached: " + connected.message());
+								self->Finish(0, Authority(host, port) + " is not reached: " + ibErrorText(connected));
 								return;
 							}
-							asio::async_write(self->m_socket, asio::buffer(self->m_request),
-								[self](const std::error_code& written, std::size_t) {
-									if (written)
-										self->Finish(0, "the request did not go: " + written.message());
-									else
-										self->Read();
-								});
+							if (!self->m_done)
+								return;
+							if (self->m_tls)
+								self->m_stream = std::make_unique<ibTlsStream>(std::move(*self->m_connecting), self->m_tls, host);
+							else
+								self->m_stream = std::make_unique<ibPlainStream>(std::move(*self->m_connecting));
+							self->m_connecting.reset();
+							self->m_stream->Handshake([self, host](const std::error_code& shaken) {
+								if (!self->m_done)
+									return;
+								if (shaken) {
+									std::string why;
+									HandshakeRefusal(static_cast<const ibTlsStream&>(*self->m_stream), host, shaken, why);
+									self->Finish(0, why);
+									return;
+								}
+								self->m_stream->Write(self->m_request.data(), self->m_request.size(),
+									[self](const std::error_code& written, std::size_t) {
+										if (written)
+											self->Finish(0, "the request did not go: " + ibErrorText(written));
+										else
+											self->Read();
+									});
+							});
 						});
 				});
 		});
@@ -526,13 +620,15 @@ private:
 
 	void Read()
 	{
-		m_socket.async_read_some(asio::buffer(m_buffer, sizeof(m_buffer)),
+		m_stream->ReadSome(m_buffer, sizeof(m_buffer),
 			[self = shared_from_this()](const std::error_code& error, std::size_t bytes) {
+				if (!self->m_done)
+					return;
 				llhttp_errno_t code = HPE_OK;
 				if (error == asio::error::eof)
 					code = llhttp_finish(&self->m_parser);   // an answer that runs to the connection's end
 				else if (error) {
-					self->Finish(0, "the server's socket dropped: " + error.message());
+					self->Finish(0, "the server's socket dropped: " + ibErrorText(error));
 					return;
 				}
 				else
@@ -555,16 +651,23 @@ private:
 			return;
 		m_timer.cancel();
 		m_resolver.cancel();
+		// Closed, not let go: what is still outstanding on the stream is told, and finds the exchange finished.
 		std::error_code ignored;
-		m_socket.close(ignored);
+		if (m_connecting)
+			m_connecting->close(ignored);
+		if (m_stream)
+			m_stream->Close();
 		const ibDone done = std::move(m_done);
 		m_done = nullptr;
 		done(status, status != 0 ? std::move(m_body) : std::string(), error);
 	}
 
-	asio::ip::tcp::socket   m_socket;
-	asio::ip::tcp::resolver m_resolver;
-	asio::steady_timer      m_timer;
+	asio::strand<asio::io_context::executor_type> m_strand;   // the socket's, the resolver's, the timer's
+	asio::ip::tcp::resolver              m_resolver;
+	asio::steady_timer                   m_timer;
+	std::optional<asio::ip::tcp::socket> m_connecting;   // until it is connected…
+	std::unique_ptr<ibHttpStream>        m_stream;       // …and its bytes from then on: plain, or TLS over m_tls
+	std::shared_ptr<const ibTlsContext>  m_tls;          // null — in the clear
 	ibDone                  m_done;
 	std::string             m_request;
 	llhttp_settings_t       m_settings;
@@ -576,11 +679,11 @@ private:
 
 } // namespace
 
-void ibHttpPost(asio::io_context& io, const std::string& host, std::uint16_t port, const std::string& target,
-	std::string body, const std::string& type, std::chrono::seconds wait,
-	std::function<void(int status, std::string body, const std::string& error)> done)
+void ibHttpPost(asio::io_context& io, const std::string& host, std::uint16_t port,
+	std::shared_ptr<const ibTlsContext> tls, const std::string& target, std::string body, const std::string& type,
+	std::chrono::seconds wait, std::function<void(int status, std::string body, const std::string& error)> done)
 {
-	const auto exchange = std::make_shared<ibPostExchange>(io, std::move(done));
+	const auto exchange = std::make_shared<ibPostExchange>(io, std::move(tls), std::move(done));
 	exchange->Start(host, port, target, std::move(body), type, wait);
 }
 
@@ -700,7 +803,7 @@ struct ibHttpClientState {
 				if (turn != m_turn || m_finished)
 					return;
 				if (error) {
-					Finish(ibHttpClientError::Connection, "'" + m_host + "' is not found: " + error.message());
+					Finish(ibHttpClientError::Connection, "'" + m_host + "' is not found: " + ibErrorText(error));
 					return;
 				}
 				m_connecting.emplace(m_io);
@@ -708,7 +811,7 @@ struct ibHttpClientState {
 					if (turn != m_turn || m_finished)
 						return;
 					if (connected) {
-						Finish(ibHttpClientError::Connection, Authority(m_host, m_port) + " is not reached: " + connected.message());
+						Finish(ibHttpClientError::Connection, Authority(m_host, m_port) + " is not reached: " + ibErrorText(connected));
 						return;
 					}
 					std::error_code ignored;
@@ -730,29 +833,11 @@ struct ibHttpClientState {
 			});
 	}
 
-	// THE HANDSHAKE FAILED — told apart by what the certificate's check said: a chain nobody vouches for first, the name
-	// after it; neither — the server does not speak TLS, or not this TLS.
 	void Refused(const std::error_code& error)
 	{
-		const std::uint32_t flags = static_cast<ibTlsStream&>(*m_stream).GetVerification();
-		if ((flags & ~static_cast<std::uint32_t>(MBEDTLS_X509_BADCERT_CN_MISMATCH)) != 0) {
-			char said[512] = {};
-			mbedtls_x509_crt_verify_info(said, sizeof(said), "", flags);
-
-			// A line per failed check, each ended with '\n' — one sentence for the script's refusal.
-			std::string what(said);
-			while (!what.empty() && what.back() == '\n')
-				what.pop_back();
-			for (std::size_t at = what.find('\n'); at != std::string::npos; at = what.find('\n', at))
-				what.replace(at, 1, "; ");
-			Finish(ibHttpClientError::Verification, what);
-			return;
-		}
-		if (flags != 0) {
-			Finish(ibHttpClientError::Hostname, "the certificate is not for '" + m_host + "'");
-			return;
-		}
-		Finish(ibHttpClientError::Handshake, "the TLS handshake failed: " + error.message());
+		std::string why;
+		const ibHttpClientError refused = HandshakeRefusal(static_cast<const ibTlsStream&>(*m_stream), m_host, error, why);
+		Finish(refused, std::move(why));
 	}
 
 	void Write()
@@ -762,7 +847,7 @@ struct ibHttpClientState {
 			if (turn != m_turn || m_finished)
 				return;
 			if (error) {
-				Finish(ibHttpClientError::Write, "the request did not go whole: " + error.message());
+				Finish(ibHttpClientError::Write, "the request did not go whole: " + ibErrorText(error));
 				return;
 			}
 			Read();
@@ -779,7 +864,7 @@ struct ibHttpClientState {
 			if (error == asio::error::eof)
 				code = llhttp_finish(&m_parser);   // an answer that runs to the connection's end
 			else if (error) {
-				Finish(ibHttpClientError::Read, "the connection was lost: " + error.message());
+				Finish(ibHttpClientError::Read, "the connection was lost: " + ibErrorText(error));
 				return;
 			}
 			else
@@ -928,8 +1013,8 @@ ibHttpClient::~ibHttpClient()
 ibHttpClientError ibHttpClient::Secure(const std::string& trusted, const std::string& certificate,
 	const std::string& password, bool verify, std::string& error)
 {
-	auto context = std::make_shared<ibTlsContext>();
-	const ibHttpClientError refused = context->LoadClient(trusted, certificate, password, verify, error);
+	std::shared_ptr<const ibTlsContext> context;
+	const ibHttpClientError refused = ibTlsClientContext(trusted, certificate, password, verify, context, error);
 	if (refused != ibHttpClientError::None)
 		return refused;
 	// A connection made in the clear is not the one spoken over TLS.

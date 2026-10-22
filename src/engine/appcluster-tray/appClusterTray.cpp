@@ -16,6 +16,7 @@
 #include "core/diagnostics/crashGuard.h"   // ibCrashGuard::Install — the process's journal and dumps
 #include "core/net/httpClient.h"
 #include "core/programFolder.h"
+#include "core/server/listener.h"   // ibTlsFiles — whether the cluster's port speaks TLS
 
 #include "clusterTray.h"
 
@@ -178,6 +179,19 @@ void ibAppClusterTray::Connect()
 		return;
 	}
 
+	// THE CLUSTER'S PORT SPEAKS TLS when backend.conf names a certificate (core/server/listener.h) — the tray then does
+	// too. Its certificate is not checked: the tray speaks to this machine's own address, where nobody else holds the
+	// port, and is let in by the token, not by the name on a certificate.
+	std::shared_ptr<const ibTlsContext> tls;
+	if (ibTlsFiles::FromConf(ibBackendConfPath()).IsNamed()) {
+		std::string refused;
+		if (ibTlsClientContext(std::string(), std::string(), std::string(), /*verify*/ false, tls, refused)
+			!= ibHttpClientError::None) {
+			m_whyNotReached = ibString::FromUTF8(refused.data(), refused.size());
+			return;
+		}
+	}
+
 	// What the socket says is taken on the main thread — and only while it is the tray's socket, not one let go of.
 	const unsigned number = ++m_socketNumber;
 	m_socket = std::make_unique<ibWebSocketClient>(m_io.GetContext(), nullptr,
@@ -195,6 +209,8 @@ void ibAppClusterTray::Connect()
 					OnClosed(why);
 			});
 		});
+	if (tls)
+		m_socket->Secure(std::move(tls));
 	m_socket->Open("127.0.0.1", port,
 		std::string(ibClusterControl::Path) + "?" + ibClusterControl::Token + "=" + token.ToUtf8());
 }

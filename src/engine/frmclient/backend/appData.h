@@ -30,8 +30,10 @@ private:
 	// had the person pick (designer-thin/mainApp.cpp, the one that fills them).
 	friend class ibAppDesigner;
 
-	// APPLICATION SERVER ENTRY — oes://server[:port]/<base>
+	// APPLICATION SERVER ENTRY — oes://server[:port]/<base>, or oess:// over TLS; the authorities it trusts, a PEM file
+	// (empty — the platform's store)
 	wxString m_strAddress;
+	wxString m_strTrusted;
 
 	// FILE ENTRY
 	wxString m_strFile;

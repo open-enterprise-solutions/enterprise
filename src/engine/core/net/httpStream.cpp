@@ -3,6 +3,19 @@
 #include <asio/post.hpp>
 #include <asio/write.hpp>
 
+#include <wx/log.h>   // wxSysErrorMsgStr — the system's text of an error, in Unicode
+
+std::string ibErrorText(const std::error_code& code)
+{
+#ifdef __WINDOWS__
+	// The standard library asks FormatMessageA: the ANSI code page, Cyrillic on a Russian Windows, which read as UTF-8
+	// is nothing at all — "Assistant access did not start: ." (2026-10-23). wx asks in Unicode.
+	if (code.category() == std::system_category())
+		return std::string(wxSysErrorMsgStr(static_cast<unsigned long>(code.value())).utf8_str());
+#endif
+	return code.message();
+}
+
 ibPlainStream::ibPlainStream(asio::ip::tcp::socket socket) :
 	m_socket(std::move(socket))
 {

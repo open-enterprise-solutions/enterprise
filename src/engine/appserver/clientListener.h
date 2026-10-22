@@ -9,7 +9,8 @@
 //   POST /<base>/client    one request, its response — for a tool, a test, curl
 //
 // HTTP only opens the door: a browser speaks nothing else, and a WebSocket is an HTTP request that became a
-// stream — the frames that follow carry no headers. One port for all of it, and TLS, when it comes, on it.
+// stream — the frames that follow carry no headers. One port for all of it, TLS on it when backend.conf names a
+// certificate (oess://), plain on this machine's own address otherwise (core/server/listener.h).
 //
 // The HTTP is the core's (core/net/httpServer.h): asynchronous, so a connection waiting for its client costs a buffer,
 // not a thread.
@@ -20,6 +21,7 @@
 #include <wx/string.h>
 
 #include "core/net/httpServer.h"
+#include "core/server/listener.h"
 
 class ibClientListener {
 public:
@@ -28,9 +30,9 @@ public:
 	~ibClientListener();
 
 	// Bound on the caller's thread, so a refusal is said here: `host` (empty — every interface) at `port`, or —
-	// `choose` — at the first free one from `port` up, which `port` then holds. `hosts` — the bases served, by
-	// name. False, with the reason, when nothing could be bound.
-	bool Start(const wxString& host, unsigned short& port, bool choose,
+	// `choose` — at the first free one from `port` up, which `port` then holds; over `tls` (ibListenerOptions).
+	// `hosts` — the bases served, by name. False, with the reason, when nothing could be bound.
+	bool Start(const wxString& host, unsigned short& port, bool choose, const ibTlsFiles& tls,
 		std::map<wxString, class ibClientHost*> hosts, wxString& refusal);
 
 	// The port closed and every connection let go — before the hosts it carries to are.

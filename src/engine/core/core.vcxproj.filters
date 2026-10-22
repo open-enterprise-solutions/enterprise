@@ -231,6 +231,9 @@
     <ClCompile Include="serialize\jsonText.cpp">
       <Filter>serialize</Filter>
     </ClCompile>
+    <ClCompile Include="server\listener.cpp">
+      <Filter>server</Filter>
+    </ClCompile>
     <ClCompile Include="server\serverConfig.cpp">
       <Filter>server</Filter>
     </ClCompile>
@@ -472,6 +475,9 @@
       <Filter>serialize</Filter>
     </ClInclude>
     <ClInclude Include="server\clusterControl.h">
+      <Filter>server</Filter>
+    </ClInclude>
+    <ClInclude Include="server\listener.h">
       <Filter>server</Filter>
     </ClInclude>
     <ClInclude Include="server\serverConfig.h">

@@ -9,8 +9,10 @@
 // own and runs no code: that is the server's, wherever it runs.
 class ibAppEnterprise : public wxApp {
 
-	// APPLICATION SERVER ENTRY — oes://server[:port]/<base>
+	// APPLICATION SERVER ENTRY — oes://server[:port]/<base>, or oess:// over TLS; the authorities it trusts, a PEM file
+	// (empty — the platform's store)
 	wxString m_strAddress;
+	wxString m_strTrusted;
 
 	// FILE ENTRY
 	wxString m_strFile;

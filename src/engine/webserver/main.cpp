@@ -28,7 +28,8 @@ static const wxCmdLineEntryDesc s_cmdLineDesc[] = {
 	{ wxCMD_LINE_OPTION, "p",  "port",       "The HTTP port (default: web.conf's HttpPort, else 8080; 0 - the system chooses)", wxCMD_LINE_VAL_NUMBER, 0 },
 	{ wxCMD_LINE_OPTION, "sp", "https-port", "The HTTPS port, over web.conf's Certificate and PrivateKey", wxCMD_LINE_VAL_NUMBER, 0 },
 	{ wxCMD_LINE_OPTION, "f",  "file",       "Publish the file base of this folder", wxCMD_LINE_VAL_STRING, 0 },
-	{ wxCMD_LINE_OPTION, "s",  "server",     "Publish this base of an application server: oes://server[:port]/<base>", wxCMD_LINE_VAL_STRING, 0 },
+	{ wxCMD_LINE_OPTION, "s",  "server",     "Publish this base of an application server: oes://server[:port]/<base>, oess:// over TLS", wxCMD_LINE_VAL_STRING, 0 },
+	{ wxCMD_LINE_OPTION, "t",  "trusted",    "--server=oess://: the authorities trusted, a PEM file (default: the system's store)", wxCMD_LINE_VAL_STRING, 0 },
 	{ wxCMD_LINE_OPTION, "n",  "name",       "The publication's name in the address (default: the base's folder, or its name on the server)", wxCMD_LINE_VAL_STRING, 0 },
 	{ wxCMD_LINE_OPTION, "lc", "locale",     "The platform's locale for the file base (default: as the base says)", wxCMD_LINE_VAL_STRING, 0 },
 	{ wxCMD_LINE_SWITCH, "g",  "debug",      "The engine's debug server for the file base, as enterprise's --debug", wxCMD_LINE_VAL_NONE, 0 },
@@ -90,10 +91,17 @@ bool ReadPublication(const wxCmdLineParser& parser, ibWebConfig& config)
 	else {
 		wxString host, base;
 		int port = ibProtocolConnectionServer::kDefaultPort;
+		bool secure = false;
 		publication.m_kind = wxT("server");
 		publication.m_address = server;
-		if (ibProtocolConnectionServer::ParseAddress(server, host, port, base))
+		if (ibProtocolConnectionServer::ParseAddress(server, host, port, base, secure))
 			publication.m_name = base;
+		wxString trusted;
+		if (parser.Found(wxT("trusted"), &trusted)) {
+			wxFileName file(trusted);
+			file.MakeAbsolute();
+			publication.m_trusted = file.GetFullPath();
+		}
 	}
 	parser.Found(wxT("name"), &publication.m_name);
 	config.m_publications.push_back(publication);

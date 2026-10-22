@@ -167,9 +167,14 @@ int ibAppServer::Run()
 	for (const auto& entry : m_clientHosts)
 		hosts[entry.first] = entry.second.get();
 
+	// Off this machine, TLS over the certificate backend.conf names (core/server/listener.h). A server the cluster
+	// started speaks in the clear, on loopback: TLS ends at the cluster's port.
 	const ibString host = worker ? ibString(wxT("127.0.0.1")) : m_config.ReadHost();
+	ibTlsFiles tls;
+	if (!worker && ibApplicationHost::Get() != nullptr)
+		tls = ibApplicationHost::Get()->GetTlsFiles();
 	wxString refusal;
-	if (!m_clientListener.Start(host, port, choose, std::move(hosts), refusal)) {
+	if (!m_clientListener.Start(host, port, choose, tls, std::move(hosts), refusal)) {
 		ibAppServerSay(ibJournalMark::Error, wxT("the clients' port did not open: %s - nothing is served"), refusal);
 		Stop();
 		return 1;
@@ -182,13 +187,13 @@ int ibAppServer::Run()
 		std::fflush(stdout);
 	}
 	else {
-		// EACH BASE'S ADDRESS, as a person gives it to a client — oes://<server>[:port]/<base>, which the client
-		// opens as the WebSocket /<base>/client on that port. Listening on every interface, the server is named by
-		// this machine's name.
+		// EACH BASE'S ADDRESS, as a person gives it to a client — oes://<server>[:port]/<base>, oess:// over TLS, which
+		// the client opens as the WebSocket /<base>/client on that port. Listening on every interface, the server is
+		// named by this machine's name.
 		const ibString server = host.IsEmpty() ? ibString(wxGetFullHostName()) : host;
 		for (const auto& entry : m_clientHosts)
-			ibAppServerSay(ibJournalMark::Info, wxT("base '%s' for clients: oes://%s:%u/%s"), entry.first, server,
-				static_cast<unsigned>(port), entry.first);
+			ibAppServerSay(ibJournalMark::Info, wxT("base '%s' for clients: %s://%s:%u/%s"), entry.first,
+				tls.IsNamed() ? wxT("oess") : wxT("oes"), server, static_cast<unsigned>(port), entry.first);
 	}
 
 	ibAppServerSay(ibJournalMark::Info, wxT("serving %u of %u base(s): %s - Ctrl+C to stop"),

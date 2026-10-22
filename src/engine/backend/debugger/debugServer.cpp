@@ -944,7 +944,7 @@ bool ibDebuggerServer::ibDebuggerServerConnection::StartServer()
 	ibHttpServerOptions options;
 	options.m_host = std::string(m_strHostName.utf8_str());
 	// The debuggee need not be on the designer's machine (debugger-architecture.md § 1), and the designer speaks
-	// ws:// only — the application server's exception, for the same reason.
+	// ws:// only to it — the one exception left (the option says so).
 	options.m_clearBeyondMachine = true;
 	// The threads only move bytes and hand them over: one of each is plenty for a designer at a time and the
 	// scanners knocking.

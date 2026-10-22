@@ -14,7 +14,7 @@
 // session's application data, else the base the thread is bound to).
 
 #include "backend/appData.h"
-#include "backend/server/listener.h"   // ibTlsFiles - the listeners' transport, said in backend.conf
+#include "core/server/listener.h"   // ibTlsFiles - the listeners' transport, said in backend.conf
 
 #include <atomic>
 #include <memory>
@@ -79,7 +79,7 @@ public:
 	static std::size_t ResumeSeconds(bool present, long configured);
 
 	// The certificate the listeners speak TLS over — backend.conf (Certificate, PrivateKey); nothing named, they
-	// listen plain on this machine's own addresses only (server/listener.h).
+	// listen plain on this machine's own addresses only (core/server/listener.h).
 	const ibTlsFiles& GetTlsFiles() const     { return m_configTls; }
 
 	ibHelpService*   GetHelpService() const   { return m_helpService.get(); }

@@ -4,7 +4,8 @@
 // THE WEB SERVER — the bases' transport for browsers: it serves a site's files, and carries the protocol of a base's
 // clients between a browser and the base. A PUBLICATION is a base under a name in the address — a file base, opened
 // here and held as a server holds its bases (protocol/connectionFile.h: one base, a connection per browser), or a
-// base of an application server, reached over its port (core/net/httpClient.h). Either way the browser sees the same
+// base of an application server, reached over its port (core/net/httpClient.h), over TLS when its address says oess://.
+// Either way the browser sees the same
 // door, the one an application server has — and the site's page beside it:
 //
 //   GET  /<publication>/          the page: the site's index.html, the same for every publication — the base is the
@@ -38,7 +39,8 @@
 //   Debug=false                     true — the engine's debug server comes up, as enterprise's --debug
 //   [remote]
 //   Kind=server                     server — a base of an application server, at its Address
-//   Address=oes://appserver:7373/trade
+//   Address=oes://appserver:7373/trade   oess:// — over TLS, the server's certificate checked against its name
+//   Trusted=                        oess://: the authorities trusted, a PEM file; empty — the system's store
 //
 // Every path is relative to the web folder.
 
@@ -71,7 +73,8 @@ struct ibWebPublication {
 	wxString m_directory;   // firebird: the base's folder
 	wxString m_locale;
 	bool     m_debug = false;
-	wxString m_address;     // server: oes://server[:port]/<base>
+	wxString m_address;     // server: oes://server[:port]/<base>, or oess://
+	wxString m_trusted;     // server, oess://: a PEM file of the authorities trusted; empty — the system's store
 };
 
 // WHAT IS SERVED — web.conf, with the command line over it.

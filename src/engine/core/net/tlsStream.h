@@ -4,8 +4,8 @@
 // TLS OVER A CONNECTION — Mbed TLS, the build's own (core/tls), driven without a socket of its own: what it
 // writes is collected and handed to the socket, what the socket reads is handed to it, so a connection waiting for
 // its peer holds no thread here either. TLS 1.2 and 1.3. The server's side — the web server reached by browsers, the
-// assistant's access — and the client's: a script's HTTPS (httpClient.h). The web server reaches its application
-// servers in the clear, on their own network, as a thin client does (protocol/connectionServer.h).
+// application server's clients, the assistant's access — and the client's (httpClient.h): a script's HTTPS, and an
+// application server's oess:// address, a thin client's and the web server's alike (protocol/connectionServer.h).
 
 #include <cstdint>
 #include <memory>

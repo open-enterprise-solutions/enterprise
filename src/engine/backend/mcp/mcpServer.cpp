@@ -24,7 +24,7 @@
 
 #include "backend/appData.h"                        // GetSettingsStorage — where a person's settings live
 #include "backend/appHost.h"                        // the process's backend.conf: the certificate the listener speaks TLS over
-#include "backend/server/listener.h"                // the listener: TLS when backend.conf names a certificate
+#include "core/server/listener.h"                   // the listener: TLS when backend.conf names a certificate
 #include "core/crypto/sessionToken.h"                // TextEqual - the token compared in constant time
 #include "backend/logger/logger.h"                  // …and ibLog — the registration journal
 #include "backend/backend_exception.h"              // an engine refusal arrives as an exception
@@ -138,14 +138,14 @@ public:
 	// Start(), not appear in a log a second later while the button says it worked.
 	bool Start(wxString& refusal)
 	{
-		// THE TRANSPORT IS THE PROCESS'S (server/listener.h): TLS when backend.conf names a certificate, plain
+		// THE TRANSPORT IS THE PROCESS'S (core/server/listener.h): TLS when backend.conf names a certificate, plain
 		// on this machine's own addresses only - an assistant edits a configuration, and a token sent in the
 		// clear across a network is a token given away.
 		ibHttpServerOptions options;
 		try {
 			options = ibListenerOptions(m_settings.m_address, m_settings.m_port, ibApplicationHost::Get()->GetTlsFiles());
 		}
-		catch (const ibBackendException& err) {
+		catch (const ibCoreException& err) {
 			refusal = wxString::Format(_("Assistant access did not start: %s"), err.GetErrorDescription());
 			// Said in the journal as well as to the caller: the designer shows it in its messages pane, the
 			// application server writes its own line - and the transport refusing is the one start-up fact
@@ -187,7 +187,8 @@ public:
 		if (!m_server.Start(options, error)) {
 			refusal = wxString::Format(
 				_("Assistant access did not start: %s.\n\n"
-				  "If another designer is open, it holds the port - only one can. "
+				  "If another designer is open, or an application server serves a base with assistant access on, "
+				  "it holds the port - only one can. "
 				  "Close it, or give this one a port of its own in Tools > Options > Assistant access."),
 				wxString::FromUTF8(error));
 			return false;

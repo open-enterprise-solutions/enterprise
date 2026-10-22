@@ -184,7 +184,7 @@ std::vector<ibConfiguredInstance> ibServerConfig::ReadInstances() const
 ibString ibServerConfig::ReadHost() const
 {
 	wxFileConfig conf(wxEmptyString, wxEmptyString, m_confPath, wxEmptyString, kConfStyle);
-	return conf.Read(wxT("/Host"));
+	return conf.Read(wxT("/Host"), wxT("127.0.0.1"));
 }
 
 bool ibServerConfig::ReadPort(unsigned short& port, ibString& error) const

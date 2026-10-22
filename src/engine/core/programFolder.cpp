@@ -42,6 +42,16 @@ wxString ibProgramFolder()
 	return ibProgramFolder(wxStandardPaths::Get().GetExecutablePath());
 }
 
+wxString ibBackendConfPath()
+{
+	const wxString working = wxGetCwd() + wxFILE_SEP_PATH + wxT("backend.conf");
+	if (wxFileName::FileExists(working))
+		return working;
+	// Inside a bundle the program folder is the one that contains the .app, which is where the file is shipped.
+	const wxString beside = ibProgramFolder() + wxFILE_SEP_PATH + wxT("backend.conf");
+	return wxFileName::FileExists(beside) ? beside : wxString();
+}
+
 wxString ibDiagnosticFolder()
 {
 #if defined(__WXOSX__)

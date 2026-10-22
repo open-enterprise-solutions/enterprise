@@ -31,6 +31,8 @@ long ibApplicationData::RunApplication(const wxString& strAppName, bool searchDe
 	// command line: a base the person picked (the folder dialog) is on none. Quoted, for the same reason the binary is.
 	if (!m_strAddress.IsEmpty()) {
 		executeCmd += wxString::Format(wxT(" --address=\"%s\""), m_strAddress);
+		if (!m_strTrusted.IsEmpty())
+			executeCmd += wxString::Format(wxT(" --trusted=\"%s\""), m_strTrusted);
 	}
 	else if (m_strFile.IsEmpty()) {
 		if (!m_strServer.IsEmpty())

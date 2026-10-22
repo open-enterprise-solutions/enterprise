@@ -899,9 +899,6 @@
     <ClInclude Include="temp\tempStorage.h">
       <Filter>temp</Filter>
     </ClInclude>
-    <ClInclude Include="server\listener.h">
-      <Filter>server</Filter>
-    </ClInclude>
     <ClInclude Include="sheetFormat\sheetFormat.h">
       <Filter>sheetFormat</Filter>
     </ClInclude>
@@ -2284,9 +2281,6 @@
     <ClCompile Include="temp\tempStorage.cpp">
       <Filter>temp</Filter>
     </ClCompile>
-    <ClCompile Include="server\listener.cpp">
-      <Filter>server</Filter>
-    </ClCompile>
     <ClCompile Include="sheetFormat\sheetFormat.cpp">
       <Filter>sheetFormat</Filter>
     </ClCompile>
@@ -2468,9 +2462,6 @@
     </Filter>
     <Filter Include="temp">
       <UniqueIdentifier>{6c2e9a41-7b3d-4f58-a1e6-0d9b4c7f2e35}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="server">
-      <UniqueIdentifier>{4d8a1f63-2c7e-4b95-8e30-7a5c9d1b6f42}</UniqueIdentifier>
     </Filter>
     <Filter Include="sheetFormat">
       <UniqueIdentifier>{8c1d4a92-6f30-4b7e-a58d-2e94c07b6a15}</UniqueIdentifier>

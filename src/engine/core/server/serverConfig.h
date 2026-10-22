@@ -14,8 +14,9 @@
 //                             infobase.conf and its journal (a PostgreSQL base: infobase.conf and journal)
 //
 //   ; server.conf
-//   Host=                     where the clients reach this server — the cluster, when it runs the bases: empty —
-//                             every interface
+//   Host=                     where the clients reach this server — the cluster, when it runs the bases: left out —
+//                             127.0.0.1, this machine alone; empty — every interface. Off this machine it speaks
+//                             TLS, over the certificate backend.conf names (core/server/listener.h): oess://
 //   Port=7373                 …and its port: chosen at the first start (the first free one from 7373 up)
 //                             and written here, so it stays the one clients are pointed at
 //   [trade]                   the group is the base's name in the journal
@@ -80,8 +81,9 @@ public:
 	// it, so renaming the group does not lose the folder — and every base learns its folder.
 	void AssignIds(std::vector<ibConfiguredInstance>& instances) const;
 
-	// WHERE THE CLIENTS REACH THIS SERVER — the keys above the first base's group (a group IS a base). The port
-	// is 0 when none is written yet; a port chosen at the first start is written back. False, with the reason,
+	// WHERE THE CLIENTS REACH THIS SERVER — the keys above the first base's group (a group IS a base). The host is
+	// this machine's own when none is written: a person has to mean it to widen that, and to name a certificate for it.
+	// The port is 0 when none is written yet; a port chosen at the first start is written back. False, with the reason,
 	// when what is written is not a port — a mistake is said, never chosen over.
 	ibString ReadHost() const;
 	bool     ReadPort(unsigned short& port, ibString& error) const;

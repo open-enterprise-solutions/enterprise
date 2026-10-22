@@ -2,13 +2,15 @@
 //	Description : the listener of a server of this platform - TLS when backend.conf names a certificate (listener.h)
 ////////////////////////////////////////////////////////////////////////////
 
-#include "backend/server/listener.h"
+#include "core/server/listener.h"
 
-#include "backend/backend_exception.h"   // a listener refused is an exception with the reason
+#include "core/exception.h"   // a listener refused is an exception with the reason
 
 #include <wx/confbase.h>
 #include <wx/ffile.h>
+#include <wx/fileconf.h>
 #include <wx/filename.h>
+#include <wx/intl.h>
 #include <wx/log.h>
 
 #include <cstddef>
@@ -33,7 +35,7 @@ wxString Resolved(const wxString& value, const wxString& folder)
 }
 
 // The file's bytes into `bytes`, or a refusal naming it. Read HERE, by the name in whatever script, and handed
-// to the server as text: the server is the core's and reads no file of backend.conf's.
+// to the server as text: the server reads no file of backend.conf's.
 void ReadWhole(const wxString& file, std::string& bytes)
 {
 	// wxFFile reports a file it cannot open through wxLog, which in the designer is a pane that pops up; the
@@ -42,12 +44,12 @@ void ReadWhole(const wxString& file, std::string& bytes)
 	wxFFile in(file, wxT("rb"));
 	const wxFileOffset length = in.IsOpened() ? in.Length() : wxInvalidOffset;
 	if (length < 0)
-		ibBackendCoreException::Error(_("The file %s named in backend.conf could not be read."), file);
+		ibCoreException::Error(_("The file %s named in backend.conf could not be read."), file);
 	if (static_cast<unsigned long long>(length) > kMostPemBytes)
-		ibBackendCoreException::Error(_("The file %s named in backend.conf is larger than a certificate or a key is."), file);
+		ibCoreException::Error(_("The file %s named in backend.conf is larger than a certificate or a key is."), file);
 	bytes.resize(static_cast<std::size_t>(length));
 	if (length > 0 && in.Read(&bytes[0], bytes.size()) != bytes.size())
-		ibBackendCoreException::Error(_("The file %s named in backend.conf could not be read."), file);
+		ibCoreException::Error(_("The file %s named in backend.conf could not be read."), file);
 }
 
 } // namespace
@@ -63,21 +65,30 @@ ibTlsFiles ibTlsFiles::FromConf(const wxConfigBase& conf, const wxString& folder
 	return files;
 }
 
+ibTlsFiles ibTlsFiles::FromConf(const wxString& path)
+{
+	if (path.IsEmpty() || !wxFileName::FileExists(path))
+		return ibTlsFiles();
+	// Read as the host reads it (ibApplicationHost::ReadBackendConf).
+	const wxFileConfig conf(wxT(""), wxT(""), path, wxT(""), wxCONFIG_USE_LOCAL_FILE | wxCONFIG_USE_NO_ESCAPE_CHARACTERS);
+	return FromConf(conf, wxFileName(path).GetPath());
+}
+
 ibHttpServerOptions ibListenerOptions(const wxString& address, std::uint16_t port, const ibTlsFiles& tls)
 {
 	ibHttpServerOptions options;
 	options.m_host = std::string(address.utf8_str());
 	if (!tls.IsNamed()) {
 		if (!ibIsLoopback(address))
-			ibBackendCoreException::Error(_("%s is not this machine's own address, and backend.conf names no certificate: the server would listen in the clear. Name Certificate and PrivateKey there, or keep the address at 127.0.0.1."), address);
+			ibCoreException::Error(_("%s is not this machine's own address, and backend.conf names no certificate: the server would listen in the clear. Name Certificate and PrivateKey there, or keep the address at 127.0.0.1."), address);
 		options.m_httpPort = port;
 		return options;
 	}
 	if (tls.m_certificate.IsEmpty() || tls.m_privateKey.IsEmpty())
-		ibBackendCoreException::Error(_("backend.conf names a Certificate without a PrivateKey, or the key without the certificate: the two go together."));
+		ibCoreException::Error(_("backend.conf names a Certificate without a PrivateKey, or the key without the certificate: the two go together."));
 	for (const wxString& file : { tls.m_certificate, tls.m_privateKey }) {
 		if (!wxFileName::FileExists(file))
-			ibBackendCoreException::Error(_("The file %s named in backend.conf is not there."), file);
+			ibCoreException::Error(_("The file %s named in backend.conf is not there."), file);
 	}
 	// Both read here, or the whole listener is refused.
 	ReadWhole(tls.m_certificate, options.m_certificate);

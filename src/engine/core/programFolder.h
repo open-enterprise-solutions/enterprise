@@ -30,4 +30,9 @@ CORE_API wxString ibProgramFolder(const wxString& executablePath);
 CORE_API wxString ibProgramFolder();
 CORE_API wxString ibDiagnosticFolder();
 
+// THE PROCESS'S backend.conf — the working directory's, when there is one there, else the one in the program folder;
+// empty when neither is. One rule for whoever reads it: the engine's host (the whole file) and the application
+// cluster and its tray (the certificate its port speaks TLS over, core/server/listener.h).
+CORE_API wxString ibBackendConfPath();
+
 #endif // __PROGRAM_FOLDER_H__

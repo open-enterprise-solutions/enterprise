@@ -15,12 +15,13 @@ is never renumbered.
 
 | Transport | Where | For |
 |---|---|---|
-| WebSocket `ws://host:port/<base>/client`, one JSON-RPC 2.0 message per call | an application server | thin clients, web servers |
+| WebSocket `ws://host:port/<base>/client` (`wss://` over TLS), one JSON-RPC 2.0 message per call | an application server | thin clients, web servers |
 | HTTP `POST /<base>/client`, one JSON-RPC request per call | an application server | whatever cannot hold a socket |
 | In process: `ibClientHost::Call(method, params, result, refusal, error)` | the client's own process | a file base; the assistant's MCP tool (`client_call`) |
 
-The address is `oes://server[:port]/<base>`; the port is 7373 unless the server's `server.conf` says otherwise. A
-file base needs no server: the client opens it itself and makes the same calls in process. A thin designer's
+The address is `oes://server[:port]/<base>`, or `oess://` when the server speaks TLS - its `backend.conf` names a
+certificate, which the client checks ([listeners.md](listeners.md)); the port is 7373 unless the server's
+`server.conf` says otherwise. A file base needs no server: the client opens it itself and makes the same calls in process. A thin designer's
 WebSocket, and a thin runtime's when `backend.conf` `Resume` is 0, ends its session when it closes. A thin runtime
 with the window on (left out, 120 seconds; 0 is off; never more than 30 minutes) keeps the session that long, and
 comes back with `login` `{Token}`.

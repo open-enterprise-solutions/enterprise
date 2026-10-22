@@ -315,18 +315,7 @@ std::size_t ibApplicationHost::ResumeSeconds(bool present, long configured)
 
 void ibApplicationHost::ReadBackendConf()
 {
-	const wxString& workingDir = wxGetCwd(); wxString strConfigFile;
-	if (wxFileName::FileExists(workingDir + wxFILE_SEP_PATH + BACKEND_CONF)) {
-		strConfigFile = workingDir +
-			wxFILE_SEP_PATH + BACKEND_CONF;
-	}
-	else {
-		// Beside the program. Inside a bundle that is the folder that contains the .app,
-		// which is where the file is shipped; the working directory above still wins.
-		const wxString beside = ibProgramFolder() + wxFILE_SEP_PATH + BACKEND_CONF;
-		if (wxFileName::FileExists(beside))
-			strConfigFile = beside;
-	}
+	const wxString strConfigFile = ibBackendConfPath();
 
 	// Read as written, as infobase.conf is: a Windows path keeps its backslashes (the \t of C:\tls\server.key is not a tab).
 	wxFileConfig fc(wxT(""), wxT(""), wxT(""), strConfigFile,
@@ -349,7 +338,7 @@ void ibApplicationHost::ReadBackendConf()
 	long resume = 0;
 	const bool resumePresent = fc.Read(wxT("Resume"), &resume);
 	m_configResume = ResumeSeconds(resumePresent, resume);
-	// The certificate the listeners speak TLS over, named relative to this file's folder (server/listener.h).
+	// The certificate the listeners speak TLS over, named relative to this file's folder (core/server/listener.h).
 	m_configTls = ibTlsFiles::FromConf(fc, wxFileName(strConfigFile).GetPath());
 
 	// (THE MCP SERVER'S SETTINGS ARE NOT HERE. They belong to a PERSON in a
