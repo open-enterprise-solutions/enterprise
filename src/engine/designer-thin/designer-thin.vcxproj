@@ -305,13 +305,15 @@
     <ClInclude Include="win\dlg\homePageEditor.h" />
     <ClInclude Include="win\dlg\predefinedEditor.h" />
     <ClInclude Include="win\dlg\textEditor.h" />
-    <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="designer.ico" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="designer-thin.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Manifest Include="..\core\program.manifest" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

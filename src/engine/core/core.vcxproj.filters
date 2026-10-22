@@ -46,6 +46,9 @@
     <Filter Include="serialize">
       <UniqueIdentifier>{8708f6ac-1c30-4368-8d4f-7555b0b5d7bf}</UniqueIdentifier>
     </Filter>
+    <Filter Include="server">
+      <UniqueIdentifier>{c2f8a4d1-6b3e-4f97-8d05-1e9a7b3c5f62}</UniqueIdentifier>
+    </Filter>
     <Filter Include="settings">
       <UniqueIdentifier>{10784ba1-c126-4a67-b3e5-95e44376c8a6}</UniqueIdentifier>
     </Filter>
@@ -228,6 +231,9 @@
     <ClCompile Include="serialize\jsonText.cpp">
       <Filter>serialize</Filter>
     </ClCompile>
+    <ClCompile Include="server\serverConfig.cpp">
+      <Filter>server</Filter>
+    </ClCompile>
     <ClCompile Include="spreadsheet\sheetFormat.cpp">
       <Filter>spreadsheet</Filter>
     </ClCompile>
@@ -399,6 +405,9 @@
     <ClInclude Include="net\webSocketFrame.h">
       <Filter>net</Filter>
     </ClInclude>
+    <ClInclude Include="net\webSocketRelay.h">
+      <Filter>net</Filter>
+    </ClInclude>
     <ClInclude Include="picturePredefined.h" />
     <ClInclude Include="pictureRegistry.h" />
     <ClInclude Include="launchTicket.h" />
@@ -453,7 +462,6 @@
     <ClInclude Include="query\queryUnfold.h">
       <Filter>query</Filter>
     </ClInclude>
-    <ClInclude Include="resource.h" />
     <ClInclude Include="serialize\dataBuilder.h">
       <Filter>serialize</Filter>
     </ClInclude>
@@ -462,6 +470,12 @@
     </ClInclude>
     <ClInclude Include="serialize\jsonText.h">
       <Filter>serialize</Filter>
+    </ClInclude>
+    <ClInclude Include="server\clusterControl.h">
+      <Filter>server</Filter>
+    </ClInclude>
+    <ClInclude Include="server\serverConfig.h">
+      <Filter>server</Filter>
     </ClInclude>
     <ClInclude Include="settings\settingsShelf.h">
       <Filter>settings</Filter>
@@ -506,5 +520,9 @@
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="core.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="program.manifest" />
+    <None Include="version.rc2" />
   </ItemGroup>
 </Project>

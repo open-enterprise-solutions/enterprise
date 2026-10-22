@@ -1,0 +1,171 @@
+#ifndef __CORE_SERVER_CLUSTER_CONTROL_H__
+#define __CORE_SERVER_CLUSTER_CONTROL_H__
+
+// THE CLUSTER'S CONTROL — what the application cluster (appcluster) and its tray (appcluster-tray) say to each other:
+// one WebSocket at /cluster on the cluster's port, from this machine alone (ibIsLoopback), opened with the token the
+// cluster writes into the server folder at every start (cluster.token — whoever may read the folder may steer its
+// servers). The cluster sends the list of its servers as the socket opens and again whenever one of them changes; the
+// tray sends a verb, for one base or for the whole cluster. Both are JSON (ibJsonProvider), written and read here alone:
+//
+//   cluster → tray   { "Port": 7373, "Servers": [ { "Base": "trade", "State": "serving", "Pid": 4120, "Falls": 0,
+//                      "Cause": "…" }, … ] }
+//   tray → cluster   { "Verb": "restart", "Base": "trade" }      { "Verb": "stop-cluster" }
+//
+// The tray starts the cluster too, when the socket finds none: the service of that name, if one is installed — the
+// program beside it otherwise. Stopped, it is the same either way: the verb.
+
+#include <cstdint>
+#include <memory>
+#include <utility>
+#include <vector>
+
+#include "core/fstring.h"
+#include "core/serialize/jsonProvider.h"
+
+// ONE SERVER'S STATE — as the cluster holds it (ibClusterWorker) and the tray shows it.
+enum class ibClusterState {
+	Starting,     // started, its port not said yet
+	Serving,      // its port said: the clients of its base are carried to it
+	Stopping,     // told to stop
+	Restarting,   // told to stop, to be started again once it has gone
+	Fallen,       // gone untold — to be started again
+	Stopped
+};
+
+// ONE SERVER, as the list says it.
+struct ibClusterServer {
+	ibString       m_base;
+	ibClusterState m_state = ibClusterState::Stopped;
+	long           m_pid = 0;
+	unsigned       m_falls = 0;
+	ibString       m_cause;   // why it fell: the last error it said before it did — empty again once it is started
+};
+
+namespace ibClusterControl {
+
+	inline constexpr const char* Path      = "/cluster";
+	inline constexpr const char* TokenFile = "cluster.token";
+	inline constexpr const char* Token     = "token";   // the parameter of the path's query
+
+	// The cluster as a service of the system (Windows' service manager): its name, and what the list of services shows.
+	inline constexpr const wchar_t* ServiceName  = L"appcluster";
+	inline constexpr const wchar_t* ServiceTitle = L"OES Application Cluster";
+
+	// The list of servers.
+	inline constexpr const char* Port      = "Port";
+	inline constexpr const char* Servers   = "Servers";
+	inline constexpr const char* Base      = "Base";
+	inline constexpr const char* State     = "State";
+	inline constexpr const char* Pid       = "Pid";
+	inline constexpr const char* Falls     = "Falls";
+	inline constexpr const char* Cause     = "Cause";
+
+	// A verb: for the server of the Base named, or for the cluster.
+	inline constexpr const char* Verb        = "Verb";
+	inline constexpr const char* Start       = "start";
+	inline constexpr const char* Stop        = "stop";
+	inline constexpr const char* Restart     = "restart";
+	inline constexpr const char* StopCluster = "stop-cluster";
+
+	// A state as its word — and back: a word not one of them is Stopped.
+	inline const char* Word(ibClusterState state)
+	{
+		switch (state) {
+		case ibClusterState::Starting:   return "starting";
+		case ibClusterState::Serving:    return "serving";
+		case ibClusterState::Stopping:   return "stopping";
+		case ibClusterState::Restarting: return "restarting";
+		case ibClusterState::Fallen:     return "fallen";
+		case ibClusterState::Stopped:    return "stopped";
+		}
+		return "stopped";
+	}
+
+	inline ibClusterState StateOf(const ibString& word)
+	{
+		for (const ibClusterState state : { ibClusterState::Starting, ibClusterState::Serving, ibClusterState::Stopping,
+				ibClusterState::Restarting, ibClusterState::Fallen }) {
+			if (word == Word(state))
+				return state;
+		}
+		return ibClusterState::Stopped;
+	}
+
+	// A message as it goes: one line.
+	inline ibString Text(const ibDataNode& message)
+	{
+		ibJsonProvider json;
+		json.SetCompact(true);
+		ibString text;
+		json.Write(message, text);
+		return text;
+	}
+
+	// THE LIST — written by the cluster, read by its tray. False: not the list.
+	inline ibString WriteServers(std::uint16_t port, const std::vector<ibClusterServer>& servers)
+	{
+		std::vector<ibDataValue> items;
+		items.reserve(servers.size());
+		for (const ibClusterServer& server : servers) {
+			const std::shared_ptr<ibDataNode> item = std::make_shared<ibDataNode>();
+			item->SetValue(Base, server.m_base);
+			item->SetValue(State, ibString(Word(server.m_state)));
+			item->SetValue(Pid, static_cast<s32>(server.m_pid));
+			item->SetValue(Falls, static_cast<s32>(server.m_falls));
+			item->SetValue(Cause, server.m_cause);
+			items.push_back(ibDataValue::Child(item));
+		}
+		ibDataNode list;
+		list.SetValue(Port, static_cast<s32>(port));
+		list.SetField(Servers, ibDataValue::Array(std::move(items)));
+		return Text(list);
+	}
+
+	inline bool ReadServers(const ibString& text, std::uint16_t& port, std::vector<ibClusterServer>& servers)
+	{
+		ibDataNode list;
+		if (!ibJsonProvider().Read(text, list))
+			return false;
+		const ibDataValue* const items = list.FindField(Servers);
+		if (items == nullptr || items->Kind() != ibDataKind::Array)
+			return false;
+		port = static_cast<std::uint16_t>(list.GetValue<s32>(Port));
+		servers.clear();
+		for (const ibDataValue& item : items->AsArray()) {
+			if (item.Kind() != ibDataKind::Child || item.AsChild() == nullptr)
+				return false;
+			const ibDataNode& read = *item.AsChild();
+			ibClusterServer server;
+			server.m_base      = read.GetValue<ibString>(Base);
+			server.m_state     = StateOf(read.GetValue<ibString>(State));
+			server.m_pid       = read.GetValue<s32>(Pid);
+			server.m_falls     = static_cast<unsigned>(read.GetValue<s32>(Falls));
+			server.m_cause     = read.GetValue<ibString>(Cause);
+			servers.push_back(std::move(server));
+		}
+		return true;
+	}
+
+	// A VERB — written by the tray, read by the cluster: for the server of `base`, or, `base` empty, for the cluster.
+	// False: not a verb.
+	inline ibString WriteVerb(const char* verb, const ibString& base)
+	{
+		ibDataNode message;
+		message.SetValue(Verb, ibString(verb));
+		if (!base.IsEmpty())
+			message.SetValue(Base, base);
+		return Text(message);
+	}
+
+	inline bool ReadVerb(const ibString& text, ibString& verb, ibString& base)
+	{
+		ibDataNode message;
+		if (!ibJsonProvider().Read(text, message))
+			return false;
+		verb = message.GetValue<ibString>(Verb);
+		base = message.GetValue<ibString>(Base);
+		return !verb.IsEmpty();
+	}
+}
+
+#endif

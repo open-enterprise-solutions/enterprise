@@ -15,7 +15,6 @@
     <ClInclude Include="launcher.h">
       <Filter>windows</Filter>
     </ClInclude>
-    <ClInclude Include="resource.h" />
     <ClInclude Include="connectionDB.h">
       <Filter>windows</Filter>
     </ClInclude>
@@ -27,6 +26,9 @@
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="launcher.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Manifest Include="..\core\program.manifest" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="launcher.ico" />

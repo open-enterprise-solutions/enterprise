@@ -37,7 +37,7 @@ The runtime executes compiled bytecode, renders forms through wxWidgets, and sto
 |---|---|
 | Language | C++17 |
 | GUI | wxWidgets 3.3.2 (git submodule at `src/3rdparty/wxWidgets`) |
-| Build (Windows) | MSBuild — `enterprise.sln` (Visual Studio 2019/2022) |
+| Build (Windows) | MSBuild — `enterprise.sln` (Visual Studio 2022, toolset v143) |
 | Build (cross-platform) | CMake — `CMakeLists.txt` at repo root; macOS / Linux build supported, Windows uses MSBuild |
 | Primary database | Firebird (embedded) |
 | Other databases | PostgreSQL (production), ODBC (CMake `OES_USE_*` opt-in, and the base an MSSQL layer derives from); SQLite is always embedded but is for **tests and logging only, never production** |
@@ -140,6 +140,8 @@ enterprise/
         ├── designer/        # designer.exe  (IDE)
         ├── launcher/        # launcher.exe  (connection chooser)
         ├── appserver/       # appserver.exe (the application server)
+        ├── appcluster/      # appcluster.exe (a server per base, the port, restarts; console or a service)
+        ├── appcluster-tray/ # appcluster-tray.exe (the cluster's tray: its servers, its verbs, starting it)
         ├── codeRunner/      # codeRunner.exe
         └── simplePlugin/    # simplePlugin.dll (example)
 ```

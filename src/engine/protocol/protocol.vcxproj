@@ -19,9 +19,6 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="resource.h" />
-  </ItemGroup>
-  <ItemGroup>
     <ResourceCompile Include="protocol.rc" />
   </ItemGroup>
   <!-- THE PROTOCOL — its contract (protocol.h: the names and numbers, depending on nothing), which the server's forms

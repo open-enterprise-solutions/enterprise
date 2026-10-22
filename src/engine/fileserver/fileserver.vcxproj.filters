@@ -9,9 +9,6 @@
     <ClInclude Include="fileBase.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="resource.h" />
-  </ItemGroup>
-  <ItemGroup>
     <ResourceCompile Include="fileserver.rc" />
   </ItemGroup>
 </Project>

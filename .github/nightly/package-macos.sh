@@ -87,6 +87,7 @@ for app in "$stage"/*.app; do
 done
 
 required=(enterprise.app enterprise-thin.app designer.app designer-thin.app launcher.app codeRunner appserver
+          appcluster appcluster-tray webserver web/www.wpk
           libcore.dylib libbackend.dylib libfrontend.dylib libprotocol.dylib libfrmclient.dylib libfrmserver.dylib libfileserver.dylib
           backend.conf help/en.hlk lang/ru/open_es.mo
           _fb/lib/libfbclient.dylib _fb/lib/libtommath.dylib _fb/plugins/libEngine13.dylib _fb/intl/libfbintl.dylib _fb/firebird.msg _fb/firebird.conf)

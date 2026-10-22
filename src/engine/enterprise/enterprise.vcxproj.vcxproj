@@ -208,7 +208,6 @@
     <ClInclude Include="mainApp.h" />
     <ClInclude Include="mainFrame\mainFrameEnterprise.h" />
     <ClInclude Include="mainFrame\output\outputWindow.h" />
-    <ClInclude Include="resource.h" />
     <ClInclude Include="win\dlg\enterpriseOption.h" />
     <ClInclude Include="win\dlg\functionAll.h" />
   </ItemGroup>
@@ -217,6 +216,9 @@
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="enterprise.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Manifest Include="..\core\program.manifest" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

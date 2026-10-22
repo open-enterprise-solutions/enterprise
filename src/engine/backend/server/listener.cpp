@@ -50,33 +50,7 @@ void ReadWhole(const wxString& file, std::string& bytes)
 		ibBackendCoreException::Error(_("The file %s named in backend.conf could not be read."), file);
 }
 
-// An IPv4 address of 127.0.0.0/8, by number: four decimal parts, the first 127 - not a name that begins
-// with "127." (127.example.com resolves wherever its owner says).
-bool IsLoopbackIPv4(const wxString& address)
-{
-	unsigned long parts[4];
-	std::size_t count = 0, at = 0;
-	for (;;) {
-		const std::size_t dot = address.find(wxT('.'), at);
-		const wxString part = address.Mid(at, dot == wxString::npos ? wxString::npos : dot - at);
-		if (count == 4 || part.IsEmpty() || part.length() > 3 || part.find_first_not_of(wxT("0123456789")) != wxString::npos
-			|| !part.ToCULong(&parts[count]) || parts[count] > 255)
-			return false;   // a fifth part, or one that is not a number of a byte
-		++count;
-		if (dot == wxString::npos)
-			break;
-		at = dot + 1;
-	}
-	return count == 4 && parts[0] == 127;
-}
-
 } // namespace
-
-bool ibIsLoopback(const wxString& address)
-{
-	const wxString own = wxString(address).Trim(true).Trim(false).Lower();
-	return own == wxT("localhost") || own == wxT("::1") || IsLoopbackIPv4(own);
-}
 
 ibTlsFiles ibTlsFiles::FromConf(const wxConfigBase& conf, const wxString& folder)
 {

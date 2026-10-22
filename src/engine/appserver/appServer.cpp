@@ -1,8 +1,12 @@
 #include "appServer.h"
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <csignal>
+#include <cstdio>
+#include <iostream>
+#include <string>
 #include <thread>
 
 #include <wx/utils.h>   // wxGetFullHostName — the server named in a base's address
@@ -49,10 +53,26 @@ BOOL WINAPI OnConsoleClose(DWORD type)
 }
 #endif
 
+// THE CLUSTER'S WORD — a server the cluster started (--worker) is told to stop on its stdin, and stops when its stdin
+// closes too: the cluster gone, nobody would ever stop it. The thread is left to the process: it waits in a read.
+void ListenToCluster()
+{
+	std::thread([] {
+		std::string line;
+		while (std::getline(std::cin, line)) {
+			if (!line.empty() && line.back() == '\r')
+				line.pop_back();
+			if (line == ibWorkerPipe::Stop)
+				break;
+		}
+		OnStopSignal(0);
+	}).detach();
+}
+
 } // namespace
 
-ibAppServer::ibAppServer(ibServerConfig& config, const wxString& locale) :
-	m_config(config), m_locale(locale)
+ibAppServer::ibAppServer(ibServerConfig& config, const wxString& locale, const ibString& workerBase) :
+	m_config(config), m_locale(locale), m_workerBase(workerBase)
 {
 }
 
@@ -66,7 +86,7 @@ int ibAppServer::Run()
 		return 1;
 	}
 
-	wxString keyError;
+	ibString keyError;
 	if (!m_config.LoadKey(keyError)) {
 		ibAppServerSay(ibJournalMark::Error, wxT("%s - nothing is served"), keyError);
 		return 1;
@@ -76,6 +96,18 @@ int ibAppServer::Run()
 	m_config.AssignIds(instances);
 	ibAppServerSay(ibJournalMark::Info, wxT("config %s: %u base(s)"),
 		m_config.GetConfPath(), static_cast<unsigned>(instances.size()));
+
+	// A SERVER THE CLUSTER STARTED serves its one base, and nothing else of the folder.
+	if (!m_workerBase.IsEmpty()) {
+		const auto base = std::find_if(instances.begin(), instances.end(),
+			[this](const ibConfiguredInstance& instance) { return instance.m_name == m_workerBase; });
+		if (base == instances.end()) {
+			ibAppServerSay(ibJournalMark::Error, wxT("the config %s has no base '%s' - nothing to serve"),
+				m_config.GetConfPath(), m_workerBase);
+			return 1;
+		}
+		instances = { *base };
+	}
 
 	// Told to stop from here on — while the bases are still being opened too: what is open is then closed in
 	// order instead of the process being cut off with its bases in hand.
@@ -87,6 +119,8 @@ int ibAppServer::Run()
 #ifdef __WXMSW__
 	::SetConsoleCtrlHandler(OnConsoleClose, TRUE);   // after the signals: asked first, it passes on what is theirs
 #endif
+	if (!m_workerBase.IsEmpty())
+		ListenToCluster();
 
 	// However Run ends — served and stopped, or refused at any step — a console closing waits no longer.
 	struct ibStoppedMark { ~ibStoppedMark() { s_state.store(ibServeState::Stopped); } } stoppedMark;
@@ -98,7 +132,9 @@ int ibAppServer::Run()
 	}
 
 	if (m_sessions.empty()) {
-		ibAppServerSay(ibJournalMark::Error, wxT("no base could be served - stopping"));
+		// A server of one base (the cluster's) has said why already: its base's own line is the cause the cluster shows.
+		if (m_workerBase.IsEmpty())
+			ibAppServerSay(ibJournalMark::Error, wxT("no base could be served - stopping"));
 		ibApplicationInstance::DestroyAppDataEnv();
 		return 1;
 	}
@@ -113,14 +149,17 @@ int ibAppServer::Run()
 	// THE PORT THE CLIENTS COME IN BY — the one written in the config, or, at the first start, the first free
 	// one from the server's own, written back so that it stays the one clients are pointed at. A written port
 	// that is taken is refused, never moved off: the clients look for this server there.
-	wxString portError;
+	// A server the cluster started is reached through the cluster alone: on this machine, on a port of the system's
+	// choosing (0), said to the cluster once it serves — the config's port is the cluster's.
+	const bool worker = !m_workerBase.IsEmpty();
+	ibString portError;
 	unsigned short port = 0;
-	if (!m_config.ReadPort(port, portError)) {
+	if (!worker && !m_config.ReadPort(port, portError)) {
 		ibAppServerSay(ibJournalMark::Error, wxT("%s - nothing is served"), portError);
 		Stop();
 		return 1;
 	}
-	const bool choose = port == 0;
+	const bool choose = !worker && port == 0;
 	if (choose)
 		port = ibServerConfig::s_defaultPort;
 
@@ -128,7 +167,7 @@ int ibAppServer::Run()
 	for (const auto& entry : m_clientHosts)
 		hosts[entry.first] = entry.second.get();
 
-	const wxString host = m_config.ReadHost();
+	const ibString host = worker ? ibString(wxT("127.0.0.1")) : m_config.ReadHost();
 	wxString refusal;
 	if (!m_clientListener.Start(host, port, choose, std::move(hosts), refusal)) {
 		ibAppServerSay(ibJournalMark::Error, wxT("the clients' port did not open: %s - nothing is served"), refusal);
@@ -138,13 +177,19 @@ int ibAppServer::Run()
 	if (choose)
 		m_config.WritePort(port);
 
-	// EACH BASE'S ADDRESS, as a person gives it to a client — oes://<server>[:port]/<base>, which the client
-	// opens as the WebSocket /<base>/client on that port. Listening on every interface, the server is named by
-	// this machine's name.
-	const wxString server = host.IsEmpty() ? wxGetFullHostName() : host;
-	for (const auto& entry : m_clientHosts)
-		ibAppServerSay(ibJournalMark::Info, wxT("base '%s' for clients: oes://%s:%u/%s"), entry.first, server,
-			static_cast<unsigned>(port), entry.first);
+	if (worker) {
+		std::printf("%s %u\n", ibWorkerPipe::Serving, static_cast<unsigned>(port));
+		std::fflush(stdout);
+	}
+	else {
+		// EACH BASE'S ADDRESS, as a person gives it to a client — oes://<server>[:port]/<base>, which the client
+		// opens as the WebSocket /<base>/client on that port. Listening on every interface, the server is named by
+		// this machine's name.
+		const ibString server = host.IsEmpty() ? ibString(wxGetFullHostName()) : host;
+		for (const auto& entry : m_clientHosts)
+			ibAppServerSay(ibJournalMark::Info, wxT("base '%s' for clients: oes://%s:%u/%s"), entry.first, server,
+				static_cast<unsigned>(port), entry.first);
+	}
 
 	ibAppServerSay(ibJournalMark::Info, wxT("serving %u of %u base(s): %s - Ctrl+C to stop"),
 		static_cast<unsigned>(m_sessions.size()), static_cast<unsigned>(instances.size()), names);
@@ -160,7 +205,7 @@ int ibAppServer::Run()
 
 bool ibAppServer::Open(const ibConfiguredInstance& instance)
 {
-	wxString ibPassword, error;
+	ibString ibPassword, error;
 	if (!m_config.OpenSecret(instance.m_name, wxT("IbPassword"), instance.m_ibPassword, ibPassword, error)) {
 		ibAppServerSay(ibJournalMark::Error, wxT("base '%s' is not opened: %s"), instance.m_name, error);
 		return false;
@@ -185,7 +230,7 @@ bool ibAppServer::Open(const ibConfiguredInstance& instance)
 	}
 	if (applicationInstance == nullptr) {
 		ibAppServerSay(ibJournalMark::Error, wxT("base '%s' did not open: %s"), instance.m_name,
-			error.IsEmpty() ? wxString(wxT("no reason given")) : error);
+			error.IsEmpty() ? ibString(wxT("no reason given")) : error);
 		return false;
 	}
 

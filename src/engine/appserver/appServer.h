@@ -11,14 +11,17 @@
 #include <vector>
 
 #include "clientListener.h"
-#include "backend/server/serverConfig.h"
+#include "core/server/serverConfig.h"
 #include "backend/session/sessionHolder.h"
 
 class ibClientHost;
 
 class ibAppServer {
 public:
-	ibAppServer(ibServerConfig& config, const wxString& locale);
+	// `workerBase` — the one base the cluster started this server for (appserver --worker=<base>, appcluster): served on
+	// this machine alone, on a port of the system's choosing, said on stdout (ibWorkerPipe); empty — every base of the
+	// folder, on the config's port.
+	ibAppServer(ibServerConfig& config, const wxString& locale, const ibString& workerBase);
 	~ibAppServer();
 
 	// The whole life: open, serve until Ctrl+C / SIGTERM / the console closing, stop. The process's exit code.
@@ -34,6 +37,7 @@ private:
 
 	ibServerConfig&              m_config;
 	wxString                     m_locale;
+	ibString                     m_workerBase;
 	std::vector<ibSessionHolder> m_sessions;   // one per base served — the base is reached through its session
 
 	// The clients of each base, working through the protocol (frmserver) — one host per base served, by the

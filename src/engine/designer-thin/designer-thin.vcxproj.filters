@@ -425,12 +425,14 @@
     <ClInclude Include="win\dlg\textEditor.h">
       <Filter>win\dlg</Filter>
     </ClInclude>
-    <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="designer.ico" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="designer-thin.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Manifest Include="..\core\program.manifest" />
   </ItemGroup>
 </Project>

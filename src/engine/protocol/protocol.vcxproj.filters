@@ -17,7 +17,6 @@
     <ClInclude Include="protocolApi.h" />
     <ClInclude Include="protocolNode.h" />
     <ClInclude Include="protocolValue.h" />
-    <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="protocol.rc" />

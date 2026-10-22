@@ -118,6 +118,14 @@ public:
 	// line. Timestamped, thread-stamped and flushed here; echoed to the debugger by the same call.
 	static void Write(ibJournalMark mark, const wxString& source, const wxString& message);
 
+	// …AND A LINE READ BACK: the mark, the source and the message of a line Write made — another process's, taken off
+	// its console (the cluster reads its servers'). False for a line that is not one: a message's own second line.
+	static bool Read(const wxString& line, ibJournalMark& mark, wxString& source, wxString& message);
+
+	// THE FIRST ERROR'S DUMP IS NOT THIS RUN'S TO TAKE — a process started again after it fell (appserver --again, by
+	// the cluster): the run before it took one, and a dump at every start fills the disk while the fault stays.
+	static void SkipErrorDump();
+
 	// ⭐ A FAILURE THE OPERATING SYSTEM EXPLAINS. A COM HRESULT or a Win32 error code is a number
 	// nobody can read; the platform holds the sentence that goes with it, and this is the one verb
 	// that asks for it. Everything else is an ordinary error: the line is journalled, the dump is

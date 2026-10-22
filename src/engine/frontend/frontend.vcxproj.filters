@@ -1761,7 +1761,6 @@
     <ClInclude Include="artProvider\splash\splashLogo.h">
       <Filter>artProvider\splash</Filter>
     </ClInclude>
-    <ClInclude Include="resource.h" />
     <ClInclude Include="win\ctrls\grid\gridext.h">
       <Filter>win\ctrls\grid</Filter>
     </ClInclude>

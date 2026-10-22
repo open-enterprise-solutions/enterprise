@@ -43,6 +43,7 @@ while IFS= read -r -d '' f; do
 done < <(find "$stage" -type f -print0)
 
 required=(enterprise enterprise-thin designer designer-thin launcher codeRunner appserver
+          appcluster appcluster-tray webserver web/www.wpk
           libcore.so libbackend.so libfrontend.so libprotocol.so libfrmclient.so libfrmserver.so libfileserver.so
           backend.conf help/en.hlk lang/ru/open_es.mo
           _fb/lib/libfbclient.so.2 _fb/lib/libtommath.so.1 _fb/plugins/libEngine13.so _fb/intl/fbintl _fb/firebird.msg _fb/firebird.conf)
@@ -53,6 +54,7 @@ done
 # Resolve, from a clean environment, what our own files need.
 unresolved=0
 for f in "$stage"/enterprise "$stage"/enterprise-thin "$stage"/designer "$stage"/designer-thin "$stage"/launcher "$stage"/codeRunner "$stage"/appserver \
+         "$stage"/appcluster "$stage"/appcluster-tray "$stage"/webserver \
          "$stage"/libcore.so "$stage"/libbackend.so "$stage"/libfrontend.so "$stage"/libprotocol.so "$stage"/libfrmclient.so \
          "$stage"/libfrmserver.so "$stage"/libfileserver.so "$stage"/_fb/lib/libfbclient.so.2 "$stage"/_fb/plugins/libEngine13.so "$stage"/_fb/intl/fbintl; do
   if env -u LD_LIBRARY_PATH ldd "$f" | grep -q 'not found'; then

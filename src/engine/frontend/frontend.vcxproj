@@ -560,7 +560,6 @@
     <ClInclude Include="propertyManager\property\advprop\advpropValuePicture.h" />
     <ClInclude Include="propertyManager\property\private\prop.h" />
     <ClInclude Include="propertyManager\property\private\propertyRegistry.h" />
-    <ClInclude Include="resource.h" />
     <ClInclude Include="visualView\controlCtor.h" />
     <ClInclude Include="visualView\controlEnum.h" />
     <ClInclude Include="visualView\ctrl\chartBox.h" />

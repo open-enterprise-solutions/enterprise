@@ -21,6 +21,7 @@
 #include "backend/system/systemManager.h"   // ibValueSystemFunction — IsNull / ValueIsFilled impls
 #include "backend/compiler/procUnitState.h"   // m_errorPlace — which opcode raised
 #include "backend/session/session.h"
+#include "backend/session/sessionRegistry.h" // MintUnlisted — a harness's session
 #include "backend/appData.h"                // the built-in dispatcher reads appData on entry
 #include "backend/system/value/valueMap.h"  // ibValueStructure, g_valueStructureCLSID
 #include "frmserver/visualView/ctrl/form.h"          // a real form, DataSource bound on it
@@ -3434,8 +3435,11 @@ struct ReadableForm : ibValueForm {
 };
 
 TEST_F(BuiltInRuntime, AFormScriptWritesThroughDataSource) {
+	// UNLISTED, as a harness's session is (frontendFormFix.h): a listed one gives itself back to its base's registry as
+	// it goes, and this base's registry was never started — the request kept the session alive into the static
+	// teardown, past the map of current sessions (ASan: heap-use-after-free; macOS: mutex lock failed).
 	auto session = std::make_shared<FramedSession>(wxT("form-write"), ibSessionKind::Enterprise);
-	ibSessionHolder holder(session);
+	ibSessionHolder holder = ibSessionRegistry::MintUnlisted(session);
 	KeyFrame frame(std::move(holder));
 	session->Attach(&frame);
 	ibSessionScope scope(session.get());

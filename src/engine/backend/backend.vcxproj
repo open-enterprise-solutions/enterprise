@@ -63,7 +63,6 @@
     <ClInclude Include="settings\settingsComposer.h" />
     <ClInclude Include="temp\tempStorage.h" />
     <ClInclude Include="server\listener.h" />
-    <ClInclude Include="server\serverConfig.h" />
     <ClInclude Include="sheetFormat\sheetFormat.h" />
     <ClInclude Include="sheetFormat\sheetFormatXlsx.h" />
     <ClInclude Include="sheetFormat\sheetFormatNative.h" />
@@ -358,7 +357,6 @@
     <ClInclude Include="propertyManager\property\variant\variantSpreadsheet.h" />
     <ClInclude Include="propertyManager\property\variant\variantTranslate.h" />
     <ClInclude Include="propertyManager\property\variant\variantType.h" />
-    <ClInclude Include="resource.h" />
     <ClInclude Include="roleHelper.h" />
     <ClInclude Include="srcObject.h" />
     <ClInclude Include="srcDataObject.h" />
@@ -484,7 +482,6 @@
     <ClCompile Include="settings\settingsComposer.cpp" />
     <ClCompile Include="temp\tempStorage.cpp" />
     <ClCompile Include="server\listener.cpp" />
-    <ClCompile Include="server\serverConfig.cpp" />
     <ClCompile Include="sheetFormat\sheetFormat.cpp" />
     <ClCompile Include="sheetFormat\sheetFormatNative.cpp" />
     <ClCompile Include="sheetFormat\sheetFormatDocx.cpp" />

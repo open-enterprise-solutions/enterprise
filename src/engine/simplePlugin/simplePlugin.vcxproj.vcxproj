@@ -78,7 +78,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LinkIncremental>true</LinkIncremental>
     <ExecutablePath>$(VC_ExecutablePath_x64_x86);$(CommonExecutablePath);$(ExecutablePath)</ExecutablePath>
-    <OutDir>$(oesBinDir)plugins</OutDir>
+    <OutDir>$(oesBinDir)plugins\</OutDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
@@ -87,7 +87,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
     <ExecutablePath>$(VC_ExecutablePath_x64_x86);$(CommonExecutablePath);$(ExecutablePath)</ExecutablePath>
-    <OutDir>$(oesBinDir)plugins</OutDir>
+    <OutDir>$(oesBinDir)plugins\</OutDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
@@ -195,6 +195,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="simplePluginDLL.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="simplePlugin.rc" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

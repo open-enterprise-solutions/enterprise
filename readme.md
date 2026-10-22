@@ -8,8 +8,8 @@ composer**. The platform turns the description into database tables, forms and r
 the database in step with the description as it changes.
 
 It ships with everything that loop needs: a designer, a compiler and bytecode interpreter, a remote
-debugger, a multi-database layer, a job manager, an application server that serves several bases from
-one process, a thin client and a web server — and a built-in **MCP server**, so an
+debugger, a multi-database layer, a job manager, an application server, a cluster that gives each base
+a server process of its own, a thin client and a web server — and a built-in **MCP server**, so an
 AI assistant can read, build and check a configuration alongside the developer, through the same
 doors the developer uses.
 
@@ -54,8 +54,8 @@ tree, forms, the language, queries and reports, and the pitfalls.
   literal the caret is in, a spreadsheet template editor, configuration compare, and a git panel.
   Every property carries its own help text.
 - **Debugger** — remote, over TCP (port 1650): breakpoints with conditions, stepping, watches,
-  evaluation in the stopped frame; the designer attaches to a desktop application or to the web
-  server.
+  evaluation in the stopped frame; the designer attaches to a desktop application, to a thin
+  client's session on its server, or to the web runtime.
 - **Access control** — rights per object and operation, folded across a user's roles. A role either
   *permits* (adds rights) or *restricts* (subtracts them, whatever the others grant), so a data
   separator is declared once instead of copied into every role. **Row-level security** is code in the
@@ -76,11 +76,17 @@ tree, forms, the language, queries and reports, and the pitfalls.
   connections, sessions, locks, jobs and journal. Several servers may share a base; a desktop client
   and a server may not use one at the same time. Passwords in its configuration are sealed
   (AES-256-GCM).
+- **Application cluster** — `appcluster` runs the same server folder as a server process per base and
+  holds the clients' port in front of them: a base whose process falls takes only its own clients with
+  it and is started again; the other bases do not notice. A console program or a service of the system
+  (`appcluster --install` on Windows, a systemd unit on Linux). `appcluster-tray` shows each base's
+  server and starts, stops and restarts it — and starts the cluster itself when none runs.
 - **Thin client** — `enterprise-thin` runs no code of the configuration: the server holds the session,
   its forms and documents, the client draws what it is answered and sends what the person did. One
   [client protocol](docs/public/client-protocol.md) — JSON-RPC 2.0 over WebSocket or HTTP to an
-  application server; a file base is the same protocol in the client's own process. See
-  [thin-client.md](docs/public/thin-client.md).
+  application server; a file base is the same protocol in the client's own process. The thin
+  designer, `designer-thin`, is started on the same protocol and replaces the desktop designer once
+  it does what it does. See [thin-client.md](docs/public/thin-client.md).
 - **Databases** — Firebird (embedded, shipped with the distribution) and PostgreSQL for production;
   ODBC; SQLite for tests and logging.
 - **Localisation** — the whole interface in English, Russian and Ukrainian; every caption of a
@@ -88,7 +94,8 @@ tree, forms, the language, queries and reports, and the pitfalls.
 - **Web client — in progress.** `wenterprise-server` serves the same forms to a browser. Layout,
   commands, navigation, text fields, check boxes and toolbars work today; tables and reference
   pickers are the next controls to arrive, so a full document form does not assemble in the browser
-  yet.
+  yet. `webserver` is the transport the browser client is coming to: it carries a browser to a file
+  base or to an application server's base over the client protocol, with TLS.
 
 ### Measured
 
@@ -99,8 +106,6 @@ On a copy of a 40 000-employee payroll base (Release, x86): a month's payroll re
 
 ## Screenshots
 
-> Screenshots will be added here. Contributions welcome.
-
 ![Designer overview](https://github.com/user-attachments/assets/8513361c-bbc3-44bb-b07c-776202940d8b)
 
 ---
@@ -109,9 +114,9 @@ On a copy of a 40 000-employee payroll base (Release, x86): a month's payroll re
 
 ### Windows
 
-1. Install [Visual Studio 2019 or 2022](https://visualstudio.microsoft.com/) with the **Desktop development with C++** workload.
-   CMake is not needed for the MSBuild build.
-2. Clone the repository and initialise the wxWidgets submodule:
+1. Install [Visual Studio 2022](https://visualstudio.microsoft.com/) with the **Desktop development with C++** workload
+   (the projects use its toolset, v143). CMake is not needed for the MSBuild build.
+2. Clone the repository and initialise the submodules:
    ```cmd
    git clone https://github.com/open-enterprise-solutions/enterprise.git
    cd enterprise
@@ -122,8 +127,9 @@ On a copy of a 40 000-employee payroll base (Release, x86): a month's payroll re
 5. Build the solution (`Ctrl+Shift+B`). Binaries are placed in `bin\<Platform>\<Configuration>\`
    (`Win32` or `Win64`).
 6. Run `designer.exe` to build a configuration, `enterprise.exe` to work in it — or `launcher.exe`
-   to pick a base first. `appserver.exe` serves the bases of a server folder with no window;
-   `enterprise-thin.exe` works in a base it serves, or in a file base.
+   to pick a base first. `appserver.exe` serves the bases of a server folder with no window,
+   `appcluster.exe` the same folder with a process per base (`appcluster-tray.exe` shows and steers
+   it); `enterprise-thin.exe` works in a base they serve, or in a file base.
 
 ### macOS
 
@@ -181,11 +187,11 @@ Output: `bin\Win64\Release\`
 The top-level `CMakeLists.txt` (CMake ≥ 3.20) builds every target. DB drivers opt in — `OES_USE_FIREBIRD`, `OES_USE_POSTGRESQL`, `OES_USE_ODBC` (all default OFF); SQLite is always embedded, no flag:
 
 ```bash
-cmake -B build \
-      -DCMAKE_BUILD_TYPE=Release \
-      -DwxWidgets_ROOT_DIR=src/3rdparty/wxWidgets
+cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --parallel
 ```
+
+wxWidgets is built from its submodule as part of the tree; nothing has to be installed for it.
 
 The web runtime (`wfrontend` + `wenterprise-server`) builds with `-DOES_BUILD_WEB=ON` (default OFF).
 The unit tests (Google Test) build with the same tree: `-DBUILD_TESTING=ON`.
@@ -204,7 +210,7 @@ git submodule update --init --recursive
 
 ```
 enterprise/
-├── enterprise.sln            # MSBuild solution (17 C++ projects)
+├── enterprise.sln            # MSBuild solution (22 projects, Mbed TLS and llhttp among them)
 ├── CMakeLists.txt            # the cross-platform build, tests included
 ├── Common.props              # Shared MSBuild properties (paths, platforms)
 ├── ConfigurationDefs.props   # Preprocessor definitions per configuration
@@ -218,7 +224,7 @@ enterprise/
 │                             # organisation only and is empty for everyone else. The build never
 │                             # needs it, so links to docs/private/… will not open for you.
 └── src/
-    ├── 3rdparty/             # Git submodules: wxWidgets 3.3.2, Mbed TLS, cpp-httplib, nlohmann/json
+    ├── 3rdparty/             # Git submodules: wxWidgets 3.3.2, Mbed TLS, Asio, llhttp, cpp-httplib, nlohmann/json
     └── engine/
         ├── core/             # What the engine and its clients share: values, strings, dates, nodes, the journal
         ├── backend/          # Core engine DLL
@@ -251,8 +257,11 @@ enterprise/
         ├── designer-thin/    # The thin designer executable
         ├── designer/         # Designer/IDE executable
         ├── wenterprise-server/ # Web server (wes process)
+        ├── webserver/        # The bases' transport for browsers (links protocol alone)
         ├── launcher/         # Launcher (connection chooser)
         ├── appserver/        # The application server
+        ├── appcluster/       # The application cluster: a server process per base, the port, restarts; a service
+        ├── appcluster-tray/  # The cluster's tray: its servers and their verbs, starting the cluster
         ├── codeRunner/       # Script runner
         └── simplePlugin/     # Example plugin
 ```
@@ -269,9 +278,10 @@ enterprise/
 | Production alternative | PostgreSQL |
 | Other databases | ODBC; SQLite (tests + logging) |
 | Client protocol | JSON-RPC 2.0 over WebSocket / HTTP |
+| Network | Asio (standalone) + llhttp — the core's HTTP and WebSocket, server and client |
 | TLS and ciphers | Mbed TLS |
 | AI access | Model Context Protocol (Streamable HTTP) |
-| Build (Windows) | MSBuild / Visual Studio 2019+ |
+| Build (Windows) | MSBuild / Visual Studio 2022 (toolset v143) |
 | Build (cross-platform) | CMake ≥ 3.20 — `CMakeLists.txt` at repo root (Windows / macOS / Linux) |
 | Tests | Google Test, run in CI (GitHub Actions) |
 | License | PolyForm Noncommercial 1.0.0 — source-available, not open source |

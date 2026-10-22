@@ -13,12 +13,9 @@
 #include "frmserver/client/clientHost.h"
 
 #include "backend/appHost.h"                 // ClientConnections — how many connections at once
-#include "backend/server/serverConfig.h"     // ibAppServerSay — the line a person watching the console sees
+#include "core/server/serverConfig.h"     // ibAppServerSay — the line a person watching the console sees
 
 namespace {
-
-// The furthest a chosen port goes from where it started looking.
-constexpr unsigned int kChooseRange = 100;
 
 // ⭐ A SOCKET THAT HAS NOT LOGGED IN GOES FIFTEEN SECONDS AFTER IT OPENED — counted from the open: a message does not
 // move that mark. A connection costs a buffer here, not a thread, but the ceiling (ClientConnections) is counted in
@@ -177,20 +174,18 @@ bool ibClientListener::Start(const wxString& host, unsigned short& port, bool ch
 
 	const std::string address = host.IsEmpty() ? std::string("0.0.0.0") : options.m_host;
 	const unsigned int first = port;
-	const unsigned int last = choose ? std::min(first + kChooseRange, 65535u) : first;
+	options.m_httpPort = port;
 	std::string error;
-	for (unsigned int candidate = first; candidate <= last; ++candidate) {
-		options.m_httpPort = static_cast<std::uint16_t>(candidate);
-		if (m_server->Start(options, error)) {
-			port = m_server->GetHttpPort();
-			ibAppServerSay(ibJournalMark::Info, wxT("client connections: up to %u"),
-				static_cast<unsigned>(options.m_maxConnections));
-			return true;
-		}
+	if (m_server->Start(options, choose ? ibServerConfig::s_choosePorts : 1, error)) {
+		port = m_server->GetHttpPort();
+		ibAppServerSay(ibJournalMark::Info, wxT("client connections: up to %u"),
+			static_cast<unsigned>(options.m_maxConnections));
+		return true;
 	}
 
 	refusal = choose
-		? wxString::Format(wxT("no free port from %u to %u on %s"), first, last, wxString::FromUTF8(address))
+		? wxString::Format(wxT("no free port from %u to %u on %s"), first, first + ibServerConfig::s_choosePorts - 1,
+			wxString::FromUTF8(address))
 		: wxString::Format(wxT("port %u on %s is taken - another application server is probably holding it (%s)"),
 			first, wxString::FromUTF8(address), wxString::FromUTF8(error));
 	m_server.reset();

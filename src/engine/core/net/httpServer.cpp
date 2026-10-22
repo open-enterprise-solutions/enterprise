@@ -163,18 +163,6 @@ const char* Reason(int status)
 	}
 }
 
-// THIS MACHINE'S OWN ADDRESSES, known as written — 127.0.0.0/8 by number, ::1, localhost — not a name that resolves
-// there, since a name resolves wherever its owner says (backend/server/listener.h).
-bool IsLoopback(const std::string& host)
-{
-	const std::string own = Lower(host);
-	if (own == "localhost" || own == "::1" || own == "[::1]")
-		return true;
-	std::error_code error;
-	const asio::ip::address address = asio::ip::make_address(own, error);
-	return !error && address.is_v4() && address.is_loopback();
-}
-
 // What a file is, by its extension.
 const char* ContentType(const std::filesystem::path& file)
 {
@@ -245,6 +233,16 @@ bool IsInside(const std::filesystem::path& root, const std::filesystem::path& fi
 
 } // namespace
 
+bool ibIsLoopback(const ibString& address)
+{
+	const std::string own = Lower(address.TrimAll().ToUtf8());
+	if (own == "localhost" || own == "::1" || own == "[::1]")
+		return true;
+	std::error_code error;
+	const asio::ip::address parsed = asio::ip::make_address(own, error);
+	return !error && parsed.is_v4() && parsed.is_loopback();
+}
+
 //*******************************************************************************************
 //*                                     The request                                         *
 //*******************************************************************************************
@@ -276,6 +274,30 @@ std::string ibHttpRequest::GetParameter(const std::string& name) const
 		from = amp + 1;
 	}
 	return std::string();
+}
+
+std::string ibHttpRequest::GetTarget() const
+{
+	// Every byte of the path but the unreserved and the separators escaped — what Decode read, written back.
+	static const char s_hex[] = "0123456789ABCDEF";
+	std::string target;
+	for (const char ch : m_path) {
+		const unsigned char c = static_cast<unsigned char>(ch);
+		if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')
+			|| c == '-' || c == '.' || c == '_' || c == '~' || c == '/') {
+			target += ch;
+		}
+		else {
+			target += '%';
+			target += s_hex[c >> 4];
+			target += s_hex[c & 0x0F];
+		}
+	}
+	if (!m_query.empty()) {
+		target += '?';
+		target += m_query;
+	}
+	return target;
 }
 
 ibString ibHttpRequest::GetText() const
@@ -1792,7 +1814,8 @@ bool ibHttpServer::Start(const ibHttpServerOptions& options, std::string& error)
 	}
 	// Where HTTP listens it serves in the clear: on this machine's own addresses, or wherever the application server's
 	// exception says (the header).
-	const bool clear = IsLoopback(options.m_host) || options.m_clearBeyondMachine;
+	const bool clear = ibIsLoopback(ibString::FromUTF8(options.m_host.data(), options.m_host.size()))
+		|| options.m_clearBeyondMachine;
 	if (options.m_httpPort && !clear && !options.m_httpsPort) {
 		error = "plain HTTP serves on this machine's own addresses only (127.0.0.1, ::1, localhost); to listen on "
 			+ (options.m_host.empty() ? std::string("every interface") : options.m_host)
@@ -1861,6 +1884,18 @@ bool ibHttpServer::Start(const ibHttpServerOptions& options, std::string& error)
 		asio::post(state.m_io, [&state, each]() { state.Accept(*each); });
 	}
 	return true;
+}
+
+bool ibHttpServer::Start(ibHttpServerOptions options, unsigned int tries, std::string& error)
+{
+	const unsigned int first = options.m_httpPort.value_or(0);
+	const unsigned int last = std::min(first + std::max(tries, 1u) - 1, 65535u);
+	for (unsigned int candidate = first; candidate <= last; ++candidate) {
+		options.m_httpPort = static_cast<std::uint16_t>(candidate);
+		if (Start(options, error))
+			return true;
+	}
+	return false;
 }
 
 void ibHttpServer::Stop()

@@ -39,7 +39,6 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="mainApp.h" />
-    <ClInclude Include="resource.h" />
     <ClInclude Include="mainFrame\mainFrameEnterprise.h">
       <Filter>mainFrame</Filter>
     </ClInclude>
@@ -87,5 +86,8 @@
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="enterprise.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Manifest Include="..\core\program.manifest" />
   </ItemGroup>
 </Project>

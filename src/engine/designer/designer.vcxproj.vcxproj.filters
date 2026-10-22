@@ -177,7 +177,6 @@
       <Filter>win\dlg</Filter>
     </ClInclude>
     <ClInclude Include="mainApp.h" />
-    <ClInclude Include="resource.h" />
     <ClInclude Include="mainFrame\mainFrameDesigner.h">
       <Filter>mainFrame</Filter>
     </ClInclude>
@@ -369,5 +368,8 @@
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="designer.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Manifest Include="..\core\program.manifest" />
   </ItemGroup>
 </Project>

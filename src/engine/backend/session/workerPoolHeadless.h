@@ -135,7 +135,6 @@ private:
 	static std::vector<ibParked>& ParkedFibers();
 
 	static void RunTask(ibSessionTask& item);
-	static void RegisterFiberLocals();
 
 	// Passed across the fiber entry. A nested type so the translation
 	// unit can name the queue (private) without a friend.

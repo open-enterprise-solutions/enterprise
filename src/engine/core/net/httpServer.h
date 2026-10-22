@@ -13,9 +13,8 @@
 // move (m_maxBodyBytes, m_idleSeconds): an assistant's request is larger, and its pauses are for thinking.
 //
 // HTTP AND HTTPS, either or both, each on its own port. ⭐ THE CLEAR DOES NOT CROSS A NETWORK — the rule of
-// backend/server/listener.h, said again here because the core links no backend: on this machine's own addresses
-// (127.0.0.0/8, ::1, localhost) HTTP serves; on any other it only sends a browser on to HTTPS, and with no HTTPS to
-// send it to it is refused.
+// backend/server/listener.h too: on this machine's own addresses (ibIsLoopback) HTTP serves; on any other it only sends
+// a browser on to HTTPS, and with no HTTPS to send it to it is refused.
 
 #include <cstdint>
 #include <functional>
@@ -48,6 +47,9 @@ struct CORE_API ibHttpRequest {
 	std::string GetHeader(const std::string& name) const;
 	// One parameter of the query, decoded; empty when there is none.
 	std::string GetParameter(const std::string& name) const;
+	// The path escaped again and its query — what a request carried on to another server is written with
+	// (ibWebSocketClient::Open, ibHttpPost).
+	std::string GetTarget() const;
 	// The body as the engine's text — a text protocol's request (JSON-RPC), its bytes read once.
 	ibString GetText() const;
 };
@@ -178,6 +180,9 @@ public:
 
 	// Listening, with the threads up — or false, with why in `error`.
 	bool Start(const ibHttpServerOptions& options, std::string& error);
+	// …on the first free HTTP port among `tries` from the options' own (GetHttpPort says which) — or false, with why
+	// the last one was refused.
+	bool Start(ibHttpServerOptions options, unsigned int tries, std::string& error);
 	// The port closed and every connection let go: each WebSocket's handler is told OnClose before Stop returns.
 	void Stop();
 
@@ -192,5 +197,10 @@ public:
 private:
 	std::unique_ptr<ibHttpServerState> m_state;
 };
+
+// THIS MACHINE'S OWN ADDRESSES, known as written — 127.0.0.0/8 by number, ::1, localhost — not a name that resolves
+// there, since a name resolves wherever its owner says: where the clear is spoken (a listener's host, the header), and
+// who may steer the application cluster (a peer's address, core/server/clusterControl.h).
+CORE_API bool ibIsLoopback(const ibString& address);
 
 #endif

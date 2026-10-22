@@ -196,7 +196,6 @@
   <ItemGroup>
     <ClInclude Include="mainApp.h" />
     <ClInclude Include="mainFrame\mainFrameEnterprise.h" />
-    <ClInclude Include="resource.h" />
     <ClInclude Include="win\dlg\functionAll.h" />
   </ItemGroup>
   <ItemGroup>
@@ -204,6 +203,9 @@
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="enterprise-thin.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Manifest Include="..\core\program.manifest" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

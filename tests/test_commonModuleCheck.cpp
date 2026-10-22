@@ -46,6 +46,11 @@ struct CommonModuleCheck : ::testing::Test {
 		if (!m_db->Open(wxT(":memory:")))
 			GTEST_SKIP() << "in-memory SQLite open failed";
 		pool->Init(m_db, /*maxSize=*/1, /*minIdle=*/0);
+		// …and the configuration's tables, which a base's opening makes (ibApplicationInstance::Open) and this base
+		// never went through.
+		ibMetaDataConfigurationStorage::CreateConfigTable();
+		ibMetaDataConfigurationStorage::CreateConfigSaveTable();
+		ibMetaDataConfigurationStorage::CreateConfigSequence();
 	}
 
 	void TearDown() override {

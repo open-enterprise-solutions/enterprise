@@ -189,6 +189,8 @@ bin\
       designer.exe
       launcher.exe
       appserver.exe
+      appcluster.exe
+      appcluster-tray.exe
       codeRunner.exe
       wenterprise-server.exe
   Win64\            (Platform=x64)
@@ -197,6 +199,13 @@ bin\
 
 `core.dll` is the shared layer under `backend.dll` and `frmclient.dll` (wx base only); every
 project that links `backend.lib` also links `core.lib`.
+
+**Resources (Windows).** Every program and library has a `<name>.rc` that names itself — description, file name,
+`VFT_APP` or `VFT_DLL`, a program's icon — and includes `core/version.rc2`, the one version resource: company,
+product, copyright, and the version, which is the platform's (`OES_VERSION_MAJOR/MINOR/RELEASE` in `core/build.h`,
+the same three `version_oes_last` is made of). Every program also merges `core/program.manifest` into the manifest
+the linker makes: Windows 10 and later, long paths. The linker adds asInvoker, wx the common controls 6 (its
+`defs.h`); per-monitor DPI awareness is not declared — wx's default. The vcxproj compiles them; CMake does not.
 `wfrontend.dll` + `wenterprise-server.exe` are the web runtime (headless
 server + web frontend). `protocol.dll`, `frmserver.dll`, `frmclient.dll`, `fileserver.dll`, `enterprise-thin.exe` and
 `designer-thin.exe` are the thin client and its server side ([thin-client.md](public/thin-client.md)). `simplePlugin.dll` is the plugin example; it builds into
@@ -315,6 +324,8 @@ The root `CMakeLists.txt` adds fifteen engine subdirectories, each with its own
 | fileserver | shared lib (`FILESERVER_EXPORTS`) |
 | frmclient | shared lib (`FRMCLIENT_EXPORTS`, links `core` + `protocol`) |
 | appserver | executable (console) — the application server; `daemon` is kept as an alias target |
+| appcluster | executable (console, or a service) — a server per base of the folder; links `core` alone |
+| appcluster-tray | executable (GUI) — the cluster's tray; links `core` alone |
 | enterprise | executable (GUI) |
 | enterprise-thin | executable (GUI) — the thin client |
 | designer | executable (GUI) |

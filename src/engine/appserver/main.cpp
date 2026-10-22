@@ -1,12 +1,10 @@
 // appserver — the application server: the process that serves the bases of its server folder without a window
-// (backend/server/serverConfig.h — the folder; appServer.h — the serving; docs/private/multi-base-process.md § 5). It was
+// (core/server/serverConfig.h — the folder; appServer.h — the serving; docs/private/multi-base-process.md § 5). It was
 // called `daemon` until 2026-10-01. Started by hand it narrates in its console — the technological journal
 // mirrored onto standard error — and stays until Ctrl+C; later it becomes a service and the journal stays.
 
 #include <wx/app.h>
 #include <wx/cmdline.h>
-#include <wx/filename.h>
-#include "core/programFolder.h"
 
 #ifdef __WXMSW__
 #include <windows.h>
@@ -26,6 +24,8 @@ static const wxCmdLineEntryDesc s_cmdLineDesc[] = {
 	{ wxCMD_LINE_OPTION, "d",  "dir",          "Server folder: server.conf, server.key and a folder per base (default: server beside the executable)", wxCMD_LINE_VAL_STRING, 0 },
 	{ wxCMD_LINE_OPTION, "lc", "locale",       "The platform's locale for a base that names none (default: backend.conf's Locale, else the system's)", wxCMD_LINE_VAL_STRING, 0 },
 	{ wxCMD_LINE_OPTION, "sp", "set-password", "Seal a password into the config: <base>/Password or <base>/IbPassword, typed at the keyboard", wxCMD_LINE_VAL_STRING, 0 },
+	{ wxCMD_LINE_OPTION, "w",  "worker",       "Serve one base for the cluster that started this server (appcluster): its port said on standard output, stopped by 'stop' on standard input or by its closing", wxCMD_LINE_VAL_STRING, 0 },
+	{ wxCMD_LINE_SWITCH, "a",  "again",        "Started again after a fall (by the cluster): the first error takes no dump - the first start took one", wxCMD_LINE_VAL_NONE, 0 },
 	{ wxCMD_LINE_SWITCH, "h",  "help",         "Show this help message.", wxCMD_LINE_VAL_NONE,   wxCMD_LINE_OPTION_HELP },
 	{ wxCMD_LINE_NONE,   nullptr, nullptr,     nullptr,                   wxCMD_LINE_VAL_NONE,   0 }
 };
@@ -35,15 +35,6 @@ static const wxCmdLineEntryDesc s_cmdLineDesc[] = {
 IB_LEAK_TRACKER_ARM();
 
 namespace {
-
-// Where a server started without --dir keeps its bases — `server` in the program folder.
-// Inside a bundle that is beside the .app, not in Contents/MacOS/.
-wxString DefaultServerDir()
-{
-	wxFileName fn = wxFileName::DirName(ibProgramFolder());
-	fn.AppendDir(wxT("server"));
-	return fn.GetPath();
-}
 
 // Typed at the keyboard, not echoed. A console reads it in UTF-16, so a password in any alphabet arrives
 // whole; anything else (a pipe) is read as a line of UTF-8.
@@ -98,7 +89,7 @@ int SetPassword(ibServerConfig& config, const wxString& target)
 		return 1;
 	}
 
-	wxString error;
+	ibString error;
 	if (!config.LoadKey(error)) {
 		ibAppServerSay(ibJournalMark::Error, wxT("%s"), error);
 		return 1;
@@ -135,11 +126,14 @@ int main(int argc, char** argv)
 	wxCmdLineParser parser(s_cmdLineDesc, argc, argv);
 	if (parser.Parse() != 0)
 		return 1;
+	if (parser.Found(wxT("again")))
+		ibTechJournal::SkipErrorDump();
 
 	// The locale left out is the platform's own: a base's, then backend.conf's Locale, then the system's (InitLocale).
-	wxString folder = DefaultServerDir(), locale, sealTarget;
+	wxString folder = ibServerConfig::DefaultFolder(), locale, sealTarget, workerBase;
 	parser.Found(wxT("dir"), &folder);
 	parser.Found(wxT("locale"), &locale);
+	parser.Found(wxT("worker"), &workerBase);
 	ibServerConfig config(folder);
 
 	if (parser.Found(wxT("set-password"), &sealTarget))
@@ -149,5 +143,5 @@ int main(int argc, char** argv)
 	::DisableProcessWindowsGhosting();
 #endif
 
-	return ibAppServer(config, locale).Run();
+	return ibAppServer(config, locale, workerBase).Run();
 }

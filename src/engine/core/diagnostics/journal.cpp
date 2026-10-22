@@ -39,6 +39,9 @@ std::atomic<bool>  s_open{ false };
 // Asked by the program itself to echo every line on standard error (EchoToStderr) — the variable's twin.
 std::atomic<bool>  s_echoToStderr{ false };
 
+// The first error's dump is taken — by this run, or by the one before it (SkipErrorDump).
+std::atomic<bool>  s_errorDumped{ false };
+
 // The chain Open makes — kept, so a program whose console the journal writes can take the previous target off it
 // (EchoToStderr).
 wxLogChain*        s_chain = nullptr;
@@ -412,13 +415,45 @@ void ibTechJournal::Write(ibJournalMark mark, const wxString& source, const wxSt
 	// it inside a loop, or on a path that recovers perfectly well. Deliberate abort stays a
 	// deliberate call (ibCrashGuard::TerminateProcessFast), written where the decision is made.
 	if (mark == ibJournalMark::Error) {
-		static std::atomic<bool> s_dumped{ false };
-		if (!s_dumped.exchange(true, std::memory_order_acq_rel)) {
+		if (!s_errorDumped.exchange(true, std::memory_order_acq_rel)) {
 			ibCrashGuard::WriteDumpNow(wxT("_error"));
 			Write(ibJournalMark::Info, wxT("journal"),
 				wxString::Format(wxT("first error - dump written to %s"), ibCrashGuard::GetCrashDir()));
 		}
 	}
+}
+
+bool ibTechJournal::Read(const wxString& line, ibJournalMark& mark, wxString& source, wxString& message)
+{
+	// The line as Write lays it out: the kind (9), a space, the time (12), two spaces, `t` and the thread, two spaces,
+	// the source — `(base) source` for a line about a base — padded to 14, two spaces, the message.
+	if (line.StartsWith(wxT("[error]")))
+		mark = ibJournalMark::Error;
+	else if (line.StartsWith(wxT("[warning]")))
+		mark = ibJournalMark::Warning;
+	else if (line.StartsWith(wxT("[info]")))
+		mark = ibJournalMark::Info;
+	else
+		return false;
+
+	constexpr size_t kThreadAt = 9 + 1 + 12 + 2;
+	if (line.length() <= kThreadAt || line[kThreadAt] != wxT('t'))
+		return false;
+	const size_t sourceAt = line.find_first_not_of(wxT(' '), line.find(wxT("  "), kThreadAt));
+	if (sourceAt == wxString::npos)
+		return false;
+	const size_t sourceEnd = line.find(wxT("  "), sourceAt);
+	if (sourceEnd == wxString::npos)
+		return false;
+	const size_t messageAt = line.find_first_not_of(wxT(' '), sourceEnd);
+	source = line.Mid(sourceAt, sourceEnd - sourceAt);
+	message = messageAt == wxString::npos ? wxString() : line.Mid(messageAt);
+	return true;
+}
+
+void ibTechJournal::SkipErrorDump()
+{
+	s_errorDumped.store(true, std::memory_order_release);
 }
 
 // The vararg door. The GATE IS TESTED FIRST, before FormatV runs: with the journal off the call is a

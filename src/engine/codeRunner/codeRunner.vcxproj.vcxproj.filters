@@ -9,7 +9,6 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="mainApp.h" />
-    <ClInclude Include="resource.h" />
     <ClInclude Include="outputMessage.h" />
     <ClInclude Include="codeRunner.h">
       <Filter>windows</Filter>
@@ -25,5 +24,8 @@
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="codeRunner.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Manifest Include="..\core\program.manifest" />
   </ItemGroup>
 </Project>

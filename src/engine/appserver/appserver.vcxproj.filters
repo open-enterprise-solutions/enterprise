@@ -9,4 +9,10 @@
     <ClInclude Include="appServer.h" />
     <ClInclude Include="clientListener.h" />
   </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="appserver.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Manifest Include="..\core\program.manifest" />
+  </ItemGroup>
 </Project>

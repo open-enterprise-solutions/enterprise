@@ -1031,8 +1031,9 @@ jobs:
   # quote these numbers as the platform's performance; measure on real hardware
   # for that.
   #
-  # It never fails the build: `|| true` on the run, and no threshold. A benchmark
-  # that gates CI on a shared runner turns into a flaky test nobody trusts.
+  # It never fails the build on a number: `|| true` on the run, and no threshold. A
+  # benchmark that gates CI on a shared runner turns into a flaky test nobody trusts.
+  # What fails it is a run that did not reach its end (the last step).
   benchmarks-linux:
     name: Benchmarks (Linux, Release) — record only
     runs-on: ubuntu-22.04
@@ -1158,6 +1159,25 @@ jobs:
           name: benchmarks-linux-release
           path: build/linux-release/benchmarks.txt
           if-no-files-found: warn
+
+      # A RUN THAT STOPPED HALF-WAY IS NOT A RECORD.
+      #
+      # `|| true` keeps a slow or noisy figure from failing anything, and it kept a
+      # crash quiet as well: from 2026-10-10 the process aborted at SessionBench (a
+      # fiber slot registered after the first snapshot), and the suites from there
+      # on never ran, under a green job. gtest prints its closing line only when it
+      # gets there, so each of the two runs above must have printed one. Still no
+      # threshold — no number is judged here, only whether the run came to its end.
+      # Last, so the summary and the artifact are already up.
+      - name: Both runs finished
+        working-directory: build/linux-release
+        run: |
+          finished=$(grep -cE '^\[==========\] [0-9]+ tests? from [0-9]+ test suites? ran\.' benchmarks.txt || true)
+          if [ "$finished" -lt 2 ]; then
+            echo "::error::A benchmark process stopped before its end - every row after its last line is missing:"
+            tail -n 5 benchmarks.txt
+            exit 1
+          fi
 
       - name: Compiler cache statistics
         if: always()

@@ -29,7 +29,7 @@
 #include <nlohmann/json.hpp>
 #include "backend/backend_exception.h"
 #include "backend/databaseLayer/databaseLayerException.h"
-#include "backend/server/listener.h"   // ibIsLoopback - the clear does not cross a network
+#include "core/net/httpServer.h"   // ibIsLoopback - the clear does not cross a network
 #include "frontend/diagnostics/oesConsole.h"
 
 #if defined(_WIN32)
@@ -435,7 +435,7 @@ int main(int argc, char** argv)
 	// another machine, are the web server's (webserver/, the core's transport). The clear does not cross a network
 	// (backend/server/listener.h) - an address off this machine is a refusal; backend.conf's certificate is the
 	// network-facing servers', not this one's.
-	if (!ibIsLoopback(wxString::FromUTF8(args.host))) {
+	if (!ibIsLoopback(ibString::FromUTF8(args.host.data(), args.host.size()))) {
 		std::cerr << "OES wenterprise-server did not start: it speaks plain HTTP on this machine's own address only "
 			"(127.0.0.1, ::1, localhost), and " << args.host << " is not one - a browser on another machine is the web "
 			"server's (webserver)." << std::endl;

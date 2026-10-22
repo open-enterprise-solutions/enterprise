@@ -1661,9 +1661,6 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="resource.h" />
-  </ItemGroup>
-  <ItemGroup>
     <ResourceCompile Include="frmclient.rc" />
   </ItemGroup>
 </Project>

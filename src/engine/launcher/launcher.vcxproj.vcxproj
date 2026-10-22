@@ -197,10 +197,12 @@
     <ClInclude Include="connectionDB.h" />
     <ClInclude Include="launcher.h" />
     <ClInclude Include="mainApp.h" />
-    <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="launcher.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Manifest Include="..\core\program.manifest" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="launcher.ico" />

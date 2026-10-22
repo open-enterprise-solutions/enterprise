@@ -25,6 +25,7 @@
 
 #include "core/net/httpClient.h"
 #include "core/net/webSocketFrame.h"
+#include "core/net/webSocketRelay.h"
 
 namespace {
 
@@ -171,56 +172,6 @@ public:
 private:
 	const ibProtocolFileBase&    m_base;
 	std::shared_ptr<ibWebSocket> m_socket;
-};
-
-// A BROWSER'S SOCKET TO AN APPLICATION SERVER'S BASE — a socket of the web server's own to the server for each, the
-// messages carried both ways as they are: a deflated answer stays deflated, if the browser asked for it.
-class ibServerRelay : public ibWebSocketHandler {
-public:
-
-	ibServerRelay(asio::io_context& io, const std::string& host, std::uint16_t port, const std::string& target,
-		std::shared_ptr<ibWebSocket> socket, const wxString& publication) :
-		m_socket(std::move(socket))
-	{
-		const std::weak_ptr<ibWebSocket> told = m_socket;
-		m_upstream = std::make_shared<ibWebSocketClient>(io, nullptr,
-			[told](const ibString& text) {
-				if (const std::shared_ptr<ibWebSocket> socket = told.lock())
-					socket->Send(text);
-			},
-			[told](std::string packed) {
-				if (const std::shared_ptr<ibWebSocket> socket = told.lock())
-					socket->SendBinary(std::move(packed));
-			},
-			[told, publication](const std::string& reason) {
-				if (!reason.empty())
-					ibWebServerSay(ibJournalMark::Warning, wxT("publication '%s': %s"), publication,
-						wxString::FromUTF8(reason));
-				if (const std::shared_ptr<ibWebSocket> socket = told.lock())
-					socket->Close(reason.empty() ? ibWebSocketClose::GoingAway : ibWebSocketClose::BadGateway,
-						reason.empty() ? "the server closed the connection" : "the server is not reached");
-			});
-		m_upstream->Open(host, port, target);
-	}
-
-	virtual void OnMessage(const ibString& text) override
-	{
-		m_upstream->Send(text);
-	}
-
-	virtual void OnBinary(std::string) override
-	{
-		m_socket->Close(ibWebSocketClose::Unsupported, "the protocol speaks text");
-	}
-
-	virtual void OnClose() override
-	{
-		m_upstream->Close();
-	}
-
-private:
-	std::shared_ptr<ibWebSocket>       m_socket;
-	std::shared_ptr<ibWebSocketClient> m_upstream;
 };
 
 } // namespace
@@ -377,9 +328,13 @@ bool ibWebServer::Publish(const ibWebPublication& publication)
 	const std::uint16_t serverPort = static_cast<std::uint16_t>(port);
 	const std::string target = ibProtocolConnectionServer::ClientPath(base);
 	asio::io_context& io = m_http.GetContext();
+	// A browser's socket to the base — a socket of the web server's own to the server for each (ibWebSocketRelay).
 	m_http.WebSocket(path, [&io, server, serverPort, target, name](const std::shared_ptr<ibWebSocket>& socket) {
 		const std::string asked = WantsDeflate(socket->GetRequest()) ? target + "?compress=deflate" : target;
-		return std::make_shared<ibServerRelay>(io, server, serverPort, asked, socket, name);
+		return std::make_shared<ibWebSocketRelay>(io, server, serverPort, asked, socket,
+			[name](const ibString& reason) {
+				ibWebServerSay(ibJournalMark::Warning, wxT("publication '%s': %s"), name, reason);
+			});
 	});
 	m_http.Post(path, [&io, server, serverPort, target, name](const ibHttpRequest& request, ibHttpResponder respond) {
 		ibHttpPost(io, server, serverPort, target, request.m_body, "application/json", kPostWait,

@@ -30,7 +30,7 @@
 #include "backend/job/platformJobs.h"         // the engine's own jobs, declared when a database opens
 #include "backend/settings/settingsStorage.h" // ibSettingsStorage (owned via GetSettingsStorage)
 #include "backend/temp/tempStorage.h"         // ibTempStorage (owned via GetTempStorage)
-#include "backend/server/serverConfig.h"      // a server reads where its base lives itself
+#include "core/server/serverConfig.h"      // a server reads where its base lives itself
 
 #include "backend/backend_exception.h"        // ibBackendCoreException — a build with no driver says so
 #include "backend/utils/passwordHash.hpp"
@@ -685,7 +685,7 @@ ibApplicationInstance* ibApplicationInstance::CreateAppDataEnv(const ibServerIns
 	ibServerConfig config(request.m_folder);
 	if (!config.HasConf())
 		ibBackendCoreException::Error(wxT("no config at %s"), config.GetConfPath());
-	wxString error;
+	ibString error;
 	if (!config.LoadKey(error))
 		ibBackendCoreException::Error(wxT("%s"), error);
 
@@ -703,8 +703,10 @@ ibApplicationInstance* ibApplicationInstance::CreateAppDataEnv(const ibServerIns
 		storage.m_port     = base->m_port;
 		storage.m_user     = base->m_user;
 		storage.m_database = base->m_database;
-		if (!config.OpenSecret(base->m_name, wxT("Password"), base->m_password, storage.m_password, error))
+		ibString password;
+		if (!config.OpenSecret(base->m_name, wxT("Password"), base->m_password, password, error))
 			ibBackendCoreException::Error(wxT("%s"), error);
+		storage.m_password = password;
 	}
 	else if (base->m_kind != wxT("firebird"))
 		ibBackendCoreException::Error(wxT("unknown Kind '%s' - expected firebird or postgresql"), base->m_kind);

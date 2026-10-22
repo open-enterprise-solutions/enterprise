@@ -11,6 +11,8 @@
 #include "core/crypto/fieldCipher.h"
 #include "core/fstring.h"
 #include "core/guid.h"
+#include "core/programFolder.h"
+#include "core/server/clusterControl.h"   // ibClusterControl::TokenFile
 #include "core/utils/base64.h"   // ibBase64 — the key's file and a sealed secret, in text
 
 namespace {
@@ -21,21 +23,31 @@ constexpr long kConfStyle = wxCONFIG_USE_LOCAL_FILE | wxCONFIG_USE_NO_ESCAPE_CHA
 // What a sealed secret starts with.
 const wxChar* const kSealed = wxT("enc:");
 
+// The cluster's token: as many random bytes as a key has.
+constexpr std::size_t kTokenBytes = ibFieldCipher::kKeySize;
+
 // The field a secret is bound to — a sealed value moved to another base or another key does not open.
-ibCipherContext SecretContext(const std::vector<unsigned char>& key, const wxString& base, const wxString& name)
+ibCipherContext SecretContext(const std::vector<unsigned char>& key, const ibString& base, const ibString& name)
 {
 	ibCipherContext context;
 	context.m_key   = key;
-	context.m_field = std::string((base + wxT("/") + name).utf8_str());
+	context.m_field = (base + wxT("/") + name).ToUtf8();
 	return context;
 }
 
 } // namespace
 
-ibServerConfig::ibServerConfig(const wxString& folder) :
+ibServerConfig::ibServerConfig(const ibString& folder) :
 	m_folder(wxFileName::DirName(folder).GetPath()),   // one spelling, no trailing separator
-	m_confPath(m_folder + wxFileName::GetPathSeparator() + wxT("server.conf"))
+	m_confPath(wxFileName(m_folder, wxT("server.conf")).GetFullPath())
 {
+}
+
+ibString ibServerConfig::DefaultFolder()
+{
+	wxFileName folder = wxFileName::DirName(ibProgramFolder());
+	folder.AppendDir(wxT("server"));
+	return folder.GetPath();
 }
 
 bool ibServerConfig::HasConf() const
@@ -43,21 +55,22 @@ bool ibServerConfig::HasConf() const
 	return wxFileName::FileExists(m_confPath);
 }
 
-bool ibServerConfig::LoadKey(wxString& error)
+bool ibServerConfig::LoadKey(ibString& error)
 {
-	const wxString path = m_folder + wxFileName::GetPathSeparator() + wxT("server.key");
+	const ibString path = wxFileName(m_folder, wxT("server.key")).GetFullPath();
 
 	if (wxFileName::FileExists(path)) {
 		wxFFile file(path, wxT("rb"));
-		wxString text;
-		if (!file.IsOpened() || !file.ReadAll(&text)) {
-			error = wxString::Format(wxT("the key %s cannot be read"), path);
+		wxString read;
+		if (!file.IsOpened() || !file.ReadAll(&read)) {
+			error = ibString::Format(wxT("the key %s cannot be read"), path);
 			return false;
 		}
+		ibString text(read);
 		text.Trim().Trim(false);
 		wxMemoryBuffer raw;
-		if (!ibBase64::Read(text.wc_str(), text.length(), raw) || raw.GetDataLen() != ibFieldCipher::kKeySize) {
-			error = wxString::Format(wxT("the key %s is not a key"), path);
+		if (!ibBase64::Read(text.wc_str(), text.Len(), raw) || raw.GetDataLen() != ibFieldCipher::kKeySize) {
+			error = ibString::Format(wxT("the key %s is not a key"), path);
 			return false;
 		}
 		const unsigned char* bytes = static_cast<const unsigned char*>(raw.GetData());
@@ -77,15 +90,66 @@ bool ibServerConfig::LoadKey(wxString& error)
 	ibBase64::Append(line, key.data(), key.size());
 	line += '\n';
 	if (!file.IsOpened() || file.Write(line.data(), line.size()) != line.size()) {
-		error = wxString::Format(wxT("the key %s cannot be written"), path);
+		error = ibString::Format(wxT("the key %s cannot be written"), path);
 		return false;
 	}
 	file.Close();
 #ifndef __WXMSW__
-	::chmod(path.fn_str(), S_IRUSR | S_IWUSR);   // the server's user alone
+	::chmod(path.ToUtf8().c_str(), S_IRUSR | S_IWUSR);   // the server's user alone
 #endif
 	ibAppServerSay(ibJournalMark::Info, wxT("a new key for this installation: %s - keep it with the config"), path);
 	m_key = std::move(key);
+	return true;
+}
+
+bool ibServerConfig::WriteClusterToken(ibString& token, ibString& error) const
+{
+	const std::vector<unsigned char> random = ibFieldCipher::Random(kTokenBytes);
+	if (random.size() != kTokenBytes) {
+		error = wxT("the platform gave no randomness for the cluster's token");
+		return false;
+	}
+	// In hex: it goes in a query as it is.
+	static const char digits[] = "0123456789abcdef";
+	std::string line;
+	for (const unsigned char byte : random) {
+		line += digits[byte >> 4];
+		line += digits[byte & 0x0F];
+	}
+
+	const ibString path = wxFileName(m_folder, ibClusterControl::TokenFile).GetFullPath();
+	wxFFile file(path, wxT("wb"));
+	if (!file.IsOpened() || file.Write(line.data(), line.size()) != line.size()) {
+		error = ibString::Format(wxT("the cluster's token %s cannot be written"), path);
+		return false;
+	}
+	file.Close();
+#ifndef __WXMSW__
+	::chmod(path.ToUtf8().c_str(), S_IRUSR | S_IWUSR);   // the server's user alone
+#endif
+	token = ibString::FromUTF8(line.data(), line.size());
+	return true;
+}
+
+bool ibServerConfig::ReadClusterToken(ibString& token, ibString& error) const
+{
+	const ibString path = wxFileName(m_folder, ibClusterControl::TokenFile).GetFullPath();
+	// No file is an answer, not a fault — the tray asks every two seconds, and an open that fails says so in a box.
+	if (!wxFileName::FileExists(path)) {
+		error = ibString::Format(wxT("there is no %s - the cluster has not started"), path);
+		return false;
+	}
+	wxFFile file(path, wxT("rb"));
+	wxString read;
+	if (!file.IsOpened() || !file.ReadAll(&read)) {
+		error = ibString::Format(wxT("the cluster's token %s cannot be read"), path);
+		return false;
+	}
+	token = ibString(read).TrimAll();
+	if (token.IsEmpty()) {
+		error = ibString::Format(wxT("the cluster's token %s is empty"), path);
+		return false;
+	}
 	return true;
 }
 
@@ -117,16 +181,17 @@ std::vector<ibConfiguredInstance> ibServerConfig::ReadInstances() const
 	return instances;
 }
 
-wxString ibServerConfig::ReadHost() const
+ibString ibServerConfig::ReadHost() const
 {
 	wxFileConfig conf(wxEmptyString, wxEmptyString, m_confPath, wxEmptyString, kConfStyle);
 	return conf.Read(wxT("/Host"));
 }
 
-bool ibServerConfig::ReadPort(unsigned short& port, wxString& error) const
+bool ibServerConfig::ReadPort(unsigned short& port, ibString& error) const
 {
 	wxFileConfig conf(wxEmptyString, wxEmptyString, m_confPath, wxEmptyString, kConfStyle);
-	const wxString written = conf.Read(wxT("/Port")).Trim().Trim(false);
+	ibString written = conf.Read(wxT("/Port"));
+	written.Trim().Trim(false);
 
 	port = 0;
 	if (written.IsEmpty())
@@ -134,7 +199,7 @@ bool ibServerConfig::ReadPort(unsigned short& port, wxString& error) const
 
 	unsigned long value = 0;
 	if (!written.ToULong(&value) || value == 0 || value > 65535) {
-		error = wxString::Format(wxT("Port=%s in %s is not a port"), written, m_confPath);
+		error = ibString::Format(wxT("Port=%s in %s is not a port"), written, m_confPath);
 		return false;
 	}
 	port = static_cast<unsigned short>(value);
@@ -158,53 +223,53 @@ void ibServerConfig::AssignIds(std::vector<ibConfiguredInstance>& instances) con
 	for (ibConfiguredInstance& instance : instances) {
 		if (!ibGuid(instance.m_id).isValid()) {
 			instance.m_id = ibGuid(ibGuid::newGuid()).str();
-			conf.Write(wxT("/") + instance.m_name + wxT("/Id"), instance.m_id);
+			conf.Write(wxT("/") + instance.m_name + wxT("/Id"), static_cast<wxString>(instance.m_id));
 			assigned = true;
 		}
 		if (instance.m_path.IsEmpty())
-			instance.m_path = m_folder + wxFileName::GetPathSeparator() + instance.m_id;
+			instance.m_path = wxFileName(m_folder, instance.m_id).GetFullPath();
 	}
 
 	if (assigned && !conf.Flush())
 		ibAppServerSay(ibJournalMark::Warning, wxT("the config %s cannot be written - the new Ids are not kept"), m_confPath);
 }
 
-bool ibServerConfig::OpenSecret(const wxString& base, const wxString& name, const wxString& stored, wxString& secret,
-	wxString& error) const
+bool ibServerConfig::OpenSecret(const ibString& base, const ibString& name, const ibString& stored, ibString& secret,
+	ibString& error) const
 {
-	secret.clear();
+	secret.Clear();
 	if (stored.IsEmpty())
 		return true;
 
-	wxString sealed;
+	ibString sealed;
 	if (!stored.StartsWith(kSealed, &sealed)) {
-		error = wxString::Format(wxT("%s/%s is written in plain text - seal it: appserver --set-password=%s/%s"),
+		error = ibString::Format(wxT("%s/%s is written in plain text - seal it: appserver --set-password=%s/%s"),
 			base, name, base, name);
 		return false;
 	}
 
 	wxMemoryBuffer raw;
-	const bool decoded = ibBase64::Read(sealed.wc_str(), sealed.length(), raw);
+	const bool decoded = ibBase64::Read(sealed.wc_str(), sealed.Len(), raw);
 	const unsigned char* bytes = static_cast<const unsigned char*>(raw.GetData());
 	std::vector<unsigned char> plain;
 	if (!decoded || !ibFieldCipher::Decrypt(std::vector<unsigned char>(bytes, bytes + raw.GetDataLen()),
 			SecretContext(m_key, base, name), plain)) {
-		error = wxString::Format(wxT("%s/%s does not open with this installation's key"), base, name);
+		error = ibString::Format(wxT("%s/%s does not open with this installation's key"), base, name);
 		return false;
 	}
-	secret = wxString::FromUTF8(reinterpret_cast<const char*>(plain.data()), plain.size());
+	secret = ibString::FromUTF8(reinterpret_cast<const char*>(plain.data()), plain.size());
 	return true;
 }
 
-bool ibServerConfig::SealSecret(const wxString& base, const wxString& name, const wxString& secret,
-	wxString& error) const
+bool ibServerConfig::SealSecret(const ibString& base, const ibString& name, const ibString& secret,
+	ibString& error) const
 {
-	const wxScopedCharBuffer utf8 = secret.utf8_str();
-	const std::vector<unsigned char> plain(utf8.data(), utf8.data() + utf8.length());
+	const std::string utf8 = secret.ToUtf8();
+	const std::vector<unsigned char> plain(utf8.begin(), utf8.end());
 
 	const std::vector<unsigned char> sealed = ibFieldCipher::Encrypt(plain, SecretContext(m_key, base, name));
 	if (sealed.empty()) {
-		error = wxString::Format(wxT("%s/%s could not be sealed"), base, name);
+		error = ibString::Format(wxT("%s/%s could not be sealed"), base, name);
 		return false;
 	}
 
@@ -213,7 +278,7 @@ bool ibServerConfig::SealSecret(const wxString& base, const wxString& name, cons
 	ibBase64::Append(text, sealed.data(), sealed.size());
 	conf.Write(wxT("/") + base + wxT("/") + name, static_cast<wxString>(text));
 	if (!conf.Flush()) {
-		error = wxString::Format(wxT("the config %s cannot be written"), m_confPath);
+		error = ibString::Format(wxT("the config %s cannot be written"), m_confPath);
 		return false;
 	}
 	return true;

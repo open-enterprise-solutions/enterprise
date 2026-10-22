@@ -196,13 +196,15 @@
     <ClInclude Include="codeRunner.h" />
     <ClInclude Include="mainApp.h" />
     <ClInclude Include="outputMessage.h" />
-    <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="codeRunner.ico" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="codeRunner.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Manifest Include="..\core\program.manifest" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

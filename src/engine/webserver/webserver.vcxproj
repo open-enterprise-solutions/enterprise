@@ -189,6 +189,12 @@
   <ItemGroup>
     <ClInclude Include="webServer.h" />
   </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="webserver.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Manifest Include="..\core\program.manifest" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

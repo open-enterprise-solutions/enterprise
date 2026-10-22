@@ -34,11 +34,8 @@ struct BACKEND_API ibTlsFiles {
 // What a server listening on `address`:`port` is started with (ibHttpServer::Start): HTTPS over the files, their
 // text read here, when they are named; plain HTTP when they are not. Refused - an ibBackendException with the
 // reason - when only one of the files is named, when a named file is not there or not readable, or when nothing is
-// named and `address` is not this machine's own. Whether the files are a certificate and its key, Start answers.
+// named and `address` is not this machine's own (ibIsLoopback, core/net/httpServer.h). Whether the files are a
+// certificate and its key, Start answers.
 BACKEND_API ibHttpServerOptions ibListenerOptions(const wxString& address, std::uint16_t port, const ibTlsFiles& tls);
-
-// This machine's own addresses, as written: 127.0.0.0/8 by number, ::1, localhost - not a name that resolves
-// there, since a name resolves wherever its owner says.
-BACKEND_API bool ibIsLoopback(const wxString& address);
 
 #endif // __BACKEND_LISTENER_H__
