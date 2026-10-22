@@ -17,8 +17,8 @@
 #include "backend/query/queryColumn.h"
 #include "backend/query/queryLowering.h"
 #include "backend/query/queryable.h"
+#include "core/description/typeDescription.h"
 #include "core/query/queryParser.h"
-#include "core/types.h"
 
 namespace {
 

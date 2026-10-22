@@ -68,8 +68,7 @@ TEST_F(CommonModuleCheck, ConfigCheckReportsABrokenModuleAndOneThatWasNeverCompi
 	auto session = std::make_shared<ibSession>(wxT("module-check"), ibSessionKind::Designer);
 	ibSessionScope scope(session.get());
 
-	ASSERT_TRUE(ibApplicationInstance::CreateActiveMetaData(
-		ibApplicationInstance::Get(), ibSessionKind::Designer, 0));
+	ASSERT_TRUE(ibApplicationInstance::CreateActiveMetaData(ibApplicationInstance::Get(), 0));
 
 	ibMetaDataConfigurationBase* cfg = activeMetaData;
 	ASSERT_NE(cfg, nullptr);
