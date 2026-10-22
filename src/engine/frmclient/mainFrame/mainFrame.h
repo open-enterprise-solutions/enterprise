@@ -216,8 +216,8 @@ protected:
 	virtual void ShowRequest(const ibProtocolNode& request, ibProtocolNode& response);
 
 	// THE DOCUMENT OF A TAB THE SERVER RAISED, by the tab's Kind (DrawTabs) — the desktop doc template's CreateDocument for
-	// a tab, as it has no template. The base makes what both modes have (a form, the journal); a mode's window makes its
-	// own (the designer's tree of an external file) and leaves the rest to the base.
+	// a tab, as it has no template. The base makes what both modes have (a form, the journal) and the runtime's start page;
+	// a mode's window makes its own (the designer's tree of an external file) and leaves the rest to the base.
 	virtual ibTabDocument* CreateDocument(ibProtocol::ibView::ibKind kind, long long tabId);
 
 	// The File and Edit menus — the desktop's, the doc manager's commands — and the bar they start it. A mode's window
@@ -350,7 +350,7 @@ private:
 	wxMenu*       m_menuEdit = nullptr;           // …and its Edit
 
 	std::map<int, ibMenuItem>             m_menuItems;     // the server's commands and schemas, by their wx ids (MenuIdOf)
-	std::string                           m_menuShape;     // the server's menu as last built, less what is enabled
+	ibString                              m_menuShape;     // the server's menu as last built, less what is enabled
 	std::deque<ibPostedCall>              m_posted;        // the calls posted, not made yet
 	std::set<long long>                   m_tabsClosing;   // the tabs a close was posted for and not answered yet
 	std::map<long long, ibTabDocument*>   m_documents;   // the tabs' documents the frame raised (DrawTabs), by their ids

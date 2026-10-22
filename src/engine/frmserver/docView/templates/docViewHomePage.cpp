@@ -223,11 +223,13 @@ void ibHomePageView::OnDraw(ibDataNode& frame)
 	if (m_columns.size() > 1)
 		frame.SetValue(ibProtocol::ibView::ibHomePage::Gravity, ibNumber(m_columnGravity));
 
+	// Each column and each cell by an id of its own, from one: children without one come whole in a patch
+	// (NodeChildrenWhole) — every cell's form drawn anew on the client when one of them changed.
 	ibDataNode& columns = frame.Child(ibProtocol::ibView::ibHomePage::Columns);
 	for (std::size_t c = 0; c < m_columns.size(); ++c) {
-		ibDataNode& column = columns.AddChild(0, static_cast<ibMetaID>(c));
+		ibDataNode& column = columns.AddChild(0, static_cast<ibMetaID>(c + 1));
 		for (std::size_t i = 0; i < m_columns[c].size(); ++i)
-			DrawCell(m_columns[c][i], column.AddChild(0, static_cast<ibMetaID>(i)));
+			DrawCell(m_columns[c][i], column.AddChild(0, static_cast<ibMetaID>(i + 1)));
 	}
 }
 

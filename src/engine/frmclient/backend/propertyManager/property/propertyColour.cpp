@@ -9,7 +9,7 @@ wxString ibPropertyColour::GetValueAsString() const
 
 void ibPropertyColour::SetValue(const wxString& val)
 {
-	ibProperty::ReadNodeValue(ibDataValue::String(val));
+	ibPropertySerializable::ReadNodeValue(ibDataValue::String(val));
 }
 
 bool ibPropertyColour::ReadNodeValue(const ibDataValue& value)

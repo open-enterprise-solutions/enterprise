@@ -1,9 +1,9 @@
 #ifndef _DEBUGGER_DEFS_H__
 #define _DEBUGGER_DEFS_H__
 
-// THE DEBUGGER'S WIRE — the engine's (backend/debugger/debugDefs.h) whole: the thin designer's debugger is the engine's
-// client, carried over (debugClient.h), and talks to the runtime over this same socket. What backend_core.h set for it
-// is set here.
+// THE DEBUGGER'S WORDS — the engine's (backend/debugger/debugDefs.h) whole: what the thin designer's listeners are told
+// (debugClientBridge.h) is in the engine's shapes, though the runtime is the server's debugger's to talk to now, and the
+// facade hears it over the protocol (debugClient.h). What backend_core.h set for it is set here.
 
 #include <vector>
 
@@ -64,10 +64,7 @@ enum CommandId
 	CommandId_Detach = 10,    // Soft stop: disconnect debug client + reset debug state, listener stays so the debugger can reattach.
 	CommandId_Destroy = 11,    // Hard stop: same as Detach plus ForceExit on desktop (kill enterprise.exe). Web mode skips the ForceExit (wes serves other tabs) — effectively degrades to Detach.
 
-	CommandId_PatchInsertLine = 12,   // Adds a new line of code.
-	CommandId_PatchDeleteLine = 13,   // Deletes a line of code.
-
-	CommandId_PatchComplete = 14,   // Refresh patch line for dataProcessors
+	// 12–14 — the editor's patches (insert, delete, complete), which no runtime read: the edits are the editor's to count.
 
 	CommandId_DeleteAllBreakpoints = 15,// Instructs the backend to clear all breakpoints set
 
@@ -240,11 +237,12 @@ public:
 struct ibStackData {
 
 	struct ibStackRow {
-		wxString m_moduleName;
+		wxString m_moduleName;      // the module's address, as ibDebugData's — what its line is counted in
+		wxString m_fullName;        // the call as the runtime names it: the module, the procedure, its parameters
 		unsigned int m_moduleLine;
 	public:
-		ibStackRow(const wxString& strModuleName, unsigned int moduleLine) :
-			m_moduleName(strModuleName), m_moduleLine(moduleLine) {
+		ibStackRow(const wxString& strModuleName, const wxString& strFullName, unsigned int moduleLine) :
+			m_moduleName(strModuleName), m_fullName(strFullName), m_moduleLine(moduleLine) {
 		}
 	};
 
@@ -252,9 +250,9 @@ struct ibStackData {
 
 public:
 
-	void AppendStack(const wxString& strModuleName, unsigned int moduleLine) {
+	void AppendStack(const wxString& strModuleName, const wxString& strFullName, unsigned int moduleLine) {
 		m_stackData.emplace_back(
-			strModuleName, moduleLine
+			strModuleName, strFullName, moduleLine
 		);
 	}
 
@@ -262,13 +260,13 @@ public:
 		return m_stackData.size();
 	}
 
-	wxString GetModuleName(unsigned int idx) const {
-		if (idx > m_stackData.size()) return wxEmptyString;
-		return m_stackData[idx].m_moduleName;
+	wxString GetFullName(unsigned int idx) const {
+		if (idx >= m_stackData.size()) return wxEmptyString;
+		return m_stackData[idx].m_fullName;
 	}
 
 	wxString GetModuleLine(unsigned int idx) const {
-		if (idx > m_stackData.size()) return wxEmptyString;
+		if (idx >= m_stackData.size()) return wxEmptyString;
 		return std::to_string(m_stackData[idx].m_moduleLine);
 	}
 };
@@ -423,8 +421,76 @@ struct ibWatchedExpression {
 #define numberOfLaunchConnectionAttempts 15
 /////////////////////////////////////////////////////////////////////////////////////////////
 
-#define waitVerifyDebuggerTimeout 5 //sec
 #define waitDebuggerTimeout 50 //msec
+
+/////////////////////////////////////////////////////////////////////////////////////////////
+
+#include <chrono>
+#include <condition_variable>
+#include <deque>
+#include <mutex>
+#include <string>
+
+// ⭐ WHAT ONE SOCKET SAID, FOR THE THREAD THAT READS IT — its commands in the order they came, and its going. One per
+// socket, at either end: the far end's commands are dispatched on the connection's own thread (RecvCommand), never on
+// the socket's. Held by the socket's handlers as much as by the connection — a handler may be told after the
+// connection let the socket go, and what it says then lands here, read by nobody.
+class ibDebugCommandQueue {
+public:
+
+	// A command, whole — from the socket's thread.
+	void Push(std::string command)
+	{
+		{
+			std::lock_guard<std::mutex> lock(m_mutex);
+			m_queue.push_back(std::move(command));
+		}
+		m_cv.notify_one();
+	}
+
+	// The socket is gone; `reason` — why, empty when either end simply closed it. What it said before is still popped.
+	void Stop(const std::string& reason)
+	{
+		{
+			std::lock_guard<std::mutex> lock(m_mutex);
+			m_stop = true;
+			m_reason = reason;
+		}
+		m_cv.notify_one();
+	}
+
+	// The next command, waiting up to `maxWaitMs` — or false: none came, or the socket has gone and nothing it said is
+	// left (IsStopped).
+	bool Pop(std::string& command, int maxWaitMs)
+	{
+		std::unique_lock<std::mutex> lock(m_mutex);
+		m_cv.wait_for(lock, std::chrono::milliseconds(maxWaitMs), [this]() { return !m_queue.empty() || m_stop; });
+		if (m_queue.empty())
+			return false;
+		command = std::move(m_queue.front());
+		m_queue.pop_front();
+		return true;
+	}
+
+	bool IsStopped() const
+	{
+		std::lock_guard<std::mutex> lock(m_mutex);
+		return m_stop;
+	}
+
+	std::string GetReason() const
+	{
+		std::lock_guard<std::mutex> lock(m_mutex);
+		return m_reason;
+	}
+
+private:
+	mutable std::mutex      m_mutex;
+	std::condition_variable m_cv;
+	std::deque<std::string> m_queue;
+	bool                    m_stop = false;
+	std::string             m_reason;
+};
 
 /////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -37,6 +37,27 @@ target_compile_definitions(core
         NOPCH
 )
 
+# THE NETWORK (net/) — HTTP and WebSocket on Asio, llhttp and Mbed TLS. Asio compiled once, in net/asio.cpp: every other
+# file only declares what the header-only library would define in each. No Boost. All of it PRIVATE: no header of
+# net/ includes Asio, since what its headers make in every file that includes them is made here only.
+target_compile_definitions(core PRIVATE ASIO_STANDALONE ASIO_SEPARATE_COMPILATION ASIO_NO_DEPRECATED)
+if(WIN32)
+    file(GLOB CORE_NET_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/net/*.cpp")
+    set_source_files_properties(${CORE_NET_SOURCES} PROPERTIES COMPILE_DEFINITIONS WIN32_LEAN_AND_MEAN)
+endif()
+target_include_directories(core PRIVATE ${OES_3RDPARTY_DIR}/asio/asio/include)
+# MBED TLS IS THE CORE'S (core/tls declares it): a random byte, a cipher, TLS — whatever else needs one asks the core
+# (crypto/, net/). PRIVATE and hidden (the root CMakeLists.txt), so nothing reaches it past the core.
+target_link_libraries(core PRIVATE llhttp mbedtls mbedx509 mbedcrypto)
+if(WIN32)
+    # crypt32 — the system's certificate store, a client's trust when it names none (net/tlsStream.cpp).
+    target_link_libraries(core PRIVATE ws2_32 crypt32 bcrypt)
+endif()
+if(APPLE)
+    # …and the keychain's (SecTrustSettingsCopyCertificates); CoreFoundation is linked below, for the guid.
+    target_link_libraries(core PRIVATE "-framework Security")
+endif()
+
 # CORE_API resolves to dllexport only when CORE_EXPORTS is defined (core.h) — frontend's rule.
 if(WIN32)
     target_compile_definitions(core PRIVATE CORE_EXPORTS)

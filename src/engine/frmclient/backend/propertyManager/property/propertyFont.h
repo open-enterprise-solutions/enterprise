@@ -1,32 +1,32 @@
 ﻿#ifndef __PROPERTY_FONT_H__
 #define __PROPERTY_FONT_H__
 
-#include "frmclient/backend/propertyManager/propertyObject.h"
+#include "frmclient/backend/propertyManager/property/propertySerializable.h"
 
 //base property for "font"
-class FRMCLIENT_API ibPropertyFont : public ibProperty {
+class FRMCLIENT_API ibPropertyFont : public ibPropertySerializable {
 public:
 
-	// …held as its node, the font's text (ibBackendProperty::ReadNodeValue).
+	// …held as its node, the font's text (ibPropertySerializable::ReadNodeValue).
 	wxFont GetValueAsFont() const { return typeConv::StringToFont(GetValueAsString()); }
 	wxString GetValueAsString() const;
 	void SetValue(const wxFont& val) { SetValue(typeConv::FontToString(val)); }
 	void SetValue(const wxString& val);
 
 	ibPropertyFont(ibPropertyCategory* cat, const wxString& name, const wxFont& f = wxNullFont)
-		: ibProperty(cat, name, wxNullVariant)
+		: ibPropertySerializable(cat, name, wxNullVariant)
 	{
 		SetValue(f);
 	}
 
 	ibPropertyFont(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxFont& f = wxNullFont)
-		: ibProperty(cat, name, label, wxNullVariant)
+		: ibPropertySerializable(cat, name, label, wxNullVariant)
 	{
 		SetValue(f);
 	}
 
 	ibPropertyFont(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString, const wxFont& f = wxNullFont)
-		: ibProperty(cat, name, label, helpString, wxNullVariant)
+		: ibPropertySerializable(cat, name, label, helpString, wxNullVariant)
 	{
 		SetValue(f);
 	}

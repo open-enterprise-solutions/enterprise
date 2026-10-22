@@ -27,7 +27,7 @@ class FRMCLIENT_API ibDialogActiveUser : public wxDialog {
 	wxListCtrl* m_activeTable;
 	wxListCtrl* m_locksTable;
 	std::shared_ptr<wxTimer> m_activeTableScanner;
-	std::string m_sessionArray;   // the sessions shown, as they came — the desktop's hash of them
+	ibString    m_sessionArray;   // the sessions shown, as they came — the desktop's hash of them
 	size_t  m_lastLockRowCount = 0;
 public:
 

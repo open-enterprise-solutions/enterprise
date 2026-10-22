@@ -20,43 +20,43 @@ void ibDialogDebugItem::RefreshDebugList()
 
 		debugClient->SearchServer();
 
-		for (auto connection : debugClient->GetListConnection()) {
-			
-			if (connection->GetConnectionType() != ConnectionType::ConnectionType_Scanner)
-				continue;
-			
-			if (!connection->IsVerifiedConnection())
-				continue;
-			
-			const long index = m_availableList->InsertItem(m_availableList->GetItemCount(), connection->GetUserName());
-			
-			m_availableList->SetItem(index, 0, connection->GetUserName());
-			m_availableList->SetItem(index, 1, connection->GetComputerName());
-			m_availableList->SetItem(index, 2, stringUtils::IntToStr(connection->GetPort()));
+		debugClient->ForEachConnection([this](const auto& connection) {
+
+			if (connection.GetConnectionType() != ConnectionType::ConnectionType_Scanner)
+				return;
+
+			if (!connection.IsVerifiedConnection())
+				return;
+
+			const long index = m_availableList->InsertItem(m_availableList->GetItemCount(), connection.GetUserName());
+
+			m_availableList->SetItem(index, 0, connection.GetUserName());
+			m_availableList->SetItem(index, 1, connection.GetComputerName());
+			m_availableList->SetItem(index, 2, stringUtils::IntToStr(connection.GetPort()));
 
 			m_listAvailable.emplace_back(
-				std::pair<unsigned short, wxString>(connection->GetPort(), connection->GetHostName())
+				std::pair<unsigned short, wxString>(connection.GetPort(), connection.GetHostName())
 			);
-		}
+		});
 
-		for (auto connection : debugClient->GetListConnection()) {
-			
-			if (connection->GetConnectionType() != ConnectionType::ConnectionType_Debugger)
-				continue;
-			
-			if (!connection->IsVerifiedConnection())
-				continue;
-			
-			const long index = m_attachedList->InsertItem(m_attachedList->GetItemCount(), connection->GetUserName());
-			
-			m_attachedList->SetItem(index, 0, connection->GetUserName());
-			m_attachedList->SetItem(index, 1, connection->GetComputerName());
-			m_attachedList->SetItem(index, 2, stringUtils::IntToStr(connection->GetPort()));
+		debugClient->ForEachConnection([this](const auto& connection) {
+
+			if (connection.GetConnectionType() != ConnectionType::ConnectionType_Debugger)
+				return;
+
+			if (!connection.IsVerifiedConnection())
+				return;
+
+			const long index = m_attachedList->InsertItem(m_attachedList->GetItemCount(), connection.GetUserName());
+
+			m_attachedList->SetItem(index, 0, connection.GetUserName());
+			m_attachedList->SetItem(index, 1, connection.GetComputerName());
+			m_attachedList->SetItem(index, 2, stringUtils::IntToStr(connection.GetPort()));
 
 			m_listAttached.emplace_back(
-				std::pair<unsigned short, wxString>(connection->GetPort(), connection->GetHostName())
+				std::pair<unsigned short, wxString>(connection.GetPort(), connection.GetHostName())
 			);
-		}
+		});
 	}
 }
 

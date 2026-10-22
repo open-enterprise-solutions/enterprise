@@ -45,6 +45,7 @@
 
 #include <wx/string.h>
 
+#include "core/fstring.h"           // ibString — a call's text and its answer, as the transport holds them
 #include "core/mcp/mcpSettings.h"   // ibMcpSettings — what a person set, the value a settings page hands over
 
 class ibSession;
@@ -219,7 +220,7 @@ public:
 
 private:
 
-	class ibMcpListener;   // the worker thread + its socket, defined in the .cpp
+	class ibMcpListener;   // the HTTP server + its stream, defined in the .cpp
 
 	// WHAT THE HTTP HEADERS SAID, for the parts of the message the transport mirrors
 	// into them. From revision 2025-06-18 a client states the protocol version in a
@@ -228,7 +229,7 @@ private:
 	// load balancer routes on the one and the server executes on the other.
 	//
 	// Carried in a struct of its own rather than by handing Answer an
-	// httplib::Request: the JSON-RPC layer has never known what HTTP is, and the
+	// ibHttpRequest: the JSON-RPC layer has never known what HTTP is, and the
 	// three strings it now needs are not a reason to teach it.
 	struct ibMcpWireHeaders {
 		wxString m_protocolVersion;   // MCP-Protocol-Version, empty when absent
@@ -250,8 +251,8 @@ private:
 	// an HTTP number. It also spares the caller from reading its own output back:
 	// searching the emitted JSON for `"code":-32020` is a guess about the writer's
 	// spacing, and it was wrong the first time it was tried.
-	wxString Answer(const wxString& request) { return Answer(request, ibMcpWireHeaders(), nullptr); }
-	wxString Answer(const wxString& request, const ibMcpWireHeaders& headers, int* outErrorCode);
+	ibString Answer(const ibString& request) { return Answer(request, ibMcpWireHeaders(), nullptr); }
+	ibString Answer(const ibString& request, const ibMcpWireHeaders& headers, int* outErrorCode);
 	friend class ibMcpListener;
 
 	void Publish(const wxString& method, const wxString& request, const wxString& answer);

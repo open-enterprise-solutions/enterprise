@@ -12,6 +12,8 @@ class FRMSERVER_API ibClientFrameDesigner : public ibClientFrame {
 public:
 
 	ibClientFrameDesigner(ibSessionHolder&& holder, ibClientInstance* clientInstance);
+	// Its debugger taken off the engine's listeners — it goes with them.
+	virtual ~ibClientFrameDesigner() override;
 
 	// The right to edit the configuration — its administration right, asked of the person who logged in; let in, the
 	// tree is loaded with it, as the desktop's AllowRun loaded its navigator.
@@ -24,6 +26,9 @@ public:
 
 	// The configuration tree, as the frame's MetaData.
 	virtual void OnDraw(ibDataNode& state) override;
+
+	// The engine's listener this frame put in — null where the configuration has no debugger.
+	virtual ibClientDebugger* GetDebugger() const override { return m_debugger; }
 
 	// A script's failure — a module checked, compiled: the desktop designer's (ibFrontendMainFrameDesigner::BackendError),
 	// a line in the messages; not the runtime's window that asks what becomes of it.
@@ -38,6 +43,10 @@ private:
 	void InitializeDefaultMenu();
 
 	ibConfigurationTree m_metaTree;
+
+	// ⭐ THE DESIGNER LISTENS AS THE ASSISTANT DOES — one more listener of the session's engine client (debugClient), put
+	// in as the frame is made and taken out as it goes. Owned by the engine's adapter meanwhile: held, not owned.
+	ibClientDebugger* m_debugger = nullptr;
 };
 
 #endif

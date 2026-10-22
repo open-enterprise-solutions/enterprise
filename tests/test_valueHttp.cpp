@@ -339,8 +339,8 @@ TEST_F(HttpClient, EveryMethodArrivesAsItselfWithItsPathAndItsBytes)
 	EXPECT_EQ(Count(), sizeof(cases) / sizeof(cases[0])) << "one request each, over one connection object";
 }
 
-// What the header's comment and the help say about a body nobody typed: the library sends it as text/plain.
-// Pinned, because it is the library's decision and an update of the library is where it would change.
+// What the header's comment and the help say about a body nobody typed: it goes as text/plain. Pinned, because a
+// script reads the help and the client is where it would change.
 TEST_F(HttpClient, ABodyWithNoContentTypeGoesAsPlainTextAndTheOneGivenArrivesOnce)
 {
 	ibValueHttpConnection connection;
@@ -387,15 +387,14 @@ TEST_F(HttpClient, AHeaderThatWouldBreakTheMessageIsRefusedBeforeAnythingIsSent)
 		const size_t before = Count();
 		const wxString why = Refusal([&] { Ask(connection, ibHttpMethod_Get, request); });
 		EXPECT_FALSE(why.empty()) << Utf8(one.first);
-		// The library refuses a bad field as well, with two words for the whole request. Ours is there to say WHICH.
+		// The refusal says WHICH: a Structure filled from a file has many entries.
 		EXPECT_TRUE(why.Contains(wxString(wxT("'")) + one.first + wxT("'"))) << "the refusal does not name the header: " << Utf8(why);
 		EXPECT_EQ(Count(), before) << "nothing reached the server";
 	}
 }
 
-// A value pasted with a space at its end goes out without it - the library would refuse the whole request for
-// that, in two words - and a value that is not a string or a number is refused by name rather than sent as the
-// name of its type.
+// A value pasted with a space at its end goes out without it, and a value that is not a string or a number is
+// refused by name rather than sent as the name of its type.
 TEST_F(HttpClient, AHeaderValueIsTrimmedAndHasToBeAStringOrANumber)
 {
 	ibValueHttpConnection connection;
@@ -421,11 +420,9 @@ TEST_F(HttpClient, AHeaderValueIsTrimmedAndHasToBeAStringOrANumber)
 	EXPECT_EQ(Count(), before);
 }
 
-// The library adds `Expect: 100-continue` to a body of 1 KB or more by itself, and against a server that does
-// not speak it - an older proxy, a register's firmware - the body waits a second before it goes. Switched
-// off for the whole build (CPPHTTPLIB_EXPECT_100_THRESHOLD=0 in the root CMakeLists.txt and in
-// ConfigurationDefs.props): a body goes when the request goes, and a script cannot be surprised by a header
-// it may not set.
+// A client that adds `Expect: 100-continue` to a large body by itself makes it wait, against a server that does not
+// speak it - an older proxy, a register's firmware - a second before it goes. This one does not: a body goes when the
+// request goes, and a script cannot be surprised by a header it may not set.
 TEST_F(HttpClient, ALargeBodyGoesWithoutAnExpectTheScriptCouldNotSet)
 {
 	ibValueHttpConnection connection;
@@ -436,7 +433,7 @@ TEST_F(HttpClient, ALargeBodyGoesWithoutAnExpectTheScriptCouldNotSet)
 	const ibValuePtr<ibValueHttpResponse> response = Ask(connection, ibHttpMethod_Post, request);
 	ASSERT_TRUE(response != nullptr);
 	EXPECT_EQ(response->StatusCode(), 200);
-	EXPECT_EQ(Last().m_headers.count("Expect"), 0u) << "the library added the header on its own";
+	EXPECT_EQ(Last().m_headers.count("Expect"), 0u) << "the client added the header on its own";
 	EXPECT_EQ(Last().m_body.size(), body.size());
 }
 
@@ -502,9 +499,8 @@ TEST_F(HttpClient, TextThatIsNotAsciiInAnAddressArrivesAsTheSameText)
 	request.SetResourceAddress(wxString::FromUTF8("/echo/a,b;c+d?name=\xD0\x91\xD0\xBE\xD1\x80\xD1\x89&pair=a%20b"));
 	Ask(connection, ibHttpMethod_Get, request);
 	const ibSeen seen = Last();
-	// The request line as it went out: what is not ASCII is %XX of its UTF-8, and NOTHING ELSE is touched - the
-	// library's own encoder would also rewrite ',' ';' and '+', and an address encoded by two rules is one
-	// nobody can predict. Its encoding is switched off; this is what says it stays off.
+	// The request line as it went out: what is not ASCII is %XX of its UTF-8, and NOTHING ELSE is touched - an
+	// encoder that also rewrote ',' ';' and '+' would make an address encoded by two rules, one nobody can predict.
 	EXPECT_EQ(seen.m_target, std::string("/echo/a,b;c+d?name=%D0%91%D0%BE%D1%80%D1%89&pair=a%20b"));
 	EXPECT_EQ(seen.m_path, std::string("/echo/a,b;c+d"));
 	ASSERT_EQ(seen.m_params.count("name"), 1u);
@@ -573,8 +569,8 @@ TEST_F(HttpClient, AClosedPortIsSaidWithTheHostAndThePort)
 	EXPECT_TRUE(why.Contains(wxT("127.0.0.1")) && why.Contains(wxString::Format(wxT("%d"), closed))) << Utf8(why);
 }
 
-// A redirect is an answer. Followed by the library it decoded the Location before sending it, turned a POST
-// into a GET on a 303 without a word, and raised for a server that DID answer when it could not go on.
+// A redirect is an answer. Followed behind the script's back it decoded the Location before sending it, turned a
+// POST into a GET on a 303 without a word, and raised for a server that DID answer when it could not go on.
 TEST_F(HttpClient, ARedirectIsAnAnswerWithItsLocationNotARoadTakenBehindTheScriptsBack)
 {
 	ibValueHttpConnection connection;
@@ -646,9 +642,9 @@ TEST_F(HttpClient, WhatTheScriptsDoorAndTheOddAnswersDo)
 }
 
 // A peer that hangs up while the body is still on its way. Off Windows the write raises SIGPIPE, whose default
-// ends the process - the daemon, on a bank that dropped the line - unless the send says MSG_NOSIGNAL (Linux, on
-// the whole target) or the socket says SO_NOSIGPIPE (macOS). The library's Server ignores the signal in its
-// constructor, which is why a test binary would never see this: the default is put back for the duration.
+// ends the process - the daemon, on a bank that dropped the line - unless the send says MSG_NOSIGNAL (Linux) or
+// the socket says SO_NOSIGPIPE (macOS), as Asio's do. cpp-httplib's Server, the reference here, ignores the signal
+// in its constructor, which is why a test binary would never see this: the default is put back for the duration.
 TEST_F(HttpClient, APeerThatHangsUpMidUploadIsASentenceNotTheEndOfTheProcess)
 {
 	httplib::Server tight;

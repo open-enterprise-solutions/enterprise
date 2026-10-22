@@ -185,7 +185,7 @@ struct BACKEND_API ibSessionIdentity {
 	wxString     m_userName;          // empty = anonymous phase / technical
 	wxString     m_userGuid;           // sys_user row, empty before Attach
 	wxString     m_computer;          // hostname
-	wxString     m_address;            // "host:port" for web; "" for desktop
+	ibString     m_address;            // "host:port" for web; "" for desktop
 	ibRunMode    m_appMode;            // how its process holds the base: a file base, a server, …
 	ibDateTime   m_started;
 	int          m_pid = 0;            // OS pid — for kick / attach debugger
@@ -890,7 +890,7 @@ private:
 	void SetInserted(bool v)   { m_inserted = v; }
 
 	// Auth-flow mutators. Driven only through ibSessionRegistry façades
-	// (InstallUser, EnableDebugForSession) — registry is the single
+	// (InstallUser) — registry is the single
 	// mutator of session state, callers from appData / login dialogs
 	// route through it. SetSessionRawPassword writes the plain-text
 	// cache used by the Designer "Start debugging" child spawn; the
@@ -907,17 +907,15 @@ private:
 	}
 	void SetSessionRawPassword(const wxString& pwd) { m_sessionRawPassword = pwd; }
 	void ClearSessionRawPassword() { m_sessionRawPassword.clear(); }
-	void EnableDebug()  { if (!m_debug) m_debug = std::make_unique<ibDebugSession>(); }
-	void DisableDebug() { m_debug.reset(); }
 
 public:
-	// Per-session debug state. nullptr -> session is not being debugged
-	// (ibProcUnit::Execute skips breakpoint checks fast). Allocated by
-	// EnableDebug() when --debug starts the session or designer attaches;
-	// destroyed in DisableDebug() / ~ibSession. Migrated here from
-	// process-level ibDebuggerServer fields so concurrent web sessions
-	// in wenterprise-server can each enter their own debug loop without
-	// blocking the others.
+	// Per-session debug state — where a stop of this session parks. MADE WITH THE SESSION: a designer
+	// attaches at any moment, and a stop must find it then. It was made only for a session that logged in
+	// under --debug, so attaching to a running application took the breakpoints and the Pause and every
+	// stop was dropped in DoDebugLoop without a word (Max, 2026-10-21, desktop and thin alike). Whether
+	// anything stops is the debug server's (m_bUseDebug, the breakpoints). Here and not on ibDebuggerServer
+	// so concurrent web sessions in wenterprise-server each enter their own debug loop without blocking
+	// the others.
 	struct ibDebugSession {
 		// True while ibProcUnit::Execute is parked in DoDebugLoop's CV
 		// wait. Designer's Continue/Step/Detach commands clear this and
@@ -941,37 +939,17 @@ public:
 		std::map<unsigned long long, wxString> m_expressions;
 	};
 
-	// Thread safety for the four accessors below.
-	//
-	// EnableDebug runs exactly once per session, on the registry thread,
-	// inside the OnAuthenticated listener BEFORE TransitionAuth flips
-	// m_auth to Authenticated. IsDebug / Debug are read by debug-server
-	// connection threads, web HTTP handlers, and ibProcUnit on script
-	// threads — all of which only run after the session reaches
-	// Authenticated. Happens-before via the auth state machine
-	// (release-store on m_auth followed by acquire-load) makes the
-	// non-atomic m_debug write visible to readers; no explicit mutex.
-	//
-	// DisableDebug is currently unused — the unique_ptr is released by
-	// ~ibSession. Kept on the API for future "detach debugger mid-
-	// session" scenarios; if it gains a real caller, the timing
-	// argument above no longer holds and m_debug needs atomic
-	// shared_ptr or a mutex.
-	// Public reads — used by debug-server worker threads and HTTP handlers
-	// to discover whether a session is attached for debugging and to
-	// access its watch list / debug-loop CV. Mutators (EnableDebug /
-	// DisableDebug) are restricted to the auth flow — see private block
-	// further down with friend ibApplicationInstance.
-	bool IsDebug() const     { return m_debug != nullptr; }
-	ibDebugSession* Debug()  { return m_debug.get(); }
+	// Read by debug-server connection threads, web HTTP handlers and ibProcUnit on script threads: it is
+	// made with the session and never replaced, so there is no write to race; what changes inside it is
+	// guarded by its own mutex and flag.
+	ibDebugSession& Debug() { return m_debug; }
 
 	// Drop the debug-park flag and notify the per-session CV so any
 	// script worker stopped at a breakpoint inside DoDebugLoop wakes
 	// up immediately and unwinds. Used by session-destroy paths (web
 	// F5 → ibWebSession::OnExit → worker join) so the parked thread
 	// doesn't hold the worker indefinitely while the destroy waits to
-	// release the registry slot. No-op if the session isn't being
-	// debugged.
+	// release the registry slot.
 	void WakeDebugLoop();
 
 	// --- Database connection façade ----------------------------------
@@ -1026,8 +1004,7 @@ private:
 	// m_parent chain. See project_runtime_facade_plan.md.
 	ibValuePtr<ibValueModuleManagerRuntimeConfiguration> m_root;
 	
-	// nullptr unless the session was created with debug attached.
-	std::unique_ptr<ibDebugSession> m_debug;
+	ibDebugSession m_debug;   // made with the session — see Debug()
 
 	// RLS — the concrete session-side policy (created at auth)
 	std::unique_ptr<ibAccessPolicy> m_accessPolicy;

@@ -139,8 +139,12 @@ wxObject* ibValueTextCtrl::Create(ibFrontendWindow* wxparent, ibVisualHost* visu
 	auto* textEditor = new ibWebTextCtrl(GetControlID());
 	textEditor->Bind(wxEVT_TEXT, &ibValueTextCtrl::OnWebTextChanged, this);
 #else
+	// Multiline is a creation-time style on macOS / GTK: pass it here, the later
+	// SetMultilineMode() in Update() cannot add it to an existing native control.
+	const long style = wxBORDER_NONE
+		| (m_propertyMultilineMode->GetValueAsBoolean() ? wxTE_MULTILINE : 0);
 	auto* textEditor = new ibControlNavigationTextEditor(
-		wxparent, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize);
+		wxparent, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, style);
 #endif
 
 	if (!m_propertySource->IsEmptyProperty()) {

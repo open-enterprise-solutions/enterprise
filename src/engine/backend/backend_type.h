@@ -17,6 +17,12 @@ public:
 	static bool WriteNode(ibDataValue& value, const ibMetaDescription& metaDesc, const class ibMetaData* metaData = nullptr);
 };
 
+// …and a type's — written against the configuration it belongs to, the classes it no longer knows dropped.
+class BACKEND_API ibBackendTypeDescriptionMemory : public ibTypeDescriptionMemory {
+public:
+	static bool WriteNode(ibDataValue& value, const ibTypeDescription& typeDesc, const class ibMetaData* metaData = nullptr);
+};
+
 //////////////////////////////////////////////////////////////
 
 class BACKEND_API ibBackendTypeFactory {

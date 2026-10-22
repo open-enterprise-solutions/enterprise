@@ -228,8 +228,7 @@ public:
 
 	virtual bool IsEditable() const;
 
-	// The type it is shown by (ibPropertyRegistry): its class, named as the server names one — the server's row says
-	// its own (ibPropertySerializable).
+	// The type it is shown by (ibPropertyRegistry): its class, named as the server names one.
 	virtual wxString GetType() const;
 
 	////////////////////
@@ -357,13 +356,8 @@ protected:
 	// exists to intercept, and the compiler now says so instead of the configuration losing a
 	// default three layers away. GetNodeValue / SetNodeValue are the surface; these are the
 	// implementation, and the pair reads Read/Write while the doors read Get/Set.
-	//
-	// ⭐ THE VALUE IS ONE VARIANT, THE SAME FOR EVERY TYPE (ibVariantDataSerializable, Max, 2026-10-20) — the node the
-	// server stores it as, named by the property's class: what is read is held as it comes, what is written is what is
-	// held. Whoever sets and gets it moves a variant and knows nothing of the node; a type that reads more than one shape
-	// of a node (a flag spelled as a word) reads it, and holds what it read here.
-	virtual bool ReadNodeValue(const ibDataValue& value);
-	virtual bool WriteNodeValue(ibDataValue& value) const;
+	virtual bool ReadNodeValue(const ibDataValue& value) = 0;
+	virtual bool WriteNodeValue(ibDataValue& value) const = 0;
 
 protected:
 	virtual void DoSetValue(const wxVariant& val) { m_propValue = val; }
@@ -470,6 +464,10 @@ protected:
 		return new ibPropertyCategory(catName, catLabel, catHelp, this, ownerCat);
 	}
 
+	// …of a row of the server's answer (Receive) — made by its owner, which knows what property a row is; none: it shows
+	// no rows. The row is given, not lent: the property keeps it (what its cell reads), the answer is done with it.
+	virtual ibProperty* CreateProperty(ibPropertyCategory* cat, ibDataNode&& row) { return nullptr; }
+
 protected:
 
 	wxString GetIndentString(int indent) const; // gets the string with the indentation
@@ -563,7 +561,7 @@ public:
 	}
 
 	// ⭐ THE SERVER'S ANSWER TAKEN IN — its rows as the server's inspector writes them (frmserver ibPropertyInspector, the
-	// schema Properties): its categories (Name, Title, their rows) and properties (an ibPropertySerializable each), in
+	// schema Properties): its categories (Name, Title, their rows) and properties (each its owner's: CreateProperty), in
 	// place of those it had. The server sends what is to be seen, no more and no less; the client knows no property of its
 	// own.
 	bool Receive(const ibProtocolNode& answer);
@@ -580,10 +578,10 @@ public:
 	*/
 	virtual int GetComponentType() const { return COMPONENT_TYPE_ABSTRACT; }
 
-	// ⭐ WHAT THE SERVER SAYS OF IT, received as it is shown (the inspector's Create): one that asks the server of its own —
-	// a metaobject, a form's attribute — asks here and takes the answer in (Receive(answer)); one whose rows came with its
-	// form's answer has nothing to ask. False: no answer.
-	virtual bool Receive() { return true; }
+	// ⭐ WHAT THE SERVER SAYS OF IT, fetched as it is shown (the inspector's Create): one that asks the server of its own —
+	// a metaobject, a form's attribute, a form's control — asks here and takes the answer in (Receive(answer)); one that
+	// asks nothing has nothing to fetch. False: no answer.
+	virtual bool Fetch() { return true; }
 
 	// The front's ONE refresh entry — sent per render and after an edit, NOT per property.
 	// Default fans out to both halves; override a half to push what that kind's state
@@ -702,8 +700,8 @@ protected:
 
 private:
 
-	// …the rows under one category, into it — its properties and its categories.
-	void Receive(ibPropertyCategory* category, const ibDataNode& rows);
+	// …the rows under one category, into it — its properties and its categories, each row given to what is made of it.
+	void Receive(ibPropertyCategory* category, ibDataNode& rows);
 
 	std::map<wxString, ibProperty*> m_properties;
 	std::map<wxString, ibEvent*> m_events;

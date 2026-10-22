@@ -709,9 +709,12 @@ void ibValueModelTableBox::OnUpdate(ibDataNode& state, ibVisualHost* host)
 		request.SetValue(ibProtocol::ibForm::ibTable::Anchor, anchor);
 		request.SetValue(ibProtocol::ibForm::ibTable::Parent, 0);
 		request.SetValue(ibProtocol::ibForm::ibTable::Count, count);
-		// A current row not handed out yet (a row just added) is not one to read around: the level is read from the top —
-		// no rows ahead of it (Before 0), so the client knows it for the top.
-		const bool fromTop = m_rowsSentVersion != -1 && anchor == 0;
+		// A current row not handed out yet (the first Version's — a choice form opened on a value; a row just added) is
+		// not one to read around: the level is read from the top — no rows ahead of it (Before 0), so the client knows it
+		// for the top, and stands on the current row when the read names it, or reads around it. Left to Fetch, a reset
+		// with no anchor read from the current row on, the page taken for the top: a choice form on its value showed the
+		// list from that row down (2026-10-21).
+		const bool fromTop = anchor == 0;
 		if (anchor != 0)
 			request.SetValue(ibProtocol::ibForm::ibTable::Before, count);
 		if (fromTop)

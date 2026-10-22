@@ -75,7 +75,8 @@ bool ibTabDocument::SaveAs()
 		return false;
 
 	// Named as its tab is, the first time — a modified one's title ends with its «*».
-	wxString name = GetFilename().IsEmpty() ? frame->FindTab(m_tabId).GetString(ibProtocol::ibFrame::ibTab::Title) : wxFileNameFromPath(GetFilename());
+	wxString name = GetFilename().IsEmpty() ? frame->FindTab(m_tabId).GetString(ibProtocol::ibFrame::ibTab::Title).ToWxString()
+		: wxFileNameFromPath(GetFilename());
 	name.Trim();
 	if (name.EndsWith(wxT("*")))
 		name.RemoveLast();

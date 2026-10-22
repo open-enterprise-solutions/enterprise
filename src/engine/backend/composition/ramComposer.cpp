@@ -14,7 +14,7 @@
 #include "backend/tabularModel.h"           // ibRamValueStorage — RowCount / SplitField / ResolveField
 #include "backend/composition/drivers/compositionDriver.h"   // ibCompositionDriver — a composition is printed through
 #include "backend/query/queryConstructorModel.h"            // WalkFrom — the hops of a path, a reference by its type
-#include "backend/query/queryRender.h"                      // ibQueryColumnFromPath — a dotted path becomes its hops, once
+#include "core/query/queryRender.h"                      // ibQueryColumnFromPath — a dotted path becomes its hops, once
 
 // ⚠ NAMED, NOT INHERITED — MSVC hands these over transitively and GCC / Clang do not.
 #include <algorithm>    // std::find / std::distance — the grouping paths are looked up by value

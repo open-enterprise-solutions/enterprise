@@ -26,11 +26,16 @@ void ibSchemaLanguages::Build(const ibSession& session, const ibDataNode& args, 
 	metaData->GetOwner(ownerRaw);
 	const ibMetaData* const owner = ownerRaw != nullptr ? ownerRaw : metaData;
 
+	// The configuration's own language (DefaultLanguage) is told by its code, as the desktop's user record finds it
+	// (activeMetaData->GetLangCode()).
+	const wxString defaultCode = owner->GetLangCode();
 	ibMetaID idx = 0;
 	for (const auto object : owner->GetAnyArrayObject<ibValueMetaObjectLanguage>(g_metaLanguageCLSID)) {
 		ibDataNode& row = languages.AddChild(0, idx++);
 		row.SetValue(ibProtocol::ibSchema::ibLanguages::Guid, object->GetDocPath());
 		row.SetValue(ibProtocol::ibSchema::ibLanguages::Title, object->GetSynonym());
 		row.SetValue(ibProtocol::ibSchema::ibLanguages::Code, object->GetLangCode());
+		if (!defaultCode.IsEmpty() && object->GetLangCode() == defaultCode)
+			row.SetValue(ibProtocol::ibSchema::ibLanguages::Default, true);
 	}
 }

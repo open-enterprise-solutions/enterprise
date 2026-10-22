@@ -2,6 +2,7 @@
 #include "core/fnumber.h"
 
 #include "core/fileSystem/fs.h" // ibReaderMemory / ibWriterMemory
+#include "core/fstring.h"       // ibString — ToString into the engine's string
 
 #include <algorithm>
 #include <atomic>
@@ -434,16 +435,15 @@ namespace
 	// optional [eE][+-]?digits. Returns true if at least one digit was consumed.
 	// On failure leaves `out` zeroed.
 	//
-	// Walks wxString's underlying wchar_t buffer directly — no UTF-8 conversion,
+	// Walks the string's wchar_t buffer directly, to its terminator — no UTF-8 conversion,
 	// since digits, sign, decimal point and exponent marker are all ASCII and
 	// fit in single wchar_t code units.
-	bool TryParseString(const wxString& s, ibNumber::BigImpl& out)
+	bool TryParseString(const wchar_t* p, ibNumber::BigImpl& out)
 	{
 		out.limbs.clear();
 		out.negative = false;
 		out.exp = 0;
 
-		const wchar_t* p = s.wc_str();
 		if (!p) return false;
 
 		while (*p == L' ' || *p == L'\t') ++p;
@@ -652,7 +652,7 @@ ibNumber::ibNumber(double v)
 	strDigits.Replace(wxT(","), wxT("."));
 
 	BigImpl big;
-	if (TryParseString(strDigits, big))
+	if (TryParseString(strDigits.wc_str(), big))
 		StoreBig(std::move(big));
 }
 
@@ -660,7 +660,7 @@ ibNumber::ibNumber(const wxString& s)
 	: m_payload(PackImmediate(0, 0))
 {
 	BigImpl big;
-	if (TryParseString(s, big)) StoreBig(std::move(big));
+	if (TryParseString(s.wc_str(), big)) StoreBig(std::move(big));
 }
 
 // A heap-tier number is SHARED: one more owner of its BigImpl, nothing copied.
@@ -1573,37 +1573,96 @@ double ibNumber::ToDouble() const
 //
 // Scientific notation is the same value in a form whose length is bounded by the DIGITS, never by the
 // exponent, and FromString reads it back.
-static wxString ScientificText(const wchar_t* digits, size_t magLen, bool negative, int32_t exp)
+template<class Text>
+static void ScientificText(Text& out, const wchar_t* digits, size_t magLen, bool negative, int32_t exp)
 {
-	wxString out;
-	if (negative) out += wxT('-');
-	out += wxString(digits, 1);
+	if (negative) out += L'-';
+	out.append(digits, 1);
 	if (magLen > 1) {
-		out += wxT('.');
-		out += wxString(digits + 1, magLen - 1);
+		out += L'.';
+		out.append(digits + 1, magLen - 1);
 	}
-	out += wxString::Format(wxT("E%+d"), static_cast<int>(exp) + static_cast<int>(magLen) - 1);
-	return out;
+	wchar_t power[16];
+	const int n = std::swprintf(power, sizeof(power) / sizeof(power[0]), L"E%+d",
+	                            static_cast<int>(exp) + static_cast<int>(magLen) - 1);
+	out.append(power, n > 0 ? static_cast<size_t>(n) : 0u);
 }
 
-wxString ibNumber::ToString() const
+// Zeros — a whole number's shifted exponent, a fraction's leading ones — a stack's worth at a time.
+template<class Text>
+static void AppendZeros(Text& out, size_t count)
 {
-	// Fast path: immediate-tier integer (mantissa fits in int64, exp == 0).
-	// This is by far the most common case for DB write paths and tight loops.
-	// We write wide-char directly into a wxString-compatible buffer — wxString
-	// is a wrapper over std::wstring on the Unicode build, so wchar_t→wxString
-	// is a direct copy without character-set conversion.
-	if (IsImmediate() && ImmExp() == 0) {
-		wchar_t buf[32];
-		const int64_t m = ImmMantissa();
-		const int n = std::swprintf(buf, sizeof(buf) / sizeof(buf[0]),
-		                            L"%lld", static_cast<long long>(m));
-		return wxString(buf, n > 0 ? static_cast<size_t>(n) : 0u);
+	static const wchar_t s_zeros[] = L"0000000000000000000000000000000000000000000000000000000000000000";
+	const size_t chunk = sizeof(s_zeros) / sizeof(s_zeros[0]) - 1;
+	while (count != 0) {
+		const size_t k = count < chunk ? count : chunk;
+		out.append(s_zeros, k);
+		count -= k;
+	}
+}
+
+// The text of digits × 10^exp: the sign, the digits with the point where the exponent puts it — zeros before them
+// when the fraction is the longer — and past the ceiling the scientific form (ScientificText above).
+template<class Text>
+static void AppendDecimal(Text& out, const wchar_t* p, size_t magLen, bool negative, int32_t exp)
+{
+	if (exp > ibNumber::kMaxDecodedExp10 || exp < -ibNumber::kMaxDecodedExp10) {
+		ScientificText(out, p, magLen, negative, exp);
+		return;
+	}
+	// Zeros after the point say nothing (5.00 == 5; 0.50 == 0.5), and a division leaves thirty of them even on an
+	// integer-valued quotient — without the trim Message(15/5) prints 30 zeros. Only the fraction's: a whole number
+	// with a shifted exponent (1000000 = mantissa 1, exp +6) keeps its zeros, they are significant.
+	while (exp < 0 && magLen > 1 && p[magLen - 1] == L'0') {
+		--magLen;
+		++exp;
+	}
+	if (negative) out += L'-';
+	if (exp >= 0) {
+		out.append(p, magLen);
+		AppendZeros(out, static_cast<size_t>(exp));
+		return;
+	}
+	const size_t fracLen = static_cast<size_t>(-exp);
+	if (magLen > fracLen) {
+		out.append(p, magLen - fracLen);
+		out += L'.';
+		out.append(p + magLen - fracLen, fracLen);
+	}
+	else {
+		out.append(L"0.", 2);
+		AppendZeros(out, fracLen - magLen);
+		out.append(p, magLen);
+	}
+}
+
+template<class Text>
+void ibNumber::AppendText(Text& out) const
+{
+	// ⭐ THE IMMEDIATE TIER FROM THE STACK — every ordinary amount and every id, whatever its exponent: |mantissa| <
+	// 2^46 fits 24 digits, and the exponent never reaches the ceiling. No BigImpl, no vector.
+	if (IsImmediate()) {
+		const int64_t mantissa = ImmMantissa();
+		if (mantissa == 0) {
+			out += L'0';
+			return;
+		}
+		const bool negative = mantissa < 0;
+		uint64_t magnitude = negative ? static_cast<uint64_t>(-mantissa) : static_cast<uint64_t>(mantissa);
+		wchar_t digits[24];
+		wchar_t* const end = digits + 24;
+		wchar_t* p = end;
+		do { *--p = static_cast<wchar_t>(L'0' + magnitude % 10); magnitude /= 10; } while (magnitude != 0);
+		AppendDecimal(out, p, static_cast<size_t>(end - p), negative, ImmExp());
+		return;
 	}
 
 	BigImpl b;
 	LoadBig(b);
-	if (b.IsZero()) return wxT("0");
+	if (b.IsZero()) {
+		out += L'0';
+		return;
+	}
 
 	// Build digit string directly into a back-filled wchar_t buffer.
 	// No prepend, no per-char Append, no string-conversion.
@@ -1624,46 +1683,20 @@ wxString ibNumber::ToString() const
 	// Trim leading zeros from the top 9-digit chunk.
 	while (p < end - 1 && *p == L'0') ++p;
 
-	const size_t magLen = static_cast<size_t>(end - p);
+	AppendDecimal(out, p, static_cast<size_t>(end - p), b.negative, b.exp);
+}
 
-	// Past the ceiling the plain form cannot be built at all — see ScientificText above.
-	if (b.exp > kMaxDecodedExp10 || b.exp < -kMaxDecodedExp10)
-		return ScientificText(p, magLen, b.negative, b.exp);
-
+wxString ibNumber::ToString() const
+{
 	wxString out;
-
-	if (b.exp >= 0) {
-		out.reserve(magLen + static_cast<size_t>(b.exp) + 1);
-		if (b.negative) out += wxT('-');
-		out += wxString(p, magLen);
-		if (b.exp > 0) out.append(static_cast<size_t>(b.exp), wxT('0'));
-	} else {
-		const size_t fracLen = static_cast<size_t>(-b.exp);
-		if (b.negative) out += wxT('-');
-		if (magLen > fracLen) {
-			const size_t intLen = magLen - fracLen;
-			out += wxString(p,          intLen);
-			out += wxT('.');
-			out += wxString(p + intLen, fracLen);
-		} else {
-			out += wxT("0.");
-			out.append(fracLen - magLen, wxT('0'));
-			out += wxString(p, magLen);
-		}
-		// Trim trailing zeros after the decimal point — they're
-		// semantically redundant (5.00 == 5; 0.50 == 0.5). Division
-		// in ttmath/ibNumber produces high-precision results like
-		// 3.000000000000000000000000000000 even for integer-valued
-		// quotients; without trim, Message(15/5) prints 30 zeros.
-		// Only fires on the b.exp < 0 branch — pure integers with
-		// shifted exponent (1000000 = mantissa 1, exp +6) never enter
-		// here, so their trailing zeros stay (they're significant).
-		while (!out.IsEmpty() && out.Last() == wxT('0'))
-			out.RemoveLast();
-		if (!out.IsEmpty() && out.Last() == wxT('.'))
-			out.RemoveLast();
-	}
+	AppendText(out);
 	return out;
+}
+
+void ibNumber::ToString(ibString& out) const
+{
+	out.clear();
+	AppendText(out);
 }
 
 wxString ibNumber::ToString(const Format& fmt) const
@@ -1802,7 +1835,8 @@ void ibNumber::ToString(const Format& fmt, wxString& out) const
 
 	// Past the ceiling the plain form cannot be built at all — see ScientificText above.
 	if (b.exp > kMaxDecodedExp10 || b.exp < -kMaxDecodedExp10) {
-		out = ScientificText(p, magLen, b.negative, b.exp);
+		out.clear();
+		ScientificText(out, p, magLen, b.negative, b.exp);
 		return;
 	}
 
@@ -1934,10 +1968,10 @@ void ibNumber::ToString(const Format& fmt, wxString& out) const
 	}
 }
 
-bool ibNumber::FromString(const wxString& s)
+bool ibNumber::FromString(const ibString& s)
 {
 	BigImpl big;
-	if (!TryParseString(s, big)) {
+	if (!TryParseString(s.wc_str(), big)) {
 		Clear();
 		return false;
 	}

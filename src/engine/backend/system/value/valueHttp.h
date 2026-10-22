@@ -23,9 +23,8 @@
 // port is closed, nobody spoke within the time allowed - and that raises, naming the host, the port and why.
 //
 // ⚠ THE TIME ALLOWED IS 30 SECONDS UNLESS SAID, never forever: a background job waiting on a server that went
-// quiet is a job nobody will ever hear from again. It bounds connecting and reading the answer as a whole,
-// not each read of it. Two things stand outside it: resolving the name (the resolver's own time) and writing
-// a large body to a server that takes it slowly (each write is bounded on its own).
+// quiet is a job nobody will ever hear from again. It bounds the whole of a request - the name's lookup, the
+// connection, the request and its answer - not each read of it.
 //
 // A REDIRECT IS AN ANSWER: a 3xx comes back with its StatusCode and its Location, and whether to go there -
 // with which method, which headers, to which host - is the script's decision, not made behind its back.
@@ -34,17 +33,20 @@
 // https:// is the SecureConnection property (valueSecureConnection.h) - with it the port, when none was given,
 // is 443 rather than 80.
 //
-// A body that goes out with no Content-Type said is sent as text/plain - the library's default, and rarely what
-// an API wants: say yours (`request.Headers.Insert("Content-Type", "application/json")`). An answer is held in
-// memory whole, up to 100 MB.
+// A body that goes out with no Content-Type said is sent as text/plain - rarely what an API wants: say yours
+// (`request.Headers.Insert("Content-Type", "application/json")`). An answer is held in memory whole, up to
+// 100 MB.
 //
 // The headers are a Structure, whose keys fold case - which is what a header's name does. The ones that say
 // how the message is framed and carried - Content-Length, Transfer-Encoding, Host, Connection, Expect,
 // Upgrade, Proxy-Authorization - are the engine's, and a script that sets one is refused by name. The
-// engine adds nothing of its own beyond those and the library's User-Agent (which a script may replace);
-// it does not ask for a compressed answer, and a script that does (Accept-Encoding) gets a failure, since
-// no decoder is compiled in. A name a response carries twice is joined with ", " as the protocol says;
-// Set-Cookie alone cannot be joined that way (its values hold commas of their own), so the last one stays.
+// engine adds nothing of its own beyond those, an Accept of */* and a User-Agent (either of which a script
+// may replace); it does not ask for a compressed answer, and one a script asks for (Accept-Encoding) comes
+// back as it was sent, its Content-Encoding saying how. A name a response carries twice is joined with ", "
+// as the protocol says; Set-Cookie alone cannot be joined that way (its values hold commas of their own), so
+// the last one stays.
+//
+// The transport is the core's (core/net/httpClient.h) - its TLS with it.
 //
 // The encoding of an answer is the script's to say: GetBodyAsString reads UTF-8 unless given a
 // TextEncoding, and does not read the charset a Content-Type may carry.
@@ -167,7 +169,7 @@ public:
 	ibValue Send(ibHttpMethod method, const ibValueHttpRequest& request);
 
 private:
-	struct ibTransport;                                      // the library lives in the .cpp, and only there
+	struct ibTransport;                                      // the client, in the .cpp
 	std::unique_ptr<ibTransport> m_transport;                // made on the first request, dropped on any failure
 	                                                         // and whenever a setting it was built from changes
 

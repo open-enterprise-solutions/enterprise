@@ -4,6 +4,7 @@
 
 #include "core/serialize/dataBuilder.h"
 #include "frmclient/backend/serialize/dataProtocol.h"   // ibReadProtocolNode, ibWriteProtocolNode — the rows, the edit
+#include "frmclient/backend/propertyManager/property/propertySerializable.h"   // its properties — a row's each
 #include "frmclient/backend/propertyManager/property/variant/variantSerializable.h"   // an edit's value — its node
 #include "frmclient/mainFrame/mainFrame.h"              // the door to the server
 
@@ -145,7 +146,7 @@ void ibValueMetaObject::Receive(long long tabId, ibMetaID metaId, const ibProtoc
 	received.rows[{ tabId, metaId }] = rows;
 }
 
-bool ibValueMetaObject::Receive()
+bool ibValueMetaObject::Fetch()
 {
 	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
 	if (frame == nullptr)
@@ -167,6 +168,11 @@ bool ibValueMetaObject::Receive()
 	const ibProtocolNode rows = answer.FindChild(ibProtocol::ibSchema::ibProperties::Properties);
 	Receive(m_metaData.GetTabId(), m_metaId, rows);
 	return ibPropertyObject::Receive(rows);
+}
+
+ibProperty* ibValueMetaObject::CreateProperty(ibPropertyCategory* cat, ibDataNode&& row)
+{
+	return ibPropertyObject::CreateProperty<ibPropertySerializable>(cat, std::move(row));
 }
 
 bool ibValueMetaObject::OnPropertyChanging(ibProperty* property, const wxVariant& newValue)

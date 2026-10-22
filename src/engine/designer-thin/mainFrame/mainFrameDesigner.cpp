@@ -95,7 +95,16 @@ void ibFrontendMainFrameDesigner::ShowRequest(const ibProtocolNode& request, ibP
 
 void ibFrontendMainFrameDesigner::DrawFrame(const ibProtocolNode& frame, const ibProtocolNode& patch)
 {
-	if (m_metaWindow == nullptr || (patch.IsNode() && !patch.Has(ibProtocol::ibFrame::MetaData)))
+	if (m_metaWindow == nullptr)
+		return;
+
+	// THE LAST TAB CLOSED — the focus goes back to the configuration's tree, and the inspector shows its row: the owner of
+	// the editor closed, as the desktop's went back to the tree the editor came from (ibMetaTreeBase::Activate). A frame
+	// sent whole is the start, not a close.
+	if (patch.Has(ibProtocol::ibFrame::ActiveTab) && frame.GetInt(ibProtocol::ibFrame::ActiveTab) == 0)
+		m_metaWindow->SetFocus();
+
+	if (patch.IsNode() && !patch.Has(ibProtocol::ibFrame::MetaData))
 		return;
 
 	const ibProtocolNode root = frame.FindChild(ibProtocol::ibFrame::MetaData);
@@ -129,6 +138,18 @@ void ibFrontendMainFrameDesigner::Debugger_OnStateChanged()
 	// brought up to date when it opens.
 	if (m_menuDebug != nullptr)
 		m_menuDebug->UpdateUI();
+}
+
+bool ibFrontendMainFrameDesigner::ListenDebug(std::function<void(const ibProtocolNode& news)> told,
+	ibProtocol::ibRefusal& refusal, wxString& error)
+{
+	return GetCommunicator().ListenDebug(std::move(told), refusal, error);
+}
+
+bool ibFrontendMainFrameDesigner::Debug(const ibProtocolNode& params, ibProtocolNode& result,
+	ibProtocol::ibRefusal& refusal, wxString& error)
+{
+	return GetCommunicator().Debug(params, result, refusal, error);
 }
 #pragma endregion
 

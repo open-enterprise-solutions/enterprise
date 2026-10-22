@@ -39,7 +39,7 @@ public:
 	// …and the types it may hold, as the desktop's picker offered them (ibShowTypeSelector): those the configuration
 	// offers a field of its shape, and those the value holds already — an editor does not drop what it was opened on;
 	// each by its class id (Type), named and drawn as it is offered. Several at once, but in a table's shape, one.
-	virtual bool GetProtocolValue(ibDataNode& row) override;
+	virtual bool GetProtocolValue(ibDataNode& row, ibReader reader) override;
 
 public:
 

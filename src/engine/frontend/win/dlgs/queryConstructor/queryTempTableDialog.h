@@ -29,7 +29,7 @@
 
 #include <vector>
 
-#include "backend/query/queryAST.h"
+#include "core/query/queryAST.h"
 #include "core/description/typeDescription.h"
 
 #include "frontend/win/ctrls/dataview/dataview.h"

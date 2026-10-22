@@ -42,7 +42,7 @@ public:
 
 	// …and the commands of the owner's form it may name, as the desktop's picker gathered them over the owner's command
 	// door (advpropCommandSource.cpp): CommandTree, the form editor's (ibBackendCommandReceiver::WriteCommandTree).
-	virtual bool GetProtocolValue(ibDataNode& row) override;
+	virtual bool GetProtocolValue(ibDataNode& row, ibReader reader) override;
 };
 
 #endif // !__PROPERTY_COMMAND_SOURCE_H__

@@ -141,9 +141,9 @@ bool ibPropertyCalcSchedule::WriteNodeValue(ibDataValue& value) const
 #include "protocol/protocol.h"            // ibProtocol::ibSchema::ibProperties — the row's keys
 #include "core/serialize/dataBuilder.h"
 
-bool ibPropertyCalcSchedule::GetProtocolValue(ibDataNode& row)
+bool ibPropertyCalcSchedule::GetProtocolValue(ibDataNode& row, ibReader reader)
 {
-	if (!ibProperty::GetProtocolValue(row))
+	if (!ibProperty::GetProtocolValue(row, reader))
 		return false;
 
 	const ibCalcScheduleDescription& desc = GetValueAsScheduleDesc();

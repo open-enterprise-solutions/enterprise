@@ -1767,9 +1767,7 @@
     <ClInclude Include="artProvider\splash\splashLogo.h">
       <Filter>artProvider\splash</Filter>
     </ClInclude>
-    <ClInclude Include="res\resource.h">
-      <Filter>res</Filter>
-    </ClInclude>
+    <ClInclude Include="resource.h" />
     <ClInclude Include="win\ctrls\grid\gridext.h">
       <Filter>win\ctrls\grid</Filter>
     </ClInclude>
@@ -2063,9 +2061,6 @@
     <Filter Include="artProvider\private">
       <UniqueIdentifier>{531fb9e2-c07f-4ce7-a206-811961ef7263}</UniqueIdentifier>
     </Filter>
-    <Filter Include="res">
-      <UniqueIdentifier>{eacc6bf8-598e-4edd-a4cf-e8c9f6d83303}</UniqueIdentifier>
-    </Filter>
     <Filter Include="win\editor">
       <UniqueIdentifier>{3398c0ae-f246-48c2-869c-1d87020ca085}</UniqueIdentifier>
     </Filter>
@@ -2155,9 +2150,7 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ResourceCompile Include="res\frontend.rc">
-      <Filter>res</Filter>
-    </ResourceCompile>
+    <ResourceCompile Include="frontend.rc" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="uikit\theme.cpp">

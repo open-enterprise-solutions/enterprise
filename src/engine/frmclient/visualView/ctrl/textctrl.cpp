@@ -7,9 +7,13 @@
 
 #include "frmclient/win/ctrls/controlTextEditor.h"
 
-void ibValueTextCtrl::Create(wxWindow* parent, const ibProtocolNode& /*node*/)
+void ibValueTextCtrl::Create(wxWindow* parent, const ibProtocolNode& node)
 {
-	m_textEditor = new ibControlNavigationTextEditor(parent, wxID_ANY);
+	// Multiline is a creation-time style on macOS / GTK: passed here, as the desktop does — the later
+	// SetMultilineMode() in Update() cannot add it to an existing native control.
+	const long style = wxBORDER_NONE
+		| (node.GetBool(ibProtocol::ibForm::ibProperty::MultilineMode) ? wxTE_MULTILINE : 0);
+	m_textEditor = new ibControlNavigationTextEditor(parent, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, style);
 
 	m_textEditor->Bind(wxEVT_CONTROL_BUTTON_SELECT, [this](wxCommandEvent&) { Send(ibProtocol::ibEvent::ibKind::Select); });
 	m_textEditor->Bind(wxEVT_CONTROL_BUTTON_OPEN, [this](wxCommandEvent&) { Send(ibProtocol::ibEvent::ibKind::Open); });

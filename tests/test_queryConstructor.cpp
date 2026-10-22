@@ -14,7 +14,7 @@
 #include <gtest/gtest.h>
 
 #include "backend/query/queryConstructorModel.h"
-#include "backend/query/queryParser.h"
+#include "core/query/queryParser.h"
 
 namespace {
 

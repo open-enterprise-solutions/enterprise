@@ -60,9 +60,6 @@
     <ClInclude Include="appData.h" />
     <ClInclude Include="appDataCtorToken.h" />
     <ClInclude Include="appHost.h" />
-    <ClInclude Include="cipher\fieldCipher.h">
-      <Filter>cipher</Filter>
-    </ClInclude>
     <ClInclude Include="uniqueKey.h" />
     <ClInclude Include="logger\logger.h">
       <Filter>logger</Filter>
@@ -144,9 +141,6 @@
     </ClInclude>
     <ClInclude Include="databaseLayer\sqllite\engine\sqlite3ext.h">
       <Filter>databaseLayer\sqllite\engine</Filter>
-    </ClInclude>
-    <ClInclude Include="utils\md5.hpp">
-      <Filter>utils</Filter>
     </ClInclude>
     <ClInclude Include="compiler\compileContext.h">
       <Filter>compiler</Filter>
@@ -789,9 +783,7 @@
     </ClInclude>
     <ClInclude Include="backend_localization.h" />
     <ClInclude Include="translateState.h" />
-    <ClInclude Include="res\resource.h">
-      <Filter>res</Filter>
-    </ClInclude>
+    <ClInclude Include="resource.h" />
     <ClInclude Include="system\value\valueSpreadsheet.h">
       <Filter>system\value</Filter>
     </ClInclude>
@@ -926,16 +918,10 @@
     <ClInclude Include="sheetFormat\sheetFormatDocx.h">
       <Filter>sheetFormat</Filter>
     </ClInclude>
-    <ClInclude Include="utils\sessionToken.h">
-      <Filter>utils</Filter>
-    </ClInclude>
     <ClInclude Include="utils\passwordHash.hpp">
       <Filter>utils</Filter>
     </ClInclude>
     <ClInclude Include="utils\dataVersion.hpp">
-      <Filter>utils</Filter>
-    </ClInclude>
-    <ClInclude Include="utils\sha256.hpp">
       <Filter>utils</Filter>
     </ClInclude>
   </ItemGroup>
@@ -1106,9 +1092,6 @@
     </ClCompile>
     <ClCompile Include="appData.cpp" />
     <ClCompile Include="appHost.cpp" />
-    <ClCompile Include="cipher\fieldCipher.cpp">
-      <Filter>cipher</Filter>
-    </ClCompile>
     <ClCompile Include="uniqueKey.cpp" />
     <ClCompile Include="logger\logger.cpp">
       <Filter>logger</Filter>
@@ -1169,9 +1152,6 @@
     </ClCompile>
     <ClCompile Include="databaseLayer\sqllite\engine\sqlite3.c">
       <Filter>databaseLayer\sqllite\engine</Filter>
-    </ClCompile>
-    <ClCompile Include="utils\md5.cpp">
-      <Filter>utils</Filter>
     </ClCompile>
     <ClCompile Include="compiler\enumUnit.cpp">
       <Filter>compiler</Filter>
@@ -2329,16 +2309,10 @@
     <ClCompile Include="sheetFormat\sheetFormatXlsxWrite.cpp">
       <Filter>sheetFormat</Filter>
     </ClCompile>
-    <ClCompile Include="utils\sessionToken.cpp">
-      <Filter>utils</Filter>
-    </ClCompile>
     <ClCompile Include="utils\passwordHash.cpp">
       <Filter>utils</Filter>
     </ClCompile>
     <ClCompile Include="utils\dataVersion.cpp">
-      <Filter>utils</Filter>
-    </ClCompile>
-    <ClCompile Include="utils\sha256.cpp">
       <Filter>utils</Filter>
     </ClCompile>
   </ItemGroup>
@@ -2481,9 +2455,6 @@
     <Filter Include="metaCollection\attribute">
       <UniqueIdentifier>{1658db8e-2fb5-4db1-8bac-a0bc5589a6c2}</UniqueIdentifier>
     </Filter>
-    <Filter Include="res">
-      <UniqueIdentifier>{a0483170-54a9-48af-976d-9a8f5c30d00b}</UniqueIdentifier>
-    </Filter>
     <Filter Include="plugin">
       <UniqueIdentifier>{6b3a8c2e-1f5d-4f4d-9c2a-9f5b1a3d4e6f}</UniqueIdentifier>
     </Filter>
@@ -2492,9 +2463,6 @@
     </Filter>
     <Filter Include="session">
       <UniqueIdentifier>{d4f2a1b8-3e9c-4b5a-8d7f-1c2e3a4b5c6d}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="cipher">
-      <UniqueIdentifier>{7c3e9a41-5b2d-4f8e-9a61-2d4c8b7e1f35}</UniqueIdentifier>
     </Filter>
     <Filter Include="lock">
       <UniqueIdentifier>{6c0f1d2a-7b3e-4d8a-9f1c-2e3b5a6c7d8e}</UniqueIdentifier>
@@ -2627,9 +2595,7 @@
     <CopyFileToFolders Include="backend.conf" />
   </ItemGroup>
   <ItemGroup>
-    <ResourceCompile Include="res\backend.rc">
-      <Filter>res</Filter>
-    </ResourceCompile>
+    <ResourceCompile Include="backend.rc" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="databaseLayer\databaseQueryBuilder.cpp">
@@ -2641,19 +2607,10 @@
     <ClCompile Include="query\dataQueryBuilder.cpp">
       <Filter>query</Filter>
     </ClCompile>
-    <ClCompile Include="query\queryLexer.cpp">
-      <Filter>query</Filter>
-    </ClCompile>
-    <ClCompile Include="query\queryRender.cpp">
-      <Filter>query</Filter>
-    </ClCompile>
     <ClCompile Include="query\queryConstructorModel.cpp">
       <Filter>query</Filter>
     </ClCompile>
     <ClCompile Include="query\queryTempStore.cpp">
-      <Filter>query</Filter>
-    </ClCompile>
-    <ClCompile Include="query\queryParser.cpp">
       <Filter>query</Filter>
     </ClCompile>
     <ClCompile Include="query\queryLowering.cpp">
@@ -2663,9 +2620,6 @@
       <Filter>query</Filter>
     </ClCompile>
     <ClCompile Include="query\queryHierarchy.cpp">
-      <Filter>query</Filter>
-    </ClCompile>
-    <ClCompile Include="query\queryRewrite.cpp">
       <Filter>query</Filter>
     </ClCompile>
     <ClCompile Include="compiler\lambdaQueryAST.cpp">
@@ -2809,22 +2763,10 @@
     <ClInclude Include="query\queryRowCursor.h">
       <Filter>query</Filter>
     </ClInclude>
-    <ClInclude Include="query\queryLexer.h">
-      <Filter>query</Filter>
-    </ClInclude>
-    <ClInclude Include="query\queryAST.h">
-      <Filter>query</Filter>
-    </ClInclude>
-    <ClInclude Include="query\queryRender.h">
-      <Filter>query</Filter>
-    </ClInclude>
     <ClInclude Include="query\queryConstructorModel.h">
       <Filter>query</Filter>
     </ClInclude>
     <ClInclude Include="query\queryTempStore.h">
-      <Filter>query</Filter>
-    </ClInclude>
-    <ClInclude Include="query\queryParser.h">
       <Filter>query</Filter>
     </ClInclude>
     <ClInclude Include="query\queryLowering.h">
@@ -2834,9 +2776,6 @@
       <Filter>query</Filter>
     </ClInclude>
     <ClInclude Include="query\queryHierarchy.h">
-      <Filter>query</Filter>
-    </ClInclude>
-    <ClInclude Include="query\queryRewrite.h">
       <Filter>query</Filter>
     </ClInclude>
     <ClInclude Include="compiler\lambdaQueryAST.h">

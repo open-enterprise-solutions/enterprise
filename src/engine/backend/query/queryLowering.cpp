@@ -6,10 +6,10 @@
 #include "queryLowering.h"
 
 #include "queryException.h"                // ibBackendQuerySourceException — L3 refuses in its own variety
-#include "queryRewrite.h"                 // ibQueryRewrite — optimizer pass (AST -> AST)
-#include "queryRender.h"                  // ibQueryOutputName — the ONE answer to "what is this field called"
-#include "queryLexer.h"                   // ibQueryLexer::ParamNames — which words of a query are its parameters
-#include "queryParser.h"                  // ibQueryCastType — the primitive a CAST converts to, as the parser read it
+#include "core/query/queryRewrite.h"                 // ibQueryRewrite — optimizer pass (AST -> AST)
+#include "core/query/queryRender.h"                  // ibQueryOutputName — the ONE answer to "what is this field called"
+#include "core/query/queryLexer.h"                   // ibQueryLexer::ParamNames — which words of a query are its parameters
+#include "core/query/queryParser.h"                  // ibQueryCastType — the primitive a CAST converts to, as the parser read it
 #include "queryRamTable.h"                // ibQueryRamTable — a package's temp table IS a snapshot
 #include "queryTempStore.h"               // ibQueryTempTableStore — WHO keeps the temp tables alive
 #include "tempTableQueryable.h"           // ibTempTableQueryable — a table handed in as a PARAMETER is a source
@@ -1447,7 +1447,7 @@ std::map<wxString, ibValue> WithEveryParameter(const wxString& text, const std::
 ibValue EvalValue(const ibQueryAstExpr& e, const std::map<wxString, ibValue>& params)
 {
 	RefuseIfQueryStackLow(e.m_line, e.m_col);
-	if (e.m_kind == ibQueryAstExprKind::Literal) return e.m_literal;
+	if (e.m_kind == ibQueryAstExprKind::Literal) return ibValue(e.m_literal);
 	if (e.m_kind == ibQueryAstExprKind::Param) {
 		const ibValue* v = FindParam(params, e.m_paramName);
 		if (v == nullptr) {
@@ -2811,7 +2811,7 @@ ibQueryColumnExprPtr BuildColumnExprFromAst(const std::vector<ibSourceBinding>& 
 		return ibQueryColumnExpr::Col(cols[0]);
 	}
 	case ibQueryAstExprKind::Literal:
-		return ibQueryColumnExpr::Const(e.m_literal);
+		return ibQueryColumnExpr::Const(ibValue(e.m_literal));
 	case ibQueryAstExprKind::Param:
 	case ibQueryAstExprKind::Value:   // value(...) resolves to a constant, exactly like a &parameter
 		return ibQueryColumnExpr::Const(EvalValue(e, params));

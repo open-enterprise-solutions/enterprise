@@ -265,22 +265,6 @@ void ibFormEditView::OnKillFocus(wxFocusEvent& event)
 // ibFormEditDocument implementation
 // ----------------------------------------------------------------------------
 
-bool ibFormEditDocument::Close()
-{
-	ibVisualEditorNotebook* const visualNotebook = GetVisualNotebook();
-	if (visualNotebook != nullptr)
-		visualNotebook->GetVisualEditor()->SaveForm();
-	return ibModuleEditDocument::Close();
-}
-
-bool ibFormEditDocument::Save()
-{
-	ibVisualEditorNotebook* const visualNotebook = GetVisualNotebook();
-	if (visualNotebook != nullptr)
-		visualNotebook->GetVisualEditor()->SaveForm();
-	return ibModuleEditDocument::Save();
-}
-
 void ibFormEditDocument::DrawView(const ibProtocolNode& view, const ibProtocolNode& patch)
 {
 	// The designer's first — the module's drawing asks the menu and the toolbar anew when the read-only changed, and they

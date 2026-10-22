@@ -69,14 +69,14 @@ public:
 ibDebuggerClientBridgeDesigner::ibDebuggerClientBridgeDesigner() = default;
 ibDebuggerClientBridgeDesigner::~ibDebuggerClientBridgeDesigner() = default;
 
-void ibDebuggerClientBridgeDesigner::OnSessionStart(wxSocketClient* sock)
+void ibDebuggerClientBridgeDesigner::OnSessionStart()
 {
 	m_runLine = std::make_unique<ibDebugRunLine>();
 
 	if (mainFrame != nullptr) mainFrame->Debugger_OnStateChanged();
 }
 
-void ibDebuggerClientBridgeDesigner::OnSessionEnd(wxSocketClient* sock)
+void ibDebuggerClientBridgeDesigner::OnSessionEnd()
 {
 	// The arrow goes with it — the holder's destructor is the clear.
 	m_runLine.reset();
@@ -87,7 +87,7 @@ void ibDebuggerClientBridgeDesigner::OnSessionEnd(wxSocketClient* sock)
 	if (mainFrame != nullptr) mainFrame->Debugger_OnStateChanged();
 }
 
-void ibDebuggerClientBridgeDesigner::OnEnterLoop(wxSocketClient* sock, const ibDebugLineData& data)
+void ibDebuggerClientBridgeDesigner::OnEnterLoop(const ibDebugLineData& data)
 {
 	if (mainFrame != nullptr) mainFrame->RaiseFrame();
 
@@ -129,7 +129,7 @@ void ibDebuggerClientBridgeDesigner::OnEnterLoop(wxSocketClient* sock, const ibD
 	if (mainFrame != nullptr) mainFrame->Debugger_OnStateChanged();
 }
 
-void ibDebuggerClientBridgeDesigner::OnLeaveLoop(wxSocketClient* sock, const ibDebugLineData& data)
+void ibDebuggerClientBridgeDesigner::OnLeaveLoop(const ibDebugLineData& data)
 {
 	// ⭐⭐ THE RUNTIME IS RUNNING AGAIN, SO THERE IS NO RUN LINE — ANYWHERE. That is the whole
 	// statement, and it needs neither the module's name nor a tree to find it in.

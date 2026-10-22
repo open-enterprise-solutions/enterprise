@@ -755,7 +755,7 @@ ibValue ibValueSystemFunction::DeserializeValue(const wxString& strJson)
 		ibBackendCoreException::Error(_("There is no open configuration to read this value against"));
 
 	ibJsonProvider provider;
-	provider.SetTypeLookup([](const wxString& name) -> ibClassID {
+	provider.SetTypeLookup([](const ibString& name) -> ibClassID {
 		return activeMetaData != nullptr
 			? activeMetaData->GetIDObjectFromString(name) : ibClassID(0); });
 
@@ -855,11 +855,13 @@ wxString ibValueSystemFunction::ComputerName()//ComputerName
 	return wxGetHostName();
 }
 
+#include "core/startProcess.h"   // a script on the server runs on a fiber, where wxExecute asserts
+
 void ibValueSystemFunction::RunApp(const wxString& sCommand)//RunApp
 {
 	if (ibBackendException::IsEvalMode())
 		return;
-	wxExecute(sCommand);
+	ibStartProcess(sCommand);
 }
 
 void ibValueSystemFunction::SetAppTitle(const wxString& sTitle)//SetAppTitle

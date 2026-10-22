@@ -12,8 +12,8 @@
 
 #include <gtest/gtest.h>
 
-#include "backend/query/queryParser.h"
-#include "backend/query/queryRewrite.h"
+#include "core/query/queryParser.h"
+#include "core/query/queryRewrite.h"
 
 #include <algorithm>   // std::find — what the rows one level down carry
 
@@ -84,6 +84,7 @@ TEST(QueryRewrite, NotTruthyColumn_BecomesEqualsFalse)
 	EXPECT_EQ(sel->m_where->m_cmp, ibQueryCompareOp::Eq);
 	EXPECT_EQ(sel->m_where->m_lhs->m_path[0], wxT("IsFolder"));
 	ASSERT_EQ(sel->m_where->m_rhs->m_kind, ibQueryAstExprKind::Literal);
+	ASSERT_EQ(sel->m_where->m_rhs->m_literal.GetType(), ibValueTypes::TYPE_BOOLEAN);
 	EXPECT_FALSE(sel->m_where->m_rhs->m_literal.GetBoolean());
 }
 

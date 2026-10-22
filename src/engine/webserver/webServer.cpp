@@ -1,23 +1,19 @@
 #include "webServer.h"
 
-// Asio before wx: winsock2.h must come ahead of the windows.h a wx header may bring.
-#include <asio/io_context.hpp>
-
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <csignal>
 #include <thread>
 
-#include <nlohmann/json.hpp>
-
 #include <wx/dir.h>
 #include <wx/file.h>
 #include <wx/fileconf.h>
 #include <wx/filename.h>
-#include <wx/mstream.h>
 #include <wx/tokenzr.h>
 #include <wx/utils.h>   // wxGetFullHostName — the server named in an address
-#include <wx/zstream.h>
+#include <wx/wfstream.h>
+#include <wx/zipstrm.h>
 
 #ifdef __WXMSW__
 #include <windows.h>   // SetConsoleCtrlHandler — the console window closing
@@ -25,9 +21,10 @@
 
 #include "protocol/connectionFile.h"
 #include "protocol/connectionServer.h"   // the oes:// address and the path of a base's clients — the protocol's
+#include "protocol/protocolNode.h"       // the request a file base is opened by
 
-#include "http/httpClient.h"
-#include "http/webSocketFrame.h"
+#include "core/net/httpClient.h"
+#include "core/net/webSocketFrame.h"
 
 namespace {
 
@@ -90,65 +87,80 @@ bool ReadPem(const wxString& path, std::string& text, wxString& error)
 	return true;
 }
 
-// ⭐ THE TRANSPORT DEFLATES, when the browser asked for it as it connected (?compress=deflate) — the application
-// server's rule (appserver/clientListener.cpp), kept by this transport for the bases it holds: an answer of some size
-// goes as a BINARY message holding it deflated, raw (RFC 1951, what DecompressionStream("deflate-raw") reads), a small
-// one as text.
-constexpr std::size_t kDeflateFrom = 1024;
-
-void SendAnswer(ibWebSocket& socket, std::string text, bool deflate)
+// THE SITE PACKED — www.wpk, a zip of the site's folder (the build packs src/engine/webserver/www into it): each file
+// by its path in the site, as an address names it; false with why.
+bool ReadPack(const wxString& path, std::map<std::string, std::string>& files, wxString& error)
 {
-	if (!deflate || text.size() < kDeflateFrom) {
-		socket.Send(std::move(text));
-		return;
+	wxFileInputStream input(path);
+	wxZipInputStream zip(input, wxConvUTF8);
+	if (!input.IsOk() || !zip.IsOk()) {
+		error = wxString::Format(wxT("%s could not be read"), path);
+		return false;
 	}
-	wxMemoryOutputStream packed;
-	{
-		wxZlibOutputStream zip(packed, wxZ_DEFAULT_COMPRESSION, wxZLIB_NO_HEADER);
-		zip.Write(text.data(), text.size());
-		if (!zip.Close()) {
-			socket.Send(std::move(text));   // not packed — sent as it is
-			return;
+	for (std::unique_ptr<wxZipEntry> entry(zip.GetNextEntry()); entry; entry.reset(zip.GetNextEntry())) {
+		if (entry->IsDir())
+			continue;
+		// As the address has it, whoever packed it: a backslash of Windows' archiver, a leading ./ of CMake's.
+		std::string name = Utf8(entry->GetInternalName());
+		std::replace(name.begin(), name.end(), '\\', '/');
+		if (name.compare(0, 2, "./") == 0)
+			name.erase(0, 2);
+		std::string data;
+		char buffer[16 * 1024];
+		while (zip.CanRead()) {
+			zip.Read(buffer, sizeof(buffer));
+			if (zip.LastRead() == 0)
+				break;
+			data.append(buffer, zip.LastRead());
 		}
+		files[name] = std::move(data);
 	}
-	const wxStreamBuffer* const buffer = packed.GetOutputStreamBuffer();
-	socket.SendBinary(std::string(static_cast<const char*>(buffer->GetBufferStart()),
-		static_cast<std::size_t>(packed.GetLength())));
+	if (files.empty()) {
+		error = wxString::Format(wxT("%s holds no file"), path);
+		return false;
+	}
+	return true;
 }
 
+// The browser asked for answers of some size deflated, as it connected — what the socket to an application server asks
+// for it too, so they come through as they are.
 bool WantsDeflate(const ibHttpRequest& request)
 {
 	return request.GetParameter("compress") == "deflate";
 }
 
 // A BROWSER'S SOCKET TO A FILE BASE — the base is the server here: the relay is the connection its clients log in
-// through, told what the base says to them, and they leave with it.
+// through, told what the base says to them, and they leave with it. The text is the engine's both ways: the base's
+// own, and the socket reads it and writes it (and deflates it, when the browser asked).
 class ibFileRelay : public ibWebSocketHandler {
 public:
 
 	ibFileRelay(const ibProtocolFileBase& base, std::shared_ptr<ibWebSocket> socket) :
-		m_base(base), m_socket(std::move(socket)), m_address(wxString::FromUTF8(m_socket->GetRequest().m_address)),
-		m_deflate(WantsDeflate(m_socket->GetRequest()))
+		m_base(base), m_socket(std::move(socket))
 	{
 		const std::weak_ptr<ibWebSocket> told = m_socket;
-		const bool deflate = m_deflate;
-		m_base.Listen(this, [told, deflate](const std::string& text) {
+		m_base.Listen(this, [told](const ibString& text) {
 			if (const std::shared_ptr<ibWebSocket> socket = told.lock())
-				SendAnswer(*socket, text, deflate);
+				socket->Send(text);
 		});
 	}
 
-	virtual void OnMessage(std::string text) override
+	virtual void OnMessage(const ibString& text) override
 	{
-		std::string answer;
+		ibString answer;
 		wxString error;
-		if (!m_base.Call(text, this, m_address, answer, error)) {
+		if (!m_base.Call(text, this, m_socket->GetRequest().m_address, answer, error)) {
 			ibWebServerSay(ibJournalMark::Error, wxT("a browser's call did not reach its base: %s"), error);
 			m_socket->Close(ibWebSocketClose::ServerError, "the base is not open");
 			return;
 		}
-		if (!answer.empty())
-			SendAnswer(*m_socket, std::move(answer), m_deflate);
+		if (!answer.IsEmpty())
+			m_socket->Send(answer);
+	}
+
+	virtual void OnBinary(std::string) override
+	{
+		m_socket->Close(ibWebSocketClose::Unsupported, "the protocol speaks text");
 	}
 
 	virtual void OnClose() override
@@ -159,8 +171,6 @@ public:
 private:
 	const ibProtocolFileBase&    m_base;
 	std::shared_ptr<ibWebSocket> m_socket;
-	wxString                     m_address;
-	bool                         m_deflate;
 };
 
 // A BROWSER'S SOCKET TO AN APPLICATION SERVER'S BASE — a socket of the web server's own to the server for each, the
@@ -173,15 +183,14 @@ public:
 		m_socket(std::move(socket))
 	{
 		const std::weak_ptr<ibWebSocket> told = m_socket;
-		m_upstream = std::make_shared<ibWebSocketClient>(io,
-			[told](std::uint8_t opcode, std::string payload) {
-				const std::shared_ptr<ibWebSocket> socket = told.lock();
-				if (!socket)
-					return;
-				if (opcode == ibWebSocketOpcode::Binary)
-					socket->SendBinary(std::move(payload));
-				else
-					socket->Send(std::move(payload));
+		m_upstream = std::make_shared<ibWebSocketClient>(io, nullptr,
+			[told](const ibString& text) {
+				if (const std::shared_ptr<ibWebSocket> socket = told.lock())
+					socket->Send(text);
+			},
+			[told](std::string packed) {
+				if (const std::shared_ptr<ibWebSocket> socket = told.lock())
+					socket->SendBinary(std::move(packed));
 			},
 			[told, publication](const std::string& reason) {
 				if (!reason.empty())
@@ -194,9 +203,14 @@ public:
 		m_upstream->Open(host, port, target);
 	}
 
-	virtual void OnMessage(std::string text) override
+	virtual void OnMessage(const ibString& text) override
 	{
-		m_upstream->Send(std::move(text));
+		m_upstream->Send(text);
+	}
+
+	virtual void OnBinary(std::string) override
+	{
+		m_socket->Close(ibWebSocketClose::Unsupported, "the protocol speaks text");
 	}
 
 	virtual void OnClose() override
@@ -315,14 +329,16 @@ bool ibWebServer::Publish(const ibWebPublication& publication)
 
 	if (publication.m_kind == wxT("firebird")) {
 		// THE FILE BASE, OPENED HERE — the request ibFileBaseOpen reads.
-		nlohmann::json request = { { "Directory", Utf8(publication.m_directory) }, { "Name", Utf8(name) } };
+		ibProtocolNode request;
+		request.SetValue(ibProtocol::ibFileBase::Directory, ibString(publication.m_directory))
+			.SetValue(ibProtocol::ibFileBase::Name, ibString(name));
 		if (!publication.m_locale.IsEmpty())
-			request["Locale"] = Utf8(publication.m_locale);
+			request.SetValue(ibProtocol::ibFileBase::Locale, ibString(publication.m_locale));
 		if (publication.m_debug)
-			request["Debug"] = true;
+			request.SetValue(ibProtocol::ibFileBase::Debug, true);
 		auto base = std::make_unique<ibProtocolFileBase>();
 		wxString error;
-		if (!base->Open(request.dump(), error)) {
+		if (!base->Open(request.Write(), error)) {
 			ibWebServerSay(ibJournalMark::Error, wxT("publication '%s': the file base at %s did not open: %s"), name,
 				publication.m_directory, error);
 			return false;
@@ -335,15 +351,15 @@ bool ibWebServer::Publish(const ibWebPublication& publication)
 		});
 		m_http.Post(path, [held](const ibHttpRequest& request, ibHttpResponder respond) {
 			// A request on its own — no connection, as an application server answers a POST.
-			std::string answer;
+			ibString answer;
 			wxString error;
 			ibHttpResponse response;
-			if (!held->Call(request.m_body, nullptr, wxString::FromUTF8(request.m_address), answer, error))
+			if (!held->Call(request.GetText(), nullptr, request.m_address, answer, error))
 				response.m_status = 503;
-			else if (answer.empty())
+			else if (answer.IsEmpty())
 				response.m_status = 204;   // a notification — no answer wanted
 			else
-				response.SetContent(std::move(answer), "application/json");
+				response.SetText(answer, "application/json");
 			respond(std::move(response));
 		});
 		return true;
@@ -409,12 +425,46 @@ int ibWebServer::Run()
 			++published;
 	}
 
-	const bool site = !m_config.m_root.IsEmpty() && wxDirExists(m_config.m_root);
-	if (site)
-		m_http.Mount("/", Utf8(m_config.m_root));
-	if (published == 0 && !site) {
-		ibWebServerSay(ibJournalMark::Error, wxT("nothing to serve: no publication opened, and no site's files at %s"),
-			m_config.m_root);
+	// THE SITE — its folder when there is one (an edit is served at the next request), else its pack beside web.conf,
+	// what a release ships. The same files at / and at each publication's address: a publication's page is the site's
+	// index.html, its socket beside it.
+	const wxString pack = m_config.m_folder + wxFileName::GetPathSeparator() + wxT("www.wpk");
+	std::map<std::string, std::string> packed;
+	wxString site;
+	if (!m_config.m_root.IsEmpty() && wxDirExists(m_config.m_root)) {
+		site = m_config.m_root;
+	}
+	else if (wxFileName::FileExists(pack)) {
+		wxString packError;
+		if (ReadPack(pack, packed, packError))
+			site = pack;
+		else
+			ibWebServerSay(ibJournalMark::Error, wxT("%s - the site is not served"), packError);
+	}
+	if (!site.IsEmpty()) {
+		std::vector<std::string> prefixes = { "/" };
+		for (const auto& entry : m_bases)
+			prefixes.push_back("/" + Utf8(entry.first) + "/");
+		for (const std::string& prefix : prefixes) {
+			if (packed.empty())
+				m_http.Mount(prefix, Utf8(site));
+			else
+				m_http.Mount(prefix, packed);
+		}
+		// A publication's address without its slash, sent on to it: the page names its files beside it.
+		for (const auto& entry : m_bases) {
+			const std::string page = "/" + Utf8(entry.first);
+			m_http.Get(page, [page](const ibHttpRequest&, ibHttpResponder respond) {
+				ibHttpResponse response;
+				response.m_status = 301;
+				response.m_headers.emplace_back("Location", page + "/");
+				respond(std::move(response));
+			});
+		}
+	}
+	if (published == 0 && site.IsEmpty()) {
+		ibWebServerSay(ibJournalMark::Error, wxT("nothing to serve: no publication opened, and no site at %s or %s"),
+			m_config.m_root, pack);
 		Stop();
 		return 1;
 	}
@@ -449,12 +499,16 @@ int ibWebServer::Run()
 	if (m_http.GetHttpPort() != 0)
 		origins.push_back(wxString::Format(wxT("http://%s:%u"), host, static_cast<unsigned>(m_http.GetHttpPort())));
 	for (const wxString& origin : origins) {
-		if (site)
-			ibWebServerSay(ibJournalMark::Info, wxT("site %s: %s/"), m_config.m_root, origin);
+		if (!site.IsEmpty())
+			ibWebServerSay(ibJournalMark::Info, wxT("site %s: %s/"), site, origin);
 		for (const auto& entry : m_bases) {
 			wxString socket = origin;
 			socket.Replace(wxT("http"), wxT("ws"), false);
-			ibWebServerSay(ibJournalMark::Info, wxT("publication '%s': %s/%s/client"), entry.first, socket, entry.first);
+			if (!site.IsEmpty())
+				ibWebServerSay(ibJournalMark::Info, wxT("publication '%s': %s/%s/, its socket %s/%s/client"), entry.first,
+					origin, entry.first, socket, entry.first);
+			else
+				ibWebServerSay(ibJournalMark::Info, wxT("publication '%s': %s/%s/client"), entry.first, socket, entry.first);
 		}
 	}
 	ibWebServerSay(ibJournalMark::Info, wxT("serving %u of %u publication(s) - Ctrl+C to stop"),

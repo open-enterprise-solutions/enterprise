@@ -9,7 +9,6 @@
 #include <functional>
 #include <set>
 
-#include <wx/base64.h>
 #include <wx/choicdlg.h>
 #include <wx/config.h>
 #include <wx/file.h>
@@ -23,9 +22,12 @@
 #include "objinspect/objinspect.h"
 #include "settings/settingsxml.h"
 
+#include "core/utils/base64.h"   // ibBase64 — a file's part, in and out of the call's text
+
 #include "frmclient/docView/docManager.h"
 #include "frmclient/docView/templates/docViewFile.h"
 #include "frmclient/docView/templates/docViewAuditLog.h"   // the journal's tab — a view of its own (the tab's Kind)
+#include "frmclient/docView/templates/docViewHomePage.h"   // the start page's tab — its forms, laid out
 #include "frmclient/artProvider/artProvider.h"
 #include "frmclient/visualView/visualHostClient.h"
 #include "frmclient/win/picture.h"
@@ -135,20 +137,19 @@ ibProtocol::ibFrame::ibMessage::ibLevel LevelOf(long long level)
 
 // A menu of the frame, as a list of what it is made of — the titles, the keys, what each item does — less whether an
 // item is enabled: two menus of one shape differ only in what may be pressed, and that is set, not built.
-void ShapeOf(const ibProtocolNode& menu, std::string& shape)
+void ShapeOf(const ibProtocolNode& menu, ibString& shape)
 {
 	for (const ibProtocolNode& item : menu.Children()) {
-		shape += '[';
+		shape << wxT('[');
 		if (item.GetBool(ibProtocol::ibFrame::ibMenu::Separator))
-			shape += '-';
-		shape += std::string(item.GetString(ibProtocol::ibFrame::ibMenu::Title).utf8_str());
-		shape += '|';
-		shape += std::string(item.GetString(ibProtocol::ibFrame::ibMenu::Shortcut).utf8_str());
-		shape += '|';
-		shape += std::to_string(item.GetInt(ibProtocol::ibFrame::ibMenu::Command, -1)) + '|' + std::to_string(item.GetInt(ibProtocol::ibFrame::ibMenu::Schema, -1));
-		shape += '|' + std::to_string(item.GetInt(ibProtocol::ibFrame::ibMenu::StockPicture));
+			shape << wxT('-');
+		shape << item.GetString(ibProtocol::ibFrame::ibMenu::Title) << wxT('|')
+			<< item.GetString(ibProtocol::ibFrame::ibMenu::Shortcut) << wxT('|')
+			<< item.GetInt(ibProtocol::ibFrame::ibMenu::Command, -1) << wxT('|')
+			<< item.GetInt(ibProtocol::ibFrame::ibMenu::Schema, -1) << wxT('|')
+			<< item.GetInt(ibProtocol::ibFrame::ibMenu::StockPicture);
 		ShapeOf(item, shape);
-		shape += ']';
+		shape << wxT(']');
 	}
 }
 
@@ -784,6 +785,10 @@ bool ibFrontendMainFrame::Show(bool show)
 		return false;
 	SetFocus();
 	Raise();
+	// …and the messages its start said, opened below — the desktop's (ibFrontendMainFrameEnterprise::Show): drawn before
+	// the window was shown, they took no focus (ibOutputWindow::Output).
+	if (m_outputWindow != nullptr && !m_outputWindow->IsEmpty())
+		m_outputWindow->SetFocus();
 
 	// …and what the login read beside the frame (GetStartSchemas), each shown as a call of its own would have been.
 	for (const ibProtocolNode& read : answer.FindChild(ibProtocol::ibLogin::Read).Children())
@@ -974,6 +979,9 @@ void ibFrontendMainFrame::Draw(const ibProtocolNode& answer)
 	// client goes once its call has settled (Call, AllowClose).
 	if (answer.GetBool(ibProtocol::ibFrame::Exit))
 		m_exitGranted = true;
+	// A debugger left its loop — the window raised, as the desktop's raised its own after the loop.
+	if (answer.GetBool(ibProtocol::ibFrame::Raise))
+		RaiseFrame();
 	if (m_outputWindow != nullptr) {
 		if (answer.GetBool(ibProtocol::ibFrame::Clear))
 			m_outputWindow->Clear();
@@ -986,7 +994,7 @@ void ibFrontendMainFrame::Draw(const ibProtocolNode& answer)
 void ibFrontendMainFrame::DrawMenu(const ibProtocolNode& menu)
 {
 	// One of the same shape — only what may be pressed is set.
-	std::string shape;
+	ibString shape;
 	ShapeOf(menu, shape);
 	if (shape == m_menuShape) {
 		std::function<void(const ibProtocolNode&)> enable = [this, &enable](const ibProtocolNode& items) {
@@ -1114,6 +1122,8 @@ ibTabDocument* ibFrontendMainFrame::CreateDocument(ibProtocol::ibView::ibKind ki
 {
 	if (kind == ibProtocol::ibView::ibKind::AuditLog)
 		return new ibAuditLogDocument(tabId);
+	if (kind == ibProtocol::ibView::ibKind::HomePage)
+		return new ibHomePageDocument(tabId);
 	return new ibFormVisualDocument(tabId);
 }
 
@@ -1540,9 +1550,10 @@ void ibFrontendMainFrame::ShowRequest(const ibProtocolNode& request, ibProtocolN
 		// THE DESKTOP'S ibValueForm::ChangeForm — its editor over the form of the active tab; what a person may arrange of
 		// each control comes in the question (Controls). Its acts are answered on the way (UpdateForm, the setting's
 		// doors); closed — answered with no Act.
-		// ⚠ Asked only of a form's tab (ibValueForm::ChangeForm), so the active tab's document is a form's.
-		ibFormVisualDocument* const document = dynamic_cast<ibFormVisualDocument*>(FindDocument(GetActiveTab()));
-		ibFormVisualEditView* const view = document != nullptr ? document->GetFirstView() : nullptr;
+		// ⚠ Asked only of a form (ibValueForm::ChangeForm) — a form's tab, or a cell of the start page: the form the person
+		// is in, its view's host (the command bar took the focus as it was pressed).
+		const ibTabDocument* const document = FindDocument(GetActiveTab());
+		const ibVisualHostView* const view = document != nullptr ? dynamic_cast<const ibVisualHostView*>(document->GetFirstView()) : nullptr;
 		ibValueForm* const form = view != nullptr && view->GetVisualHost() != nullptr ? view->GetVisualHost()->GetValueForm() : nullptr;
 		if (form == nullptr)
 			break;
@@ -1588,7 +1599,9 @@ bool ibFrontendMainFrame::UploadFile(const wxString& path, wxString& file)
 			params.SetValue(ibProtocol::ibFile::Name, wxFileName(path).GetFullName());
 		else
 			params.SetValue(ibProtocol::ibFile::File, file);
-		params.SetValue(ibProtocol::ibFile::Data, wxBase64Encode(part.data(), static_cast<std::size_t>(read)));
+		ibString text;
+		ibBase64::Append(text, part.data(), static_cast<std::size_t>(read));
+		params.SetValue(ibProtocol::ibFile::Data, text);
 
 		ibProtocol::ibRefusal refusal = ibProtocol::ibRefusal::None;
 		wxString error;
@@ -1620,7 +1633,9 @@ bool ibFrontendMainFrame::DownloadFile(const wxString& file, const wxString& pat
 			return false;
 		}
 		parts = answer.GetInt(ibProtocol::ibFile::Parts);
-		const wxMemoryBuffer data = wxBase64Decode(answer.GetString(ibProtocol::ibFile::Data));
+		wxMemoryBuffer data;
+		if (!ibBase64::Read(answer.GetString(ibProtocol::ibFile::Data), data))
+			return false;
 		if (data.GetDataLen() != 0 && target.Write(data.GetData(), data.GetDataLen()) != data.GetDataLen())
 			return false;
 	}

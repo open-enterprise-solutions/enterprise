@@ -9,7 +9,8 @@ Two neighbours hold what is not repeated here:
 [CONTRIBUTING.md](../CONTRIBUTING.md) (what sending a pull request means legally, and the four
 comment markers) and [CLAUDE.md](../CLAUDE.md) (layout, naming table, key decisions, what not to
 do). Portability has its own file, [portability.md](portability.md), and so does the build,
-[BUILD.md](BUILD.md).
+[BUILD.md](BUILD.md). How the code itself is written — names, class layout, holders, refusals,
+the diff — is the companion of this file, [writing-code.md](writing-code.md).
 
 ---
 

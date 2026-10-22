@@ -31,7 +31,7 @@
 #ifdef OES_USE_FIREBIRD
 #include "backend/databaseLayer/firebird/firebirdDatabaseLayer.h"
 #endif
-#include "backend/utils/sessionToken.h"
+#include "core/crypto/sessionToken.h"
 #include "core/exception.h"
 
 #include "frmserver/client/clientHost.h"
@@ -79,7 +79,7 @@ Rpc ReadRpc(const wxString& text)
 {
 	Rpc rpc;
 	ibProtocolNode root;
-	if (!ibProtocolNode::Read(std::string(text.utf8_str()), root)) {
+	if (!ibProtocolNode::Read(text, root)) {
 		rpc.message = text;
 		return rpc;
 	}
@@ -103,7 +103,7 @@ wxString Request(long long id, const char* method, const ibProtocolNode& params)
 		.SetValue(ibProtocol::ibRpc::Id, id)
 		.SetValue(ibProtocol::ibRpc::Method, method)
 		.SetValue(ibProtocol::ibRpc::Params, params);
-	return wxString::FromUTF8(request.Write());
+	return request.Write();
 }
 
 wxString TokenHashOf(const wxString& token)
@@ -227,14 +227,14 @@ ibProtocolNode PasswordLogin(bool resume = true)
 		.SetValue(ibProtocol::ibLogin::Password, wxString())
 		.SetValue(ibProtocol::ibLogin::Protocol, ibProtocol::Version);
 	if (resume)
-		params.AddItem(ibProtocol::ibLogin::Features, wxString::FromUTF8(ibProtocol::ibLogin::FeatureResume));
+		params.AddItem(ibProtocol::ibLogin::Features, ibProtocol::ibLogin::FeatureResume);
 	return params;
 }
 
 bool ListsResume(const ibProtocolNode& result)
 {
 	for (const ibProtocolNode& feature : result.GetList(ibProtocol::ibLogin::Features)) {
-		if (feature.AsString() == wxString::FromUTF8(ibProtocol::ibLogin::FeatureResume))
+		if (feature.AsString() == ibProtocol::ibLogin::FeatureResume)
 			return true;
 	}
 	return false;
@@ -589,7 +589,7 @@ TEST_F(SessionFailover, StartModuleThatAsksDoesNotHangTheLogin)
 	EXPECT_FALSE(login.result.GetString(ibProtocol::ibLogin::Token).IsEmpty());
 	const ibProtocolNode request = login.result.FindChild("Request");
 	ASSERT_TRUE(request.IsNode()) << "the start module's question was not on the login answer: "
-		<< login.result.Write();
+		<< login.result.Write().ToUtf8();
 	EXPECT_EQ(request.GetString("Text"), wxT("stay"));
 
 	const wxString client = login.result.GetString(ibProtocol::ibLogin::Client);
@@ -643,12 +643,12 @@ namespace {
 // A connection that fails one exchange, then accepts the login and the resent call.
 class ScriptedConnection : public ibProtocolConnection {
 public:
-	std::vector<std::string> sent;
-	std::vector<bool>        fail;
-	std::vector<std::string> answers;
-	int                      reconnects = 0;
+	std::vector<ibString> sent;
+	std::vector<bool>     fail;
+	std::vector<ibString> answers;
+	int                   reconnects = 0;
 
-	bool Exchange(const std::string& request, std::string& answer, ibProtocol::ibRefusal& refusal, wxString& error) override
+	bool Exchange(const ibString& request, ibString& answer, ibProtocol::ibRefusal& refusal, wxString& error) override
 	{
 		sent.push_back(request);
 		if (fail.empty()) {
@@ -672,10 +672,10 @@ public:
 		++reconnects;
 		return true;
 	}
-	void Listen(std::function<void(const std::string&)>) override {}
+	void Listen(std::function<void(const ibString&)>) override {}
 };
 
-std::string Answer(long long id, const ibProtocolNode& result)
+ibString Answer(long long id, const ibProtocolNode& result)
 {
 	ibProtocolNode root;
 	root.SetValue(ibProtocol::ibRpc::Version, "2.0")
@@ -684,7 +684,7 @@ std::string Answer(long long id, const ibProtocolNode& result)
 	return root.Write();
 }
 
-long long IdOf(const std::string& text)
+long long IdOf(const ibString& text)
 {
 	ibProtocolNode node;
 	EXPECT_TRUE(ibProtocolNode::Read(text, node));
@@ -736,7 +736,7 @@ TEST(SessionFailoverClient, IdsStayMonotonicAcrossReconnect)
 	EXPECT_EQ(IdOf(raw->sent[1]), 2);
 	EXPECT_EQ(IdOf(raw->sent[2]), 3);
 	EXPECT_EQ(IdOf(raw->sent[3]), 2);
-	EXPECT_NE(raw->sent[2].find("\"Token\""), std::string::npos);
+	EXPECT_TRUE(raw->sent[2].Contains(wxT("\"Token\"")));
 
 	ASSERT_TRUE(communicator.Call(ibProtocol::ibMethod::Frame, params, result, refusal, error)) << error;
 	EXPECT_EQ(IdOf(raw->sent.back()), 4);
@@ -759,20 +759,21 @@ ibProtocolNode StateEvent(int control, ibProtocol::ibEvent::ibKind event, const 
 	return node;
 }
 
-std::vector<ibProtocolNode> PendingOf(const std::string& text)
+std::vector<ibProtocolNode> PendingOf(const ibString& text)
 {
 	ibProtocolNode node;
 	EXPECT_TRUE(ibProtocolNode::Read(text, node));
 	return node.FindChild(ibProtocol::ibRpc::Params).GetList(ibProtocol::ibLogin::Pending);
 }
 
-std::string LoginAnswer(int protocol)
+ibString LoginAnswer(int protocol)
 {
-	return "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"Client\":\"client-1\",\"Protocol\":" + std::to_string(protocol)
-		+ ",\"Frame\":1,\"Title\":\"Home\"}}";
+	return ibString::Format(
+		wxT("{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"Client\":\"client-1\",\"Protocol\":%d,\"Frame\":1,\"Title\":\"Home\"}}"),
+		protocol);
 }
 
-std::string FrameAnswer(long long id, int number)
+ibString FrameAnswer(long long id, int number)
 {
 	ibProtocolNode frame;
 	frame.SetValue(ibProtocol::ibFrame::Frame, number).SetValue(ibProtocol::ibFrame::Title, wxString(wxT("Home")));
@@ -822,19 +823,19 @@ TEST(SubscribedEventsClient, HeldEventsGoWithTheNextCall)
 	// …and the server reads it as the client wrote it: a list of events, each with its Args.
 	ibRpcRequest request;
 	wxString parseError;
-	ASSERT_TRUE(ibRpcParseRequest(wxString::FromUTF8(raw->sent[1]), request, parseError)) << parseError;
-	const ibDataValue* const read = request.m_params.FindField(wxString::FromUTF8(ibProtocol::ibLogin::Pending));
+	ASSERT_TRUE(ibRpcParseRequest(raw->sent[1], request, parseError)) << parseError;
+	const ibDataValue* const read = request.m_params.FindField(ibProtocol::ibLogin::Pending);
 	ASSERT_NE(read, nullptr);
 	ASSERT_EQ(read->Kind(), ibDataKind::Array);
 	ASSERT_EQ(read->AsArray().size(), 4u);
 	const ibDataValue& last = read->AsArray()[3];
 	ASSERT_EQ(last.Kind(), ibDataKind::Child);
-	EXPECT_EQ(last.AsChild()->GetValue<s32>(wxString::FromUTF8(ibProtocol::ibEvent::Event)),
+	EXPECT_EQ(last.AsChild()->GetValue<s32>(ibProtocol::ibEvent::Event),
 		static_cast<s32>(ibProtocol::ibEvent::ibKind::Row));
-	EXPECT_EQ(last.AsChild()->GetValue<s32>(wxString::FromUTF8(ibProtocol::ibEvent::Control)), 7);
-	const ibDataNode* const args = last.AsChild()->FindChild(wxString::FromUTF8(ibProtocol::ibEvent::Args));
+	EXPECT_EQ(last.AsChild()->GetValue<s32>(ibProtocol::ibEvent::Control), 7);
+	const ibDataNode* const args = last.AsChild()->FindChild(ibProtocol::ibEvent::Args);
 	ASSERT_NE(args, nullptr);
-	EXPECT_EQ(args->GetValue<s32>(wxString::FromUTF8(ibProtocol::ibEvent::Row)), 500);
+	EXPECT_EQ(args->GetValue<s32>(ibProtocol::ibEvent::Row), 500);
 
 	// Taken once.
 	ASSERT_TRUE(communicator.Call(ibProtocol::ibMethod::Frame, params, result, refusal, error)) << error;

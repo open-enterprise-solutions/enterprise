@@ -78,6 +78,7 @@ struct FRMCLIENT_API ibUserInfo {
 		wxString m_strLanguageGuid;
 		wxString m_strLanguageTitle;
 		wxString m_strLanguageCode;
+		bool m_default = false;   // the configuration's own language (its DefaultLanguage)
 	};
 
 	// ListAll — every row projected to Brief. A list the server could not read is refused to the person, and comes back

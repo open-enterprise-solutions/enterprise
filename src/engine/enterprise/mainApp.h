@@ -3,7 +3,6 @@
 
 #include <wx/app.h>
 #include <wx/aui/framemanager.h>
-#include <wx/socket.h>
 
 #include <memory>
 
@@ -41,7 +40,7 @@ public:
 	// We only fill in the exe-specific name + boot bodies.
 	wxString GetExeName() const override { return wxT("enterprise"); }
 
-	// DoOnInit defaulted on the base (wxSocketBase::Initialize + wxApp::OnInit).
+	// DoOnInit defaulted on the base (wxApp::OnInit).
 	int DoOnRun() override;
 
 	int OnExit() override;

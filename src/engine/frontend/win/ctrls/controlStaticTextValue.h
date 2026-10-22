@@ -187,6 +187,17 @@ public:
 
 	wxString GetValueText() const { return m_valueText != nullptr ? m_valueText->GetLabel() : wxString(); }
 
+	// THE VALUE HALF SHOWN — none for a text bound to nothing (a heading, a note): then it is a caption
+	// only, not the title of a field, and the label column neither measures it nor widens it — a long
+	// note above a group of fields used to push every field's title out to the note's width.
+	void ShowValue(bool show) {
+		if (m_valueText == nullptr || m_valueText->IsShown() == show) return;
+		m_valueText->Show(show);
+		InvalidateBestSize();
+		LayoutControls();
+	}
+	virtual bool AllowCalc() const override { return m_valueText != nullptr && m_valueText->IsShown(); }
+
 	// Does the value lead anywhere? Draws it as a link and makes it answer clicks.
 	void SetHyperlink(bool hyperlink) {
 		if (m_valueText == nullptr) return;

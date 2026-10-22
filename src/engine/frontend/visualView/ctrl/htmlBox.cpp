@@ -22,11 +22,17 @@ wxObject* ibValueHTMLBox::Create(wxWindow* wxparent, ibVisualHost* visualHost)
 		wxDefaultPosition,
 		wxDefaultSize);
 
-	wxString dummy_page(
-		wxT("<b>wxHtmlWindow</b><br />")
-		wxT("This is a dummy page.</body></html>"));
+	// The page the code set (in OnOpen, before this window existed), else a placeholder.
+	if (!m_page.IsEmpty()) {
+		htmlBox->SetPage(m_page);
+	}
+	else {
+		wxString dummy_page(
+			wxT("<b>wxHtmlWindow</b><br />")
+			wxT("This is a dummy page.</body></html>"));
 
-	htmlBox->SetPage(dummy_page);
+		htmlBox->SetPage(dummy_page);
+	}
 
 	return htmlBox;
 }
@@ -85,8 +91,10 @@ bool ibValueHTMLBox::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ib
 	switch (m_members.GetMethodData(lMethodNum))
 	{
 	case enSetPage:
+		// Kept as well as shown: a window created later (or created again) shows it too.
+		m_page = paParams[0]->GetString();
 		pvarRetValue = htmlBox ?
-			htmlBox->SetPage(paParams[0]->GetString()) : !paParams[0]->IsEmpty();
+			htmlBox->SetPage(m_page) : !paParams[0]->IsEmpty();
 		return true;
 	}
 

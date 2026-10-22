@@ -120,7 +120,7 @@ int main(int argc, char** argv)
 {
 	wxApp::CheckBuildOptions(WX_BUILD_OPTIONS_SIGNATURE, "appserver");
 
-	// wxInitializer + wxSocketBase::Initialize + ibCrashGuard::Install, in one line. Headless: no wxApp, faults
+	// wxInitializer + ibCrashGuard::Install, in one line. Headless: no wxApp, faults
 	// from worker / debug-listener threads write minidumps instead of a silent abort.
 	ibOesConsoleBoot boot(wxT("appserver"), argc, argv);
 	if (!boot.IsOk()) {

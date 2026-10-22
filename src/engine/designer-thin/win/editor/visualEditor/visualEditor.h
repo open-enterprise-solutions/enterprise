@@ -23,6 +23,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <set>
 #include <vector>
 
 class ibModuleEditDocument;
@@ -45,13 +46,6 @@ class ibValueCommandBarItem;
 
 #define wxNOTEBOOK_PAGE_DESIGNER 0
 #define wxNOTEBOOK_PAGE_CODE_EDITOR 1
-
-#define oes_clipboard_frame		wxT("oes_clipboard_frame")
-#define oes_clipboard_attribute	wxT("oes_clipboard_attribute")
-#define oes_clipboard_command	wxT("oes_clipboard_command")
-// A command of a control's command bar — on the system's clipboard as the others are: the desktop held it in its process
-// (commandBar.cpp's s_commandClipboard), out of reach of another window.
-#define oes_clipboard_command_bar_item	wxT("oes_clipboard_command_bar_item")
 
 // wxDropTarget for a node dragged from a form-editor tree — the desktop's (designer visualEditor.h). Shared by the form
 // CANVAS and the OBJECT TREE. It holds the registered draggable KINDS (ibFormDragItem — a source path, a command
@@ -153,14 +147,24 @@ public: class ibVisualEditor :
 	public:
 
 		// Done, and the undone ones after the cursor dropped: a new command starts another branch. A save point among
-		// them goes with them — the form can no longer come back to what was handed.
+		// them goes with them — the form can no longer come back to what was handed. The cursor moves first, as an
+		// undo's and a redo's does: the form a command draws is handed as it is drawn (ibVisualEditor::Draw), and is
+		// past the save point then.
 		void Execute(ibVisualEditorCmd* command) {
-			command->Execute();
 			if (m_savePoint > m_done)
 				m_savePoint = kNoSavePoint;
 			m_history.resize(m_done);
 			m_history.emplace_back(command);
 			++m_done;
+			command->Execute();
+		}
+		// …A COMMAND THE SERVER DID (a door's answer): done as Execute does, the save point moved with it — the server
+		// holds the form it leaves, so its drawing hands nothing; a redo of it does (the server may have gone on since).
+		void Receive(ibVisualEditorCmd* command) {
+			m_history.resize(m_done);
+			m_history.emplace_back(command);
+			m_savePoint = ++m_done;
+			command->Execute();
 		}
 
 		void Undo() { if (m_done > 0) m_history[--m_done]->Restore(); }
@@ -198,6 +202,13 @@ public:
 		virtual wxWindow* GetBackgroundWindow() const override;
 		virtual void OnClickFromApp(wxWindow* currentWindow, wxMouseEvent& event) override;
 		virtual void SelectControl(ibValueFrame* control) override { m_formHandler->SelectObject(control); }
+		// Its rows held or asked of the server, received with its values as its node has them.
+		virtual bool Fetch(ibValueFrame* control) override {
+			if (!m_formHandler->FetchRows(control->GetControlID()))
+				return false;
+			m_formHandler->Receive(m_formHandler->m_formNode);
+			return true;
+		}
 		virtual void ModifyProperty(ibProperty* prop, const wxVariant& oldValue, const wxVariant& newValue) override {
 			m_formHandler->ModifyProperty(prop, oldValue, newValue);
 		}
@@ -224,6 +235,14 @@ public:
 
 	protected:
 
+		// A control reads its node — the editor's, its rows first (they make its properties), then its values and whether
+		// it is open in the tree.
+		virtual void ReadControl(ibValueFrame* control, const ibProtocolNode& node) override {
+			ibVisualHostClient::ReadControl(control, node);
+			m_formHandler->Receive(control);
+			ibVisualEditor::Receive(control, node);
+			control->SetExpanded(node.GetBool(ibProtocol::ibForm::Expanded, true));
+		}
 		// The card sized to the form it holds, and the canvas to the card.
 		virtual void UpdateVirtualSize() override;
 
@@ -269,12 +288,13 @@ public:
 
 		// The tree drawn anew from the form: the selected command bar's row kept, the rows opened as the form has them.
 		void RebuildTree();
-		// A control's row under the parent's (none: the root), its command bar's rows and its children's. A sizer item
-		// is no row: its control stands in its place.
-		void AddControl(ibValueFrame* control, const wxTreeItemId& parent);
-		// The desktop's "Command interface" node under a control with a command bar — its commands under it, as its
-		// node has them (Layers, CommandBar).
-		void AddCommandBar(ibValueFrame* obj, const wxTreeItemId& parent);
+		// A control's row under the parent's (none: the root), its command bar's rows and its children's — its node beside
+		// it, its children the control's in their order (the host lays each in at its place). A sizer item is no row: its
+		// control stands in its place.
+		void AddControl(ibValueFrame* control, const ibProtocolNode& node, const wxTreeItemId& parent);
+		// The desktop's "Command interface" node under a control with a command bar (its node's state carries it) — its
+		// commands under it, as its node has them (Layers, CommandBar).
+		void AddCommandBar(ibValueFrame* obj, const ibProtocolNode& node, const wxTreeItemId& parent);
 
 		// The row says the control's name and class; the selected control's row is selected.
 		void UpdateItem(const wxTreeItemId& row, ibValueFrame* control);
@@ -357,12 +377,16 @@ public:
 
 		// The holder whose property that is — none: no attribute's.
 		ibFormAttributeValue* FindEntry(const ibPropertyObject* owner) const;
+		// THE ATTRIBUTE A DOOR SHOWS (its answer's Attribute, Column) — its row lit (a column's: the attribute opened, the
+		// column's row), its holder the editor's current element, shown in the inspector. False: no such row.
+		bool SelectAttribute(long long attributeId, long long columnId);
 
-		// ⭐ THE SOURCE WINDOW — the desktop's (frontend advpropSource.cpp): these rows, filtered by what a control may be
-		// bound to (`filter`; a column — of `table`), a reference opened as the tree opens it
-		// (Composition), the binding's own row selected; OK — `binding` the row's path. False: cancelled, or nothing.
-		bool PickSource(wxWindow* parent, ibProtocol::ibSchema::ibProperties::ibSourceDataType filter,
-			const ibSourceDescription& table, ibSourceDescription& binding);
+		// ⭐ THE SOURCE WINDOW — the desktop's (frontend advpropSource.cpp): the tree the selected control's Source of
+		// that `name` offers (the server's, asked as the window opens — Editor), a reference opened as the tree opens it
+		// (Composition) and filtered by what the control may be bound to (`filter`), the binding's own row selected; OK —
+		// `binding` the row's path. False: cancelled, or nothing.
+		bool PickSource(wxWindow* parent, const wxString& name, ibProtocol::ibSchema::ibProperties::ibSourceDataType filter,
+			ibSourceDescription& binding);
 
 	protected:
 
@@ -417,7 +441,8 @@ public:
 
 		// The rows and the attributes as the tree last showed them — a draw that says the same leaves the tree alone
 		// (expanded rows stay so).
-		wxString m_shape;
+		wxString       m_shape;
+		ibProtocolNode m_attributes;
 		// The attribute selected, by its id.
 		long long m_selectedId = 0;
 
@@ -620,17 +645,17 @@ public:
 	void ModifyProperty(ibProperty* prop, const wxVariant& oldValue, const wxVariant& newValue);
 
 	// …and the attribute tree's, by the attribute's id (`Attribute`) — the server's editor's doors of the same names:
-	// a new one (String, uniquely named) and a pasted one — its id, the tree lands on it (0: refused) —, its name given
-	// (false: refused — empty, or another's), the main one (none: null).
-	long long CreateAttribute();
+	// a new one (String, uniquely named) and a pasted one, its name given (false: refused — empty, or another's), the main
+	// one (none: null); the tree lands on what the answer shows (Execute).
+	void CreateAttribute();
 	void RemoveAttribute(ibFormAttributeValue* entry);
 	void CutAttribute(ibFormAttributeValue* entry);
 	void CopyAttribute(ibFormAttributeValue* entry);
-	long long PasteAttribute();
+	void PasteAttribute();
 	bool RenameAttribute(ibFormAttributeValue* entry, const wxString& newName);
 	void SetMainAttribute(ibFormAttributeValue* entry);
-	// …a value table's column (the desktop's OnAddColumn) — the new one's id, the tree lands on it (0: refused).
-	long long AddColumn(ibFormAttributeValue* entry);
+	// …a value table's column (the desktop's OnAddColumn) — the tree lands on the new one.
+	void AddColumn(ibFormAttributeValue* entry);
 
 	// …and the command tree's, by the form command's id (`FormCommand`): a new one (uniquely named, its Action empty) and
 	// a pasted one — its id, the tree lands on it (0: refused).
@@ -681,25 +706,28 @@ public:
 
 	// THE FORM AS A COMMAND LEAVES IT — drawn (by what `patch` changed; none: whole), each control built anew reading
 	// its rows and every one its values from its node, the selection the control with that id; its attributes' and its
-	// commands' trees as the server's last answer about it wrote them (`trees`: AttributeTree, CommandTree).
+	// commands' trees as the server's last answer about it wrote them (`trees`: AttributeTree, CommandTree). Handed to
+	// the server as it is drawn (SaveForm) — a command's, an undo's, a redo's alike.
 	void Draw(const ibProtocolNode& form, const ibProtocolNode& trees, const ibProtocolNode& patch, long long selected);
 	// …and a control drawn as its properties say, the desktop's (ibVisualHost::UpdateControl): what of them its node does
 	// not hold put in it.
 	void UpdateControl(ibValueFrame* control);
 
-	// ⭐ THE FORM FROM THE TAB'S ANSWER — drawn (Form), each control reading its rows (Controls), the tree's icons and the
-	// classes a control is made of (Classes); the desktop's LoadForm read the metaobject in its own process.
+	// ⭐ THE FORM FROM THE TAB'S ANSWER — drawn (Form), the tree's icons and the classes a control is made of (Classes); a
+	// control's rows asked as it is shown (FetchRows). The desktop's LoadForm read the metaobject in its own process.
 	bool LoadForm(const ibProtocolNode& answer);
-	// …and handed back whole when it has changed since (Change with Form): the server loads it over the one it holds.
+	// …and handed back whole when it has changed since (Change with Form): the server loads it over the one it holds,
+	// and every request after it is asked about that one — none carries the form it is about.
 	bool SaveForm();
 
 private:
 
 	void Execute(ibVisualEditorCmd* cmd);
-	// ⭐ A DOOR OF THE SERVER'S EDITOR — asked with the form as it stands (Form, unless the request carries another), its
-	// answer the command's form: drawn, its controls' rows kept, its trees, the selection it names (Selected; none: as
-	// it was). False — refused: nothing done.
-	bool Execute(ibProtocolNode request, ibProtocolNode& answer);
+	// ⭐ A DOOR OF THE SERVER'S EDITOR — over the form the server holds (the one last handed), or over another the request
+	// carries (Form — a layer's edit), its answer the command's form: drawn, its controls' rows kept, its trees, the
+	// selection it names (Selected; none: as it was) — a command the server did, its form not handed back (Receive).
+	// False — refused: nothing done.
+	bool Execute(const ibProtocolNode& request, ibProtocolNode& answer);
 
 	// The node of the attribute (`owner` Attributes) or command (FormCommands) with that id put on the clipboard in that
 	// format — what Paste hands to the server's editor.
@@ -711,8 +739,18 @@ private:
 
 	void DoRemoveObject(ibValueFrame* obj, bool cutObject);
 
-	// Each control of the node drawn receives what it holds: its rows (the answers', m_rows) when it was built anew, its
-	// values from the node.
+	// ⭐ A CONTROL'S ROWS ARE ASKED AS IT IS SHOWN — held (m_rows), else the server's editor's Rows of that control: a
+	// door's answer carries none, the inspector fetches them (ibVisualEditorHost::Fetch), a layer of the control too.
+	// Every new control's rode each answer before, the inspector shown or not (2026-10-22). False: no answer.
+	bool FetchRows(long long controlId);
+	// AN ANSWER RECEIVED — all of it but its form: its controls' rows held by their ids (m_rows), those it changed marked
+	// (m_rowsChanged); its attributes' and its commands' trees given in `trees`.
+	void Receive(const ibProtocolNode& answer, ibProtocolNode& trees);
+	// A control receives its rows — the answers' (m_rows) — when it has none (the client's controls declare none) or an
+	// answer changed them (m_rowsChanged): as the host reads its node (ibVisualEditorHost::ReadControl), its values after.
+	void Receive(ibValueFrame* control);
+	// …and each control of the node whose rows an answer changed while its node stayed as it was, which the host does not
+	// read again — the one the inspector shows, its rows just fetched (ibVisualEditorHost::Fetch).
 	void Receive(const ibProtocolNode& node);
 
 	// A SOURCE PATH as the attribute tree's rows write it (Path — its hops, items {Id, Type}): what a row is asked
@@ -740,8 +778,11 @@ private:
 	ibProtocolNode m_trees;
 	// The classes a control may be made of, as the tab's answer had them (Name, Picture, Type, Menu).
 	ibProtocolNode m_classes;
-	// Each control's rows, by its id — the tab's answer's, and each door's that made one.
+	// Each control's rows, by its id — asked (FetchRows), or the edited control's that its edit's answer brought: an answer
+	// about the form changed lets the others go, they are of the form before it.
 	std::map<long long, ibProtocolNode> m_rows;
+	// …and the controls whose rows an answer changed, until each receives them as it is drawn: the rest keep theirs.
+	std::set<long long> m_rowsChanged;
 
 	ibCommandProcessor m_cmdProc;
 
@@ -943,7 +984,7 @@ public:
 
 	// What the server says of it, asked as it is shown — the server's editor's Properties, with the form as it stands: the
 	// attribute's rows, or its column's.
-	virtual bool Receive() override;
+	virtual bool Fetch() override;
 	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue) override;
 
 	long long GetId() const { return m_attributeId; }
@@ -957,6 +998,9 @@ public:
 	void ReadRow(const ibProtocolNode& row);
 
 private:
+
+	// …each of its rows, the server's property (ibPropertySerializable).
+	virtual ibProperty* CreateProperty(ibPropertyCategory* cat, ibDataNode&& row) override;
 
 	ibVisualEditorNotebook::ibVisualEditor* m_formHandler;
 	const long long m_attributeId;
@@ -984,7 +1028,7 @@ public:
 	virtual bool IsEditable() const override;
 
 	// What the server says of it, asked as it is shown — as an attribute's is.
-	virtual bool Receive() override;
+	virtual bool Fetch() override;
 	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue) override;
 
 	long long GetId() const { return m_commandId; }
@@ -994,6 +1038,9 @@ public:
 	void ReadRow(const ibProtocolNode& row);
 
 private:
+
+	// …each of its rows, the server's property (ibPropertySerializable).
+	virtual ibProperty* CreateProperty(ibPropertyCategory* cat, ibDataNode&& row) override;
 
 	ibVisualEditorNotebook::ibVisualEditor* m_formHandler;
 	const long long m_commandId;
@@ -1015,10 +1062,10 @@ public:
 
 	virtual bool IsEditable() const override;
 
-	// What it holds, received as it is shown: its rows as the last answer brought them with its control's (Controls), in
-	// place of what it had — a command's presentations (what its command is called, its picture) are its own and the
-	// server's to say — and its values as its node has them now.
-	virtual bool Receive() override;
+	// What it holds, fetched as it is shown: its rows with its control's (Controls — asked when none are held), in place
+	// of what it had — a command's presentations (what its command is called, its picture) are its own and the server's
+	// to say — and its values as its node has them now.
+	virtual bool Fetch() override;
 	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue) override;
 
 	// Its node in the control's node — none: an empty node.
@@ -1039,6 +1086,9 @@ public:
 	ibProtocolNode GetNode() const;
 
 protected:
+
+	// …each of its rows, the server's property (ibPropertySerializable).
+	virtual ibProperty* CreateProperty(ibPropertyCategory* cat, ibDataNode&& row) override;
 
 	// The form as it stands with the command bar of this control given those commands — drawn by the server, a command
 	// the editor's; then the one at `selected` shown (wxNOT_FOUND: none).

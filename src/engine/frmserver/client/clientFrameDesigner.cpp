@@ -1,6 +1,7 @@
 #include "clientFrameDesigner.h"
 
 #include "backend/appData.h"
+#include "backend/debugger/debugClient.h"
 #include "backend/mcp/mcpServer.h"
 #include "backend/metadataConfiguration.h"
 #include "backend/session/session.h"
@@ -10,11 +11,27 @@
 #include "frmserver/docView/docManagerDesigner.h"
 #include "frmserver/schema/designer/mcpServer.h"   // SwitchableServer — the assistant the person may switch here
 
+#include "clientDebugger.h"
+
 ibClientFrameDesigner::ibClientFrameDesigner(ibSessionHolder&& holder, ibClientInstance* clientInstance)
 	: ibClientFrame(std::move(holder), clientInstance), m_metaTree(this)
 {
 	m_docManager = new ibDocManagerDesigner;
 	InitializeDefaultMenu();
+
+	// The designer's debugger — the engine's, which the login made with the configuration — heard over the wire.
+	ibSession* const session = GetSession();
+	if (debugClient != nullptr && session != nullptr) {
+		m_debugger = new ibClientDebugger(session->GetApplicationInstance(), clientInstance);
+		debugClient->AddBridge(m_debugger);
+	}
+}
+
+ibClientFrameDesigner::~ibClientFrameDesigner()
+{
+	// RemoveBridge destroys it — the adapter owns what it holds.
+	if (m_debugger != nullptr && debugClient != nullptr)
+		debugClient->RemoveBridge(m_debugger);
 }
 
 bool ibClientFrameDesigner::AllowRun()

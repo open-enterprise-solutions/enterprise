@@ -1,5 +1,5 @@
 // webserver — the bases' transport for browsers: a site's files and the protocol of a base's clients, over HTTP and
-// HTTPS (webServer.h — what it serves and web.conf; http/httpServer.h — the port). Started by hand it narrates in its
+// HTTPS (webServer.h — what it serves and web.conf; core/net/httpServer.h — the port). Started by hand it narrates in its
 // console — the technological journal mirrored onto standard error — and stays until Ctrl+C; later it becomes a
 // service. What it publishes is web.conf's, and the command line's over it:
 //
@@ -106,8 +106,7 @@ int main(int argc, char** argv)
 {
 	wxApp::CheckBuildOptions(WX_BUILD_OPTIONS_SIGNATURE, "webserver");
 
-	// wxInitializer + wxSocketBase::Initialize + ibCrashGuard::Install, in one line — a file base's engine runs in this
-	// process, and its debug server speaks over wxSocket.
+	// wxInitializer + ibCrashGuard::Install, in one line — a file base's engine runs in this process.
 	ibOesConsoleBoot boot(wxT("webserver"), argc, argv);
 	if (!boot.IsOk()) {
 		std::fprintf(stderr, "Failed to initialize the wxWidgets library, aborting.");

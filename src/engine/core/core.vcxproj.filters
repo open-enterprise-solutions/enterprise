@@ -7,6 +7,9 @@
     <Filter Include="composition">
       <UniqueIdentifier>{7b2e4c91-3f58-4a0d-b6e2-9c1d8a5f3e47}</UniqueIdentifier>
     </Filter>
+    <Filter Include="crypto">
+      <UniqueIdentifier>{6e1b3d84-2f7a-4c95-b0d8-3a9e5c1f7b26}</UniqueIdentifier>
+    </Filter>
     <Filter Include="description">
       <UniqueIdentifier>{5fd91569-04e3-42cc-a2eb-ab6104edba35}</UniqueIdentifier>
     </Filter>
@@ -34,11 +37,11 @@
     <Filter Include="mcp">
       <UniqueIdentifier>{9047548b-5914-4dc5-9f68-0cb257b06510}</UniqueIdentifier>
     </Filter>
+    <Filter Include="net">
+      <UniqueIdentifier>{3c1d7f52-8e4a-4b9d-a6f0-5e2b9c7d1a84}</UniqueIdentifier>
+    </Filter>
     <Filter Include="query">
       <UniqueIdentifier>{a4a3bd23-8265-4eae-9b38-c123e23b3d1c}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="res">
-      <UniqueIdentifier>{3be40a77-37b2-4932-b674-ea437eebb065}</UniqueIdentifier>
     </Filter>
     <Filter Include="serialize">
       <UniqueIdentifier>{8708f6ac-1c30-4368-8d4f-7555b0b5d7bf}</UniqueIdentifier>
@@ -55,6 +58,9 @@
     <Filter Include="tabular">
       <UniqueIdentifier>{9c3f5e21-7a4d-4b86-8e1f-2d6b0a9c4f73}</UniqueIdentifier>
     </Filter>
+    <Filter Include="utils">
+      <UniqueIdentifier>{aee12374-94c8-4629-ad37-42f5f8911ad6}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="anyValue.cpp" />
@@ -65,7 +71,7 @@
     <ClCompile Include="compiler\foldLevel.cpp">
       <Filter>compiler</Filter>
     </ClCompile>
-    <ClCompile Include="compiler\lexValue.cpp">
+    <ClCompile Include="compiler\literal.cpp">
       <Filter>compiler</Filter>
     </ClCompile>
     <ClCompile Include="compiler\scriptParseCode.cpp">
@@ -78,6 +84,15 @@
       <Filter>composition</Filter>
     </ClCompile>
     <ClCompile Include="core.cpp" />
+    <ClCompile Include="crypto\fieldCipher.cpp">
+      <Filter>crypto</Filter>
+    </ClCompile>
+    <ClCompile Include="crypto\sessionToken.cpp">
+      <Filter>crypto</Filter>
+    </ClCompile>
+    <ClCompile Include="crypto\sha256.cpp">
+      <Filter>crypto</Filter>
+    </ClCompile>
     <ClCompile Include="description\calcScheduleDescription.cpp">
       <Filter>description</Filter>
     </ClCompile>
@@ -121,6 +136,7 @@
       <Filter>diagnostics</Filter>
     </ClCompile>
     <ClCompile Include="exception.cpp" />
+    <ClCompile Include="fboolean.cpp" />
     <ClCompile Include="fdatetime.cpp" />
     <ClCompile Include="fiber\fiber.cpp">
       <Filter>fiber</Filter>
@@ -152,14 +168,51 @@
       <Filter>job</Filter>
     </ClCompile>
     <ClCompile Include="localization.cpp" />
+    <ClCompile Include="net\asio.cpp">
+      <Filter>net</Filter>
+    </ClCompile>
+    <ClCompile Include="net\httpClient.cpp">
+      <Filter>net</Filter>
+    </ClCompile>
+    <ClCompile Include="net\httpServer.cpp">
+      <Filter>net</Filter>
+    </ClCompile>
+    <ClCompile Include="net\httpStream.cpp">
+      <Filter>net</Filter>
+    </ClCompile>
+    <ClCompile Include="net\ioThreads.cpp">
+      <Filter>net</Filter>
+    </ClCompile>
+    <ClCompile Include="net\tlsStream.cpp">
+      <Filter>net</Filter>
+    </ClCompile>
+    <ClCompile Include="net\webSocketFrame.cpp">
+      <Filter>net</Filter>
+    </ClCompile>
     <ClCompile Include="picturePredefined.cpp" />
     <ClCompile Include="pictureRegistry.cpp" />
     <ClCompile Include="programFolder.cpp" />
+    <ClCompile Include="startProcess.cpp" />
     <ClCompile Include="typeName.cpp" />
     <ClCompile Include="query\queryAggregates.cpp">
       <Filter>query</Filter>
     </ClCompile>
     <ClCompile Include="query\queryKeywords.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
+    <ClCompile Include="query\queryLexer.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
+    <ClCompile Include="query\queryRender.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
+    <ClCompile Include="query\queryParser.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
+    <ClCompile Include="query\queryRewrite.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
+    <ClCompile Include="query\queryRefusal.cpp">
       <Filter>query</Filter>
     </ClCompile>
     <ClCompile Include="serialize\dataBuilder.cpp">
@@ -192,6 +245,12 @@
     <ClCompile Include="tabular\tabularModelView.cpp">
       <Filter>tabular</Filter>
     </ClCompile>
+    <ClCompile Include="utils\base64.cpp">
+      <Filter>utils</Filter>
+    </ClCompile>
+    <ClCompile Include="utils\md5.cpp">
+      <Filter>utils</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="anyValue.h" />
@@ -206,7 +265,7 @@
     <ClInclude Include="compiler\foldLevel.h">
       <Filter>compiler</Filter>
     </ClInclude>
-    <ClInclude Include="compiler\lexValue.h">
+    <ClInclude Include="compiler\literal.h">
       <Filter>compiler</Filter>
     </ClInclude>
     <ClInclude Include="compiler\scriptParseCode.h">
@@ -219,6 +278,15 @@
       <Filter>composition</Filter>
     </ClInclude>
     <ClInclude Include="core.h" />
+    <ClInclude Include="crypto\fieldCipher.h">
+      <Filter>crypto</Filter>
+    </ClInclude>
+    <ClInclude Include="crypto\sessionToken.h">
+      <Filter>crypto</Filter>
+    </ClInclude>
+    <ClInclude Include="crypto\sha256.hpp">
+      <Filter>crypto</Filter>
+    </ClInclude>
     <ClInclude Include="description\calcScheduleDescription.h">
       <Filter>description</Filter>
     </ClInclude>
@@ -265,6 +333,7 @@
       <Filter>diagnostics</Filter>
     </ClInclude>
     <ClInclude Include="exception.h" />
+    <ClInclude Include="fboolean.h" />
     <ClInclude Include="fdatetime.h" />
     <ClInclude Include="fiber\fiber.h">
       <Filter>fiber</Filter>
@@ -308,12 +377,31 @@
     <ClInclude Include="mcp\mcpSettings.h">
       <Filter>mcp</Filter>
     </ClInclude>
+    <ClInclude Include="net\httpClient.h">
+      <Filter>net</Filter>
+    </ClInclude>
+    <ClInclude Include="net\httpServer.h">
+      <Filter>net</Filter>
+    </ClInclude>
+    <ClInclude Include="net\httpStream.h">
+      <Filter>net</Filter>
+    </ClInclude>
+    <ClInclude Include="net\ioThreads.h">
+      <Filter>net</Filter>
+    </ClInclude>
+    <ClInclude Include="net\tlsStream.h">
+      <Filter>net</Filter>
+    </ClInclude>
+    <ClInclude Include="net\webSocketFrame.h">
+      <Filter>net</Filter>
+    </ClInclude>
     <ClInclude Include="picturePredefined.h" />
     <ClInclude Include="pictureRegistry.h" />
     <ClInclude Include="programFolder.h" />
     <ClInclude Include="propertyChoiceMode.h" />
     <ClInclude Include="roleCompositionMode.h" />
     <ClInclude Include="selectorDataType.h" />
+    <ClInclude Include="startProcess.h" />
     <ClInclude Include="typeName.h" />
     <ClInclude Include="query\queryAggregates.h">
       <Filter>query</Filter>
@@ -333,12 +421,28 @@
     <ClInclude Include="query\queryPeriodUnits.h">
       <Filter>query</Filter>
     </ClInclude>
+    <ClInclude Include="query\queryLexer.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\queryAST.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\queryRender.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\queryParser.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\queryRewrite.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\queryRefusal.h">
+      <Filter>query</Filter>
+    </ClInclude>
     <ClInclude Include="query\queryUnfold.h">
       <Filter>query</Filter>
     </ClInclude>
-    <ClInclude Include="res\resource.h">
-      <Filter>res</Filter>
-    </ClInclude>
+    <ClInclude Include="resource.h" />
     <ClInclude Include="serialize\dataBuilder.h">
       <Filter>serialize</Filter>
     </ClInclude>
@@ -382,10 +486,14 @@
     <ClInclude Include="tabular\tabularModelView.h">
       <Filter>tabular</Filter>
     </ClInclude>
+    <ClInclude Include="utils\base64.h">
+      <Filter>utils</Filter>
+    </ClInclude>
+    <ClInclude Include="utils\md5.hpp">
+      <Filter>utils</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ResourceCompile Include="res\core.rc">
-      <Filter>res</Filter>
-    </ResourceCompile>
+    <ResourceCompile Include="core.rc" />
   </ItemGroup>
 </Project>

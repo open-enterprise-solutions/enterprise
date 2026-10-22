@@ -128,6 +128,27 @@ constexpr ibClassID GetIDByVT(ibValueTypes valueType) {
 	}
 }
 
+// THE WIDEST NUMBER AND THE LONGEST STRING a type may be qualified with — `Number(32)`, `String(1024)`. The engine's
+// and the client's: the query's parser checks a CAST against them on either side.
+#define MAX_PRECISION_NUMBER 32
+#define MAX_LENGTH_STRING 1024
+
+// THE PRIMITIVE'S NAME AS THE LANGUAGE WRITES IT — the `Number` of `New TypeDescription("Number")` and of a query's
+// `CAST(… AS Number(15, 2))`; nullptr for a kind that is no primitive. ONE TABLE: the engine registers its primitives
+// by these words (backend/compiler/value.cpp, PRIMITIVE_TYPE_REGISTER) and ibValue::GetNameObjectFromVT answers by
+// it, so the name a class is known by cannot part from the one the query's parser reads.
+constexpr const char* GetNameObjectFromVT(ibValueTypes valueType) {
+	switch (valueType) {
+	case ibValueTypes::TYPE_EMPTY: return "Undefined";
+	case ibValueTypes::TYPE_BOOLEAN: return "Boolean";
+	case ibValueTypes::TYPE_NUMBER: return "Number";
+	case ibValueTypes::TYPE_DATE: return "Date";
+	case ibValueTypes::TYPE_STRING: return "String";
+	case ibValueTypes::TYPE_NULL: return "Null";
+	default: return nullptr;
+	}
+}
+
 // What a date keeps — the date, both, the time. Here, beside the value types, because the type
 // description keeps it (typeDescription.h) and the format string reads it (formatString.h).
 enum ibDateFractions {
@@ -163,6 +184,20 @@ enum ibCtorObjectTypeEvent {
 // spellings of the same key is how a value gets written under one name and read under another.
 inline const wxChar* const kValueFieldClsid = wxT("t");   // the type — written and read FIRST
 inline const wxChar* const kValueFieldData  = wxT("v");   // the payload
+
+// THE CLIPBOARD'S FORMATS — what a copied object is put on the system's clipboard under. Here, not with a designer,
+// because both designers and the client copy and paste by them: one window pastes what another copied, so the
+// name a copy goes under cannot part from the one a paste asks for.
+#define oes_clipboard_metadata	wxT("oes_clipboard_metadata")
+#define oes_clipboard_frame		wxT("oes_clipboard_frame")
+#define oes_clipboard_interface	wxT("oes_clipboard_interface")
+#define oes_clipboard_role		wxT("oes_clipboard_role")
+#define oes_clipboard_template	wxT("oes_clipboard_template")
+#define oes_clipboard_attribute	wxT("oes_clipboard_attribute")
+#define oes_clipboard_command	wxT("oes_clipboard_command")
+// A command of a control's command bar — on the system's clipboard as the others are: the desktop held it in its process
+// (commandBar.cpp's s_commandClipboard), out of reach of another window.
+#define oes_clipboard_command_bar_item	wxT("oes_clipboard_command_bar_item")
 
 //*******************************************************************************************
 

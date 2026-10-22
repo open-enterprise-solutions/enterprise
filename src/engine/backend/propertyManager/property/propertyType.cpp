@@ -92,9 +92,9 @@ bool ibPropertyType::WriteNodeValue(ibDataValue& value) const
 
 #include <algorithm>
 
-bool ibPropertyType::GetProtocolValue(ibDataNode& row)
+bool ibPropertyType::GetProtocolValue(ibDataNode& row, ibReader reader)
 {
-	if (!ibProperty::GetProtocolValue(row))
+	if (!ibProperty::GetProtocolValue(row, reader))
 		return false;
 
 	const ibSelectorDataType filter = GetFilterDataType();

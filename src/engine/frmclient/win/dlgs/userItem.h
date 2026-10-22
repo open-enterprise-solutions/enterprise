@@ -65,6 +65,8 @@ private:
 
 	std::map<wxTreeItemId, ibDataUserRole> m_roleArray;
 	std::map<int, ibDataUserLanguageItem> m_languageArray;
+	// The configuration's own language (the row the server marks Default) — the desktop's activeMetaData->GetLangCode().
+	wxString m_strDefaultLanguageCode;
 
 	wxAuiNotebook* m_mainNotebook;
 	wxPanel* m_main;

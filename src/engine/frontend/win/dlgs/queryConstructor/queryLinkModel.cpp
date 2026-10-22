@@ -4,9 +4,9 @@
 
 #include "queryLinkModel.h"
 
-#include "backend/query/queryRender.h"
-#include "backend/query/queryParser.h"   // a condition typed into a cell is read by the ENGINE
-#include "backend/query/queryRewrite.h"  // ibQueryTrueLiteral / ibQueryIsTrueLiteral — "no link", spelled
+#include "core/query/queryRender.h"
+#include "core/query/queryParser.h"   // a condition typed into a cell is read by the ENGINE
+#include "core/query/queryRewrite.h"  // ibQueryTrueLiteral / ibQueryIsTrueLiteral — "no link", spelled
 
 #include "core/exception.h"   // ibCoreException — what a refused condition throws
 

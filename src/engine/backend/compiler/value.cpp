@@ -5,7 +5,7 @@
 
 #include "value.h"
 #include "backend/backend_exception.h"
-#include "core/compiler/lexValue.h"
+#include "core/compiler/literal.h"
 
 
 //**********************************************************************
@@ -194,22 +194,22 @@ ibValue::ibValue(ibString&& cParam)   // native — takes the text over (runtime
 }
 
 // The kinds a text can write — each into its own slot; Undefined and Null hold nothing.
-ibValue::ibValue(const ibLexValue& lexValue)
-	: m_typeClass(lexValue.GetType()), m_bReadOnly(false), m_refCount(0), m_dData()
+ibValue::ibValue(const ibLiteral& literal)
+	: m_typeClass(literal.GetType()), m_bReadOnly(false), m_refCount(0), m_dData()
 {
 	switch (m_typeClass)
 	{
 	case TYPE_BOOLEAN:
-		m_bData = lexValue.GetBoolean();
+		m_bData = literal.GetBoolean();
 		break;
 	case TYPE_NUMBER:
-		m_fData = lexValue.GetNumber();
+		m_fData = literal.GetNumber();
 		break;
 	case TYPE_DATE:
-		m_dData = lexValue.GetDate();
+		m_dData = literal.GetDate();
 		break;
 	case TYPE_STRING:
-		m_sData = lexValue.GetString();
+		m_sData = literal.GetString();
 		break;
 	default:
 		m_pRef = nullptr;
@@ -591,8 +591,11 @@ bool ibValue::SetBoolean(const wxString& strBoolean)
 
 	Reset();
 
+	ibBoolean bData;
+	bData.FromString(strBoolean);
+
 	m_typeClass = ibValueTypes::TYPE_BOOLEAN;
-	m_bData = stringUtils::CompareString(strBoolean, wxT("True"));
+	m_bData = bData;
 
 	return true;
 }
@@ -749,8 +752,11 @@ bool ibValue::GetBoolean() const
 		return m_bData;
 	case ibValueTypes::TYPE_NUMBER:
 		return !m_fData.IsZero();
-	case ibValueTypes::TYPE_STRING:
-		return stringUtils::CompareString(wxT("True"), stringUtils::TrimAll(GetString()));
+	case ibValueTypes::TYPE_STRING: {
+		ibBoolean bData;
+		bData.FromString(GetString());
+		return bData;
+	}
 	case ibValueTypes::TYPE_DATE:
 		return false;
 	case ibValueTypes::TYPE_CONST_REFFER:
@@ -768,7 +774,7 @@ ibNumber ibValue::GetNumber() const
 	switch (m_typeClass)
 	{
 	case ibValueTypes::TYPE_BOOLEAN:
-		return m_bData;
+		return ibNumber(m_bData ? 1 : 0);
 	case ibValueTypes::TYPE_NUMBER:
 		return m_fData;
 	case ibValueTypes::TYPE_STRING: {
@@ -802,7 +808,7 @@ ibString ibValue::GetString() const
 	case ibValueTypes::TYPE_NULL:
 		return ibString();
 	case ibValueTypes::TYPE_BOOLEAN:
-		return m_bData ? wxT("True") : wxT("False");
+		return m_bData.ToString();
 	case ibValueTypes::TYPE_NUMBER:
 		return m_fData.ToString();
 	case ibValueTypes::TYPE_STRING:
@@ -1151,7 +1157,7 @@ int ibValue::CompareValueLS(const ibValue& cParam) const
 	// at the top of the function.
 	case ibValueTypes::TYPE_BOOLEAN:
 		return CompareOrder(m_bData,
-			cParam.m_typeClass == ibValueTypes::TYPE_BOOLEAN ? cParam.m_bData : cParam.GetBoolean());
+			cParam.m_typeClass == ibValueTypes::TYPE_BOOLEAN ? cParam.m_bData : ibBoolean(cParam.GetBoolean()));
 	case ibValueTypes::TYPE_NUMBER:
 		return OrderOfDifference(cParam.m_typeClass == ibValueTypes::TYPE_NUMBER
 			? m_fData.Compare(cParam.m_fData)          // both raw
@@ -1203,7 +1209,7 @@ bool ibValue::CompareValueEQ(const ibValue& cParam) const
 	// m_typeClass, which does not: that one is about where the bytes are.
 	case ibValueTypes::TYPE_BOOLEAN:
 		if (cParam.GetType() != ibValueTypes::TYPE_BOOLEAN) return false;
-		return m_bData == (cParam.m_typeClass == ibValueTypes::TYPE_BOOLEAN ? cParam.m_bData : cParam.GetBoolean());
+		return m_bData == (cParam.m_typeClass == ibValueTypes::TYPE_BOOLEAN ? cParam.m_bData : ibBoolean(cParam.GetBoolean()));
 	case ibValueTypes::TYPE_NUMBER:
 		if (cParam.GetType() != ibValueTypes::TYPE_NUMBER) return false;
 		return 0 == (cParam.m_typeClass == ibValueTypes::TYPE_NUMBER
@@ -1607,11 +1613,12 @@ bool ibValue::AdjustOutValue(const ibValue& varValue, ibValue& out) const
 //*                       Runtime register                             *
 //**********************************************************************
 
-PRIMITIVE_TYPE_REGISTER(ibValue, "Undefined", ibValueTypes::TYPE_EMPTY, g_valueUndefinedCLSID);
+// The primitives' names are the core's one table (core/core.h, GetNameObjectFromVT).
+PRIMITIVE_TYPE_REGISTER(ibValue, GetNameObjectFromVT(ibValueTypes::TYPE_EMPTY), ibValueTypes::TYPE_EMPTY, g_valueUndefinedCLSID);
 
-PRIMITIVE_TYPE_REGISTER(ibValue, "Boolean", ibValueTypes::TYPE_BOOLEAN, g_valueBooleanCLSID);
-PRIMITIVE_TYPE_REGISTER(ibValue, "Number", ibValueTypes::TYPE_NUMBER, g_valueNumberCLSID);
-PRIMITIVE_TYPE_REGISTER(ibValue, "Date", ibValueTypes::TYPE_DATE, g_valueDateCLSID);
-PRIMITIVE_TYPE_REGISTER(ibValue, "String", ibValueTypes::TYPE_STRING, g_valueStringCLSID);
+PRIMITIVE_TYPE_REGISTER(ibValue, GetNameObjectFromVT(ibValueTypes::TYPE_BOOLEAN), ibValueTypes::TYPE_BOOLEAN, g_valueBooleanCLSID);
+PRIMITIVE_TYPE_REGISTER(ibValue, GetNameObjectFromVT(ibValueTypes::TYPE_NUMBER), ibValueTypes::TYPE_NUMBER, g_valueNumberCLSID);
+PRIMITIVE_TYPE_REGISTER(ibValue, GetNameObjectFromVT(ibValueTypes::TYPE_DATE), ibValueTypes::TYPE_DATE, g_valueDateCLSID);
+PRIMITIVE_TYPE_REGISTER(ibValue, GetNameObjectFromVT(ibValueTypes::TYPE_STRING), ibValueTypes::TYPE_STRING, g_valueStringCLSID);
 
-PRIMITIVE_TYPE_REGISTER(ibValue, "Null", ibValueTypes::TYPE_NULL, g_valueNullCLSID);
+PRIMITIVE_TYPE_REGISTER(ibValue, GetNameObjectFromVT(ibValueTypes::TYPE_NULL), ibValueTypes::TYPE_NULL, g_valueNullCLSID);

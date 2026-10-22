@@ -4,8 +4,8 @@
 
 #include "queryJoinDiagram.h"
 
-#include "backend/query/queryParser.h"
-#include "backend/query/queryRender.h"
+#include "core/query/queryParser.h"
+#include "core/query/queryRender.h"
 #include "backend/backend_exception.h"
 
 #include <wx/dcbuffer.h>

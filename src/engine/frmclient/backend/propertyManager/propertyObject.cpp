@@ -6,8 +6,6 @@
 #include "propertyObject.h"
 #include "core/serialize/dataBuilder.h"   // ibDataValue — property node serialization
 #include "core/typeName.h"                // ibTypeInfoName — a property's class, named as the server names one
-#include "frmclient/backend/propertyManager/property/propertySerializable.h"          // a row's property
-#include "frmclient/backend/propertyManager/property/variant/variantSerializable.h"   // every property's value
 #include "frmclient/backend/serialize/dataProtocol.h"                         // ibReadProtocolNode — the answer's rows
 #include "frmclient/win/picture.h"                                            // ibProtocolPictureReceive — the choices' pictures
 #include "protocol/protocol.h"                                                // ibProtocol::ibSchema::ibProperties — the rows' keys
@@ -232,20 +230,6 @@ bool ibBackendProperty::SetNodeValue(const ibDataValue& value)
 	return ReadNodeValue(value);
 }
 
-bool ibBackendProperty::ReadNodeValue(const ibDataValue& value)
-{
-	// A node arriving (a typed setter's, the gate's), held as it comes, named by the property's class. A node has no
-	// words: what reads here is the old ones until the rows come back.
-	m_propValue = wxVariant(new ibVariantDataSerializable(GetType(), value, m_propValue.GetString()));
-	return true;
-}
-
-bool ibBackendProperty::WriteNodeValue(ibDataValue& value) const
-{
-	value = ibVariantDataSerializable::GetNodeValue(m_propValue);
-	return true;
-}
-
 // by-value convenience — delegates to the virtual out-param getter (so it dispatches
 // to the property type's override) and yields the value for inline placement.
 // Yields null when the getter declines (returns false).
@@ -430,8 +414,8 @@ void ibPropertyObject::AddNotifier(ibPropertyObjectNotifier* notifier)
 		return;
 	m_notifiers.push_back(notifier);
 	notifier->SetOwner(this);
-	// …and what it shows, received — what the server says of it (a metaobject's rows).
-	Receive();
+	// …and what it shows, fetched — what the server says of it (a metaobject's rows).
+	Fetch();
 }
 
 void ibPropertyObject::RemoveNotifier(ibPropertyObjectNotifier* notifier)
@@ -522,15 +506,15 @@ bool ibPropertyObject::Receive(const ibProtocolNode& answer)
 	return true;
 }
 
-void ibPropertyObject::Receive(ibPropertyCategory* category, const ibDataNode& rows)
+void ibPropertyObject::Receive(ibPropertyCategory* category, ibDataNode& rows)
 {
-	for (const ibDataNode& row : rows.Children()) {
+	for (ibDataNode& row : rows.Children()) {
 		// A CATEGORY — a row with no class, its rows within.
 		if (row.FindField(ibProtocol::ibSchema::ibProperties::Class) == nullptr)
 			Receive(CreatePropertyCategory(category, row.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Name),
 				row.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Title)), row);
 		else
-			CreateProperty<ibPropertySerializable>(category, row);
+			CreateProperty(category, std::move(row));
 	}
 }
 

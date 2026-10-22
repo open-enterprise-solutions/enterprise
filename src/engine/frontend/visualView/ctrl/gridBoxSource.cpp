@@ -63,7 +63,12 @@ bool ibValueGridBox::GetSourceList(std::vector<ibBackendFormAttributeValue*>& ou
 			continue;
 		for (unsigned int idx = 0; idx < explorer->GetHelperCount(); ++idx) {
 			const ibSourceExplorer* node = explorer->GetHelper(idx);
-			if (node != nullptr && node->ContainType(g_valueDataCompositionCLSID)) {
+			// …and so does one holding a SPREADSHEET DOCUMENT field (`Object.Sheet` on a data processor's
+			// form): the first of the two types the constructor declares, one hop down, exactly as the
+			// composition is. Without it the binding the picker made does not resolve at runtime, the box
+			// counts as unbound and is hidden.
+			if (node != nullptr && (node->ContainType(g_valueDataCompositionCLSID)
+				|| node->ContainType(g_valueSpreadsheetCLSID))) {
 				out.push_back(holder);
 				break;
 			}

@@ -2,34 +2,21 @@
 //	Description : the MCP server — one listener, one exchange at a time
 ////////////////////////////////////////////////////////////////////////////
 //
-// ⭐ THE TRANSPORT IS cpp-httplib, not a hand-written one.
+// ⭐ THE TRANSPORT IS THE CORE'S (core/net/httpServer.h) — the engine's one HTTP, with its one
+// TLS: the application server's, the debugger's and the web server's port are the same server.
 //
-// It used to be ~230 lines over wxSocketServer: an accept loop polling every
-// kPollMs so it could notice a stop flag, headers read a BYTE AT A TIME until
-// the blank line, Content-Length parsed by hand, and the SSE stream held as a
-// raw socket written to from other threads under a mutex.
+// It was ~230 lines over wxSocketServer first, then cpp-httplib (until 2026-10-21), whose TLS
+// compiled Mbed TLS into every module that included it; Mbed TLS is the core's alone now.
 //
-// None of that was wrong; all of it was already solved. cpp-httplib is ALREADY
-// in this tree (src/3rdparty/cpp-httplib) and already in production under
-// wenterprise-server and wfrontend — MCP was the only thing that wrote its own
-// instead of taking what was there.
+// Two things have the transport's shape:
 //
-// ⭐ AND IT IS THE ROAD TO TLS. Certificates over a raw socket are a project;
-// here they are CPPHTTPLIB_OPENSSL_SUPPORT and a cert path, and the day that
-// dependency is brought in it serves BOTH servers — the web one will want it
-// first, being the one that faces outward. Nothing here is built for that yet;
-// this change only stops standing in its way.
+//   • THE STREAM IS THE SERVER'S. A GET opens an event stream (ibEventStream) that is held here
+//     and written to from wherever something is said; the server queues it on the connection.
+//     Nobody listening — nothing is held: a line said then is dropped.
 //
-// Two things genuinely changed shape:
-//
-//   • THE STREAM INVERTED. httplib calls a content provider; the old code held
-//     the socket and wrote INTO it from wherever. So the way out became a queue
-//     with a condition variable — which also removes a race the old one had,
-//     between asking IsConnected() and writing.
-//
-//   • THE SESSION IS BOUND PER REQUEST. There is no longer one thread to bind
-//     once: httplib serves from a pool, so the binding that makes metadata and
-//     rights answer as the developer happens around each call.
+//   • THE SESSION IS BOUND PER REQUEST. There is no one thread to bind once: the server's
+//     workers serve, so the binding that makes metadata and rights answer as the developer
+//     happens around each call.
 //
 ////////////////////////////////////////////////////////////////////////////
 
@@ -38,7 +25,7 @@
 #include "backend/appData.h"                        // GetSettingsStorage — where a person's settings live
 #include "backend/appHost.h"                        // the process's backend.conf: the certificate the listener speaks TLS over
 #include "backend/server/listener.h"                // the listener: TLS when backend.conf names a certificate
-#include "backend/utils/sessionToken.h"             // TextEqual - the token compared in constant time
+#include "core/crypto/sessionToken.h"                // TextEqual - the token compared in constant time
 #include "backend/logger/logger.h"                  // …and ibLog — the registration journal
 #include "backend/backend_exception.h"              // an engine refusal arrives as an exception
 #include "backend/query/queryException.h"           // …and the query family says WHERE
@@ -54,26 +41,11 @@
 
 #include <algorithm>
 #include <chrono>
-#include <condition_variable>
-#include <deque>
 #include <future>
+#include <memory>
 #include <mutex>
-#include <thread>
 
-// The transport. Header-only and large, so it is included in exactly this one
-// translation unit — the same way wenterprise-server includes it in main.cpp.
-//
-// ⚠ AND AFTER wx, WITH THE GUARD ALREADY SET. wx aliases ssize_t and so does
-// cpp-httplib; MSVC then sees two incompatible definitions and refuses
-// (C2371 at httplib.h:233). The header's own MSVC guard is _SSIZE_T_DEFINED, so
-// declaring it here tells httplib the alias is already made. This is not a
-// discovery — wenterprise-server/main.cpp hit it first and wrote the cure down;
-// it is copied rather than re-derived.
-#if defined(_WIN32) && !defined(_SSIZE_T_DEFINED)
-#	define _SSIZE_T_DEFINED
-#endif
-
-#include <cpp-httplib/httplib.h>
+#include "core/net/httpServer.h"   // the transport
 
 namespace {
 
@@ -141,7 +113,7 @@ ibDataNode SupportedVersions(const wxString& asked)
 // A request is a JSON document, not a file upload. Anything past this is a
 // client that has lost its place — refused before it is allocated, the way the
 // debug server refuses an absurd packet length.
-const unsigned long kMaxRequestBytes = 8ul * 1024ul * 1024ul;
+const std::size_t kMaxRequestBytes = 8u * 1024u * 1024u;
 
 } // namespace
 
@@ -161,19 +133,17 @@ public:
 		Stop();
 	}
 
-	// BOUND ON THE CALLER'S THREAD, deliberately. A person pressed a button and
-	// is owed an answer now: "that port is taken" must come back from Start(),
-	// not appear in a log a second later while the button says it worked.
-	//
-	// httplib splits exactly this way — bind_to_port answers here, and
-	// listen_after_bind is what the thread then runs.
-	bool Bind(wxString& refusal)
+	// LISTENING WHEN THIS RETURNS, started on the caller's thread, deliberately. A person
+	// pressed a button and is owed an answer now: "that port is taken" must come back from
+	// Start(), not appear in a log a second later while the button says it worked.
+	bool Start(wxString& refusal)
 	{
 		// THE TRANSPORT IS THE PROCESS'S (server/listener.h): TLS when backend.conf names a certificate, plain
 		// on this machine's own addresses only - an assistant edits a configuration, and a token sent in the
 		// clear across a network is a token given away.
+		ibHttpServerOptions options;
 		try {
-			m_server = ibMakeListener(m_settings.m_address, ibApplicationHost::Get()->GetTlsFiles());
+			options = ibListenerOptions(m_settings.m_address, m_settings.m_port, ibApplicationHost::Get()->GetTlsFiles());
 		}
 		catch (const ibBackendException& err) {
 			refusal = wxString::Format(_("Assistant access did not start: %s"), err.GetErrorDescription());
@@ -183,110 +153,97 @@ public:
 			ibJournalWarning(wxT("mcp"), wxT("assistant access did not start: %s"), err.GetErrorDescription());
 			return false;
 		}
-		m_server->set_payload_max_length(kMaxRequestBytes);
-		m_server->set_tcp_nodelay(true);
+		options.m_maxBodyBytes = kMaxRequestBytes;
 
-		// 🛑🛑 ONE LISTENER PER PORT, SAID TO THE OPERATING SYSTEM — because on Windows the default
-		// does NOT say it. httplib asks for SO_REUSEADDR (there is no SO_REUSEPORT there), and on
-		// Windows that option means something else than it does everywhere else: it lets a SECOND
-		// socket bind a port another process is already listening on, and WHICH OF THEM a connection
-		// reaches is undefined.
+		// ⚠ HOW LONG A CONNECTION MAY SIT IDLE between two calls. A server's minute is not this one's:
+		// the pause between two calls from an assistant is a pause for THINKING. httplib closed a
+		// kept-alive connection after five seconds of it, under a client that had every intention of
+		// using it again, and the next call read as a dropped session rather than as a reconnect — a
+		// refusal that arrived INSTANTLY, on a call that takes 371 ms.
 		//
-		// Measured 2026-09-23, two designers on two different bases: netstat listed BOTH of them
-		// LISTENING on 127.0.0.1:3737, both believed their server was up, and both showed the
-		// endpoint in the status bar. An assistant connecting to that port then edits whichever
-		// base answered — silently, and not necessarily the one the person is looking at. A wrong
-		// configuration written confidently is the worst outcome this server has.
-		//
-		// SO_EXCLUSIVEADDRUSE is the Windows way to say "this port is mine": the second bind then
-		// FAILS, which is what the refusal below is written for and what the designer already knows
-		// how to report. Everywhere else the default is right and is left alone.
-#ifdef _WIN32
-		// The socket type is httplib's own and is not spelled here: a generic lambda converts to its
-		// SocketOptions whatever that turns out to be, and the option itself is the OPERATING
-		// SYSTEM's, asked for directly rather than through a helper of the library's.
-		m_server->set_socket_options([](auto sock) {
-			const int yes = 1;
-			::setsockopt((SOCKET)sock, SOL_SOCKET, SO_EXCLUSIVEADDRUSE,
-				reinterpret_cast<const char*>(&yes), sizeof(yes));
-		});
-#endif
+		// This server exists to be addressed occasionally and thought about in between. Idle is its
+		// normal state, not a sign the caller has gone. (How long a call may TAKE is not bounded here: a
+		// verb that touches metadata waits its turn on the main thread, and RunTool answers on its own
+		// after five minutes — whoever times out should be the one that can explain why.)
+		options.m_idleSeconds = 10 * 60;
+
+		// One assistant, one designer: an I/O thread and a handful of workers — a verb waiting for the
+		// main thread holds one.
+		options.m_threads = 1;
+		options.m_workers = 8;
 
 		Route();
 
-		const std::string host = std::string(m_settings.m_address.utf8_str());
-
-		// ⭐ THE CONSEQUENCE FIRST, THEN THE CAUSE. This said only "port 3737 is already taken",
-		// which is true and leaves the reader to work out for themselves that the assistant is
-		// therefore NOT LISTENING — and the symptom on the other side is a client that cannot
-		// connect, which looks exactly like the access being switched off (2026-09-23: two
-		// designers open, the second one silently without a server).
+		// ⭐ THE CONSEQUENCE FIRST, THEN THE CAUSE — and the likely holder named. "Port 3737 is already
+		// taken" alone leaves the reader to work out that the assistant is therefore NOT LISTENING, and
+		// the symptom on the other side is a client that cannot connect, which looks exactly like the
+		// access being switched off (2026-09-23: two designers open, the second one silently without a
+		// server). Another designer already open is the ordinary reason, not a fault.
 		//
-		// ⚠ AND IT NAMES THE LIKELY HOLDER. Another designer already open is the ordinary reason,
-		// not a fault, so the message says so rather than leaving a person looking for one.
-		if (!m_server->bind_to_port(host, (int)m_settings.m_port)) {
+		// 🛑 One listener per port is said to the operating system by the server (SO_EXCLUSIVEADDRUSE on
+		// Windows): without it the second designer binds the port too, and which base an assistant edits
+		// is whichever answered.
+		std::string error;
+		if (!m_server.Start(options, error)) {
 			refusal = wxString::Format(
-				_("Assistant access did not start: port %u on %s is already taken.\n\n"
-				  "Another designer is probably open and holding it - only one can. "
+				_("Assistant access did not start: %s.\n\n"
+				  "If another designer is open, it holds the port - only one can. "
 				  "Close it, or give this one a port of its own in Tools > Options > Assistant access."),
-				(unsigned)m_settings.m_port, m_settings.m_address);
+				wxString::FromUTF8(error));
 			return false;
 		}
 
 		return true;
 	}
 
-	// Nothing to report: the bind already happened and was already answered for. Starting the
-	// thread that serves the bound socket cannot half-succeed.
-	void Run()
-	{
-		m_thread = std::thread([this] { m_server->listen_after_bind(); });
-	}
-
-	// STOPPED IN THE ORDER THAT LETS EVERYTHING LEAVE.
-	//
-	// The stream's provider is asleep on the queue and would never notice the
-	// server closing, so it is woken FIRST; then listen_after_bind returns; then
-	// the thread is joined, so the socket is closed before a restart on the same
-	// port can race the old listener — the property the old poll loop had, kept.
+	// The port closed and the connections let go — the stream's among them — before this returns, so
+	// a restart on the same port cannot race the old listener.
 	void Stop()
 	{
-		{
-			std::lock_guard<std::mutex> lock(m_streamMutex);
-			m_stopping = true;
-		}
-		m_streamWake.notify_all();
+		m_server.Stop();
 
-		if (m_server)
-			m_server->stop();
-
-		if (m_thread.joinable())
-			m_thread.join();
+		std::lock_guard<std::mutex> lock(m_streamMutex);
+		m_stream.reset();
 	}
 
 	// One event out. Silent when nobody is listening — which is the ordinary
 	// state, not a failure: the platform talks to the designer's window whether
 	// or not an assistant is connected.
 	//
-	// ⭐ A QUEUE, NOT A SOCKET. This used to write into a held wxSocketBase from
-	// whatever thread called it, having first asked IsConnected() — with a race
-	// between the asking and the writing that only stayed harmless because one
-	// window was the only writer. Now the caller leaves the line here and the
-	// provider, which is the only thing that touches the connection, takes it.
-	void WriteToStream(const wxString& json)
+	// Sent under the lock: what two threads say reaches the stream in the order it was said.
+	void WriteToStream(const ibString& json)
 	{
-		{
-			std::lock_guard<std::mutex> lock(m_streamMutex);
+		std::lock_guard<std::mutex> lock(m_streamMutex);
 
-			if (!m_streamOpen)
-				return;   // nobody is listening — drop it rather than grow forever
+		if (!m_stream)
+			return;   // nobody is listening — dropped
 
-			m_streamQueue.push_back(json);
-		}
-		m_streamWake.notify_one();
+		m_stream->Send(json.ToUtf8());
 	}
 
 private:
+
+	// THE ONE LISTENING, told its stream is gone — so the listener stops holding it. A stream replaced
+	// by a newer one finds another held, and leaves it be.
+	class ibStreamRelay : public ibEventStreamHandler {
+	public:
+
+		ibStreamRelay(ibMcpListener& listener, std::shared_ptr<ibEventStream> stream)
+			: m_listener(listener), m_stream(std::move(stream))
+		{
+		}
+
+		virtual void OnClose() override
+		{
+			std::lock_guard<std::mutex> lock(m_listener.m_streamMutex);
+			if (m_listener.m_stream == m_stream)
+				m_listener.m_stream.reset();
+		}
+
+	private:
+		ibMcpListener&                 m_listener;
+		std::shared_ptr<ibEventStream> m_stream;
+	};
 
 	// ⭐ THE ONE QUESTION ASKED OF EVERY REQUEST. `Authorization: Bearer <token>`, compared whole.
 	//
@@ -295,13 +252,13 @@ private:
 	// omission on the one installation nobody looked at. The token is minted when the settings are
 	// configured, so blank means something went wrong rather than something was chosen — and the
 	// honest answer to that is no.
-	bool IsAuthorised(const httplib::Request& req) const
+	bool IsAuthorised(const ibHttpRequest& req) const
 	{
 		const wxString expected = m_settings.m_token;
 		if (expected.IsEmpty())
 			return false;
 
-		const std::string header = req.get_header_value("Authorization");
+		const std::string header = req.GetHeader("authorization");
 		if (header.empty())
 			return false;
 
@@ -329,13 +286,13 @@ private:
 	// The token is not guessable and is deliberately not derivable, so saying WHERE it is shown
 	// gives away nothing: without the designer's own settings page in front of you, the sentence
 	// is useless. What it saves is the half hour spent deciding whether the server is even up.
-	static void RefuseUnauthorised(httplib::Response& res)
+	static void RefuseUnauthorised(ibHttpResponse& res)
 	{
-		res.status = 401;
+		res.m_status = 401;
 		// The scheme, as the HTTP spec asks — a client that reads headers can act on this one
 		// without parsing a body it has no reason to expect.
-		res.set_header("WWW-Authenticate", "Bearer realm=\"OES Enterprise MCP\"");
-		res.set_content("{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32001,"
+		res.m_headers.emplace_back("WWW-Authenticate", "Bearer realm=\"OES Enterprise MCP\"");
+		res.SetContent("{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32001,"
 			"\"message\":\"Unauthorized: this server requires an Authorization: Bearer <token> "
 			"header on every request, including the event stream.\","
 			"\"data\":{\"where\":\"The token is minted with the server and shown in the designer, "
@@ -358,9 +315,9 @@ private:
 	//
 	// The token already refuses an unauthorised caller; this refuses an unauthorised PLACE, one
 	// step earlier, without reading the body.
-	static bool IsOriginAllowed(const httplib::Request& req)
+	static bool IsOriginAllowed(const ibHttpRequest& req)
 	{
-		const std::string origin = req.get_header_value("Origin");
+		const std::string origin = req.GetHeader("origin");
 		if (origin.empty())
 			return true;   // not a browser — nothing to check
 
@@ -379,9 +336,9 @@ private:
 	// than as an error. What is NOT allowed is to answer an unknown revision as if it were ours —
 	// the spec asks for 400 there, so the client learns to negotiate instead of guessing why the
 	// answers look wrong.
-	static bool IsProtocolVersionAcceptable(const httplib::Request& req)
+	static bool IsProtocolVersionAcceptable(const ibHttpRequest& req)
 	{
-		const std::string header = req.get_header_value("MCP-Protocol-Version");
+		const std::string header = req.GetHeader("mcp-protocol-version");
 		if (header.empty())
 			return true;   // pre-2025-06-18 client — read as 2025-03-26, per the transport
 
@@ -408,88 +365,67 @@ private:
 
 		// No id: the refusal happens before the body has been read, so there is no call to
 		// answer — which is the shape JSON-RPC allows for exactly this.
-		const wxString text = ibRpcWriteError(ibDataValue(), ibRpcError::UnsupportedVersion,
-			wxT("Unsupported protocol version"), &data);
-
-		const wxScopedCharBuffer utf8 = text.utf8_str();
-		return std::string(utf8.data(), utf8.length());
+		return ibRpcWriteError(ibDataValue(), ibRpcError::UnsupportedVersion,
+			wxT("Unsupported protocol version"), &data).ToUtf8();
 	}
 
 	// What the transport saw in the header, for the refusal to quote back.
-	static wxString AskedVersion(const httplib::Request& req)
+	static wxString AskedVersion(const ibHttpRequest& req)
 	{
-		const std::string header = req.get_header_value("MCP-Protocol-Version");
+		const std::string header = req.GetHeader("mcp-protocol-version");
 		return wxString::FromUTF8(header.c_str(), header.size()).Trim(true).Trim(false);
+	}
+
+	// ⭐ THE TRANSPORT'S QUESTIONS, asked of both verbs and before the body is read: who is
+	// speaking, where from, in which revision. True — refused, and the answer is in `res`. A listen
+	// stream hands over MORE than any single call does, so it is the last place to relax any of them.
+	bool Refuse(const ibHttpRequest& req, ibHttpResponse& res) const
+	{
+		// ⭐ WHO IS SPEAKING, ASKED FIRST. Before a message is parsed, before a tool is looked up — an
+		// unauthorised caller must not be able to learn what exists, let alone reach it. And the
+		// stream is guarded too: it hands over everything the platform says from the moment it is
+		// opened — what is being built, what failed, what a person typed into the assistant window.
+		//
+		// The address is not an authorisation: a loopback port is open to every process on the
+		// machine, and this one edits a configuration and runs code as the developer whose
+		// session it lives in. "Only local" answers where a caller is, never who.
+		if (!IsAuthorised(req)) {
+			RefuseUnauthorised(res);
+			return true;
+		}
+
+		// WHERE FROM, and IN WHICH REVISION. A JSON-RPC error with no `id` is what the spec allows
+		// for a refusal that happens before a message exists to answer.
+		if (!IsOriginAllowed(req)) {
+			res.m_status = 403;
+			res.SetContent("{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32000,"
+				"\"message\":\"Origin not allowed\"}}", "application/json");
+			return true;
+		}
+		if (!IsProtocolVersionAcceptable(req)) {
+			res.m_status = 400;
+			res.SetContent(RefuseVersion(AskedVersion(req)), "application/json");
+			return true;
+		}
+		return false;
 	}
 
 	// The two verbs of the protocol, on one path.
 	void Route()
 	{
-		// ⚠ HOW LONG A REQUEST MAY TAKE, SAID OUT LOUD — because httplib's own answer is FIVE
-		// SECONDS (CPPHTTPLIB_SERVER_READ_TIMEOUT_SECOND / _WRITE_TIMEOUT_SECOND), and almost
-		// nothing this server does is finished in five seconds.
-		//
-		// A verb that touches metadata is handed to the MAIN THREAD and waits its turn there
-		// (RunTool). Creating a metaobject, saving a configuration, applying one — each takes
-		// longer than that whenever the designer is busy. httplib then closed the socket while the
-		// work was still queued, so the caller was told the session had ended WHILE THE OPERATION
-		// WENT ON TO SUCCEED. Measured 2026-09-04: `metadata_create` and `config_save` both
-		// answered "session expired" and both had done their work — and the assistant, believing
-		// the refusal, repeated the call and left three unnamed common modules behind in somebody's
-		// configuration. A false refusal is worse than a slow answer: it makes a caller act.
-		//
-		// Matched to the wait in RunTool, which gives the main thread five minutes before it
-		// answers on its own, plus a margin so the transport never gives up FIRST — whoever times
-		// out should be the one that can explain why.
-		m_server->set_read_timeout(std::chrono::minutes(6));
-		m_server->set_write_timeout(std::chrono::minutes(6));
-
-		// ⚠ AND HOW LONG A CONNECTION MAY SIT IDLE, which is the half that actually bit. httplib
-		// closes a kept-alive connection after FIVE SECONDS of silence
-		// (CPPHTTPLIB_KEEPALIVE_TIMEOUT_SECOND) — and the pause between two calls from an assistant
-		// is a pause for THINKING, routinely longer than that. The socket was then closed under a
-		// client that had every intention of using it again, and the next call read as a dropped
-		// session rather than as a reconnect. It explains what the read timeout above does not: the
-		// refusal arrived INSTANTLY, on a call that takes 371 ms.
-		//
-		// This server exists to be addressed occasionally and thought about in between. Idle is its
-		// normal state, not a sign the caller has gone.
-		m_server->set_keep_alive_timeout(std::chrono::minutes(10));
 		// A POST IS A QUESTION: one JSON-RPC message in, one answer out.
-		m_server->Post("/", [this](const httplib::Request& req, httplib::Response& res) {
+		m_server.Post("/", [this](const ibHttpRequest& req, ibHttpResponder respond) {
 
-			// ⭐ WHO IS SPEAKING, ASKED FIRST AND ASKED HERE. Before a message is parsed, before a
-			// tool is looked up — an unauthorised caller must not be able to learn what exists,
-			// let alone reach it.
-			//
-			// The address is not an authorisation: a loopback port is open to every process on the
-			// machine, and this one edits a configuration and runs code as the developer whose
-			// session it lives in. "Only local" answers where a caller is, never who.
-			if (!IsAuthorised(req)) {
-				RefuseUnauthorised(res);
+			ibHttpResponse res;
+			if (Refuse(req, res)) {
+				respond(std::move(res));
 				return;
 			}
 
-			// WHERE FROM, and IN WHICH REVISION — both are the transport's questions, both are
-			// answered before the body is read. A JSON-RPC error with no `id` is what the spec
-			// allows for a refusal that happens before a message exists to answer.
-			if (!IsOriginAllowed(req)) {
-				res.status = 403;
-				res.set_content("{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32000,"
-					"\"message\":\"Origin not allowed\"}}", "application/json");
-				return;
-			}
-			if (!IsProtocolVersionAcceptable(req)) {
-				res.status = 400;
-				res.set_content(RefuseVersion(AskedVersion(req)), "application/json");
-				return;
-			}
-
-			// ⭐ IN WHOSE NAME — per request, because there is no longer one thread to bind once.
-			// httplib serves from a pool, so the session that started the server is bound around
+			// ⭐ IN WHOSE NAME — per request, because there is no one thread to bind once. The
+			// server's workers serve, so the session that started the server is bound around
 			// each call and released after: metadata, rights and the active configuration then
-			// answer exactly as they would for the developer at the keyboard. The old code did
-			// this once in the thread body; the pool made that impossible, and the binding follows
+			// answer exactly as they would for the developer at the keyboard. The binding follows
 			// the work rather than the thread.
 			// ibSessionScope is the tree's own RAII for this, and it restores through a weak_ptr
 			// so a session destroyed while the scope is open cannot be resurrected into the
@@ -497,17 +433,17 @@ private:
 			const ibSessionScope inThisSession(m_session);
 
 			// WHAT THE TRANSPORT SAW, handed down so the protocol layer can hold the body to it.
-			// Reading them here and nowhere else keeps httplib out of everything below.
+			// Reading them here and nowhere else keeps the transport out of everything below.
 			ibMcpServer::ibMcpWireHeaders wire;
 			const auto headerOf = [&req](const char* name) -> wxString {
-				const std::string v = req.get_header_value(name);
+				const std::string v = req.GetHeader(name);
 				return v.empty() ? wxString() : wxString::FromUTF8(v.c_str(), v.size());
 			};
-			wire.m_protocolVersion = headerOf("MCP-Protocol-Version");
-			wire.m_method          = headerOf("Mcp-Method");
-			wire.m_name            = headerOf("Mcp-Name");
+			wire.m_protocolVersion = headerOf("mcp-protocol-version");
+			wire.m_method          = headerOf("mcp-method");
+			wire.m_name            = headerOf("mcp-name");
 
-			const wxString request = wxString::FromUTF8(req.body.data(), req.body.size());
+			const ibString request = req.GetText();
 
 			// 🛑 THE VERDICT IS ASKED FOR, NOT RECOGNISED. The first version read the status out
 			// of the emitted JSON by looking for `"code":-32020` — and got 200 on every refusal,
@@ -515,7 +451,7 @@ private:
 			// fact you already had is a guess about the writer's formatting dressed up as a
 			// decision; the layer that decided the refusal is the one that says so.
 			int refusalCode = 0;
-			const wxString answer = m_owner->Answer(request, wire, &refusalCode);
+			const ibString answer = m_owner->Answer(request, wire, &refusalCode);
 
 			// ⭐ THE HTTP STATUS IS PART OF THE REFUSAL, not decoration on it. The modern
 			// transport asks a client to tell a version refusal from a header refusal from an
@@ -523,99 +459,43 @@ private:
 			// to retry with another version or fall back to `initialize` entirely. A refusal
 			// answered 200 reads as agreement to a client that only looks at the status.
 			switch ((ibRpcError)refusalCode) {
-				case ibRpcError::UnsupportedVersion:                       // retry with another version
-				case ibRpcError::HeaderMismatch: res.status = 400; break;  // the two sources disagree
-				case ibRpcError::MethodNotFound: res.status = 404; break;  // nothing here answers to that name
-				default: break;                                            // 200: the body carries the whole answer
+				case ibRpcError::UnsupportedVersion:                         // retry with another version
+				case ibRpcError::HeaderMismatch: res.m_status = 400; break;  // the two sources disagree
+				case ibRpcError::MethodNotFound: res.m_status = 404; break;  // nothing here answers to that name
+				default: break;                                              // 200: the body carries the whole answer
 			}
 
 			// A notification is answered with no body, as the protocol says — but
 			// the transport still needs a reply, or the client waits for one.
-			if (answer.IsEmpty()) {
-				res.status = 202;
-				return;
-			}
-
-			const wxScopedCharBuffer utf8 = answer.utf8_str();
-			res.set_content(utf8.data(), utf8.length(), "application/json");
+			if (answer.IsEmpty())
+				res.m_status = 202;
+			else
+				res.SetText(answer, "application/json");
+			respond(std::move(res));
 		});
 
 		// A GET IS AN OFFER TO LISTEN. It asks nothing — it hands the server
 		// somewhere to speak, and is kept open until one side goes away.
-		m_server->Get("/", [this](const httplib::Request& req, httplib::Response& res) {
+		m_server.EventStream("/", [this](const std::shared_ptr<ibEventStream>& stream, ibHttpResponse& refusal)
+			-> std::shared_ptr<ibEventStreamHandler> {
 
-			// ⚠ THE STREAM IS GUARDED TOO, and it matters more here than on the other verb: this
-			// one hands over everything the platform says from the moment it is opened — what is
-			// being built, what failed, what a person typed into the assistant window. An
-			// unauthorised listener would need to ask for nothing at all.
-			if (!IsAuthorised(req)) {
-				RefuseUnauthorised(res);
-				return;
-			}
-
-			// The same two transport questions as on POST — a listen stream hands over MORE than
-			// any single call does, so it is the last place to relax either of them.
-			if (!IsOriginAllowed(req)) {
-				res.status = 403;
-				res.set_content("{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32000,"
-					"\"message\":\"Origin not allowed\"}}", "application/json");
-				return;
-			}
-			if (!IsProtocolVersionAcceptable(req)) {
-				res.status = 400;
-				res.set_content(RefuseVersion(AskedVersion(req)), "application/json");
-				return;
-			}
+			if (Refuse(stream->GetRequest(), refusal))
+				return nullptr;
 
 			// ONE LISTENER AT A TIME, still. A second offer replaces the first
 			// rather than joining it: two clients each half-hearing a conversation
 			// is worse than one hearing all of it, and the person at the designer
-			// is talking to ONE assistant. The generation is how the older
-			// provider learns it has been replaced — it wakes, sees a newer number
-			// and leaves.
-			unsigned long mine = 0;
+			// is talking to ONE assistant. The older stream is ended.
+			std::shared_ptr<ibEventStream> replaced;
 			{
 				std::lock_guard<std::mutex> lock(m_streamMutex);
-				mine = ++m_streamGeneration;
-				m_streamOpen = true;
-				m_streamQueue.clear();
+				replaced = std::move(m_stream);
+				m_stream = stream;
 			}
-			m_streamWake.notify_all();
+			if (replaced)
+				replaced->Close();
 
-			res.set_chunked_content_provider("text/event-stream",
-				[this, mine](std::size_t /*offset*/, httplib::DataSink& sink) {
-
-					wxString line;
-					{
-						std::unique_lock<std::mutex> lock(m_streamMutex);
-
-						m_streamWake.wait(lock, [this, mine] {
-							return m_stopping
-								|| m_streamGeneration != mine
-								|| !m_streamQueue.empty();
-						});
-
-						if (m_stopping || m_streamGeneration != mine) {
-							// Only the CURRENT stream owns the flag; a replaced one
-							// must not clear it on its way out.
-							if (m_streamGeneration == mine)
-								m_streamOpen = false;
-							sink.done();
-							return false;
-						}
-
-						line = m_streamQueue.front();
-						m_streamQueue.pop_front();
-					}
-
-					const wxScopedCharBuffer utf8 = line.utf8_str();
-
-					std::string frame("data: ");
-					frame.append(utf8.data(), utf8.length());
-					frame.append("\n\n");
-
-					return sink.write(frame.data(), frame.size());
-				});
+			return std::make_shared<ibStreamRelay>(*this, stream);
 		});
 	}
 
@@ -623,17 +503,12 @@ private:
 	ibMcpSettings m_settings;
 	ibSession*    m_session = nullptr;
 
-	std::unique_ptr<httplib::Server> m_server;   // the listener (server/listener.h): TLS or plain, made in Bind
-	std::thread     m_thread;
+	ibHttpServer  m_server;   // TLS or plain, as server/listener.h says; started in Start
 
-	// The way out. Filled by whoever has something to say (the UI thread, a tool)
-	// and drained by the one provider that holds the connection.
-	std::mutex              m_streamMutex;
-	std::condition_variable m_streamWake;
-	std::deque<wxString>    m_streamQueue;
-	bool                    m_streamOpen = false;
-	unsigned long           m_streamGeneration = 0;
-	bool                    m_stopping = false;
+	// The way out — the one stream listening, or none. Said to by whoever has something to say
+	// (the UI thread, a tool).
+	std::mutex                     m_streamMutex;
+	std::shared_ptr<ibEventStream> m_stream;
 };
 
 //---------------------------------------------------------------------------
@@ -969,10 +844,8 @@ bool ibMcpServer::Start(ibSession* session, wxString& refusal)
 	}
 
 	std::unique_ptr<ibMcpListener> listener(new ibMcpListener(this, m_settings, session));
-	if (!listener->Bind(refusal))
+	if (!listener->Start(refusal))
 		return false;
-
-	listener->Run();
 
 	m_session  = session;
 	m_listener = std::move(listener);
@@ -1053,7 +926,7 @@ void ibMcpServer::Stop()
 		bridge->Detach();
 
 	if (m_listener) {
-		// Stop() wakes the stream, closes the server and JOINS — so the port is
+		// Stop() closes the server, the stream with it, and JOINS — so the port is
 		// free before we return and a restart on it cannot race the old listener.
 		// The destructor calls it too; asking here keeps the order visible at the
 		// place that cares about it.
@@ -1903,16 +1776,17 @@ void ibMcpDescribePlatform(const ibApplicationInstance* applicationInstance, ibD
 		int seen = 0;
 		int attached = 0;
 
-		for (const auto* connection : debugClient->GetListConnection()) {
+		// A runtime that answered — not a scanner's socket dialling a port (ibMcpDebugBridge::GetStop).
+		debugClient->ForEachConnection([&seen, &attached](const auto& connection) {
 
-			if (connection == nullptr || !connection->IsConnected())
-				continue;
+			if (!connection.IsVerifiedConnection())
+				return;
 
 			seen++;
 
-			if (connection->GetConnectionType() == ConnectionType_Debugger)
+			if (connection.GetConnectionType() == ConnectionType_Debugger)
 				attached++;
-		}
+		});
 
 		ibDataNode& debugger = into.Child(wxT("debugger"));
 		debugger.AddField(wxT("runtimes"), ibDataValue::Int((s64)seen));
@@ -2447,7 +2321,7 @@ wxString BuildOrientation(const ibApplicationInstance* applicationInstance)
 
 } // namespace
 
-wxString ibMcpServer::Answer(const wxString& request, const ibMcpWireHeaders& headers, int* outErrorCode)
+ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& headers, int* outErrorCode)
 {
 	// THE VERDICT THE TRANSPORT WILL ASK FOR — recorded where the refusal is decided,
 	// which is the only place that knows. Reading it back out of the emitted JSON was
@@ -2455,7 +2329,7 @@ wxString ibMcpServer::Answer(const wxString& request, const ibMcpWireHeaders& he
 	// and the search looked for `"code":-32020`.
 	if (outErrorCode != nullptr) *outErrorCode = 0;
 	const auto refuse = [&](const ibDataValue& id, ibRpcError code, const wxString& text,
-		const ibDataNode* data = nullptr) -> wxString {
+		const ibDataNode* data = nullptr) -> ibString {
 		if (outErrorCode != nullptr) *outErrorCode = (int)code;
 		return ibRpcWriteError(id, code, text, data);
 	};
@@ -2466,7 +2340,7 @@ wxString ibMcpServer::Answer(const wxString& request, const ibMcpWireHeaders& he
 	// an answer to our own question.
 	{
 		ibDataValue answeringId;
-		wxString    payload;
+		ibString    payload;
 		bool        wasError = false;
 
 		if (ibRpcParseResponse(request, answeringId, payload, wasError)) {
@@ -2475,8 +2349,8 @@ wxString ibMcpServer::Answer(const wxString& request, const ibMcpWireHeaders& he
 			// the window, through Reply — rather than back to whoever asked, who by design did not
 			// sit waiting on a socket for it (see AskModel in the header).
 			Reply(wasError
-				? wxString::Format(_("The assistant could not answer: %s"), payload)
-				: payload);
+				? wxString::Format(_("The assistant could not answer: %s"), payload.ToWxString())
+				: payload.ToWxString());
 
 			// A response is answered with nothing: it IS the answer.
 			return wxEmptyString;
@@ -2570,7 +2444,7 @@ wxString ibMcpServer::Answer(const wxString& request, const ibMcpWireHeaders& he
 		return ibRpcWriteResult(parsed.m_id, result);
 	}
 
-	wxString answer;
+	ibString answer;
 
 	// THE OUTCOME OF A TOOL CALL, carried out to where the record is written. The call itself is
 	// made deep inside the branch below; the journal line is written once, at the bottom, for every
@@ -3129,9 +3003,9 @@ wxString ibMcpServer::Answer(const wxString& request, const ibMcpWireHeaders& he
 			// Rendered against the configuration this server serves, so a type
 			// reads as "CatalogRef.Goods" rather than as a number that means
 			// nothing on the other side of the socket.
-			wxString text = ok
+			const ibString text = ok
 				? ibRpcRenderNode(payload, ibMetaTypeResolver(GetMetaData()))
-				: refusal;
+				: ibString(refusal);
 
 			// ⭐⭐ SAID ONCE IS NOT SAID. The orientation asks a client to introduce itself in the
 			// assistant window before any work, in as many words — and it is handed over exactly
@@ -3170,7 +3044,7 @@ wxString ibMcpServer::Answer(const wxString& request, const ibMcpWireHeaders& he
 					picture->SetValue(wxT("data"), image->AsString());
 					picture->SetValue(wxT("mimeType"),
 						type != nullptr && type->Kind() == ibDataKind::String && !type->AsString().IsEmpty()
-							? type->AsString() : wxString(wxT("image/png")));
+							? type->AsString().ToWxString() : wxString(wxT("image/png")));
 
 					blocks.push_back(ibDataValue::Child(picture));
 

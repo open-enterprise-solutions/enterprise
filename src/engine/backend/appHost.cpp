@@ -292,8 +292,8 @@ std::size_t ibApplicationHost::ReadCount(const wxConfigBase& conf, const wxStrin
 
 std::size_t ibApplicationHost::ResumeSeconds(bool present, long configured)
 {
-	// The same 30 minutes a client already dies by when nobody calls (kIdleLimit). A window longer than that
-	// would hold locks and a seat past the idle limit the process already has.
+	// The same 30 minutes a connectionless client dies by when nobody calls (kIdleLimit). A window longer than that
+	// would hold a dropped client's locks and seat for longer than any client is kept unheard.
 	constexpr long kMost = 30 * 60;
 	constexpr std::size_t kDefault = 120;
 	if (!present)

@@ -1,7 +1,7 @@
 #include "userItem.h"
 
 #include "backend/appData.h"
-#include "backend/utils/md5.hpp"
+#include "core/utils/md5.hpp"
 #include "backend/utils/passwordHash.hpp"
 
 #include "backend/metadataConfiguration.h"

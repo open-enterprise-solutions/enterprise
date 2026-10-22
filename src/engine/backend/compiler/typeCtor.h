@@ -195,7 +195,7 @@ public:
 
 // 4-arg (legacy): explicit clsid.
 #define PRIMITIVE_TYPE_REGISTER_4(class_info, class_name, class_type, clsid)\
-GENERATE_REGISTER(wxT(class_name), wxMAKE_UNIQUE_NAME(s_cs_reg_s_), new ibCtorPrimitiveType<class_info>(wxT(class_name), class_type, clsid))
+GENERATE_REGISTER(class_name, wxMAKE_UNIQUE_NAME(s_cs_reg_s_), new ibCtorPrimitiveType<class_info>(wxString(class_name), class_type, clsid))
 // 3-arg (new): clsid = ib_clsid_hash(class_name).
 #define PRIMITIVE_TYPE_REGISTER_3(class_info, class_name, class_type)\
 PRIMITIVE_TYPE_REGISTER_4(class_info, class_name, class_type, primitive_to_clsid(class_name))

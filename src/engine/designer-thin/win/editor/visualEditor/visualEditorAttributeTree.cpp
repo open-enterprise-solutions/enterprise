@@ -10,6 +10,7 @@
 
 #include "frmclient/backend/backend_picture.h"                         // ibBackendPicture — the attribute's picture
 #include "frmclient/backend/metaCollection/metaObject.h"               // g_metaAttributeCLSID — the attribute's picture
+#include "frmclient/backend/propertyManager/property/propertySerializable.h"   // its properties — a row's each
 #include "frmclient/mainFrame/mainFrame.h"
 #include "frmclient/mainFrame/objinspect/objinspect.h"
 
@@ -60,16 +61,13 @@ std::vector<ibSourceHop> PathOf(const ibProtocolNode& row)
 }
 
 // The rows' shape — each root row's id, name, and what it is drawn as: a draw that says the same leaves the tree alone.
-// …and the form's attributes as it holds them: a row opened was asked of them then, so the same rows over attributes
-// changed say another composition — a column given a reference type showed none to open (2026-10-15).
-wxString ShapeOf(const ibProtocolNode& rows, const ibProtocolNode& attributes)
+wxString ShapeOf(const ibProtocolNode& rows)
 {
 	wxString shape;
 	for (const ibProtocolNode& row : rows.Children())
 		shape << row.GetId() << wxT(':') << row.GetString(ibProtocol::ibView::ibFormDesigner::Name) << wxT(':')
 			<< row.GetBool(ibProtocol::ibView::ibFormDesigner::Main) << row.GetBool(ibProtocol::ibView::ibFormDesigner::HasComposition)
 			<< row.GetString(ibProtocol::ibView::ibFormDesigner::DropControl) << row.FindChild(ibProtocol::ibView::ibFormDesigner::Menu).IsNode() << wxT(';');
-	shape << wxString::FromUTF8(attributes.Write());
 	return shape;
 }
 
@@ -101,16 +99,20 @@ bool ibFormAttributeValue::IsEditable() const
 	return m_formHandler->IsEditable();
 }
 
-bool ibFormAttributeValue::Receive()
+bool ibFormAttributeValue::Fetch()
 {
 	ibProtocolNode request;
 	request.SetValue(ibProtocol::ibView::ibFormDesigner::Kind, static_cast<int>(ibProtocol::ibView::ibFormDesigner::ibRequest::Properties));
-	request.SetValue(ibProtocol::ibView::ibFormDesigner::Form, m_formHandler->m_formNode);
 	request.SetValue(ibProtocol::ibView::ibFormDesigner::Attribute, m_attributeId);
 	if (m_columnId != 0)
 		request.SetValue(ibProtocol::ibView::ibFormDesigner::Column, m_columnId);
 	ibProtocolNode answer;
 	return m_formHandler->GetEditorDocument()->Fetch(request, answer) && ibPropertyObject::Receive(answer);
+}
+
+ibProperty* ibFormAttributeValue::CreateProperty(ibPropertyCategory* cat, ibDataNode&& row)
+{
+	return ibPropertyObject::CreateProperty<ibPropertySerializable>(cat, std::move(row));
 }
 
 void ibFormAttributeValue::OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue)
@@ -215,10 +217,14 @@ ibAttributeTree::~ibVisualEditorAttributeTree()
 
 void ibAttributeTree::Draw(const ibProtocolNode& rows, const ibProtocolNode& attributes)
 {
-	const wxString shape = ShapeOf(rows, attributes);
-	if (shape == m_shape)
+	// …and the form's attributes as it holds them: a row opened was asked of them then, so the same rows over attributes
+	// changed say another composition — a column given a reference type showed none to open (2026-10-15). Compared as
+	// nodes: written out as text to be compared, they were 14 % of a control's creation (2026-10-22).
+	const wxString shape = ShapeOf(rows);
+	if (shape == m_shape && attributes == m_attributes)
 		return;
 	m_shape = shape;
+	m_attributes = attributes;
 
 	// THE HOLDERS — one per root row, kept by its id: the one the inspector shows survives the rebuild.
 	std::set<long long> drawn;
@@ -276,6 +282,21 @@ ibFormAttributeValue* ibAttributeTree::FindEntry(const ibPropertyObject* owner) 
 			return held.second.get();
 	}
 	return nullptr;
+}
+
+bool ibAttributeTree::SelectAttribute(long long attributeId, long long columnId)
+{
+	// A column's — the attribute's row opened, its columns asked, the column's row lit and its holder shown (the desktop's
+	// OnAddColumn).
+	if (columnId != 0)
+		return SelectColumn(attributeId, columnId) && SelectColumnInInspector(m_tcAttributes->GetSelection());
+	// …an attribute's — its row lit, its holder shown (the desktop's OnAdd / OnPaste, SelectEntry).
+	const auto found = m_entries.find(attributeId);
+	if (found == m_entries.end())
+		return false;
+	SelectEntry(found->first);
+	SelectInInspector(found->second.get());
+	return true;
 }
 
 void ibAttributeTree::AppendRows(const wxTreeItemId& parent, const ibProtocolNode& rows)
@@ -360,15 +381,15 @@ bool ibAttributeTree::SelectColumnInInspector(const wxTreeItemId& item)
 	if (data == nullptr || data->GetEntry() != nullptr)   // a root holder is handled by SelectInInspector
 		return false;
 	const std::vector<ibSourceHop>& path = data->GetPath();
-	if (path.size() < 2)                                   // [attrId, columnId] — shallower can't name a column
-		return false;
+	if (path.size() != 2)                                  // [attrId, columnId] — shallower can't name a column, and a
+		return false;                                      // deeper row is a field of the column's type (its Date, 404)
 
 	const long long attributeId = static_cast<long long>(path.front().m_id);
 	const auto head = m_entries.find(attributeId);
 	if (head == m_entries.end() || !FindMenuItem(head->second->GetMenu(), ibProtocol::ibView::ibFormDesigner::Column).Has(ibProtocol::ibView::ibFormDesigner::Name))
 		return false;
 
-	const long long columnId = static_cast<long long>(path.back().m_id);
+	const long long columnId = static_cast<long long>(path[1].m_id);
 	std::unique_ptr<ibFormAttributeValue>& held = m_columns[{ attributeId, columnId }];
 	if (held == nullptr)
 		held.reset(new ibFormAttributeValue(m_formHandler, attributeId, columnId));
@@ -476,9 +497,9 @@ void ibAttributeTree::OnActivated(wxTreeEvent& event)
 void ibAttributeTree::OnItemExpanding(wxTreeEvent& event)
 {
 	// Lazy composition build — a node ships with a single dummy [+]; its real children are the server's answer, asked
-	// HERE, each time it opens (Composition): the row as it was written is what it is asked with, and the form as it
-	// stands — what the metadata has now, an attribute added to the object since shown, one taken away gone. A node
-	// already filled inline (a table section) is marked loaded and no-ops here.
+	// HERE, each time it opens (Composition): the row as it was written is what it is asked with, over the form as it
+	// stands, as the server holds it — what the metadata has now, an attribute added to the object since shown, one taken
+	// away gone. A node already filled inline (a table section) is marked loaded and no-ops here.
 	ibAttributeTreeItemData* data = (ibAttributeTreeItemData*)m_tcAttributes->GetItemData(event.GetItem());
 	if (data == nullptr || data->IsLoaded())
 		return;
@@ -493,7 +514,6 @@ bool ibAttributeTree::FetchComposition(const ibAttributeTreeItemData* data, ibPr
 {
 	ibProtocolNode request;
 	request.SetValue(ibProtocol::ibView::ibFormDesigner::Kind, static_cast<int>(ibProtocol::ibView::ibFormDesigner::ibRequest::Composition));
-	request.SetValue(ibProtocol::ibView::ibFormDesigner::Form, m_formHandler->m_formNode);
 	ibVisualEditor::WritePath(request, data->GetPath());
 	for (const ibMetaID& target : data->GetRefTypes())
 		request.AddItem(ibProtocol::ibView::ibFormDesigner::Targets, static_cast<long long>(target));
@@ -521,83 +541,80 @@ bool SamePlace(const std::vector<ibSourceHop>& path, const std::vector<ibSourceH
 	return true;
 }
 
-// A row holds a table section somewhere in what came inline with it.
-bool HoldsTable(const ibProtocolNode& row)
-{
-	for (const ibProtocolNode& child : row.Children()) {
-		if (child.GetBool(ibProtocol::ibView::ibFormDesigner::TableSection) || HoldsTable(child))
-			return true;
-	}
-	return false;
-}
-
-// The row at that path, among these and what came inline with them — the table a column's box is bound to.
-bool FindRow(const ibProtocolNode& rows, const std::vector<ibSourceHop>& path, ibProtocolNode& found)
-{
-	for (const ibProtocolNode& row : rows.Children()) {
-		if (SamePlace(PathOf(row), path, path.size())) {
-			found = row;
-			return true;
-		}
-		if (FindRow(row, path, found))
-			return true;
-	}
-	return false;
-}
-
 } // namespace
 
-bool ibAttributeTree::PickSource(wxWindow* parent, ibProtocol::ibSchema::ibProperties::ibSourceDataType filter,
-	const ibSourceDescription& table, ibSourceDescription& binding)
+bool ibAttributeTree::PickSource(wxWindow* parent, const wxString& name,
+	ibProtocol::ibSchema::ibProperties::ibSourceDataType filter, ibSourceDescription& binding)
 {
 	using ibSourceDataType = ibProtocol::ibSchema::ibProperties::ibSourceDataType;
 
-	// WHERE THE TREE STARTS — the form's attributes as the editor last drew them; a column's, the columns of its table.
-	ibProtocolNode rows = m_formHandler->m_trees.FindChild(ibProtocol::ibView::ibFormDesigner::AttributeTree);
-	if (filter == ibSourceDataType::TableColumn) {
-		ibProtocolNode bound;
-		if (!table.IsOk() || !FindRow(rows, table.GetPath(), bound) || bound.Children().empty()) {
-			wxMessageBox(_("The table box of this column is not bound to a table."), _("Choice source"),
-				wxOK | wxICON_INFORMATION, parent);
-			return false;
-		}
-		rows = bound;
-	}
+	// WHERE THE TREE STARTS — what the selected control's Source of that name offers, asked as the window opens (Editor):
+	// the server's, its editor's.
+	if (m_formHandler->m_selected == wxNOT_FOUND)
+		return false;
+	ibProtocolNode request;
+	request.SetValue(ibProtocol::ibView::ibFormDesigner::Kind, static_cast<int>(ibProtocol::ibView::ibFormDesigner::ibRequest::Editor));
+	request.SetValue(ibProtocol::ibView::ibFormDesigner::Control, m_formHandler->m_selected);
+	request.SetValue(ibProtocol::ibView::ibFormDesigner::Name, name);
+	ibProtocolNode answer;
+	if (!m_formHandler->GetEditorDocument()->Fetch(request, answer))
+		return false;
+	const ibProtocolNode rows = answer.FindChild(ibProtocol::ibSchema::ibProperties::Sources);
 
 	wxDialog dlg(parent, wxID_ANY, _("Choice source"), wxDefaultPosition, wxDefaultSize,
 		wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER | wxCLIP_CHILDREN);
+	dlg.SetFont(parent->GetFont());   // the desktop's: the property grid's
 	wxTreeCtrl* const tc = new wxTreeCtrl(&dlg, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-		wxTR_HIDE_ROOT | wxTR_HAS_BUTTONS | wxTR_LINES_AT_ROOT | wxTR_NO_LINES | wxSUNKEN_BORDER | wxTR_SINGLE);
-	wxImageList* const images = m_tcAttributes->GetImageList();
-	tc->SetImageList(images);   // the attribute tree's — it outlives the window
-	const int image = images != nullptr && images->GetImageCount() > 0 ? 0 : -1;
+		wxTR_HIDE_ROOT | wxTR_HAS_BUTTONS | wxTR_LINES_AT_ROOT | wxTR_NO_LINES | wxSUNKEN_BORDER | wxTR_SINGLE
+		| (filter != ibSourceDataType::TableColumn ? wxTR_TWIST_BUTTONS : 0));
 
-	// THE ROWS, FILTERED — a table: the table sections (and the attributes they are of); a field or a column: all but
-	// a table section; a row with a composition not yet asked, the dummy [+].
-	std::function<void(const wxTreeItemId&, const ibProtocolNode&)> append = [&](const wxTreeItemId& under, const ibProtocolNode& list) {
+	// …each row with the attribute's picture, a table with its own (the row's Picture), as the desktop's had them.
+	wxImageList* const images = new wxImageList(16, 16);
+	const wxBitmap attributePicture = ibBackendPicture::GetPicture(g_metaAttributeCLSID);
+	if (attributePicture.IsOk())
+		images->Add(attributePicture);
+	tc->AssignImageList(images);
+	std::map<wxString, int> pictures;
+	auto imageOf = [&](const ibProtocolNode& row) {
+		const wxString picture = row.GetString(ibProtocol::ibView::ibFormDesigner::Picture);
+		const int fallback = images->GetImageCount() > 0 ? 0 : -1;
+		if (picture.IsEmpty())
+			return fallback;
+		const auto found = pictures.find(picture);
+		if (found != pictures.end())
+			return found->second;
+		const wxBitmap bitmap = ibProtocolPicture(picture);
+		return pictures[picture] = bitmap.IsOk() ? images->Add(bitmap) : fallback;
+	};
+
+	// THE ROWS — the server's, as it offers them; under a reference, the rows it answers with, a table section not
+	// among them; a row with a composition not yet asked, the dummy [+].
+	std::function<void(const wxTreeItemId&, const ibProtocolNode&, bool)> append = [&](const wxTreeItemId& under,
+		const ibProtocolNode& list, bool composition) {
 		for (const ibProtocolNode& row : list.Children()) {
 			const bool tableSection = row.GetBool(ibProtocol::ibView::ibFormDesigner::TableSection);
-			if (filter == ibSourceDataType::Table ? !(tableSection || HoldsTable(row)) : tableSection)
+			if (composition && tableSection)
 				continue;
 			std::vector<ibMetaID> refTypes;
 			for (const ibProtocolNode& target : row.GetList(ibProtocol::ibView::ibFormDesigner::Targets))
 				refTypes.push_back(static_cast<ibMetaID>(target.AsInt()));
 			ibAttributeTreeItemData* const itemData = new ibAttributeTreeItemData(nullptr, PathOf(row), refTypes,
 				tableSection, 0, row.GetBool(ibProtocol::ibView::ibFormDesigner::UnderList));
+			const int image = imageOf(row);
 			const wxTreeItemId item = tc->AppendItem(under, row.GetString(ibProtocol::ibView::ibFormDesigner::Name), image, image, itemData);
-			if (filter == ibSourceDataType::Table && !tableSection)
-				tc->SetItemTextColour(item, wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));   // only holds one
+			if (tableSection)
+				tc->SetItemBold(item);
 			if (!row.Children().empty()) {
-				append(item, row);
+				append(item, row, composition);
 				itemData->SetLoaded();
 			}
-			else if (filter != ibSourceDataType::Table && row.GetBool(ibProtocol::ibView::ibFormDesigner::HasComposition)) {
+			else if (row.GetBool(ibProtocol::ibView::ibFormDesigner::HasComposition)) {
 				tc->AppendItem(item, wxEmptyString);
 			}
 		}
 	};
 	const wxTreeItemId root = tc->AddRoot(wxEmptyString);
-	append(root, rows);
+	append(root, rows, false);
 
 	// …a reference opened as the tree opens it — its composition asked once.
 	tc->Bind(wxEVT_TREE_ITEM_EXPANDING, [&](wxTreeEvent& event) {
@@ -608,8 +625,15 @@ bool ibAttributeTree::PickSource(wxWindow* parent, ibProtocol::ibSchema::ibPrope
 		tc->DeleteChildren(event.GetItem());
 		ibProtocolNode composition;
 		if (FetchComposition(data, composition))
-			append(event.GetItem(), composition);
+			append(event.GetItem(), composition, true);
 	});
+
+	// …every root open, as the desktop's: a reference under it stays shut, opened as the tree opens it.
+	{
+		wxTreeItemIdValue cookie;
+		for (wxTreeItemId top = tc->GetFirstChild(root, cookie); top.IsOk(); top = tc->GetNextChild(root, cookie))
+			tc->Expand(top);
+	}
 
 	// What may be chosen: a table section for a table, anything else for the rest.
 	auto chosen = [&]() -> ibAttributeTreeItemData* {
@@ -626,24 +650,39 @@ bool ibAttributeTree::PickSource(wxWindow* parent, ibProtocol::ibSchema::ibPrope
 			event.Skip();
 	});
 
-	// THE BINDING'S OWN ROW — walked down its path, each row on the way opened (a reference asked as it opens).
+	// THE BINDING'S OWN ROW — walked down its path: at each level the row it goes through, the longest (a row with no
+	// path — a column's table, an object above it — through its rows), each row on the way opened (a reference asked as
+	// it opens).
 	{
 		const std::vector<ibSourceHop>& path = binding.GetPath();
-		wxTreeItemId under = root, found;
-		for (size_t count = filter == ibSourceDataType::TableColumn ? table.GetPath().size() + 1 : 1; count <= path.size(); count++) {
+		std::function<wxTreeItemId(const wxTreeItemId&, size_t&)> through = [&](const wxTreeItemId& under, size_t& length) {
 			wxTreeItemId match;
 			wxTreeItemIdValue cookie;
 			for (wxTreeItemId child = tc->GetFirstChild(under, cookie); child.IsOk(); child = tc->GetNextChild(under, cookie)) {
 				const ibAttributeTreeItemData* const data = static_cast<ibAttributeTreeItemData*>(tc->GetItemData(child));
-				if (data != nullptr && SamePlace(data->GetPath(), path, count)) {
+				if (data == nullptr)
+					continue;
+				const size_t size = data->GetPath().size();
+				if (size == 0) {
+					const wxTreeItemId inner = through(child, length);
+					if (inner.IsOk())
+						match = inner;
+				}
+				else if (size > length && SamePlace(data->GetPath(), path, size)) {
 					match = child;
-					break;
+					length = size;
 				}
 			}
+			return match;
+		};
+		wxTreeItemId found;
+		size_t length = 0;
+		for (wxTreeItemId under = root; length < path.size();) {
+			const wxTreeItemId match = through(under, length);
 			if (!match.IsOk())
 				break;
 			found = match;
-			if (count < path.size())
+			if (length < path.size())
 				tc->Expand(match);
 			under = match;
 		}
@@ -701,28 +740,17 @@ void ibAttributeTree::OnBeginDrag(wxTreeEvent& event)
 void ibAttributeTree::OnAdd(wxCommandEvent& WXUNUSED(event))
 {
 	// A new attribute is never empty: a UNIQUE name and a default Type (String) — the server's editor makes it, through
-	// its command processor (undoable); the tree lands on it and shows it, as the desktop's OnAdd (SelectEntry).
-	const auto found = m_entries.find(m_formHandler->CreateAttribute());
-	if (found == m_entries.end())
-		return;
-	SelectEntry(found->first);
-	SelectInInspector(found->second.get());
+	// its command processor (undoable); the tree lands on it and shows it, as the desktop's OnAdd (SelectEntry) — the
+	// answer shows it (SelectAttribute).
+	m_formHandler->CreateAttribute();
 }
 
 void ibAttributeTree::OnAddColumn(wxCommandEvent& WXUNUSED(event))
 {
 	// A column of the selected VALUE-TABLE attribute — a UNIQUE name (Column, Column1, …) and a default Type (String),
-	// made by the server's editor; the tree lands on it and shows it, as the desktop's OnAddColumn.
-	ibFormAttributeValue* const entry = GetEntryFromItem(m_tcAttributes->GetSelection());
-	if (entry == nullptr)
-		return;
-	const long long id = entry->GetId();
-	const long long column = m_formHandler->AddColumn(entry);
-	if (column == 0)
-		return;
-	// The tree built anew with the attributes changed (Draw) — the attribute opened, its columns asked with this one.
-	SelectColumn(id, column);
-	SelectColumnInInspector(m_tcAttributes->GetSelection());
+	// made by the server's editor; the tree lands on it and shows it, as the desktop's OnAddColumn — the answer shows it
+	// (SelectAttribute): the attribute opened, its columns asked with this one.
+	m_formHandler->AddColumn(GetEntryFromItem(m_tcAttributes->GetSelection()));
 }
 
 void ibAttributeTree::OnEdit(wxCommandEvent& WXUNUSED(event))
@@ -799,10 +827,6 @@ void ibAttributeTree::OnCut(wxCommandEvent& WXUNUSED(event))
 void ibAttributeTree::OnPaste(wxCommandEvent& WXUNUSED(event))
 {
 	// The server pastes it (a fresh, non-main, uniquely named one); the tree lands on it and shows it, as the desktop's
-	// OnPaste (SelectEntry).
-	const auto found = m_entries.find(m_formHandler->PasteAttribute());
-	if (found == m_entries.end())
-		return;
-	SelectEntry(found->first);
-	SelectInInspector(found->second.get());
+	// OnPaste (SelectEntry) — the answer shows it (SelectAttribute).
+	m_formHandler->PasteAttribute();
 }

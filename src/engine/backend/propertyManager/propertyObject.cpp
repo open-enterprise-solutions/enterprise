@@ -270,8 +270,10 @@ ibDataValue ibBackendProperty::GetNodeValue() const
 #include "protocol/protocol.h"   // ibProtocol::ibSchema::ibProperties — the row's keys
 #include "core/typeName.h"       // ibTypeInfoName — a property's class, named as the client registers it
 
-bool ibBackendProperty::GetProtocolValue(ibDataNode& row)
+bool ibBackendProperty::GetProtocolValue(ibDataNode& row, ibReader reader)
 {
+	if (reader != ibReader::Cell)
+		return false;
 	row.SetValue(ibProtocol::ibSchema::ibProperties::Name, GetName());
 	row.SetValue(ibProtocol::ibSchema::ibProperties::Title, GetLabel());
 	if (!GetHelp().IsEmpty())
@@ -292,9 +294,9 @@ bool ibBackendProperty::GetProtocolValue(ibDataNode& row)
 	return true;
 }
 
-bool ibEvent::GetProtocolValue(ibDataNode& row)
+bool ibEvent::GetProtocolValue(ibDataNode& row, ibReader reader)
 {
-	if (!ibBackendProperty::GetProtocolValue(row))
+	if (!ibBackendProperty::GetProtocolValue(row, reader))
 		return false;
 	std::vector<ibDataValue> args;
 	for (const wxString& arg : GetArgs())

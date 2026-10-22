@@ -47,7 +47,7 @@
 #include "backend/query/queryConstructorModel.h"   // ibQueryFieldsOfText — what the TEXT offers
 #include "backend/query/queryException.h"          // …and the judge that refuses one
 #include "backend/query/queryLowering.h"
-#include "backend/query/queryParser.h"
+#include "core/query/queryParser.h"
 #include "backend/query/queryable.h"
 
 #include <algorithm>   // std::remove_if — taking a grouping level back out
@@ -665,7 +665,7 @@ bool ValueForPath(const ibCompositionDescription& composition, const wxString& p
 		return false;
 	}
 
-	const wxString text = given->Kind() == ibDataKind::String ? given->AsString() : wxString();
+	const wxString text = given->Kind() == ibDataKind::String ? given->AsString().ToWxString() : wxString();
 
 	// ⭐ A REFERENCE IS WRITTEN THE WAY A SCRIPT WRITES ONE - "Catalog.Warehouses.MainWarehouse",
 	// kind, object, then the predefined item's name (or `EmptyRef` for the empty reference). Three
@@ -828,7 +828,7 @@ bool ConditionFromTree(const ibCompositionDescription& composition, const ibData
 		const bool on = use == nullptr || use->Kind() != ibDataKind::Bool || use->AsBool();
 
 		if (const ibDataValue* group = line.FindField(wxT("group"))) {
-			const wxString word = group->Kind() == ibDataKind::String ? group->AsString() : wxString();
+			const wxString word = group->Kind() == ibDataKind::String ? group->AsString().ToWxString() : wxString();
 			const auto kind = std::find_if(GroupWords().begin(), GroupWords().end(),
 				[&word](const std::pair<const wxChar*, ibFilterGroupKind>& known) { return word.IsSameAs(known.first, false); });
 			if (kind == GroupWords().end()) {
@@ -846,7 +846,7 @@ bool ConditionFromTree(const ibCompositionDescription& composition, const ibData
 		}
 
 		const ibDataValue* pathSaid = line.FindField(wxT("path"));
-		const wxString path = pathSaid != nullptr && pathSaid->Kind() == ibDataKind::String ? pathSaid->AsString() : wxString();
+		const wxString path = pathSaid != nullptr && pathSaid->Kind() == ibDataKind::String ? pathSaid->AsString().ToWxString() : wxString();
 		if (path.IsEmpty()) {
 			refusal = ibMcpText("A line of `condition` names its field - \"path\".");
 			return false;
@@ -855,7 +855,7 @@ bool ConditionFromTree(const ibCompositionDescription& composition, const ibData
 			return false;
 		const ibDataValue* comparisonSaid = line.FindField(wxT("comparison"));
 		const wxString word = comparisonSaid != nullptr && comparisonSaid->Kind() == ibDataKind::String
-			? comparisonSaid->AsString() : wxString();
+			? comparisonSaid->AsString().ToWxString() : wxString();
 		ibComparisonKind comparison = ibComparisonKind_Equal;
 		if (!ComparisonFromWord(word, comparison, refusal))
 			return false;
@@ -2921,7 +2921,10 @@ public:
 
 			try {
 				ibQueryParser parser;
-				const ibQueryPackage package = parser.ParsePackage(text);
+				// The engine's door: the core parser's refusal is raised as the engine's, so the syntax handler below reads its span.
+				ibQueryPackage package;
+				try { package = parser.ParsePackage(text); }
+				catch (const ibQueryRefusal& refusal) { ibBackendQuerySyntaxException::Raise(refusal); }
 
 				// Against THIS configuration, named explicitly: a tool is not standing inside one.
 				const ibSourceMetaDataScope resolveAgainst(activeMetaData);

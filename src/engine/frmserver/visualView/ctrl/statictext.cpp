@@ -75,7 +75,10 @@ void ibValueStaticText::OnUpdate(ibDataNode& state, ibVisualHost* host)
 	const bool read = GetControlValue(value);
 
 	state.SetValue(ibProtocol::ibForm::ibState::Caption, GetControlTitle());
-	state.SetValue(ibProtocol::ibForm::ibState::Text, read ? value.GetString() : ibString());
+	// …and no value text at all where it is bound to nothing: the client shows no value half then, and the caption stays
+	// out of the form's label column.
+	if (!m_propertySource->IsEmptyProperty())
+		state.SetValue(ibProtocol::ibForm::ibState::Text, read ? value.GetString() : ibString());
 
 	// A link only where there is something to open: an empty value is plain text, because a link
 	// that leads nowhere is worse than no link.

@@ -53,7 +53,7 @@ public:
 
 	// Its properties as the server has them now — those received for it at this frame (below), else one batch (schema
 	// Properties: Id, Tab), in place of the ones it holds. False: the server answered none.
-	virtual bool Receive() override;
+	virtual bool Fetch() override;
 
 	// THE INSPECTOR SETS THE VALUE; the object is told. Before — the value it is to take, sent (Send): the server's answer
 	// is the leave, refused the value is not set. After — set: whoever shows it is told it is to be read anew (Cleared).
@@ -68,6 +68,9 @@ public:
 	static void Receive(long long tabId, ibMetaID metaId, const ibProtocolNode& rows);
 
 private:
+
+	// …each of its rows, the server's property (ibPropertySerializable).
+	virtual ibProperty* CreateProperty(ibPropertyCategory* cat, ibDataNode&& row) override;
 
 	const ibMetaID m_metaId;
 	ibMetaData m_metaData;

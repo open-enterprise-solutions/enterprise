@@ -36,5 +36,5 @@ target_include_directories(designer PRIVATE
 target_link_libraries(designer PRIVATE
     backend
     frontend
-    wx::core wx::aui wx::html wx::propgrid wx::adv wx::stc wx::xrc wx::qa wx::base wx::net wx::xml
+    wx::core wx::aui wx::html wx::propgrid wx::adv wx::stc wx::xrc wx::qa wx::base wx::xml
 )

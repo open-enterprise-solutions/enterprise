@@ -62,17 +62,17 @@ public:
 
 	//copy & paste — preserves the predefined child's CommonGuid
 	virtual bool CopyNodeValue(ibDataValue& value) const override {
-		value = ibDataValue::String(m_metaObject->GetCommonGuid());
+		value = ibDataValue::String(m_metaObject->GetCommonGuid().str());
 		return true;
 	}
 	virtual bool PasteNodeValue(const ibDataValue& value) override {
-		m_metaObject->SetCommonGuid(value.AsString());
+		m_metaObject->SetCommonGuid(ibGuid(value.AsString()));
 		return true;
 	}
 
 	// NO ROW — it carries composition (an inner attribute: Ref, Code, Description, …; a table), not a value to edit: the
 	// desktop's grid has no editor for it (advpropModule.cpp, RegisterNoEditor) and draws none.
-	virtual bool GetProtocolValue(ibDataNode& row) override { return false; }
+	virtual bool GetProtocolValue(ibDataNode& row, ibReader reader) override { return false; }
 
 private:
 

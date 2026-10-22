@@ -131,6 +131,7 @@ std::vector<ibUserInfo::LanguageBrief> ibUserInfo::ListLanguages(const ibMetaDat
 		entry.m_strLanguageGuid = row.GetString(ibProtocol::ibSchema::ibUserList::Guid);
 		entry.m_strLanguageTitle = row.GetString(ibProtocol::ibSchema::ibUserList::Title);
 		entry.m_strLanguageCode = row.GetString(ibProtocol::ibSchema::ibLanguages::Code);
+		entry.m_default = row.GetBool(ibProtocol::ibSchema::ibLanguages::Default);
 		list.emplace_back(std::move(entry));
 	}
 	return list;

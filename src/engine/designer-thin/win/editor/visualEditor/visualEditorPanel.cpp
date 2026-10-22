@@ -8,7 +8,7 @@
 
 #include "core/diagnostics/journal.h"
 #include "designer-thin/docManager/templates/docViewModuleEditor.h"
-#include "frmclient/backend/serialize/dataProtocol.h"   // ibReadProtocolNode — a control's values, as its node has them
+#include "frmclient/backend/serialize/dataProtocol.h"   // ibReadProtocolValue — a control's values, as its node has them
 #include "frmclient/mainFrame/objinspect/objinspect.h"
 #include "frmclient/propertyManager/property/advprop/advpropSource.h"   // ibSetSourcePicker — a control's Source cell
 
@@ -30,13 +30,12 @@ ibVisualEditorNotebook::ibVisualEditor::ibVisualEditor(ibModuleEditDocument* doc
 {
 	CreateWideGui();
 
-	// THE SOURCE WINDOW — the attribute tree of the form whose control the cell is of (the one the inspector shows).
-	static const bool picker = (ibSetSourcePicker([](wxWindow* parent, const ibPropertyObject* owner,
-		ibProtocol::ibSchema::ibProperties::ibSourceDataType filter,
-		const ibSourceDescription& table, ibSourceDescription& binding) {
+	// THE SOURCE WINDOW — opened by the form whose control the cell is of (the one the inspector shows).
+	static const bool picker = (ibSetSourcePicker([](wxWindow* parent, const ibPropertyObject* owner, const wxString& name,
+		ibProtocol::ibSchema::ibProperties::ibSourceDataType filter, ibSourceDescription& binding) {
 		for (ibVisualEditor* const editor : OpenEditors()) {
 			if (owner != nullptr && editor->GetCurrentElement() == owner)
-				return editor->GetAttributeTree()->PickSource(parent, filter, table, binding);
+				return editor->GetAttributeTree()->PickSource(parent, name, filter, binding);
 		}
 		return false;
 	}), true);
@@ -144,16 +143,11 @@ bool ibVisualEditorNotebook::ibVisualEditor::LoadForm(const ibProtocolNode& answ
 	m_classes = answer.FindChild(ibProtocol::ibView::ibFormDesigner::Classes);
 	m_objectTree->CreateTree(m_classes);
 
-	// ⭐ WHAT EACH CONTROL HAS IS THE SERVER'S TO SAY — its rows, as the designer's inspector writes them; the client's
-	// controls declare none (ibValueFrame). Kept by the control's id: a control built anew reads them again.
+	// Its trees; no control's rows held before — each asked as it is shown (FetchRows).
 	m_rows.clear();
-	for (const ibProtocolNode& described : answer.FindChild(ibProtocol::ibView::ibFormDesigner::Controls).Children())
-		m_rows[described.GetInt(ibProtocol::ibView::ibFormDesigner::Control)] = described;
-
-	// …and its attributes' and its commands' trees.
+	m_rowsChanged.clear();
 	ibProtocolNode trees;
-	trees.SetValue(ibProtocol::ibView::ibFormDesigner::AttributeTree, answer.FindChild(ibProtocol::ibView::ibFormDesigner::AttributeTree));
-	trees.SetValue(ibProtocol::ibView::ibFormDesigner::CommandTree, answer.FindChild(ibProtocol::ibView::ibFormDesigner::CommandTree));
+	Receive(answer, trees);
 
 	m_cmdProc.Reset();
 	Draw(form, trees, ibProtocolNode(), form.GetInt(ibProtocol::ibForm::ControlId));
@@ -189,7 +183,14 @@ void ibVisualEditorNotebook::ibVisualEditor::Draw(const ibProtocolNode& form, co
 
 	// The canvas never paints from a control that is gone.
 	m_formNode = form;
+	// ⭐ …AND THE SERVER HOLDS IT BEFORE ANYTHING HERE ASKS — the inspector's attribute received anew below, a tree's
+	// composition: a request carries no form, it is asked about the one handed. As the desktop's wrote it into its
+	// metaobject after each command (NotifyEditorSaved → SaveFormData).
+	SaveForm();
 	m_visualEditor->ClearObjectSelect();
+	// ⭐ EACH CONTROL READS WHAT IT HOLDS AS THE HOST DRAWS IT — its rows and its values where its node changed
+	// (ibVisualEditorHost::ReadControl): one walk and one compare, the host's. The editor walked the form again after it,
+	// comparing it with the one before, to read them (2026-10-22).
 	m_visualEditor->Draw(m_formNode, drawn);
 
 	if (GetValueForm() == nullptr) {
@@ -197,7 +198,9 @@ void ibVisualEditorNotebook::ibVisualEditor::Draw(const ibProtocolNode& form, co
 		ibJournalWarning(wxT("designer"), wxT("form editor: the form was not drawn"));
 		return;
 	}
+	// …a control whose rows alone the answer changed, after; the rows left are of no control drawn.
 	Receive(m_formNode);
+	m_rowsChanged.clear();
 
 	m_visualEditor->Thaw();
 
@@ -224,21 +227,69 @@ void ibVisualEditorNotebook::ibVisualEditor::Draw(const ibProtocolNode& form, co
 	}
 }
 
+bool ibVisualEditorNotebook::ibVisualEditor::FetchRows(long long controlId)
+{
+	if (m_rows.find(controlId) != m_rows.end())
+		return true;
+
+	ibProtocolNode request;
+	request.SetValue(ibProtocol::ibView::ibFormDesigner::Kind, static_cast<int>(ibProtocol::ibView::ibFormDesigner::ibRequest::Rows));
+	request.SetValue(ibProtocol::ibView::ibFormDesigner::Control, controlId);
+	ibProtocolNode answer;
+	if (!m_document->Fetch(request, answer))
+		return false;
+
+	// Held from here on, marked changed: the control receives them as the one shown, or as it is drawn next. The answer
+	// brings no trees — the form's stay.
+	ibProtocolNode trees;
+	Receive(answer, trees);
+	return true;
+}
+
+void ibVisualEditorNotebook::ibVisualEditor::Receive(const ibProtocolNode& answer, ibProtocolNode& trees)
+{
+	// ⭐ WHAT EACH CONTROL HAS IS THE SERVER'S TO SAY — its rows, as the designer's inspector writes them; the client's
+	// controls declare none (ibValueFrame). Kept by the control's id: a control made reads them as it is built, one whose
+	// rows the answer changed as it is drawn.
+	for (const ibProtocolNode& described : answer.FindChild(ibProtocol::ibView::ibFormDesigner::Controls).Children()) {
+		const long long id = described.GetInt(ibProtocol::ibView::ibFormDesigner::Control);
+		ibProtocolNode& held = m_rows[id];
+		if (held != described)
+			m_rowsChanged.insert(id);
+		held = described;
+	}
+
+	// …and its attributes' and its commands' trees.
+	trees.SetValue(ibProtocol::ibView::ibFormDesigner::AttributeTree, answer.FindChild(ibProtocol::ibView::ibFormDesigner::AttributeTree));
+	trees.SetValue(ibProtocol::ibView::ibFormDesigner::CommandTree, answer.FindChild(ibProtocol::ibView::ibFormDesigner::CommandTree));
+}
+
+void ibVisualEditorNotebook::ibVisualEditor::Receive(ibValueFrame* control)
+{
+	// Its rows as the server last wrote them — none yet, or an answer changed them: a control that stays keeps its
+	// properties. Every control's made anew at each door's answer was a quarter of a draw (2026-10-22).
+	const long long controlId = control->GetControlID();
+	const bool changed = m_rowsChanged.erase(controlId) != 0;
+	const auto found = m_rows.find(controlId);
+	if (found != m_rows.end() && (changed || control->GetPropertyCount() == 0))
+		control->Receive(found->second);
+}
+
 void ibVisualEditorNotebook::ibVisualEditor::Receive(const ibProtocolNode& node)
 {
-	ibValueForm* const valueForm = GetValueForm();
+	if (m_rowsChanged.empty())
+		return;
+
+	// Its rows, then its values as its node has them — the properties are made anew with the rows.
 	const long long controlId = node.GetInt(ibProtocol::ibForm::ControlId);
-	ibValueFrame* const control = controlId == valueForm->GetControlID() ? valueForm : valueForm->FindControlByID(controlId);
-
-	if (control != nullptr) {
-		// Built anew — its rows received again (the client's controls declare none).
-		const auto found = m_rows.find(controlId);
-		if (control->GetPropertyCount() == 0 && found != m_rows.end())
-			control->Receive(found->second);
-
-		// …and its values as its node has them now — what a command left; open in the tree too, the header's (SaveNode).
-		Receive(control, node);
-		control->SetExpanded(node.GetBool(ibProtocol::ibForm::Expanded, true));
+	if (m_rowsChanged.count(controlId) != 0) {
+		ibValueForm* const valueForm = GetValueForm();
+		ibValueFrame* const control = controlId == valueForm->GetControlID() ? valueForm : valueForm->FindControlByID(controlId);
+		if (control != nullptr) {
+			Receive(control);
+			Receive(control, node);
+			control->SetExpanded(node.GetBool(ibProtocol::ibForm::Expanded, true));
+		}
 	}
 
 	for (const ibProtocolNode& child : node.Children())
@@ -247,18 +298,12 @@ void ibVisualEditorNotebook::ibVisualEditor::Receive(const ibProtocolNode& node)
 
 void ibVisualEditorNotebook::ibVisualEditor::Receive(ibPropertyObject* object, const ibProtocolNode& node)
 {
-	// A property's, as WriteData wrote it; the wire brings a scalar back a field.
-	ibProtocolNode values = node.Clone();
-	values.Remove(ibProtocol::ibNode::Children);
-	ibDataNode entries;
-	ibReadProtocolNode(values, entries);
+	// A property's, as WriteData wrote it — read off the node by its name, the node's children not copied nor read with it.
 	for (unsigned int idx = 0; idx < object->GetPropertyCount(); idx++) {
 		ibProperty* const prop = object->GetProperty(idx);
-		const ibDataValue* value = entries.FindProperty(prop->GetName());
-		if (value == nullptr)
-			value = entries.FindField(prop->GetName());
-		if (value != nullptr)
-			prop->SetNodeValue(*value);
+		ibDataValue value;
+		if (ibReadProtocolValue(node, prop->GetName(), value))
+			prop->SetNodeValue(value);
 	}
 }
 

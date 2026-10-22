@@ -97,8 +97,8 @@ public:
 
 	wxString GetDescription() const override
 	{
-		return ibMcpText("Start the application on this base - the thick client or the web server, with "
-			"or without the debugger attached. The same launch the designer's Debug menu "
+		return ibMcpText("Start the application on this base - the thick client, the thin one or the web "
+			"server, with or without the debugger attached. The same launch the designer's Debug menu "
 			"performs, so connection flags and the debug port are handled. Refuses when the "
 			"configuration has edits the base does not hold - a module written a moment ago as much as "
 			"a change of structure: config_apply them first, because a launch must never write to a base "
@@ -120,17 +120,10 @@ public:
 			return false;
 		}
 
+		// Any of the argument's words — one it does not take was refused before Call (ibMcpArgument's list).
 		wxString application = ArgApplication().Text(params);
 		if (application.IsEmpty())
 			application = wxT("enterprise");
-
-		if (!application.IsSameAs(wxT("enterprise"), false)
-			&& !application.IsSameAs(wxT("wenterprise-server"), false)) {
-			refusal = wxString::Format(
-				ibMcpText("'%s' is not something to start. Use enterprise or wenterprise-server."),
-				application);
-			return false;
-		}
 
 		// DEFAULTS TO TRUE, and asked of the field rather than of the value: `debug: false` has
 		// to be distinguishable from "not said", or the default silently wins over an explicit no.
@@ -182,11 +175,9 @@ public:
 
 			if (restart) {
 				// ⭐ THE PLATFORM'S OWN ENDING, asked of every connection rather than of a chosen
-				// one: DetachConnection is a no-op on a connection that is not attached, so the
-				// filtering that would otherwise be written here is already inside it.
-				for (auto* connection : debugClient->GetListConnection())
-					if (connection != nullptr)
-						connection->DetachConnection(/*kill=*/true);
+				// one — the debugger's Stop: DetachConnection is a no-op on a connection that is not
+				// attached, so the filtering that would otherwise be written here is already inside it.
+				debugClient->Stop(/*kill=*/true);
 
 				ended = true;
 

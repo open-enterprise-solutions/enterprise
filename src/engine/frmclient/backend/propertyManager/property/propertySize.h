@@ -1,12 +1,12 @@
 #ifndef __PROPERTY_SIZE_H__
 #define __PROPERTY_SIZE_H__
 
-#include "frmclient/backend/propertyManager/propertyObject.h"
+#include "frmclient/backend/propertyManager/property/propertySerializable.h"
 
 //base property for "size"
-class FRMCLIENT_API ibPropertySize : public ibProperty {
+class FRMCLIENT_API ibPropertySize : public ibPropertySerializable {
 public:
-	// …held as its node, the size's text (ibBackendProperty::ReadNodeValue).
+	// …held as its node, the size's text (ibPropertySerializable::ReadNodeValue).
 	wxSize GetValueAsSize() const { return typeConv::StringToSize(GetValueAsString()); }
 	wxString GetValueAsString() const;
 
@@ -14,19 +14,19 @@ public:
 	void SetValue(const wxString& val);
 
 	ibPropertySize(ibPropertyCategory* cat, const wxString& name, const wxSize& s = wxDefaultSize)
-		: ibProperty(cat, name, wxNullVariant)
+		: ibPropertySerializable(cat, name, wxNullVariant)
 	{
 		SetValue(s);
 	}
 
 	ibPropertySize(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxSize& s = wxDefaultSize)
-		: ibProperty(cat, name, label, wxNullVariant)
+		: ibPropertySerializable(cat, name, label, wxNullVariant)
 	{
 		SetValue(s);
 	}
 
 	ibPropertySize(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString, const wxSize& s = wxDefaultSize)
-		: ibProperty(cat, name, label, helpString, wxNullVariant)
+		: ibPropertySerializable(cat, name, label, helpString, wxNullVariant)
 	{
 		SetValue(s);
 	}

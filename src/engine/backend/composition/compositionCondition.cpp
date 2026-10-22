@@ -11,7 +11,7 @@
 #include "dataComposerInternal.h"
 
 #include "backend/backend_composition.h"           // ibStoredValue — a condition's literal and a rule's values, unpacked
-#include "backend/query/queryRender.h"             // ibQueryColumnFromPath — a dotted path becomes its hops, once
+#include "core/query/queryRender.h"             // ibQueryColumnFromPath — a dotted path becomes its hops, once
 #include "backend/query/queryConstructorModel.h"   // ibQueryConstructorField — the leaf a path walks to (WalkPath)
 #include "backend/query/queryHierarchy.h"          // ibQueryHierarchyScope — what «in hierarchy» admits; how «in» lists
 // ibCompositionRulesOf — the ONE place an appearance becomes what a cell is drawn with, so the only one that knows

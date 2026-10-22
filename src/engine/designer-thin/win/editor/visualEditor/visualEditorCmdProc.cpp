@@ -9,7 +9,8 @@
 #include <set>
 
 #include "designer-thin/docManager/templates/docViewModuleEditor.h"   // ibModuleEditDocument — Modify, Fetch, Post
-#include "frmclient/backend/serialize/dataProtocol.h"   // ibWriteProtocolNode — a property's value into the control's node
+#include "frmclient/backend/serialize/dataProtocol.h"   // ibReadProtocolValue, ibWriteProtocolNode — a control's values
+#include "frmclient/backend/propertyManager/property/propertySerializable.h"   // a layer's properties — a row's each
 #include "frmclient/mainFrame/objinspect/objinspect.h"
 
 #include <wx/artprov.h>
@@ -88,7 +89,7 @@ void SetChildren(ibProtocolNode node, const std::vector<ibProtocolNode>& childre
 	for (const ibProtocolNode& child : copies) {
 		ibProtocolNode added = node.AddChild();
 		for (const auto& [name, entry] : child.Entries())
-			added.SetValue(name.c_str(), entry);
+			added.SetValue(name, entry);
 	}
 }
 
@@ -204,68 +205,84 @@ protected:
 	virtual void DoRestore() override;
 
 private:
+	// The property set to that value, the control drawn as it says — both found again by the control's id and the
+	// property's name: the rows the server answers make the control's properties anew (UpdateControl), and a pointer
+	// kept from the edit before pointed at one gone.
+	void SetValue(const wxVariant& value);
+
 	ibVisualEditorNotebook::ibVisualEditor* m_visualEditor;
 
-	ibProperty* m_property;
+	long long m_controlId;
+	wxString m_name;
 	wxVariant m_oldValue, m_newValue;
 };
 
 ibVisualEditorModifyPropertyCmd::ibVisualEditorModifyPropertyCmd(ibVisualEditorNotebook::ibVisualEditor* visualEditor, ibProperty* prop, const wxVariant& oldValue, const wxVariant& newValue) : m_visualEditor(visualEditor),
-m_property(prop), m_oldValue(oldValue), m_newValue(newValue)
+m_controlId(dynamic_cast<ibValueFrame*>(prop->GetPropertyObject())->GetControlID()), m_name(prop->GetName()),
+m_oldValue(oldValue), m_newValue(newValue)
 {
 }
 
 void ibVisualEditorModifyPropertyCmd::DoExecute()
 {
-	// Get the ibValueFrame from the event
-	ibValueFrame* control =
-		dynamic_cast<ibValueFrame*>(m_property->GetPropertyObject());
-
-	m_property->SetValue(m_newValue);
-	m_visualEditor->UpdateControl(control);
-	m_visualEditor->RefreshCurrentElement();
+	SetValue(m_newValue);
 }
 
 void ibVisualEditorModifyPropertyCmd::DoRestore()
 {
-	// Get the ibValueFrame from the event
-	ibValueFrame* control =
-		dynamic_cast<ibValueFrame*>(m_property->GetPropertyObject());
+	SetValue(m_oldValue);
+}
 
-	m_property->SetValue(m_oldValue);
+void ibVisualEditorModifyPropertyCmd::SetValue(const wxVariant& value)
+{
+	ibValueForm* const valueForm = m_visualEditor->GetValueForm();
+	ibValueFrame* const control = valueForm == nullptr ? nullptr
+		: m_controlId == valueForm->GetControlID() ? valueForm : valueForm->FindControlByID(m_controlId);
+	ibProperty* const property = control != nullptr ? control->GetProperty(m_name) : nullptr;
+	if (property == nullptr)
+		return;
+
+	property->SetValue(value);
 	m_visualEditor->UpdateControl(control);
 	m_visualEditor->RefreshCurrentElement();
 }
 
 void ibVisualEditorNotebook::ibVisualEditor::Execute(ibVisualEditorCmd* cmd)
 {
+	// The form it leaves went to the server as it was drawn (Draw); the document said modified after it — what that posts
+	// goes behind the form, never the form behind it.
 	m_cmdProc.Execute(cmd);
-	m_document->Modify(!m_cmdProc.IsAtSavePoint());
-
-	// …and the form goes to the server, as the desktop's wrote it into its metaobject after each command
-	// (NotifyEditorSaved → SaveFormData): the configuration saved from elsewhere has it.
-	SaveForm();
+	m_document->Modify(true);
 }
 
-bool ibVisualEditorNotebook::ibVisualEditor::Execute(ibProtocolNode request, ibProtocolNode& answer)
+bool ibVisualEditorNotebook::ibVisualEditor::Execute(const ibProtocolNode& request, ibProtocolNode& answer)
 {
-	if (!request.Has(ibProtocol::ibView::ibFormDesigner::Form))
-		request.SetValue(ibProtocol::ibView::ibFormDesigner::Form, m_formNode);
 	if (!m_document->Fetch(request, answer))
 		return false;
 	const ibProtocolNode form = answer.FindChild(ibProtocol::ibView::ibFormDesigner::Form);
 	if (form.GetType() != ibProtocol::ibForm::ibType::ClientForm)
 		return false;
 
-	// Its controls' rows kept by their ids — a control made there reads them as it is built.
-	for (const ibProtocolNode& described : answer.FindChild(ibProtocol::ibView::ibFormDesigner::Controls).Children())
-		m_rows[described.GetInt(ibProtocol::ibView::ibFormDesigner::Control)] = described;
-
+	// The rows held are of the form before it — each asked again as it is shown (FetchRows).
+	m_rows.clear();
 	ibProtocolNode trees;
-	trees.SetValue(ibProtocol::ibView::ibFormDesigner::AttributeTree, answer.FindChild(ibProtocol::ibView::ibFormDesigner::AttributeTree));
-	trees.SetValue(ibProtocol::ibView::ibFormDesigner::CommandTree, answer.FindChild(ibProtocol::ibView::ibFormDesigner::CommandTree));
-	Execute(new ibVisualEditorFormCmd(this, m_formNode, form, ibProtocolNode(), m_selected,
-		answer.GetInt(ibProtocol::ibView::ibFormDesigner::Selected, m_selected), m_trees, trees));
+	Receive(answer, trees);
+
+	// ⭐ WHERE IT LANDS IS THE ANSWER'S — a control it selects (Selected), drawn so; the attribute it shows (Attribute, a
+	// column of it: Column) the current element once drawn, the one current before let go of: drawn, it was shown again
+	// and left at once (the inspector filled twice a paste, 2026-10-22).
+	const bool showsAttribute = answer.Has(ibProtocol::ibView::ibFormDesigner::Attribute);
+	if (showsAttribute)
+		m_element = nullptr;
+
+	// …done by the server, which holds the form it answered and wrote it into its metaobject (ibFormDesignView::Fetch):
+	// drawn, not handed back.
+	m_cmdProc.Receive(new ibVisualEditorFormCmd(this, m_formNode, form, ibProtocolNode(), m_selected,
+		showsAttribute ? wxNOT_FOUND : answer.GetInt(ibProtocol::ibView::ibFormDesigner::Selected, m_selected), m_trees, trees));
+	if (showsAttribute)
+		m_attributeTree->SelectAttribute(answer.GetInt(ibProtocol::ibView::ibFormDesigner::Attribute),
+			answer.GetInt(ibProtocol::ibView::ibFormDesigner::Column));
+	m_document->Modify(true);
 	return true;
 }
 
@@ -609,9 +626,10 @@ void ibVisualEditorNotebook::ibVisualEditor::ModifyProperty(ibProperty* prop, co
 	if (control == nullptr || oldValue == newValue)
 		return;
 
+	// The tree told first: the command makes the control's properties anew from the server's rows (UpdateControl).
 	CallAfter([this, prop, oldValue, newValue]() {
-		Execute(new ibVisualEditorModifyPropertyCmd(this, prop, oldValue, newValue));
 		NotifyPropertyModified(prop);
+		Execute(new ibVisualEditorModifyPropertyCmd(this, prop, oldValue, newValue));
 	});
 }
 
@@ -633,20 +651,14 @@ void ibVisualEditorNotebook::ibVisualEditor::UpdateControl(ibValueFrame* control
 		step = step.AddChild();
 		step.SetValue(ibProtocol::ibNode::Id, id);
 	}
-	ibProtocolNode values = nodes.back().Clone();
-	values.Remove(ibProtocol::ibNode::Children);
-	ibDataNode held;
-	ibReadProtocolNode(values, held);
 	ibDataNode entries;
 	for (unsigned int idx = 0; idx < control->GetPropertyCount(); idx++) {
 		const ibProperty* const property = control->GetPropertyByIndex(idx);
 		ibDataValue value;
 		if (!property->CopyNodeValue(value))
 			continue;
-		const ibDataValue* entry = held.FindProperty(property->GetName());
-		if (entry == nullptr)
-			entry = held.FindField(property->GetName());
-		if (entry != nullptr ? *entry == value : value.IsEmpty())
+		ibDataValue held;
+		if (ibReadProtocolValue(nodes.back(), property->GetName(), held) ? held == value : value.IsEmpty())
 			continue;
 		step.AddItem(ibProtocol::ibNode::Removed, property->GetName());
 		if (!value.IsEmpty())
@@ -668,6 +680,18 @@ void ibVisualEditorNotebook::ibVisualEditor::UpdateControl(ibValueFrame* control
 		PatchState(answer.FindChild(ibProtocol::ibView::ibFormDesigner::Node), step);
 		edited = m_formNode.Clone();
 		edited.Apply(patch);
+
+		// …and its rows as the server wrote them after the edit: a value's words are the server's to say — a source
+		// picked reads as its name only then (it read "<not selected>", 2026-10-21). Changed, the control receives them
+		// anew as it is drawn; the answer brings no trees — the form's stay. The others held are of the form before the
+		// edit — a column's under its table edited — each asked again as it is shown.
+		m_rows.clear();
+		ibProtocolNode trees;
+		Receive(answer, trees);
+
+		// The request handed the form so edited, and the server holds it (written as a Change writes it): drawn, it is
+		// not handed again.
+		m_cmdProc.SetSavePoint();
 	}
 
 	Draw(edited, m_trees, patch, m_selected);
@@ -675,15 +699,13 @@ void ibVisualEditorNotebook::ibVisualEditor::UpdateControl(ibValueFrame* control
 
 /////////////////////////////////////////////////////////////////////////////////////
 
-long long ibVisualEditorNotebook::ibVisualEditor::CreateAttribute()
+void ibVisualEditorNotebook::ibVisualEditor::CreateAttribute()
 {
 	if (!IsEditable())
-		return 0;
+		return;
 	ibProtocolNode answer;
-	if (!Execute(EntryRequest(ibProtocol::ibView::ibFormDesigner::ibRequest::Attribute, ibProtocol::ibView::ibFormDesigner::ibCommand::Create,
-		ibProtocol::ibView::ibFormDesigner::Attribute, 0), answer))
-		return 0;
-	return answer.GetInt(ibProtocol::ibView::ibFormDesigner::Attribute);
+	Execute(EntryRequest(ibProtocol::ibView::ibFormDesigner::ibRequest::Attribute, ibProtocol::ibView::ibFormDesigner::ibCommand::Create,
+		ibProtocol::ibView::ibFormDesigner::Attribute, 0), answer);
 }
 
 void ibVisualEditorNotebook::ibVisualEditor::RemoveAttribute(ibFormAttributeValue* entry)
@@ -707,18 +729,16 @@ void ibVisualEditorNotebook::ibVisualEditor::CopyAttribute(ibFormAttributeValue*
 		CopyEntry(ibProtocol::ibView::ibFormDesigner::Attributes, entry->GetId(), oes_clipboard_attribute, entry->GetName());
 }
 
-long long ibVisualEditorNotebook::ibVisualEditor::PasteAttribute()
+void ibVisualEditorNotebook::ibVisualEditor::PasteAttribute()
 {
 	const ibProtocolNode copied = PasteEntry(oes_clipboard_attribute);
 	if (!copied.IsNode() || !IsEditable())
-		return 0;
+		return;
 	ibProtocolNode request = EntryRequest(ibProtocol::ibView::ibFormDesigner::ibRequest::Attribute, ibProtocol::ibView::ibFormDesigner::ibCommand::Paste,
 		ibProtocol::ibView::ibFormDesigner::Attribute, 0);
 	request.SetValue(ibProtocol::ibView::ibFormDesigner::Value, copied);
 	ibProtocolNode answer;
-	if (!Execute(request, answer))
-		return 0;
-	return answer.GetInt(ibProtocol::ibView::ibFormDesigner::Attribute);
+	Execute(request, answer);
 }
 
 bool ibVisualEditorNotebook::ibVisualEditor::RenameAttribute(ibFormAttributeValue* entry, const wxString& newName)
@@ -742,15 +762,13 @@ void ibVisualEditorNotebook::ibVisualEditor::SetMainAttribute(ibFormAttributeVal
 		ibProtocol::ibView::ibFormDesigner::Attribute, entry != nullptr ? entry->GetId() : 0), answer);
 }
 
-long long ibVisualEditorNotebook::ibVisualEditor::AddColumn(ibFormAttributeValue* entry)
+void ibVisualEditorNotebook::ibVisualEditor::AddColumn(ibFormAttributeValue* entry)
 {
 	if (entry == nullptr || !IsEditable())
-		return 0;
+		return;
 	ibProtocolNode answer;
-	if (!Execute(EntryRequest(ibProtocol::ibView::ibFormDesigner::ibRequest::Attribute, ibProtocol::ibView::ibFormDesigner::ibCommand::AddColumn,
-		ibProtocol::ibView::ibFormDesigner::Attribute, entry->GetId()), answer))
-		return 0;
-	return answer.GetInt(ibProtocol::ibView::ibFormDesigner::Column);
+	Execute(EntryRequest(ibProtocol::ibView::ibFormDesigner::ibRequest::Attribute, ibProtocol::ibView::ibFormDesigner::ibCommand::AddColumn,
+		ibProtocol::ibView::ibFormDesigner::Attribute, entry->GetId()), answer);
 }
 
 /////////////////////////////////////////////////////////////////////////////////////
@@ -818,7 +836,8 @@ void ibVisualEditorNotebook::ibVisualEditor::CopyEntry(const char* owner, long l
 void ibVisualEditorNotebook::ibVisualEditor::CopyEntry(const ibProtocolNode& entry, const wxString& format,
 	const wxString& name)
 {
-	const std::string text = entry.Write();
+	// The clipboard's are bytes — UTF-8, made here once, and read back once in PasteEntry.
+	const std::string text = entry.Write().ToUtf8();
 	if (wxTheClipboard->Open()) {
 		wxDataObjectComposite* const composite = new wxDataObjectComposite;
 		wxCustomDataObject* const data = new wxCustomDataObject(wxDataFormat(format));
@@ -839,7 +858,7 @@ ibProtocolNode ibVisualEditorNotebook::ibVisualEditor::PasteEntry(const wxString
 	if (wxTheClipboard->IsSupported(dataFormat)) {
 		wxCustomDataObject data(dataFormat);
 		if (wxTheClipboard->GetData(data))
-			ibProtocolNode::Read(std::string(static_cast<const char*>(data.GetData()), data.GetSize()), copied);
+			ibProtocolNode::Read(ibString::FromUTF8(static_cast<const char*>(data.GetData()), data.GetSize()), copied);
 	}
 	wxTheClipboard->Close();
 	return copied;
@@ -955,14 +974,18 @@ void ibVisualEditorNotebook::ibVisualEditor::ScrollToObject(ibValueFrame* obj)
 
 void ibVisualEditorNotebook::ibVisualEditor::Undo()
 {
+	if (!m_cmdProc.CanUndo())
+		return;
 	m_cmdProc.Undo();
-	m_document->Modify(!m_cmdProc.IsAtSavePoint());
+	m_document->Modify(true);
 }
 
 void ibVisualEditorNotebook::ibVisualEditor::Redo()
 {
+	if (!m_cmdProc.CanRedo())
+		return;
 	m_cmdProc.Redo();
-	m_document->Modify(!m_cmdProc.IsAtSavePoint());
+	m_document->Modify(true);
 }
 
 bool ibVisualEditorNotebook::ibVisualEditor::CanPasteObject() const
@@ -1042,14 +1065,21 @@ ibProtocolNode ibValueLayerObject::GetNode() const
 	return FindNode(path.back());
 }
 
-bool ibValueLayerObject::Receive()
+bool ibValueLayerObject::Fetch()
 {
+	if (!m_formHandler->FetchRows(m_controlId))
+		return false;
 	const auto found = m_formHandler->m_rows.find(m_controlId);
 	if (found == m_formHandler->m_rows.end())
 		return false;
 	ibPropertyObject::Receive(FindRows(found->second));
 	ibVisualEditorNotebook::ibVisualEditor::Receive(this, GetNode());
 	return true;
+}
+
+ibProperty* ibValueLayerObject::CreateProperty(ibPropertyCategory* cat, ibDataNode&& row)
+{
+	return ibPropertyObject::CreateProperty<ibPropertySerializable>(cat, std::move(row));
 }
 
 void ibValueLayerObject::SetCommandItems(const std::vector<ibProtocolNode>& items, int selected) const
@@ -1119,7 +1149,7 @@ void ibValueCommandBar::ExecuteMenu(int menuId)
 	// A new command is the server's (CommandBarItem's Node — the desktop's AddCommandItem), a pasted one the clipboard's;
 	// either is put last, and shown.
 	ibProtocolNode added;
-	if (menuId == kMenuAddCommand) {
+	if (menuId == kMenuAddCommand && m_formHandler->FetchRows(m_controlId)) {
 		const auto found = m_formHandler->m_rows.find(m_controlId);
 		if (found != m_formHandler->m_rows.end())
 			added = found->second.FindChild(ibProtocol::ibView::ibFormDesigner::CommandBarItem).FindChild(ibProtocol::ibView::ibFormDesigner::Node);

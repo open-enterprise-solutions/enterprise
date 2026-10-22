@@ -119,7 +119,7 @@ public:
 	// zeroes it again. So whatever member is written next writes over a valid empty one. Never write
 	// a string or a number member over a non-zero word of another kind: its old text would be kept.
 	union {
-		bool          m_bData;  //TYPE_BOOLEAN
+		ibBoolean     m_bData;  //TYPE_BOOLEAN — one byte
 		ibDateTime    m_dData;  //TYPE_DATE — one word, the count of a wall-clock reading
 		ibValue*      m_pRef;   //TYPE_REFFER (+ VALUE/ENUM/OLE/... aliased)
 		// TYPE_CONST_REFFER — read-only view of a NON-owned object (const
@@ -928,7 +928,7 @@ public:
 
 	// A CONSTANT AS THE TRANSLATOR READ IT (ibLexem::m_valData) — the door through which the compiler
 	// puts one into the bytecode. Explicit: a lexem's value is not an engine value until it is asked to be.
-	explicit ibValue(const class ibLexValue& lexValue);
+	explicit ibValue(const class ibLiteral& literal);
 
 	// ⭐⭐ ANY OTHER POINTER IS A MISTAKE, AND IT USED TO BECOME `TRUE`.
 	//

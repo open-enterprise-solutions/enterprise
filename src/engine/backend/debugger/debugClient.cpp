@@ -5,14 +5,7 @@
 
 #include "debugClient.h"
 
-// Socket-option constants (IPPROTO_TCP / TCP_NODELAY / SOL_SOCKET / SO_KEEPALIVE) used by the
-// SetOption calls below. On Windows they arrive with winsock through wx; POSIX keeps them in
-// its own headers and wx does not re-export them.
-#ifndef __WXMSW__
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-#endif
+#include "core/net/httpClient.h"             // the socket to a runtime's debug port
 
 #include "backend/metadataConfiguration.h"
 #include "backend/session/session.h"
@@ -27,12 +20,6 @@
 
 ///////////////////////////////////////////////////////////////////////
 ibDebuggerClient* ibDebuggerClient::ms_debugClient = nullptr;
-///////////////////////////////////////////////////////////////////////
-
-///////////////////////////////////////////////////////////////////////
-wxCriticalSection ibDebuggerClient::ms_criticalSectionConnection1;
-wxCriticalSection ibDebuggerClient::ms_criticalSectionConnection2;
-wxCriticalSection ibDebuggerClient::ms_criticalSectionConnection3;
 ///////////////////////////////////////////////////////////////////////
 
 namespace {
@@ -88,9 +75,8 @@ static void ShiftLineMap(std::map<unsigned int, Entry>& lines, unsigned int line
 
 ibDebuggerClient::ibDebuggerClient(ibMetaDataConfigurationBase* metaData) :
 	m_metaData(metaData),
-	m_activeSocket(nullptr),
 	m_adapter(new ibDebuggerClientAdapter),
-	m_enterLoop(false), m_connectionSuccess(false)
+	m_enterLoop(false), m_connectionSuccess(false), m_numberOfConnectionAttempts(numberOfConnectionAttempts)
 {
 	// Always: it creates the table when it is missing and adds the condition column to one from before it.
 	ibDebuggerClient::CreateBreakpointDatabase();
@@ -99,8 +85,19 @@ ibDebuggerClient::ibDebuggerClient(ibMetaDataConfigurationBase* metaData) :
 
 ibDebuggerClient::~ibDebuggerClient()
 {
-	while (m_listConnection.size()) {
-		m_listConnection[m_listConnection.size() - 1]->Delete();
+	// Each connection told to stop, and waited for — taken from the list under its lock, waited for outside it: a
+	// connection on its way out tells its listeners and takes itself out of the list, both under that lock. (Delete keeps
+	// the thread's object alive while it waits — wxThreadKeepAlive; a thread that ends by itself between the pick and the
+	// Delete is the self-deleting thread's own window.)
+	for (;;) {
+		ibDebuggerClientConnection* connection = nullptr;
+		{
+			std::lock_guard<std::recursive_mutex> lock(m_connectionsMutex);
+			if (m_listConnection.empty())
+				break;
+			connection = m_listConnection.back();
+		}
+		connection->Delete();
 	}
 	wxDELETE(m_adapter);
 
@@ -108,9 +105,10 @@ ibDebuggerClient::~ibDebuggerClient()
 		ms_debugClient = nullptr;
 }
 
-//special functions:
+//special functions — each names the stop it is about, read under the lock it is parked under:
 void ibDebuggerClient::Continue()
 {
+	std::lock_guard<std::recursive_mutex> lock(m_connectionsMutex);
 	ibWriterMemory commandChannel;
 	commandChannel.w_u16(CommandId_Continue);
 	commandChannel.w_stringZ(m_currentSessionGuid);
@@ -119,6 +117,7 @@ void ibDebuggerClient::Continue()
 
 void ibDebuggerClient::StepOver()
 {
+	std::lock_guard<std::recursive_mutex> lock(m_connectionsMutex);
 	ibWriterMemory commandChannel;
 	commandChannel.w_u16(CommandId_StepOver);
 	commandChannel.w_stringZ(m_currentSessionGuid);
@@ -127,6 +126,7 @@ void ibDebuggerClient::StepOver()
 
 void ibDebuggerClient::StepInto()
 {
+	std::lock_guard<std::recursive_mutex> lock(m_connectionsMutex);
 	ibWriterMemory commandChannel;
 	commandChannel.w_u16(CommandId_StepInto);
 	commandChannel.w_stringZ(m_currentSessionGuid);
@@ -135,6 +135,7 @@ void ibDebuggerClient::StepInto()
 
 void ibDebuggerClient::StepOut()
 {
+	std::lock_guard<std::recursive_mutex> lock(m_connectionsMutex);
 	ibWriterMemory commandChannel;
 	commandChannel.w_u16(CommandId_StepOut);
 	commandChannel.w_stringZ(m_currentSessionGuid);
@@ -143,6 +144,7 @@ void ibDebuggerClient::StepOut()
 
 void ibDebuggerClient::Pause()
 {
+	std::lock_guard<std::recursive_mutex> lock(m_connectionsMutex);
 	ibWriterMemory commandChannel;
 	commandChannel.w_u16(CommandId_Pause);
 	commandChannel.w_stringZ(m_currentSessionGuid);
@@ -153,6 +155,7 @@ std::map<wxString, std::map<unsigned int, wxString>> ibDebuggerClient::GetBreakp
 {
 	std::map<wxString, std::map<unsigned int, wxString>> out;
 
+	std::lock_guard<std::recursive_mutex> lock(m_breakpointsMutex);
 	for (const auto& module : m_listBreakpoint) {
 
 		std::map<unsigned int, wxString>& lines = out[module.first];
@@ -176,6 +179,7 @@ std::map<wxString, std::map<unsigned int, wxString>> ibDebuggerClient::GetBreakp
 
 void ibDebuggerClient::Stop(bool kill)
 {
+	std::lock_guard<std::recursive_mutex> lock(m_connectionsMutex);
 	for (auto connection : m_listConnection) {
 		connection->DetachConnection(kill);
 	}
@@ -183,6 +187,7 @@ void ibDebuggerClient::Stop(bool kill)
 
 void ibDebuggerClient::InitializeModule(const wxString& strModuleName, unsigned int line_count)
 {
+	std::lock_guard<std::recursive_mutex> lock(m_breakpointsMutex);
 	m_listOffsetBreakpoint[strModuleName].clear();
 	for (unsigned int i = 0; i < line_count; i++)
 		m_listOffsetBreakpoint[strModuleName].emplace(i, 0);
@@ -194,26 +199,22 @@ void ibDebuggerClient::PatchModule(const wxString& strModuleName, unsigned int l
 {
 	// Two maps shift the same way for this edit, differing only in collision handling:
 	// breakpoints collapse onto one line; the dense committed<->editor offset map keeps all lines.
+	std::lock_guard<std::recursive_mutex> lock(m_breakpointsMutex);
 	if (auto* breakpoints = FindModuleLines(m_listBreakpoint, strModuleName))
 		ShiftLineMap(*breakpoints, line, line_offset, atLineStart, /*collapseCollisions*/ true);
 
 	if (auto* offsets = FindModuleLines(m_listOffsetBreakpoint, strModuleName))
 		ShiftLineMap(*offsets, line, line_offset, atLineStart, /*collapseCollisions*/ false);
 
-	// Patch notification to the server — kept as-is (server-side handling lives there).
-	ibWriterMemory commandChannel;
-
-	commandChannel.w_u16(line_offset > 0 ? CommandId_PatchInsertLine : CommandId_PatchDeleteLine);
-	commandChannel.w_stringZ(strModuleName);
-	commandChannel.w_u32(line);
-	commandChannel.w_s32(line_offset);
-
-	SendCommand(commandChannel.pointer(), commandChannel.size());
+	// …and nothing to the runtime: it counts the committed lines (CommandId_ToggleBreakpoint), and the edits since are
+	// the editor's to count (Max, 2026-10-21: *"the designer keeps the patches, so as not to clutter the runtime"*).
 }
 
 bool ibDebuggerClient::SaveModule(const wxString& strModuleName, unsigned int line_count)
 {
-	//initialize breakpoint 
+	std::lock_guard<std::recursive_mutex> lock(m_breakpointsMutex);
+
+	//initialize breakpoint
 	auto breakpoint_iterator = std::find_if(m_listBreakpoint.begin(), m_listBreakpoint.end(),
 		[&strModuleName](const auto& pair) { return stringUtils::CompareString(pair.first, strModuleName); });
 
@@ -238,17 +239,12 @@ bool ibDebuggerClient::SaveModule(const wxString& strModuleName, unsigned int li
 
 	InitializeModule(module_offset_iterator != m_listOffsetBreakpoint.end() ? module_offset_iterator->first : strModuleName,
 		line_count);
-
-	ibWriterMemory commandChannel;
-	commandChannel.w_u16(CommandId_PatchComplete);
-	commandChannel.w_stringZ(strModuleName);
-
-	SendCommand(commandChannel.pointer(), commandChannel.size());
 	return true;
 }
 
 void ibDebuggerClient::RemoveModule(const wxString& strModuleName)
 {
+	std::lock_guard<std::recursive_mutex> lock(m_breakpointsMutex);
 	auto breakpoint_iterator = std::find_if(m_listBreakpoint.begin(), m_listBreakpoint.end(),
 		[&strModuleName](const auto& pair) { return stringUtils::CompareString(pair.first, strModuleName); });
 	if (breakpoint_iterator != m_listBreakpoint.end())
@@ -262,7 +258,9 @@ void ibDebuggerClient::RemoveModule(const wxString& strModuleName)
 
 bool ibDebuggerClient::SaveAllBreakpoints()
 {
-	//initialize breakpoint 
+	std::lock_guard<std::recursive_mutex> lock(m_breakpointsMutex);
+
+	//initialize breakpoint
 	for (auto breakpoint_iterator = m_listBreakpoint.begin(); breakpoint_iterator != m_listBreakpoint.end(); breakpoint_iterator++) {
 		std::map<unsigned int, ibBreakpoint>& list_breakpoint = breakpoint_iterator->second, moduleBreakpointsNew;
 		for (auto it = list_breakpoint.begin(); it != list_breakpoint.end(); it++) {
@@ -283,14 +281,6 @@ bool ibDebuggerClient::SaveAllBreakpoints()
 		else {
 			InitializeModule(module_offset_iterator->first, 1);
 		}
-	}
-
-	for (auto breakpoint_iterator = m_listBreakpoint.begin();
-		breakpoint_iterator != m_listBreakpoint.end(); breakpoint_iterator++) {
-		ibWriterMemory commandChannel;
-		commandChannel.w_u16(CommandId_PatchComplete);
-		commandChannel.w_stringZ(breakpoint_iterator->first);
-		SendCommand(commandChannel.pointer(), commandChannel.size());
 	}
 
 	return true;
@@ -324,6 +314,7 @@ std::map<unsigned int, int>::iterator ibDebuggerClient::ResolveOriginalLine(
 bool ibDebuggerClient::ToggleBreakpoint(const wxString& strModuleName, unsigned int line,
 	wxString* refusal, const wxString& condition)
 {
+	std::lock_guard<std::recursive_mutex> lock(m_breakpointsMutex);
 	std::map<unsigned int, int>& list_module_offset = m_listOffsetBreakpoint[strModuleName];
 	std::map<unsigned int, int>::iterator itOffset = ResolveOriginalLine(list_module_offset, line);
 	if (itOffset == list_module_offset.end() || line != (itOffset->first + itOffset->second)) {
@@ -375,6 +366,7 @@ bool ibDebuggerClient::ToggleBreakpoint(const wxString& strModuleName, unsigned 
 
 bool ibDebuggerClient::RemoveBreakpoint(const wxString& strModuleName, unsigned int line)
 {
+	std::lock_guard<std::recursive_mutex> lock(m_breakpointsMutex);
 	std::map<unsigned int, int>& list_module_offset = m_listOffsetBreakpoint[strModuleName];
 	std::map<unsigned int, int>::iterator itOffset = ResolveOriginalLine(list_module_offset, line);
 	if (itOffset == list_module_offset.end())
@@ -414,7 +406,10 @@ bool ibDebuggerClient::RemoveAllBreakpoint(wxString* refusal)
 	SendCommand(commandChannel.pointer(), commandChannel.size());
 
 	if (RemoveAllBreakpointInDB()) {
-		m_listBreakpoint.clear();
+		{
+			std::lock_guard<std::recursive_mutex> lock(m_breakpointsMutex);
+			m_listBreakpoint.clear();
+		}
 		if (auto* frame = ibSession::CurrentFrame())
 			frame->RefreshFrame();
 		return true;
@@ -441,23 +436,27 @@ void ibDebuggerClient::AddExpression(const wxString& strExpression, unsigned int
 	ibWriterMemory commandChannel;
 
 	commandChannel.w_u16(CommandId_AddExpression);
-	// ⭐⭐ WHICH STOP THIS IS ABOUT — the session that parked, as the loop-entry packet named it and this
-	// end has kept it since. Every step already says it (Continue / StepInto / …); an evaluation is a
-	// question about the same stop and has to say it too, or the far end works the answer out in whichever
-	// session happens to be first in its queue. See ParkedSession in debugServer.cpp.
-	commandChannel.w_stringZ(m_currentSessionGuid);
-	// WHO ASKED — written here, echoed back with the answer, read by nobody in between.
-	commandChannel.w_stringZ(asker);
-	commandChannel.w_stringZ(strExpression);
+	{
+		std::lock_guard<std::recursive_mutex> lock(m_connectionsMutex);
+		// ⭐⭐ WHICH STOP THIS IS ABOUT — the session that parked, as the loop-entry packet named it and this
+		// end has kept it since. Every step already says it (Continue / StepInto / …); an evaluation is a
+		// question about the same stop and has to say it too, or the far end works the answer out in whichever
+		// session happens to be first in its queue. See ParkedSession in debugServer.cpp.
+		commandChannel.w_stringZ(m_currentSessionGuid);
+		// WHO ASKED — written here, echoed back with the answer, read by nobody in between.
+		commandChannel.w_stringZ(asker);
+		commandChannel.w_stringZ(strExpression);
 #if _USE_64_BIT_POINT_IN_DEBUGGER == 1
-	commandChannel.w_u64(id);
-#else 
-	commandChannel.w_u32(id);
-#endif 
+		commandChannel.w_u64(id);
+#else
+		commandChannel.w_u32(id);
+#endif
 
-	SendCommand(commandChannel.pointer(), commandChannel.size());
+		SendCommand(commandChannel.pointer(), commandChannel.size());
+	}
 
 	//set expression in map
+	std::lock_guard<std::recursive_mutex> lock(m_breakpointsMutex);
 	m_listExpression.insert_or_assign(id, ibWatchedExpression{ asker, strExpression });
 }
 
@@ -467,6 +466,7 @@ void ibDebuggerClient::ExpandExpression(const wxString& strExpression, unsigned 
 void ibDebuggerClient::ExpandExpression(const wxString& strExpression, unsigned int id, const wxString& asker)
 #endif
 {
+	std::lock_guard<std::recursive_mutex> lock(m_connectionsMutex);
 	ibWriterMemory commandChannel;
 
 	commandChannel.w_u16(CommandId_ExpandExpression);
@@ -500,12 +500,14 @@ void ibDebuggerClient::RemoveExpression(unsigned int id)
 	SendCommand(commandChannel.pointer(), commandChannel.size());
 
 	//delete expression from map
+	std::lock_guard<std::recursive_mutex> lock(m_breakpointsMutex);
 	m_listExpression.erase(id);
 }
 
 void ibDebuggerClient::SetLevelStack(unsigned int level)
 {
 	if (ibDebuggerClient::IsEnterLoop()) {
+		std::lock_guard<std::recursive_mutex> lock(m_connectionsMutex);
 		ibWriterMemory commandChannel;
 		commandChannel.w_u16(CommandId_SetStack);
 		commandChannel.w_stringZ(m_currentSessionGuid);   // which stop — see AddExpression
@@ -517,6 +519,7 @@ void ibDebuggerClient::SetLevelStack(unsigned int level)
 void ibDebuggerClient::EvaluateToolTip(const wxString& strFileName, const wxString& strModuleName, const wxString& strExpression)
 {
 	if (ibDebuggerClient::IsEnterLoop()) {
+		std::lock_guard<std::recursive_mutex> lock(m_connectionsMutex);
 		ibWriterMemory commandChannel;
 		commandChannel.w_u16(CommandId_EvalToolTip);
 		commandChannel.w_stringZ(m_currentSessionGuid);   // which stop — see AddExpression
@@ -535,6 +538,7 @@ void ibDebuggerClient::EvaluateToolTip(const wxString& strFileName, const wxStri
 void ibDebuggerClient::RunSandbox(const wxString& code)
 {
 	if (ibDebuggerClient::IsEnterLoop()) {
+		std::lock_guard<std::recursive_mutex> lock(m_connectionsMutex);
 		ibWriterMemory commandChannel;
 		commandChannel.w_u16(CommandId_RunSandbox);
 		commandChannel.w_stringZ(m_currentSessionGuid);   // which stop — see AddExpression
@@ -606,6 +610,7 @@ void ibDebuggerClient::RequestCompose(const wxMemoryBuffer& request)
 void ibDebuggerClient::EvaluateAutocomplete(const wxString& strFileName, const wxString& strModuleName, const wxString& strExpression, const wxString& keyWord, int currline)
 {
 	if (ibDebuggerClient::IsEnterLoop()) {
+		std::lock_guard<std::recursive_mutex> lock(m_connectionsMutex);
 		ibWriterMemory commandChannel;
 		commandChannel.w_u16(CommandId_EvalAutocomplete);
 		commandChannel.w_stringZ(m_currentSessionGuid);   // which stop — see AddExpression
@@ -621,6 +626,7 @@ void ibDebuggerClient::EvaluateAutocomplete(const wxString& strFileName, const w
 std::map<unsigned int, wxString> ibDebuggerClient::GetDebugList(const wxString& strModuleName)
 {
 	std::map<unsigned int, wxString> listBreakpoint;
+	std::lock_guard<std::recursive_mutex> lock(m_breakpointsMutex);
 	if (auto* breakpoints = FindModuleLines(m_listBreakpoint, strModuleName))
 		for (const auto& breakpoint : *breakpoints)
 			listBreakpoint[breakpoint.first + breakpoint.second.m_offset] = breakpoint.second.m_condition;
@@ -629,9 +635,53 @@ std::map<unsigned int, wxString> ibDebuggerClient::GetDebugList(const wxString& 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-enum ibSocketType {
-	wxID_SOCKET_CLIENT = 1
-};
+ibDebuggerClient::ibDebuggerClientConnection::~ibDebuggerClientConnection()
+{
+	// The socket first: it goes by the client's I/O thread, which outlives no connection still in the list.
+	CloseConnection();
+
+	if (debugClient != nullptr)
+		debugClient->DeleteConnection(this);
+}
+
+bool ibDebuggerClient::ibDebuggerClientConnection::IsConnected() const
+{
+	std::lock_guard<std::mutex> lock(m_socketMutex);
+	return m_socketClient != nullptr && !m_commandQueue->IsStopped();
+}
+
+std::shared_ptr<ibDebugCommandQueue> ibDebuggerClient::ibDebuggerClientConnection::OpenConnection()
+{
+	const std::shared_ptr<ibDebugCommandQueue> commandQueue = std::make_shared<ibDebugCommandQueue>();
+	// The runtime speaks binary (debugServer.cpp); a text message is nobody's command.
+	const std::shared_ptr<ibWebSocketClient> socketClient = std::make_shared<ibWebSocketClient>(ms_debugClient->m_ioThreads.GetContext(), nullptr,
+		nullptr,
+		[commandQueue](std::string payload) {
+			commandQueue->Push(std::move(payload));
+		},
+		[commandQueue](const std::string& reason) {
+			commandQueue->Stop(reason);
+		});
+	{
+		std::lock_guard<std::mutex> lock(m_socketMutex);
+		m_socketClient = socketClient;
+		m_commandQueue = commandQueue;
+	}
+	socketClient->Open(std::string(m_hostName.utf8_str()), m_port, "/debugger");
+	return commandQueue;
+}
+
+void ibDebuggerClient::ibDebuggerClientConnection::CloseConnection()
+{
+	std::shared_ptr<ibWebSocketClient> socketClient;
+	{
+		std::lock_guard<std::mutex> lock(m_socketMutex);
+		socketClient.swap(m_socketClient);
+		m_commandQueue.reset();
+	}
+	if (socketClient != nullptr)
+		socketClient->Close();
+}
 
 void ibDebuggerClient::ibDebuggerClientConnection::AttachConnection()
 {
@@ -644,7 +694,7 @@ void ibDebuggerClient::ibDebuggerClientConnection::AttachConnection()
 		SendCommand(commandChannel.pointer(), commandChannel.size());
 
 		// Send the start event message to the UI.
-		ms_debugClient->CallAfter(&ibDebuggerClient::ibDebuggerClientAdapter::OnSessionStart, m_socketClient);
+		ms_debugClient->CallAfter(&ibDebuggerClient::ibDebuggerClientAdapter::OnSessionStart);
 	}
 }
 
@@ -666,13 +716,14 @@ void ibDebuggerClient::ibDebuggerClientConnection::DetachConnection(bool kill)
 		commandChannel.w_u16(kill ? CommandId_Destroy : CommandId_Detach);
 		SendCommand(commandChannel.pointer(), commandChannel.size());
 
-		// From the caller's thread, while the connection's own thread may be closing it too.
-		m_socketLock.Close(m_socketClient);
+		// From the caller's thread, while the connection's own thread may be closing it too — the command above
+		// goes out before the socket does.
+		CloseConnection();
 
 		m_verifiedConnection = false;
 
 		// Told last, once this connection no longer counts as one - see the bottom of EntryClient.
-		ms_debugClient->CallAfter(&ibDebuggerClient::ibDebuggerClientAdapter::OnSessionEnd, m_socketClient);
+		ms_debugClient->CallAfter(&ibDebuggerClient::ibDebuggerClientAdapter::OnSessionEnd);
 	}
 }
 
@@ -700,7 +751,7 @@ void ibDebuggerClient::ibDebuggerClientConnection::OnKill()
 			wxT("debug client: the connection thread was killed while debugging"));
 
 		// Send the exit event message to the UI.
-		ms_debugClient->CallAfter(&ibDebuggerClient::ibDebuggerClientAdapter::OnSessionEnd, m_socketClient);
+		ms_debugClient->CallAfter(&ibDebuggerClient::ibDebuggerClientAdapter::OnSessionEnd);
 
 		// Delete connection 
 		ms_debugClient->DeleteConnection(this);
@@ -708,76 +759,57 @@ void ibDebuggerClient::ibDebuggerClientConnection::OnKill()
 
 	m_number_connection_attempts = -1;
 
-	m_socketLock.Destroy(m_socketClient);
+	CloseConnection();
 }
 
 void ibDebuggerClient::ibDebuggerClientConnection::EntryClient()
 {
-	m_socketLock.Destroy(m_socketClient);
-
-	wxIPV4address addr;
-	addr.Hostname(m_hostName);
-	addr.Service(m_port);
-
-	// set the appropriate flags for the socket
-	m_socketLock.Assign(m_socketClient, new wxSocketClient(wxSOCKET_BLOCK | wxSOCKET_WAITALL));
-
 	// step wait connect  
 	m_number_connection_attempts = 0;
 
 	while (!TestDestroy()) {
 
-		if (m_number_connection_attempts > numberOfConnectionAttempts) {
+		if (ms_debugClient == nullptr || m_number_connection_attempts > ms_debugClient->m_numberOfConnectionAttempts) {
 			m_number_connection_attempts = -1;
 			break;
 		}
 
-		bool connected = m_socketClient->Connect(addr, false);
-		if (!connected && m_socketClient->Wait())
-			connected = m_socketClient->IsConnected();
+		// A socket for each try, and its queue with it.
+		const std::shared_ptr<ibDebugCommandQueue> commandQueue = OpenConnection();
 
+		///////////////////////////////////////////////////////////////////////
+		ibWriterMemory commandChannel;
+		commandChannel.w_u16(CommandId_VerifyConnection);
+		SendCommand(commandChannel.pointer(), commandChannel.size());
+		///////////////////////////////////////////////////////////////////////
+
+		// CONNECTED IS ANSWERED, not dialled: the runtime answers the verification on a socket it took, and a port
+		// with no runtime behind it, or with one another designer is on (debugServer.cpp, AcceptConnection), lets
+		// the socket go having said nothing.
+		bool connected = false;
 		bool sessionEnded = false;   // said to the UI at the bottom of this pass, see there
 
-		if (!TestDestroy() && connected) {
+		std::string command;
 
-			// disable Nagle — debugger protocol is bursty with tiny packets (step, eval, locals)
-			int flag = 1;
-			m_socketClient->SetOption(IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(flag));
-			// keepalive — detect a crashed/killed server within seconds instead of hours
-			m_socketClient->SetOption(SOL_SOCKET, SO_KEEPALIVE, &flag, sizeof(flag));
-
-			///////////////////////////////////////////////////////////////////////
-			ibWriterMemory commandChannel;
-			commandChannel.w_u16(CommandId_VerifyConnection);
-			SendCommand(commandChannel.pointer(), commandChannel.size());
-			///////////////////////////////////////////////////////////////////////
-
-			unsigned int length = 0;
-
-			while (ibDebuggerClientConnection::IsConnected()) {
-
-				if (m_verifiedConnection) break;
-
-				if (m_socketClient && m_socketClient->WaitForRead(waitVerifyDebuggerTimeout)) {
-					m_socketClient->ReadMsg(&length, sizeof(unsigned int));
-					if (m_socketClient && m_socketClient->WaitForRead()) {
-						wxMemoryBuffer bufferData(length);
-						m_socketClient->ReadMsg(bufferData.GetData(), length);
-						if (length > 0) {
+		while (!m_verifiedConnection && !TestDestroy()) {
+			if (commandQueue->Pop(command, waitDebuggerTimeout)) {
+				connected = true;
+				if (!command.empty()) {
+					const unsigned int length = static_cast<unsigned int>(command.size());
 #if _USE_NET_COMPRESSOR == 1
-							BYTE* dest = nullptr; unsigned int dest_sz = 0;
-							_decompressLZ(&dest, &dest_sz, bufferData.GetData(), bufferData.GetBufSize());
-							RecvCommand(dest, dest_sz); free(dest);
+					BYTE* dest = nullptr; unsigned int dest_sz = 0;
+					_decompressLZ(&dest, &dest_sz, command.data(), length);
+					RecvCommand(dest, dest_sz); free(dest);
 #else
-							RecvCommand(bufferData.GetData(), bufferData.GetBufSize());
-#endif 
-							length = 0;
-						}
-					}
+					RecvCommand(command.data(), length);
+#endif
 				}
-
-				if (TestDestroy()) break;
 			}
+			else if (commandQueue->IsStopped())
+				break;
+		}
+
+		if (!TestDestroy() && connected) {
 
 			if (m_verifiedConnection && m_connectionType == ConnectionType::ConnectionType_Debugger) {
 				ibWriterMemory startSessionChannel;
@@ -788,10 +820,11 @@ void ibDebuggerClient::ibDebuggerClientConnection::EntryClient()
 			if (m_verifiedConnection) {
 
 				ms_debugClient->m_connectionSuccess = true;
+				ms_debugClient->m_numberOfConnectionAttempts = numberOfConnectionAttempts;
 
 				if (m_connectionType == ConnectionType::ConnectionType_Debugger) {
 					// Send the start event message to the UI.
-					ms_debugClient->CallAfter(&ibDebuggerClient::ibDebuggerClientAdapter::OnSessionStart, m_socketClient);
+					ms_debugClient->CallAfter(&ibDebuggerClient::ibDebuggerClientAdapter::OnSessionStart);
 				}
 
 				// 🔎 WHY THE SESSION ENDED — the word this loop leaves by, printed once below.
@@ -802,62 +835,12 @@ void ibDebuggerClient::ibDebuggerClientConnection::EntryClient()
 				// one question a log could answer and did not (Max, 2026-09-25: *"the connection is not
 				// being killed — it detaches by itself"*), so the answer travels in a word and is
 				// reported with the state the doors are judged on.
-				const wxChar* leftBy = wxT("the loop's own condition - IsConnected() answered no");
+				const wxChar* leftBy = wxT("the socket closing - by this end (DetachConnection) or the far one");
 
-				while (ibDebuggerClientConnection::IsConnected()) {
+				for (;;) {
 
-					if (m_socketClient != nullptr && m_socketClient->WaitForRead(0, waitDebuggerTimeout)) {
-						wxMemoryBuffer bufferData;
-						{
-							// 🛑⭐⭐ ONE THREAD AT A TIME MAY USE THIS SOCKET — and this end had nothing of
-							// the kind, while the far end had half of it (debugServer.h, m_socketMutex).
-							// wxSocketBase keeps its blocking FLAGS on the object: a read raises WAITALL
-							// for the length of its read and a write does the same for its write, each
-							// restoring what it found. Overlap them — the window's thread sending a step
-							// while this thread reads the answer to the last one — and one restores the
-							// other's flags mid-frame, so a read obliged to wait for every byte comes back
-							// SHORT, on a socket that is connected, healthy and not closed.
-							//
-							// The wait stays outside the lock: a reader must not hold the socket while
-							// nothing is arriving. Inside is one whole frame, and the dispatch below stays
-							// outside — it answers, and answering takes this same lock.
-							std::lock_guard<std::mutex> lk(m_socketMutex);
-
-							m_socketClient->ReadMsg(&length, sizeof(unsigned int));
-							// short read on the length header — treat as disconnect
-							if (m_socketClient->LastCount() != sizeof(unsigned int)) {
-								leftBy = wxT("a short read on the length header");
-								break;
-							}
-							// guard against hostile/garbled server sending an absurd size
-							static const unsigned int kMaxDebugPacket = 16u * 1024u * 1024u;
-							if (length > kMaxDebugPacket) {
-								leftBy = wxT("a declared frame size past the 16 MiB ceiling");
-								break;
-							}
-							if (m_socketClient == nullptr) {
-								leftBy = wxT("the socket was taken out of its slot by another thread");
-								break;
-							}
-							// No second WaitForRead before the payload —
-							// the socket was created with wxSOCKET_BLOCK |
-							// wxSOCKET_WAITALL so ReadMsg blocks until
-							// every requested byte arrives. The previous
-							// WaitForRead(0, 50ms) gate timed out under
-							// network jitter / multi-tab debug traffic
-							// and skipped the payload while the length
-							// had already been consumed; the next outer
-							// iteration read the payload's first bytes
-							// as a fresh length header (huge value),
-							// tripped the kMaxDebugPacket guard, and
-							// detached. Symmetric fix to the server side.
-							bufferData.SetBufSize(length);
-							m_socketClient->ReadMsg(bufferData.GetData(), length);
-							if (m_socketClient->LastCount() != length) {
-								leftBy = wxT("a short read on the payload");
-								break;
-							}
-						}
+					if (commandQueue->Pop(command, waitDebuggerTimeout)) {
+						const unsigned int length = static_cast<unsigned int>(command.size());
 						if (m_connectionType == ConnectionType::ConnectionType_Debugger && length > 0) {
 							// 🛑 A FRAME THIS END CANNOT READ ENDS THE CONNECTION, NOT THE PROCESS. The reader
 							// refuses a chunk whose declared size is larger than what arrived (fileSystem/fs.cpp),
@@ -867,15 +850,14 @@ void ibDebuggerClient::ibDebuggerClientConnection::EntryClient()
 							// second later, from a thread whose entire record was those two lines.
 							//
 							// What a bad frame means is that this end and the far end no longer agree about the
-							// wire, and the only honest thing left is to stop reading it. The loop above already
-							// treats a short read that way (`LastCount() != length`).
+							// wire, and the only honest thing left is to stop reading it.
 							try {
 #if _USE_NET_COMPRESSOR == 1
 								BYTE* dest = nullptr; unsigned int dest_sz = 0;
-								_decompressLZ(&dest, &dest_sz, bufferData.GetData(), length);
+								_decompressLZ(&dest, &dest_sz, command.data(), length);
 								RecvCommand(dest, dest_sz); free(dest);
 #else
-								RecvCommand(bufferData.GetData(), length);
+								RecvCommand(command.data(), length);
 #endif
 							}
 							catch (const ibCoreException& err) {
@@ -885,8 +867,12 @@ void ibDebuggerClient::ibDebuggerClientConnection::EntryClient()
 								leftBy = wxT("a frame this end could not read");
 								break;
 							}
-							length = 0;
 						}
+					}
+					else if (commandQueue->IsStopped()) {
+						if (!commandQueue->GetReason().empty())
+							leftBy = wxT("the socket dropping");
+						break;
 					}
 
 					if (TestDestroy()) {
@@ -895,37 +881,25 @@ void ibDebuggerClient::ibDebuggerClientConnection::EntryClient()
 					}
 				}
 
-				// 🔎 THE ONE LINE THAT NAMES THE DOOR. The state comes with it because that is what the
-				// doors are judged on and what tells a connection that DIED from one this end walked away
-				// from: `closed` is the far end having gone, and connected=1 ok=1 closed=0 with a reason of
-				// "the loop's own condition" means the socket was alive and something else in IsConnected()
-				// said otherwise. Read it against the enterprise journal's own line for the same moment —
-				// whichever end printed first is the end that ended the session.
-				ibJournalIf {
-					const auto hold = m_socketLock.Hold();
-					const wxSocketClient* sock = m_socketClient;
-					ibJournalInfo(wxT("debugger"),
-						wxT("debug client: the read loop gave up on %s - socket %s, connected=%d, ok=%d, closed=%d, lastError=%d, lastCount=%u, type=%d"),
-						leftBy,
-						sock != nullptr ? wxT("held") : wxT("gone"),
-						sock != nullptr ? static_cast<int>(sock->IsConnected()) : -1,
-						sock != nullptr ? static_cast<int>(sock->IsOk()) : -1,
-						sock != nullptr ? static_cast<int>(sock->IsClosed()) : -1,
-						sock != nullptr ? static_cast<int>(sock->LastError()) : -1,
-						sock != nullptr ? static_cast<unsigned int>(sock->LastCount()) : 0u,
-						static_cast<int>(m_connectionType));
-				}
+				// 🔎 THE ONE LINE THAT NAMES THE DOOR — with why the socket went, when it did not simply close: a
+				// connection that DIED says so here. Read it against the enterprise journal's own line for the same
+				// moment — whichever end printed first is the end that ended the session.
+				const std::string reason = commandQueue->GetReason();
+				ibJournalInfo(wxT("debugger"),
+					wxT("debug client: the read loop gave up on %s - %s, type=%d"),
+					leftBy, reason.empty() ? wxString(wxT("no fault")) : wxString::FromUTF8(reason),
+					static_cast<int>(m_connectionType));
 
 				if (ms_debugClient != nullptr && m_connectionType == ConnectionType::ConnectionType_Debugger)
 					sessionEnded = true;
 			}
 
-			// The far end has gone (or this thread was told to stop) — and DetachConnection may be closing
-			// the same socket right now, from another thread.
-			m_socketLock.Close(m_socketClient);
-
 			m_number_connection_attempts = 0;
 		}
+
+		// The far end has gone (or this thread was told to stop) — and DetachConnection may be closing
+		// the same socket right now, from another thread.
+		CloseConnection();
 
 		if (!connected) m_number_connection_attempts++;
 
@@ -939,12 +913,12 @@ void ibDebuggerClient::ibDebuggerClientConnection::EntryClient()
 		// HasConnections while this one still answered "connected" and left the Debug menu lit with
 		// nothing attached (2026-09-11).
 		if (sessionEnded && ms_debugClient != nullptr)
-			ms_debugClient->CallAfter(&ibDebuggerClient::ibDebuggerClientAdapter::OnSessionEnd, m_socketClient);
+			ms_debugClient->CallAfter(&ibDebuggerClient::ibDebuggerClientAdapter::OnSessionEnd);
 	}
 
 	m_number_connection_attempts = -1;
 
-	m_socketLock.Destroy(m_socketClient);
+	CloseConnection();
 }
 
 void ibDebuggerClient::ibDebuggerClientConnection::RecvCommand(void* pointer, unsigned int length)
@@ -1003,6 +977,7 @@ void ibDebuggerClient::ibDebuggerClientConnection::RecvCommand(void* pointer, un
 		// first. 🛑 The name was left out here, so the runtime read the expression's text as the asker
 		// and the id's bytes as the expression, then asked for an id past the end of the frame: an
 		// exception on its connection thread, which is the thread the whole debug session lives on.
+		std::lock_guard<std::recursive_mutex> lock(ms_debugClient->m_breakpointsMutex);
 		for (const auto& watched : ms_debugClient->m_listExpression) {
 			ibWriterMemory commandChannel;
 			commandChannel.w_u16(CommandId_AddExpression);
@@ -1039,9 +1014,6 @@ void ibDebuggerClient::ibDebuggerClientConnection::RecvCommand(void* pointer, un
 	}
 	else if (commandFromServer == CommandId_EnterLoop) {
 
-		ms_debugClient->m_enterLoop = true;
-		ms_debugClient->m_activeSocket = this;
-
 		// New first field: sessionGuid (which session in wenterprise-server
 		// hit the breakpoint). On desktop enterprise.exe this is the main
 		// session's guid; on wes one of the per-tab WebClient sessions.
@@ -1055,16 +1027,26 @@ void ibDebuggerClient::ibDebuggerClientConnection::RecvCommand(void* pointer, un
 		data.m_moduleName = strModuleName;
 		data.m_line = ms_debugClient->GetLineOffset(strModuleName, commandReader.r_s32());
 
-		ms_debugClient->m_currentSessionGuid = sessionGuid;
+		// THE STOP PARKED — on this connection, in that session, under the lock the list is under; the listeners are
+		// told with it let go.
+		{
+			std::lock_guard<std::recursive_mutex> lock(ms_debugClient->m_connectionsMutex);
+			ms_debugClient->m_activeSocket = this;
+			ms_debugClient->m_currentSessionGuid = sessionGuid;
+		}
+		ms_debugClient->m_enterLoop = true;
 
 		ms_debugClient->CallAfter(
-			&ibDebuggerClient::ibDebuggerClientAdapter::OnEnterLoop, m_socketClient, data
+			&ibDebuggerClient::ibDebuggerClientAdapter::OnEnterLoop, data
 		);
 	}
 	else if (commandFromServer == CommandId_LeaveLoop) {
 
 		ms_debugClient->m_enterLoop = false;
-		ms_debugClient->m_activeSocket = nullptr;
+		{
+			std::lock_guard<std::recursive_mutex> lock(ms_debugClient->m_connectionsMutex);
+			ms_debugClient->m_activeSocket = nullptr;
+		}
 
 		wxString sessionGuid;          commandReader.r_stringZ(sessionGuid);
 		const wxString& strFileName    = commandReader.r_stringZ();
@@ -1078,7 +1060,7 @@ void ibDebuggerClient::ibDebuggerClientConnection::RecvCommand(void* pointer, un
 		data.m_line = ms_debugClient->GetLineOffset(strModuleName, commandReader.r_s32());
 
 		ms_debugClient->CallAfter(
-			&ibDebuggerClient::ibDebuggerClientAdapter::OnLeaveLoop, m_socketClient, data
+			&ibDebuggerClient::ibDebuggerClientAdapter::OnLeaveLoop, data
 		);
 	}
 	else if (commandFromServer == CommandId_EvalToolTip) {
@@ -1280,7 +1262,7 @@ void ibDebuggerClient::ibDebuggerClientConnection::RecvCommand(void* pointer, un
 			const wxString& strModuleName = commandReader.r_stringZ();
 			const wxString& strFullName = commandReader.r_stringZ();
 			stackData.AppendStack(
-				strFullName,
+				strModuleName, strFullName,
 				ms_debugClient->GetLineOffset(strModuleName, commandReader.r_u32())
 			);
 		}
@@ -1335,48 +1317,33 @@ void ibDebuggerClient::ibDebuggerClientConnection::RecvCommand(void* pointer, un
 
 void ibDebuggerClient::ibDebuggerClientConnection::SendCommand(void* pointer, unsigned int length)
 {
-	bool sent = false;
-
-	// ⭐⭐ THE SOCKET IS USED BY ONE THREAD AT A TIME. Two calls go out here, a header and then its
-	// payload, and they must not be split — by another sender, nor by the READER on the connection's own
-	// thread. The far end has held this lock for its writes all along (debugServer.h); this end held
-	// nothing, and the window's thread sending a step while the connection's thread read the answer to
-	// the last one is what left a read short on a live socket. See the read loop in EntryClient.
+	// ⭐ A COMMAND IS ONE MESSAGE, queued whole — the window's thread and this connection's may both send, and
+	// neither splits the other's. The lock is held while it is queued, so the commands leave in the order the
+	// journal prints them.
 	std::lock_guard<std::mutex> lk(m_socketMutex);
 
+	const bool sent = m_socketClient != nullptr && !m_commandQueue->IsStopped();
+	if (sent) {
 #if _USE_NET_COMPRESSOR == 1
-	BYTE* dest = nullptr; unsigned int dest_sz = 0;
-	_compressLZ(&dest, &dest_sz, pointer, length);
-	if (m_socketClient && m_socketClient->IsOk()) {
-		m_socketClient->WriteMsg(&dest_sz, sizeof(unsigned int));
-		m_socketClient->WriteMsg(dest, dest_sz);
-		sent = true;
-	}
-	free(dest);
+		BYTE* dest = nullptr; unsigned int dest_sz = 0;
+		_compressLZ(&dest, &dest_sz, pointer, length);
+		m_socketClient->SendBinary(std::string(reinterpret_cast<const char*>(dest), dest_sz));
+		free(dest);
 #else
-	if (m_socketClient && ibDebuggerClientConnection::IsConnected()) {
-		m_socketClient->WriteMsg(&length, sizeof(unsigned int));
-		m_socketClient->WriteMsg(pointer, length);
-		sent = true;
-	}
+		m_socketClient->SendBinary(std::string(static_cast<const char*>(pointer), length));
 #endif
+	}
 
 	// 🔎 WHO WROTE, AND WHETHER IT WENT OUT — the wire as this end sees it, one line per command.
 	//
-	// Two facts are worth having and neither was recorded. WHICH THREAD — the journal's own column says
-	// that, and it is worth reading here: the pair of WriteMsg calls above is a header and then its
-	// payload, and the lock that keeps them together is young (see above). AND WHETHER IT WENT AT ALL: a
-	// command dropped because IsConnected() said no leaves the person pressing a key that does nothing —
-	// which is what "the debugger fell off" looks like from the outside, before anything is closed.
+	// WHICH THREAD — the journal's own column says that. AND WHETHER IT WENT AT ALL: a command dropped because
+	// the connection had no socket leaves the person pressing a key that does nothing — which is what "the
+	// debugger fell off" looks like from the outside, before anything is closed.
 	ibJournalIf {
 		const u16 command = length >= sizeof(u16) ? *static_cast<const u16*>(pointer) : 0;
-		const auto hold = m_socketLock.Hold();
-		const wxSocketClient* sock = m_socketClient;
 		ibJournalInfo(wxT("debugger.wire"),
-			wxT("debug client -> command %d of %u bytes %s (wrote=%u, lastError=%d)"),
+			wxT("debug client -> command %d of %u bytes %s"),
 			static_cast<int>(command), length,
-			sent ? wxT("sent") : wxT("DROPPED - the connection did not answer to being connected"),
-			sock != nullptr ? static_cast<unsigned int>(sock->LastCount()) : 0u,
-			sock != nullptr ? static_cast<int>(sock->LastError()) : -1);
+			sent ? wxT("sent") : wxT("DROPPED - the connection has no socket"));
 	}
 }

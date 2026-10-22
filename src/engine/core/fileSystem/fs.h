@@ -9,7 +9,7 @@
 #include "core/core.h"
 #include "core/fileSystem/types.h"
 
-class ibString;   // backend/fstring.h — r_stringZ(ibString&) overload
+class ibString;   // core/fstring.h — the w_stringZ / r_stringZ(ibString&) overloads
 
 //------------------------------------------------------------------------------------
 // Write
@@ -48,6 +48,8 @@ public:
 	inline void			w_stringZ(const char* p) { w(p, (u32)strlen(p) + 1); }
 	inline void			w_stringZ(const std::string& p) { w(p.c_str() ? p.c_str() : "", (u32)p.size()); w_u8(0); }
 	inline void			w_stringZ(const wxString& p) { const wxScopedCharBuffer s = p.utf8_str(); w(s.data() ? s.data() : "", (u32)s.length()); w_u8(0); }
+	void				w_stringZ(const ibString& p);
+	void				w_stringZ(const wchar_t* p);   // a wide literal — one of the two above would both take it
 
 #ifdef _MSC_VER
 	void	__cdecl  	w_printf(const char* format, ...);

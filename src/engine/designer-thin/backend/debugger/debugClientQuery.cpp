@@ -46,25 +46,23 @@ namespace {
 ///////////////////////////////////////////////////////////////////////////////////////
 
 ibDebuggerClient::ibDebuggerClient() :
-	m_activeSocket(nullptr),
-	m_adapter(new ibDebuggerClientAdapter),
-	m_enterLoop(false), m_connectionSuccess(false), m_numberOfConnectionAttempts(numberOfConnectionAttempts)
+	m_adapter(new ibDebuggerClientAdapter)
 {
 	ibDebuggerClient::CreateBreakpointDatabase();
 	ms_debugClient = this;
 
 	LoadModuleCollection();
+	Listen();
 }
 
 ibDebuggerClient::ibDebuggerClient(const ibProtocolNode& store) :
-	m_activeSocket(nullptr),
-	m_adapter(new ibDebuggerClientAdapter),
-	m_enterLoop(false), m_connectionSuccess(false), m_numberOfConnectionAttempts(numberOfConnectionAttempts)
+	m_adapter(new ibDebuggerClientAdapter)
 {
 	ibDebuggerClient::CreateBreakpointDatabase();
 	ms_debugClient = this;
 
 	LoadModuleCollection(store);
+	Listen();
 }
 
 // The table is the server's, made by its own client with the configuration (CreateBreakpointDatabase there).

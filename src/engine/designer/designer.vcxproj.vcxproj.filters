@@ -177,9 +177,7 @@
       <Filter>win\dlg</Filter>
     </ClInclude>
     <ClInclude Include="mainApp.h" />
-    <ClInclude Include="resource.h">
-      <Filter>res</Filter>
-    </ClInclude>
+    <ClInclude Include="resource.h" />
     <ClInclude Include="mainFrame\mainFrameDesigner.h">
       <Filter>mainFrame</Filter>
     </ClInclude>
@@ -296,9 +294,6 @@
     <Filter Include="mcp\tools">
       <UniqueIdentifier>{f000b85f-7517-4a4b-8f2d-962e68dd18cb}</UniqueIdentifier>
     </Filter>
-    <Filter Include="res">
-      <UniqueIdentifier>{d3f4bf29-6f86-43b3-b079-064ad3a64eb7}</UniqueIdentifier>
-    </Filter>
     <Filter Include="mainFrame">
       <UniqueIdentifier>{c4ad9574-1344-4c87-b10d-e8d80991c467}</UniqueIdentifier>
     </Filter>
@@ -370,13 +365,9 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <Image Include="designer.ico">
-      <Filter>res</Filter>
-    </Image>
+    <Image Include="designer.ico" />
   </ItemGroup>
   <ItemGroup>
-    <ResourceCompile Include="designer.rc">
-      <Filter>res</Filter>
-    </ResourceCompile>
+    <ResourceCompile Include="designer.rc" />
   </ItemGroup>
 </Project>

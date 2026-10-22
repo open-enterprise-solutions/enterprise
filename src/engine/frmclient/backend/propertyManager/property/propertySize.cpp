@@ -11,7 +11,7 @@ wxString ibPropertySize::GetValueAsString() const
 
 void ibPropertySize::SetValue(const wxString& val)
 {
-	ibProperty::ReadNodeValue(ibDataValue::String(val));
+	ibPropertySerializable::ReadNodeValue(ibDataValue::String(val));
 }
 
 ////////////////////////////////////////////////////////////////////////
