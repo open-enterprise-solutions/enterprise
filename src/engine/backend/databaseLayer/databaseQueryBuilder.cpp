@@ -1349,8 +1349,9 @@ static wxString ibTableAsReferenced(const wxString& table, const wxString& alias
 wxString ibQueryRenderer::BinOpText(ibQueryBinOp op)
 {
 	switch (op) {
-	case ibQueryBinOp::Add: return wxT("+");
-	case ibQueryBinOp::Sub: return wxT("-");
+	case ibQueryBinOp::Add:    return wxT("+");
+	case ibQueryBinOp::Concat: return wxT("||");   // string addition; see ibQueryBinOp::Concat
+	case ibQueryBinOp::Sub:    return wxT("-");
 	case ibQueryBinOp::Mul: return wxT("*");
 	case ibQueryBinOp::Div: return wxT("/");
 	case ibQueryBinOp::Mod: return wxT("%");   // NB: Firebird wants MOD() — out of MVP scope

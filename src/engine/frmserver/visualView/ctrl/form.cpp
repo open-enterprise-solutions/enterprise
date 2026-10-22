@@ -417,17 +417,12 @@ bool ibValueForm::GetPropVal(const long lPropNum, ibValue& pvarPropVal)
 		// Bound handle (Controls / DataSource) — resolve the live bind value directly. Works in the
 		// Designer (no ProcUnit) and as a runtime fallback.
 		//
-		// The bound cell is an EMBEDDED member, NOT a heap object with its own ref count: ThisForm =
-		// the form itself; Controls = m_formCollectionControl; DataSource / <attr> = &m_value of the
-		// attribute wrapper. Its ref count is 0. So take `bound` as a CONST pointer — the assignment
-		// then binds a NON-owning reference (operator=(const ibValue*) -> TYPE_CONST_REFFER). An owning
-		// ibValue* (IncrRef now, DecrRef -> delete this on destruct) would drive the member to 0 and
-		// `delete` a member pointer, corrupting the heap (crash: expanding thisForm.DataSource in the
-		// debugger watch).
-		if (const ibValue* bound = GetBoundValue(GetPropName(lPropNum))) {
-			pvarPropVal = bound;
+		// The form module compiles DataSource as a property of ThisForm, so
+		// `DataSource.B = ...` arrives here, and so does `ThisForm.DataSource`.
+		// The cell is an embedded member. Copy the reference it already holds;
+		// a read-only slot answers false instead of leaving the previous value.
+		if (GetBoundValue(GetPropName(lPropNum), pvarPropVal))
 			return true;
-		}
 	}
 	else if (lPropAlias == eProperty || lPropAlias == eEvent) {
 		// Properties + the Events container come from ibValueFrame's surface.

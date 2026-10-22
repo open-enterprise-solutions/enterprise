@@ -570,9 +570,12 @@ ibValue ibValueRecordDataObjectRef::GenerateNextIdentifier(ibValueMetaObjectAttr
 	// renderer instead of a hardcoded name check that drifts from the dialects.
 	ibDatabaseQueryBuilder q;
 
-	// Period bucket — parking value for now; per-type periodicity (catalog
-	// vs document) is a future feature.
-	const int interval = 20000101;
+	// The series. A catalog, and a document that is not periodic, stay on 20000101 — the bucket
+	// every number allocated before periodicity was a setting already lives in. A periodic document
+	// names the period of its date, and the bootstrap scan below stays inside that period: the
+	// first number of a new year must not continue the previous year's max.
+	const ibNumberSeriesKey series = NumberSeriesKey();
+	const int interval = series.m_interval;
 
 	const ibTypeDescription& typeDesc = attribute->GetTypeDesc();
 
@@ -606,6 +609,12 @@ ibValue ibValueRecordDataObjectRef::GenerateNextIdentifier(ibValueMetaObjectAttr
 		if (isString)
 			source = ibFilter(std::move(source),
 				ibBinOp(ibQueryBinOp::Like, ibCol(field), ibConst(ibValue(strPrefix + wxT("%")))));
+		if (!series.m_dateField.IsEmpty()) {
+			source = ibFilter(std::move(source),
+				ibBinOp(ibQueryBinOp::And,
+					ibBinOp(ibQueryBinOp::Ge, ibCol(series.m_dateField), ibConst(ibValue(ibDateTime(series.m_from)))),
+					ibBinOp(ibQueryBinOp::Lt, ibCol(series.m_dateField), ibConst(ibValue(ibDateTime(series.m_to))))));
+		}
 
 		ibQueryIR ir;
 		ir.m_root = ibAggregate(std::move(source),

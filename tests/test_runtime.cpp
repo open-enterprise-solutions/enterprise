@@ -13,6 +13,7 @@
 
 #include <gtest/gtest.h>
 
+#include "backend/backend_exception.h"
 #include "backend/compiler/compileCode.h"
 #include "backend/compiler/procUnit.h"
 #include "backend/compiler/byteCode.h"
@@ -21,6 +22,13 @@
 #include "backend/compiler/procUnitState.h"   // m_errorPlace — which opcode raised
 #include "backend/session/session.h"
 #include "backend/appData.h"                // the built-in dispatcher reads appData on entry
+#include "backend/system/value/valueMap.h"  // ibValueStructure, g_valueStructureCLSID
+#include "frmserver/visualView/ctrl/form.h"          // a real form, DataSource bound on it
+#include "frmserver/visualView/ctrl/formAttribute.h" // the attribute cell the bind points at
+#include "backend/backend_mainFrame.h"               // a frame so the form can be born
+#include "backend/metaCollection/metaModuleObject.h" // a form module, so the bind has somewhere to live
+#include "backend/metadataConfiguration.h"           // the module's file name is asked of its metadata
+#include "backend/moduleManager/moduleManager.h"
 #include "backend/system/value/valueDynamicList.h"
 
 #include <wx/init.h>
@@ -926,6 +934,183 @@ TEST(RuntimeTest, CallFunctionWithMultipleParams) {
 	ibValue ret, a(10), b(20), c(30);
 	pu.CallAsFunc(wxT("Add3"), ret, a, b, c);
 	EXPECT_EQ(ret.GetInteger(), 60);
+}
+
+// The arguments a caller leaves out are the declaration's defaults. Inside one
+// script that already happened at the call site; a call into the module from
+// outside used to leave the parameter Undefined.
+TEST(RuntimeTest, AnOmittedArgumentTakesTheDeclaredDefault) {
+	ibCompileCode cc(wxT("test"), wxT("memory"), false);
+	const wxString src =
+		wxT("var same public;\n")
+		wxT("var kept public;\n")
+		wxT("Function Piece(text, sep = \",\") Public\n")
+		wxT("  Return text + sep + text;\n")
+		wxT("EndFunction\n")
+		wxT("Function Flag(show = true) Public\n")
+		wxT("  If show Then\n")
+		wxT("    Return 1;\n")
+		wxT("  EndIf;\n")
+		wxT("  Return 0;\n")
+		wxT("EndFunction\n")
+		wxT("Function Offset(n, delta = 2) Public\n")
+		wxT("  Return n + delta;\n")
+		wxT("EndFunction\n")
+		wxT("Function Both(a, b = \"b\", c = \"c\") Public\n")
+		wxT("  Return b + c;\n")
+		wxT("EndFunction\n")
+		wxT("Function Need(a, b) Public\n")
+		wxT("  Return b;\n")
+		wxT("EndFunction\n")
+		wxT("Function Inner(a, b = \"same\")\n")
+		wxT("  Return b;\n")
+		wxT("EndFunction\n")
+		wxT("Procedure Stamp(name = \"rows\") Public\n")
+		wxT("  kept = name;\n")
+		wxT("EndProcedure\n")
+		wxT("same = Inner(1);\n");
+	ASSERT_TRUE(TryCompile(cc, src));
+
+	ibProcUnit pu;
+	ASSERT_TRUE(TryExecute(pu, cc.m_cByteCode));
+
+	ibValue same;
+	ASSERT_TRUE(pu.GetPropVal(wxT("same"), same));
+	EXPECT_EQ(same.GetString(), wxT("same"));
+
+	ibValue ret;
+	ibValue text(wxT("X"));
+	ASSERT_TRUE(pu.CallAsFunc(wxT("Piece"), ret, text));
+	EXPECT_EQ(ret.GetString(), wxT("X,X"));
+
+	ibValue dash(wxT("-"));
+	ASSERT_TRUE(pu.CallAsFunc(wxT("Piece"), ret, text, dash));
+	EXPECT_EQ(ret.GetString(), wxT("X-X"));
+
+	ASSERT_TRUE(pu.CallAsFunc(wxT("Flag"), ret));
+	EXPECT_EQ(ret.GetInteger(), 1);
+
+	ibValue hide(false);
+	ASSERT_TRUE(pu.CallAsFunc(wxT("Flag"), ret, hide));
+	EXPECT_EQ(ret.GetInteger(), 0);
+
+	ibValue ten(10);
+	ASSERT_TRUE(pu.CallAsFunc(wxT("Offset"), ret, ten));
+	EXPECT_EQ(ret.GetInteger(), 12);
+
+	ibValue one(wxT("a"));
+	ASSERT_TRUE(pu.CallAsFunc(wxT("Both"), ret, one));
+	EXPECT_EQ(ret.GetString(), wxT("bc"));
+
+	ibValue ex(wxT("X"));
+	ASSERT_TRUE(pu.CallAsFunc(wxT("Both"), ret, one, ex));
+	EXPECT_EQ(ret.GetString(), wxT("Xc"));
+
+	// The second parameter has no default. The call is refused, rather than
+	// answered with Undefined.
+	EXPECT_THROW(pu.CallAsFunc(wxT("Need"), ret, one), ibBackendCoreException);
+
+	ASSERT_TRUE(pu.CallAsProc(wxT("Stamp")));
+	ibValue kept;
+	ASSERT_TRUE(pu.GetPropVal(wxT("kept"), kept));
+	EXPECT_EQ(kept.GetString(), wxT("rows"));
+
+	ibValue other(wxT("other"));
+	ASSERT_TRUE(pu.CallAsProc(wxT("Stamp"), other));
+	ASSERT_TRUE(pu.GetPropVal(wxT("kept"), kept));
+	EXPECT_EQ(kept.GetString(), wxT("other"));
+}
+
+// `Lib.Piece("X")` is a call on a common module's own unit. The default belongs
+// to that module. A hole in the middle is filled there too, and a required
+// argument that was left out is refused.
+TEST_F(BuiltInRuntime, ACommonModuleUnitFillsAHoleInTheMiddle) {
+	ibSession session(wxT("mod-default"), ibSessionKind::Enterprise);
+	ibSessionScope scope(&session);
+
+	// The module is written with Procedure/EndFunction. The process default
+	// is CES, and under that those words are identifiers.
+	const short savedStyle = ibCompileCode::GetCodeStyle();
+	ibCompileCode::SetCodeStyle(CODE_VES);
+	struct StyleRestore {
+		short saved;
+		~StyleRestore() { ibCompileCode::SetCodeStyle(saved); }
+	} styleRestore{ savedStyle };
+
+	ibMetaDataConfigurationFile cfg;
+	ibValueMetaObjectConfiguration* root = cfg.GetCommonMetaObject();
+	ASSERT_NE(root, nullptr);
+	auto* mod = dynamic_cast<ibValueMetaObjectCommonModule*>(
+		cfg.CreateMetaObject(g_metaCommonModuleCLSID, root, false));
+	ASSERT_NE(mod, nullptr);
+	mod->SetModuleText(
+		wxT("Function Piece(text, sep = \",\") Public\n")
+		wxT("  Return text + sep + text;\n")
+		wxT("EndFunction\n")
+		wxT("Function Flag(show = true) Public\n")
+		wxT("  If show Then\n")
+		wxT("    Return 1;\n")
+		wxT("  EndIf;\n")
+		wxT("  Return 0;\n")
+		wxT("EndFunction\n")
+		wxT("Function Both(a, b = \"m\", c) Public\n")
+		wxT("  Return \"\" + a + b + c;\n")
+		wxT("EndFunction\n")
+		wxT("Function Need(a, b) Public\n")
+		wxT("  Return b;\n")
+		wxT("EndFunction\n"));
+
+	ibValueModuleManagerDesigner manager(&cfg, root);
+	// The common module is compiled against the configuration module, so that
+	// module has to be compiled and running before the common module's own
+	// frame will accept it.
+	ASSERT_TRUE(manager.Compile());
+	ASSERT_TRUE(manager.AddCommonModule(mod));
+	ibValueModuleManager::ibValueModuleUnit* unit = manager.FindCommonModule(mod);
+	ASSERT_NE(unit, nullptr);
+	ASSERT_TRUE(unit->Compile());
+	manager.InitializeRuntime();
+	manager.Run(false);
+	unit->InitializeRuntime();
+	unit->Run(false);
+	unit->InvalidateNames();
+
+	ibCompileCode caller(wxT("caller"), wxT("memory"), false);
+	caller.AddContextVariable(wxT("Lib"), unit, false);
+	ASSERT_TRUE(TryCompile(caller,
+		wxT("var joined public;\n")
+		wxT("var dashed public;\n")
+		wxT("var shown public;\n")
+		wxT("var holed public;\n")
+		wxT("joined = Lib.Piece(\"X\");\n")
+		wxT("dashed = Lib.Piece(\"X\", \"-\");\n")
+		wxT("shown = Lib.Flag();\n")
+		wxT("holed = Lib.Both(1, , 3);\n")));
+
+	ibProcUnit callerUnit;
+	wxString error;
+	ASSERT_TRUE(RunBound(caller, callerUnit, error)) << error.ToStdString();
+
+	ibValue joined;
+	ASSERT_TRUE(callerUnit.GetPropVal(wxT("joined"), joined));
+	EXPECT_EQ(joined.GetString(), wxT("X,X"));
+
+	ibValue dashed;
+	ASSERT_TRUE(callerUnit.GetPropVal(wxT("dashed"), dashed));
+	EXPECT_EQ(dashed.GetString(), wxT("X-X"));
+
+	ibValue shown;
+	ASSERT_TRUE(callerUnit.GetPropVal(wxT("shown"), shown));
+	EXPECT_EQ(shown.GetInteger(), 1);
+
+	ibValue holed;
+	ASSERT_TRUE(callerUnit.GetPropVal(wxT("holed"), holed));
+	EXPECT_EQ(holed.GetString(), wxT("1m3"));
+
+	ibValue ret;
+	ibValue one(1);
+	ibValue* args[] = { &one };
+	EXPECT_THROW(unit->CallAsFunc(unit->FindMethod(wxT("Need")), ret, args, 1), ibBackendCoreException);
 }
 
 TEST(RuntimeTest, RecursiveFactorial) {
@@ -3210,6 +3395,100 @@ TEST(RuntimeTest, AnArrayWalkedAndRewalkedIsLetGoOfOnce) {
 
 	// The frame goes here, with both arrays in it. That is the moment the nightly
 	// caught: passing under a sanitiser is the whole assertion.
+}
+
+// A form's DataSource is the main attribute's cell. The cell holds a reference
+// to the object. A script that writes DataSource.B must change that object,
+// and a read-only slot must not answer as if the read had succeeded.
+// GetBoundValue is the form's own read; the test reaches it through a form.
+// A form is born against the session's frame. This one only has to name a key.
+struct KeyFrame : ibBackendDocFrame {
+	explicit KeyFrame(ibSessionHolder&& holder) : ibBackendDocFrame(std::move(holder)) {}
+	void SetTitle(const wxString&) override {}
+	void SetStatusText(const wxString&, int) override {}
+	void RefreshFrame() override {}
+	void RaiseFrame() override {}
+	ibUniqueKey CreateFormUniqueKey(const ibBackendControlFrame*,
+		const ibSourceDataObject*, const ibUniqueKey& formGuid) override
+	{
+		if (formGuid.isValid())
+			return formGuid;
+		ibUniqueKey made = wxNewUniqueGuid;
+		return made;
+	}
+};
+
+struct FramedSession : ibSession {
+	using ibSession::ibSession;
+	ibBackendDocFrame* GetFrame() const override { return m_frame; }
+	void Attach(ibBackendDocFrame* frame) { m_frame = frame; }
+	ibBackendDocFrame* m_frame = nullptr;
+};
+
+struct ReadableForm : ibValueForm {
+	// A form with no module meta cannot keep a bind: EnsureCompileModule
+	// has nothing to compile against and BindExportVariable does nothing.
+	ibValueMetaObjectModule m_module{ wxT("Form") };
+	const ibValueMetaObjectModuleBase* GetMetaForCompile() const override { return &m_module; }
+	bool ReadBound(const wxString& name, ibValue& out) { return GetBoundValue(name, out); }
+};
+
+TEST_F(BuiltInRuntime, AFormScriptWritesThroughDataSource) {
+	auto session = std::make_shared<FramedSession>(wxT("form-write"), ibSessionKind::Enterprise);
+	ibSessionHolder holder(session);
+	KeyFrame frame(std::move(holder));
+	session->Attach(&frame);
+	ibSessionScope scope(session.get());
+
+	// The call holds ThisForm and releases it when the frame goes. A form on
+	// the stack would be deleted by that release. The configuration outlives
+	// that release: the compile module asks it for a file name.
+	ibMetaDataConfigurationFile cfg;
+	ReadableForm* form = new ReadableForm();
+	form->m_module.SetMetaData(&cfg);
+	// Binding ThisForm is what a live form does first. That creates the
+	// compile module, and only then can the main attribute point DataSource
+	// at its cell.
+	form->BindContextVariable(wxT("ThisForm"), form);
+
+	ibValuePtr<ibValueStructure> object(new ibValueStructure());
+	object->Insert(ibValue(wxT("A")), ibValue(3));
+	object->Insert(ibValue(wxT("B")), ibValue(0));
+
+	ibValue held;
+	held = static_cast<ibValue*>(static_cast<ibValueStructure*>(object));
+	ibFormAttributeValue* attr = form->AddAttribute(wxT("Src"), g_valueStructureCLSID, ibValue());
+	ASSERT_NE(attr, nullptr);
+	form->SetMainAttribute(attr);
+	attr->SetHeldValue(held);
+
+	ibValue stale(wxT("stale"));
+	stale.m_bReadOnly = true;
+	EXPECT_FALSE(form->ReadBound(wxT("DataSource"), stale));
+	EXPECT_EQ(stale.GetString(), wxT("stale"));
+
+	const short savedStyle = ibCompileCode::GetCodeStyle();
+	ibCompileCode::SetCodeStyle(CODE_VES);
+	struct StyleRestore {
+		short saved;
+		~StyleRestore() { ibCompileCode::SetCodeStyle(saved); }
+	} styleRestore{ savedStyle };
+
+	ibCompileCode cc(wxT("caller"), wxT("memory"), false);
+	cc.AddContextVariable(wxT("ThisForm"), form);
+	ASSERT_TRUE(TryCompile(cc,
+		wxT("Procedure Write()\n")
+		wxT("  ThisForm.DataSource.B = ThisForm.DataSource.A;\n")
+		wxT("EndProcedure\n")));
+
+	ibProcUnit pu;
+	wxString err;
+	ASSERT_TRUE(RunBound(cc, pu, err)) << err.ToStdString();
+	ASSERT_TRUE(pu.CallAsProc(wxT("Write")));
+
+	ibValue got;
+	ASSERT_TRUE(object->GetPropVal(object->FindProp(wxT("B")), got));
+	EXPECT_EQ(got.GetInteger(), 3);
 }
 
 // A list form's DataSource is a dynamic list. It already knows its source

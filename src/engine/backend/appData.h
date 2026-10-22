@@ -284,7 +284,7 @@ public:
 	// reported URL. Returns pid on spawn-ok, 0 on failure. Exposed for
 	// callers that build the cmd from external connection data (e.g.
 	// launcher picks from a saved IB list, not the appData singleton).
-	static long SpawnWebServerWithManifest(wxString cmd, bool searchDebug = false);
+	static long SpawnWebServerWithManifest(wxString cmd, const struct ibLaunchSecrets& secrets, bool searchDebug = false);
 #pragma endregion
 
 	ibRunMode GetAppMode() const { return m_runMode; }

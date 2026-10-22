@@ -70,6 +70,7 @@ add_executable(oes_tests
     test_metadataPasteIdentity.cpp
     test_propertySerialized.cpp
     test_metadataTree.cpp
+    test_numberPeriodicity.cpp
     test_commonAttribute.cpp
     test_roleComposition.cpp
     test_rolePolicyFold.cpp
@@ -79,6 +80,7 @@ add_executable(oes_tests
     test_jsonProvider.cpp
     test_valueJson.cpp
     test_queryRenderer.cpp
+    test_queryStringConcat.cpp
     test_queryLifecycle.cpp
     test_queryBuilderShowcase.cpp
     test_queryTotals.cpp
@@ -166,6 +168,7 @@ add_executable(oes_tests
     test_readerWriterMemory.cpp
     test_openAccess.cpp
     test_passwordHash.cpp
+    test_launchTicket.cpp
     test_loginName.cpp
     test_programFolder.cpp
     test_md5.cpp
@@ -193,6 +196,7 @@ add_executable(oes_tests
     test_metadataMove.cpp
     test_sectionInterfaceItems.cpp
     test_debugServer.cpp
+    test_commonModuleCheck.cpp
     test_lockRace.cpp
     test_clientListener.cpp
 )

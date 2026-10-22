@@ -222,6 +222,7 @@
       <PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <ClCompile Include="pictureRegistry.cpp" />
+    <ClCompile Include="launchTicket.cpp" />
     <ClCompile Include="programFolder.cpp" />
     <ClCompile Include="query\queryAggregates.cpp" />
     <ClCompile Include="query\queryKeywords.cpp" />
@@ -305,6 +306,7 @@
     <ClInclude Include="net\tlsStream.h" />
     <ClInclude Include="net\webSocketFrame.h" />
     <ClInclude Include="pictureRegistry.h" />
+    <ClInclude Include="launchTicket.h" />
     <ClInclude Include="programFolder.h" />
     <ClInclude Include="propertyChoiceMode.h" />
     <ClInclude Include="query\queryAggregates.h" />

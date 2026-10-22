@@ -16,9 +16,16 @@
 #include "backend/metadataConfiguration.h"
 #include "backend/metaCollection/metaSessionParameterObject.h"
 #include "backend/system/value/valueArray.h"
+#include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
 
+#include <chrono>
 #include <memory>
 #include <type_traits>
+
+#include <wx/filefn.h>
+#include <wx/filename.h>
+#include <wx/init.h>
+#include <wx/utils.h>
 
 // ---------------------------------------------------------------------------
 // Composition: ibSession owns a holder, does NOT inherit one
@@ -157,4 +164,87 @@ TEST_F(SessionParameterRead, AWriteOutsideTheSessionModuleIsRefused) {
 	catch (const ibBackendException& err) {
 		EXPECT_NE(wxNOT_FOUND, wxString(err.GetErrorDescription()).Find(wxT("session module")));
 	}
+}
+
+// The registry thread heartbeats and sweeps sys_session, and Add waits behind that thread.
+// A row another transaction still holds — an apply's open transaction, a peer's write —
+// must come back at once (noWait), not after the driver's lock wait, or the caller hears
+// "registry did not answer to Add". The heartbeat is an UPDATE; the sweep is a DELETE.
+TEST(SessionRegistry, ALockedHeartbeatAndSweepComeBackAtOnce)
+{
+	wxInitializer wxInit;
+	ASSERT_TRUE(wxInit.IsOk());
+
+	const wxString path = wxFileName::GetTempDir()
+		+ wxFileName::GetPathSeparator()
+		+ wxString::Format(wxT("oes-session-nowait-%ld.sqlite"), wxGetProcessId());
+	struct Gone {
+		wxString path;
+		std::shared_ptr<ibDatabaseLayerSQLite> holder;
+		std::shared_ptr<ibDatabaseLayerSQLite> other;
+		static void Drop(const wxString& file) {
+			if (wxFileExists(file))
+				wxRemoveFile(file);
+		}
+		~Gone() {
+			if (holder) holder->Close();
+			if (other) other->Close();
+			Drop(path);
+			Drop(path + wxT("-wal"));
+			Drop(path + wxT("-shm"));
+		}
+	} gone;
+	gone.path = path;
+	Gone::Drop(path);
+	Gone::Drop(path + wxT("-wal"));
+	Gone::Drop(path + wxT("-shm"));
+
+	gone.holder = std::make_shared<ibDatabaseLayerSQLite>();
+	gone.other = std::make_shared<ibDatabaseLayerSQLite>();
+	ASSERT_TRUE(gone.holder->Open(path));
+	ASSERT_TRUE(gone.other->Open(path));
+
+	gone.holder->RunStatement(wxT("CREATE TABLE sys_session (session TEXT PRIMARY KEY, n INTEGER)"));
+	gone.holder->RunStatement(wxT("INSERT INTO sys_session (session, n) VALUES ('live', 1)"));
+
+	gone.holder->BeginTransaction();
+	gone.holder->RunStatement(wxT("UPDATE sys_session SET n = 2 WHERE session = 'live'"));
+
+	const auto refuse = [&](const wxString& sql) {
+		const auto started = std::chrono::steady_clock::now();
+		bool refused = false;
+		try {
+			ibDbTxOptions opts;
+			opts.noWait = true;
+			gone.other->BeginTransaction(opts);
+			gone.other->RunStatement(sql);
+			gone.other->Commit();
+		}
+		catch (const ibBackendException&) {
+			refused = true;
+			if (gone.other->IsActiveTransaction())
+				gone.other->RollBack();
+		}
+		const auto waited = std::chrono::steady_clock::now() - started;
+		EXPECT_TRUE(refused) << "a locked row is left, not written out from under its owner: "
+		                     << sql.utf8_str();
+		EXPECT_LT(waited, std::chrono::seconds(1))
+			<< "the refusal does not spend the driver's lock wait: " << sql.utf8_str();
+	};
+	refuse(wxT("UPDATE sys_session SET n = 3 WHERE session = 'live'"));
+	refuse(wxT("DELETE FROM sys_session WHERE session = 'live'"));
+
+	gone.holder->RollBack();
+
+	ibDbTxOptions again;
+	again.noWait = true;
+	gone.other->BeginTransaction(again);
+	const int updated = gone.other->RunStatement(wxT("UPDATE sys_session SET n = 3 WHERE session = 'live'"));
+	gone.other->Commit();
+	EXPECT_EQ(updated, 1) << "once the lock is gone the heartbeat update takes the row";
+
+	gone.other->BeginTransaction(again);
+	const int removed = gone.other->RunStatement(wxT("DELETE FROM sys_session WHERE session = 'live'"));
+	gone.other->Commit();
+	EXPECT_EQ(removed, 1) << "once the lock is gone the sweep delete takes the row";
 }

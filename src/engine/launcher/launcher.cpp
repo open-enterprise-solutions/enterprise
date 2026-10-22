@@ -1,5 +1,6 @@
 #include "launcher.h"
 #include "backend/appData.h"
+#include "core/launchTicket.h"
 #include "core/programFolder.h"
 
 #include <wx/config.h>
@@ -34,9 +35,10 @@ wxString FindSiblingExecutable(const wxString& exeName) {
 	return flatPath;
 }
 
-wxString BuildLaunchCommand(const wxString& exeName, const CListInfo& info) {
+wxString BuildLaunchCommand(const wxString& exeName, const CListInfo& info, ibLaunchSecrets& secrets) {
 	wxString exePath = FindSiblingExecutable(exeName);
 	wxString cmd = wxT("\"") + exePath + wxT("\"");
+	secrets = ibLaunchSecrets();
 
 	if (info.m_bFileMode) {
 		if (!info.m_strFilePath.IsEmpty())
@@ -51,8 +53,8 @@ wxString BuildLaunchCommand(const wxString& exeName, const CListInfo& info) {
 			cmd += wxT(" -db ") + info.m_strDatabase;
 		if (!info.m_strUser.IsEmpty())
 			cmd += wxT(" -usr ") + info.m_strUser;
-		if (!info.m_strPassword.IsEmpty())
-			cmd += wxT(" -pwd ") + info.m_strPassword;
+		secrets.m_dbUser = info.m_strUser;
+		secrets.m_dbPassword = info.m_strPassword;
 	}
 
 	// Pass locale from appData singleton (already read from backend.conf)
@@ -281,12 +283,13 @@ void ibFrameLauncher::StartApplication(const wxString& appName) {
 	int selection = m_listIBwnd->GetSelection();
 	if (selection == wxNOT_FOUND) return;
 	auto itSelection = m_listInfoBase.begin() + selection;
-	const wxString executeCmd = BuildLaunchCommand(appName, itSelection->second);
+	ibLaunchSecrets secrets;
+	const wxString executeCmd = BuildLaunchCommand(appName, itSelection->second, secrets);
 
-	// ⭐ A START THAT FAILED IS SAID, AND THE LAUNCHER STAYS. wxExecute answers 0 when nothing was started; the
+	// ⭐ A START THAT FAILED IS SAID, AND THE LAUNCHER STAYS. The spawn answers 0 when nothing was started; the
 	// launcher used to close regardless, so a missing executable looked exactly like a click that did nothing —
 	// which is how the designer "would not start" on a Mac with nothing on screen to say why.
-	if (wxExecute(executeCmd) == 0) {
+	if (ibExecuteWithSecrets(executeCmd, secrets) == 0) {
 		wxMessageBox(wxString::Format(_("Could not start %s.\n\n%s"), appName, executeCmd),
 			_("Launch OES"), wxOK | wxICON_ERROR, this);
 		return;
@@ -332,17 +335,19 @@ void ibFrameLauncher::OnButtonWeb(wxCommandEvent& event) {
 		if (!info.m_strDatabase.IsEmpty())
 			cmd += wxT(" --db=") + info.m_strDatabase;
 		if (!info.m_strUser.IsEmpty())
-			cmd += wxT(" --user=") + info.m_strUser;
-		if (!info.m_strPassword.IsEmpty())
-			cmd += wxT(" --password=") + info.m_strPassword;
+			cmd += wxT(" --user=\"") + info.m_strUser + wxT("\"");
 	}
 
 	// IB-side auth: reuse the launcher entry's user/password. Most
 	// embedded-Firebird configs don't need distinct DB vs IB creds.
+	// The password rides on the child's stdin, not on this command line.
 	if (!info.m_strUser.IsEmpty())
-		cmd += wxT(" --ibuser=") + info.m_strUser;
-	if (!info.m_strPassword.IsEmpty())
-		cmd += wxT(" --ibpwd=") + info.m_strPassword;
+		cmd += wxT(" --ibuser=\"") + info.m_strUser + wxT("\"");
+	ibLaunchSecrets secrets;
+	secrets.m_dbUser = info.m_strUser;
+	secrets.m_dbPassword = info.m_strPassword;
+	secrets.m_ibUser = info.m_strUser;
+	secrets.m_ibPassword = info.m_strPassword;
 	if (appData != nullptr) {
 		wxString locale = appData->GetLocale();
 		if (!locale.IsEmpty())
@@ -352,7 +357,7 @@ void ibFrameLauncher::OnButtonWeb(wxCommandEvent& event) {
 	// Shared helper adds --port=0 --manifest=<tempfile>, spawns wes,
 	// polls the manifest and opens the browser at the reported URL.
 	// Any change to the spawn/handshake protocol lives in one place.
-	const long pid = ibApplicationInstance::SpawnWebServerWithManifest(cmd);
+	const long pid = ibApplicationInstance::SpawnWebServerWithManifest(cmd, secrets);
 	if (pid == 0) {
 		ibJournalError(wxT("launcher"), _("Failed to start wenterprise-server: %s"), cmd);
 		return;

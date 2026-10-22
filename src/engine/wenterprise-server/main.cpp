@@ -23,6 +23,7 @@
 #	define _SSIZE_T_DEFINED
 #endif
 
+#include "core/launchTicket.h"
 #include <cpp-httplib/httplib.h>
 #include "wfrontend.h"
 #include <nlohmann/json.hpp>
@@ -144,6 +145,9 @@ struct CmdArgs {
 	// (technical session + every per-tab WebClient session). Off by
 	// default — production wes runs without a listener.
 	bool debugEnable = false;
+
+	bool sawDbPassword = false;
+	bool sawIbPassword = false;
 };
 
 bool StartsWith(const std::string& s, const char* prefix)
@@ -163,10 +167,10 @@ CmdArgs ParseArgs(int argc, char** argv)
 		else if (StartsWith(arg, "--server="))    a.server      = arg.substr(9);
 		else if (StartsWith(arg, "--dbport="))    a.dbPort      = arg.substr(9);
 		else if (StartsWith(arg, "--user="))      a.srvUser     = arg.substr(7);
-		else if (StartsWith(arg, "--password="))  a.srvPassword = arg.substr(11);
+		else if (StartsWith(arg, "--password="))  { a.srvPassword = arg.substr(11); a.sawDbPassword = true; }
 		else if (StartsWith(arg, "--db="))        a.database    = arg.substr(5);
 		else if (StartsWith(arg, "--ibuser="))    a.ibUser      = arg.substr(9);
-		else if (StartsWith(arg, "--ibpwd="))     a.ibPassword  = arg.substr(8);
+		else if (StartsWith(arg, "--ibpwd="))     { a.ibPassword = arg.substr(8); a.sawIbPassword = true; }
 		else if (StartsWith(arg, "--locale="))    a.locale      = arg.substr(9);
 		else if (StartsWith(arg, "--url="))       a.urlPrefix   = arg.substr(6);
 		else if (StartsWith(arg, "--manifest="))  a.manifest    = arg.substr(11);
@@ -212,6 +216,17 @@ CmdArgs ParseArgs(int argc, char** argv)
 			a.urlPrefix = "default";
 		}
 	}
+
+	ibLaunchSecrets line;
+	line.m_dbUser = wxString::FromUTF8(a.srvUser);
+	line.m_dbPassword = wxString::FromUTF8(a.srvPassword);
+	line.m_ibUser = wxString::FromUTF8(a.ibUser);
+	line.m_ibPassword = wxString::FromUTF8(a.ibPassword);
+	ibApplyLaunchSecrets(line, a.sawDbPassword, a.sawIbPassword);
+	a.srvUser = std::string(line.m_dbUser.utf8_str());
+	a.srvPassword = std::string(line.m_dbPassword.utf8_str());
+	a.ibUser = std::string(line.m_ibUser.utf8_str());
+	a.ibPassword = std::string(line.m_ibPassword.utf8_str());
 	return a;
 }
 
