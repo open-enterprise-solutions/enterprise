@@ -160,6 +160,7 @@
     <ClCompile Include="build.cpp" />
     <ClCompile Include="compiler\blockSyntaxLINQ.cpp" />
     <ClCompile Include="compiler\literal.cpp" />
+    <ClCompile Include="compiler\scriptFoldCode.cpp" />
     <ClCompile Include="compiler\scriptParseCode.cpp" />
     <ClCompile Include="compiler\translateCode.cpp" />
     <ClCompile Include="composition\compositionTheme.cpp" />
@@ -251,6 +252,7 @@
     <ClInclude Include="compiler\blockSyntaxLINQ.h" />
     <ClInclude Include="compiler\codeDef.h" />
     <ClInclude Include="compiler\literal.h" />
+    <ClInclude Include="compiler\scriptFoldCode.h" />
     <ClInclude Include="compiler\scriptParseCode.h" />
     <ClInclude Include="compiler\translateCode.h" />
     <ClInclude Include="composition\compositionTheme.h" />

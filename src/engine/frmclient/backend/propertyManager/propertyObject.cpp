@@ -414,8 +414,8 @@ void ibPropertyObject::AddNotifier(ibPropertyObjectNotifier* notifier)
 		return;
 	m_notifiers.push_back(notifier);
 	notifier->SetOwner(this);
-	// …and what it shows, received — what the server says of it (a metaobject's rows).
-	Receive();
+	// …and what it shows, fetched — what the server says of it (a metaobject's rows).
+	Fetch();
 }
 
 void ibPropertyObject::RemoveNotifier(ibPropertyObjectNotifier* notifier)
@@ -506,15 +506,15 @@ bool ibPropertyObject::Receive(const ibProtocolNode& answer)
 	return true;
 }
 
-void ibPropertyObject::Receive(ibPropertyCategory* category, const ibDataNode& rows)
+void ibPropertyObject::Receive(ibPropertyCategory* category, ibDataNode& rows)
 {
-	for (const ibDataNode& row : rows.Children()) {
+	for (ibDataNode& row : rows.Children()) {
 		// A CATEGORY — a row with no class, its rows within.
 		if (row.FindField(ibProtocol::ibSchema::ibProperties::Class) == nullptr)
 			Receive(CreatePropertyCategory(category, row.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Name),
 				row.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Title)), row);
 		else
-			CreateProperty(category, row);
+			CreateProperty(category, std::move(row));
 	}
 }
 

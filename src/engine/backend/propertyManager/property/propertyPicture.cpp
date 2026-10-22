@@ -66,9 +66,9 @@ bool ibPropertyPicture::WriteNodeValue(ibDataValue& value) const
 #include "backend/metaData.h"
 #include "backend/metaCollection/metaPictureObject.h"   // ibValueMetaObjectPicture — its Guid
 
-bool ibPropertyPicture::GetProtocolValue(ibDataNode& row)
+bool ibPropertyPicture::GetProtocolValue(ibDataNode& row, ibReader reader)
 {
-	if (!ibProperty::GetProtocolValue(row))
+	if (!ibProperty::GetProtocolValue(row, reader))
 		return false;
 
 	const ibPropertyObject* const owner = m_owner;   // CONST: the non-const GetMetaData wxFAILs

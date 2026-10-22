@@ -88,6 +88,9 @@
     <ClCompile Include="docView\templates\docViewAuditLog.cpp">
       <Filter>docView\templates</Filter>
     </ClCompile>
+    <ClCompile Include="docView\templates\docViewHomePage.cpp">
+      <Filter>docView\templates</Filter>
+    </ClCompile>
     <ClCompile Include="docView\templates\docViewHelp.cpp">
       <Filter>docView\templates</Filter>
     </ClCompile>
@@ -387,6 +390,9 @@
       <Filter>docView\templates</Filter>
     </ClInclude>
     <ClInclude Include="docView\templates\docViewAuditLog.h">
+      <Filter>docView\templates</Filter>
+    </ClInclude>
+    <ClInclude Include="docView\templates\docViewHomePage.h">
       <Filter>docView\templates</Filter>
     </ClInclude>
     <ClInclude Include="docView\templates\docViewHelp.h">

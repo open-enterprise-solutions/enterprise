@@ -198,6 +198,7 @@ namespace ibProtocol {
 		inline constexpr const char* Messages   = "Messages";   // ibMessage each
 		inline constexpr const char* Clear      = "Clear";
 		inline constexpr const char* Exit       = "Exit";       // the client is to go — Exit done
+		inline constexpr const char* Raise      = "Raise";      // the client's window raised — a debugger left its loop
 		inline constexpr const char* Title      = "Title";
 		inline constexpr const char* Status     = "Status";
 		inline constexpr const char* Menu       = "Menu";       // ibMenu each
@@ -1271,6 +1272,7 @@ namespace ibProtocol {
 			Assistant        = 13,   // ibAssistant
 			Composer         = 14,   // ibComposer
 			Configuration    = 15,   // a configuration file (or the database's copy) browsed read-only: MetaData
+			HomePage         = 16,   // ibHomePage: the start page — the forms the configuration places on it
 		};
 
 		// Text, ReadOnly; what was typed handed back as event {Tab, Event: Change, Args: {Text}}.
@@ -1386,8 +1388,7 @@ namespace ibProtocol {
 
 		// THE DESIGNER'S EDITOR OF A FORM — a module's tab (ibModule: State, its requests, its Input and Change {Text})
 		// whose form the CLIENT edits, as the desktop's editor did: fetch {Tab} — {Text, Form — the form's node as a frame
-		// draws it, Controls — each control's rows (Control, as the inspector writes them), Classes — the classes a control
-		// may be made of (Name, Picture, Type; Visible false — not offered to place; Menu — the classes a control of it adds
+		// draws it (a control's rows asked as it is shown: ibRequest::Rows), Classes — the classes a control may be made of (Name, Picture, Type; Visible false — not offered to place; Menu — the classes a control of it adds
 		// in itself, Name and Title each), AttributeTree, CommandTree}; State's Opening — once, in the frame that opens its
 		// tab: what its Text fetch answers; what else — ibRequest; the form handed back whole — event {Tab, Event: Change,
 		// Args: {Form}}.
@@ -1447,31 +1448,37 @@ namespace ibProtocol {
 			// WHAT A FORM'S TAB IS ASKED besides its module's — `fetch {Tab, Request: {Kind, …}}`, numbered past the
 			// module's (ibModule::ibRequest), whose requests the same tab answers: what only the server knows of a form
 			// edited on the client. Where the answer carries the form, it is the form as the server made it — {Form,
-			// Controls, AttributeTree, CommandTree} as the tab's fetch writes them, and Selected, the control to work on —
-			// and the client puts it in as an edit of its own: undone on the client.
+			// AttributeTree, CommandTree} as the tab's fetch writes them, and Selected, the control to work on —
+			// and the client puts it in as an edit of its own: undone on the client. A request is about the form the server
+			// holds — the client hands its own edits as a Change — and carries one only where it is about another (Rows,
+			// Form); a door that changes the form writes it into its metaobject, the client hands it no more.
 			enum class ibRequest : int {
-				BoundControl   = 11,   // {Form, Control, Path} — a control bound to the source at the path's end, dropped on
-				                       // that control → the form
-				CommandControl = 12,   // {Form, Control, Value — {CommandPath, Kind}, as the command tree's row [,
-				                       // CommandBar]} — a control running the command, dropped on that control (CommandBar:
-				                       // on its bar — an item of it) → the form
-				Rows           = 13,   // {Form — the form as it stands, Control} — that control after an edit of its
-				                       // properties: Node — as the server draws it (its State — enabled, shown), Controls —
-				                       // its rows (some shown or hidden)
+				BoundControl   = 11,   // {Control, Path} — a control bound to the source at the path's end, dropped on that
+				                       // control → the form
+				CommandControl = 12,   // {Control, Value — {CommandPath, Kind}, as the command tree's row [, CommandBar]} —
+				                       // a control running the command, dropped on that control (CommandBar: on its bar — an
+				                       // item of it) → the form
+				Rows           = 13,   // {Control [, Form — the form so edited]} — that control as the inspector shows it,
+				                       // or after an edit of its properties: Node — as the server draws it (its State —
+				                       // enabled, shown), Controls — its rows (some shown or hidden) and its sizer item's
+				                       // (Control each)
 				Composition    = 14,   // {Path, Targets, UnderList} of an attribute row → Rows, the rows under it
 				                       // (AttributeTree's)
-				Attribute      = 15,   // {Form, Command (ibCommand), Attribute, Column, Name, Value} — a door of the
-				                       // attribute tree (Column — of a value table's column) → the form, Attribute and
-				                       // Column — the one to show
-				FormCommand    = 16,   // {Form, Command, FormCommand, Name, Value} — a door of the command tree → the form,
+				Attribute      = 15,   // {Command (ibCommand), Attribute, Column, Name, Value} — a door of the attribute
+				                       // tree (Column — of a value table's column) → the form, Attribute and Column — the one
+				                       // to show
+				FormCommand    = 16,   // {Command, FormCommand, Name, Value} — a door of the command tree → the form,
 				                       // FormCommand — the one to show
-				Properties     = 17,   // {Form, Attribute [, Column] | FormCommand} — its rows, as the inspector writes them
+				Properties     = 17,   // {Attribute [, Column] | FormCommand} — its rows, as the inspector writes them
 				Form           = 18,   // {Form} → the form as the server draws it — after an edit of the client's that
 				                       // changes what the server draws of it (a command bar's commands)
-				Control        = 19,   // {Form, Control, Class} — a control of that class made in that control (none: the
-				                       // form), as the desktop's palette made it: one that binds to a source, bound to a fresh
-				                       // attribute; {Form, Control, Command Paste, Value} — the copied one put there → the
-				                       // form, Selected — the one put
+				Control        = 19,   // {Control, Class} — a control of that class made in that control (none: the form),
+				                       // as the desktop's palette made it: one that binds to a source, bound to a fresh
+				                       // attribute; {Control, Command Paste, Value} — the copied one put there → the form,
+				                       // Selected — the one put
+				Editor         = 20,   // {Control, Name} — what that control's property's own editor reads beside its row,
+				                       // asked as the editor opens (ibSchema::ibProperties — a Source's: Sources, rows as
+				                       // AttributeTree's, a reference's asked by Composition)
 			};
 
 			// A door of a form designer's tree — an attribute's, a form command's (ibRequest Attribute, FormCommand); a
@@ -1597,9 +1604,9 @@ namespace ibProtocol {
 
 		}
 
-		// The start page a home page lays out, a tab's: Columns, the forms of each — Title, Icon, Height (its weight in the
-		// column), View (the form, as a tab's) or Unavailable (why it is not); Gravity — the left column's share of the
-		// width.
+		// The start page a home page lays out, a tab's (Kind HomePage): Columns, the forms of each — Title, Icon, Height
+		// (its weight in the column), View (the form, as a tab's) or Unavailable (why it is not); Gravity — the left
+		// column's share of the width.
 		namespace ibHomePage {
 
 			inline constexpr const char* Columns     = "Columns";

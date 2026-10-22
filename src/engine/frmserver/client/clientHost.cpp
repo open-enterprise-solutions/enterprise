@@ -1663,6 +1663,9 @@ void ibClientHost::DrawFrame(ibClientFrame* frame, ibDataNode& state, ibDataNode
 	// Exit done — the client goes; its session goes when it logs out.
 	if (frame->TakeExitPending())
 		events.SetValue(ibProtocol::ibFrame::Exit, true);
+	// A debugger left its loop — the client's window raised, as the desktop's raised its own.
+	if (frame->TakeRaisePending())
+		events.SetValue(ibProtocol::ibFrame::Raise, true);
 	// The inspector's rows of what a door acted on (ShowProperties) — each by its object's id and tab: the client shows
 	// them without reading them again.
 	std::vector<ibDataNode> shown = frame->TakeShownProperties();

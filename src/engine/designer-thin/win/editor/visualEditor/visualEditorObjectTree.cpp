@@ -30,19 +30,23 @@ void ShapeOf(ibValueFrame* obj, wxString& shape)
 	shape << wxT(']');
 }
 
-// …and the commands of each control's bar, as its node has them: one added, removed, moved or renamed is drawn too.
-void ShapeOf(const ibProtocolNode& node, const std::map<long long, ibProtocolNode>& rows, wxString& shape)
+// The desktop's HasCommandBar: the server's state of a control carries its bar only when it has one.
+bool HasCommandBar(const ibProtocolNode& node)
 {
-	const long long controlId = node.GetInt(ibProtocol::ibForm::ControlId);
-	const auto found = rows.find(controlId);
-	if (found != rows.end() && found->second.FindChild(ibProtocol::ibForm::ibCommandBar::CommandBar).IsNode()) {
-		shape << controlId << wxT('{');
+	return node.FindChild(ibProtocol::ibForm::ibState::State).Has(ibProtocol::ibForm::ibCommandBar::CommandBar);
+}
+
+// …and the commands of each control's bar, as its node has them: one added, removed, moved or renamed is drawn too.
+void ShapeOf(const ibProtocolNode& node, wxString& shape)
+{
+	if (HasCommandBar(node)) {
+		shape << node.GetInt(ibProtocol::ibForm::ControlId) << wxT('{');
 		for (const ibProtocolNode& item : node.FindChild(ibProtocol::ibForm::ibCommandBar::Layers).FindChild(ibProtocol::ibForm::ibCommandBar::CommandBar).Children())
 			shape << item.GetString(ibProtocol::ibForm::Name) << wxT(';');
 		shape << wxT('}');
 	}
 	for (const ibProtocolNode& child : node.Children())
-		ShapeOf(child, rows, shape);
+		ShapeOf(child, shape);
 }
 
 // The desktop's CanDeleteControl (frmserver ibValueForm, ibValueNotebookPage, ibValueModelTableBoxColumn): never the
@@ -85,7 +89,7 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::RebuildTr
 	m_layerItemMap.clear();
 
 	if (ibValueFrame* const valueForm = m_formHandler->GetValueForm()) {
-		AddControl(valueForm, wxTreeItemId());
+		AddControl(valueForm, m_formHandler->m_formNode, wxTreeItemId());
 
 		// Restore the row highlight by identity — under m_selecting so SelectItem sets the bold mark WITHOUT re-pushing
 		// the inspector (OnSelChanged bolds before the guard early-out), matching OnObjectSelected.
@@ -119,11 +123,15 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::RebuildTr
 	wxWindow::Update();
 }
 
-void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::AddControl(ibValueFrame* control, const wxTreeItemId& parent)
+void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::AddControl(ibValueFrame* control,
+	const ibProtocolNode& node, const wxTreeItemId& parent)
 {
+	const std::vector<ibProtocolNode> children = node.Children();
+	const auto childNode = [&children](unsigned int idx) { return idx < children.size() ? children[idx] : ibProtocolNode(); };
+
 	if (control->GetComponentType() == COMPONENT_TYPE_SIZERITEM) {
 		if (control->GetChildCount() > 0) {
-			AddControl(control->GetChild(0), parent);
+			AddControl(control->GetChild(0), childNode(0), parent);
 			return;
 		}
 		// An item holds its control, always: an empty one is a form built wrong — said, and skipped.
@@ -144,24 +152,23 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::AddContro
 
 	// Command interface (a chrome LAYER the frame carries): a static sub-node added FIRST, so it sits above the content
 	// like the rendered toolbar.
-	AddCommandBar(control, row);
+	AddCommandBar(control, node, row);
 
 	for (unsigned int i = 0; i < control->GetChildCount(); i++)
-		AddControl(control->GetChild(i), row);
+		AddControl(control->GetChild(i), childNode(i), row);
 
 	// Open as the form keeps it — once the rows under it are there to show.
 	if (control->GetExpanded())
 		m_tree->Expand(row);
 }
 
-void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::AddCommandBar(ibValueFrame* obj, const wxTreeItemId& parent)
+void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::AddCommandBar(ibValueFrame* obj,
+	const ibProtocolNode& node, const wxTreeItemId& parent)
 {
-	// The desktop's HasCommandBar: the server writes the bar's rows only of a control that has one.
-	const long long controlId = obj->GetControlID();
-	const auto found = m_formHandler->m_rows.find(controlId);
-	if (found == m_formHandler->m_rows.end() || !found->second.FindChild(ibProtocol::ibView::ibFormDesigner::CommandBar).IsNode())
+	if (!HasCommandBar(node))
 		return;
 
+	const long long controlId = obj->GetControlID();
 	// Selecting it edits the bar's settings (AutoFill) — what it holds received as it is shown. Icon = the toolbar's.
 	std::unique_ptr<ibValueCommandBar>& bar = m_commandBars[controlId];
 	if (bar == nullptr)
@@ -255,13 +262,13 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnEditorL
 }
 
 // THE FORM DRAWN AGAIN — the tree rebuilt only when what it shows changed (a control added, removed, moved or renamed, a
-// command of a bar); the controls themselves are the frame's anew on a change of shape, so the map is rebuilt with them.
+// command of a bar); a control the host makes anew where it lays it in is another, so the map is rebuilt with them.
 void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::OnEditorRefresh()
 {
 	wxString shape;
 	if (ibValueFrame* const valueForm = m_formHandler->GetValueForm())
 		ShapeOf(valueForm, shape);
-	ShapeOf(m_formHandler->m_formNode, m_formHandler->m_rows, shape);
+	ShapeOf(m_formHandler->m_formNode, shape);
 
 	if (shape == m_shape && !m_controlItems.empty()) {
 		// …open or closed as the form has it now — an expansion undone or redone leaves the shape as it was.

@@ -80,9 +80,9 @@ bool ibPropertyDynamicSource::WriteNodeValue(ibDataValue& value) const
 
 #include "protocol/protocol.h"   // ibProtocol::ibSchema::ibProperties — the row's keys
 
-bool ibPropertyDynamicSource::GetProtocolValue(ibDataNode& row)
+bool ibPropertyDynamicSource::GetProtocolValue(ibDataNode& row, ibReader reader)
 {
-	if (!ibProperty::GetProtocolValue(row))
+	if (!ibProperty::GetProtocolValue(row, reader))
 		return false;
 	ibQueryableFactory* const factory = ibDynamicSourceFactory(m_owner);
 	if (factory == nullptr)

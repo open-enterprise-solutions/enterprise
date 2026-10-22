@@ -86,9 +86,10 @@ public:
 
 	// A REPAINT the backend asks for, the frame having changed by itself (a report delivered, a debugger stopped): the
 	// client is told so (ibClientHost::NotifyChanged) and asks for it — the next frame it is sent is the repaint.
-	// A raise is a window act.
 	virtual void RefreshFrame() override;
-	virtual void RaiseFrame() override {}
+	// …and a RAISE — a debugger left its loop (ibDebuggerServer::DoDebugLoop): the window is the client's, so it is told
+	// (Raise in the next answer, one-shot as Clear) and called for that answer (RefreshFrame).
+	virtual void RaiseFrame() override;
 
 	// Forms. CreateNewForm is what a script's OpenForm() ultimately reaches: the form is made here and
 	// opened into a tab by its own ShowForm. ActiveWindow is the active tab's form.
@@ -171,6 +172,8 @@ public:
 	bool                        TakeClearPending();
 	// The client is to go — Exit done: every tab closed. A one-shot flag, as Clear, told with the next answer.
 	bool                        TakeExitPending();
+	// …and its window to be raised (RaiseFrame), one-shot as well.
+	bool                        TakeRaisePending();
 	// ⭐ THE CLIENT TOLD TO GO — its own Exit (DoCommand): every tab but the locked ones closed (CloseAll), each may keep
 	// itself, and then the client stays. FORCED — the session closed under it (a debugger's Stop, an administrator's
 	// kick: OnClose): nothing is asked, and a client at rest is called for it (RefreshFrame) — it hears Exit in the next
@@ -294,6 +297,7 @@ private:
 	std::vector<PendingMessage> m_pendingMessages;
 	bool                        m_clearPending = false;
 	bool                        m_exitPending = false;
+	bool                        m_raisePending = false;
 	std::vector<ibDataNode>     m_shownProperties;
 
 	// The requests waiting, oldest first. A response is a slot of its own, shared with the waiting script —

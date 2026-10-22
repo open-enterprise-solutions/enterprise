@@ -43,7 +43,7 @@ public:
 	// …and the configuration's pictures it may be loaded from, as the desktop's cell listed them (advpropPicture.cpp):
 	// Pictures — the picture metaobjects of the owner's configuration, or of the one it extends, each by its Name and
 	// its Guid, not as a Picture: a picture named in an answer is fetched before the answer is drawn.
-	virtual bool GetProtocolValue(ibDataNode& row) override;
+	virtual bool GetProtocolValue(ibDataNode& row, ibReader reader) override;
 
 public:
 

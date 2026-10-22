@@ -57,10 +57,11 @@ public:
 
 private:
 
-	// THE TAB'S REQUESTS ABOUT THE FORM (ibProtocol::ibView::ibFormDesigner::ibRequest), each on the form the request carries: the rows under an
-	// attribute row (Composition); a door of the attribute tree, of the command tree (Attribute, FormCommand); a control
-	// bound to a dropped row, running a dropped command (BoundControl, CommandControl); the rows of an attribute or a
-	// form command (Properties); a control's rows again (Rows).
+	// THE TAB'S REQUESTS ABOUT THE FORM (ibProtocol::ibView::ibFormDesigner::ibRequest), each on the form held: the rows
+	// under an attribute row (Composition); a door of the attribute tree, of the command tree (Attribute, FormCommand); a
+	// control bound to a dropped row, running a dropped command (BoundControl, CommandControl); the rows of an attribute
+	// or a form command (Properties); a control's rows again (Rows), and what one of its properties' editor reads beside
+	// its row (Editor).
 	bool FetchComposition(const ibDataNode& request, ibDataNode& response);
 	bool FetchAttribute(const ibDataNode& request, ibDataNode& response);
 	bool FetchFormCommand(const ibDataNode& request, ibDataNode& response);
@@ -69,20 +70,17 @@ private:
 	bool FetchCommandControl(const ibDataNode& request, ibDataNode& response);
 	bool FetchProperties(const ibDataNode& request, ibDataNode& response);
 	bool FetchRows(const ibDataNode& request, ibDataNode& response);
+	bool FetchEditor(const ibDataNode& request, ibDataNode& response);
 
-	// The form whole, as the client edits it: its node as a frame draws it (Form), each control's rows as the inspector
-	// writes them (Controls — Control and its rows), its attributes and its commands as the trees beside it show them
-	// (AttributeTree, CommandTree). The rows of the controls in `held` not written — the client holds them already: a
-	// drop's answer brings only the new ones' and the one the drop changed.
-	void WriteForm(ibDataNode& response, const std::set<ibFormID>& held = std::set<ibFormID>());
+	// The form whole, as the client edits it: its node as a frame draws it (Form), its attributes and its commands as the
+	// trees beside it show them (AttributeTree, CommandTree). No control's rows: the client asks them of the one it shows
+	// (Rows) — every new control's rode each answer, the inspector shown or not (2026-10-22).
+	void WriteForm(ibDataNode& response);
 	// The classes a control may be made of (Classes — Name, Picture, Type; not offered to place: Visible false; the
 	// classes a control of it adds in itself: Menu).
 	void WriteClasses(ibDataNode& response);
-	// A control's rows and its subtree's, as the designer's inspector shows them — each under Control, its id; but those
-	// in `held`.
-	static void WriteRows(ibValueFrame* control, ibDataNode& controls, const std::set<ibFormID>& held = std::set<ibFormID>());
-	// …and the ids of a control and its subtree — the form handed, the controls the client holds the rows of.
-	static void CollectControls(ibValueFrame* control, std::set<ibFormID>& held);
+	// A control's rows as the designer's inspector shows them, under Control, its id — its command bar's with them.
+	static void WriteRows(ibValueFrame* control, ibDataNode& controls);
 	// The form handed back, its properties where a reader looks for them — the wire brought each scalar back a field.
 	static void RestoreProperties(ibDataNode& node);
 	// A property or an event of an attribute, of a form command, given the value the request carries (Name, Value) —

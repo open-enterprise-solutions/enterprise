@@ -159,8 +159,13 @@ void ibObjectInspector::Create(ibPropertyObject* object, bool force)
 
 		m_currentSel = object;
 
+		// What it shows fetched as it is registered (ibPropertyObject::Fetch), then the grid filled — each timed apart.
+		ibJournalStopwatch fetched, filled;
+		fetched.Resume();
 		if (m_currentSel != nullptr)
 			m_currentSel->AddNotifier(m_notifier.get());
+		fetched.Pause();
+		filled.Resume();
 
 		const int pageNumber = m_pg->GetSelectedPage();
 
@@ -216,6 +221,9 @@ void ibObjectInspector::Create(ibPropertyObject* object, bool force)
 
 		m_pg->Refresh();
 		m_pg->Update();
+		filled.Pause();
+		ibJournalInfo(wxT("ui"), wxT("the inspector filled %lld ms, its rows fetched %lld ms: %u properties"),
+			filled.Ms(), fetched.Ms(), static_cast<unsigned int>(m_propMap.size()));
 	}
 
 	// ShownObject, not m_currentSel: asked again with the address of an object that has since died,

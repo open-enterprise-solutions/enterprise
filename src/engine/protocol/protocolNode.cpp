@@ -268,6 +268,9 @@ ibProtocolNode ibProtocolNode::Clone() const
 
 bool ibProtocolNode::operator==(const ibProtocolNode& other) const
 {
+	// The same node, by two handles — alike, not walked.
+	if (m_body != nullptr && m_body == other.m_body)
+		return true;
 	if (m_body != nullptr || other.m_body != nullptr)
 		return m_body != nullptr && other.m_body != nullptr && *m_body == *other.m_body;
 	if (m_value == nullptr || other.m_value == nullptr)

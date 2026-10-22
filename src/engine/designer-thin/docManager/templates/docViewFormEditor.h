@@ -9,8 +9,8 @@
 // THE DESKTOP'S (designer/docManager/templates/docViewFormEditor.h) IN A TAB THE SERVER RAISED: the form's tab is a
 // module's (frmserver ibFormDesignDocument over ibModuleTextDocument) whose form the CLIENT edits — the tab's one answer
 // brings the form, its controls' rows, the classes a control may be made of and the module's text
-// (ibProtocol::ibView::ibKind::FormDesigner); the form goes back whole after each command and as the tab is saved or closed
-// (SaveForm).
+// (ibProtocol::ibView::ibKind::FormDesigner); the form goes back whole as each command draws it (SaveForm) — the tab's
+// save or close finds it handed.
 // ⚠ No wx class info, as the module's tab has none.
 
 // ----------------------------------------------------------------------------
@@ -79,11 +79,6 @@ class ibFormEditDocument : public ibModuleEditDocument {
 public:
 
 	explicit ibFormEditDocument(long long tabId) : ibModuleEditDocument(tabId) {}
-
-	// The form goes back whole before the module's text and the server's save or close — as the desktop wrote the form
-	// on save.
-	virtual bool Close() override;
-	virtual bool Save() override;
 
 	// The module's State, and the card's: its title, and whether the form takes edits.
 	virtual void DrawView(const ibProtocolNode& view, const ibProtocolNode& patch) override;

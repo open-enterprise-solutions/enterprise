@@ -57,7 +57,7 @@ ibPGChartBindingProperty::ibPGChartBindingProperty(const ibPropertyObject* prope
 	: wxPGProperty(label, strName), m_ownerProperty(property), m_choiceMode(mode)
 {
 	for (unsigned int idx = 0; idx < choices.GetCount(); idx++)
-		m_choices.Add(choices.GetLabel(idx), ibBackendPicture::CreatePicture(choices.GetPicture(idx)), choices.GetId(idx));
+		m_choices.Add(choices.GetName(idx), ibBackendPicture::CreatePicture(choices.GetPicture(idx)), choices.GetId(idx));   // names, as the cell names them (ValueToString)
 
 	m_flags |= wxPGPropertyFlags_ActiveButton; // Property button always enabled.
 
