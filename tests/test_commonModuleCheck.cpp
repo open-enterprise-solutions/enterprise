@@ -20,6 +20,7 @@
 #include "backend/metaCollection/metaModuleObject.h"
 #include "backend/metadataConfiguration.h"
 #include "backend/session/session.h"
+#include "backend/session/sessionRegistry.h"
 
 namespace {
 
@@ -68,10 +69,21 @@ TEST_F(CommonModuleCheck, ConfigCheckReportsABrokenModuleAndOneThatWasNeverCompi
 	auto session = std::make_shared<ibSession>(wxT("module-check"), ibSessionKind::Designer);
 	ibSessionScope scope(session.get());
 
-	ASSERT_TRUE(ibApplicationInstance::CreateActiveMetaData(ibApplicationInstance::Get(), 0));
+	// The configuration a designer edits is its session's own, made as the
+	// session is let in (NotifyAuthenticated → ibSession::AcquireMetaData) and
+	// let go as it leaves. The base's active one is not it.
+	ibSessionRegistry* const registry = ibApplicationInstance::GetSessionRegistry();
+	ASSERT_NE(registry, nullptr);
+	registry->NotifyAuthenticated(session.get());
+	struct Leave {
+		ibSessionRegistry* m_registry;
+		ibSession* m_session;
+		~Leave() { m_registry->NotifyDisconnect(m_session); }
+	} leave{ registry, session.get() };
 
-	ibMetaDataConfigurationBase* cfg = activeMetaData;
+	ibMetaDataConfigurationBase* cfg = session->GetMetaData();
 	ASSERT_NE(cfg, nullptr);
+	ASSERT_EQ(activeMetaData, cfg);
 	if (cfg->IsConfigOpen())
 		ASSERT_TRUE(cfg->CloseDatabase(forceCloseFlag));
 
