@@ -25,7 +25,7 @@ class ibValueEnumAccumulationRegisterType : public ibValueEnumeration<ibRegister
 };
 class ibValueEnumAccumulationRegisterRecordType : public ibValueEnumeration<ibRecordType> {
 	public:
-	// A new record is a receipt unless the code says otherwise - as in 1C (#411).
+	// A new record is a receipt unless the code says otherwise (#411).
 	static ibValue CreateDefEnumValue() {
 		return ibValue::CreateEnumObject<ibValueEnumAccumulationRegisterRecordType>(ibRecordType::eReceipt);
 	}
