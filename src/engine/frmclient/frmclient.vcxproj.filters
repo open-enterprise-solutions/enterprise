@@ -61,6 +61,15 @@
     <Filter Include="win\theme">
       <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5021}</UniqueIdentifier>
     </Filter>
+    <Filter Include="uikit">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f505e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="uikit\ctrl">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f505f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="uikit\theme">
+      <UniqueIdentifier>{5f0e7a2c-1b3d-4e6f-8a9b-0c1d2e3f5060}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="frmclient.cpp" />
@@ -361,6 +370,108 @@
     <ClCompile Include="visualView\ctrl\textBox.cpp">
       <Filter>visualView\ctrl</Filter>
     </ClCompile>
+    <ClCompile Include="uikit\theme.cpp">
+      <Filter>uikit</Filter>
+    </ClCompile>
+    <ClCompile Include="uikit\inputConsumer.cpp">
+      <Filter>uikit</Filter>
+    </ClCompile>
+    <ClCompile Include="uikit\inputHandler.cpp">
+      <Filter>uikit</Filter>
+    </ClCompile>
+    <ClCompile Include="uikit\controlRenderer.cpp">
+      <Filter>uikit</Filter>
+    </ClCompile>
+    <ClCompile Include="uikit\window.cpp">
+      <Filter>uikit</Filter>
+    </ClCompile>
+    <ClCompile Include="uikit\menu.cpp">
+      <Filter>uikit</Filter>
+    </ClCompile>
+    <ClCompile Include="uikit\theme\themeRenderer.cpp">
+      <Filter>uikit\theme</Filter>
+    </ClCompile>
+    <ClCompile Include="uikit\theme\lunaTheme.cpp">
+      <Filter>uikit\theme</Filter>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\control.cpp">
+      <Filter>uikit\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\scrollBar.cpp">
+      <Filter>uikit\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\scrollArrow.cpp">
+      <Filter>uikit\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\scrollThumb.cpp">
+      <Filter>uikit\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\anyButton.cpp">
+      <Filter>uikit\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\button.cpp">
+      <Filter>uikit\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\staticText.cpp">
+      <Filter>uikit\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\staticLine.cpp">
+      <Filter>uikit\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\checkBox.cpp">
+      <Filter>uikit\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\radioButton.cpp">
+      <Filter>uikit\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\gauge.cpp">
+      <Filter>uikit\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\toggleButton.cpp">
+      <Filter>uikit\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\textCtrl.cpp">
+      <Filter>uikit\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\listBox.cpp">
+      <Filter>uikit\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\choice.cpp">
+      <Filter>uikit\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\notebook.cpp">
+      <Filter>uikit\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\toolBar.cpp">
+      <Filter>uikit\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\comboBox.cpp">
+      <Filter>uikit\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\spinButton.cpp">
+      <Filter>uikit\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\slider.cpp">
+      <Filter>uikit\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\staticBox.cpp">
+      <Filter>uikit\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\staticBitmap.cpp">
+      <Filter>uikit\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\bmpButton.cpp">
+      <Filter>uikit\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\checkListBox.cpp">
+      <Filter>uikit\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\radioBox.cpp">
+      <Filter>uikit\ctrl</Filter>
+    </ClCompile>
+    <ClCompile Include="uikit\ctrl\treeCtrl.cpp">
+      <Filter>uikit\ctrl</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="frmclient.h" />
@@ -652,6 +763,117 @@
     </ClInclude>
     <ClInclude Include="visualView\ctrl\widgets.h">
       <Filter>visualView\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="uikit\colourScheme.h">
+      <Filter>uikit</Filter>
+    </ClInclude>
+    <ClInclude Include="uikit\inputConsumer.h">
+      <Filter>uikit</Filter>
+    </ClInclude>
+    <ClInclude Include="uikit\inputHandler.h">
+      <Filter>uikit</Filter>
+    </ClInclude>
+    <ClInclude Include="uikit\menu.h">
+      <Filter>uikit</Filter>
+    </ClInclude>
+    <ClInclude Include="uikit\menuItem.h">
+      <Filter>uikit</Filter>
+    </ClInclude>
+    <ClInclude Include="uikit\renderer.h">
+      <Filter>uikit</Filter>
+    </ClInclude>
+    <ClInclude Include="uikit\scrollTimer.h">
+      <Filter>uikit</Filter>
+    </ClInclude>
+    <ClInclude Include="uikit\theme.h">
+      <Filter>uikit</Filter>
+    </ClInclude>
+    <ClInclude Include="uikit\uikit.h">
+      <Filter>uikit</Filter>
+    </ClInclude>
+    <ClInclude Include="uikit\window.h">
+      <Filter>uikit</Filter>
+    </ClInclude>
+    <ClInclude Include="uikit\theme\themeRenderer.h">
+      <Filter>uikit\theme</Filter>
+    </ClInclude>
+    <ClInclude Include="uikit\ctrl\anyButton.h">
+      <Filter>uikit\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="uikit\ctrl\bmpButton.h">
+      <Filter>uikit\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="uikit\ctrl\button.h">
+      <Filter>uikit\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="uikit\ctrl\checkBox.h">
+      <Filter>uikit\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="uikit\ctrl\checkListBox.h">
+      <Filter>uikit\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="uikit\ctrl\choice.h">
+      <Filter>uikit\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="uikit\ctrl\comboBox.h">
+      <Filter>uikit\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="uikit\ctrl\control.h">
+      <Filter>uikit\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="uikit\ctrl\gauge.h">
+      <Filter>uikit\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="uikit\ctrl\listBox.h">
+      <Filter>uikit\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="uikit\ctrl\notebook.h">
+      <Filter>uikit\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="uikit\ctrl\radioBox.h">
+      <Filter>uikit\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="uikit\ctrl\radioButton.h">
+      <Filter>uikit\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="uikit\ctrl\scrollArrow.h">
+      <Filter>uikit\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="uikit\ctrl\scrollBar.h">
+      <Filter>uikit\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="uikit\ctrl\scrollThumb.h">
+      <Filter>uikit\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="uikit\ctrl\slider.h">
+      <Filter>uikit\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="uikit\ctrl\spinButton.h">
+      <Filter>uikit\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="uikit\ctrl\staticBitmap.h">
+      <Filter>uikit\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="uikit\ctrl\staticBox.h">
+      <Filter>uikit\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="uikit\ctrl\staticLine.h">
+      <Filter>uikit\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="uikit\ctrl\staticText.h">
+      <Filter>uikit\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="uikit\ctrl\textCtrl.h">
+      <Filter>uikit\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="uikit\ctrl\toggleButton.h">
+      <Filter>uikit\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="uikit\ctrl\toolBar.h">
+      <Filter>uikit\ctrl</Filter>
+    </ClInclude>
+    <ClInclude Include="uikit\ctrl\treeCtrl.h">
+      <Filter>uikit\ctrl</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

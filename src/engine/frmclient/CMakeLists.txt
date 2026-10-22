@@ -5,11 +5,17 @@
 # frame).
 # =============================================================================
 
-# CONFIGURE_DEPENDS — see the note in backend/CMakeLists.txt. Every source here is in the build: the project
-# (frmclient.vcxproj) lists the same set.
+# CONFIGURE_DEPENDS — see the note in backend/CMakeLists.txt. Every source here is in the build but the listed uikit
+# units — unfinished, not in the project (frmclient.vcxproj) either.
 file(GLOB_RECURSE FRMCLIENT_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp"
 )
+list(FILTER FRMCLIENT_SOURCES EXCLUDE REGEX "uikit/ctrl/statusBar\\.cpp$")
+list(FILTER FRMCLIENT_SOURCES EXCLUDE REGEX "uikit/dialog\\.cpp$")
+list(FILTER FRMCLIENT_SOURCES EXCLUDE REGEX "uikit/settings\\.cpp$")
+list(FILTER FRMCLIENT_SOURCES EXCLUDE REGEX "uikit/theme/theme_win32\\.cpp$")
+list(FILTER FRMCLIENT_SOURCES EXCLUDE REGEX "uikit/topLevel\\.cpp$")
+list(FILTER FRMCLIENT_SOURCES EXCLUDE REGEX "uikit/frame\\.cpp$")
 
 add_library(frmclient SHARED ${FRMCLIENT_SOURCES})
 
@@ -19,10 +25,10 @@ if(APPLE)
 endif()
 
 # The FORKED widget layer compiles quiet — frontend's rule, for the same forks copied here (win/ctrls: wx's dataview,
-# grid, treelistctrl; win/theme: wxAUI dock art). frontend/CMakeLists.txt has the why and the limit: this reaches the
-# .cpp only, a vendored header silences itself with `#pragma GCC system_header`.
+# grid, treelistctrl; win/theme: wxAUI dock art; uikit: wxUniversal). frontend/CMakeLists.txt has the why and the
+# limit: this reaches the .cpp only, a vendored header silences itself with `#pragma GCC system_header`.
 set(FRMCLIENT_VENDORED_SOURCES ${FRMCLIENT_SOURCES})
-list(FILTER FRMCLIENT_VENDORED_SOURCES INCLUDE REGEX "/(win/ctrls|win/theme)/")
+list(FILTER FRMCLIENT_VENDORED_SOURCES INCLUDE REGEX "/(uikit|win/ctrls|win/theme)/")
 
 if(FRMCLIENT_VENDORED_SOURCES)
     if(MSVC)

@@ -3,8 +3,6 @@
 
 FILE  frontend/win/ctrls/charts/*     # not ported (Max, 2026-10-14)
 CLASS * (frontend/win/ctrls/charts/*  # not ported (Max, 2026-10-14)
-FILE  frontend/uikit/*                # not ported (Max, 2026-10-14)
-CLASS * (frontend/uikit/*             # not ported (Max, 2026-10-14)
 FILE  frontend/visualView/ctrl/toolBar*     # the Toolbar control is not in the desktop designer either; to be cut out (Max, 2026-10-19)
 CLASS * (frontend/visualView/ctrl/toolBar*  # the same
 

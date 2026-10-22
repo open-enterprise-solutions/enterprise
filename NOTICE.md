@@ -73,7 +73,7 @@ They live in:
 | `src/engine/frontend/win/ctrls/dataview`, `src/engine/frmclient/win/ctrls/dataview` | 8 + 8 |
 | `src/engine/frontend/win/ctrls`, `src/engine/frmclient/win/ctrls` (treelistctrl) | 2 + 2 |
 | `src/engine/frontend/docView`, `src/engine/frmclient/docView`, `src/engine/frmserver/docView` | 2 + 2 + 2 |
-| `src/engine/frontend/uikit` (with `ctrl`, `theme`) | 70 |
+| `src/engine/frontend/uikit`, `src/engine/frmclient/uikit` (with `ctrl`, `theme`) | 70 + 70 |
 | `src/engine/frontend/propertyManager/property/advprop`, `src/engine/frmclient/propertyManager/property/advprop` (advpropFont, advpropSize) | 2 + 2 |
 
 The per-file notices are authoritative; the table is a map, not a substitute. See
