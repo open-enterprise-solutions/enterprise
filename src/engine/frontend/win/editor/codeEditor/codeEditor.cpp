@@ -33,13 +33,13 @@ wxString ibCodeEditor::MakeProcedureTemplate(const wxString& name, const wxStrin
 }
 
 ibCodeEditor::ibCodeEditor()
-	: wxStyledTextCtrl(), m_ac(this), m_ct(this), m_tc(ibCompileCode::GetCodeStyle()), m_fp(this)
+	: wxStyledTextCtrl(), m_ac(this), m_ct(this), m_tc(ibCompileCode::GetCodeStyle())
 {
 }
 
 ibCodeEditor::ibCodeEditor(ibMetaDocument* document, wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSize& size, long style, const wxString& name)
 	: wxStyledTextCtrl(parent, id, pos, size, style, name),
-	  m_document(document), m_ac(this), m_ct(this), m_tc(ibCompileCode::GetCodeStyle()), m_fp(this)
+	  m_document(document), m_ac(this), m_ct(this), m_tc(ibCompileCode::GetCodeStyle())
 {
 	// initialize styles
 	StyleClearAll();
@@ -599,7 +599,7 @@ void ibCodeEditor::HighlightSyntaxAndCalculateFoldLevel(const int fromPos, const
 		}
 	}
 
-	m_fp.UpdateFoldLevel();
+	UpdateFoldLevel();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1159,4 +1159,14 @@ void ibCodeEditor::OnContextMenu(wxContextMenuEvent& event)
 		pt = ClientToScreen(wxPoint(PointFromPosition(pos).x, PointFromPosition(pos).y));
 	}
 	PopupMenu(&menu, ScreenToClient(pt));
+}
+
+void ibCodeEditor::UpdateFoldLevel()
+{
+	std::vector<int> levels;
+	if (!m_fp.UpdateFoldLevel(m_tc, GetLineCount(), levels))
+		return;
+
+	for (int line = 1; line < static_cast<int>(levels.size()); line++)
+		SetFoldLevel(line, levels[line]);
 }

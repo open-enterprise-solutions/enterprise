@@ -71,6 +71,9 @@
     <ClCompile Include="compiler\literal.cpp">
       <Filter>compiler</Filter>
     </ClCompile>
+    <ClCompile Include="compiler\scriptFoldCode.cpp">
+      <Filter>compiler</Filter>
+    </ClCompile>
     <ClCompile Include="compiler\scriptParseCode.cpp">
       <Filter>compiler</Filter>
     </ClCompile>
@@ -260,6 +263,9 @@
       <Filter>compiler</Filter>
     </ClInclude>
     <ClInclude Include="compiler\literal.h">
+      <Filter>compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\scriptFoldCode.h">
       <Filter>compiler</Filter>
     </ClInclude>
     <ClInclude Include="compiler\scriptParseCode.h">
