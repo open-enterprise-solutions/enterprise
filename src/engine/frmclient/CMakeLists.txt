@@ -13,6 +13,11 @@ file(GLOB_RECURSE FRMCLIENT_SOURCES CONFIGURE_DEPENDS
 
 add_library(frmclient SHARED ${FRMCLIENT_SOURCES})
 
+if(APPLE)
+    target_sources(frmclient PRIVATE mainFrame/mainFrameMac.mm)
+    target_link_libraries(frmclient PRIVATE "-framework AppKit")
+endif()
+
 # The FORKED widget layer compiles quiet — frontend's rule, for the same forks copied here (win/ctrls: wx's dataview,
 # grid, treelistctrl; win/theme: wxAUI dock art). frontend/CMakeLists.txt has the why and the limit: this reaches the
 # .cpp only, a vendored header silences itself with `#pragma GCC system_header`.
@@ -76,5 +81,6 @@ set_target_properties(frmclient PROPERTIES
     CXX_STANDARD_REQUIRED ON
     POSITION_INDEPENDENT_CODE ON
     CXX_VISIBILITY_PRESET hidden
+    OBJCXX_VISIBILITY_PRESET hidden
     OUTPUT_NAME "frmclient"
 )

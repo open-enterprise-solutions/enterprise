@@ -28,6 +28,11 @@ list(FILTER FRONTEND_SOURCES EXCLUDE REGEX "uikit/frame\\.cpp$")
 
 add_library(frontend SHARED ${FRONTEND_SOURCES})
 
+if(APPLE)
+    target_sources(frontend PRIVATE mainFrame/mainFrameMac.mm)
+    target_link_libraries(frontend PRIVATE "-framework AppKit")
+endif()
+
 # ---------------------------------------------------------------------------
 # The FORKED widget layer compiles quiet — same rule as the wxWidgets submodule
 # (see the root CMakeLists), applied per-file because these live inside our target.
