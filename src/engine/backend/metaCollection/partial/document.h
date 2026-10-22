@@ -202,7 +202,7 @@ private:
 //*                                      Object                                              *
 //********************************************************************************************
 
-class ibValueRecordDataObjectDocument : public ibValueRecordDataObjectRecorderRef {
+class BACKEND_API ibValueRecordDataObjectDocument : public ibValueRecordDataObjectRecorderRef {
 	public:
 	ibValueRecordDataObjectDocument(const ibValueMetaObjectDocument* metaObject = nullptr, const ibGuid& guid = wxNullGuid);
 	ibValueRecordDataObjectDocument(const ibValueRecordDataObjectDocument& source);
