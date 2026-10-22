@@ -337,12 +337,15 @@ private:
 	bool ModifyProperty(ibProperty* prop, const wxVariant& newValue);
 	bool ModifyEvent(ibEvent* event, const wxVariant& newValue);
 
-	void RestoreLastSelectedPropItem() {
+	// The row last selected (m_strSelPropItem) when it is still shown, else the name — its editor focused when `focus`.
+	void RestoreLastSelectedPropItem(bool focus) {
 
-		wxPGProperty* propPtr = m_pg->GetPropertyByName(wxT("name"));
+		wxPGProperty* propPtr = !m_strSelPropItem.IsEmpty() ? m_pg->GetPropertyByName(m_strSelPropItem) : nullptr;
+		if (propPtr == nullptr || !propPtr->IsVisible())
+			propPtr = m_pg->GetPropertyByName(wxT("name"));
 		if (propPtr != nullptr) {
 
-			m_pg->SelectProperty(propPtr, false);
+			m_pg->SelectProperty(propPtr, focus);
 
 			std::map< wxPGProperty*, ibProperty*>::iterator itProperty = m_propMap.find(propPtr);
 			if (itProperty != m_propMap.end()) {

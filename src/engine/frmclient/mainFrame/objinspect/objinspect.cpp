@@ -148,7 +148,20 @@ void ibObjectInspector::Create(ibPropertyObject* object, bool force)
 	// (the flicker bug). wxWindowUpdateLocker Thaws in its dtor at block exit.
 	wxWindowUpdateLocker updateLock(m_pg);
 
+	bool inGrid = false;
 	if (force || object != m_currentSel) {
+
+		// ⭐ THE PERSON'S PLACE, KEPT ACROSS THE REBUILD — frozen meanwhile, so the rebuild itself is not seen: the same
+		// object made anew (an edit's answer, a list that changed) comes back scrolled as it was, to the row they were on,
+		// and to its editor when they were in the grid; another object starts at its name. Asked before Clear — it takes
+		// the editor, the focus with it, and the scrolling.
+		const bool sameObject = object == m_currentSel;
+		if (!sameObject)
+			m_strSelPropItem.clear();
+		wxWindow* const focused = wxWindow::FindFocus();
+		inGrid = focused != nullptr && (focused == m_pg || m_pg->IsDescendant(focused));
+		int viewX = 0, viewY = 0;
+		m_pg->GetGrid()->GetViewStart(&viewX, &viewY);
 
 		// The object pushes its presentation through the notifier, so it must be registered on
 		// exactly the object we are showing — leave the old one first. A null owner means that
@@ -219,6 +232,8 @@ void ibObjectInspector::Create(ibPropertyObject* object, bool force)
 			m_currentSel->OnPropertyCreated();
 		}
 
+		if (sameObject)
+			m_pg->GetGrid()->Scroll(viewX, viewY);
 		m_pg->Refresh();
 		m_pg->Update();
 		filled.Pause();
@@ -250,7 +265,7 @@ void ibObjectInspector::Create(ibPropertyObject* object, bool force)
 		}
 	}
 
-	RestoreLastSelectedPropItem();
+	RestoreLastSelectedPropItem(inGrid);
 }
 
 bool ibObjectInspector::IsShownInspector() const
