@@ -773,7 +773,7 @@ void ibValueModelTableBox::OnUpdate(ibDataNode& state, ibVisualHost* host)
 			ibDataNode& entry = menu.AddChild(0, 0);
 			entry.SetValue(ibProtocol::ibForm::ibCommandBar::Id, static_cast<s32>(id));
 			entry.SetValue(ibProtocol::ibForm::ibCommandBar::Caption, actions.GetCaptionByID(id));
-			entry.SetValue(ibProtocol::ibForm::ibCommandBar::Picture, ibBackendPicture::SendPicture(actions.GetPictureByID(id)));
+			entry.SetValue(ibProtocol::ibForm::ibCommandBar::Picture, ibBackendPicture::SendPicture(actions.GetPictureByID(id), *GetMetaData()));
 			entry.SetValue(ibProtocol::ibForm::ibCommandBar::Enabled, !(viewOnly && actions.GetModifiesDataByID(id)));
 		}
 	}
@@ -1062,7 +1062,7 @@ bool ibValueModelTableBox::Fetch(const ibDataNode& request, ibDataNode& response
 		// The row's state picture, by its id — the picture itself the client loads apart.
 		const ibPictureID picture = m_tableModel->GetRowPicture(item);
 		if (picture != 0)
-			row.SetValue(ibProtocol::ibForm::ibTable::Picture, ibBackendPicture::SendPicture(picture));
+			row.SetValue(ibProtocol::ibForm::ibTable::Picture, ibBackendPicture::SendPicture(picture, *GetMetaData()));
 
 		// A row none of whose shown cells can be edited (a list row, a group heading) — the client opens
 		// no inline editor on it, and a double-click goes to the table (OnRowActivated).

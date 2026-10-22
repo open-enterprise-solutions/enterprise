@@ -22,8 +22,8 @@ void ibSchemaActiveUser::Build(const ibSession& session, const ibDataNode& WXUNU
 	const ibApplicationInstance* const applicationInstance = session.GetApplicationInstance();
 
 	// The dialog's pictures, as the desktop's drew them — the window's, and the one beside each user.
-	result.SetValue(ibProtocol::ibSchema::ibActiveUser::Icon, ibBackendPicture::SendPicture(g_picUserActiveCLSID));
-	result.SetValue(ibProtocol::ibSchema::ibActiveUser::Picture, ibBackendPicture::SendPicture(g_picUserCLSID));
+	result.SetValue(ibProtocol::ibSchema::ibActiveUser::Icon, ibBackendPicture::SendPicture(g_picUserActiveCLSID, *session.GetMetaData()));
+	result.SetValue(ibProtocol::ibSchema::ibActiveUser::Picture, ibBackendPicture::SendPicture(g_picUserCLSID, *session.GetMetaData()));
 
 	// The sessions — every process's in the base, not this server's alone.
 	ibDataNode& sessions = result.Child(ibProtocol::ibSchema::ibActiveUser::Sessions);

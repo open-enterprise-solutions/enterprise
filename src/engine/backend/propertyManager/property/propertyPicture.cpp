@@ -84,6 +84,7 @@ bool ibPropertyPicture::GetProtocolValue(ibDataNode& row, ibReader reader)
 		item.SetValue(ibProtocol::ibSchema::ibProperties::Name, picture->GetName());
 		const ibGuid guid = picture->GetGuid();
 		item.SetValue(ibProtocol::ibSchema::ibProperties::Guid, guid.str());
+		item.SetValue(ibProtocol::ibSchema::ibProperties::Id, ibBackendPicture::SendPicture(guid, *source));
 	}
 	row.SetProperty(ibProtocol::ibSchema::ibProperties::Pictures, ibDataValue::Child(pictures));
 	return true;

@@ -154,6 +154,14 @@ wxBitmap ibBackendPicture::CreatePicture(const ibExternalPictureDescription& pic
 #include "backend/metadataConfiguration.h"
 #include "backend/metaCollection/metaPictureObject.h"
 
+// A CONFIGURATION'S PICTURE, where the configuration keeps it: in the one it extends when it extends one, else its own.
+static const ibValueMetaObjectPicture* FindConfigurationPicture(const ibMetaData& metaData, const ibGuid& guid)
+{
+	ibMetaData* metaDataOwner = nullptr;
+	const ibMetaData& source = metaData.GetOwner(metaDataOwner) && metaDataOwner != nullptr ? *metaDataOwner : metaData;
+	return source.FindAnyObjectByFilter<ibValueMetaObjectPicture>(guid);
+}
+
 wxBitmap ibBackendPicture::CreatePicture(const ibPictureDescription& pictureDesc, const ibMetaData* metaData, const wxSize& size)
 {
 	if (pictureDesc.m_type == ibPictureType::eFromBackend) {
@@ -161,17 +169,8 @@ wxBitmap ibBackendPicture::CreatePicture(const ibPictureDescription& pictureDesc
 	}
 	else if (pictureDesc.m_type == ibPictureType::eFromConfiguration) {
 		if (metaData != nullptr && pictureDesc.m_meta_guid.isValid()) {
-			ibMetaData* metaDataOwner = nullptr;
-			if (metaData != nullptr && metaData->GetOwner(metaDataOwner) && metaDataOwner != nullptr) {
-				const ibValueMetaObjectPicture* picture =
-					metaDataOwner->FindAnyObjectByFilter<ibValueMetaObjectPicture>(pictureDesc.m_meta_guid);
-				return picture != nullptr && picture->IsAllowed() ? picture->GetValueAsBitmap() : wxNullBitmap;
-			}
-			else if (metaData != nullptr) {
-				const ibValueMetaObjectPicture* picture =
-					metaData->FindAnyObjectByFilter<ibValueMetaObjectPicture>(pictureDesc.m_meta_guid);
-				return picture != nullptr && picture->IsAllowed() ? picture->GetValueAsBitmap() : wxNullBitmap;
-			}
+			const ibValueMetaObjectPicture* picture = FindConfigurationPicture(*metaData, pictureDesc.m_meta_guid);
+			return picture != nullptr && picture->IsAllowed() ? picture->GetValueAsBitmap() : wxNullBitmap;
 		}
 	}
 	else if (pictureDesc.m_type == ibPictureType::eFromFile) {
@@ -211,18 +210,25 @@ ibPicture ibBackendPicture::GetServerPicture(const ibPictureDescription& picture
 	return bitmap.IsOk() ? FromImage(bitmap.ConvertToImage()) : ibPicture();
 }
 
-ibString ibBackendPicture::SendPicture(const ibPictureDescription& pictureDesc)
+ibString ibBackendPicture::SendPicture(const ibPictureDescription& pictureDesc, const ibMetaData& metaData)
 {
 	if (pictureDesc.IsEmptyPicture())
 		return ibString();
 	// A picture held as a file's bytes has no name of its own: it goes as itself.
 	if (pictureDesc.m_type == ibPictureType::eFromFile)
-		return GetServerPicture(pictureDesc).GetData();
+		return GetServerPicture(pictureDesc, &metaData).GetData();
 
-	// A backend picture's number as a decimal — a u64 is past what a JSON number keeps; a configuration picture's guid.
-	return pictureDesc.m_type == ibPictureType::eFromBackend
-		? ibString::Format(wxT("%llu"), static_cast<unsigned long long>(pictureDesc.m_class_identifier))
-		: ibString(pictureDesc.m_meta_guid.str());
+	// A backend picture's number as a decimal — a u64 is past what a JSON number keeps.
+	if (pictureDesc.m_type == ibPictureType::eFromBackend)
+		return ibString::Format(wxT("%llu"), static_cast<unsigned long long>(pictureDesc.m_class_identifier));
+
+	// A configuration picture's guid and the hash of what it holds now: a client keeps a picture by its id, and one
+	// changed since is another id, asked for anew. One the configuration has none of is no picture.
+	const ibValueMetaObjectPicture* const picture = FindConfigurationPicture(metaData, pictureDesc.m_meta_guid);
+	if (picture == nullptr)
+		return ibString();
+	return ibString(wxString::Format(wxT("%s#%016llx"), pictureDesc.m_meta_guid.str(),
+		static_cast<unsigned long long>(picture->GetContentHash())));
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////

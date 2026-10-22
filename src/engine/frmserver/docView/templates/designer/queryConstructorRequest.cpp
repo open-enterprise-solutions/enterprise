@@ -138,7 +138,7 @@ wxString ibKindPicture(const wxString& kind, const ibMetaData* metaData)
 	if (metaData == nullptr || kind.IsEmpty())
 		return wxString();
 	const ibCtorAbstractType* const ctor = metaData->GetAvailableCtor(kind);
-	return ctor != nullptr ? wxString(ibBackendPicture::SendPicture(ctor->GetClassType())) : wxString();
+	return ctor != nullptr ? wxString(ibBackendPicture::SendPicture(ctor->GetClassType(), *metaData)) : wxString();
 }
 
 bool ibFetchQueryConstructorRequest(const ibDataNode& request, ibDataNode& response, const ibMetaData* metaData)

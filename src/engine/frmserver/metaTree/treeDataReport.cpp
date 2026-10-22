@@ -47,7 +47,7 @@ void ibDataReportTree::FillData(ibDataNode& root)
 
 	root.SetMetaId(commonMetadata->GetMetaID());
 	root.SetValue(ibProtocol::ibSchema::ibMetaData::Title, commonMetadata->GetName());
-	root.SetValue(ibProtocol::ibSchema::ibMetaData::Picture, ibBackendPicture::SendPicture(g_metaReportCLSID));
+	root.SetValue(ibProtocol::ibSchema::ibMetaData::Picture, ibBackendPicture::SendPicture(g_metaReportCLSID, *m_metaData));
 	root.SetValue(ibProtocol::ibSchema::ibMetaData::Type, ClsidText(commonMetadata->GetClassType()));
 	root.SetValue(ibProtocol::ibSchema::ibMetaData::Synonym, commonMetadata->GetSynonym());
 	// …and its header, the fields above the rows — its properties' rows, as the inspector writes them.

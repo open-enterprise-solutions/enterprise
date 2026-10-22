@@ -4,6 +4,7 @@
 #include "core/picturePredefined.h"
 #include "core/serialize/dataBuilder.h"
 #include "backend/session/session.h"
+#include "backend/metadataConfiguration.h"   // the session's configuration, whose pictures these are
 
 #include "backend/backend_picture.h"   // ibBackendPicture::SendPicture — the picture, by its id
 #include "protocol/protocol.h"   // ibProtocol::ibRequest::ibKind::ApplyChange
@@ -21,7 +22,7 @@ bool ibDialogApplyChange::ShowApplyChange(const ibRestructureInfo& info)
 	// there) — and the window's own picture.
 	ibDataNode request;
 	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<s32>(ibProtocol::ibRequest::ibKind::ApplyChange));
-	request.SetValue(ibProtocol::ibRequest::ibApplyChange::Picture, ibBackendPicture::SendPicture(g_picStructureCLSID));
+	request.SetValue(ibProtocol::ibRequest::ibApplyChange::Picture, ibBackendPicture::SendPicture(g_picStructureCLSID, *frame->GetSession()->GetMetaData()));
 	for (const ibRestructureInfo::Entry& entry : info) {
 		ibDataNode& item = request.AddChild(0, 0);
 		item.SetValue(ibProtocol::ibRequest::ibApplyChange::Level, static_cast<s32>(entry.type));

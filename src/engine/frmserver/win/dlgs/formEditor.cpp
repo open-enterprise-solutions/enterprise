@@ -49,7 +49,7 @@ int ibDialogFormEditor::ShowModal()
 	for (;;) {
 		ibDataNode request;
 		request.SetValue(ibProtocol::ibRequest::Kind, static_cast<s32>(ibProtocol::ibRequest::ibKind::FormEditor));
-		request.SetValue(ibProtocol::ibRequest::ibFormEditor::Picture, ibBackendPicture::SendPicture(g_picChangeFormCLSID));
+		request.SetValue(ibProtocol::ibRequest::ibFormEditor::Picture, ibBackendPicture::SendPicture(g_picChangeFormCLSID, *m_owner->GetMetaData()));
 		request.SetValue(ibProtocol::ibRequest::ibFormEditor::HasSetting, ibHasFormSettings(m_owner));
 		if (result != wxNOT_FOUND)
 			request.SetValue(ibProtocol::ibRequest::ibFormEditor::Result, static_cast<s32>(result));
@@ -59,7 +59,7 @@ int ibDialogFormEditor::ShowModal()
 		for (const ibCtorAbstractType* ctor : ibValue::GetListCtorsByType(ibCtorObjectType::ibCtorObjectType_object_control)) {
 			ibDataNode& described = classes.AddChild(0, 0);
 			described.SetValue(ibProtocol::ibRequest::ibFormEditor::Name, ctor->GetClassName());
-			described.SetValue(ibProtocol::ibRequest::ibFormEditor::Picture, ibBackendPicture::SendPicture(ctor->GetClassType()));
+			described.SetValue(ibProtocol::ibRequest::ibFormEditor::Picture, ibBackendPicture::SendPicture(ctor->GetClassType(), *m_owner->GetMetaData()));
 		}
 		// …and the form's controls, what a person may arrange of each — as they stand now: asked again after each act.
 		AppendControl(request.Child(ibProtocol::ibRequest::ibFormEditor::Controls), m_owner);

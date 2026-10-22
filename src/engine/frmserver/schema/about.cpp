@@ -6,6 +6,7 @@
 #include "backend/plugin/pluginManager.h"
 #include "core/serialize/dataBuilder.h"
 #include "backend/session/session.h"
+#include "backend/metadataConfiguration.h"   // the session's configuration, whose pictures these are
 #include "backend/backend_picture.h"   // ibBackendPicture::SendPicture — the picture, by its id
 
 void ibSchemaAbout::Build(const ibSession& session, const ibDataNode& WXUNUSED(args), ibDataNode& result) const
@@ -13,7 +14,7 @@ void ibSchemaAbout::Build(const ibSession& session, const ibDataNode& WXUNUSED(a
 	const ibApplicationInstance* const applicationInstance = session.GetApplicationInstance();
 
 	result.SetValue(ibProtocol::ibSchema::ibAbout::Build, static_cast<s32>(GetBuildId()));
-	result.SetValue(ibProtocol::ibSchema::ibAbout::Picture, ibBackendPicture::SendPicture(g_metaCommonMetadataCLSID));
+	result.SetValue(ibProtocol::ibSchema::ibAbout::Picture, ibBackendPicture::SendPicture(g_metaCommonMetadataCLSID, *session.GetMetaData()));
 	result.SetValue(ibProtocol::ibSchema::ibAbout::User, session.GetUserInfo().m_strUserName);
 	if (applicationInstance == nullptr)
 		return;
