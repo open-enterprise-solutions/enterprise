@@ -66,10 +66,14 @@ bool ibHomePageDescription::ReadNode(const ibDataValue& value)
 
 	for (int idx = eHomePageColumn_Left; idx < eHomePageColumn_Count; idx++) {
 		m_columns[idx].clear();
-		const ibDataValue columnVal = root->GetProperty(s_columnNodeName[idx]);
-		if (columnVal.Kind() != ibDataKind::Array)
+		// A field, as every description keeps a list — a JSON text does not say an entry's area, and its reader puts a
+		// list among the fields (ibJsonProvider::ReadEntry); a file written before kept the column a property.
+		const ibDataValue* columnVal = root->FindField(s_columnNodeName[idx]);
+		if (columnVal == nullptr)
+			columnVal = root->FindProperty(s_columnNodeName[idx]);
+		if (columnVal == nullptr || columnVal->Kind() != ibDataKind::Array)
 			continue;
-		for (const ibDataValue& itemVal : columnVal.AsArray()) {
+		for (const ibDataValue& itemVal : columnVal->AsArray()) {
 			if (itemVal.Kind() != ibDataKind::Child)
 				continue;
 			const std::shared_ptr<ibDataNode>& itemNode = itemVal.AsChild();
@@ -101,7 +105,7 @@ bool ibHomePageDescription::WriteNode(ibDataValue& value) const
 			itemNode->SetValue(wxT("Visible"), item.m_visible);
 			items.push_back(ibDataValue::Child(itemNode));
 		}
-		root->SetProperty(s_columnNodeName[idx], ibDataValue::Array(items));
+		root->AddField(s_columnNodeName[idx], ibDataValue::Array(items));
 	}
 
 	value = ibDataValue::Child(root);

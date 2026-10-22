@@ -82,7 +82,8 @@ tab it gets what changed there, not the whole form. A client keeps each tab's vi
 makes active in place (keeping the view it holds when it has none for that tab), applies the patch's `View` to it,
 and begins the store again with a frame sent whole.
 
-A tab's `Kind` says what its view shows when it is no form (2 a text, 3 a spreadsheet, 4 the registration journal).
+A tab's `Kind` says what its view shows when it is no form (2 a text, 3 a spreadsheet, 4 the registration journal,
+16 the start page — its `Columns`, each cell's form a `View` as a tab's, named by its `Key`).
 A text's `View` is a textbox's node, its `State` the `Text` and `ReadOnly`; help is such a tab, read-only. The
 journal's rows are fetched by the tab, newest first: `fetch {Tab, Request}` with the filter `From`, `To` (ms since the
 epoch, 0 — no bound), `Level`, `User`, `Session`, `Source`, `Event`, `Ref`, `Search` (a part of the message), `Offset`,

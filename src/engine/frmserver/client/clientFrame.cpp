@@ -125,6 +125,15 @@ void ibClientFrame::RefreshFrame()
 		host->NotifyChanged(m_clientInstance);
 }
 
+void ibClientFrame::RaiseFrame()
+{
+	{
+		std::lock_guard<std::mutex> lock(m_msgMutex);
+		m_raisePending = true;
+	}
+	RefreshFrame();
+}
+
 void ibClientFrame::Message(const wxString& strMessage, ibStatusMessage status)
 {
 	std::lock_guard<std::mutex> lock(m_msgMutex);
@@ -190,6 +199,14 @@ bool ibClientFrame::TakeExitPending()
 	std::lock_guard<std::mutex> lock(m_msgMutex);
 	const bool was = m_exitPending;
 	m_exitPending = false;
+	return was;
+}
+
+bool ibClientFrame::TakeRaisePending()
+{
+	std::lock_guard<std::mutex> lock(m_msgMutex);
+	const bool was = m_raisePending;
+	m_raisePending = false;
 	return was;
 }
 
@@ -776,10 +793,25 @@ void ibClientFrame::DrainPendingCloses()
 				continue;
 			// The view goes, and with the last view the document and its form (ibDocument::DeleteAllViews) —
 			// only now, with nothing on the stack inside them. Then the tab, and the mark its view's going put on it.
-			if (ibDocument* const document = m_tabs[i]->GetDocument())
+			ibDocument* const document = m_tabs[i]->GetDocument();
+			const ibDocument* const owner = document != nullptr ? document->GetDocParent() : nullptr;
+			if (document != nullptr)
 				document->DeleteAllViews();
 			m_pendingCloses.erase(std::remove(m_pendingCloses.begin(), m_pendingCloses.end(), tab), m_pendingCloses.end());
+			const bool wasActive = i == m_activeTab;
 			m_tabs.erase(m_tabs.begin() + i);
+			// ⭐ WHAT IS ACTIVE AFTER IT — the desktop's: a tab closed before the active one leaves that one active; the
+			// active one closed hands it to its owner's tab (the form editor's — the object it was opened from), else to
+			// the tab on its left (ibAuiDocChildFrame::Destroy). The index kept handed it to the one on the right.
+			if (i < m_activeTab)
+				--m_activeTab;
+			else if (wasActive) {
+				m_activeTab = i > 0 ? i - 1 : 0;
+				for (std::size_t j = 0; owner != nullptr && j < m_tabs.size(); ++j) {
+					if (m_tabs[j]->GetDocument() == owner)
+						m_activeTab = j;
+				}
+			}
 			if (m_activeTab >= m_tabs.size())
 				m_activeTab = m_tabs.empty() ? 0 : m_tabs.size() - 1;
 			break;

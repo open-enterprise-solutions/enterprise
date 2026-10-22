@@ -198,6 +198,7 @@ namespace ibProtocol {
 		inline constexpr const char* Messages   = "Messages";   // ibMessage each
 		inline constexpr const char* Clear      = "Clear";
 		inline constexpr const char* Exit       = "Exit";       // the client is to go — Exit done
+		inline constexpr const char* Raise      = "Raise";      // the client's window raised — a debugger left its loop
 		inline constexpr const char* Title      = "Title";
 		inline constexpr const char* Status     = "Status";
 		inline constexpr const char* Menu       = "Menu";       // ibMenu each
@@ -1271,6 +1272,7 @@ namespace ibProtocol {
 			Assistant        = 13,   // ibAssistant
 			Composer         = 14,   // ibComposer
 			Configuration    = 15,   // a configuration file (or the database's copy) browsed read-only: MetaData
+			HomePage         = 16,   // ibHomePage: the start page — the forms the configuration places on it
 		};
 
 		// Text, ReadOnly; what was typed handed back as event {Tab, Event: Change, Args: {Text}}.
@@ -1557,9 +1559,9 @@ namespace ibProtocol {
 
 		}
 
-		// The start page a home page lays out, a tab's: Columns, the forms of each — Title, Icon, Height (its weight in the
-		// column), View (the form, as a tab's) or Unavailable (why it is not); Gravity — the left column's share of the
-		// width.
+		// The start page a home page lays out, a tab's (Kind HomePage): Columns, the forms of each — Title, Icon, Height
+		// (its weight in the column), View (the form, as a tab's) or Unavailable (why it is not); Gravity — the left
+		// column's share of the width.
 		namespace ibHomePage {
 
 			inline constexpr const char* Columns     = "Columns";

@@ -186,14 +186,21 @@ void ApplyLabels(const ibValueFrame* control, wxBoxSizer* parentSizer, int& maxL
 //***********************************************************************************
 
 ibVisualHostClient::ibVisualHostClient(ibFrontendMainFrame& frame, wxWindow* parent, long long tabId)
-	: wxScrolledCanvas(parent, wxID_ANY), m_mainFrame(frame), m_tabId(tabId), m_valueForm(std::make_unique<ibValueForm>(*this))
+	: wxPanel(parent, wxID_ANY), m_mainFrame(frame), m_tabId(tabId), m_valueForm(std::make_unique<ibValueForm>(*this))
 {
-	SetDoubleBuffered(true);
-	SetScrollRate(5, 5);
+	// ⭐ A FRAME AROUND THE WINDOW THE CONTROLS SCROLL IN, that one filling it — the desktop's facade (ibVisualHost): the
+	// command bar stands above it (Build) and stays where it is while the controls scroll; it scrolled away with them when
+	// this one was the scrolling window (2026-10-22).
+	m_contentWindow = new wxScrolledCanvas(this, wxID_ANY);
+	m_contentWindow->SetDoubleBuffered(true);
+	m_contentWindow->SetScrollRate(5, 5);
 #ifdef __WXOSX__
-	SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW));
-	SetBackgroundStyle(wxBG_STYLE_SYSTEM);
+	m_contentWindow->SetBackgroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW));
+	m_contentWindow->SetBackgroundStyle(wxBG_STYLE_SYSTEM);
 #endif
+	wxBoxSizer* const sizer = new wxBoxSizer(wxVERTICAL);
+	sizer->Add(m_contentWindow, 1, wxEXPAND);
+	SetSizer(sizer);
 }
 
 ibVisualHostClient::~ibVisualHostClient()
@@ -385,16 +392,25 @@ void ibVisualHostClient::UpdateForm(const ibProtocolNode& form)
 
 void ibVisualHostClient::Build(const ibProtocolNode& form)
 {
-	// The desktop's chrome: the command bar at the top, above the controls (CreateFormLayers).
+	// The desktop's chrome: the command bar at the top, above the controls (CreateFormLayers) — on this window, above the
+	// one they scroll in, so it stays where it is (InitMainSizer); a host that builds them deeper (the designer's card)
+	// has it there with them, the whole card scrolling.
 	wxWindow* const window = GetBackgroundWindow();
-	m_sizer = new wxBoxSizer(wxVERTICAL);
-	m_commandBar = std::make_unique<ibViewCommandBar>(window, *this, [this](const ibProtocolNode& args) {
+	wxWindow* const barParent = window == m_contentWindow ? this : window;
+	m_commandBar = std::make_unique<ibViewCommandBar>(barParent, *this, [this](const ibProtocolNode& args) {
 		Send(m_valueForm->GetControlID(), ibProtocol::ibEvent::ibKind::Command, args);
 	});
-	m_sizer->Add(m_commandBar->GetWindow(), 0, wxEXPAND);
 	m_content = new wxBoxSizer(wxVERTICAL);
-	m_sizer->Add(m_content, 1, wxEXPAND);
-	window->SetSizer(m_sizer);
+	if (barParent == this) {
+		GetSizer()->Insert(0, m_commandBar->GetWindow(), 0, wxEXPAND);
+		window->SetSizer(m_content);
+	}
+	else {
+		wxBoxSizer* const column = new wxBoxSizer(wxVERTICAL);
+		column->Add(m_commandBar->GetWindow(), 0, wxEXPAND);
+		column->Add(m_content, 1, wxEXPAND);
+		window->SetSizer(column);
+	}
 
 	// A VIEW THAT IS NO FORM IS ONE CONTROL, filling the tab — with no commands of a form's.
 	if (form.GetType() != ibProtocol::ibForm::ibType::ClientForm) {
@@ -650,7 +666,9 @@ void ibVisualHostClient::Clear()
 	wxWindow* const window = GetBackgroundWindow();
 	window->DestroyChildren();
 	window->SetSizer(nullptr);
-	m_sizer = nullptr;
+	// …and the command bar where it stands on this one, above them (Build).
+	if (m_commandBar != nullptr && window == m_contentWindow)
+		m_commandBar->GetWindow()->Destroy();
 	m_content = nullptr;
 	m_commandBar.reset();
 
@@ -688,8 +706,10 @@ void ibVisualHostClient::AlignLabels()
 
 void ibVisualHostClient::UpdateVirtualSize()
 {
-	// The scrolling is what the controls need: the scrollbars show only when the form does not fit.
+	// The scrolling is what the controls need: the scrollbars show only when the form does not fit — the command bar
+	// above, laid out with the window they scroll in.
 	Layout();
-	FitInside();
-	Refresh();
+	m_contentWindow->Layout();
+	m_contentWindow->FitInside();
+	m_contentWindow->Refresh();
 }

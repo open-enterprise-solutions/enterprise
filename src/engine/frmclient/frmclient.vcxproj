@@ -160,6 +160,7 @@
     <ClCompile Include="docView\templates\docViewText.cpp" />
     <ClCompile Include="docView\templates\docViewFile.cpp" />
     <ClCompile Include="docView\templates\docViewAuditLog.cpp" />
+    <ClCompile Include="docView\templates\docViewHomePage.cpp" />
     <ClCompile Include="docView\templates\docViewHelp.cpp" />
     <ClCompile Include="mainFrame\mainFrame.cpp" />
     <ClCompile Include="mainFrame\mainFrameChild.cpp" />
@@ -353,6 +354,7 @@
     <ClInclude Include="docView\templates\docViewText.h" />
     <ClInclude Include="docView\templates\docViewFile.h" />
     <ClInclude Include="docView\templates\docViewAuditLog.h" />
+    <ClInclude Include="docView\templates\docViewHomePage.h" />
     <ClInclude Include="docView\templates\docViewHelp.h" />
     <ClInclude Include="mainFrame\settings\editorsettings.h" />
     <ClInclude Include="win\editor\textEditor\textEditor.h" />

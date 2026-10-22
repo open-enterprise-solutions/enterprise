@@ -121,6 +121,8 @@ public:
 	// client names that form by — an event to a cell's control carries it). Written whole every time.
 	virtual void OnDraw(ibDataNode& frame) override;
 
+	virtual ibProtocol::ibView::ibKind GetViewKind() const override { return ibProtocol::ibView::ibKind::HomePage; }
+
 private:
 
 	// One attached form. `m_metaForm` is what the item points at (null when it was deleted since it was

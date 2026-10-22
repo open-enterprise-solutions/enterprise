@@ -21,13 +21,14 @@ class ibFrontendMainFrame;
 class ibViewCommandBar;
 
 // THE VIEW OF A TAB — the tab's form as the server writes it (the frame's View), drawn: the desktop's ibVisualHost
-// (frontend/visualView/visualHost.h) — its inner scrolling window, the one that holds the controls — over the wire's
-// node instead of the form. The same walk builds it (GenerateControl): a sizer item is no control, it carries how its
-// one child sits in the sizer above; a window goes into the sizer it sits in, and so does a sizer.
+// (frontend/visualView/visualHost.h) over the wire's node instead of the form — a frame around the window the controls
+// scroll in, the command bar above that window, still while they scroll. The same walk builds it (GenerateControl): a
+// sizer item is no control, it carries how its one child sits in the sizer above; a window goes into the sizer it sits
+// in, and so does a sizer.
 //
 // A frame of the same form is drawn into the controls there — a control added, removed, moved or made otherwise laid in
 // among them where it changed (UpdateChildren); another form is built anew.
-class FRMCLIENT_API ibVisualHostClient : public wxScrolledCanvas {
+class FRMCLIENT_API ibVisualHostClient : public wxPanel {
 public:
 
 	ibVisualHostClient(ibFrontendMainFrame& frame, wxWindow* parent, long long tabId);
@@ -50,6 +51,8 @@ public:
 	ibValueForm* GetValueForm() const { return m_valueForm.get(); }
 	// …and its command bar, drawn above its controls (the server's form's GetCommandBar).
 	ibViewCommandBar* GetCommandBar() const { return m_commandBar.get(); }
+	// The window the controls scroll in, filling this one under the command bar — the desktop's inner one.
+	wxScrolledCanvas* GetContentWindow() const { return m_contentWindow; }
 	// The tab it draws in — whose document the form's is.
 	long long GetTabId() const { return m_tabId; }
 	// The control a window drawn is — none: no control's (the desktop's GetObjectBase).
@@ -58,8 +61,8 @@ public:
 	// THE DESIGNER'S HOST — the desktop's: the form drawn for its editor, what the person does with a control the
 	// editor's — nothing of it goes to the server (Send, Hold).
 	virtual bool IsDesignerHost() const { return false; }
-	// The window the controls are built in — this one; a designer's host, its card's.
-	virtual wxWindow* GetBackgroundWindow() const { return const_cast<ibVisualHostClient*>(this); }
+	// The window the controls are built in — the one they scroll in; a designer's host, its card's.
+	virtual wxWindow* GetBackgroundWindow() const { return m_contentWindow; }
 	// A click into it, as the application saw it before the window clicked did — a designer's host selects by it.
 	virtual void OnClickFromApp(wxWindow* WXUNUSED(currentWindow), wxMouseEvent& WXUNUSED(event)) {}
 	// …and a part of a control clicked that is a control of its own — a table's column by its header, the table by its
@@ -116,10 +119,10 @@ private:
 
 	wxString    m_formKey;             // the form drawn, as an event names it; empty — a view that is no form
 	std::string m_shape;               // the view as last built
-	wxBoxSizer* m_sizer = nullptr;     // the background window's: the command bar above the controls (the desktop's chrome)
-	wxBoxSizer* m_content = nullptr;   // the form's controls', laid out as the form says
+	wxScrolledCanvas* m_contentWindow = nullptr;   // the controls' window, scrolling under the command bar
+	wxBoxSizer*       m_content = nullptr;         // the form's controls', laid out as the form says
 
-	std::unique_ptr<ibViewCommandBar> m_commandBar;   // its window is this one's child
+	std::unique_ptr<ibViewCommandBar> m_commandBar;   // its window stands above the controls' (Build)
 
 	std::map<long long, ibValueFrame*>   m_controls;   // by their node ids — held by the form's tree
 	std::map<long long, ibProtocolNode>  m_drawn;      // their nodes as last drawn, less what is in them
@@ -152,36 +155,39 @@ private:
 	const ibFormVisualDocument& m_document;
 };
 
-class FRMCLIENT_API ibFormVisualEditView : public ibFrontendView {
+// ⭐ THE VIEW OF FORM HOSTS, A FACADE OVER THE ACTIVE CONTROL of the form the person is in (ibValueForm::GetActiveControl,
+// which this view puts as the focus moves; docview-fork.md). When it holds a view of its own (ibValueFrame::GetControlView
+// — the grid box, the text box), the form hands that view the menu, the toolbar, the commands, activation, printing,
+// saving and undo, as a view that shows it would. A form's tab has one host (ibFormVisualEditView); the start page one in
+// each of its cells (ibHomePageView).
+class FRMCLIENT_API ibVisualHostView : public ibFrontendView {
 public:
 
-	// The tab's View — the frame's while the tab is the active one — drawn into it, by what the patch changed (none: whole).
-	void Draw(const ibProtocolNode& view, const ibProtocolNode& patch);
+	// Its hosts made, a derived view's OnCreate calls this: the focus is watched, and every command passes by.
+	virtual bool OnCreate(ibFrontendDocument* doc, long flags) override;
+	virtual bool OnClose(bool deleteWindow = true) override;
 
 	virtual wxPrintout* OnCreatePrintout() override;
 
-	virtual bool OnCreate(ibFrontendDocument* doc, long flags) override;
-	virtual bool OnClose(bool deleteWindow = true) override;
-	virtual void OnDraw(wxDC* WXUNUSED(dc)) override {}
-
-	ibVisualHostClient* GetVisualHost() const { return m_visualHost; }
-
-	// ⭐ THE SAME DOC/VIEW, A FACADE OVER THE FORM'S ACTIVE CONTROL (ibValueForm::GetActiveControl, which this view
-	// puts as the focus moves; docview-fork.md). When it holds a view of its own (ibValueFrame::GetControlView —
-	// the grid box, the text box), the form hands that view the menu, the toolbar, the commands, activation,
-	// printing, saving and undo, as a view that shows it would.
 #if wxUSE_MENUS
 	virtual wxMenuBar* CreateMenuBar() const override;
 #endif
 	virtual void OnCreateToolbar(wxAuiToolBar* toolbar) override;
 	virtual void OnActivateView(bool activate, ibFrontendView* activeView, ibFrontendView* deactiveView) override;
 
+	// The host a window of the view is in — none: it is in none (a cell's header). A form's tab: its one host, filling it.
+	virtual ibVisualHostClient* FindVisualHost(wxWindow* WXUNUSED(window)) const { return m_visualHost; }
+
+	// The host the person is in — the one the focus went into last.
+	ibVisualHostClient* GetVisualHost() const { return m_visualHost; }
 	// The active control's view — null when it is a bare control, or there is none.
 	ibFrontendView* GetActiveControlView() const;
 
-private:
+protected:
 
-	ibVisualHostClient* m_visualHost = nullptr;   // the one window in the tab, filling it
+	ibVisualHostClient* m_visualHost = nullptr;
+
+private:
 
 	// The focus is watched on the view's window, which an EMBEDDED form does not own and which outlives
 	// it — so the watch is taken off in OnClose, before the view lets the window go.
@@ -190,6 +196,17 @@ private:
 	void OnActiveControlCommand(wxCommandEvent& event);
 
 	const ibFrontendView* m_shownControlView = nullptr;   // whose chrome is shown now — compared, never followed
+};
+
+// The form's view in its tab — one host, filling it.
+class FRMCLIENT_API ibFormVisualEditView : public ibVisualHostView {
+public:
+
+	virtual bool OnCreate(ibFrontendDocument* doc, long flags) override;
+	virtual void OnDraw(wxDC* WXUNUSED(dc)) override {}
+
+	// The tab's View — the frame's while the tab is the active one — drawn into it, by what the patch changed (none: whole).
+	void Draw(const ibProtocolNode& view, const ibProtocolNode& patch);
 };
 
 // The tab of a form — the form's view in it, and the form's undo.
