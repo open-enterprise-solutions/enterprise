@@ -1972,10 +1972,13 @@ ibValue EvalColumnExprRow(const ibQueryColumnExpr* e, const ibQueryRow& row, con
 			const ibValue va = EvalColumnExprRow(e->m_lhs.get(), row, win);
 			const ibValue vb = EvalColumnExprRow(e->m_rhs.get(), row, win);
 			if (RamAnyNull({ &va, &vb })) return RamNullValue();   // strict — see above
+			if (e->m_arith == ibQueryColumnArithOp::Concat)   // before the numbers: a string is not read as one
+				return ibValue(va.GetString() + vb.GetString());
 			const ibNumber a = va.GetNumber();
 			const ibNumber b = vb.GetNumber();
 			switch (e->m_arith) {
 				case ibQueryColumnArithOp::Add: return ibValue(a + b);
+				case ibQueryColumnArithOp::Concat: break;   // answered above
 				case ibQueryColumnArithOp::Sub: return ibValue(a - b);
 				case ibQueryColumnArithOp::Mul: return ibValue(a * b);
 				case ibQueryColumnArithOp::Div: return ibValue(b.IsZero() ? ibNumber() : a / b);   // guard /0 -> 0

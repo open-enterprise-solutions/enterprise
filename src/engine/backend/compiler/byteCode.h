@@ -529,6 +529,10 @@ public:
 		return iterator != m_listFunc.end();
 	}
 
+	// The declared default of a parameter, from this module's constant pool. False for a
+	// parameter declared without one — the caller has to supply it.
+	bool GetParamDefValue(const long lCodeLine, const long lParamNum, ibValue& pvarParamDefValue) const;
+
 	// Reverse lookup: find the function whose entry-line equals
 	// lCodeLine. Used by Execute on function entry to populate
 	// ibRunContext::m_currentFunction so the runtime carries

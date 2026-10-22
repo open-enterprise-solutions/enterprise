@@ -85,7 +85,11 @@ class ibValueEnumNumberPeriodicity : public ibValueEnumeration<ibNumberPeriodici
 };
 #pragma endregion
 
-class ibDateTime;
-int ibDocumentNumberInterval(ibNumberPeriodicity period, const ibDateTime& when);
+int ibDocumentNumberInterval(ibNumberPeriodicity period, const class ibDateTime& when);
+
+// The stretch a periodic number repeats in, as the unit a date is cut to (BeginOfPeriod) — what
+// GetPeriodicityUnit is to a register. Asked of a periodic number only: a nonperiodical one has no
+// stretch, and the series key and FindByNumber both answer for it before they ask.
+enum ibTotalsPeriod ibNumberPeriodicityUnit(ibNumberPeriodicity period);
 
 #endif // ! _DOCUMENT_EMUN_H_

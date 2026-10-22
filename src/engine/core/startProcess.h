@@ -6,6 +6,8 @@
 
 #include "core/core.h"
 
+#include <vector>
+
 #include <wx/string.h>
 
 // Starts a program and does not wait for it: the new process's id, or 0 when it could not start (the reason goes to
@@ -16,6 +18,9 @@
 // waits for its child through the main loop on Unix, and the application server has no main loop at all: a designer's
 // tool there runs on a session's fiber, and app_run asserted from one (2026-10-21). The child is not watched; on POSIX
 // a thread waits for it, so it does not stay a zombie that wxProcess::Exists reports as running.
-CORE_API long ibStartProcess(const wxString& command);
+//
+// `input`, when there is any, is written on the child's stdin and the pipe closed after it - the road a launch hands
+// its passwords by (launchTicket.h), so they are never on a command line. Without it the child's stdin is left alone.
+CORE_API long ibStartProcess(const wxString& command, const std::vector<unsigned char>& input = {});
 
 #endif // __CORE_START_PROCESS_H__

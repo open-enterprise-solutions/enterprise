@@ -1813,6 +1813,26 @@ bool ibValueManagerDataObject::CallAsFunc(const long lMethodNum, ibValue& pvarRe
 	return false;
 }
 
+bool ibValueManagerDataObject::GetParamDefValue(const long lMethodNum, const long lParamNum, ibValue& pvarParamDefValue) const
+{
+	const ibValueMetaObjectGenericData* valueMetaObject = GetMetaObject();
+	wxASSERT(valueMetaObject);
+
+	const ibMetaData* metaData = valueMetaObject->GetMetaData();
+	wxASSERT(metaData);
+
+	if (m_members.GetMethodAlias(lMethodNum) != g_aliasExport)
+		return false;
+
+	auto* moduleManager = ibSession::EditModuleManagerFor(metaData);
+	auto* pRefData = moduleManager ? moduleManager->FindCommonModule(GetManagerModule()) : nullptr;
+
+	if (pRefData != nullptr)
+		return pRefData->GetParamDefValue(ibModuleMethodNum(*pRefData, m_members.GetMethodName(lMethodNum)), lParamNum, pvarParamDefValue);
+
+	return false;
+}
+
 ibClassID ibValueManagerDataObject::GetClassType() const
 {
 	const ibValueMetaObjectGenericData* valueMetaObject = GetMetaObject();
@@ -2288,6 +2308,17 @@ bool ibValueRecordDataObject::CallAsFunc(const long lMethodNum, ibValue& pvarRet
 	case eGetMetadata:
 		pvarRetValue = GetMetaObject();
 		return true;
+	}
+
+	return false;
+}
+
+bool ibValueRecordDataObject::GetParamDefValue(const long lMethodNum, const long lParamNum, ibValue& pvarParamDefValue) const
+{
+	if (m_members.GetMethodAlias(lMethodNum) == eProcUnit) {
+		return ibRuntimeModuleDataObject::GetParamDefValue(
+			GetMethodName(lMethodNum), lParamNum, pvarParamDefValue
+		);
 	}
 
 	return false;

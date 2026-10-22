@@ -1106,7 +1106,7 @@ long ibApplicationInstance::RunApplication(const wxString& strAppName, const wxS
 	if (useManifest)
 		return SpawnWebServerWithManifest(executeCmd, secrets, searchDebug);
 
-	const long execute = ibExecuteWithSecrets(executeCmd, secrets);
+	const long execute = ibStartProcess(executeCmd, secrets);
 
 	if (searchDebug && execute != 0) {
 		// Scan in rounds, the same way the manifest path below does, and for the same
@@ -1144,7 +1144,7 @@ long ibApplicationInstance::SpawnWebServerWithManifest(wxString cmd, const ibLau
 	cmd += wxString::Format(wxT(" --port=0 --manifest=\"%s\""), manifestPath);
 
 	// Spawn detached so the caller can exit without killing the server.
-	const long pid = ibExecuteWithSecrets(cmd, secrets);
+	const long pid = ibStartProcess(cmd, secrets);
 	if (pid == 0) {
 		wxRemoveFile(manifestPath);
 		return 0;

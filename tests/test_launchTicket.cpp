@@ -5,6 +5,7 @@
 #include <wx/file.h>
 #include <wx/filename.h>
 #include <wx/stdpaths.h>
+#include <wx/utils.h>
 
 #include "backend/appData.h"
 #include "backend/session/session.h"
@@ -14,8 +15,6 @@
 
 #if !defined(__WXMSW__)
 #  include <signal.h>
-#  include <sys/wait.h>
-#  include <unistd.h>
 #endif
 
 namespace {
@@ -82,14 +81,13 @@ TEST(LaunchSecrets, AChildReadsThePasswordTwiceAndTheCommandLineDoesNotCarryIt)
 	auto once = [&](const wxString& out) {
 		ASSERT_EQ(setenv("OES_LAUNCH_CHILD", "1", 1), 0);
 		ASSERT_EQ(setenv("OES_LAUNCH_OUT", out.utf8_str(), 1), 0);
-		const long pid = ibExecuteWithSecrets(cmd, secrets);
-		ASSERT_GT(pid, 0);
-		int status = 0;
-		const pid_t done = waitpid(static_cast<pid_t>(pid), &status, 0);
-		EXPECT_EQ(done, static_cast<pid_t>(pid));
-		EXPECT_TRUE(WIFEXITED(status));
+		const long pid = ibStartProcess(cmd, secrets);
 		unsetenv("OES_LAUNCH_CHILD");
 		unsetenv("OES_LAUNCH_OUT");
+		ASSERT_GT(pid, 0);
+		// ibStartProcess reaps its own child, so the test waits for what the child writes, not for the child.
+		for (int i = 0; i < 100 && ReadFile(out).IsEmpty(); ++i)
+			wxMilliSleep(100);
 	};
 
 	once(first);
@@ -99,7 +97,7 @@ TEST(LaunchSecrets, AChildReadsThePasswordTwiceAndTheCommandLineDoesNotCarryIt)
 	wxRemoveFile(first);
 	wxRemoveFile(second);
 
-	const long sleeper = ibExecuteWithSecrets(wxT("sleep 30"), secrets);
+	const long sleeper = ibStartProcess(wxT("sleep 30"), secrets);
 	ASSERT_GT(sleeper, 0);
 	const wxString cmdlinePath = wxString::Format(wxT("/proc/%ld/cmdline"), sleeper);
 	const wxString cmdline = ReadFile(cmdlinePath);
@@ -107,8 +105,6 @@ TEST(LaunchSecrets, AChildReadsThePasswordTwiceAndTheCommandLineDoesNotCarryIt)
 	EXPECT_FALSE(cmdline.Contains(wxT("db-secret-oes-9f3a")));
 	EXPECT_FALSE(cmdline.Contains(wxT("--password=")));
 	kill(static_cast<pid_t>(sleeper), SIGTERM);
-	int status = 0;
-	waitpid(static_cast<pid_t>(sleeper), &status, 0);
 }
 
 #endif

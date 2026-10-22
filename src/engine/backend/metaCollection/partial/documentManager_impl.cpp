@@ -37,11 +37,7 @@ ibValue ibValueManagerDataObjectDocument::FindByNumber(const ibValue& vNumber, c
 			}
 			else {
 				const ibDateTime when = vPeriod.GetDate();
-				const ibTotalsPeriod unit =
-					periodicity == ibNumberPeriodicity::ibNumberPeriodicity_Year    ? ibTotalsPeriod::Year
-					: periodicity == ibNumberPeriodicity::ibNumberPeriodicity_Quarter ? ibTotalsPeriod::Quarter
-					: periodicity == ibNumberPeriodicity::ibNumberPeriodicity_Month   ? ibTotalsPeriod::Month
-					:                                                 ibTotalsPeriod::Day;
+				const ibTotalsPeriod unit = ibNumberPeriodicityUnit(periodicity);
 				const ibValue from(when.BeginOfPeriod(unit));
 				const ibValue to(when.BeginOfNextPeriod(unit));
 				q.WhereCompare(attributeDate->GetQueryColumn(), ibQueryFilterOp::GreaterEqual, attributeDate->AdjustValue(from));

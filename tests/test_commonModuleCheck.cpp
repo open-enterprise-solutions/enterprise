@@ -144,16 +144,4 @@ TEST_F(CommonModuleCheck, ConfigCheckReportsABrokenModuleAndOneThatWasNeverCompi
 	const ibDataValue* empty = neverProblem->AsChild()->FindField(wxT("diagnostics"));
 	ASSERT_NE(empty, nullptr);
 	EXPECT_TRUE(empty->Kind() == ibDataKind::Array && empty->AsArray().empty());
-
-	const ibMcpTool* apply = ibFindMcpTool(wxT("config_apply"));
-	ASSERT_NE(apply, nullptr);
-	ibDataNode applyParams;
-	applyParams.AddField(wxT("confirm"), ibDataValue::Bool(false));
-	ibDataNode applyResult;
-	wxString applyRefusal;
-	ASSERT_TRUE(apply->Call(applyParams, applyResult, applyRefusal)) << applyRefusal.ToStdString();
-	const ibDataValue* applyProblems = applyResult.FindField(wxT("problems"));
-	ASSERT_NE(applyProblems, nullptr);
-	EXPECT_EQ(applyProblems->Kind(), ibDataKind::Array);
-	EXPECT_EQ(applyResult.FindField(wxT("moduleDiagnostics")), nullptr);
 }

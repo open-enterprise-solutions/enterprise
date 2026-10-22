@@ -20,10 +20,10 @@ struct CORE_API ibLaunchSecrets {
 	wxString m_ibPassword;
 };
 
-// Start `command` the way wxExecute does, and write `secrets` on the child's
+// Start `command` (core/startProcess.h) with `secrets` written on the child's
 // stdin. Returns the process id, or 0 when the process did not start. The
 // session that asked for the launch keeps its own copy of the password.
-CORE_API long ibExecuteWithSecrets(const wxString& command, const ibLaunchSecrets& secrets);
+CORE_API long ibStartProcess(const wxString& command, const ibLaunchSecrets& secrets);
 
 // Read the block from stdin when stdin is not a terminal, and fold it into
 // `line`. A password in the block replaces one that arrived on the command

@@ -967,8 +967,7 @@ static bool InsertSessionRow(ibDatabaseConnectionHolder& holder, const ibSession
 	// cluster).
 	try {
 		ibRegistryNoWait tx(holder);   // the holder's bound conn (= m_writeConn); a locked table comes back at once
-		ibDatabaseQueryBuilder& q = tx.Query();
-		q.Execute(ibInsert(session_table, {
+		tx.Query().Execute(ibInsert(session_table, {
 			{ wxT("session"),     ibConst(ibValue(s.GetId())) },
 			{ wxT("userName"),    ibConst(ibValue(userName)) },
 			{ wxT("application"), ibConst(ibValue(int(id.m_appMode))) },
@@ -976,30 +975,10 @@ static bool InsertSessionRow(ibDatabaseConnectionHolder& holder, const ibSession
 			{ wxT("lastActive"),  ibConst(ibValue(id.m_started)) },
 			{ wxT("computer"),    ibConst(ibValue(id.m_computer)) },
 		}));
+		tx.Commit();
 		SESSION_LOG("[session INSERT] ok guid=" << s.GetId()
 		          << " user='" << (const char*)userName.ToUTF8().data() << "'"
 		          << " mode=" << int(id.m_appMode));
-
-		// Best-effort population of extension columns — silently skipped
-		// when the schema pre-dates them. MigrateTableSession tries to
-		// add the columns on startup; this is the follow-up writer.
-		try {
-			q.Execute(ibUpdate(session_table, {
-				{ wxT("pid"),     ibConst(ibValue(id.m_pid)) },
-				{ wxT("address"), ibConst(ibValue(id.m_address)) },
-				{ wxT("kind"),    ibConst(ibValue(int(s.GetKind()))) },
-				// …AND `exclusive` = 0, EXPLICITLY. A session that never takes monopoly mode used to leave
-				// this column NULL for its whole life, while one that took it and let it go left 0 — two
-				// spellings of "not exclusive" in one table. Nothing reads them apart TODAY (the driver
-				// reports NULL as 0), but a fact with two spellings is answered by whoever asks NEXT, and
-				// the next asker may be SQL, where `exclusive <> 1` and `IS NULL` part company. The row
-				// says it from birth instead of acquiring the answer later.
-				{ wxT("exclusive"), ibConst(ibValue(0)) },
-			}, ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("session")), ibConst(ibValue(s.GetId())))));
-		} catch (...) { /* legacy schema — fine */ }
-
-		tx.Commit();
-		return true;
 	}
 	catch (const ibCoreException& err) {
 		SESSION_LOG("[session INSERT] FAILED: "
@@ -1010,6 +989,32 @@ static bool InsertSessionRow(ibDatabaseConnectionHolder& holder, const ibSession
 		SESSION_LOG("[session INSERT] FAILED: unknown exception");
 		return false;
 	}
+
+	// Best-effort population of extension columns — silently skipped
+	// when the schema pre-dates them. MigrateTableSession tries to
+	// add the columns on startup; this is the follow-up writer.
+	//
+	// IN A TRANSACTION OF ITS OWN, after the row is committed. On PostgreSQL a failed statement aborts
+	// the transaction it runs in, and the COMMIT of an aborted one is a rollback: an UPDATE refused by
+	// a legacy schema took the INSERT above down with it, while this function answered true.
+	try {
+		ibRegistryNoWait tx(holder);
+		tx.Query().Execute(ibUpdate(session_table, {
+			{ wxT("pid"),     ibConst(ibValue(id.m_pid)) },
+			{ wxT("address"), ibConst(ibValue(id.m_address)) },
+			{ wxT("kind"),    ibConst(ibValue(int(s.GetKind()))) },
+			// …AND `exclusive` = 0, EXPLICITLY. A session that never takes monopoly mode used to leave
+			// this column NULL for its whole life, while one that took it and let it go left 0 — two
+			// spellings of "not exclusive" in one table. Nothing reads them apart TODAY (the driver
+			// reports NULL as 0), but a fact with two spellings is answered by whoever asks NEXT, and
+			// the next asker may be SQL, where `exclusive <> 1` and `IS NULL` part company. The row
+			// says it from birth instead of acquiring the answer later.
+			{ wxT("exclusive"), ibConst(ibValue(0)) },
+		}, ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("session")), ibConst(ibValue(s.GetId())))));
+		tx.Commit();
+	} catch (...) { /* legacy schema — fine */ }
+
+	return true;
 }
 
 static bool UpdateSessionUser(ibDatabaseConnectionHolder& holder, const wxString& guidStr, const wxString& userName, const wxString& userGuid)
@@ -1446,15 +1451,18 @@ void ibSessionRegistry::ProcessSetExclusive(ibRegistryRequest& req)
 	// or whose schema predates the column. Best-effort; failure here
 	// doesn't roll back the in-process state since cluster sweep cleans
 	// up zombie rows anyway.
+	//
+	// ⚠ THIS ONE WAITS, unlike the ticks around it. The column is what the other nodes refuse Add by,
+	// and nothing writes it again on a later tick: a write skipped on a lock would grant a monopoly the
+	// cluster cannot see, or leave a released one standing for every node.
 	auto writeExclusiveColumn = [&](int value) {
 		if (!m_ownsSysSession || !m_writeConn || !s.Inserted()) return;
 		try {
-			ibRegistryNoWait tx(m_writeHolder);
-			tx.Query().Execute(ibUpdate(session_table,
+			ibDatabaseQueryBuilder q(&m_writeHolder);
+			q.Execute(ibUpdate(session_table,
 				{ { wxT("exclusive"), ibConst(ibValue(value)) } },
 				ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("session")), ibConst(ibValue(s.GetId())))));
-			tx.Commit();
-		} catch (...) { /* legacy schema, or the row is locked by the apply — the next tick writes it */ }
+		} catch (...) { /* legacy schema — silent */ }
 	};
 
 	if (req.exclusiveOn) {

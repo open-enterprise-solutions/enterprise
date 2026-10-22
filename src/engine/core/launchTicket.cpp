@@ -8,6 +8,7 @@
 #include <wx/filename.h>
 
 #include "core/diagnostics/journal.h"
+#include "core/startProcess.h"
 
 #if defined(__WXMSW__)
 #  include <windows.h>
@@ -102,95 +103,11 @@ bool Decode(const unsigned char* data, std::size_t n, ibLaunchSecrets& out)
 constexpr std::size_t kMaxBlock =
 	4u + 4u * (4u + static_cast<std::size_t>(ibLaunchSecrets::kMaxFieldBytes));
 
-#if !defined(__WXMSW__)
-bool WriteAll(int fd, const unsigned char* data, std::size_t n)
-{
-	while (n > 0) {
-		const ssize_t wrote = ::write(fd, data, n);
-		if (wrote < 0) {
-			if (errno == EINTR)
-				continue;
-			return false;
-		}
-		data += wrote;
-		n -= static_cast<std::size_t>(wrote);
-	}
-	return true;
-}
-#endif
-
 } // namespace
 
-long ibExecuteWithSecrets(const wxString& command, const ibLaunchSecrets& secrets)
+long ibStartProcess(const wxString& command, const ibLaunchSecrets& secrets)
 {
-	const std::vector<unsigned char> block = Encode(secrets);
-	const wxScopedCharBuffer utf8 = command.utf8_str();
-
-#if defined(__WXMSW__)
-	HANDLE readEnd = nullptr;
-	HANDLE writeEnd = nullptr;
-	SECURITY_ATTRIBUTES inherit;
-	inherit.nLength = sizeof(inherit);
-	inherit.lpSecurityDescriptor = nullptr;
-	inherit.bInheritHandle = TRUE;
-	if (!CreatePipe(&readEnd, &writeEnd, &inherit, 0))
-		return 0;
-	SetHandleInformation(writeEnd, HANDLE_FLAG_INHERIT, 0);
-
-	STARTUPINFOW start;
-	ZeroMemory(&start, sizeof(start));
-	start.cb = sizeof(start);
-	start.dwFlags = STARTF_USESTDHANDLES;
-	start.hStdInput = readEnd;
-	start.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
-	start.hStdError = GetStdHandle(STD_ERROR_HANDLE);
-
-	std::wstring wide(command.wc_str());
-	std::vector<wchar_t> mutableCmd(wide.begin(), wide.end());
-	mutableCmd.push_back(L'\0');
-
-	PROCESS_INFORMATION process;
-	ZeroMemory(&process, sizeof(process));
-	const BOOL started = CreateProcessW(nullptr, mutableCmd.data(), nullptr, nullptr, TRUE,
-		0, nullptr, nullptr, &start, &process);
-	CloseHandle(readEnd);
-	if (!started) {
-		CloseHandle(writeEnd);
-		return 0;
-	}
-	if (!block.empty()) {
-		DWORD wrote = 0;
-		WriteFile(writeEnd, block.data(), static_cast<DWORD>(block.size()), &wrote, nullptr);
-	}
-	CloseHandle(writeEnd);
-	CloseHandle(process.hThread);
-	CloseHandle(process.hProcess);
-	return static_cast<long>(process.dwProcessId);
-#else
-	int fds[2] = { -1, -1 };
-	if (pipe(fds) != 0)
-		return 0;
-	const pid_t pid = fork();
-	if (pid < 0) {
-		close(fds[0]);
-		close(fds[1]);
-		return 0;
-	}
-	if (pid == 0) {
-		close(fds[1]);
-		if (dup2(fds[0], STDIN_FILENO) < 0)
-			_exit(127);
-		if (fds[0] != STDIN_FILENO)
-			close(fds[0]);
-		execl("/bin/sh", "sh", "-c", utf8.data(), static_cast<char*>(nullptr));
-		_exit(127);
-	}
-	close(fds[0]);
-	if (!block.empty())
-		WriteAll(fds[1], block.data(), block.size());
-	close(fds[1]);
-	return static_cast<long>(pid);
-#endif
+	return ibStartProcess(command, Encode(secrets));
 }
 
 void ibNotePlaintextLaunchPassword(const wxString& flag)

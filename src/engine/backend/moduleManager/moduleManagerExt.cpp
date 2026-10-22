@@ -549,6 +549,18 @@ bool ibValueModuleRuntimeManagerExternalDataProcessor::CallAsFunc(const long lMe
 	);
 }
 
+bool ibValueModuleRuntimeManagerExternalDataProcessor::GetParamDefValue(const long lMethodNum, const long lParamNum, ibValue& pvarParamDefValue) const
+{
+	if (m_objectValue &&
+		m_objectValue->FindMethod(GetMethodName(lMethodNum)) != wxNOT_FOUND) {
+		return m_objectValue->GetParamDefValue(lMethodNum, lParamNum, pvarParamDefValue);
+	}
+
+	return ibRuntimeModuleDataObject::GetParamDefValue(
+		GetMethodName(lMethodNum), lParamNum, pvarParamDefValue
+	);
+}
+
 bool ibValueModuleRuntimeManagerExternalDataProcessor::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 {
 	if (m_objectValue &&
@@ -620,6 +632,18 @@ bool ibValueModuleRuntimeManagerExternalReport::CallAsFunc(const long lMethodNum
 
 	return ibRuntimeModuleDataObject::ExecAsFunc(
 		GetMethodName(lMethodNum), pvarRetValue, paParams, lSizeArray
+	);
+}
+
+bool ibValueModuleRuntimeManagerExternalReport::GetParamDefValue(const long lMethodNum, const long lParamNum, ibValue& pvarParamDefValue) const
+{
+	if (m_objectValue &&
+		m_objectValue->FindMethod(GetMethodName(lMethodNum)) != wxNOT_FOUND) {
+		return m_objectValue->GetParamDefValue(lMethodNum, lParamNum, pvarParamDefValue);
+	}
+
+	return ibRuntimeModuleDataObject::GetParamDefValue(
+		GetMethodName(lMethodNum), lParamNum, pvarParamDefValue
 	);
 }
 

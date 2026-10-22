@@ -289,7 +289,7 @@ void ibFrameLauncher::StartApplication(const wxString& appName) {
 	// ⭐ A START THAT FAILED IS SAID, AND THE LAUNCHER STAYS. The spawn answers 0 when nothing was started; the
 	// launcher used to close regardless, so a missing executable looked exactly like a click that did nothing —
 	// which is how the designer "would not start" on a Mac with nothing on screen to say why.
-	if (ibExecuteWithSecrets(executeCmd, secrets) == 0) {
+	if (ibStartProcess(executeCmd, secrets) == 0) {
 		wxMessageBox(wxString::Format(_("Could not start %s.\n\n%s"), appName, executeCmd),
 			_("Launch OES"), wxOK | wxICON_ERROR, this);
 		return;

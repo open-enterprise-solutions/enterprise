@@ -2090,6 +2090,7 @@ class BACKEND_API ibValueManagerDataObject : public ibValueManagerObject {
 
 	virtual bool CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray);//method call
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);//method call
+	virtual bool GetParamDefValue(const long lMethodNum, const long lParamNum, ibValue& pvarParamDefValue) const override;
 
 	//Get ref class
 	virtual ibClassID GetClassType() const;
@@ -2227,6 +2228,7 @@ public:
 
 	virtual bool CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray) override;
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray) override;
+	virtual bool GetParamDefValue(const long lMethodNum, const long lParamNum, ibValue& pvarParamDefValue) const override;
 
 	//check is empty
 	virtual bool IsEmpty() const override { return ibValue::IsEmpty(); }

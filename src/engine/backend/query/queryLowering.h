@@ -413,7 +413,7 @@ public:
 	// A computed (arithmetic / CASE) projection lambda body (x => x.A * 2, x => IIF(c, a, b)) —
 	// lowered to a server-side output-column expr, read back by its alias. Returns null for a plain
 	// column / dot-walk path / structure / chained projection (the caller handles those / falls to RAM).
-	static ibQueryColumnExprPtr LowerLambdaColumnExpr(
+	static BACKEND_API ibQueryColumnExprPtr LowerLambdaColumnExpr(
 	                                                const ibBackendQueryable* source,
 	                                                const ibQueryAstExpr& expr,
 	                                                const std::map<wxString, ibValue>& captured);

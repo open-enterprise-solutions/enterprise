@@ -89,3 +89,10 @@ bool ibValueModuleManager::ibValueModuleUnit::CallAsFunc(const long lMethodNum, 
 		GetMethodName(lMethodNum), pvarRetValue, paParams, lSizeArray
 	);
 }
+
+bool ibValueModuleManager::ibValueModuleUnit::GetParamDefValue(const long lMethodNum, const long lParamNum, ibValue& pvarParamDefValue) const
+{
+	return ibRuntimeModuleDataObject::GetParamDefValue(
+		GetMethodName(lMethodNum), lParamNum, pvarParamDefValue
+	);
+}

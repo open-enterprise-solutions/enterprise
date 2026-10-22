@@ -289,9 +289,6 @@ IB_FORCEINLINE const ibValue& ResolveRead(int slot, int idx,
 		}                                                                       \
 	} while (0)
 
-static void FillLambdaDefaults(ibRunContext& frame, const ibByteCode::ibByteFunction* function,
-	const ibByteCode* bytecode);
-
 //**************************************************************************************************************
 //*                                              support error place                                           *
 //**************************************************************************************************************
@@ -1695,7 +1692,7 @@ start_label:
 					if (curCode.m_numOper == OPER_SETCONST) {
 						LOAD_ARG_CONST(cRunContext.m_pLocVars[i]);
 					}
-					else if (index1 >= 0 && !pVariable2->GetParamDefValue(lMethodNum, i, *cRunContext.m_pRefLocVars[i])) {
+					else if (index1 >= 0) {
 						if (cvariable1.m_bReadOnly && !cvariable1.IsReference()) {
 							CopyValue(cRunContext.m_pLocVars[i], cvariable1);
 						}
@@ -1703,15 +1700,11 @@ start_label:
 							cRunContext.m_pRefLocVars[i] = &variable1;
 						}
 					}
-				}
-
-				// A hole is an empty slot of this temporary, not an argument.
-				// Handed over as null, the callee fills its own local from
-				// the declaration. A value the caller wrote keeps its pointer.
-				for (long i = 0; i < cRunContext.m_lParamCount; ++i) {
-					if (cRunContext.m_pRefLocVars[i] == &cRunContext.m_pLocVars[i]
-						&& cRunContext.m_pLocVars[i].IsEmpty())
-						cRunContext.m_pRefLocVars[i] = nullptr;
+					// ⭐ A HOLE ASKS THE VALUE WHOSE METHOD IT IS. The default is the callee's — a script's
+					// function answers from its declaration, a built-in answers nothing and keeps the empty
+					// slot it always got. An argument written as Undefined is an argument, and is not asked.
+					if (index1 < 0)
+						pVariable2->GetParamDefValue(lMethodNum, i, cRunContext.m_pLocVars[i]);
 				}
 
 				if (pVariable2->HasRetVal(lMethodNum)) {
@@ -2071,19 +2064,17 @@ start_label:
 				// and a function declared after a hundred others paid +31 ns for it (RuntimeBench.CallCost,
 				// 2026-09-28). Taken only when it names THIS entry; a tape without it — written before the
 				// stamp, or a list rearranged since — walks as before, and can never land on another function.
+				//
+				// The frame enters it here, defaults filled, before the cached key is built from the arguments.
 				{
 					const std::vector<ibByteCode::ibByteFunction>& functions = m_pByteCode->m_listFunc;
 					const long entryIndex = (long)index4;
-					pContext->m_currentFunction =
+					pContext->Enter(
 						entryIndex >= 0 && entryIndex < (long)functions.size() && (long)functions[entryIndex] == lCodeLine
 							? &functions[entryIndex]
-							: m_pByteCode->FindFunctionByEntry(lCodeLine);
+							: m_pByteCode->FindFunctionByEntry(lCodeLine),
+						m_pByteCode);
 				}
-
-				// Defaults, once, before the cached key is built from the
-				// arguments. A hole in the middle is an empty own slot, the
-				// same as a tail the caller did not write.
-				FillLambdaDefaults(*pContext, pContext->m_currentFunction, m_pByteCode);
 
 				// `Cached` — DECIDED HERE, and here only.
 				//
@@ -2284,10 +2275,6 @@ start_label:
 				}
 				pNewCtx->m_lStart          = lambdaEntryIp + 1;  // first body opcode
 				pNewCtx->m_lParamCount     = lambdaParamCount;
-				// Stamp the lambda's ibByteFunction so debugger / call-stack
-				// renders "<lambda@N>" with proper params + locals; eval
-				// host detection uses bfn->m_listLocals to resolve names.
-				pNewCtx->m_currentFunction = bfn;
 				// For OPER_LFUNC chain-walks inside this lambda body to
 				// reach the lambda's LEXICAL outer scope (not its dynamic
 				// caller), wire m_parentRunContext to the first captured
@@ -2310,7 +2297,11 @@ start_label:
 				// violations, not user errors.
 				for (long i = 0; i < callerArgCount; i++) {
 					lCodeLine++;
-					if (curCode.m_numOper == OPER_SETCONST) {
+					if (index1 < 0) {
+						// A hole the call was written with — Enter fills it.
+						pNewCtx->m_pRefLocVars[i] = nullptr;
+					}
+					else if (curCode.m_numOper == OPER_SETCONST) {
 						// Phase 1 is CALLER-supplied arguments, so the caller's pool —
 						// this used the LAMBDA's parent bytecode, which is right only for
 						// the DEFAULTS filled in phase 2 below. It was also the one branch
@@ -2333,9 +2324,13 @@ start_label:
 					}
 				}
 
-				// Phase 2 — the same fill a named body does at entry, including
-				// a hole between two arguments the caller did write.
-				FillLambdaDefaults(*pNewCtx, bfn, pLocalByteCode);
+				// Phase 2 — the tail the caller did not write is left out too, and
+				// the frame enters the lambda the way a named body is entered: the
+				// debugger and the call stack read the function from it, and the
+				// defaults come from the lambda's own module.
+				for (long i = callerArgCount; i < lambdaParamCount; i++)
+					pNewCtx->m_pRefLocVars[i] = nullptr;
+				pNewCtx->Enter(bfn, pLocalByteCode);
 
 				fn->Execute(pNewCtx, pRetValue, false);
 				break;
@@ -2865,48 +2860,6 @@ bool ibProcUnit::CallAsFunc(const ibString& funcName, ibValue& pvarRetValue, ibV
 	return false;
 }
 
-// The arguments a body was entered without. One place, for every road: a
-// direct call, a call through a module, a lambda. A slot that still points
-// at the frame's own empty local was not written — a tail the caller left
-// off, or a hole in the middle. A slot that names another value was passed,
-// even when that value is empty.
-//
-// A parameter with no default is refused. A default whose constant is not
-// in this module's pool is refused. The same-module compiler already wrote
-// the default at the call site, so this does not write it a second time.
-static void FillLambdaDefaults(ibRunContext& frame, const ibByteCode::ibByteFunction* function,
-	const ibByteCode* bytecode)
-{
-	if (function == nullptr || bytecode == nullptr || frame.m_pLocVars == nullptr)
-		return;
-
-	const long declared = static_cast<long>(function->m_listParam.size());
-	const long slots = frame.GetLocalCount();
-	for (long i = 0; i < declared && i < slots; ++i) {
-		// Null is a hole a method call handed over. The frame's own empty
-		// local is a tail, or a hole, that nobody wrote. A pointer at some
-		// other value was passed, and stays passed even when it is empty.
-		ibValue* slot = frame.m_pRefLocVars[i];
-		const bool omitted = slot == nullptr
-			|| (slot == &frame.m_pLocVars[i] && slot->IsEmpty());
-		if (!omitted)
-			continue;
-		frame.m_pRefLocVars[i] = &frame.m_pLocVars[i];
-		slot = frame.m_pRefLocVars[i];
-
-		const ibByteCode::ibByteParam& param = function->m_listParam[static_cast<size_t>(i)];
-		const ibParamRunUnit& def = param.m_defaultValue;
-		if (def.m_numArray == DEF_VAR_SKIP) {
-			ibBackendCoreException::Error(_("Missing required argument '%s'"), param.m_strName);
-		}
-		if (def.m_numIndex < 0
-			|| static_cast<size_t>(def.m_numIndex) >= bytecode->m_listConst.size()) {
-			ibBackendCoreException::Error(_("Default for '%s' is not a constant"), param.m_strName);
-		}
-		CopyValue(*slot, bytecode->m_listConst[static_cast<size_t>(def.m_numIndex)]);
-	}
-}
-
 //Calling a procedure by its address in the byte code array
 //The call is made incl. and in the parent module
 void ibProcUnit::CallAsProc(const long lCodeLine, ibValue** ppParams, const long lSizeArray)
@@ -2938,6 +2891,9 @@ void ibProcUnit::CallAsProc(const long lCodeLine, ibValue** ppParams, const long
 
 	//load parameters
 	memcpy(&cRunContext.m_pRefLocVars[0], &ppParams[0], std::min(lSizeArray, cRunContext.m_lParamCount) * sizeof(ibValue*));
+	// The tail the caller had nothing for — the entry opcode fills it (ibRunContext::Enter).
+	for (long i = lSizeArray; i < cRunContext.m_lParamCount; i++)
+		cRunContext.m_pRefLocVars[i] = nullptr;
 
 	//execute arbitrary code
 	Execute(&cRunContext, nullptr, false);
@@ -2970,6 +2926,9 @@ void ibProcUnit::CallAsFunc(const long lCodeLine, ibValue& pvarRetValue, ibValue
 
 	//load parameters
 	memcpy(&cRunContext.m_pRefLocVars[0], &ppParams[0], std::min(lSizeArray, cRunContext.m_lParamCount) * sizeof(ibValue*));
+	// The tail the caller had nothing for — the entry opcode fills it (ibRunContext::Enter).
+	for (long i = lSizeArray; i < cRunContext.m_lParamCount; i++)
+		cRunContext.m_pRefLocVars[i] = nullptr;
 
 	// `Cached` needs nothing here: the modifier is applied at the function's
 	// ENTRY OPCODE, which this call reaches like every other road into a body.

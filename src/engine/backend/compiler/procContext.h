@@ -150,6 +150,15 @@ struct ibRunContext : ibRunContextSmall {
 	void SetProcUnit(ibProcUnit* procUnit) { m_procUnit = procUnit; }
 	ibProcUnit* GetProcUnit() const { return m_procUnit; }
 
+	// ⭐ THE FRAME ENTERS ITS FUNCTION, on every road into a body: the entry opcode of a named one (a
+	// direct call, a call through a module, a handler fired from C++), and the call of a lambda, from a
+	// script or from a pipeline. It takes the function it runs, and fills from the declaration each
+	// argument the CALL marked as left out — a null slot: a tail the binder had nothing for, a hole a
+	// lambda call was written with. A slot that names a value was passed, even when the value is
+	// empty. A parameter with no default is refused. `bytecode` holds the defaults' constants: the
+	// function's own module.
+	void Enter(const ibByteCode::ibByteFunction* function, const ibByteCode* bytecode);
+
 	// Bytecode-driven derived getters. Each frame's metadata is
 	// reconstructable from m_currentFunction (when inside a function)
 	// or from GetByteCode()->m_bExpressionOnly (eval block) — runtime

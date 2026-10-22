@@ -50,6 +50,13 @@ bool ibValueModuleManager::CallAsFunc(const long lMethodNum, ibValue& pvarRetVal
 	);
 }
 
+bool ibValueModuleManager::GetParamDefValue(const long lMethodNum, const long lParamNum, ibValue& pvarParamDefValue) const
+{
+	return ibRuntimeModuleDataObject::GetParamDefValue(
+		GetMethodName(lMethodNum), lParamNum, pvarParamDefValue
+	);
+}
+
 bool ibValueModuleManager::SetPropVal(const long lPropNum, const ibValue& varPropVal)        //setting attribute
 {
 	if (m_procUnit != nullptr)

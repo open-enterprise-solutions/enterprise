@@ -49,9 +49,9 @@ private:
 		// the numbers are positions in the member table (FillMembers), which is listed in this order.
 		enTotal,
 		enFindRows,
-		// The position of a row (0-based), as 1C's Индекс(row) answers it; -1 for a row of another table.
+		// The position of a row (0-based); -1 for a row of another table.
 		enIndex,
-		// GroupBy (Свернуть): rows that agree on the group columns become one, the sum columns added up.
+		// Rows that agree on the group columns become one, the sum columns added up.
 		enGroupBy,
 		// Issue #435: one value into the listed columns of every row (all columns when none are listed).
 		enFillValues,
@@ -374,21 +374,14 @@ public:
 	// PHYSICAL — the rows are re-seated, and that is the order the table then IS. See the body.
 	void SortValue(const ibDataViewColumnItem& column, bool ascending);
 
-	// ⭐ THE TOTAL OF A COLUMN: its numbers added exactly (ibNumber, not a double), an empty cell adding nothing.
-	// A column that is not there raises - a wrong total that looks right is the worst answer a sum can give -
-	// and so does a cell holding something that is not a number, naming the row. An empty table totals zero.
-	ibValue TotalOf(const wxString& column) const;
-
 	// ⭐ THE ROWS THAT MATCH A FILTER, as an array of the table's own rows (change one and the table changes),
 	// in table order. The filter is a Structure of `column = value`; a row matches when EVERY term does, and an
 	// empty filter matches every row. A column the filter names that is not there raises rather than
 	// matching nothing: a typo in a filter would otherwise read as "no such rows".
 	ibValue FindRows(const ibValueContainer& filter);
-	// In place, as the table-of-values verb does: only the group and the sum columns remain.
+	// In place: rows equal in the group columns become one, the sum columns added up; only those columns remain.
 	void GroupBy(const wxString& groupColumns, const wxString& sumColumns);
-
-	// FillValues(value, columns): `columns` is a comma-separated list of names; empty means every column.
-	// A name that is not a column raises before any cell is written.
+	// One value into the listed columns of every row; no columns listed means every column.
 	void FillValues(const ibValue& value, const wxString& columns);
 
 	// Command store (ibStandardCommandTabular): a table of values defines its OWN Add / Copy / Edit / Delete and runs
@@ -444,8 +437,8 @@ public:
 	void FillMembers(ibMemberTable& helper) const;   // bound in ctor (was PrepareNames)
 
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal); // attribute value
-	virtual bool CallAsProc(const long lMethodNum, ibValue** paParams, const long lSizeArray);                            // procedure call (GroupBy)
-	// `T.GroupBy("cols", "sums")` compiles as the LINQ verb of the same name; a string first argument means the table's own Свернуть.
+	// `T.GroupBy("cols", "sums")` compiles as the LINQ verb of the same name; a string first argument means the
+	// table's own GroupBy (by column names), anything else the LINQ one.
 	virtual void DispatchLinqMethod(ibLinqMethod method, ibValue& ret, ibValue** args, long n) override;
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);       // method call
 
@@ -545,6 +538,9 @@ public:
 	// nodes) directly — no per-table override / member here.
 
 private:
+
+	// The columns a comma-separated list names (GroupBy, FillValues); a name that is not a column raises.
+	std::vector<ibMetaID> ColumnsOf(const wxString& names) const;
 
 	ibValuePtr<ibValueModelTableColumnCollection> m_tableColumnCollection;
 

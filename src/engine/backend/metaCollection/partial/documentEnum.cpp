@@ -34,3 +34,13 @@ int ibDocumentNumberInterval(ibNumberPeriodicity period, const ibDateTime& when)
 		return ibNumberSeriesNonperiodical;
 	}
 }
+
+ibTotalsPeriod ibNumberPeriodicityUnit(ibNumberPeriodicity period)
+{
+	switch (period) {
+	case ibNumberPeriodicity::ibNumberPeriodicity_Year:    return ibTotalsPeriod::Year;
+	case ibNumberPeriodicity::ibNumberPeriodicity_Quarter: return ibTotalsPeriod::Quarter;
+	case ibNumberPeriodicity::ibNumberPeriodicity_Month:   return ibTotalsPeriod::Month;
+	default:                                               return ibTotalsPeriod::Day;
+	}
+}

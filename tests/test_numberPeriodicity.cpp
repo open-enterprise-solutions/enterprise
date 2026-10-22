@@ -231,3 +231,24 @@ TEST_F(NumberSeries, NonperiodicalKeepsOneSeriesAcrossYears)
 	EXPECT_EQ(Padded(6), Next(ibDateTime(2026, 1, 1)));
 	EXPECT_EQ(Padded(7), Next(ibDateTime(2024, 1, 1)));
 }
+
+// Periodic and back. The year's series numbered rows the one series' counter never saw, so that
+// counter would hand out a number a row already has; it is set to where the rows are instead.
+TEST_F(NumberSeries, BackToOneSeriesSkipsTheNumbersTheYearTook)
+{
+	Use(ibNumberPeriodicity::ibNumberPeriodicity_Nonperiodical);
+	Plant(ibDateTime(2026, 1, 10), 1);
+	EXPECT_EQ(Padded(2), Next(ibDateTime(2026, 1, 20)));
+	Plant(ibDateTime(2026, 1, 20), 2);
+
+	Use(ibNumberPeriodicity::ibNumberPeriodicity_Year);
+	EXPECT_EQ(Padded(3), Next(ibDateTime(2026, 2, 1)));
+	Plant(ibDateTime(2026, 2, 1), 3);
+	EXPECT_EQ(Padded(4), Next(ibDateTime(2026, 3, 1)));
+	Plant(ibDateTime(2026, 3, 1), 4);
+
+	Use(ibNumberPeriodicity::ibNumberPeriodicity_Nonperiodical);
+	EXPECT_EQ(Padded(5), Next(ibDateTime(2026, 4, 1)));
+	Plant(ibDateTime(2026, 4, 1), 5);
+	EXPECT_EQ(Padded(6), Next(ibDateTime(2026, 5, 1)));
+}

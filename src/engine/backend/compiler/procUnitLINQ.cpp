@@ -65,30 +65,15 @@ IB_NOINLINE static void RefuseLambdaCall(const ibByteCode::ibByteFunction* bfn, 
 	ibBackendQueryLinqException::Error(_("Lambda must accept at least %ld argument(s)"), argCount);
 }
 
-// The parameters the caller did not pass, from their compile-time defaults — refused for one that has none.
-IB_NOINLINE static void FillLambdaDefaults(ibValueFunction& fn, const ibByteCode::ibByteFunction* bfn,
-                                           ibRunContext& frame, long from)
-{
-	const ibByteCode* const pLocalByteCode = fn.GetParentBc();
-	for (long i = from; i < (long)bfn->m_listParam.size(); i++) {
-		const ibParamRunUnit& puDef = bfn->m_listParam[i].m_defaultValue;
-		if (puDef.m_numArray == DEF_VAR_SKIP) {
-			ibBackendQueryLinqException::Error(
-				_("Lambda missing required argument '%s'"), bfn->m_listParam[i].m_strName);
-		}
-		CopyValue(frame.m_pLocVars[i], pLocalByteCode->m_listConst[puDef.m_numIndex]);
-	}
-}
-
 // Lambda invocation with N bound-by-ref args from host (C++) code.
 // Mirrors Phase 1+2 of OPER_CALL_LAMBDA minus the OPER_SET/SETCONST
 // tape walk — args come from C++ pointers, not bytecode operands.
 // argPtrs[0..argCount-1] are bound to param slots 0..argCount-1 by
 // reference; trailing lambda params (argCount..paramCount-1) are
-// filled from compile-time defaults and throw if required-without-
-// default. Used by both the single-arg LINQ thin wrappers below
-// (Where/Select/SkipWhile/...) and the two-arg Join projection +
-// Aggregate reducer.
+// filled from compile-time defaults by ibRunContext::Enter, which
+// refuses one declared without a default. Used by both the
+// single-arg LINQ thin wrappers below (Where/Select/SkipWhile/...)
+// and the two-arg Join projection + Aggregate reducer.
 static void CallLambdaWithArgs(ibValueFunction& fn, ibValue** argPtrs,
                                 long argCount, ibValue& retVal)
 {
@@ -148,7 +133,6 @@ static void CallLambdaWithArgs(ibValueFunction& fn, ibValue** argPtrs,
 
 	cRunContext.m_lStart          = bfn->m_lCodeLine + 1;
 	cRunContext.m_lParamCount     = lambdaParamCount;
-	cRunContext.m_currentFunction = bfn;
 
 	for (long i = 0; i < argCount; ++i) {
 		if (bHeapFrame)
@@ -157,9 +141,11 @@ static void CallLambdaWithArgs(ibValueFunction& fn, ibValue** argPtrs,
 			cRunContext.m_pRefLocVars[i] = argPtrs[i];
 	}
 
-	// Missing tail params from compile-time defaults.
-	if (argCount < lambdaParamCount)
-		FillLambdaDefaults(fn, bfn, cRunContext, argCount);
+	// The tail the pipeline does not pass is left out, and the frame enters the lambda the way
+	// every body is entered — the defaults from the lambda's own module (ibRunContext::Enter).
+	for (long i = argCount; i < lambdaParamCount; ++i)
+		cRunContext.m_pRefLocVars[i] = nullptr;
+	cRunContext.Enter(bfn, fn.GetParentBc());
 
 	fn.Execute(&cRunContext, &retVal, /*bDelta*/false);
 

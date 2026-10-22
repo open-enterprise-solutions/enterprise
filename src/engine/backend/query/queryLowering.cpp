@@ -1636,6 +1636,8 @@ ibQueryColumnExprPtr BuildColumnExprFromAst(const std::vector<ibSourceBinding>& 
                                             const ibQueryAstExpr& e, const std::map<wxString, ibValue>& params);   // defined below
 ibQueryColumnExprPtr BuildWindowExprFromAst(const std::vector<ibSourceBinding>& sources,
                                             const ibQueryAstExpr& e, const std::map<wxString, ibValue>& params);   // defined below
+static ibTypeDescription TypeOfExpr(const std::vector<ibSourceBinding>& sources,
+                                    const ibQueryAstExpr& e, const std::map<wxString, ibValue>& params);   // defined below
 
 // Is this AST expression a COMPUTED WHERE / aggregate-input lhs (arithmetic or CASE)?
 // A CONDITION — what a WHERE is made of. Standing where a VALUE is asked for (`Qty > 100 AS Big`, a CASE
@@ -2822,8 +2824,14 @@ ibQueryColumnExprPtr BuildColumnExprFromAst(const std::vector<ibSourceBinding>& 
 		return ibQueryColumnExpr::Const(EvalValue(e, params));
 
 	case ibQueryAstExprKind::Arith: {
+		// A '+' that answers a string is concatenation. The one typing says so, the same that types
+		// the output (TypeOfExpr); nothing downstream guesses it again.
+		const auto concat = [&]() {
+			const ibTypeDescription t = TypeOfExpr(sources, e, params);
+			return t.GetClsidCount() == 1 && t.ContainType(ibValueTypes::TYPE_STRING);
+		};
 		const ibQueryColumnArithOp op =
-			e.m_arith == ibQueryArithOp::Add ? ibQueryColumnArithOp::Add
+			e.m_arith == ibQueryArithOp::Add ? (concat() ? ibQueryColumnArithOp::Concat : ibQueryColumnArithOp::Add)
 			: e.m_arith == ibQueryArithOp::Sub ? ibQueryColumnArithOp::Sub
 			: e.m_arith == ibQueryArithOp::Mul ? ibQueryColumnArithOp::Mul
 			: e.m_arith == ibQueryArithOp::Div ? ibQueryColumnArithOp::Div

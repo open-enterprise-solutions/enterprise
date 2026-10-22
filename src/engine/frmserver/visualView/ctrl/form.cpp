@@ -525,6 +525,13 @@ bool ibValueForm::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibVal
 	);
 }
 
+bool ibValueForm::GetParamDefValue(const long lMethodNum, const long lParamNum, ibValue& pvarParamDefValue) const
+{
+	return ibRuntimeModuleDataObject::GetParamDefValue(
+		GetMethodName(lMethodNum), lParamNum, pvarParamDefValue
+	);
+}
+
 //***********************************************************************
 //*                       Register in runtime                           *
 //***********************************************************************

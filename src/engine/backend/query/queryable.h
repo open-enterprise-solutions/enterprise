@@ -434,7 +434,8 @@ enum class ibQueryWindowFn { Sum, Count, Min, Max, Avg, RowNumber, Rank, DenseRa
 //   Range   — the same, but every row sharing this one's sort key contributes, so three movements
 //             stamped with one period are one period's worth of stock, in any order.
 enum class ibQueryWindowFrame { Whole, Rows, Range };
-enum class ibQueryColumnArithOp { Add, Sub, Mul, Div, Mod };
+// Concat is a '+' the lowering typed a string (TypeOfExpr): Firebird dialect 3 refuses '+' on VARCHAR.
+enum class ibQueryColumnArithOp { Add, Concat, Sub, Mul, Div, Mod };
 
 struct ibQueryColumnExpr;
 using ibQueryColumnExprPtr = std::shared_ptr<ibQueryColumnExpr>;

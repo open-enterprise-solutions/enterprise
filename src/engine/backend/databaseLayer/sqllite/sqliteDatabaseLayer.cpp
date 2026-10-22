@@ -253,6 +253,10 @@ ibDatabaseLayerSQLite::~ibDatabaseLayerSQLite()
 	//wxDELETE(m_pDatabase);
 }
 
+// How long a statement waits for the file lock — given at Open, and put back when a noWait
+// transaction ends (DoBeginTransaction).
+static const int kBusyTimeoutMs = 5000;
+
 // open database
 bool ibDatabaseLayerSQLite::Open(const wxString& strDatabase, bool mustExist)
 {
@@ -292,7 +296,7 @@ bool ibDatabaseLayerSQLite::Open(const wxString& strDatabase)
 
 	// Enable WAL mode for concurrent read/write access from multiple threads
 	sqlite3_exec((sqlite3*)m_pDatabase, "PRAGMA journal_mode=WAL;", nullptr, nullptr, nullptr);
-	sqlite3_exec((sqlite3*)m_pDatabase, "PRAGMA busy_timeout=5000;", nullptr, nullptr, nullptr);
+	sqlite3_busy_timeout((sqlite3*)m_pDatabase, kBusyTimeoutMs);
 
 	return true;
 }
@@ -340,7 +344,7 @@ void ibDatabaseLayerSQLite::Cancel()
 
 void ibDatabaseLayerSQLite::DoBeginTransaction(const ibTxOptions& opts)
 {
-	// SQLite locks the file, and Open() asks it to wait five seconds (PRAGMA busy_timeout).
+	// SQLite locks the file, and Open() asks it to wait five seconds (kBusyTimeoutMs).
 	// A noWait transaction must not spend that wait: the registry thread's heartbeat, sweep
 	// and snapshot run there, and a locked row has to come back at once so Add can be answered.
 	// Zero disables the busy handler for this transaction; commit and rollback put the five
@@ -357,7 +361,7 @@ void ibDatabaseLayerSQLite::DoBeginTransaction(const ibTxOptions& opts)
 	}
 	catch (...) {
 		if (opts.noWait && m_pDatabase != nullptr)
-			sqlite3_busy_timeout((sqlite3*)m_pDatabase, 5000);
+			sqlite3_busy_timeout((sqlite3*)m_pDatabase, kBusyTimeoutMs);
 		throw;
 	}
 }
@@ -370,11 +374,11 @@ void ibDatabaseLayerSQLite::DoCommit()
 	}
 	catch (...) {
 		if (m_pDatabase != nullptr)
-			sqlite3_busy_timeout((sqlite3*)m_pDatabase, 5000);
+			sqlite3_busy_timeout((sqlite3*)m_pDatabase, kBusyTimeoutMs);
 		throw;
 	}
 	if (m_pDatabase != nullptr)
-		sqlite3_busy_timeout((sqlite3*)m_pDatabase, 5000);
+		sqlite3_busy_timeout((sqlite3*)m_pDatabase, kBusyTimeoutMs);
 }
 
 void ibDatabaseLayerSQLite::DoRollBack()
@@ -385,11 +389,11 @@ void ibDatabaseLayerSQLite::DoRollBack()
 	}
 	catch (...) {
 		if (m_pDatabase != nullptr)
-			sqlite3_busy_timeout((sqlite3*)m_pDatabase, 5000);
+			sqlite3_busy_timeout((sqlite3*)m_pDatabase, kBusyTimeoutMs);
 		throw;
 	}
 	if (m_pDatabase != nullptr)
-		sqlite3_busy_timeout((sqlite3*)m_pDatabase, 5000);
+		sqlite3_busy_timeout((sqlite3*)m_pDatabase, kBusyTimeoutMs);
 }
 
 // IsActiveTransaction inherits the base-class default (m_txDepth > 0).

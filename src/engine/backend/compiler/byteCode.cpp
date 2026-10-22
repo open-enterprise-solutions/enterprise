@@ -1,6 +1,7 @@
 #include "byteCode.h"
 
 #include "core/compiler/codeDef.h"   // the opcode vocabulary — FindCaret reads the declaration opcodes
+#include "compileContext.h"          // DEF_VAR_SKIP — a parameter declared without a default
 
 #include <shared_mutex>
 #include <unordered_map>
@@ -197,6 +198,18 @@ long ibByteCode::FindExportProcedure(const ibString& procName) const
 	if (iterator != m_listFunc.end())
 		return (long)*iterator;
 	return wxNOT_FOUND;
+}
+
+bool ibByteCode::GetParamDefValue(const long lCodeLine, const long lParamNum, ibValue& pvarParamDefValue) const
+{
+	const ibByteFunction* const function = FindFunctionByEntry(lCodeLine);
+	if (function == nullptr || lParamNum < 0 || lParamNum >= (long)function->m_listParam.size())
+		return false;
+	const ibParamRunUnit& def = function->m_listParam[static_cast<size_t>(lParamNum)].m_defaultValue;
+	if (def.m_numArray == DEF_VAR_SKIP || def.m_numIndex < 0 || def.m_numIndex >= (long)m_listConst.size())
+		return false;
+	pvarParamDefValue = m_listConst[static_cast<size_t>(def.m_numIndex)];
+	return true;
 }
 
 // Bytecode-driven cross-module symbol resolution. Recursive walk:

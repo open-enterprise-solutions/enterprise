@@ -579,33 +579,23 @@ ibValue ibValueRecordDataObjectRef::GenerateNextIdentifier(ibValueMetaObjectAttr
 
 	const ibTypeDescription& typeDesc = attribute->GetTypeDesc();
 
-	// Bootstrap helper: when sys_sequence has no row yet for this key,
-	// scan the actual data table for the highest existing counter value
-	// matching strPrefix so the first-ever sequence INSERT doesn't
-	// collide with imported / migrated records. Returns 0 on empty.
-	// GetSQLFieldName() returns the composite "<fld>_TYPE,<fld>_<X>"
-	// shape used by SaveData; we want the raw per-type sub-column.
-	auto scanDataMax = [&]() -> ibNumber {
-		const wxString tableName = m_metaObject->GetPhysicalTableName();
-		ibNumber maxFound = 0;
-
-		const bool isNumber = attribute->ContainType(ibValueTypes::TYPE_NUMBER);
-		const bool isString = !isNumber && attribute->ContainType(ibValueTypes::TYPE_STRING);
-		if (!isNumber && !isString)
-			return maxFound;
-
-		// The per-type sub-column, asked of the layout by its ROLE. Spelling the suffix here made
-		// this a second writer of the lettering — and one that would keep compiling after a change.
+	// The counter's column in the data table: the per-type sub-column, asked of the layout by its ROLE.
+	// GetSQLFieldName() returns the composite "<fld>_TYPE,<fld>_<X>" shape used by SaveData, and spelling
+	// the suffix here made this a second writer of the lettering — one that would keep compiling after a
+	// change. Empty for an attribute that is neither a number nor a string: there is nothing to look at.
+	const bool isNumber = attribute->ContainType(ibValueTypes::TYPE_NUMBER);
+	const bool isString = !isNumber && attribute->ContainType(ibValueTypes::TYPE_STRING);
+	wxString field;
+	if (isNumber || isString) {
 		const ibColumnRole role = isNumber ? ibColumnRole::Number : ibColumnRole::String;
-		wxString field;
 		for (const ibColumnSlot& slot : DescribeColumnLayout(attribute->GetQueryColumn()))
 			if (slot.m_role == role) { field = slot.m_name; break; }
-		if (field.IsEmpty())
-			return maxFound;
+	}
 
-		// SELECT MAX(<field>) FROM <table> [WHERE <field> LIKE '<prefix>%'] — one shape, the
-		// string arm just adds the prefix filter. Aggregate with no group keys = one row.
-		ibQueryRelPtr source = ibScan(tableName);
+	// The rows of THIS series: the string arm narrows to the prefix, a periodic document to the
+	// period of its date. Both questions below ask them.
+	const auto seriesRows = [&]() {
+		ibQueryRelPtr source = ibScan(m_metaObject->GetPhysicalTableName());
 		if (isString)
 			source = ibFilter(std::move(source),
 				ibBinOp(ibQueryBinOp::Like, ibCol(field), ibConst(ibValue(strPrefix + wxT("%")))));
@@ -615,9 +605,21 @@ ibValue ibValueRecordDataObjectRef::GenerateNextIdentifier(ibValueMetaObjectAttr
 					ibBinOp(ibQueryBinOp::Ge, ibCol(series.m_dateField), ibConst(ibValue(ibDateTime(series.m_from)))),
 					ibBinOp(ibQueryBinOp::Lt, ibCol(series.m_dateField), ibConst(ibValue(ibDateTime(series.m_to))))));
 		}
+		return source;
+	};
 
+	// Bootstrap helper: when sys_sequence has no row yet for this key,
+	// scan the actual data table for the highest existing counter value
+	// matching strPrefix so the first-ever sequence INSERT doesn't
+	// collide with imported / migrated records. Returns 0 on empty.
+	auto scanDataMax = [&]() -> ibNumber {
+		ibNumber maxFound = 0;
+		if (field.IsEmpty())
+			return maxFound;
+
+		// SELECT MAX(<field>) FROM <series rows>. Aggregate with no group keys = one row.
 		ibQueryIR ir;
-		ir.m_root = ibAggregate(std::move(source),
+		ir.m_root = ibAggregate(seriesRows(),
 			{ { ibFunc(wxT("MAX"), { ibCol(field) }), wxT("maxValue") } }, {});
 
 		ibQueryResult rs = q.ExecuteIR(ir);
@@ -640,6 +642,42 @@ ibValue ibValueRecordDataObjectRef::GenerateNextIdentifier(ibValueMetaObjectAttr
 		return maxFound;
 	};
 
+	// The value the attribute stores for counter `n`.
+	const auto codeOf = [&](const ibNumber& n) -> ibValue {
+		if (attribute->ContainType(ibValueTypes::TYPE_NUMBER))
+			return n;
+
+		if (attribute->ContainType(ibValueTypes::TYPE_STRING)) {
+			// "<prefix><zero-padded number>" — width derived from typeDesc.
+			// Defensive else: if length was shrunk in the designer below
+			// what the prefix already takes, drop the prefix and pad the
+			// number to prefix-width so the output keeps a stable size.
+			// Uses ibNumber::Format directly — no int64 cap, big counters OK.
+			const size_t prefLen = strPrefix.length();
+			const size_t totLen  = (size_t)typeDesc.GetLength();
+			ibNumber::Format fmt;
+			fmt.minIntDigits = (int)((prefLen < totLen) ? totLen - prefLen : prefLen);
+			return (prefLen < totLen ? strPrefix : wxString()) + n.ToString(fmt);
+		}
+
+		wxASSERT_MSG(false, "m_metaAttribute->GetClsidList() != ibValueTypes::TYPE_NUMBER"
+			"|| m_metaAttribute->GetClsidList() != ibValueTypes::TYPE_STRING");
+
+		return wxEmptyValue;
+	};
+
+	// Does a row of the series already hold `code`?
+	const auto taken = [&](const ibValue& code) {
+		if (field.IsEmpty())
+			return false;
+		ibQueryIR ir;
+		ir.m_root = ibAggregate(
+			ibFilter(seriesRows(), ibBinOp(ibQueryBinOp::Eq, ibCol(field), ibConst(code))),
+			{ { ibFunc(wxT("COUNT"), { ibCol(field) }), wxT("taken") } }, {});
+		ibQueryResult rs = q.ExecuteIR(ir);
+		return rs.Next() && rs.GetValue(1).GetInteger() > 0;
+	};
+
 	// Two attempts:
 	//   1) UPDATE … RETURNING — the row exists → done.
 	//   2) Bootstrap-scan + INSERT. The INSERT may PK-conflict if another session
@@ -657,6 +695,7 @@ ibValue ibValueRecordDataObjectRef::GenerateNextIdentifier(ibValueMetaObjectAttr
 
 	ibNumber resultCode = 1;
 	bool gotCode = false;
+	bool counted = false;   // the row was there, and the number is the counter's
 	for (int attempt = 0; attempt < 2 && !gotCode; ++attempt) {
 		// UPDATE … SET number = number + 1 … RETURNING number. One statement, so the row is
 		// locked, incremented and read in a single shot — concurrent sessions (including
@@ -675,6 +714,7 @@ ibValue ibValueRecordDataObjectRef::GenerateNextIdentifier(ibValueMetaObjectAttr
 				if (!number.IsNull()) {
 					resultCode = number.GetNumber();
 					gotCode = true;
+					counted = true;
 				}
 			}
 		}
@@ -707,24 +747,17 @@ ibValue ibValueRecordDataObjectRef::GenerateNextIdentifier(ibValueMetaObjectAttr
 
 	if (!gotCode) return attribute->CreateValue();
 
-	if (attribute->ContainType(ibValueTypes::TYPE_NUMBER))
-		return resultCode;
-
-	if (attribute->ContainType(ibValueTypes::TYPE_STRING)) {
-		// "<prefix><zero-padded number>" — width derived from typeDesc.
-		// Defensive else: if length was shrunk in the designer below
-		// what the prefix already takes, drop the prefix and pad the
-		// number to prefix-width so the output keeps a stable size.
-		// Uses ibNumber::Format directly — no int64 cap, big counters OK.
-		const size_t prefLen = strPrefix.length();
-		const size_t totLen  = (size_t)typeDesc.GetLength();
-		ibNumber::Format fmt;
-		fmt.minIntDigits = (int)((prefLen < totLen) ? totLen - prefLen : prefLen);
-		return (prefLen < totLen ? strPrefix : wxString()) + resultCode.ToString(fmt);
+	// ⭐ A COUNTER BEHIND ITS OWN SERIES. The row is where the series stood when it was last counted, and
+	// the rows moved on without it: the document went periodic and back — the year's buckets numbered the
+	// same rows — or rows came in by import. The number it hands out is then one a row already has. The
+	// counter is set to where the rows are, once, and the series goes on from there; the UPDATE above
+	// holds the row, so a concurrent writer waits for this one.
+	if (counted && taken(codeOf(resultCode))) {
+		resultCode = scanDataMax() + 1;
+		q.Execute(ibUpdate(sequence_table,
+			{ { wxT("number"), ibConst(ibValue(resultCode)) } },
+			keyPredicate()));
 	}
 
-	wxASSERT_MSG(false, "m_metaAttribute->GetClsidList() != ibValueTypes::TYPE_NUMBER"
-		"|| m_metaAttribute->GetClsidList() != ibValueTypes::TYPE_STRING");
-
-	return wxEmptyValue;
+	return codeOf(resultCode);
 }

@@ -276,11 +276,7 @@ ibValueRecordDataObjectRef::ibNumberSeriesKey ibValueRecordDataObjectDocument::N
 
 	key.m_interval = ibDocumentNumberInterval(period, when);
 
-	const ibTotalsPeriod unit =
-		period == ibNumberPeriodicity::ibNumberPeriodicity_Year    ? ibTotalsPeriod::Year
-		: period == ibNumberPeriodicity::ibNumberPeriodicity_Quarter ? ibTotalsPeriod::Quarter
-		: period == ibNumberPeriodicity::ibNumberPeriodicity_Month   ? ibTotalsPeriod::Month
-		:                                            ibTotalsPeriod::Day;
+	const ibTotalsPeriod unit = ibNumberPeriodicityUnit(period);
 	key.m_from = when.BeginOfPeriod(unit).GetValue();
 	key.m_to   = when.BeginOfNextPeriod(unit).GetValue();
 

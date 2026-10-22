@@ -143,6 +143,40 @@ ibComposerNode* ibValueModelStorage::NewRow() const
 	return row;
 }
 
+long ibValueModelStorage::IndexOf(const ibValue& row) const
+{
+	// A row of another model, or of no model any more, is not among these rows: GetRow answers -1 for it.
+	ibValueModelReturnLine* line = nullptr;
+	return row.ConvertToValue(line) ? GetRow(line->GetLineItem()) : wxNOT_FOUND;
+}
+
+ibValue ibValueModelStorage::TotalOf(const wxString& column) const
+{
+	ibValueModelColumnCollection* const columns = GetColumnCollection();
+	const ibValueModelColumnCollection::ibValueModelColumnInfo* const colInfo =
+		columns != nullptr ? columns->GetColumnByName(column) : nullptr;
+	if (colInfo == nullptr)
+		ibBackendCoreException::Error(_("Table column '%s' not found"), column);
+
+	const ibMetaID id = static_cast<ibMetaID>(colInfo->GetColumnID());
+	ibNumber total(0);
+	for (long row = 0; row < GetRowCount(); ++row) {
+		ibComposerNode* const node = m_storage.GetNode(row);
+		if (node == nullptr)
+			continue;
+		const ibValue cell = node->GetTableValue(id);
+		if (cell.GetType() == ibValueTypes::TYPE_NUMBER) {
+			total += cell.GetNumber();
+			continue;
+		}
+		if (cell.IsEmpty())
+			continue;   // nothing there adds nothing
+		ibBackendCoreException::Error(_("Table column '%s' holds a value that is not a number (row %d); a column added without a type holds text - declare it as a Number"),
+			column, static_cast<int>(row + 1));
+	}
+	return ibValue(total);
+}
+
 ibValueModel::~ibValueModel()
 {
 	// A READ MUST NOT OUTLIVE WHAT IT IS READING. The rented run walks this model
