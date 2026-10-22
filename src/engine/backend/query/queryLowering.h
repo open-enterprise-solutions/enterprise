@@ -192,20 +192,9 @@ public:
 	BACKEND_API static std::vector<ibQueryAstExprPtr> UngroupedProjections(
 		const ibQuerySelect& ast, const std::map<wxString, ibValue>& params);
 
-	// THE COLUMNS THIS QUERY ALREADY FOLDS — the ones living inside an aggregate call.
-	//
-	// The mirror of the above, and the same two readings. A folded column is accounted for: it is
-	// not missing from GROUP BY, and it must not be PUT there — `SUM(Parent) … GROUP BY Parent`
-	// leaves one row per group, so the fold returns the value itself.
-	//   * CheckNames reads it as a refusal — grouped and aggregated at once is wrong, and it says
-	//     which field. It refuses NARROWLY: a column the query also selects plainly is exempt,
-	//     because the completeness rule above demands that very key and the two must not disagree;
-	//   * a host that assembles a query reads it as "do not offer this one", which is what stops
-	//     the same field standing in the grouping list and the aggregates list together.
-	//
-	// Needs no sources and cannot fail: it reads the written expressions, not what they resolve to.
-	// The caller that has to COMPARE it against a group key resolves both (CheckNames does).
-	BACKEND_API static std::vector<ibQueryAstExprPtr> AggregatedColumns(const ibQuerySelect& ast);
+	// (Its mirror — the columns the query already FOLDS — needs no sources, so it is the core's:
+	//  ibQueryAggregatedColumns, queryRewrite.h. CheckNames reads it as a refusal, a host as "do not
+	//  offer this one".)
 
 	// WHAT COLUMNS DOES THIS QUERY PRODUCE — resolved, and NOT RUN.
 	//

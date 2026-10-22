@@ -87,7 +87,7 @@ private:
 
 // Open the CASE builder over `expression` (a CASE, or anything else to start empty). Returns true
 // when the author pressed OK, and replaces `expression` with what they built.
-// (FRMCLIENT_API, not BACKEND_API — it lives in frontend.dll. The wrong macro linked by luck here,
+// (FRMCLIENT_API, not BACKEND_API — it lives in frmclient.dll. The wrong macro linked by luck here,
 //  and would have exported it from the wrong library the moment anything outside asked for it.)
 FRMCLIENT_API bool ibShowQueryCaseBuilder(wxWindow* parent,
                                         const std::vector<ibQueryConstructorField>& fields,

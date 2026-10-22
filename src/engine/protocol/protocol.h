@@ -263,6 +263,7 @@ namespace ibProtocol {
 			inline constexpr const char* Parent   = "Parent";
 			inline constexpr const char* File     = "File";       // the file its document was saved as (SaveAs)
 			inline constexpr const char* Commands = "Commands";   // the commands its document takes now
+			inline constexpr const char* ReadOnly = "ReadOnly";   // what it shows takes no edit (its document's IsEditable)
 			inline constexpr const char* Formats  = "Formats";    // what its document saves as — Title, Mask each
 			inline constexpr const char* Mask     = "Mask";
 

@@ -7,7 +7,6 @@
 #include "backend/query/queryLowering.h"                  // CheckNames / UngroupedProjections — the desktop's verdict
 #include "backend/query/queryConstructorModel.h"          // the desktop's model — what is asked is answered by it
 #include "backend/query/queryable.h"                      // ibSourceMetaDataScope — the names resolve against THIS configuration
-#include "core/clsid.h"                                   // IsReference — a table's own reference type
 #include "core/query/queryParser.h"                       // ibQueryParser — the source as the client wrote it
 #include "core/query/queryRender.h"                       // ibRenderQueryExpr — a projection, as the window reads it back
 #include "core/serialize/dataBuilder.h"
@@ -52,16 +51,10 @@ void WriteSources(ibDataNode& response, const ibQueryConstructorModel& model, co
 			path.push_back(ibDataValue::String(segment));
 		row.AddField(qc::Path, ibDataValue::Array(std::move(path)));
 		row.SetValue(qc::Presentation, source.m_presentation);
-		// ⭐ ITS OWN REFERENCE TYPE — what a CAST to the table brings a value to (TypeOfCast) and what a reference's
-		// branch is named by (GetReferenceBranches); the client answers both from this list.
-		if (source.m_path.size() == 2) {
-			auto cast = ibQueryAstExpr::Make(ibQueryAstExprKind::Cast);
-			cast->m_path = source.m_path;
-			const ibTypeDescription type = model.TypeOfCast(*cast);
-			if (type.GetClsidCount() == 1 && IsReference(type.GetClsidList().front()))
-				row.SetValue(qc::Reference,
-					ibString::Format(wxT("%llu"), static_cast<unsigned long long>(type.GetClsidList().front())));
-		}
+		// ⭐ ITS OWN REFERENCE TYPE — what a CAST to the table brings a value to and what a reference's branch is named
+		// by; the client's model answers both from this list (ReferenceOfTable, TableOfReference).
+		if (const ibClassID reference = model.ReferenceOfTable(source.m_path))
+			row.SetValue(qc::Reference, ibString::Format(wxT("%llu"), static_cast<unsigned long long>(reference)));
 	}
 }
 

@@ -34,8 +34,7 @@
 
 #include "core/query/queryParser.h"
 #include "core/query/queryRender.h"
-#include "core/query/queryRewrite.h"    // Clone — the engine's own deep copy of a select
-#include "frmclient/backend/query/queryLowering.h"   // CheckNames — the engine resolves the names, we only ask
+#include "core/query/queryRewrite.h"    // Clone — the engine's own deep copy of a select; ibQueryAggregatedColumns
 #include "frmclient/backend/query/queryable.h"       // ibSourceMetaDataScope — WHICH config the names resolve against
 #include "core/query/queryKeywords.h"      // the ACTIVE keyword table — the one spelling of a keyword, and the highlighter's word set
 #include "core/query/queryAggregates.h"    // ibQueryAggregatesFor — the folds a field's type admits, as CheckNames reads them

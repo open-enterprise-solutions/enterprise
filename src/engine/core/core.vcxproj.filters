@@ -212,6 +212,9 @@
     <ClCompile Include="query\queryRewrite.cpp">
       <Filter>query</Filter>
     </ClCompile>
+    <ClCompile Include="query\anyQueryConstructorModel.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
     <ClCompile Include="query\queryRefusal.cpp">
       <Filter>query</Filter>
     </ClCompile>
@@ -413,6 +416,12 @@
       <Filter>query</Filter>
     </ClInclude>
     <ClInclude Include="query\queryConstructorField.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\anyQueryConstructorModel.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\querySourceParameter.h">
       <Filter>query</Filter>
     </ClInclude>
     <ClInclude Include="query\queryKeywords.h">

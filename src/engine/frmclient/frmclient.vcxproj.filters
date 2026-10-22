@@ -139,6 +139,9 @@
     <ClCompile Include="backend\userInfo.cpp">
       <Filter>backend</Filter>
     </ClCompile>
+    <ClCompile Include="backend\metaData.cpp">
+      <Filter>backend</Filter>
+    </ClCompile>
     <ClCompile Include="win\editor\textEditor\textEditor.cpp">
       <Filter>win\editor\textEditor</Filter>
     </ClCompile>
@@ -957,16 +960,10 @@
     <ClInclude Include="backend\query\queryConstructorModel.h">
       <Filter>backend\query</Filter>
     </ClInclude>
-    <ClInclude Include="backend\query\queryLowering.h">
-      <Filter>backend\query</Filter>
-    </ClInclude>
     <ClInclude Include="backend\query\queryable.h">
       <Filter>backend\query</Filter>
     </ClInclude>
     <ClCompile Include="backend\query\queryConstructorModel.cpp">
-      <Filter>backend\query</Filter>
-    </ClCompile>
-    <ClCompile Include="backend\query\queryLowering.cpp">
       <Filter>backend\query</Filter>
     </ClCompile>
     <ClCompile Include="backend\serialize\dataProtocol.cpp">

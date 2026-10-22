@@ -2317,14 +2317,14 @@ void ibDialogQueryConstructor::OnAddGrouping(wxCommandEvent&)
 	if (fields.empty())
 		return;
 
-	// ⚠ A FIELD THE QUERY ALREADY FOLDS IS NOT A GROUP KEY — asked of the engine, the same call
+	// ⚠ A FIELD THE QUERY ALREADY FOLDS IS NOT A GROUP KEY — asked of the core, the same walk
 	// CheckNames refuses by. Without this the same field could stand in both lists at once, and the
 	// query that came out grouped by the very column it summed.
 	// ASKED ONCE, not once per field: the answer is about the QUERY, and it does not change while
 	// this loop runs. (Inside the loop it walked every projection again for every field selected —
 	// picking a whole table meant a full re-walk per column of it.)
 	std::vector<wxString> foldedText;
-	for (const ibQueryAstExprPtr& folded : ibQueryLowering::AggregatedColumns(*select))
+	for (const ibQueryAstExprPtr& folded : ibQueryAggregatedColumns(*select))
 		if (folded)
 			foldedText.push_back(ibRenderQueryExpr(*folded));
 

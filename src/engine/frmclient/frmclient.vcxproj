@@ -177,6 +177,7 @@
     <ClCompile Include="backend\appData.cpp" />
     <ClCompile Include="backend\mcp\mcpServer.cpp" />
     <ClCompile Include="backend\userInfo.cpp" />
+    <ClCompile Include="backend\metaData.cpp" />
     <ClCompile Include="win\editor\textEditor\textEditor.cpp" />
     <ClCompile Include="win\editor\codeEditor\codeEditor.cpp" />
     <ClCompile Include="win\editor\codeEditor\codeEditorLoader.cpp" />
@@ -328,7 +329,6 @@
     <ClCompile Include="backend\serialize\dataProtocol.cpp" />
     <ClCompile Include="backend\settings\settingsComposer.cpp" />
     <ClCompile Include="backend\query\queryConstructorModel.cpp" />
-    <ClCompile Include="backend\query\queryLowering.cpp" />
     <ClCompile Include="visualView\ctrl\frame.cpp" />
     <ClCompile Include="visualView\ctrl\form.cpp" />
     <ClCompile Include="visualView\visualHostClient.cpp" />
@@ -545,7 +545,6 @@
     <ClInclude Include="backend\composition\dataComposer.h" />
     <ClInclude Include="backend\settings\settingsComposer.h" />
     <ClInclude Include="backend\query\queryConstructorModel.h" />
-    <ClInclude Include="backend\query\queryLowering.h" />
     <ClInclude Include="backend\query\queryable.h" />
     <ClInclude Include="backend\compiler\value.h" />
     <ClInclude Include="backend\serialize\dataProtocol.h" />
