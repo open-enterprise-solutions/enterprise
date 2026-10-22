@@ -184,10 +184,12 @@ jobs:
       - name: Build the applications
         run: cmake --build --preset linux-debug
 
-      # A SEGFAULT tells ctest nothing beyond the exit signal, so on failure take one
-      # backtrace here rather than guessing across a 40-minute round trip. Two cases:
-      # the smallest compile test and the smallest runtime one — if the crash is shared
-      # they show the same frames, and if it is not, that is worth knowing too.
+      # A SEGFAULT tells ctest nothing beyond the exit signal, so on failure take a
+      # backtrace here rather than guessing across a 40-minute round trip — of the tests that
+      # failed, as ctest listed them (five at most). The two fixed ones (the smallest compile
+      # test and the smallest runtime one) were run instead until 2026-10-23, when a crash of
+      # another test went without a single frame. No list (the run never got to the tests):
+      # those two, as before.
       # …and only where there is a test binary to run: a job that failed before building (a submodule fetch
       # answered 503) has no build directory, and this step then failed too, on a missing working directory —
       # a second error over the first that pointed nowhere near it (2026-09-17, the macOS job).
@@ -196,7 +198,8 @@ jobs:
         working-directory: build/linux-debug
         run: |
           sudo apt-get install -y gdb
-          for t in CompilerTest.SimpleAssignmentEmitsBytecode RuntimeTest.ConstantAssignment; do
+          failed=$(cut -d: -f2- Testing/Temporary/LastTestsFailed.log 2>/dev/null | head -n 5 || true)
+          for t in ${failed:-CompilerTest.SimpleAssignmentEmitsBytecode RuntimeTest.ConstantAssignment}; do
             echo "=============== $t ==============="
             gdb -batch -ex run -ex "bt 40" --args ./bin/Debug/oes_tests --gtest_filter=$t || true
           done
@@ -996,12 +999,14 @@ jobs:
       - name: Build the applications
         run: cmake --build --preset macos-debug -- -k 0
 
-      # lldb, not gdb — same intent as the Linux backtrace step, and the same guard: no binary, no backtrace.
+      # lldb, not gdb — same intent as the Linux backtrace step (the tests that failed), and the same guard: no binary,
+      # no backtrace.
       - name: Backtrace on failure
         if: failure() && hashFiles('build/macos-debug/bin/Debug/oes_tests') != ''
         working-directory: build/macos-debug
         run: |
-          for t in CompilerTest.SimpleAssignmentEmitsBytecode RuntimeTest.ConstantAssignment; do
+          failed=$(cut -d: -f2- Testing/Temporary/LastTestsFailed.log 2>/dev/null | head -n 5 || true)
+          for t in ${failed:-CompilerTest.SimpleAssignmentEmitsBytecode RuntimeTest.ConstantAssignment}; do
             echo "=============== $t ==============="
             lldb -b -o run -o "bt 40" -- ./bin/Debug/oes_tests --gtest_filter=$t || true
           done

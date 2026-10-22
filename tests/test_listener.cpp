@@ -294,15 +294,16 @@ TEST(Listener, MislaidFilesAreARefusalNotAFallback)
 TEST(Listener, LoopbackIsKnownByItsNames)
 {
 	wxInitializer init;
-	for (const wxChar* own : { wxT("127.0.0.1"), wxT("127.5.5.5"), wxT("127.255.255.255"), wxT(" 127.0.0.1 "), wxT("localhost"), wxT("LocalHost"), wxT("::1") }) {
+	// [::1] among them: the server takes the brackets off and binds ::1 (ibHttpServer::Start) — one test of this machine
+	// for the door and the server (ibIsLoopback, core/net/httpServer.h).
+	for (const wxChar* own : { wxT("127.0.0.1"), wxT("127.5.5.5"), wxT("127.255.255.255"), wxT(" 127.0.0.1 "), wxT("localhost"), wxT("LocalHost"), wxT("::1"), wxT("[::1]") }) {
 		const wxString why = Refusal(own, ibTlsFiles());
 		EXPECT_TRUE(why.IsEmpty()) << own << ": " << why.ToStdString();
 	}
 	// By number, not by the look of a name: what begins with "127." and is not an address resolves wherever
-	// its owner says, and a name that resolves to loopback today is still a name. [::1] is not how a listener
-	// binds the address, so it is not how it is written here.
+	// its owner says, and a name that resolves to loopback today is still a name.
 	for (const wxChar* other : { wxT("0.0.0.0"), wxT("::"), wxT("192.168.1.10"), wxT("10.0.0.1"), wxT("example.com"), wxT(""),
-			wxT("127.example.com"), wxT("127.0.0.1.evil"), wxT("127"), wxT("127.0.0"), wxT("127.0.0.256"), wxT("127.0.0.+1"), wxT("1270.0.0.1"), wxT("localhost."), wxT("[::1]") })
+			wxT("127.example.com"), wxT("127.0.0.1.evil"), wxT("127"), wxT("127.0.0"), wxT("127.0.0.256"), wxT("127.0.0.+1"), wxT("1270.0.0.1"), wxT("localhost.") })
 		EXPECT_FALSE(Refusal(other, ibTlsFiles()).IsEmpty()) << other;
 }
 
