@@ -64,9 +64,14 @@ private:
 	void OnPageChanged(wxAuiNotebookEvent& event);
 	void OnBGDClick(wxAuiNotebookEvent& event);
 	void OnEndDrag(wxAuiNotebookEvent& event);
+	void OnNotebookSize(wxSizeEvent& event);
 
 	ibValueNotebookPage* m_activePage;
 	std::vector< ibValueNotebookPage*> m_pageArray;
+	// Guards the one-time initial-selection fix in OnUpdated — see notebook.cpp.
+	bool m_selectionSettled = false;
+	// Guards the one-time post-layout page fix in OnNotebookSize — see notebook.cpp.
+	bool m_pagesLaidOut = false;
 
 	ibPropertyCategory* m_categoryNotebook = ibPropertyObject::CreatePropertyCategory(wxT("Notebook"), _("Notebook"));
 	ibPropertyEnum<ibValueEnumOrientNotebookPage>* m_propertyOrient = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumOrientNotebookPage>>(m_categoryNotebook, wxT("OrientPage"), _("Orient page"),
