@@ -1163,9 +1163,8 @@ void ibCodeEditor::OnContextMenu(wxContextMenuEvent& event)
 
 void ibCodeEditor::UpdateFoldLevel()
 {
-	// The syntax that drives the folds is the session's syntax, as the desktop read it before the fold manager moved to the core.
 	std::vector<int> levels;
-	if (!m_fp.UpdateFoldLevel(m_tc, ibCompileCode::GetCodeStyle() == CODE_CES, GetLineCount(), levels))
+	if (!m_fp.UpdateFoldLevel(m_tc, GetLineCount(), levels))
 		return;
 
 	for (int line = 1; line < static_cast<int>(levels.size()); line++)

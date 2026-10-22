@@ -1158,9 +1158,8 @@ void ibCodeEditor::OnContextMenu(wxContextMenuEvent& event)
 
 void ibCodeEditor::UpdateFoldLevel()
 {
-	// The syntax that drives the folds is the stream's — the module's syntax, as its tab says (SetCodeStyle).
 	std::vector<int> levels;
-	if (!m_fp.UpdateFoldLevel(m_tc, m_tc.GetCodeStyle() == CODE_CES, GetLineCount(), levels))
+	if (!m_fp.UpdateFoldLevel(m_tc, GetLineCount(), levels))
 		return;
 
 	for (int line = 1; line < static_cast<int>(levels.size()); line++)

@@ -68,10 +68,10 @@
     <ClCompile Include="compiler\blockSyntaxLINQ.cpp">
       <Filter>compiler</Filter>
     </ClCompile>
-    <ClCompile Include="compiler\foldLevel.cpp">
+    <ClCompile Include="compiler\literal.cpp">
       <Filter>compiler</Filter>
     </ClCompile>
-    <ClCompile Include="compiler\literal.cpp">
+    <ClCompile Include="compiler\scriptFoldCode.cpp">
       <Filter>compiler</Filter>
     </ClCompile>
     <ClCompile Include="compiler\scriptParseCode.cpp">
@@ -262,10 +262,10 @@
     <ClInclude Include="compiler\codeDef.h">
       <Filter>compiler</Filter>
     </ClInclude>
-    <ClInclude Include="compiler\foldLevel.h">
+    <ClInclude Include="compiler\literal.h">
       <Filter>compiler</Filter>
     </ClInclude>
-    <ClInclude Include="compiler\literal.h">
+    <ClInclude Include="compiler\scriptFoldCode.h">
       <Filter>compiler</Filter>
     </ClInclude>
     <ClInclude Include="compiler\scriptParseCode.h">

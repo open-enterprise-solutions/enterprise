@@ -1,5 +1,5 @@
 // =============================================================================
-// Where a module's text folds — core/compiler/foldLevel.h.
+// Where a module's text folds — core/compiler/scriptFoldCode.h.
 //
 // The fold manager was a private class nested in both code editors (the desktop's and the thin client's). It
 // moved to the core as is; these pin what the editors read of it: the level each line gets (UpdateFoldLevel)
@@ -8,7 +8,7 @@
 
 #include <gtest/gtest.h>
 
-#include "core/compiler/foldLevel.h"
+#include "core/compiler/scriptFoldCode.h"
 #include "core/compiler/translateCode.h"
 #include "core/compiler/codeDef.h"
 
@@ -46,10 +46,10 @@ int LineOfDelimiter(const ibTranslateCode& tc, wxUniChar c)
 	return -1;
 }
 
-constexpr int Base   = ibFoldLevelParser::FoldLevelBase;
-constexpr int Header = ibFoldLevelParser::FoldLevelHeader;
-constexpr int White  = ibFoldLevelParser::FoldLevelWhite;
-constexpr int Else   = ibFoldLevelParser::FoldLevelElse;
+constexpr int Base   = ibFoldCode::FoldLevelBase;
+constexpr int Header = ibFoldCode::FoldLevelHeader;
+constexpr int White  = ibFoldCode::FoldLevelWhite;
+constexpr int Else   = ibFoldCode::FoldLevelElse;
 
 } // namespace
 
@@ -58,14 +58,14 @@ TEST(FoldLevel, NothingIsComputedUntilTheTextChanged)
 	ibTranslateCode tc(CODE_VES);
 	Read(tc, wxT("Procedure P()\n\ta = 1;\nEndProcedure\n"));
 
-	ibFoldLevelParser fp;
+	ibFoldCode fp;
 	std::vector<int> levels{ 7 };
-	EXPECT_FALSE(fp.UpdateFoldLevel(tc, false, 3, levels));
+	EXPECT_FALSE(fp.UpdateFoldLevel(tc, 3, levels));
 	EXPECT_EQ(std::vector<int>{ 7 }, levels);
 
 	fp.RecalcFoldLevel();
-	EXPECT_TRUE(fp.UpdateFoldLevel(tc, false, 3, levels));
-	EXPECT_FALSE(fp.UpdateFoldLevel(tc, false, 3, levels)) << "one recalculation per change";
+	EXPECT_TRUE(fp.UpdateFoldLevel(tc, 3, levels));
+	EXPECT_FALSE(fp.UpdateFoldLevel(tc, 3, levels)) << "one recalculation per change";
 }
 
 TEST(FoldLevel, AProcedureFoldsFromItsHeaderToItsEnd)
@@ -78,10 +78,10 @@ TEST(FoldLevel, AProcedureFoldsFromItsHeaderToItsEnd)
 	ASSERT_GE(open, 0);
 	ASSERT_EQ(open + 2, close);
 
-	ibFoldLevelParser fp;
+	ibFoldCode fp;
 	fp.RecalcFoldLevel();
 	std::vector<int> levels;
-	ASSERT_TRUE(fp.UpdateFoldLevel(tc, false, close + 2, levels));
+	ASSERT_TRUE(fp.UpdateFoldLevel(tc, close + 2, levels));
 	ASSERT_GT(static_cast<int>(levels.size()), close + 1);
 
 	EXPECT_EQ(Base | Header, levels[open]);
@@ -104,10 +104,10 @@ TEST(FoldLevel, ElseIsAMarkInsideTheFold)
 	const int elseLine = LineOf(tc, KEY_ELSE);
 	ASSERT_GE(elseLine, 0);
 
-	ibFoldLevelParser fp;
+	ibFoldCode fp;
 	fp.RecalcFoldLevel();
 	std::vector<int> levels;
-	ASSERT_TRUE(fp.UpdateFoldLevel(tc, false, elseLine + 3, levels));
+	ASSERT_TRUE(fp.UpdateFoldLevel(tc, elseLine + 3, levels));
 	EXPECT_EQ((Base + 1) | Else, fp.GetFoldMask(elseLine));
 	EXPECT_EQ(Base + 1, levels[elseLine]);
 }
@@ -122,10 +122,10 @@ TEST(FoldLevel, CesFoldsByBracesNotByKeywords)
 	ASSERT_GE(open, 0);
 	ASSERT_EQ(open + 2, close);
 
-	ibFoldLevelParser fp;
+	ibFoldCode fp;
 	fp.RecalcFoldLevel();
 	std::vector<int> levels;
-	ASSERT_TRUE(fp.UpdateFoldLevel(tc, true, close + 1, levels));
+	ASSERT_TRUE(fp.UpdateFoldLevel(tc, close + 1, levels));
 
 	EXPECT_EQ(Base, levels[open - 1]) << "the keyword opens no fold in CES";
 	EXPECT_EQ(Base | Header, levels[open]);
@@ -138,10 +138,10 @@ TEST(FoldLevel, AnOpenThatNeverClosesFoldsNothing)
 	ibTranslateCode tc(CODE_VES);
 	Read(tc, wxT("a = 1;\nIf a Then\n\tb = 1;\n\tb = 2;\n"));
 
-	ibFoldLevelParser fp;
+	ibFoldCode fp;
 	fp.RecalcFoldLevel();
 	std::vector<int> levels;
-	ASSERT_TRUE(fp.UpdateFoldLevel(tc, false, 4, levels));
+	ASSERT_TRUE(fp.UpdateFoldLevel(tc, 4, levels));
 	for (int line = 1; line <= 4; ++line)
 		EXPECT_EQ(Base, levels[line]) << line;
 }
@@ -154,10 +154,10 @@ TEST(FoldLevel, AOneLineQueryIsBalanced)
 	const int line = LineOf(tc, KEY_FROM);
 	ASSERT_GE(line, 0);
 
-	ibFoldLevelParser fp;
+	ibFoldCode fp;
 	fp.RecalcFoldLevel();
 	std::vector<int> levels;
-	ASSERT_TRUE(fp.UpdateFoldLevel(tc, false, line + 2, levels));
+	ASSERT_TRUE(fp.UpdateFoldLevel(tc, line + 2, levels));
 	EXPECT_EQ(Base, fp.GetFoldMask(line));
 	EXPECT_EQ(Base, fp.GetFoldMask(line + 1));
 }

@@ -1,8 +1,8 @@
 ////////////////////////////////////////////////////////////////////////////
-//	Description : where a module's text folds — the code editor's fold manager (foldLevel.h)
+//	Description : where a module's text folds — the code editor's fold manager (scriptFoldCode.h)
 ////////////////////////////////////////////////////////////////////////////
 
-#include "foldLevel.h"
+#include "scriptFoldCode.h"
 
 #include "core/compiler/translateCode.h"   // the lexem stream
 #include "core/compiler/codeDef.h"         // KEYWORD / DELIMITER, KEY_*
@@ -10,17 +10,17 @@
 #include <algorithm>
 #include <iterator>
 
-ibFoldLevelParser::ibFoldLevelParser()
+ibFoldCode::ibFoldCode()
 	: m_update_fold(false), m_counts{}
 {
 }
 
-bool ibFoldLevelParser::UpdateFoldLevel(const ibTranslateCode& tc, bool ces, int lineCount, std::vector<int>& levels)
+bool ibFoldCode::UpdateFoldLevel(const ibTranslateCode& tc, int lineCount, std::vector<int>& levels)
 {
 	if (!m_update_fold)
 		return false;
 
-	CalcFoldLevel(tc, ces);
+	CalcFoldLevel(tc);
 
 	// Detect a tail of opens that never close (incomplete code while
 	// the user is still typing) and skip them so half-finished folds
@@ -76,7 +76,7 @@ bool ibFoldLevelParser::UpdateFoldLevel(const ibTranslateCode& tc, bool ces, int
 	return true;
 }
 
-int ibFoldLevelParser::GetFoldMask(int line) const
+int ibFoldCode::GetFoldMask(int line) const
 {
 	// Accumulate ALL deltas up to and including `line` for the
 	// cumulative indent level, AND the per-line net for the flag.
@@ -133,18 +133,18 @@ int ibFoldLevelParser::GetFoldMask(int line) const
 	return FoldLevelBase + level;
 }
 
-void ibFoldLevelParser::OpenFold(const int line, FoldKind kind)
+void ibFoldCode::OpenFold(const int line, FoldKind kind)
 {
 	m_counts[kind]++;
 	m_folding_vector.push_back({ line, +1 });
 }
 
-void ibFoldLevelParser::MarkFold(const int line)
+void ibFoldCode::MarkFold(const int line)
 {
 	m_folding_vector.push_back({ line, 0 });
 }
 
-void ibFoldLevelParser::CloseFold(const int line, FoldKind kind)
+void ibFoldCode::CloseFold(const int line, FoldKind kind)
 {
 	if (m_counts[kind] > 0) {
 		m_folding_vector.push_back({ line, -1 });
@@ -152,13 +152,13 @@ void ibFoldLevelParser::CloseFold(const int line, FoldKind kind)
 	}
 }
 
-void ibFoldLevelParser::ClearFoldLevel()
+void ibFoldCode::ClearFoldLevel()
 {
 	m_counts.fill(0);
 	m_folding_vector.clear();
 }
 
-ibFoldLevelParser::FoldKind ibFoldLevelParser::OpenKindFor(short numData)
+ibFoldCode::FoldKind ibFoldCode::OpenKindFor(short numData)
 {
 	switch (numData) {
 		case KEY_PROCEDURE: return FoldProcedure;
@@ -173,7 +173,7 @@ ibFoldLevelParser::FoldKind ibFoldLevelParser::OpenKindFor(short numData)
 	}
 }
 
-ibFoldLevelParser::FoldKind ibFoldLevelParser::CloseKindFor(short numData)
+ibFoldCode::FoldKind ibFoldCode::CloseKindFor(short numData)
 {
 	switch (numData) {
 		case KEY_ENDPROCEDURE: return FoldProcedure;
@@ -198,14 +198,14 @@ ibFoldLevelParser::FoldKind ibFoldLevelParser::CloseKindFor(short numData)
 	}
 }
 
-bool ibFoldLevelParser::IsMarkKeyword(short numData)
+bool ibFoldCode::IsMarkKeyword(short numData)
 {
 	return numData == KEY_ELSE
 		|| numData == KEY_ELSEIF
 		|| numData == KEY_EXCEPT;
 }
 
-void ibFoldLevelParser::CalcFoldLevel(const ibTranslateCode& tc, bool isCES)
+void ibFoldCode::CalcFoldLevel(const ibTranslateCode& tc)
 {
 	ClearFoldLevel();
 
@@ -223,7 +223,8 @@ void ibFoldLevelParser::CalcFoldLevel(const ibTranslateCode& tc, bool isCES)
 	//     LINQ surface (`from .. select / group`) DOES still
 	//     fold via keywords in both modes (its closers stay
 	//     keywords in CES).
-	// Mode is the caller's (foldLevel.h).
+	// Mode is the stream's (scriptFoldCode.h).
+	const bool isCES = tc.GetCodeStyle() == CODE_CES;
 
 	for (size_t i = 0; i < tc.GetLexCount(); ++i) {
 		const ibLexem& lex = tc.GetLexAt(i);

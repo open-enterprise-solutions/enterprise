@@ -19,7 +19,7 @@
 #include <memory>
 
 #include "core/compiler/translateCode.h"   // the lexem stream, and what the caret stands in
-#include "core/compiler/foldLevel.h"       // ibFoldLevelParser — where the text folds, the core's one copy
+#include "core/compiler/scriptFoldCode.h"  // ibFoldCode — where the text folds, the core's one copy
 #include "core/compiler/codeDef.h"   // CODE_VES / CODE_CES — the syntax the stream reads in, for fold-mode dispatch
 
 #include "protocol/protocol.h"   // ibProtocol::ibView::ibModule::ibRequest — what the module's tab is asked
@@ -57,6 +57,12 @@ public:
 #define wxSTC_FOLDLEVELWHITE_FLAG 0x1000
 #define wxSTC_FOLDLEVELHEADER_FLAG 0x2000
 #define wxSTC_FOLDLEVELELSE_FLAG 0x4000
+
+// The core spells the fold levels without Scintilla (core/compiler/scriptFoldCode.h): the same numbers.
+static_assert(ibFoldCode::FoldLevelBase == wxSTC_FOLDLEVELBASE, "the core's fold base is Scintilla's");
+static_assert(ibFoldCode::FoldLevelWhite == wxSTC_FOLDLEVELWHITEFLAG, "the core's closer flag is Scintilla's");
+static_assert(ibFoldCode::FoldLevelHeader == wxSTC_FOLDLEVELHEADERFLAG, "the core's opener flag is Scintilla's");
+static_assert(ibFoldCode::FoldLevelElse == wxSTC_FOLDLEVELELSE_FLAG, "the core's else mark is the editor's");
 
 ///////////////////////////////////////////////////////////////////////////
 
@@ -282,6 +288,8 @@ private:
 
 	//Support styling
 	void HighlightSyntaxAndCalculateFoldLevel(const int fromPos, const int toPos);
+	// The fold manager's levels handed to the control when the text changed (RecalcFoldLevel) — on styling.
+	void UpdateFoldLevel();
 
 	//Support debugger
 	void EditDebugPoint(int line);
@@ -307,10 +315,7 @@ private:
 	// context — is answered by the compiler now, through one door each: ibValueAtCaret for what an
 	// expression arrived at, ibNamesAtCaret for what may be written.
 	ibTranslateCode   m_tc;
-	ibFoldLevelParser m_fp;
-
-	// The fold manager's levels handed to the control when the text changed (RecalcFoldLevel) — on styling.
-	void UpdateFoldLevel();
+	ibFoldCode        m_fp;
 
 	bool m_initialized        = false;
 	int  m_indentationSize    = 0;

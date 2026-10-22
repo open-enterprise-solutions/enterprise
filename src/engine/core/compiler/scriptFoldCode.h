@@ -1,5 +1,5 @@
-#ifndef __FOLD_LEVEL_H__
-#define __FOLD_LEVEL_H__
+#ifndef __IB_SCRIPT_FOLD_CODE_H__
+#define __IB_SCRIPT_FOLD_CODE_H__
 
 ////////////////////////////////////////////////////////////////////////////
 // WHERE A MODULE'S TEXT FOLDS — the code editor's fold manager, out of the widget.
@@ -13,8 +13,8 @@
 // with Scintilla's values (wxSTC_FOLDLEVELBASE / WHITEFLAG / HEADERFLAG, and the editors' ELSE mark), and the
 // editor hands the levels to its control (SetFoldLevel) itself.
 //
-// ⭐ THE SYNTAX IS THE CALLER'S: each editor says which syntax drives the folds as it read it before the move
-// (the desktop — the session's, the thin client — its tab's), so neither changes behaviour.
+// ⭐ THE SYNTAX IS THE STREAM'S: the folds are read in the syntax the lexems were read in (GetCodeStyle) — the
+// session's on the desktop, the tab's in the thin client, as each editor says it before lexing.
 //
 ////////////////////////////////////////////////////////////////////////////
 
@@ -25,7 +25,7 @@
 
 class ibTranslateCode;
 
-class CORE_API ibFoldLevelParser {
+class CORE_API ibFoldCode {
 public:
 
 	// Scintilla's fold-level encoding — what GetFoldMask answers and the editors' indentation decodes.
@@ -36,14 +36,14 @@ public:
 		FoldLevelElse   = 0x4000,   // wxSTC_FOLDLEVELELSE_FLAG: Else / ElseIf / Except on a net-zero line
 	};
 
-	ibFoldLevelParser();
+	ibFoldCode();
 
 	// The text changed — the folds are recomputed on the next UpdateFoldLevel (cheap, lazy).
 	void RecalcFoldLevel() const { m_update_fold = true; }
 
 	// Recompute when RecalcFoldLevel asked for it: the levels of lines [1, lineCount] are written into `levels`
 	// (index = line; index 0 is not written). False — nothing was pending, `levels` is untouched.
-	bool UpdateFoldLevel(const ibTranslateCode& tc, bool ces, int lineCount, std::vector<int>& levels);
+	bool UpdateFoldLevel(const ibTranslateCode& tc, int lineCount, std::vector<int>& levels);
 
 	// The level `line` stands at, with the flag of what it opens or closes — the editors' auto-indent reads it.
 	int GetFoldMask(int line) const;
@@ -83,7 +83,7 @@ private:
 	void CloseFold(const int line, FoldKind kind);
 	void ClearFoldLevel();
 
-	void CalcFoldLevel(const ibTranslateCode& tc, bool ces);
+	void CalcFoldLevel(const ibTranslateCode& tc);
 
 	// Recalc-pending flag. Set by RecalcFoldLevel (cheap, lazy);
 	// consumed by UpdateFoldLevel on the next paint.
