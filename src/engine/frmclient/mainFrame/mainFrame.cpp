@@ -1235,9 +1235,11 @@ void ibFrontendMainFrame::DrawView(long long active, const ibProtocolNode& view,
 		child->Activate();
 	}
 
-	// …and its view the doc manager's current one: a tab closed picks the page after it with the notebook's events off
-	// (ibAuiDocChildFrame::Destroy), so that page's view is never told it became active.
-	if (m_docManager->GetCurrentView() != shown)
+	// …and its view the doc manager's current one when the active tab is another — the patch names ActiveTab: a tab
+	// closed picks the page after it with the notebook's events off (ibAuiDocChildFrame::Destroy), so that page's view is
+	// never told it became active. Not on any other answer, nor on a frame drawn whole: the person may be in a view that is
+	// no tab (the configuration's tree), and the answer to their edit must leave them there.
+	if (patch.Has(ibProtocol::ibFrame::ActiveTab) && m_docManager->GetCurrentView() != shown)
 		shown->Activate(true);
 
 	// The active tab's view — the one the frame carries, drawn by what the patch changed in it: none in a frame sent
