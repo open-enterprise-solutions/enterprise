@@ -137,7 +137,7 @@ bool Bind(ibClientListener& listener, ibClientHost& host, unsigned short& port, 
 	std::map<wxString, ibClientHost*> hosts;
 	hosts[wxT("demo")] = &host;
 	wxString refusal;
-	if (!listener.Start(wxT("127.0.0.1"), port, true, std::move(hosts), refusal))
+	if (!listener.Start(wxT("127.0.0.1"), port, true, ibTlsFiles(), std::move(hosts), refusal))
 		return false;
 	url = "ws://127.0.0.1:" + std::to_string(port) + "/demo/client";
 	return true;
@@ -219,7 +219,7 @@ TEST(ClientListener, MoreConnectionsThanTheOldPoolAllGetAReply) {
 	std::map<wxString, ibClientHost*> hosts;
 	hosts[wxT("demo")] = &host;
 	wxString refusal;
-	ASSERT_TRUE(listener.Start(wxT("127.0.0.1"), port, true, std::move(hosts), refusal))
+	ASSERT_TRUE(listener.Start(wxT("127.0.0.1"), port, true, ibTlsFiles(), std::move(hosts), refusal))
 		<< refusal.ToStdString();
 
 	const std::string url = "ws://127.0.0.1:" + std::to_string(port) + "/demo/client";
