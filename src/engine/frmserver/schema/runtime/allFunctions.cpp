@@ -73,13 +73,13 @@ void ibSchemaAllFunctions::Build(const ibSession& session, const ibDataNode& WXU
 	for (std::size_t i = 0; i < groups.size(); ++i) {
 		ibDataNode& group = nodes.AddChild(0, static_cast<ibMetaID>(i));
 		group.SetValue(ibProtocol::ibSchema::ibAllFunctions::Title, groups[i].title);
-		group.SetValue(ibProtocol::ibSchema::ibAllFunctions::Icon, ibBackendPicture::SendPicture(groups[i].clsid, *metaData));
+		group.SetValue(ibProtocol::ibSchema::ibAllFunctions::Icon, ibBackendPicture::SendPicture(groups[i].clsid));
 
 		for (const ibValueMetaObjectGenericData* object : OfferedObjects(metaData, groups[i].clsid)) {
 			ibDataNode& item = group.AddChild(0, object->GetMetaID());
 			item.SetValue(ibProtocol::ibSchema::ibAllFunctions::Item, static_cast<s32>(object->GetMetaID()));
 			item.SetValue(ibProtocol::ibSchema::ibAllFunctions::Title, object->GetSynonym());
-			item.SetValue(ibProtocol::ibSchema::ibAllFunctions::Icon, ibBackendPicture::SendPicture(object->GetClassType(), *metaData));
+			item.SetValue(ibProtocol::ibSchema::ibAllFunctions::Icon, ibBackendPicture::SendPicture(object->GetClassType()));
 		}
 	}
 }

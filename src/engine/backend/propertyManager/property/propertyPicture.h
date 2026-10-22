@@ -57,7 +57,7 @@ public:
 #pragma region _value_
 	wxBitmap GetValueAsBitmap() const;
 	const ibExternalPictureDescription& GetValueAsPictureDesc() const;
-	u64 GetValueAsContentHash() const;
+	ibGuid GetValueAsVersion() const;
 	void SetValue(const ibExternalPictureDescription& val);
 #pragma endregion 
 

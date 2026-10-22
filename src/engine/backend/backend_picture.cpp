@@ -210,25 +210,30 @@ ibPicture ibBackendPicture::GetServerPicture(const ibPictureDescription& picture
 	return bitmap.IsOk() ? FromImage(bitmap.ConvertToImage()) : ibPicture();
 }
 
-ibString ibBackendPicture::SendPicture(const ibPictureDescription& pictureDesc, const ibMetaData& metaData)
+ibString ibBackendPicture::SendPicture(const ibPictureDescription& pictureDesc, const ibMetaData* metaData)
 {
 	if (pictureDesc.IsEmptyPicture())
 		return ibString();
 	// A picture held as a file's bytes has no name of its own: it goes as itself.
 	if (pictureDesc.m_type == ibPictureType::eFromFile)
-		return GetServerPicture(pictureDesc, &metaData).GetData();
+		return GetServerPicture(pictureDesc, metaData).GetData();
 
-	// A backend picture's number as a decimal — a u64 is past what a JSON number keeps.
 	if (pictureDesc.m_type == ibPictureType::eFromBackend)
-		return ibString::Format(wxT("%llu"), static_cast<unsigned long long>(pictureDesc.m_class_identifier));
+		return SendPicture(pictureDesc.m_class_identifier);
 
-	// A configuration picture's guid and the hash of what it holds now: a client keeps a picture by its id, and one
-	// changed since is another id, asked for anew. One the configuration has none of is no picture.
-	const ibValueMetaObjectPicture* const picture = FindConfigurationPicture(metaData, pictureDesc.m_meta_guid);
+	// A configuration picture's guid and the version of what it holds now: a client keeps a picture by its guid with the
+	// version it was given, and asks anew for one named by another. One no configuration has — none given, or the
+	// one given has none of it — is no picture.
+	const ibValueMetaObjectPicture* const picture =
+		metaData != nullptr ? FindConfigurationPicture(*metaData, pictureDesc.m_meta_guid) : nullptr;
 	if (picture == nullptr)
 		return ibString();
-	return ibString(wxString::Format(wxT("%s#%016llx"), pictureDesc.m_meta_guid.str(),
-		static_cast<unsigned long long>(picture->GetContentHash())));
+	return ibString(pictureDesc.m_meta_guid.str() + wxT('#') + picture->GetValueAsVersion().str());
+}
+
+ibString ibBackendPicture::SendPicture(const ibPictureID& id)
+{
+	return id != 0 ? ibString::Format(wxT("%llu"), static_cast<unsigned long long>(id)) : ibString();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////

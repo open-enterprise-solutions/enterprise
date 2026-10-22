@@ -701,7 +701,7 @@ void ibValueCommandBar::Update(ibDataNode& state)
 
 		// The representation decides which of the two a client shows — said here once, not left to each client.
 		entry.SetValue(ibProtocol::ibForm::ibCommandBar::Caption, c.representation == ibRepresentation_Picture ? wxString() : c.caption);
-		entry.SetValue(ibProtocol::ibForm::ibCommandBar::Picture, c.representation == ibRepresentation_Text ? ibString() : ibBackendPicture::SendPicture(c.picture, *GetMetaData()));
+		entry.SetValue(ibProtocol::ibForm::ibCommandBar::Picture, c.representation == ibRepresentation_Text ? ibString() : ibBackendPicture::SendPicture(c.picture, GetMetaData()));
 		entry.SetValue(ibProtocol::ibForm::ibCommandBar::Tooltip, c.tooltip.IsEmpty() ? c.caption : c.tooltip);
 		entry.SetValue(ibProtocol::ibForm::ibCommandBar::Enabled, c.enabled);
 		entry.SetValue(ibProtocol::ibForm::ibCommandBar::Kind, static_cast<s32>(c.kind));
@@ -726,7 +726,7 @@ void ibValueCommandBar::Update(ibDataNode& state)
 			ibDataNode& member = entry.AddChild(0, 0);
 			const bool resolved = ResolveCommand(item->GetBindingDesc(), caption, picture, &modifies);
 			member.SetValue(ibProtocol::ibForm::ibCommandBar::Caption, caption);
-			member.SetValue(ibProtocol::ibForm::ibCommandBar::Picture, ibBackendPicture::SendPicture(picture, *GetMetaData()));
+			member.SetValue(ibProtocol::ibForm::ibCommandBar::Picture, ibBackendPicture::SendPicture(picture, GetMetaData()));
 			// A member gone since the bar was built is listed, disabled, so the places stay the places
 			// ExecuteCommand(id, member) counts.
 			member.SetValue(ibProtocol::ibForm::ibCommandBar::Enabled, resolved && !(viewOnly && modifies));
@@ -855,7 +855,7 @@ void WriteCommandTree(ibDataNode& node, ibValueForm* form)
 			? form->FindFormCommandById(entry.desc.GetLeaf()) : nullptr;
 		ibDataNode& row = parent->AddChild(0, formCommand != nullptr ? formCommand->GetId() : 0);
 		row.SetValue(ibProtocol::ibSchema::ibProperties::Name, entry.label);
-		const ibString picture = ibBackendPicture::SendPicture(entry.picture, *form->GetMetaData());   // the command's own picture, else the tree's default
+		const ibString picture = ibBackendPicture::SendPicture(entry.picture, form->GetMetaData());   // the command's own picture, else the tree's default
 		if (!picture.IsEmpty())
 			row.SetValue(ibProtocol::ibSchema::ibProperties::Picture, picture);
 

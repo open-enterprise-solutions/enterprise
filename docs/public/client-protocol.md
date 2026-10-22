@@ -49,7 +49,7 @@ deflate (RFC 1951 — a browser's `DecompressionStream("deflate-raw")`). A text 
 | `open` | `Client`, `File` or `Extension` | the frame — the file opened as a document; without a file, a new document of the template that opens `Extension` (File → New) |
 | `command` | `Client`, `Command` | the frame — the command done on the active tab's document |
 | `presentation` | `Client`, `Value`, `Format` | `Text` — the value as a person reads it, formatted by the server (`Format`: the codes `Format()` takes) |
-| `picture` | `Client`, `Pictures` — the ids | `Pictures` — each `Id`, `Picture` (PNG, base64; empty when there is none of that id) |
+| `picture` | `Client`, `Pictures` — the ids: an engine picture's number, a configuration picture's `<guid>#<version>` (read by the guid) | `Pictures` — each `Id`, `Picture` (PNG, base64; empty when there is none of that id) |
 | `debug` | `Client`, `Command` and its fields (protocol 6) | at once, never the frame — [The debugger](#the-debugger) |
 
 `login`'s `Read` saves the start's own reads: the designer names the debugger's store (`Schema` 15), which was a
@@ -140,8 +140,10 @@ The client's picker lists them; the chosen command's path goes back through the 
 the command bound already, sends nothing. Making a new form command is the form editor's command tree's own door.
 A picture's `ibPropertyPicture` row carries the configuration's pictures it may be loaded from (the picture
 metaobjects of the owner's configuration, or of the one it extends) as an optional node `Pictures`: children with
-`Name` and `Guid`. They are named by `Guid` rather than as a `Picture`, so the rows do not make the client fetch every
-configuration picture before it draws them. Picking one is the row's `Set` with the value `{Type 2, Guid}`.
+`Name`, `Guid` and `Id` (the id it is drawn by). They are named rather than sent as a `Picture`; the cell asks for them
+in one `picture` call. Picking one is the row's `Set` with the value `{Type 2, Guid}`.
+A configuration picture's version is a guid new with each picture its object is given; it is not stored. A client
+keeps a picture by its guid with the id it came by, and asks again when an answer names another version.
 A field's `ibPropertyChoiceLink` (link by type) and `ibPropertyChoiceParameters` rows carry what their windows ask of
 the configuration, as optional nodes. `Targets`, on both: the field's reference types, each `Id` (its metaobject),
 `Title`, `Type` (the class its reference is registered under, as a link keeps it) and `Picture`; on the parameters row

@@ -7,31 +7,31 @@
 
 class BACKEND_API ibVariantDataExternalPicture : public wxVariantData {
 	wxString MakeString() const;
-	static u64 HashContent(const ibExternalPictureDescription& container);
 public:
 
 	bool IsEmptyPicture() const { return m_pictureExternalFile.IsEmptyPicture(); }
 
 	const ibExternalPictureDescription& GetExternalPictureDesc() const { return m_pictureExternalFile; }
-	// What it holds as a number, worked out as it is set: what a configuration picture's id carries
-	// (ibBackendPicture::SendPicture).
-	u64 GetContentHash() const { return m_contentHash; }
+	// ⭐ WHICH PICTURE IT HOLDS — a guid new with each picture it is given and kept by its copies: what a configuration
+	// picture's id carries (ibBackendPicture::SendPicture), so a client asks anew for one changed since. Not written with
+	// the picture: one read is given a new one.
+	const ibGuid& GetPictureVersion() const { return m_version; }
 
 	wxString GetPictureFileName() const;
 	wxBitmap GetPictureBitmap(const wxSize& size = wxSize(16, 16)) const;
 
 	void SetFromExternalFile(const ibExternalPictureDescription& container) {
 		m_pictureExternalFile = container;
-		m_contentHash = HashContent(container);
+		m_version = wxNewUniqueGuid;
 	}
 
 	ibVariantDataExternalPicture(const ibExternalPictureDescription& container = ibExternalPictureDescription())
-		: m_pictureExternalFile(container), m_contentHash(HashContent(container))
+		: m_pictureExternalFile(container), m_version(wxNewUniqueGuid)
 	{
 	}
 
 	ibVariantDataExternalPicture(const ibVariantDataExternalPicture& src) :
-		wxVariantData(), m_pictureExternalFile(src.m_pictureExternalFile), m_contentHash(src.m_contentHash)
+		wxVariantData(), m_pictureExternalFile(src.m_pictureExternalFile), m_version(src.m_version)
 	{
 	}
 
@@ -61,7 +61,7 @@ public:
 protected:
 
 	ibExternalPictureDescription m_pictureExternalFile;
-	u64 m_contentHash = 0;
+	ibGuid m_version;
 };
 
 class BACKEND_API ibVariantDataPicture : public wxVariantData {

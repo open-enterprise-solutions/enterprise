@@ -31,7 +31,7 @@ void ibWriteSettingsField(ibDataNode& fields, const wxString& name, const wxStri
 	field.SetValue(ibProtocol::ibRequest::ibListSettings::Available, available);
 	// A field's picture is its source's, of the configuration the fields were read from.
 	if (!picture.IsEmptyPicture())
-		field.SetValue(ibProtocol::ibRequest::ibListSettings::Picture, ibBackendPicture::SendPicture(picture, *metaData));
+		field.SetValue(ibProtocol::ibRequest::ibListSettings::Picture, ibBackendPicture::SendPicture(picture, metaData));
 	ibDataValue written;
 	ibTypeDescriptionMemory::WriteNode(written, type);
 	field.SetProperty(ibProtocol::ibRequest::ibListSettings::Type, written);

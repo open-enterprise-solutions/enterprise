@@ -189,7 +189,7 @@ ibHomePageView::ibHomePageCell ibHomePageView::OpenCell(const ibHomePageItem& it
 	return cell;
 }
 
-void ibHomePageView::DrawCell(const ibHomePageCell& cell, const ibMetaData& metaData, ibDataNode& node) const
+void ibHomePageView::DrawCell(const ibHomePageCell& cell, ibDataNode& node) const
 {
 	node.SetValue(ibProtocol::ibView::ibHomePage::Height, static_cast<s32>(ItemWeight(cell.m_item)));
 
@@ -200,7 +200,7 @@ void ibHomePageView::DrawCell(const ibHomePageCell& cell, const ibMetaData& meta
 	const ibValueMetaObject* const owner = metaForm != nullptr ? metaForm->GetParent() : nullptr;
 	const ibPictureID headerIcon = owner != nullptr ? owner->GetClassType()
 		: metaForm != nullptr ? metaForm->GetClassType() : g_picHomePageCLSID;
-	node.SetValue(ibProtocol::ibView::ibHomePage::Icon, ibBackendPicture::SendPicture(headerIcon, metaData));
+	node.SetValue(ibProtocol::ibView::ibHomePage::Icon, ibBackendPicture::SendPicture(headerIcon));
 
 	const ibFormVisualDocument* const formDoc = cell.m_valueForm ? cell.m_valueForm->GetVisualDocument() : nullptr;
 	ibFormVisualEditView* const formView = formDoc != nullptr ? formDoc->GetFirstView() : nullptr;
@@ -224,14 +224,12 @@ void ibHomePageView::OnDraw(ibDataNode& frame)
 		frame.SetValue(ibProtocol::ibView::ibHomePage::Gravity, ibNumber(m_columnGravity));
 
 	// Each column and each cell by an id of its own, from one: children without one come whole in a patch
-	// (NodeChildrenWhole) — every cell's form drawn anew on the client when one of them changed. Each cell's pictures
-	// are of the page's configuration — the document's (OnCreate took no other).
-	const ibMetaData& metaData = *static_cast<const ibHomePageDocument*>(GetDocument())->GetMetaData();
+	// (NodeChildrenWhole) — every cell's form drawn anew on the client when one of them changed.
 	ibDataNode& columns = frame.Child(ibProtocol::ibView::ibHomePage::Columns);
 	for (std::size_t c = 0; c < m_columns.size(); ++c) {
 		ibDataNode& column = columns.AddChild(0, static_cast<ibMetaID>(c + 1));
 		for (std::size_t i = 0; i < m_columns[c].size(); ++i)
-			DrawCell(m_columns[c][i], metaData, column.AddChild(0, static_cast<ibMetaID>(i + 1)));
+			DrawCell(m_columns[c][i], column.AddChild(0, static_cast<ibMetaID>(i + 1)));
 	}
 }
 

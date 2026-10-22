@@ -65,7 +65,7 @@ void ibSchemaHomePage::Build(const ibSession& session, const ibDataNode& args, i
 		row.SetValue(ibProtocol::ibSchema::ibHomePage::Id, static_cast<s32>(metaForm->GetMetaID()));
 		row.SetValue(ibProtocol::ibSchema::ibHomePage::Name, metaForm->GetName());
 		row.SetValue(ibProtocol::ibSchema::ibHomePage::FullName, metaForm->GetFullName());
-		row.SetValue(ibProtocol::ibSchema::ibHomePage::Picture, ibBackendPicture::SendPicture(metaForm->GetClassType(), *metaData));
+		row.SetValue(ibProtocol::ibSchema::ibHomePage::Picture, ibBackendPicture::SendPicture(metaForm->GetClassType()));
 		if (metaForm->GetClassType() == g_metaCommonFormCLSID) {
 			row.SetValue(ibProtocol::ibSchema::ibHomePage::Common, true);
 			continue;
@@ -73,7 +73,7 @@ void ibSchemaHomePage::Build(const ibSession& session, const ibDataNode& args, i
 		if (const ibValueMetaObject* const owner = metaForm->GetParent()) {
 			row.SetValue(ibProtocol::ibSchema::ibHomePage::Owner, static_cast<s32>(owner->GetMetaID()));
 			row.SetValue(ibProtocol::ibSchema::ibHomePage::OwnerName, owner->GetFullName());
-			row.SetValue(ibProtocol::ibSchema::ibHomePage::OwnerPicture, ibBackendPicture::SendPicture(owner->GetClassType(), *metaData));
+			row.SetValue(ibProtocol::ibSchema::ibHomePage::OwnerPicture, ibBackendPicture::SendPicture(owner->GetClassType()));
 		}
 	}
 }

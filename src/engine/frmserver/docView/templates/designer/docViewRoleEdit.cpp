@@ -62,7 +62,7 @@ ibDataNode& ibRoleRightsView::GroupFor(ibDataNode& root, const ibClassID& clsid)
 	ibDataNode& group = root.AddChild(0, -static_cast<ibMetaID>(root.Children().size() + 1));
 	const wxString caption = ibMetaGroupCaption(clsid);
 	group.SetValue(ibProtocol::ibView::ibCheckTree::Title, caption.IsEmpty() ? typeCtor->GetClassName() : caption);
-	group.SetValue(ibProtocol::ibView::ibCheckTree::Picture, ibBackendPicture::SendPicture(clsid, *GetDocument()->GetMetaObject()->GetMetaData()));
+	group.SetValue(ibProtocol::ibView::ibCheckTree::Picture, ibBackendPicture::SendPicture(clsid));
 	return group;
 }
 
@@ -70,7 +70,7 @@ ibDataNode& ibRoleRightsView::AppendItem(ibDataNode& parent, ibValueMetaObject* 
 {
 	ibDataNode& item = parent.AddChild(0, metaObject->GetMetaID());
 	item.SetValue(ibProtocol::ibView::ibCheckTree::Title, metaObject->GetName());
-	item.SetValue(ibProtocol::ibView::ibCheckTree::Picture, ibBackendPicture::SendPicture(metaObject->GetClassType(), *metaObject->GetMetaData()));
+	item.SetValue(ibProtocol::ibView::ibCheckTree::Picture, ibBackendPicture::SendPicture(metaObject->GetClassType()));
 	AppendRoles(item, metaObject);
 	return item;
 }
@@ -118,7 +118,7 @@ void ibRoleRightsView::FillData(ibDataNode& root)
 	// The configuration's row is its common object's — its rights are the configuration's own.
 	root.SetMetaId(commonObject->GetMetaID());
 	root.SetValue(ibProtocol::ibView::ibCheckTree::Title, commonObject->GetName());
-	root.SetValue(ibProtocol::ibView::ibCheckTree::Picture, ibBackendPicture::SendPicture(g_metaCommonMetadataCLSID, *metaData));
+	root.SetValue(ibProtocol::ibView::ibCheckTree::Picture, ibBackendPicture::SendPicture(g_metaCommonMetadataCLSID));
 	AppendRoles(root, commonObject);
 
 	// ASKED, NOT LISTED — does this object HAVE any rights? One with none has nothing to grant or deny, so it has no row

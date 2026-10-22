@@ -542,7 +542,7 @@ void ibValueModelTableBox::Command_ShowViewMode()
 
 	ibDataNode request;
 	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<s32>(ibProtocol::ibRequest::ibKind::ViewMode));
-	request.SetValue(ibProtocol::ibRequest::ibViewMode::Picture, ibBackendPicture::SendPicture(g_picHierarchyCLSID, *GetMetaData()));
+	request.SetValue(ibProtocol::ibRequest::ibViewMode::Picture, ibBackendPicture::SendPicture(g_picHierarchyCLSID));
 	request.SetValue(ibProtocol::ibRequest::ibViewMode::Mode, static_cast<s32>(m_propertyViewMode->GetValueAsEnum()));
 
 	ibDataNode response;

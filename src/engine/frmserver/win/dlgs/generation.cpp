@@ -18,7 +18,7 @@ bool ibDialogGeneration::ShowModal(ibMetaID& id)
 	// window's own picture.
 	ibDataNode request;
 	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<s32>(ibProtocol::ibRequest::ibKind::Generation));
-	request.SetValue(ibProtocol::ibRequest::ibGeneration::Picture, ibBackendPicture::SendPicture(g_picGenerateCLSID, *m_metaData));
+	request.SetValue(ibProtocol::ibRequest::ibGeneration::Picture, ibBackendPicture::SendPicture(g_picGenerateCLSID));
 	for (unsigned int idx = 0; idx < m_metaDesc.GetTypeCount(); idx++) {
 		const ibValueMetaObject* typeCtor = m_metaData->FindAnyObjectByFilter(m_metaDesc.GetByIdx(idx));
 		if (typeCtor == nullptr)
@@ -26,7 +26,7 @@ bool ibDialogGeneration::ShowModal(ibMetaID& id)
 		ibDataNode& item = request.AddChild(0, 0);
 		item.SetValue(ibProtocol::ibRequest::ibGeneration::Id, static_cast<s32>(m_metaDesc.GetByIdx(idx)));
 		item.SetValue(ibProtocol::ibRequest::ibGeneration::Caption, typeCtor->GetSynonym());
-		item.SetValue(ibProtocol::ibRequest::ibGeneration::Picture, ibBackendPicture::SendPicture(typeCtor->GetClassType(), *m_metaData));
+		item.SetValue(ibProtocol::ibRequest::ibGeneration::Picture, ibBackendPicture::SendPicture(typeCtor->GetClassType()));
 	}
 
 	ibDataNode response;

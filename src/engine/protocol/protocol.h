@@ -329,8 +329,8 @@ namespace ibProtocol {
 
 	// ⭐ A PICTURE IS NAMED BY ITS ID, EVERYWHERE — an answer carries the id alone, and the picture is loaded by this,
 	// apart: picture {Pictures} → Pictures: the pictures of those ids, each {Id, Picture} (PNG, base64) — a backend one by
-	// its number (a registered picture, a class's own: its class id), a configuration's by its guid and its content's
-	// hash, `<guid>#<hash>` (a changed picture is another id); several at once,
+	// its number (a registered picture, a class's own: its class id), a configuration's by its guid and its version,
+	// `<guid>#<version>` (a changed picture is another version); several at once,
 	// asked by a client that has not got them and kept by it. One there is none of comes back empty, not refused.
 	namespace ibPicture {
 

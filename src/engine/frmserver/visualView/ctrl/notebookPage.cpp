@@ -26,7 +26,7 @@ void ibValueNotebookPage::OnUpdate(ibDataNode& state, ibVisualHost* host)
     // The picture travels by its id, and only when the tab shows one.
     const ibPictureDescription picture = m_propertyPicture->GetValueAsPictureDesc();
     if (representation != ibRepresentation::ibRepresentation_Text && !picture.IsEmptyPicture())
-        state.SetValue(ibProtocol::ibForm::ibState::Picture, ibBackendPicture::SendPicture(picture, *GetMetaData()));
+        state.SetValue(ibProtocol::ibForm::ibState::Picture, ibBackendPicture::SendPicture(picture, GetMetaData()));
 }
 
 void ibValueNotebookPage::OnSelected(ibVisualHost* host)

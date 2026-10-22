@@ -21,9 +21,9 @@ const ibExternalPictureDescription& ibPropertyExternalPicture::GetValueAsPicture
 	return get_cell_variant<ibVariantDataExternalPicture>()->GetExternalPictureDesc();
 }
 
-u64 ibPropertyExternalPicture::GetValueAsContentHash() const
+ibGuid ibPropertyExternalPicture::GetValueAsVersion() const
 {
-	return get_cell_variant<ibVariantDataExternalPicture>()->GetContentHash();
+	return get_cell_variant<ibVariantDataExternalPicture>()->GetPictureVersion();
 }
 
 void ibPropertyExternalPicture::SetValue(const ibExternalPictureDescription& val)
@@ -54,7 +54,7 @@ bool ibPropertyExternalPicture::GetDataValue(ibValue& pvarPropVal) const
 
 bool ibPropertyExternalPicture::ReadNodeValue(const ibDataValue& value)
 {
-	// Read whole, then set: the cell is a new value, its hash worked out with it — never written in place.
+	// Read whole, then set: the cell is a new value, with a version of its own — never written in place.
 	ibExternalPictureDescription read;
 	if (!ibExternalPictureDescriptionMemory::ReadNode(value, read))
 		return false;

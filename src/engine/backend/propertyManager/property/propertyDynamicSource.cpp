@@ -102,7 +102,7 @@ bool ibPropertyDynamicSource::GetProtocolValue(ibDataNode& row, ibReader reader)
 		const ibValueMetaObjectGenericData* const metaObject = queryable->GetSourceMetaObject();
 		if (metaObject != nullptr)
 			choice.SetValue(ibProtocol::ibSchema::ibProperties::Picture,
-				ibBackendPicture::SendPicture(ibPictureDescription(metaObject->GetClassType()), *metaObject->GetMetaData()));
+				ibBackendPicture::SendPicture(metaObject->GetClassType()));
 	}
 	return true;
 }

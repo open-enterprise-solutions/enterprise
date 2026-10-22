@@ -365,13 +365,12 @@ void ibFormDesignView::WriteClasses(ibDataNode& response)
 	// The classes a control may be made of, with their pictures — the editor's palette and its trees' icons; one the
 	// desktop did not offer to place (IsControlSystem — a sizer's item, a page) is not Visible. Each is made by the
 	// server (Control — its palette, its paste), so nothing of one is written but what is shown.
-	const ibMetaData& metaData = *GetDocument()->GetMetaObject()->GetMetaData();
 	ibDataNode& classes = response.Child(ibProtocol::ibView::ibFormDesigner::Classes);
 	for (const ibCtorAbstractType* ctor : ibValue::GetListCtorsByType(ibCtorObjectType::ibCtorObjectType_object_control)) {
 		const wxString className = ctor->GetClassName();
 		ibDataNode& described = classes.AddChild(0, 0);
 		described.SetValue(ibProtocol::ibView::ibFormDesigner::Name, className);
-		described.SetValue(ibProtocol::ibView::ibFormDesigner::Picture, ibBackendPicture::SendPicture(ctor->GetClassType(), metaData));
+		described.SetValue(ibProtocol::ibView::ibFormDesigner::Picture, ibBackendPicture::SendPicture(ctor->GetClassType()));
 		const ibCtorControlTypeBase* const controlCtor = dynamic_cast<const ibCtorControlTypeBase*>(ctor);
 		if (controlCtor == nullptr)
 			continue;

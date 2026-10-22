@@ -156,7 +156,7 @@ void ibClientFrame::BackendError(const wxString& strFileName,
 	// what becomes of the failure. Closed without a choice — as Close window.
 	ibDataNode request;
 	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<s32>(ibProtocol::ibRequest::ibKind::Error));
-	request.SetValue(ibProtocol::ibRequest::ibError::Picture, ibBackendPicture::SendPicture(g_picErrorCLSID, *GetSession()->GetMetaData()));
+	request.SetValue(ibProtocol::ibRequest::ibError::Picture, ibBackendPicture::SendPicture(g_picErrorCLSID));
 	request.SetValue(ibProtocol::ibRequest::ibError::Text, strErrorMessage);
 
 	ibDataNode response;

@@ -339,7 +339,7 @@ ibDataNode& ibMetaTreeBase::AppendGroupItem(ibDataNode& parent, const ibClassID&
 	const ibMetaID place = -static_cast<ibMetaID>(parent.Children().size() + 1);
 	ibDataNode& item = parent.AddChild(0, place);
 	item.SetValue(ibProtocol::ibSchema::ibMetaData::Title, name);
-	item.SetValue(ibProtocol::ibSchema::ibMetaData::Picture, ibBackendPicture::SendPicture(clsid, *GetMetaData()));
+	item.SetValue(ibProtocol::ibSchema::ibMetaData::Picture, ibBackendPicture::SendPicture(clsid));
 	item.SetValue(ibProtocol::ibSchema::ibMetaData::Group, ClsidText(clsid));
 	return item;
 }
@@ -356,7 +356,7 @@ ibDataNode& ibMetaTreeBase::AppendItem(ibDataNode& parent, ibValueMetaObject* me
 	ibDataNode& item = parent.AddChild(0, metaObject->GetMetaID());
 	item.SetValue(ibProtocol::ibSchema::ibMetaData::Title, metaObject->GetName());
 	// Every metaobject's icon is its class's.
-	item.SetValue(ibProtocol::ibSchema::ibMetaData::Picture, ibBackendPicture::SendPicture(metaObject->GetClassType(), *GetMetaData()));
+	item.SetValue(ibProtocol::ibSchema::ibMetaData::Picture, ibBackendPicture::SendPicture(metaObject->GetClassType()));
 	item.SetValue(ibProtocol::ibSchema::ibMetaData::Type, ClsidText(metaObject->GetClassType()));
 	item.SetValue(ibProtocol::ibSchema::ibMetaData::Synonym, metaObject->GetSynonym());
 	// …and its guid — what a record of the base keeps it by (a user's roles and language: ibDialogUserItem).
@@ -391,9 +391,9 @@ void ibMetaTreeBase::AppendMenu(ibDataNode& item, ibValueMetaObject* metaObject)
 		}
 		// Its picture — of what it opens, else its own (the desktop's AppendMetaMenu).
 		if (entry.m_metaObject != nullptr)
-			row.SetValue(ibProtocol::ibSchema::ibMetaData::Picture, ibBackendPicture::SendPicture(entry.m_metaObject->GetClassType(), *GetMetaData()));
+			row.SetValue(ibProtocol::ibSchema::ibMetaData::Picture, ibBackendPicture::SendPicture(entry.m_metaObject->GetClassType()));
 		else if (entry.m_picture != 0)
-			row.SetValue(ibProtocol::ibSchema::ibMetaData::Picture, ibBackendPicture::SendPicture(entry.m_picture, *GetMetaData()));
+			row.SetValue(ibProtocol::ibSchema::ibMetaData::Picture, ibBackendPicture::SendPicture(entry.m_picture));
 		if (entry.m_id != wxNOT_FOUND)
 			row.SetValue(ibProtocol::ibSchema::ibMetaData::Command, static_cast<s32>(entry.m_id));
 	}
@@ -716,7 +716,7 @@ void ibConfigurationTree::FillData(ibDataNode& root)
 
 	root.SetMetaId(commonMetadata->GetMetaID());
 	root.SetValue(ibProtocol::ibSchema::ibMetaData::Title, m_metaData->GetConfigName());
-	root.SetValue(ibProtocol::ibSchema::ibMetaData::Picture, ibBackendPicture::SendPicture(g_metaCommonMetadataCLSID, *m_metaData));
+	root.SetValue(ibProtocol::ibSchema::ibMetaData::Picture, ibBackendPicture::SendPicture(g_metaCommonMetadataCLSID));
 	root.SetValue(ibProtocol::ibSchema::ibMetaData::Type, ClsidText(commonMetadata->GetClassType()));
 	// …the dialect its modules are written in — what the desktop's process held (ibCompileCode::GetCodeStyle).
 	root.SetValue(ibProtocol::ibSchema::ibMetaData::Syntax, static_cast<s32>(m_metaData->GetCommonMetaObject()->GetCompileSyntax()));

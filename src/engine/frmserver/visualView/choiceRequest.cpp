@@ -11,7 +11,7 @@
 namespace {
 
 // The request a choice is put as — its caption and the items offered.
-ibDataNode ChoiceRequest(const wxString& caption, const std::vector<ibChoiceItem>& items, const ibMetaData& metaData)
+ibDataNode ChoiceRequest(const wxString& caption, const std::vector<ibChoiceItem>& items, const ibMetaData* metaData)
 {
 	ibDataNode request;
 	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<s32>(ibProtocol::ibRequest::ibKind::Choice));
@@ -36,7 +36,7 @@ bool ibRequestChoice(const wxString& caption, const std::vector<ibChoiceItem>& i
 	if (frame == nullptr || items.empty())
 		return false;
 
-	ibDataNode request = ChoiceRequest(caption, items, *frame->GetSession()->GetMetaData());
+	ibDataNode request = ChoiceRequest(caption, items, frame->GetSession()->GetMetaData());
 	ibDataNode response;
 	if (!frame->Request(request, response))
 		return false;
@@ -57,7 +57,7 @@ bool ibRequestChoice(const wxString& caption, const std::vector<ibChoiceItem>& i
 	if (frame == nullptr || items.empty())
 		return false;
 
-	ibDataNode request = ChoiceRequest(caption, items, *frame->GetSession()->GetMetaData());
+	ibDataNode request = ChoiceRequest(caption, items, frame->GetSession()->GetMetaData());
 	request.SetValue(ibProtocol::ibRequest::ibChoice::Multiple, true);
 	ibDataNode response;
 	if (!frame->Request(request, response))

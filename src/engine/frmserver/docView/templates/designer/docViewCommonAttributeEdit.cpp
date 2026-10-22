@@ -63,7 +63,7 @@ ibDataNode& ibCommonAttributeCompositionView::GroupFor(ibDataNode& root, const i
 	ibDataNode& group = root.AddChild(0, -static_cast<ibMetaID>(root.Children().size() + 1));
 	const wxString caption = ibMetaGroupCaption(clsid);
 	group.SetValue(ibProtocol::ibView::ibCheckTree::Title, caption.IsEmpty() ? typeCtor->GetClassName() : caption);
-	group.SetValue(ibProtocol::ibView::ibCheckTree::Picture, ibBackendPicture::SendPicture(clsid, *GetDocument()->GetMetaObject()->GetMetaData()));
+	group.SetValue(ibProtocol::ibView::ibCheckTree::Picture, ibBackendPicture::SendPicture(clsid));
 	return group;
 }
 
@@ -74,7 +74,7 @@ ibDataNode& ibCommonAttributeCompositionView::AppendItem(ibDataNode& parent, ibV
 
 	ibDataNode& item = parent.AddChild(0, metaObject->GetMetaID());
 	item.SetValue(ibProtocol::ibView::ibCheckTree::Title, metaObject->GetName());
-	item.SetValue(ibProtocol::ibView::ibCheckTree::Picture, ibBackendPicture::SendPicture(metaObject->GetClassType(), *metaObject->GetMetaData()));
+	item.SetValue(ibProtocol::ibView::ibCheckTree::Picture, ibBackendPicture::SendPicture(metaObject->GetClassType()));
 	item.SetValue(ibProtocol::ibView::ibCheckTree::Checked, metaCommonAttribute->IsCompositionObject(metaObject));
 	item.SetValue(ibProtocol::ibView::ibCheckTree::ReadOnly, !metaObject->IsEditable());
 	return item;
@@ -91,7 +91,7 @@ void ibCommonAttributeCompositionView::FillData(ibDataNode& root)
 	// The root wears the CONFIGURATION's icon, as the section editor's; the desktop's kept the word "Configuration" on it.
 	root.SetMetaId(commonObject->GetMetaID());
 	root.SetValue(ibProtocol::ibView::ibCheckTree::Title, _("Configuration"));
-	root.SetValue(ibProtocol::ibView::ibCheckTree::Picture, ibBackendPicture::SendPicture(g_metaCommonMetadataCLSID, *metaData));
+	root.SetValue(ibProtocol::ibView::ibCheckTree::Picture, ibBackendPicture::SendPicture(g_metaCommonMetadataCLSID));
 
 	// ASKED, NOT LISTED: every metaobject that says it can carry one (IsCompositionAllowed), in the order of its group's
 	// declared place (ibMetaGroupOrder); a stable sort leaves each group's own objects as the metadata gives them.

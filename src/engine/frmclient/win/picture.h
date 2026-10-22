@@ -12,11 +12,11 @@
 #include "frmclient/frmclient.h"
 
 // ⭐ A PICTURE AS THE WIRE NAMES IT — by its id: a backend picture's number in decimal, a configuration's guid and its
-// content's hash, `<guid>#<hash>` (ibBackendPicture::SendPicture); a picture with no id of its own (a file's) is its PNG
-// in base64 itself. Drawn from what this client keeps: the engine's own are the core's (registered as it loads,
+// version, `<guid>#<version>` (ibBackendPicture::SendPicture); a picture with no id of its own (a file's) is its PNG in
+// base64 itself. Drawn from what this client keeps: the engine's own are the core's (registered as it loads,
 // core/picturePredefined.cpp), any other is asked of the server by its id the first time it is named
-// (ibProtocol::ibMethod::Picture) and kept — one the server has none of as well, so it is not asked again. An empty
-// bitmap when there is none.
+// (ibProtocol::ibMethod::Picture) and kept with its version — one the server has none of as well, so it is not asked
+// again; one named by another version is asked anew and kept in its place. An empty bitmap when there is none.
 FRMCLIENT_API wxBitmap ibProtocolPicture(const wxString& value);
 // …a backend picture by its number — a row's state picture (ibDataViewModel::GetRowPicture).
 FRMCLIENT_API wxBitmap ibProtocolPictureById(ibPictureID id);

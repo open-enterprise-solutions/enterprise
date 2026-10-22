@@ -60,7 +60,7 @@ ibDataNode& ibFunctionalOptionMembersView::GroupFor(ibDataNode& root, const ibCl
 	ibDataNode& group = root.AddChild(0, -static_cast<ibMetaID>(root.Children().size() + 1));
 	const wxString caption = ibMetaGroupCaption(clsid);
 	group.SetValue(ibProtocol::ibView::ibCheckTree::Title, caption.IsEmpty() ? typeCtor->GetClassName() : caption);
-	group.SetValue(ibProtocol::ibView::ibCheckTree::Picture, ibBackendPicture::SendPicture(clsid, *GetDocument()->GetMetaObject()->GetMetaData()));
+	group.SetValue(ibProtocol::ibView::ibCheckTree::Picture, ibBackendPicture::SendPicture(clsid));
 	return group;
 }
 
@@ -70,7 +70,7 @@ ibDataNode& ibFunctionalOptionMembersView::AppendItem(ibDataNode& parent, ibValu
 
 	ibDataNode& item = parent.AddChild(0, metaObject->GetMetaID());
 	item.SetValue(ibProtocol::ibView::ibCheckTree::Title, metaObject->GetName());
-	item.SetValue(ibProtocol::ibView::ibCheckTree::Picture, ibBackendPicture::SendPicture(metaObject->GetClassType(), *metaObject->GetMetaData()));
+	item.SetValue(ibProtocol::ibView::ibCheckTree::Picture, ibBackendPicture::SendPicture(metaObject->GetClassType()));
 	item.SetValue(ibProtocol::ibView::ibCheckTree::Checked, metaObject->IsInFunctionalOption(metaOption->GetMetaID()));
 	item.SetValue(ibProtocol::ibView::ibCheckTree::ReadOnly, !metaObject->IsEditable());
 	return item;
@@ -99,7 +99,7 @@ void ibFunctionalOptionMembersView::FillData(ibDataNode& root)
 	// word "Configuration" on it.
 	root.SetMetaId(commonObject->GetMetaID());
 	root.SetValue(ibProtocol::ibView::ibCheckTree::Title, _("Configuration"));
-	root.SetValue(ibProtocol::ibView::ibCheckTree::Picture, ibBackendPicture::SendPicture(g_metaCommonMetadataCLSID, *metaData));
+	root.SetValue(ibProtocol::ibView::ibCheckTree::Picture, ibBackendPicture::SendPicture(g_metaCommonMetadataCLSID));
 
 	// ASKED, NOT LISTED: every object that says it may belong (IsFunctionalOptionAllowed), in the order of its group's
 	// declared place (ibMetaGroupOrder); a stable sort leaves each group's own objects as the metadata gives them.

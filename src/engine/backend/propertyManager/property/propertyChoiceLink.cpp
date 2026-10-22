@@ -124,7 +124,7 @@ bool ibPropertyChoiceParameters::WriteNodeValue(ibDataValue& value) const
 namespace {
 
 // One item — its Id, its Title (a name, as the desktop's windows named it) and its Picture.
-ibDataNode& AppendItem(ibDataNode& parent, const ibPropertyChoiceList& list, unsigned int index, const ibMetaData& metaData)
+ibDataNode& AppendItem(ibDataNode& parent, const ibPropertyChoiceList& list, unsigned int index, const ibMetaData* metaData)
 {
 	ibDataNode& item = parent.AddChild(0, static_cast<ibMetaID>(parent.Children().size() + 1));
 	item.SetValue(ibProtocol::ibSchema::ibProperties::Id, static_cast<s32>(list.GetId(index)));
@@ -138,14 +138,14 @@ ibDataNode& AppendItem(ibDataNode& parent, const ibPropertyChoiceList& list, uns
 // THE FIELD'S REFERENCE TYPES — what both windows name a target by; for the parameters, each its fields.
 void AppendTargets(ibDataNode& row, const ibPropertyObject* owner, const ibPropertyChoiceParameters* parameters)
 {
-	const ibMetaData& metaData = *owner->GetMetaData();   // a field's types are of its owner's configuration
+	const ibMetaData* const metaData = owner != nullptr ? owner->GetMetaData() : nullptr;
 	auto targets = std::make_shared<ibDataNode>();
 	ibPropertyChoiceList types;
 	ibFieldReferenceTypes(owner, types);
 	for (unsigned int index = 0; index < types.GetCount(); ++index) {
 		ibDataNode& target = AppendItem(*targets, types, index, metaData);
-		const ibClassID clsid = metaData.GetIDObjectFromMetaID(
-			static_cast<ibMetaID>(types.GetId(index)), ibCtorObjectMetaType::ibCtorObjectMetaType_Reference);
+		const ibClassID clsid = metaData != nullptr ? metaData->GetIDObjectFromMetaID(
+			static_cast<ibMetaID>(types.GetId(index)), ibCtorObjectMetaType::ibCtorObjectMetaType_Reference) : 0;
 		target.SetValue(ibProtocol::ibSchema::ibProperties::Type, wxString::Format(wxT("%llu"), static_cast<unsigned long long>(clsid)));
 		if (parameters == nullptr || clsid == 0)
 			continue;
@@ -173,7 +173,7 @@ bool ibPropertyChoiceParameters::GetProtocolValue(ibDataNode& row, ibReader read
 		return false;
 	AppendTargets(row, m_owner, this);
 	const ibPropertyObject* const owner = m_owner;   // CONST: the non-const GetMetaData wxFAILs
-	const ibMetaData& metaData = *owner->GetMetaData();   // the fields beside it are of its configuration
+	const ibMetaData* const metaData = owner != nullptr ? owner->GetMetaData() : nullptr;   // the fields beside it are of its configuration
 
 	auto sources = std::make_shared<ibDataNode>();
 	sources->SetValue(ibProtocol::ibSchema::ibProperties::Title, ibChoiceHolderName(m_owner));
