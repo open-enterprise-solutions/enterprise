@@ -164,7 +164,7 @@ bool ibValueTabularSectionDataObjectRef::SaveData()
 			if (object->FillCheck()) {
 				if (node->IsEmptyValue(object->GetMetaID())) {
 					wxString fillError =
-						wxString::Format(_("The %s is required on line %i of the %s list"), object->GetSynonym(), currLine, m_metaTable->GetSynonym());
+						wxString::Format(_("The %s is required on line %ld of the %s list"), object->GetSynonym(), currLine, m_metaTable->GetSynonym());
 					ibValueSystemFunction::Message(fillError, ibStatusMessage::ibStatusMessage_Information);
 					fillCheck = false;
 				}
