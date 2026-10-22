@@ -18,7 +18,7 @@
 class FRMCLIENT_API ibPropertySerializable : public ibProperty {
 public:
 
-	ibPropertySerializable(ibPropertyCategory* cat, const ibDataNode& row);
+	ibPropertySerializable(ibPropertyCategory* cat, ibDataNode&& row);
 
 	// …unless the server says it is not (its own IsEditable — the row's ReadOnly).
 	virtual bool IsEditable() const override { return !m_readOnly && ibProperty::IsEditable(); }

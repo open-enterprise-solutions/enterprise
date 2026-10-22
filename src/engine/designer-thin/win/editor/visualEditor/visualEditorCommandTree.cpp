@@ -85,19 +85,18 @@ bool ibFormCommandValue::IsEditable() const
 	return m_formHandler->IsEditable();
 }
 
-bool ibFormCommandValue::Receive()
+bool ibFormCommandValue::Fetch()
 {
 	ibProtocolNode request;
 	request.SetValue(ibProtocol::ibView::ibFormDesigner::Kind, static_cast<int>(ibProtocol::ibView::ibFormDesigner::ibRequest::Properties));
-	request.SetValue(ibProtocol::ibView::ibFormDesigner::Form, m_formHandler->m_formNode);
 	request.SetValue(ibProtocol::ibView::ibFormDesigner::FormCommand, m_commandId);
 	ibProtocolNode answer;
 	return m_formHandler->GetEditorDocument()->Fetch(request, answer) && ibPropertyObject::Receive(answer);
 }
 
-ibProperty* ibFormCommandValue::CreateProperty(ibPropertyCategory* cat, const ibDataNode& row)
+ibProperty* ibFormCommandValue::CreateProperty(ibPropertyCategory* cat, ibDataNode&& row)
 {
-	return ibPropertyObject::CreateProperty<ibPropertySerializable>(cat, row);
+	return ibPropertyObject::CreateProperty<ibPropertySerializable>(cat, std::move(row));
 }
 
 void ibFormCommandValue::OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue)

@@ -45,25 +45,25 @@ wxVariant ReceiveValue(const ibDataNode& row)
 
 }
 
-ibPropertySerializable::ibPropertySerializable(ibPropertyCategory* cat, const ibDataNode& row) :
+ibPropertySerializable::ibPropertySerializable(ibPropertyCategory* cat, ibDataNode&& row) :
 	ibProperty(cat, row.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Name), row.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Title),
 		row.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Help), ReceiveValue(row)),
-	m_row(row),
-	m_type(row.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Class)),
-	m_readOnly(row.GetValue<bool>(ibProtocol::ibSchema::ibProperties::ReadOnly))
+	m_row(std::move(row)),
+	m_type(m_row.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Class)),
+	m_readOnly(m_row.GetValue<bool>(ibProtocol::ibSchema::ibProperties::ReadOnly))
 {
 	if (m_propLabel.IsEmpty())
 		m_propLabel = m_propName;
 
 	// The classes its choices' data names (Classes) — what a window groups them under.
-	if (const ibDataNode* const classes = row.FindChild(ibProtocol::ibSchema::ibProperties::Classes)) {
+	if (const ibDataNode* const classes = m_row.FindChild(ibProtocol::ibSchema::ibProperties::Classes)) {
 		for (const ibDataNode& entry : classes->Children())
 			RegisterCtor(entry, entry.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Name));
 	}
 
 	// What it may be set to — its children with an Id, each with its data; a type's, the types it may hold (Type — the
 	// class id, named and drawn as the server offered it: what the picker and the cell read it by).
-	for (const ibDataNode& choice : row.Children()) {
+	for (const ibDataNode& choice : m_row.Children()) {
 		if (choice.FindField(ibProtocol::ibSchema::ibProperties::Type) != nullptr) {
 			const wxString title = choice.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Title);
 			const ibClassID clsid = RegisterCtor(choice, title);
@@ -76,7 +76,7 @@ ibPropertySerializable::ibPropertySerializable(ibPropertyCategory* cat, const ib
 		m_choices.Add(id, choice.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Title), wxEmptyString, wxVariant(id),
 			ibProtocolPicture(choice.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Picture)), ReceiveU64(choice, ibProtocol::ibSchema::ibProperties::Data));
 	}
-	m_mode = row.GetValue<bool>(ibProtocol::ibSchema::ibProperties::Multiple) ? ibPropertyChoiceMode::Mult
+	m_mode = m_row.GetValue<bool>(ibProtocol::ibSchema::ibProperties::Multiple) ? ibPropertyChoiceMode::Mult
 		: m_choices.GetCount() > 0 ? ibPropertyChoiceMode::Single : ibPropertyChoiceMode::None;
 }
 

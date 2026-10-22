@@ -313,7 +313,8 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::UpdateVirtualSi
 	m_back->Layout();
 	m_back->SetClientSize(m_back->GetBestSize());
 
-	const wxPoint margin = m_back->GetPosition();
+	// Unscrolled: scrolled, the card stands where the scrolling moved it, and the canvas would shrink by twice that.
+	const wxPoint margin = CalcUnscrolledPosition(m_back->GetPosition());
 	SetVirtualSize(m_back->GetSize() + wxSize(margin.x * 2, margin.y * 2));
 	Refresh();
 }

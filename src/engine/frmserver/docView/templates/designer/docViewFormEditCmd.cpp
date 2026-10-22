@@ -162,9 +162,7 @@ bool ibFormDesignView::FetchControl(const ibDataNode& request, ibDataNode& respo
 {
 	// The desktop's palette (ibVisualEditor::CreateObject): made in the selected control — none selected: on the form —
 	// or, where that cannot hold it, in the first of its parents that can; its paste (Paste — the copy, Value) put so
-	// too. The rows of the controls the client handed it holds already: the answer brings the new ones'.
-	std::set<ibFormID> held;
-	CollectControls(m_valueForm, held);
+	// too. No control's rows: the client asks them of the one it shows (Rows).
 	ibValueFrame* const target = m_valueForm->FindControlByID(request.GetValue<s32>(ibProtocol::ibView::ibFormDesigner::Control));
 	ibValueFrame* made = nullptr;
 	if (static_cast<ibProtocol::ibView::ibFormDesigner::ibCommand>(request.GetValue<s32>(ibProtocol::ibView::ibFormDesigner::Command)) ==
@@ -180,23 +178,21 @@ bool ibFormDesignView::FetchControl(const ibDataNode& request, ibDataNode& respo
 	}
 	if (made == nullptr)
 		return false;
-	WriteForm(response, held);
+	WriteForm(response);
 	response.SetValue(ibProtocol::ibView::ibFormDesigner::Selected, static_cast<s32>(made->GetControlID()));
 	return true;
 }
 
 bool ibFormDesignView::FetchBoundControl(const ibDataNode& request, ibDataNode& response)
 {
-	// Dropped on a control — none named: on the form; the new ones' rows only, as the palette's.
-	std::set<ibFormID> held;
-	CollectControls(m_valueForm, held);
+	// Dropped on a control — none named: on the form.
 	ibValueFrame* const target = m_valueForm->FindControlByID(request.GetValue<s32>(ibProtocol::ibView::ibFormDesigner::Control));
 	ibSourceDescription desc;
 	ReadPath(request, desc);
 	ibValueFrame* const made = CreateBoundControl(target != nullptr ? target : GetValueForm(), desc);
 	if (made == nullptr)
 		return false;
-	WriteForm(response, held);
+	WriteForm(response);
 	response.SetValue(ibProtocol::ibView::ibFormDesigner::Selected, static_cast<s32>(made->GetControlID()));
 	return true;
 }
@@ -212,17 +208,13 @@ bool ibFormDesignView::FetchCommandControl(const ibDataNode& request, ibDataNode
 	ibCommandDescription desc;
 	ReadPath(*command, desc);
 	// A drop that landed ON a command-bar TOOLBAR (CommandBar) joins THAT bar — the one of the control it is of.
-	std::set<ibFormID> held;
-	CollectControls(m_valueForm, held);
 	ibValueFrame* const owner = target != nullptr ? target : GetValueForm();
 	ibValueCommandBar* const dropBar = request.GetValue<bool>(ibProtocol::ibView::ibFormDesigner::CommandBar) && owner->HasCommandBar() ?
 		owner->GetCommandBar() : nullptr;
 	ibValueFrame* const made = CreateCommandButton(owner, desc, dropBar);
 	if (made == nullptr)
 		return false;
-	// …the new ones' rows, and the control whose bar the command joined: its bar's rows have it now.
-	held.erase(made->GetControlID());
-	WriteForm(response, held);
+	WriteForm(response);
 	response.SetValue(ibProtocol::ibView::ibFormDesigner::Selected, static_cast<s32>(made->GetControlID()));
 	return true;
 }

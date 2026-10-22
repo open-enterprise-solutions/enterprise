@@ -15,7 +15,7 @@
 void ibPropertyInspector::AppendProperty(ibDataNode& parent, ibBackendProperty* property)
 {
 	ibDataNode& row = parent.AddChild(0, static_cast<ibMetaID>(parent.Children().size() + 1));
-	if (!property->GetProtocolValue(row)) {
+	if (!property->GetProtocolValue(row, ibBackendProperty::ibReader::Cell)) {
 		parent.Children().pop_back();
 		return;
 	}

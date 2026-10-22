@@ -146,7 +146,7 @@ void ibValueMetaObject::Receive(long long tabId, ibMetaID metaId, const ibProtoc
 	received.rows[{ tabId, metaId }] = rows;
 }
 
-bool ibValueMetaObject::Receive()
+bool ibValueMetaObject::Fetch()
 {
 	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
 	if (frame == nullptr)
@@ -170,9 +170,9 @@ bool ibValueMetaObject::Receive()
 	return ibPropertyObject::Receive(rows);
 }
 
-ibProperty* ibValueMetaObject::CreateProperty(ibPropertyCategory* cat, const ibDataNode& row)
+ibProperty* ibValueMetaObject::CreateProperty(ibPropertyCategory* cat, ibDataNode&& row)
 {
-	return ibPropertyObject::CreateProperty<ibPropertySerializable>(cat, row);
+	return ibPropertyObject::CreateProperty<ibPropertySerializable>(cat, std::move(row));
 }
 
 bool ibValueMetaObject::OnPropertyChanging(ibProperty* property, const wxVariant& newValue)

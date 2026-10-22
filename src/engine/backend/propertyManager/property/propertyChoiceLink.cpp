@@ -159,17 +159,17 @@ void AppendTargets(ibDataNode& row, const ibPropertyObject* owner, const ibPrope
 
 } // namespace
 
-bool ibPropertyChoiceLink::GetProtocolValue(ibDataNode& row)
+bool ibPropertyChoiceLink::GetProtocolValue(ibDataNode& row, ibReader reader)
 {
-	if (!ibProperty::GetProtocolValue(row))
+	if (!ibProperty::GetProtocolValue(row, reader))
 		return false;
 	AppendTargets(row, m_owner, nullptr);
 	return true;
 }
 
-bool ibPropertyChoiceParameters::GetProtocolValue(ibDataNode& row)
+bool ibPropertyChoiceParameters::GetProtocolValue(ibDataNode& row, ibReader reader)
 {
-	if (!ibProperty::GetProtocolValue(row))
+	if (!ibProperty::GetProtocolValue(row, reader))
 		return false;
 	AppendTargets(row, m_owner, this);
 

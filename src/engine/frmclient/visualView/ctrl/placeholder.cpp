@@ -10,7 +10,7 @@ void ibViewPlaceholder::Create(wxWindow* parent, const ibProtocolNode& /*node*/)
 	m_panel = new wxPanel(parent, wxID_ANY);
 
 	wxStaticText* const text = new wxStaticText(m_panel, wxID_ANY,
-		wxString::Format(_("The control type \"%s\" is not registered in this client yet."), m_type),
+		wxString::Format(_("The control type \"%s\" is not registered in this client yet."), GetClassName()),
 		wxDefaultPosition, wxDefaultSize, wxALIGN_CENTRE_HORIZONTAL);
 	text->SetForegroundColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT));
 

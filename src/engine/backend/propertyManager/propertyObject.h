@@ -414,7 +414,12 @@ public:
 	// window offers — adds that here, so the inspector asks every property the one question and knows none of them; what
 	// it may be set to is GetValueList's, which the inspector asks every property itself. False: it has no row (a
 	// composition, which the desktop's grid draws none for either).
-	virtual bool GetProtocolValue(ibDataNode& row);
+	//
+	// WHO READS IT: the cell — the row, what the cell shows; its editor — only what it reads beside the row, asked as the
+	// window opens (ibFormDesigner::ibRequest::Editor): what the window offers when it is the same for many rows, too much
+	// to ride each (a Source's tree). False for the editor: its editor reads nothing more.
+	enum class ibReader { Cell, Editor };
+	virtual bool GetProtocolValue(ibDataNode& row, ibReader reader);
 
 protected:
 
@@ -460,7 +465,7 @@ public:
 	const wxArrayString& GetArgs() const { return m_args; }
 
 	// …and the parameters of its procedure (Args), as the desktop's editor wrote the procedure's template.
-	virtual bool GetProtocolValue(ibDataNode& row) override;
+	virtual bool GetProtocolValue(ibDataNode& row, ibReader reader) override;
 
 	// THE dispatcher this event fires through — PURE: every concrete event decides HOW it dispatches (ibEventControl
 	// vends a named-event / lambda value; a plain no-dispatch event returns nullptr). CallAsEvent asks for this and

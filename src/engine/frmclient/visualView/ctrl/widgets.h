@@ -172,16 +172,15 @@ private:
 // What is in it is not drawn.
 class ibViewPlaceholder : public ibValueFrame {
 public:
-	ibViewPlaceholder(ibVisualHostClient& host, long long controlId, const wxString& type)
-		: ibValueFrame(host, controlId), m_type(type) {}
+	ibViewPlaceholder(ibVisualHostClient& host, long long controlId) : ibValueFrame(host, controlId) {}
 
 	virtual void Create(wxWindow* parent, const ibProtocolNode& node) override;
 	virtual void Update(const ibProtocolNode& node) override;
 	virtual wxWindow* GetWindow() const override { return m_panel; }
+	virtual bool IsPlaceholder() const override { return true; }
 
 private:
-	const wxString m_type;
-	wxPanel*       m_panel = nullptr;
+	wxPanel* m_panel = nullptr;
 };
 
 // A line. Its orientation is what it is built with — a line turned is built anew (ibVisualHostClient's shape).

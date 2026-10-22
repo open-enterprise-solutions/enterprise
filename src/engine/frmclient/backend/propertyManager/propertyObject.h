@@ -465,8 +465,8 @@ protected:
 	}
 
 	// …of a row of the server's answer (Receive) — made by its owner, which knows what property a row is; none: it shows
-	// no rows.
-	virtual ibProperty* CreateProperty(ibPropertyCategory* cat, const ibDataNode& row) { return nullptr; }
+	// no rows. The row is given, not lent: the property keeps it (what its cell reads), the answer is done with it.
+	virtual ibProperty* CreateProperty(ibPropertyCategory* cat, ibDataNode&& row) { return nullptr; }
 
 protected:
 
@@ -578,10 +578,10 @@ public:
 	*/
 	virtual int GetComponentType() const { return COMPONENT_TYPE_ABSTRACT; }
 
-	// ⭐ WHAT THE SERVER SAYS OF IT, received as it is shown (the inspector's Create): one that asks the server of its own —
-	// a metaobject, a form's attribute — asks here and takes the answer in (Receive(answer)); one whose rows came with its
-	// form's answer has nothing to ask. False: no answer.
-	virtual bool Receive() { return true; }
+	// ⭐ WHAT THE SERVER SAYS OF IT, fetched as it is shown (the inspector's Create): one that asks the server of its own —
+	// a metaobject, a form's attribute, a form's control — asks here and takes the answer in (Receive(answer)); one that
+	// asks nothing has nothing to fetch. False: no answer.
+	virtual bool Fetch() { return true; }
 
 	// The front's ONE refresh entry — sent per render and after an edit, NOT per property.
 	// Default fans out to both halves; override a half to push what that kind's state
@@ -700,8 +700,8 @@ protected:
 
 private:
 
-	// …the rows under one category, into it — its properties and its categories.
-	void Receive(ibPropertyCategory* category, const ibDataNode& rows);
+	// …the rows under one category, into it — its properties and its categories, each row given to what is made of it.
+	void Receive(ibPropertyCategory* category, ibDataNode& rows);
 
 	std::map<wxString, ibProperty*> m_properties;
 	std::map<wxString, ibEvent*> m_events;

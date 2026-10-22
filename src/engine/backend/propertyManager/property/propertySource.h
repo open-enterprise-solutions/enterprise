@@ -109,11 +109,11 @@ public:
 	virtual bool CopyNodeValue(ibDataValue& value) const override;
 	virtual bool PasteNodeValue(const ibDataValue& value) override;
 
-	// What its source window may offer: SourceDataType (ibSourceDataType), and the window's tree (Sources) — the
-	// desktop's, written as the attribute tree's rows.
+	// What its source window may offer: SourceDataType (ibSourceDataType).
 	// …and in its Value, beside the path, the type the binding holds (SourceType — its node and its words), with the
-	// classes it names (Classes).
-	virtual bool GetProtocolValue(ibDataNode& row) override;
+	// classes it names (Classes). Its editor: the window's tree, as it opens (Sources) — the desktop's, written as the
+	// attribute tree's rows.
+	virtual bool GetProtocolValue(ibDataNode& row, ibReader reader) override;
 
 public:
 

@@ -182,11 +182,14 @@ bool ibValueReader::ReadNumber(ibProtocolValue& value)
 	return true;
 }
 
-// A node's entry by its name — the last written under it.
+// A node's entry by its name — the last written under it. Walked by pointer: a reverse iterator's wrapping was most of a
+// look-up in the Debug build every one runs (2026-10-22: 110 of its 129 samples).
 template<class Entries, class Name>
 auto FindIn(Entries& entries, const Name& name) -> decltype(&entries.front().m_value)
 {
-	for (auto entry = entries.rbegin(); entry != entries.rend(); ++entry) {
+	auto* const first = entries.data();
+	for (auto* entry = first + entries.size(); entry != first;) {
+		--entry;
 		if (entry->m_name == name)
 			return &entry->m_value;
 	}
@@ -320,7 +323,11 @@ bool ibProtocolBody::operator==(const ibProtocolBody& other) const
 	if (m_list != other.m_list || m_entries.size() != other.m_entries.size())
 		return false;
 	for (size_t i = 0; i < m_entries.size(); ++i) {
-		const ibProtocolValue* const held = m_list ? &other.m_entries[i].m_value : other.Find(m_entries[i].m_name);
+		// A node's entry by its name — the one in the same place first: two nodes of one writer have them in its order,
+		// and each looked up by name was a walk of the other's entries for every one (2026-10-22).
+		const ibProtocolEntry& there = other.m_entries[i];
+		const ibProtocolValue* const held = m_list || there.m_name == m_entries[i].m_name ? &there.m_value
+			: other.Find(m_entries[i].m_name);
 		if (held == nullptr || *held != m_entries[i].m_value)
 			return false;
 	}

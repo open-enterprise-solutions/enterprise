@@ -137,6 +137,8 @@ public:
 
 	// Config metadata behind this binding — drives the metaId<->guid resolution at save/load.
 	const class ibMetaData* GetMetaData() const { return m_ownerProperty != nullptr ? m_ownerProperty->GetMetaData() : nullptr; }
+	// …and the owning factory (the control) itself — what it may be bound to, asked of it by the property's editor.
+	const ibBackendTypeSourceFactory* GetSourceFactory() const { return m_ownerProperty; }
 
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

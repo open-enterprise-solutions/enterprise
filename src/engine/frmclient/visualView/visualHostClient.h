@@ -25,8 +25,8 @@ class ibViewCommandBar;
 // node instead of the form. The same walk builds it (GenerateControl): a sizer item is no control, it carries how its
 // one child sits in the sizer above; a window goes into the sizer it sits in, and so does a sizer.
 //
-// A frame of the same SHAPE — the same controls in the same places — is drawn into the controls there; one of another
-// shape (a control added, removed, moved, or built otherwise) is built anew.
+// A frame of the same form is drawn into the controls there — a control added, removed, moved or made otherwise laid in
+// among them where it changed (UpdateChildren); another form is built anew.
 class FRMCLIENT_API ibVisualHostClient : public wxScrolledCanvas {
 public:
 
@@ -65,6 +65,9 @@ public:
 	// …and a part of a control clicked that is a control of its own — a table's column by its header, the table by its
 	// rows (the desktop's g_visualHostContext->SelectControl): a designer's host selects it in its editor.
 	virtual void SelectControl(ibValueFrame* WXUNUSED(control)) {}
+	// A control's properties fetched as the inspector shows it (ibValueFrame::Fetch) — a designer's host asks its editor,
+	// which holds them or asks the server; a running form's control shows none. False: no answer.
+	virtual bool Fetch(ibValueFrame* WXUNUSED(control)) { return true; }
 	// A property of a control edited (ibValueFrame::OnPropertyChanged) — a designer's host gives it to its editor, which
 	// draws it; nothing of it is the runtime's.
 	virtual void ModifyProperty(ibProperty* WXUNUSED(property), const wxVariant& WXUNUSED(oldValue),
@@ -75,6 +78,9 @@ public:
 
 protected:
 
+	// ⭐ A NODE READ BY ITS CONTROL — the one place a control reads what its node says: as it is built (Generate), and
+	// drawn again where its node changed (UpdateNode). A designer's host reads its properties there too.
+	virtual void ReadControl(ibValueFrame* control, const ibProtocolNode& node);
 	// The scrolling fitted to what is drawn — a designer's host fits its card first.
 	virtual void UpdateVirtualSize();
 
@@ -91,10 +97,15 @@ private:
 	// node: none) — and what is in it, under the control it is in (none: the form).
 	void Generate(const ibProtocolNode& node, wxWindow* parent, wxSizer* sizer, const ibProtocolNode& item,
 		ibValueFrame* parentControl);
-	// A frame of the same shape, into the controls drawn.
+	// A node of the frame, into its control drawn — what is in it, UpdateChildren draws.
 	void UpdateNode(const ibProtocolNode& node);
-	// …and only what its patch changed: a control — or the form itself — whose node in the patch has entries of its own.
+	// …and only what its patch changed, down the patch: a control — or the form itself — whose node in the patch has
+	// entries of its own.
 	void UpdateNode(const ibProtocolNode& node, const ibProtocolNode& patch);
+	// What is in a node, into what is drawn in its control — a control added, gone, moved or made otherwise laid in, each
+	// that stayed drawn (UpdateNode) and gone into; its children made in `parent`, sitting in `sizer`. False — what is in
+	// it cannot be laid in (a notebook's pages): it is made anew where it is, the form built anew.
+	bool UpdateChildren(const ibProtocolNode& node, ibValueFrame* control, wxWindow* parent, wxSizer* sizer);
 	void Clear();
 
 	// The label columns lined up (the desktop's CalculateLabelSize).
