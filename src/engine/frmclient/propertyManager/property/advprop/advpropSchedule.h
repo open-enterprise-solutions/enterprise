@@ -17,8 +17,7 @@ class FRMCLIENT_API ibPropertyObject;
 // with fourteen fields — it cannot be typed into a grid cell, so the row shows the SENTENCE the
 // rules produce and the editing happens in a dialog.
 //
-// It holds the property's OWNER, as the client's link does (ibPGHyperLinkProperty), where the desktop's held the
-// property: the client's property is the server's row, replaced by every answer, so the dialog finds it again by its
+// It holds the property's OWNER, where the desktop's held the property: the client's property is the server's row, replaced by every answer, so the dialog finds it again by its
 // name and writes it back through its owner (ibPropertyGate::SetValue), as an edit in the grid does.
 // -----------------------------------------------------------------------
 

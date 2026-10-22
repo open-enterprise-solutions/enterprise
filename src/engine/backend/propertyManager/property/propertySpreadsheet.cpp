@@ -58,4 +58,15 @@ bool ibPropertySpreadsheet::ReadNodeValue(const ibDataValue& value)
 bool ibPropertySpreadsheet::WriteNodeValue(ibDataValue& value) const
 {
 	return ibSpreadsheetDescriptionMemory::WriteNode(value, GetValueAsSpreadsheetDesc());
+}
+
+#include "backend/metaCollection/metaObject.h"   // ibValueMetaObject — the owner, the link's object
+#include "protocol/protocol.h"                   // ibProtocol::ibSchema::ibProperties::Object
+
+bool ibPropertySpreadsheet::GetProtocolValue(ibDataNode& row, ibReader reader)
+{
+	if (!ibProperty::GetProtocolValue(row, reader))
+		return false;
+	row.SetValue(ibProtocol::ibSchema::ibProperties::Object, static_cast<s32>(static_cast<const ibValueMetaObject*>(m_owner)->GetMetaID()));
+	return true;
 }

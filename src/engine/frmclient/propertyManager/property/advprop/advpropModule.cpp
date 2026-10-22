@@ -1,6 +1,7 @@
 #include "advpropHyperLink.h"
 
 #include "frmclient/propertyManager/property/private/propertyRegistry.h"
+#include "protocol/protocol.h"   // ibProtocol::ibSchema::ibProperties::Object — what the link opens
 
 // register frontend property
 class ibPropertyModuleLoader
@@ -8,19 +9,24 @@ class ibPropertyModuleLoader
 public:
 	ibPropertyModuleLoader()
 	{
-		// ibPropertyInnerModule, whichever module: the server names a template without its arguments. The link hands the
-		// property's OWNER — the module it opens is the property's value (the module's node), in the owner's configuration.
+		// ibPropertyInnerModule, whichever module: the server names a template without its arguments. The link opens the
+		// object the row names — the module — in its owner's configuration.
 		ibPropertyRegistry::Register(wxT("ibPropertyInnerModule"), [](ibBackendProperty* property) -> wxPGProperty* {
-			return new ibPGHyperLinkProperty(property->GetPropertyObject(), property->GetLabel(), property->GetName(),
-				property->GetValue());
+			ibDataNode row;
+			property->GetProtocolValue(row);
+			const ibPropertyObject* const owner = property->GetPropertyObject();   // CONST: the non-const GetMetaData wxFAILs
+			return new ibPGHyperLinkProperty(static_cast<ibMetaID>(row.GetValue<s32>(ibProtocol::ibSchema::ibProperties::Object)),
+				*owner->GetMetaData(), property->GetLabel(), property->GetName(), property->GetValue());
 		});
 
-		// …and the row that opens ITS OWN OBJECT — a module's Module: the same link, its value the module's text, so it
-		// opens its owner. A form's Form and a template's Template are the desktop's own files
-		// (advpropForm.cpp, advpropSpreadsheet.cpp).
+		// …and a module's Module: the same link, the row naming the module itself. A form's Form and a template's Template
+		// are the desktop's own files (advpropForm.cpp, advpropSpreadsheet.cpp).
 		ibPropertyRegistry::Register(wxT("ibPropertyModule"), [](ibBackendProperty* property) -> wxPGProperty* {
-			return new ibPGHyperLinkProperty(property->GetPropertyObject(), property->GetLabel(), property->GetName(),
-				property->GetValue());
+			ibDataNode row;
+			property->GetProtocolValue(row);
+			const ibPropertyObject* const owner = property->GetPropertyObject();
+			return new ibPGHyperLinkProperty(static_cast<ibMetaID>(row.GetValue<s32>(ibProtocol::ibSchema::ibProperties::Object)),
+				*owner->GetMetaData(), property->GetLabel(), property->GetName(), property->GetValue());
 		});
 	}
 }g_moduleLoader;

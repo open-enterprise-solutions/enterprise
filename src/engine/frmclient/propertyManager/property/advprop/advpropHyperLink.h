@@ -5,17 +5,18 @@
 #include <wx/propgrid/advprops.h>
 
 #include "frmclient/backend/backend_core.h"
-
-class FRMCLIENT_API ibPropertyObject;
+#include "frmclient/backend/metaData.h"   // ibMetaData — the configuration of the object it opens
 
 // -----------------------------------------------------------------------
 // ibPGHyperLinkProperty
 // -----------------------------------------------------------------------
 
+// THE LINK OPENS AN OBJECT — a module, a form, a template, whichever the server named in the row (ibProperties::Object):
+// what OpenForm takes, its id in its configuration. What the object is, the link does not know.
 class ibPGHyperLinkProperty : public wxPGProperty {
 public:
 
-	ibPGHyperLinkProperty(ibPropertyObject* property = nullptr, const wxString& label = wxPG_LABEL,
+	ibPGHyperLinkProperty(ibMetaID id = 0, const ibMetaData& metaData = ibMetaData(), const wxString& label = wxPG_LABEL,
 		const wxString& name = wxPG_LABEL, const wxVariant& value = wxNullVariant);
 	virtual ~ibPGHyperLinkProperty();
 
@@ -33,7 +34,8 @@ public:
 	virtual void RefreshChildren();
 
 protected:
-	ibPropertyObject* m_ownerProperty = nullptr;
+	ibMetaID m_metaId = 0;
+	ibMetaData m_metaData;
 private:
 	WX_PG_DECLARE_PROPERTY_CLASS(ibPGHyperLinkProperty);
 };

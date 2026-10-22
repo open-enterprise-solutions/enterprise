@@ -3,6 +3,7 @@
 
 #include "metaObject.h"
 #include "core/serialize/dataBuilder.h"   // ibDataNode — holder serializes its metaobject's node
+#include "protocol/protocol.h"            // ibProtocol::ibSchema::ibProperties::Object — what the holder's link opens
 
 enum ibContentHelper {
 	eProcedureHelper = 1,
@@ -61,6 +62,14 @@ public:
 		auto child = std::make_shared<ibDataNode>();
 		m_metaObject->SaveNode(*child);
 		value = ibDataValue::Child(child);
+		return true;
+	}
+
+	// …and what its link opens: the module it holds (Object).
+	virtual bool GetProtocolValue(ibDataNode& row, ibReader reader) override {
+		if (!ibProperty::GetProtocolValue(row, reader))
+			return false;
+		row.SetValue(ibProtocol::ibSchema::ibProperties::Object, static_cast<s32>(m_metaObject->GetMetaID()));
 		return true;
 	}
 

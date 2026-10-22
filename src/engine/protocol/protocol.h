@@ -1134,6 +1134,8 @@ namespace ibProtocol {
 			inline constexpr const char* Pictures     = "Pictures";       // a picture's: those it may be (Guid, Name; Id —
 			                                                              // the id it is drawn by)
 			inline constexpr const char* Guid         = "Guid";
+			inline constexpr const char* Object       = "Object";         // a link's: the metaobject it opens, by its id —
+			                                                              // an inner module's module, else its own object
 			// …a command source's: the desktop's command tree — sections, groups, sub-groups, a row each with its Name;
 			// the command rows Name, Picture, CommandPath, Kind (ibInterfaceCommandType).
 			inline constexpr const char* CommandTree  = "CommandTree";

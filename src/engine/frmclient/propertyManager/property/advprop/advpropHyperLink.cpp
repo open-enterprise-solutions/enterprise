@@ -9,10 +9,8 @@
 
 wxPG_IMPLEMENT_PROPERTY_CLASS(ibPGHyperLinkProperty, wxPGProperty, HyperLink)
 
-#include "frmclient/backend/metaData.h"   // the owner's configuration — copied into the command
-
-ibPGHyperLinkProperty::ibPGHyperLinkProperty(ibPropertyObject* ownerProperty, const wxString& label,
-	const wxString& name, const wxVariant& value) : wxPGProperty(label, name), m_ownerProperty(ownerProperty) {
+ibPGHyperLinkProperty::ibPGHyperLinkProperty(ibMetaID id, const ibMetaData& metaData, const wxString& label,
+	const wxString& name, const wxVariant& value) : wxPGProperty(label, name), m_metaId(id), m_metaData(metaData) {
 
 	wxPGProperty::SetFlagRecursively(wxPGFlags::ReadOnly, true);
 	//wxPGProperty::SetFlagRecursively(wxPGFlags::Hidden, true);
@@ -45,10 +43,6 @@ bool ibPGHyperLinkProperty::StringToValue(wxVariant& variant,
 	return false;
 }
 
-#include "frmclient/backend/metaCollection/metaObject.h"                       // GetMetaID — the owner, opened itself
-#include "core/serialize/dataBuilder.h"   // ibDataValue — the property's value, an inner module's node
-#include "frmclient/backend/propertyManager/property/variant/variantSerializable.h"   // …read from the cell's value
-#include "protocol/protocol.h"            // ibProtocol::ibSchema::ibProperties::Id — the module's, in its node
 #include "frmclient/docView/docView.h"   // docManager — the door that opens a metaobject
 
 void ibPGHyperLinkProperty::OnSetValue()
@@ -61,23 +55,14 @@ void ibPGHyperLinkProperty::OnSetValue()
 		// standing turns one click into every later refresh.
 		m_value.SetName(wxEmptyString);
 
-		// THE LINK CARRIES ITS COMMAND — open the module its value is (an inner module's: the module's node, as the
-		// server stores it — its Id, as MCP reads it), or else the owner itself (a form's, a template's, a module's own
-		// text — the desktop's link opened its owner metaobject), in the configuration its owner was opened from; the
-		// server opens it. Taken now, by value: the owner is the inspector's, and goes with the next selection.
-		const ibPropertyObject* const owner = m_ownerProperty;
-		const ibDataValue value = ibVariantDataSerializable::GetNodeValue(m_value);
-		const std::shared_ptr<ibDataNode> module = value.Kind() == ibDataKind::Child ? value.AsChild() : nullptr;
-		const ibValueMetaObject* const metaObject = dynamic_cast<const ibValueMetaObject*>(owner);
-		const ibMetaID id = module != nullptr ? static_cast<ibMetaID>(module->GetValue<s32>(ibProtocol::ibSchema::ibProperties::Id))
-			: metaObject != nullptr ? metaObject->GetMetaID() : 0;
-		const ibMetaData* const metaData = owner != nullptr ? owner->GetMetaData() : nullptr;
-		if (id != 0 && metaData != nullptr) {
+		// THE LINK CARRIES ITS OBJECT — the one the server named, in the configuration its owner was opened from; the
+		// server opens it. Taken by value: the cell goes with the next selection.
+		if (m_metaId != 0) {
 
 			// ⚠ DEFERRED, because the click is still being dispatched: opening a document from
 			// inside the grid's own event tears down the cell that is handling it.
 			wxTheApp->CallAfter(
-				[id, metaData = *metaData]() {
+				[id = m_metaId, metaData = m_metaData]() {
 
 					// ⭐⭐ JUST OPEN IT. Whose it is — the document holding that configuration, or
 					// nobody's when it is the one the main window shows — is worked out INSIDE

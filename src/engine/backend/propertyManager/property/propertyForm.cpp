@@ -98,4 +98,14 @@ bool ibPropertyForm::PasteNodeValue(const ibDataValue& value)
 	return metaForm->PasteFormData();
 }
 
+#include "protocol/protocol.h"   // ibProtocol::ibSchema::ibProperties::Object — what the link opens
+
+bool ibPropertyForm::GetProtocolValue(ibDataNode& row, ibReader reader)
+{
+	if (!ibProperty::GetProtocolValue(row, reader))
+		return false;
+	row.SetValue(ibProtocol::ibSchema::ibProperties::Object, static_cast<s32>(static_cast<const ibValueMetaObject*>(m_owner)->GetMetaID()));
+	return true;
+}
+
 //////////////////////////////////////////////////////////

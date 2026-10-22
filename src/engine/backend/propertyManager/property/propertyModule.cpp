@@ -49,3 +49,14 @@ bool ibPropertyModule::WriteNodeValue(ibDataValue& value) const
 	value = ibDataValue::String(ibPropertyModule::GetValueAsString());
 	return true;
 }
+
+#include "backend/metaCollection/metaObject.h"   // ibValueMetaObject — the owner, the link's object
+#include "protocol/protocol.h"                   // ibProtocol::ibSchema::ibProperties::Object
+
+bool ibPropertyModule::GetProtocolValue(ibDataNode& row, ibReader reader)
+{
+	if (!ibProperty::GetProtocolValue(row, reader))
+		return false;
+	row.SetValue(ibProtocol::ibSchema::ibProperties::Object, static_cast<s32>(static_cast<const ibValueMetaObject*>(m_owner)->GetMetaID()));
+	return true;
+}

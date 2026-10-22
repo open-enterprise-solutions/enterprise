@@ -36,6 +36,9 @@ public:
 	virtual bool ReadNodeValue(const ibDataValue& value) override;
 	virtual bool WriteNodeValue(ibDataValue& value) const override;
 
+	// …and what its link opens: the module it is the text of (Object).
+	virtual bool GetProtocolValue(ibDataNode& row, ibReader reader) override;
+
 public:
 
 };
