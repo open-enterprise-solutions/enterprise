@@ -329,6 +329,7 @@
     <ClCompile Include="visualView\ctrl\gridBox.cpp" />
     <ClCompile Include="visualView\ctrl\htmlBox.cpp" />
     <ClCompile Include="visualView\ctrl\notebook.cpp" />
+    <ClCompile Include="visualView\ctrl\panel.cpp" />
     <ClCompile Include="visualView\ctrl\placeholder.cpp" />
     <ClCompile Include="visualView\ctrl\radiobutton.cpp" />
     <ClCompile Include="visualView\ctrl\sizer.cpp" />
@@ -544,6 +545,7 @@
     <ClInclude Include="visualView\visualHostClient.h" />
     <ClInclude Include="visualView\ctrl\gridBox.h" />
     <ClInclude Include="visualView\ctrl\notebook.h" />
+    <ClInclude Include="visualView\ctrl\panel.h" />
     <ClInclude Include="visualView\pageWindow.h" />
     <ClInclude Include="visualView\ctrl\sizer.h" />
     <ClInclude Include="visualView\ctrl\tableBox.h" />

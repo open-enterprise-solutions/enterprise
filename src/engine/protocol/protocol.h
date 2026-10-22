@@ -1605,6 +1605,7 @@ namespace ibProtocol {
 			inline constexpr const char* Textbox             = "Textbox";
 			inline constexpr const char* Notebook            = "Notebook";
 			inline constexpr const char* NotebookPage        = "NotebookPage";
+			inline constexpr const char* Panel               = "Panel";
 			inline constexpr const char* Radiobutton         = "Radiobutton";
 			inline constexpr const char* Slider              = "Slider";
 			inline constexpr const char* Gauge               = "Gauge";

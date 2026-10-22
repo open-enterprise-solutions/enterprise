@@ -8,6 +8,7 @@
 
 #include "gridBox.h"
 #include "notebook.h"
+#include "panel.h"
 #include "sizer.h"
 #include "tableBox.h"
 #include "widgets.h"
@@ -54,6 +55,8 @@ ibValueFrame* MakeOfType(const wxString& type, ibVisualHostClient& host, long lo
 		return new ibValueNotebook(host, controlId);
 	if (type == ibProtocol::ibForm::ibType::NotebookPage)
 		return new ibValueNotebookPage(host, controlId);
+	if (type == ibProtocol::ibForm::ibType::Panel)
+		return new ibValuePanel(host, controlId);
 	if (type == ibProtocol::ibForm::ibType::Radiobutton)
 		return new ibValueRadioButton(host, controlId);
 	if (type == ibProtocol::ibForm::ibType::Slider)
