@@ -263,6 +263,7 @@ namespace ibProtocol {
 			inline constexpr const char* Parent   = "Parent";
 			inline constexpr const char* File     = "File";       // the file its document was saved as (SaveAs)
 			inline constexpr const char* Commands = "Commands";   // the commands its document takes now
+			inline constexpr const char* ReadOnly = "ReadOnly";   // what it shows takes no edit (its document's IsEditable)
 			inline constexpr const char* Formats  = "Formats";    // what its document saves as — Title, Mask each
 			inline constexpr const char* Mask     = "Mask";
 
@@ -1555,6 +1556,51 @@ namespace ibProtocol {
 				Source = 23,   // {Id, Text} — a dynamic list's fields: those of its main table (Id, optional) and what its
 				               // query (Text, optional) adds — Fields, References, Error — as the desktop's list settings
 				               // window reads them
+			};
+
+		}
+
+		// THE DESIGNER'S QUERY CONSTRUCTOR — what its model (ibQueryConstructorModel) asks the configuration, of the tab
+		// it was opened from (a module's, a form's, a composer's; a list settings window — its form's): `fetch {Tab,
+		// Request: {Kind (ibRequest), …}}`, numbered past the composer's. The client keeps each answer for the tab: one
+		// question per source, never one per edit. A reference's [+] is the composer's Expand (22), asked of the same tab.
+		namespace ibQueryConstructor {
+
+			inline constexpr const char* Kind             = "Kind";
+			inline constexpr const char* Source           = "Source";            // a source as a FROM writes it, its arguments too
+			inline constexpr const char* Slot             = "Slot";              // Fields: a condition parameter's — its fields
+			inline constexpr const char* Sources          = "Sources";
+			inline constexpr const char* Path             = "Path";
+			inline constexpr const char* Presentation     = "Presentation";
+			inline constexpr const char* Reference        = "Reference";         // the table's own reference type (a class id as text)
+			inline constexpr const char* Fields           = "Fields";            // rows as a settings field tree reads them
+			inline constexpr const char* References       = "References";        // …and which of their types are references
+			inline constexpr const char* Parameters       = "Parameters";
+			inline constexpr const char* Name             = "Name";
+			inline constexpr const char* Condition        = "Condition";
+			inline constexpr const char* Type             = "Type";
+			inline constexpr const char* Required         = "Required";
+			inline constexpr const char* Choices          = "Choices";
+			inline constexpr const char* Description      = "Description";
+			inline constexpr const char* ConsumedBySource = "ConsumedBySource";
+			inline constexpr const char* Default          = "Default";
+			inline constexpr const char* Error            = "Error";
+			inline constexpr const char* Kinds            = "Kinds";
+			inline constexpr const char* Picture          = "Picture";
+			inline constexpr const char* Text             = "Text";
+			inline constexpr const char* Statement        = "Statement";
+			inline constexpr const char* UnionBranch      = "UnionBranch";
+			inline constexpr const char* UngroupedProjections = "UngroupedProjections";
+
+			enum class ibRequest : int {
+				Sources          = 24,   // {} — every source a query may name: Sources, rows {Path, Presentation, Reference}
+				                         // (GetSources); Kinds, rows {Name, Picture} (as Linq's Kinds)
+				Fields           = 25,   // {Source [, Slot]} — its fields: Fields, References, Error (GetFields; with Slot —
+				                         // GetConditionFields)
+				SourceParameters = 26,   // {Source} — what a virtual table takes: Parameters, rows {Name, Condition, Type,
+				                         // Required, Choices, Description, ConsumedBySource, Default} (GetSourceParameters)
+				Check            = 27,   // {Text} — the whole query text: Error (CheckNames); with Statement, UnionBranch —
+				                         // that select's UngroupedProjections
 			};
 
 		}

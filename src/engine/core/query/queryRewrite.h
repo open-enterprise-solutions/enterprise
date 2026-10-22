@@ -87,6 +87,24 @@ CORE_API void ibQuerySortConditionsByFold(ibQuerySelect& select);
 // ibQueryFlattenAnd's note gives.
 CORE_API bool ibQueryMentionsAggregate(const ibQueryAstExprPtr& expr);
 
+// ⭐ WHICH COLUMNS A PROJECTION FOLDS, AND WHICH IT READS FREE — one walk, both halves of the grouping rule: a column
+// under a GROUP aggregate is accounted for, a column outside every aggregate has to be a group key. The lowering asks
+// it to refuse (CheckNames) and to complete a grouping (UngroupedProjections); the constructor asks it what not to
+// offer — the desktop's and the thin client's, so it is written here, once.
+//   · a WINDOW aggregate (`SUM(x) OVER (…)`) folds nothing, and its PARTITION BY / ORDER BY keys obey the same rule;
+//   · `groupedExprs` — the COMPUTED group keys, as the text the execution matches them by: a subtree that is one reads
+//     nothing free (`BEGINOFPERIOD(Date, Month)` grouped fixes `Date` for its group).
+CORE_API void ibQueryCollectFoldedAndFree(const ibQueryAstExprPtr& expr, bool insideAggregate,
+	std::vector<const ibQueryAstExpr*>& folded, std::vector<const ibQueryAstExpr*>& free,
+	const std::vector<wxString>* groupedExprs = nullptr);
+// A COLUMN NODE STANDING ON ITS OWN — a path the caller can resolve and report without holding the projection alive.
+CORE_API ibQueryAstExprPtr ibQueryColumnCopy(const ibQueryAstExpr& column);
+// THE COLUMNS A SELECT ALREADY FOLDS — those inside a GROUP aggregate, each a column of its own. They are accounted for:
+// not missing from GROUP BY, and not to be PUT there (`SUM(Parent) … GROUP BY Parent` folds each group over one row).
+// CheckNames reads it as a refusal, a constructor as "do not offer this one". It reads the written expressions, not
+// what they resolve to, so it needs no sources and cannot fail.
+CORE_API std::vector<ibQueryAstExprPtr> ibQueryAggregatedColumns(const ibQuerySelect& select);
+
 // ⭐⭐ "NO LINK" IS SPELLED `TRUE`, and that is why these are here rather than written out wherever
 // somebody needs a boolean.
 //

@@ -8,6 +8,7 @@
 #include "core/description/compositionDescription.h"     // ibCompositionDescriptionMemory — the node form
 #include "core/serialize/dataBuilder.h"
 #include "frmserver/win/dlgs/settings/settingsRequest.h" // ibWriteSettingsField / References — a field as the windows read it
+#include "queryConstructorRequest.h"                      // ibFetchQueryConstructorRequest — the query constructor over its query
 
 #include <vector>
 
@@ -102,7 +103,9 @@ bool ibComposerCompositionView::Fetch(const ibDataNode& request, ibDataNode& res
 {
 	const ibValueMetaObjectComposer* const metaComposer =
 		GetDocument()->ConvertMetaObjectToType<ibValueMetaObjectComposer>();
-	return metaComposer != nullptr && ibFetchComposerRequest(request, response, metaComposer->GetMetaData());
+	return metaComposer != nullptr
+		&& (ibFetchQueryConstructorRequest(request, response, metaComposer->GetMetaData())
+		    || ibFetchComposerRequest(request, response, metaComposer->GetMetaData()));
 }
 
 bool ibComposerCompositionView::OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args)

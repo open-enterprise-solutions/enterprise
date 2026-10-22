@@ -1,21 +1,241 @@
-#ifndef _FRMCLIENT_QUERY_CONSTRUCTOR_INTERNAL_H__
-#define _FRMCLIENT_QUERY_CONSTRUCTOR_INTERNAL_H__
+#ifndef __QUERY_CONSTRUCTOR_INTERNAL_H__
+#define __QUERY_CONSTRUCTOR_INTERNAL_H__
 
-// THE CONSTRUCTOR'S OWN INTERIOR — the desktop's (frontend/win/dlgs/queryConstructor/queryConstructorInternal.h): its
-// grids, its models, its parser and renderer — the designer's. What a client's window takes of it is the expression
-// cell, a cell of wx and nothing else, and it is copied here whole.
+////////////////////////////////////////////////////////////////////////////
+// The constructor's OWN INTERIOR - shared by its four translation units.
+////////////////////////////////////////////////////////////////////////////
+//
+// queryConstructor.cpp grew past four thousand lines, which is not a size problem so much as a
+// READING problem: building a page, filling it from the AST, and acting on what the user does to
+// it are three different jobs, and reading any one of them meant scrolling past the other two.
+// So the window is now four files that answer four questions:
+//
+//   queryConstructor.cpp      WHAT IS THERE  - the window, its tabs, its grids and trees
+//   queryConstructorFill.cpp  WHAT IT SHOWS  - AST -> tabs, one Fill per pane, plus which
+//                                              statement/branch is currently being shown
+//   queryConstructorEdit.cpp  WHAT IT DOES   - every verb: add, remove, move, rename, edit
+//   queryConstructorText.cpp  WHAT IT IS     - the text pane, the parse gate, OK, and the two
+//                                              entry points the rest of the product opens it by
+//
+// The class is unchanged; this is where the file-local part of it lives so all four can see it.
+// The include list is deliberately the WHOLE one rather than a per-file minimum: these four files
+// are one window cut in four, and a header per cut would be four lists to keep in step.
+//
+////////////////////////////////////////////////////////////////////////////
 
-#include "frmclient/win/ctrls/dataview/dataview.h"
+#include "queryConstructor.h"
+#include "queryJoinDiagram.h"
+#include "queryLinkModel.h"
+#include "querySelectionLinkModel.h"   // the PACKAGE's own links between named selections
+#include "queryConditionModel.h"
+#include "queryUnionModel.h"
+#include "queryGridModel.h"
+#include "queryExpressionDialog.h"
 
-#include <wx/combobox.h>
-#include <wx/button.h>
-#include <wx/panel.h>
+#include "core/query/queryParser.h"
+#include "core/query/queryRender.h"
+#include "core/query/queryRewrite.h"    // Clone — the engine's own deep copy of a select; ibQueryAggregatedColumns
+#include "frmclient/backend/query/queryable.h"       // ibSourceMetaDataScope — WHICH config the names resolve against
+#include "core/query/queryKeywords.h"      // the ACTIVE keyword table — the one spelling of a keyword, and the highlighter's word set
+#include "core/query/queryAggregates.h"    // ibQueryAggregatesFor — the folds a field's type admits, as CheckNames reads them
+#include "frmclient/backend/backend_exception.h"
+#include "frmclient/backend/metaData.h"
+#include "frmclient/backend/compiler/value.h"   // ibValue::GetIconGroup — the desktop's metaData.h brings it
+#include "artProvider/artProvider.h"    // wxART_FRONTEND — the product's own pictures, asked for first
+
 #include <wx/sizer.h>
+#include <wx/stattext.h>
+#include <wx/statbox.h>
+#include <wx/button.h>
+#include <wx/msgdlg.h>
+#include <wx/choicdlg.h>
+#include <wx/textdlg.h>   // the totals level's name — a prompt, because the cell would not open   // wxGetSingleChoiceIndex — the fallback when no field is picked in a tree
+#include <wx/panel.h>
 #include <wx/settings.h>
+#include <wx/splitter.h>
+#include <wx/toolbar.h>
+#include <wx/artprov.h>
+#include <wx/dnd.h>
+#include <wx/wupdlock.h>
+#include <wx/stc/stc.h>
 
+#include "../callbackDropTarget.h"   // the same-process drag: a drop is a notification, the source knows what moved
+#include "frmclient/win/ctrls/dataview/dataviewEditOnActivate.h"   // a double-click opens the cell
+#include "queryFieldTree.h"   // the field row: its node, its walk, its drag — shared with the expression editor
+
+#include "mainFrame/settings/fontcolorsettings.h"   // the engine's own font + colours, so this pane matches the code editor
+
+#include <algorithm>
 #include <functional>
+#include <map>
+#include <set>
 
+// The window's own small vocabulary - names it uses everywhere and nobody else needs.
 namespace queryctor {
+
+
+// (The unfold is shown in the LANGUAGE'S own words now — ibQueryKeywordText(Elements / Hierarchy /
+// HierarchyOnly) — so the totals grid and the query text cannot call the same thing two names.)
+
+// A source as a person reads it: the nested case says so instead of showing nothing, because a
+// blank line in the table list is the one thing that makes a query unreadable.
+// THE NAME A CHOSEN TABLE IS KNOWN BY — its alias when it has one, else the LAST segment of its
+// path. Short on purpose: `Catalog.Products` is where it came FROM, and that belongs in the
+// catalogue on the left; in the query it is `Products`, which is what every field of it is
+// qualified with and what a rename replaces. Writing the whole dotted path here said the same
+// thing twice and left no room for the part that varies.
+// (It is ibQuerySourceLabel — this header held a byte-identical copy of what the constructor model
+//  held on the other side of the DLL boundary. Both ask now.)
+
+
+// A RENAME CARRIES ITS REFERENCES. Every field written against a table starts with that table's
+// NAME, and the AST stores those paths as written — so changing the alias without rewriting them
+// leaves ten broken references behind one deliberate edit. Rewrites this select only: an alias is
+// scoped to the query that declares it, and a union branch means its own table by the same word.
+// Body in queryConstructorFill.cpp, beside the collect walk it mirrors.
+void ibQueryRenameSourceReferences(ibQuerySelect& select, const wxString& from, const wxString& to);
+
+// A TABLE IS REMOVED, and everything written against it goes with it — its fields, the conditions
+// that named it, the links that mentioned it. Explicit, because removal is: a path that breaks for
+// any OTHER reason stays where it is and the engine speaks about it.
+void ibQueryDropSourceReferences(ibQuerySelect& select, const wxString& source);
+
+// THE TABS ABOUT THE WHOLE RESULT — its order, its totals, its index. A union has ONE of each, written
+// after the last branch (or on the statement that materialises it), so no branch has its own: the
+// strip is not offered on them, and moving onto one of them puts the tabs back on the statement. Asked
+// of a branch, an ORDER BY or a TOTALS was written in the middle of the union and refused on the way back.
+inline bool ibQueryTabIsWholeResult(const wxString& tab)
+{
+	return tab == _("Order") || tab == _("Totals") || tab == _("Index");
+}
+
+// THE TOTALS GO WHOLE — the flag, the figures, the levels, OVERALL and every SPLIT node. Taken apart in
+// three places, and each of them forgot the nodes: a SPLIT left behind wrote `TOTALS … SPLIT …` with
+// nothing before it, which the parser refuses.
+void ibQueryDropTotals(ibQuerySelect& select);
+
+// ⭐⭐ A UNION IS PADDED, NOT REFUSED. Every branch ends up selecting the same fields, in the same
+// order; a branch that has no column for one of them selects an EMPTY value under that name.
+// Applied on the way out of the dialog, so the query it hands back is one the engine can read.
+void ibQueryPadUnionBranches(ibQuerySelect& select);
+
+// ⭐⭐ THE FIELDS A SOURCE NO LONGER HAS go with the change that removed them. `available` is what
+// the source offers NOW; everything this query wrote about that source and is not in it is dropped,
+// clause by clause, exactly as deleting the table drops what named it.
+void ibQueryDropMissingFields(ibQuerySelect& select, const wxString& source,
+                              const std::set<wxString>& available);
+
+// An aggregate projection is one whose expression IS an aggregate call — the Grouping tab's
+// second list is that subset of the projections, not a list of its own.
+inline bool IsAggregateProjection(const ibQueryProjection& projection)
+{
+	return projection.m_expr && projection.m_expr->m_kind == ibQueryAstExprKind::Func;
+}
+
+// ARROWS BUILT FROM CODE POINTS, never written as literals in this source. The file is UTF-8
+// WITHOUT a BOM and MSVC then reads it in the system codepage — a literal ↑ came out as mojibake
+// on the button, seen live 2026-08-06. A wxUniChar is codepage-proof.
+inline wxString Glyph(int codePoint) { return wxString(wxUniChar(codePoint)); }
+
+inline wxString ArrowRight() { return Glyph(0x203A); }   // the "forward" chevron
+inline wxString ArrowLeft()  { return Glyph(0x2039); }   // the "back" chevron
+// (No "field → alias" text any more: the alias has a COLUMN of its own where it is set — the
+// Unions tab's field map — instead of being glued onto the end of a field's name.)
+
+// A TEXT COLUMN, and whether it can be TYPED INTO. The fork's text renderer is INERT unless it is
+// told otherwise — which is the whole reason the grids in this window opened as things to look at
+// rather than things to edit. Made a helper so a new column cannot forget to ask.
+inline ibDataViewColumn* TextColumn(const wxString& title, unsigned int col, int width, bool editable = false)
+{
+	return new ibDataViewColumn(title,
+		new ibDataViewTextRenderer(ibDataViewTextRenderer::GetDefaultType(),
+			editable ? wxDATAVIEW_CELL_EDITABLE : wxDATAVIEW_CELL_INERT),
+		col, width, wxAlignment::wxALIGN_LEFT);
+}
+
+// A COLUMN THAT CARRIES THE FIELD PICTURE. The same picture the trees use, so a field reads as one
+// thing whether it is being chosen on the left or listed on the right — which is what "everything
+// should look the same" comes down to. INERT: these columns hold a PATH, and a path is changed in
+// the expression editor, not typed over.
+inline ibDataViewColumn* IconColumn(const wxString& title, unsigned int col, int width)
+{
+	return new ibDataViewColumn(title,
+		new ibDataViewIconTextRenderer(ibDataViewIconTextRenderer::GetDefaultType(), wxDATAVIEW_CELL_INERT),
+		col, width, wxAlignment::wxALIGN_LEFT);
+}
+
+// A CELL OVER A CLOSED SET IS A CHOICE, NOT A TYPED WORD. The unfold, the sort direction and the
+// aggregate function are each a fixed set the LANGUAGE already names — so the cell offers exactly
+// those words and cannot hold anything else. Typed text there would be a second, weaker spelling of
+// an enumeration that exists, and the first misspelling would reach the parser as a syntax error
+// about something the user was never free to choose.
+//
+// The words come from `ibQueryKeywordText`, so the list is the keyword table's, not a copy of it.
+// ⭐ A CHOICE WHOSE LIST DEPENDS ON THE ROW. `SUM` over a string is not a mistake to be caught after
+// the fact, it is a choice that should never have been offered — and which choices fit depends on
+// the field THIS row aggregates, so the list cannot be fixed when the column is made.
+//
+// The words come from the ENGINE (ibQueryAggregatesFor), which is the same answer
+// CheckNames reads as a refusal. Offering what the engine would reject is how a window teaches
+// people to distrust it.
+class ibRowChoiceRenderer : public ibDataViewChoiceRenderer
+{
+public:
+	using Choices = std::function<wxArrayString()>;
+
+	explicit ibRowChoiceRenderer(Choices choices, ibDataViewCellMode mode = wxDATAVIEW_CELL_EDITABLE)
+		: ibDataViewChoiceRenderer(wxArrayString(), mode), m_choices(std::move(choices)) {}
+
+	wxWindow* CreateEditorCtrl(wxWindow* parent, wxRect rect, const wxVariant& value) override
+	{
+		wxArrayString words = m_choices ? m_choices() : wxArrayString();
+
+		// ⚠⚠ WHAT THE ROW ALREADY HOLDS IS ALWAYS IN THE LIST, even when the engine would not offer
+		// it. The list is what FITS this row's field; the value is what the query SAYS. They differ
+		// exactly when the query is wrong — `SUM` over a reference, where the offer is COUNT alone —
+		// and that is the moment the author most needs to see what is written.
+		//
+		// Without this the cell opened EMPTY on a perfectly readable `SUM(Parent)`: the selection
+		// silently failed to match, so the window hid the very thing the engine was complaining
+		// about, and the complaint on the verdict line named a function nothing on screen showed.
+		// A cell never loses what it holds; the refusal is the ENGINE's line to deliver, not a blank.
+		const wxString held = value.GetString();
+		if (!held.IsEmpty() && words.Index(held, false) == wxNOT_FOUND)
+			words.Insert(held, 0);
+
+		wxChoice* editor = new wxChoice(parent, wxID_ANY, rect.GetTopLeft(), rect.GetSize(), words);
+		editor->SetStringSelection(held);
+		return editor;
+	}
+
+	bool GetValueFromEditorCtrl(wxWindow* editor, wxVariant& value) override
+	{
+		wxChoice* choice = dynamic_cast<wxChoice*>(editor);
+		if (choice == nullptr)
+			return false;
+		value = choice->GetStringSelection();
+		return true;
+	}
+
+	// ⚠⚠ MEASURED BY THE VALUE, not by the list. The base measures the widest of its FIXED choices —
+	// and this renderer has none, because its list is built per row. Constructed with an empty array
+	// it reported a near-zero width, and the cell drew nothing at all: the Function and Expression
+	// columns came up blank over perfectly good aggregates.
+	wxSize GetSize() const override
+	{
+		wxVariant value;
+		GetValue(value);
+		const wxString text = value.GetString();
+		wxSize size = text.IsEmpty() ? GetTextExtent(wxT("Wg")) : GetTextExtent(text);
+		// Room for the drop-down button on the right, as the base allows for it.
+		size.x += wxSystemSettings::GetMetric(wxSYS_VSCROLL_X);
+		size.x += GetTextExtent(wxT("M")).x;
+		return size;
+	}
+
+private:
+	Choices m_choices;
+};
 
 // ⭐ AN EXPRESSION CELL: A LIST, A KEYBOARD AND A DOOR — all three, because an expression is not a
 // closed set.
@@ -136,6 +356,49 @@ private:
 	Freeform m_freeform;
 	wxString m_text;
 };
+
+inline ibDataViewColumn* ChoiceColumn(const wxString& title, unsigned int col, int width,
+                               const std::vector<ibQueryKeyword>& choices)
+{
+	wxArrayString words;
+	for (ibQueryKeyword keyword : choices)
+		words.Add(ibQueryKeywordText(keyword));
+	return new ibDataViewColumn(title,
+		new ibDataViewChoiceRenderer(words, wxDATAVIEW_CELL_EDITABLE),
+		col, width, wxAlignment::wxALIGN_LEFT);
+}
+
+// EVERY LIST IN THIS WINDOW IS THE SAME CONTROL, made the same way. Six listboxes and two listctrls
+// standing beside three dataview grids is what "the designer catches the eye" meant — different row
+// heights, different grid lines, and no cell you could edit where it stood.
+// ⚠ A DOUBLE-CLICK MUST OPEN THE CELL — and how is the CONTROL's business now, not this window's:
+// ibDataViewEditOnActivate (dataviewEditOnActivate.h) is this window's answer, moved beside the grid
+// so the LINQ constructor opens its cells the same way (2026-09-15).
+
+inline ibDataViewCtrl* MakeGrid(wxWindow* parent, ibQueryGridModel* model, std::function<void()> onChanged)
+{
+	ibDataViewCtrl* grid = new ibDataViewCtrl(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+		wxDV_ROW_LINES | wxDV_SINGLE);
+	model->SetOnChanged(std::move(onChanged));
+	grid->AssociateModel(model);
+	ibDataViewEditOnActivate(grid);
+	return grid;
+}
+
+// ⭐ THE SAME GRID, OVER A TREE. The totals are the one pane in this window whose rows are NESTED —
+// a separator is a node and its groupings are its children — so it takes the tree model instead of
+// the flat one. Everything else about it is unchanged: same row lines, same single selection, same
+// edit-on-activate.
+inline ibDataViewCtrl* MakeTreeGrid(wxWindow* parent, ibQueryTotalsTreeModel* model,
+	std::function<void()> onChanged)
+{
+	ibDataViewCtrl* grid = new ibDataViewCtrl(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+		wxDV_ROW_LINES | wxDV_SINGLE);
+	model->SetOnChanged(std::move(onChanged));
+	grid->AssociateModel(model);
+	ibDataViewEditOnActivate(grid);
+	return grid;
+}
 
 } // namespace queryctor
 

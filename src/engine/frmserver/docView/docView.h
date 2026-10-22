@@ -187,6 +187,10 @@ public:
     virtual bool IsModified() const { return m_documentModified; }
     virtual void Modify(bool mod);
 
+    // Does what it shows take an edit — said to the client with its tab (ibTab::ReadOnly), where the windows opened
+    // from it ask it of their configuration. Nothing restricts a document by itself.
+    virtual bool IsEditable() const { return true; }
+
     virtual bool AddView(ibView *view);
     virtual bool RemoveView(ibView *view);
 
@@ -786,6 +790,10 @@ public:
 	virtual void Modify(bool mod) override;
 	virtual bool Save() override;
 	virtual bool SaveAs() override;
+
+	// ITS METAOBJECT'S answer — the configuration's word, an object deleted or switched off (ibValueMetaObject::
+	// IsEditable): what the module and composer views already say with their State. None held: nothing restricts it.
+	virtual bool IsEditable() const override { return m_metaObject == nullptr || m_metaObject->IsEditable(); }
 
 	// Treats every metadata doc as "child" regardless of m_documentParent.
 	// Historical OES semantic — preserved separately from base's parent-based
