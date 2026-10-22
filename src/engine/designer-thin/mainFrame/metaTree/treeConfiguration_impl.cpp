@@ -9,10 +9,12 @@
 
 #include <wx/clipbrd.h>
 #include <wx/file.h>
+#include <wx/filedlg.h>
 #include <wx/filename.h>
 #include <wx/wupdlock.h>
 
 #include "clipboardLock.h"   // the Open/Close pair, taken as a guard — the desktop's
+#include "core/fileKind.h"   // ibFileKindOf, ibFileFilter — the file a data processor or a report is kept in
 #include "designer-thin/docManager/templates/docViewModuleEditor.h"   // a module's tab — the line a stop shows
 #include "frmclient/artProvider/artProvider.h"
 #include "frmclient/backend/metaCollection/metaObjectMetadata.h"      // the objects a modal editor of its menu is over
@@ -697,6 +699,77 @@ void ibMetaTreeBase::PasteItem()
 	wxRemoveFile(local);
 }
 
+// A DATA PROCESSOR OR A REPORT FROM THE FILE IT IS KEPT IN — the desktop's Replace and Insert: the file the person picks,
+// uploaded, read by the server over the selected object (Id), or into the selected group (Type, Parent); the row it made
+// selected.
+void ibMetaTreeBase::LoadItem(const wxString& extension)
+{
+	const wxTreeItemId selection = m_metaTreeCtrl->GetSelection();
+	ibFileKind kind = ibFileKind::Tool;
+	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
+	if (m_readOnly || frame == nullptr || !ibFileKindOf(wxT("*.") + extension, kind))
+		return;
+
+	ibProtocolNode args;
+	const long long id = GetObject(selection);
+	if (id != 0) {
+		args.SetValue(ibProtocol::ibSchema::ibMetaData::Id, id);
+	}
+	else {
+		wxString type;
+		long long parent = 0;
+		if (!GetPlace(selection, type, parent))
+			return;
+		args.SetValue(ibProtocol::ibSchema::ibMetaData::Type, type);
+		args.SetValue(ibProtocol::ibSchema::ibMetaData::Parent, parent);
+	}
+
+	wxFileDialog openFileDialog(this, kind == ibFileKind::Tool ? _("Open data processor file") : _("Open report file"), "", "",
+		ibFileFilter(kind), wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+	if (openFileDialog.ShowModal() == wxID_CANCEL)
+		return;
+
+	wxString file;
+	if (!frame->UploadFile(openFileDialog.GetPath(), file))
+		return;
+	args.SetValue(ibProtocol::ibSchema::ibMetaData::File, file);
+	std::set<long long> drawn;
+	ibObjectIds(m_root, drawn);
+	if (Command(ibProtocol::ibSchema::ibMetaData::ibCommand::Load, args))
+		SelectCreated(drawn);
+}
+
+// …and written into one — the desktop's Save: into a file uploaded empty, taken down to where the person chose (the
+// configuration's SaveConfigToFile).
+void ibMetaTreeBase::UnloadItem(const wxString& extension)
+{
+	const wxTreeItemId selection = m_metaTreeCtrl->GetSelection();
+	const long long id = GetObject(selection);
+	ibFileKind kind = ibFileKind::Tool;
+	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
+	if (id == 0 || frame == nullptr || !ibFileKindOf(wxT("*.") + extension, kind))
+		return;
+
+	wxFileDialog saveFileDialog(this, kind == ibFileKind::Tool ? _("Save data processor file") : _("Save report file"), "", "",
+		ibFileFilter(kind), wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+	saveFileDialog.SetFilename(GetRow(selection)->m_row.GetString(ibProtocol::ibSchema::ibMetaData::Title));
+	if (saveFileDialog.ShowModal() == wxID_CANCEL)
+		return;
+
+	const wxString local = wxFileName::CreateTempFileName(wxT("oes"));
+	if (local.IsEmpty())
+		return;
+	wxString file;
+	const bool uploaded = frame->UploadFile(local, file);
+	wxRemoveFile(local);
+
+	ibProtocolNode args;
+	args.SetValue(ibProtocol::ibSchema::ibMetaData::Id, id);
+	args.SetValue(ibProtocol::ibSchema::ibMetaData::File, file);
+	if (uploaded && Command(ibProtocol::ibSchema::ibMetaData::ibCommand::Unload, args))
+		frame->DownloadFile(file, saveFileDialog.GetPath());
+}
+
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void ibMetaTreeBase::UpdateToolbar()
@@ -752,7 +825,8 @@ bool ibMetaTreeBase::AppendMetaMenu(wxMenu& menu, const ibProtocolNode& row)
 
 		// ⭐⭐ THE ITEM CARRIES ITS OWN ACTION — what it opens, by its id (a module's carries its Command too). A modal
 		// editor — a Command with nothing to open — is the tree's, over the row's object (the engine's ProcessCommand
-		// called it so), by the item's Name; one this tree does not have: shown, shut.
+		// called it so), by the item's Name, and so is the file a data processor or a report is kept in (Load, Unload —
+		// the file by its Extension); one this tree does not have: shown, shut.
 		if (object == 0) {
 			const wxString name = entry.GetString(ibProtocol::ibSchema::ibMetaData::Name);
 			const ibMetaID owner = static_cast<ibMetaID>(row.GetId());
@@ -767,6 +841,15 @@ bool ibMetaTreeBase::AppendMetaMenu(wxMenu& menu, const ibProtocolNode& row)
 					ibValueMetaObjectConfiguration metaObject(owner, ibMetaData(m_tab));
 					EditHomePage(&metaObject);
 				}, id);
+			}
+			else if (name == wxT("Load")) {
+				const wxString extension = entry.GetString(ibProtocol::ibSchema::ibMetaData::Extension);
+				menu.Bind(wxEVT_MENU, [this, extension](wxCommandEvent&) { LoadItem(extension); }, id);
+				menuItem->Enable(!m_readOnly);
+			}
+			else if (name == wxT("Unload")) {
+				const wxString extension = entry.GetString(ibProtocol::ibSchema::ibMetaData::Extension);
+				menu.Bind(wxEVT_MENU, [this, extension](wxCommandEvent&) { UnloadItem(extension); }, id);
 			}
 			else {
 				menuItem->Enable(false);
@@ -820,6 +903,8 @@ void ibMetaTreeBase::ShowContextMenu(const wxTreeItemId& item, const wxPoint& po
 	}
 	else if (m_metaTreeCtrl->HasFlag(wxTR_HIDE_ROOT) || row->m_row.GetId() != -1
 		|| m_metaTreeCtrl->GetItemParent(item) != m_metaTreeCtrl->GetRootItem()) {
+		// …a group's own first — one read in from a file (Load), where its kind is kept in one.
+		AppendMetaMenu(menu, row->m_row);
 		wxMenuItem* menuItem = menu.Append(ID_METATREE_NEW, _("New"));
 		menuItem->SetBitmap(wxArtProvider::GetBitmapBundle(wxART_ADD, wxART_FRONTEND, wxSize(16, 16)));
 		menuItem->Enable(!m_readOnly);

@@ -11,6 +11,7 @@
 #include "backend/metaCollection/partial/commonObject.h"
 #include "backend/metaCollection/partial/dataReport.h"  // ibValueMetaObjectReport — AddReportItem
 #include "backend/backend_picture.h"                    // ibBackendPicture::SendPicture — the rows' pictures, by their ids
+#include "core/fileKind.h"                              // ibFileExtension — the file a data processor or a report is kept in
 #include "core/serialize/dataBuilder.h"
 
 #include "frmserver/client/clientFrame.h"
@@ -106,6 +107,30 @@ std::vector<const ibMetaTreeGroupDef*> OrderedGroups()
 			return ibMetaGroupOrder(a->m_clsid) < ibMetaGroupOrder(b->m_clsid);
 		});
 	return rows;
+}
+
+// THE FILE A DATA PROCESSOR OR A REPORT IS KEPT IN apart from the configuration — the desktop's tree read one from it and
+// wrote it into one (ibConfigurationTree::PrepareReplaceMenu, InsertItem). False: a kind kept in none.
+bool FileKindOf(const ibClassID& clsid, ibFileKind& kind)
+{
+	if (clsid == g_metaDataProcessorCLSID)
+		kind = ibFileKind::Tool;
+	else if (clsid == g_metaReportCLSID)
+		kind = ibFileKind::Report;
+	else
+		return false;
+	return true;
+}
+
+// …an item that reads or writes it — the tree's own, the command it sends by its Name (Load, Unload), the file by its
+// extension.
+void AppendFileItem(ibDataNode& menu, const wxString& name, const wxString& caption, ibFileKind kind)
+{
+	ibDataNode& row = menu.AddChild(0, static_cast<ibMetaID>(menu.Children().size() + 1));
+	row.SetValue(ibProtocol::ibSchema::ibMetaData::Kind, static_cast<s32>(ibMetaMenuKind::Editor));
+	row.SetValue(ibProtocol::ibSchema::ibMetaData::Name, name);
+	row.SetValue(ibProtocol::ibSchema::ibMetaData::Title, caption);
+	row.SetValue(ibProtocol::ibSchema::ibMetaData::Extension, ibFileExtension(kind));
 }
 
 } // namespace
@@ -341,6 +366,10 @@ ibDataNode& ibMetaTreeBase::AppendGroupItem(ibDataNode& parent, const ibClassID&
 	item.SetValue(ibProtocol::ibSchema::ibMetaData::Title, name);
 	item.SetValue(ibProtocol::ibSchema::ibMetaData::Picture, ibBackendPicture::SendPicture(clsid));
 	item.SetValue(ibProtocol::ibSchema::ibMetaData::Group, ClsidText(clsid));
+	// …and a group of what is kept in a file apart: one read in from it (the desktop's InsertItem).
+	ibFileKind kind = ibFileKind::Tool;
+	if (FileKindOf(clsid, kind))
+		AppendFileItem(item.Child(ibProtocol::ibSchema::ibMetaData::Menu), wxT("Load"), _("Insert data processor, report..."), kind);
 	return item;
 }
 
@@ -371,7 +400,9 @@ void ibMetaTreeBase::AppendMenu(ibDataNode& item, ibValueMetaObject* metaObject)
 {
 	std::vector<ibMetaMenuItem> items;
 	const bool standardSuppressed = metaObject->CollectContextMenu(items);
-	if (items.empty() && !standardSuppressed)
+	ibFileKind kind = ibFileKind::Tool;
+	const bool keptInFile = FileKindOf(metaObject->GetClassType(), kind);
+	if (items.empty() && !standardSuppressed && !keptInFile)
 		return;
 
 	ibDataNode& menu = item.Child(ibProtocol::ibSchema::ibMetaData::Menu);
@@ -396,6 +427,12 @@ void ibMetaTreeBase::AppendMenu(ibDataNode& item, ibValueMetaObject* metaObject)
 			row.SetValue(ibProtocol::ibSchema::ibMetaData::Picture, ibBackendPicture::SendPicture(entry.m_picture));
 		if (entry.m_id != wxNOT_FOUND)
 			row.SetValue(ibProtocol::ibSchema::ibMetaData::Command, static_cast<s32>(entry.m_id));
+	}
+
+	// …and the file it is kept in apart, as the desktop's tree offered it (PrepareReplaceMenu): read over it, written out.
+	if (keptInFile) {
+		AppendFileItem(menu, wxT("Load"), _("Replace data processor, report..."), kind);
+		AppendFileItem(menu, wxT("Unload"), _("Save data processor, report..."), kind);
 	}
 }
 

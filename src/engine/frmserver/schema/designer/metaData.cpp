@@ -2,6 +2,8 @@
 
 #include "backend/backend_mainFrame.h"   // ibBackendDocFrame — the configuration's own say how they went
 #include "backend/metadataConfiguration.h"
+#include "backend/metadataDataProcessor.h"   // ibMetaDataDataProcessor — a data processor read from its file, written into one
+#include "backend/metadataReport.h"          // ibMetaDataReport — …a report
 #include "backend/metaCollection/metaIntrospect.h"   // ibFindMetaObjectById — an object by its id, anywhere in the tree
 #include "backend/session/session.h"
 #include "backend/temp/tempStorage.h"
@@ -60,6 +62,40 @@ ibMetaDataConfigurationBase* FindConfiguration(const ibSession& session, const i
 		return nullptr;
 	}
 	return configuration;
+}
+
+// A DATA PROCESSOR OR A REPORT IS KEPT IN A FILE APART — the desktop's tree read one from it and wrote it into one
+// (ibConfigurationTree::InsertItem, ReplaceItem, SaveItem), through these readers. One of that class read from that file of
+// the session's temporary storage into the configuration, under its root. Null: the file is not one — and what the reader
+// had put in before reading is taken away again, so a bad file leaves nothing behind.
+ibValueMetaObject* ReadExternal(ibMetaData* metaData, const ibClassID& clsid, const wxString& file)
+{
+	ibValueMetaObject* read = nullptr;
+	bool loaded = false;
+	if (clsid == g_metaDataProcessorCLSID) {
+		// A reader only — what it reads lives on in this configuration, so it is never closed (the desktop's InsertItem).
+		const std::shared_ptr<ibMetaDataDataProcessor> reader = std::make_shared<ibMetaDataDataProcessor>(metaData);
+		read = reader->GetDataProcessor();
+		loaded = reader->LoadFromTempFile(file);
+	}
+	else {
+		const std::shared_ptr<ibMetaDataReport> reader = std::make_shared<ibMetaDataReport>(metaData);
+		read = reader->GetReport();
+		loaded = reader->LoadFromTempFile(file);
+	}
+	if (loaded)
+		return read;
+	metaData->GetCommonMetaObject()->RemoveChild(read);
+	return nullptr;
+}
+
+// …and that one written into that file.
+bool WriteExternal(ibMetaData* metaData, ibValueMetaObject* object, const wxString& file)
+{
+	// A writer over the configuration's own object — never closed, for the object stays (the desktop's SaveItem).
+	if (object->GetClassType() == g_metaDataProcessorCLSID)
+		return std::make_shared<ibMetaDataDataProcessor>(metaData, static_cast<ibValueMetaObjectDataProcessor*>(object))->SaveToTempFile(file);
+	return std::make_shared<ibMetaDataReport>(metaData, static_cast<ibValueMetaObjectReport*>(object))->SaveToTempFile(file);
 }
 
 } // namespace
@@ -273,6 +309,47 @@ std::function<void()> ibSchemaMetaData::Command(const ibSession& session, s32 co
 		};
 	}
 	case ibProtocol::ibSchema::ibMetaData::ibCommand::Load: {
+		// …or a data processor or a report, from the file it is kept in apart (the desktop's tree's Replace and Insert):
+		// that one replaced by the one read (Id), or one read in under that object (Type, Parent).
+		if (args.GetValue<s32>(ibProtocol::ibSchema::ibMetaData::Id) != 0
+			|| !args.GetValue<wxString>(ibProtocol::ibSchema::ibMetaData::Type).IsEmpty()) {
+			// The reader puts its object in before it reads — so the configuration's word is asked here, not at its door.
+			if (!metaData->IsEditable()) {
+				refusal = ibProtocol::ibRefusal::NoRight;
+				error = wxT("the configuration is read-only");
+				return nullptr;
+			}
+			ibValueMetaObject* replaced = nullptr;
+			ibClassID clsid = 0;
+			if (args.GetValue<s32>(ibProtocol::ibSchema::ibMetaData::Id) != 0) {
+				replaced = FindObject(metaData, args, ibProtocol::ibSchema::ibMetaData::Id, refusal, error);
+				if (replaced == nullptr)
+					return nullptr;
+				clsid = replaced->GetClassType();
+			}
+			else {
+				ibValueMetaObject* parent = nullptr;
+				if (!FindPlace(metaData, args, parent, clsid, refusal, error))
+					return nullptr;
+			}
+			if (clsid != g_metaDataProcessorCLSID && clsid != g_metaReportCLSID) {
+				refusal = ibProtocol::ibRefusal::BadParameter;
+				error = wxT("only a data processor or a report is kept in a file");
+				return nullptr;
+			}
+			// A file that is not one leaves the configuration as it was, and the person is told.
+			const wxString file = args.GetValue<wxString>(ibProtocol::ibSchema::ibMetaData::File);
+			return [metaData, clsid, replaced, file]() {
+				if (ReadExternal(metaData, clsid, file) == nullptr) {
+					if (ibBackendDocFrame* const frame = ibSession::CurrentFrame())
+						frame->ShowModalMessage(BackendErrorChain(_("The data processor or report could not be read from the file.")),
+							wxString(), wxOK | wxCENTRE | wxICON_ERROR);
+					return;
+				}
+				if (replaced != nullptr)
+					metaData->RemoveMetaObject(replaced);
+			};
+		}
 		ibMetaDataConfigurationBase* const configuration = FindConfiguration(session, metaData, refusal, error);
 		if (configuration == nullptr)
 			return nullptr;
@@ -297,6 +374,24 @@ std::function<void()> ibSchemaMetaData::Command(const ibSession& session, s32 co
 		};
 	}
 	case ibProtocol::ibSchema::ibMetaData::ibCommand::Unload: {
+		// …or a data processor or a report, written as the file it is kept in apart (Id — the desktop's tree's Save).
+		if (args.GetValue<s32>(ibProtocol::ibSchema::ibMetaData::Id) != 0) {
+			ibValueMetaObject* const object = FindObject(metaData, args, ibProtocol::ibSchema::ibMetaData::Id, refusal, error);
+			if (object == nullptr)
+				return nullptr;
+			if (object->GetClassType() != g_metaDataProcessorCLSID && object->GetClassType() != g_metaReportCLSID) {
+				refusal = ibProtocol::ibRefusal::BadParameter;
+				error = wxT("only a data processor or a report is kept in a file");
+				return nullptr;
+			}
+			if (!WriteExternal(metaData, object, args.GetValue<wxString>(ibProtocol::ibSchema::ibMetaData::File))) {
+				refusal = ibProtocol::ibRefusal::Failed;
+				error = wxString::Format(wxT("'%s' was not written"), object->GetName());
+				return nullptr;
+			}
+			// Done in the asking — nothing in the configuration changed.
+			return []() {};
+		}
 		ibMetaDataConfigurationBase* const configuration = FindConfiguration(session, metaData, refusal, error);
 		if (configuration == nullptr)
 			return nullptr;

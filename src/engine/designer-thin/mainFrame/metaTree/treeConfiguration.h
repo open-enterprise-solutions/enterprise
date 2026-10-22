@@ -136,6 +136,9 @@ private:
 	void SortItem();
 	void CopyItem();
 	void PasteItem();
+	// …a data processor or a report as the file of that extension it is kept in (its menu's Load, Unload).
+	void LoadItem(const wxString& extension);
+	void UnloadItem(const wxString& extension);
 	// …the row put where its sibling stands (Up, Down).
 	void MoveItem(const wxTreeItemId& item, const wxTreeItemId& sibling);
 	// …the row of the object not among `drawn` selected and opened (Create, Paste); false — there is none.

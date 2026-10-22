@@ -104,6 +104,12 @@ In the designer a configuration file opened with File → Open (`.oap`) is a tab
 `MetaData` — the configuration's tree, as an external data processor's does (Kind 5) — browsed read-only. Schema
 `MetaData` commands for that tab carry its `Tab`.
 
+A data processor's or a report's row in the tree, and their group's, carry `Menu` items `Load` / `Unload` with
+`Extension` — the file the object is kept in apart. Schema `MetaData` `Load {Type, Parent, File}` reads one in from that
+uploaded file, `Load {Id, File}` replaces that object by the one read, `Unload {Id, File}` writes it into the file
+(uploaded empty). A property row whose cell is a link (a module, a form, a template) carries `Object` — the metaobject
+the link opens, by its id.
+
 In the designer a report's composer is a tab of `Kind` 14. Its `View` holds `State` (`ReadOnly`), `Composition` —
 the composer's description in its node form — and `Fields`, `References`, `Error` — what its query offers, as the
 ComposerSettings question has them. The client edits the description itself and sends it back whole: event

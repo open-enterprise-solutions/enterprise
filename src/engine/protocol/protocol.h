@@ -1064,6 +1064,9 @@ namespace ibProtocol {
 			inline constexpr const char* Name       = "Name";
 			inline constexpr const char* Object     = "Object";       // the metaobject an item opens, by its id
 			inline constexpr const char* Command    = "Command";
+			// …a Load or Unload item's — a data processor's or a report's row (Load, Unload), its group's (Load): the file
+			// it reads or writes, by its extension (ibFileExtension).
+			inline constexpr const char* Extension  = "Extension";
 			// …and its commands' Args.
 			inline constexpr const char* Tab        = "Tab";
 			inline constexpr const char* Id         = "Id";
@@ -1091,6 +1094,9 @@ namespace ibProtocol {
 				Unload   = 12,   // {File} — written into that one (uploaded empty)
 				Browse   = 13,   // the base's configuration in a tab, read-only (ibView::ibKind::Configuration): raised when
 				                 // open, else opened
+				// …and Load and Unload over a data processor or a report, as the file it is kept in apart (the desktop's
+				// tree's Insert, Replace and Save): Load {Type, Parent, File} — one read from that file under that object;
+				// Load {Id, File} — that one replaced by the one read; Unload {Id, File} — that one written into that file.
 			};
 
 		}
