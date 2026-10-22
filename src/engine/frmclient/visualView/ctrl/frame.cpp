@@ -71,9 +71,10 @@ ibValueFrame* MakeOfType(const wxString& type, ibVisualHostClient& host, long lo
 
 ibValueFrame* ibValueFrame::Make(const wxString& type, ibVisualHostClient& host, long long controlId)
 {
-	ibValueFrame* const made = MakeOfType(type, host, controlId);
-	if (made != nullptr)
-		made->m_className = type;
+	ibValueFrame* made = MakeOfType(type, host, controlId);
+	if (made == nullptr)
+		made = new ibViewPlaceholder(host, controlId);
+	made->m_className = type;
 	return made;
 }
 
@@ -83,14 +84,19 @@ bool ibValueFrame::ChangeChildPosition(ibValueFrame* obj, unsigned int pos)
 	return ibPropertyObjectHelper::ChangeChildPosition(obj, pos);
 }
 
+bool ibValueFrame::Fetch()
+{
+	return m_host.Fetch(this);
+}
+
 void ibValueFrame::OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue)
 {
 	m_host.ModifyProperty(property, oldValue, newValue);
 }
 
-ibProperty* ibValueFrame::CreateProperty(ibPropertyCategory* cat, const ibDataNode& row)
+ibProperty* ibValueFrame::CreateProperty(ibPropertyCategory* cat, ibDataNode&& row)
 {
-	return ibPropertyObject::CreateProperty<ibPropertySerializable>(cat, row);
+	return ibPropertyObject::CreateProperty<ibPropertySerializable>(cat, std::move(row));
 }
 
 ibValueFrame* ibValueFrame::DoFindControlByName(const wxString& controlName, ibValueFrame* top) const

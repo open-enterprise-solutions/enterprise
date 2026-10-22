@@ -13,6 +13,14 @@ enum ibRepresentation {
 	ibRepresentation_PictureAndText
 };
 
+// Where a notebook's tabs are (its OrientPage) - none: the notebook is a panel, the active page alone. The numbers are
+// the ones a saved form holds (Top and Bottom were wx's flags).
+enum ibTabLocation {
+	ibTabLocation_None = 0,
+	ibTabLocation_Top = 1,
+	ibTabLocation_Bottom = 8
+};
+
 #include "frontend/frontend.h"
 
 #pragma region enumeration
@@ -39,15 +47,14 @@ class FRONTEND_API ibValueEnumStretch :
 private:
 };
 
-#include <wx/aui/auibook.h>
-
 class FRONTEND_API ibValueEnumOrientNotebookPage :
-	public ibValueEnumeration<wxAuiNotebookOption> {
+	public ibValueEnumeration<ibTabLocation> {
 	public:
 	ibValueEnumOrientNotebookPage() : ibValueEnumeration() {}
 	virtual void CreateEnumeration() {
-		AddEnumeration(wxAuiNotebookOption::wxAUI_NB_TOP, wxT("Top"), _("Top"));
-		AddEnumeration(wxAuiNotebookOption::wxAUI_NB_BOTTOM, wxT("Bottom"), _("Bottom"));
+		AddEnumeration(ibTabLocation::ibTabLocation_Top, wxT("Top"), _("Top"));
+		AddEnumeration(ibTabLocation::ibTabLocation_Bottom, wxT("Bottom"), _("Bottom"));
+		AddEnumeration(ibTabLocation::ibTabLocation_None, wxT("None"), _("None"));
 	}
 private:
 };

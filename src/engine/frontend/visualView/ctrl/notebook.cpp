@@ -35,8 +35,8 @@ ibValueNotebook::ibValueNotebook() : ibValueWindow(), m_activePage(nullptr)
 
 wxObject* ibValueNotebook::Create(wxWindow* wxparent, ibVisualHost* visualHost)
 {
-	long style = m_propertyOrient->GetValueAsInteger() |
-		wxAUI_NB_TAB_MOVE | 
+	long style = (m_propertyOrient->GetValueAsEnum() == ibTabLocation_Bottom ? wxAUI_NB_BOTTOM : wxAUI_NB_TOP) |
+		wxAUI_NB_TAB_MOVE |
 		wxAUI_NB_SCROLL_BUTTONS;
 	if (!visualHost->IsDesignerHost())
 		style |= wxAUI_NB_TAB_SPLIT;
@@ -80,12 +80,17 @@ void ibValueNotebook::OnUpdated(wxObject* wxobject, wxWindow* wxparent, ibVisual
 	wxAuiNotebook* notebook = dynamic_cast<wxAuiNotebook*>(wxobject);
 
 	if (notebook != nullptr) {
-		long style = m_propertyOrient->GetValueAsInteger() |
+		long style = (m_propertyOrient->GetValueAsEnum() == ibTabLocation_Bottom ? wxAUI_NB_BOTTOM : wxAUI_NB_TOP) |
 			wxAUI_NB_TAB_MOVE |
 			wxAUI_NB_SCROLL_BUTTONS;
 		if (!visualHost->IsDesignerHost())
 			style |= wxAUI_NB_TAB_SPLIT;
 		notebook->SetWindowStyle(style);
+		// ⭐ A NOTEBOOK WITH NO TABS IS A PANEL (Max, 2026-10-22: not a control of its own). OrientPage None takes the
+		// tab strip to no height: the active page is shown alone and code switches it (ActivePage). The designer keeps
+		// the tabs, so its author reaches every page by the mouse.
+		const bool tabs = visualHost->IsDesignerHost() || m_propertyOrient->GetValueAsEnum() != ibTabLocation_None;
+		notebook->SetTabCtrlHeight(tabs ? -1 : 0);
 	}
 }
 

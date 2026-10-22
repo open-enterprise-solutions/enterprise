@@ -173,7 +173,7 @@ void ibMetaTreeBase::OnEditHelp(wxCommandEvent& event)
 	const long long id = GetObject(m_metaTreeCtrl->GetSelection());
 	if (id != 0) {
 		ibValueMetaObject metaObject(static_cast<ibMetaID>(id), ibMetaData(m_tab));
-		metaObject.Receive();
+		metaObject.Fetch();
 		EditOneText(&metaObject, this, /*help*/ true);
 	}
 
@@ -185,7 +185,7 @@ void ibMetaTreeBase::OnEditNotes(wxCommandEvent& event)
 	const long long id = GetObject(m_metaTreeCtrl->GetSelection());
 	if (id != 0) {
 		ibValueMetaObject metaObject(static_cast<ibMetaID>(id), ibMetaData(m_tab));
-		metaObject.Receive();
+		metaObject.Fetch();
 		EditOneText(&metaObject, this, /*help*/ false);
 	}
 

@@ -184,7 +184,7 @@ struct ibQueryAstExpr
 //   * ibQueryMentionsAggregate — `DATEDIFF(x, MIN(y), Day)` read as "folds nothing", so the
 //     projection was taken for a GROUP KEY and died on a message about "an unsupported expression"
 //     instead of the one written for exactly this case;
-//   * CollectFoldedAndFree — the GROUP BY completeness rule could not see a column inside
+//   * ibQueryCollectFoldedAndFree — the GROUP BY completeness rule could not see a column inside
 //     `YEAR(Period)`, so a free column beside a folded one went unreported there;
 //   * CloneExpr — the arguments were SHARED between the clone and the original (the struct copy
 //     copies the vector of shared pointers), so a rewrite of the copy reaches into the source tree.

@@ -157,6 +157,9 @@
     <ClCompile Include="docView\templates\designer\docViewComposerEdit.cpp">
       <Filter>docView\templates\designer</Filter>
     </ClCompile>
+    <ClCompile Include="docView\templates\designer\queryConstructorRequest.cpp">
+      <Filter>docView\templates\designer</Filter>
+    </ClCompile>
     <ClCompile Include="docView\templates\designer\docViewInterfaceEdit.cpp">
       <Filter>docView\templates\designer</Filter>
     </ClCompile>
@@ -623,6 +626,9 @@
       <Filter>docView\templates\designer</Filter>
     </ClInclude>
     <ClInclude Include="docView\templates\designer\docViewComposerEdit.h">
+      <Filter>docView\templates\designer</Filter>
+    </ClInclude>
+    <ClInclude Include="docView\templates\designer\queryConstructorRequest.h">
       <Filter>docView\templates\designer</Filter>
     </ClInclude>
     <ClInclude Include="docView\templates\designer\docViewInterfaceEdit.h">

@@ -69,9 +69,9 @@ bool ibPropertyCommandSource::WriteNodeValue(ibDataValue& value) const
 
 #include "protocol/protocol.h"   // ibProtocol::ibSchema::ibProperties — the row's keys
 
-bool ibPropertyCommandSource::GetProtocolValue(ibDataNode& row)
+bool ibPropertyCommandSource::GetProtocolValue(ibDataNode& row, ibReader reader)
 {
-	if (!ibProperty::GetProtocolValue(row))
+	if (!ibProperty::GetProtocolValue(row, reader))
 		return false;
 	if (const ibBackendCommandReceiver* const receiver = get_cell_variant<ibVariantDataCommandSource>()->GetOwner())
 		receiver->WriteCommandTree(row.Child(ibProtocol::ibSchema::ibProperties::CommandTree));

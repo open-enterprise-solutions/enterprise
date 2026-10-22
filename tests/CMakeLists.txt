@@ -39,6 +39,7 @@ add_executable(oes_tests
     test_driverDates.cpp
     test_formatString.cpp
     test_blockSyntaxLINQ.cpp
+    test_scriptFoldCode.cpp
     test_byteCodeAOT.cpp
     test_byteCodeFormat.cpp
     test_compiler.cpp
@@ -99,6 +100,7 @@ add_executable(oes_tests
     test_queryL4Parser.cpp
     test_queryCoreData.cpp
     test_queryConstructor.cpp
+    test_queryConstructorRequest.cpp
     test_queryNaming.cpp
     test_queryRoundTrip.cpp
     test_jsonRoundTrip.cpp

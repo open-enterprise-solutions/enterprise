@@ -18,6 +18,8 @@
 #include "backend/backend_picture.h"         // ibBackendPicture::SendPicture — the picture by its id
 #include "core/serialize/dataBuilder.h"
 #include "frmserver/client/clientFrame.h"   // IsClosingWindow — the client leaving vs a tab's cross
+#include "docViewComposerEdit.h"         // ibFetchComposerRequest — a reference's [+] (Expand), asked by the query constructor
+#include "queryConstructorRequest.h"     // ibFetchQueryConstructorRequest — what the query constructor asks the configuration
 
 #include <algorithm>
 
@@ -397,10 +399,7 @@ wxString LinqKindPicture(const wxString& section, const ibMetaData* metaData)
 		kind = wxT("ChartOf") + kind.Mid(8);
 	else if (kind.EndsWith(wxT("s")))
 		kind.RemoveLast();
-	if (metaData == nullptr)
-		return wxString();
-	const ibCtorAbstractType* const ctor = metaData->GetAvailableCtor(kind);
-	return ctor != nullptr ? wxString(ibBackendPicture::SendPicture(ctor->GetClassType())) : wxString();
+	return ibKindPicture(kind, metaData);
 }
 
 // Open — the desktop's constructor before its window is drawn: the query the caret stands in, where the block will
@@ -568,6 +567,14 @@ bool ibModuleTextView::Fetch(const ibDataNode& request, ibDataNode& response)
 		GetDocument()->ConvertMetaObjectToType<ibValueMetaObjectModuleBase>();
 	if (creator == nullptr)
 		return false;
+
+	// THE QUERY CONSTRUCTOR opened over this module's query asks the module's configuration — its sources, a source's
+	// fields and parameters, and a reference's fields one level down (the composer's Expand).
+	if (ibFetchQueryConstructorRequest(request, response, creator->GetMetaData()))
+		return true;
+	if (static_cast<ibProtocol::ibView::ibComposer::ibRequest>(request.GetValue<s32>(ibProtocol::ibView::ibComposer::Kind))
+	    == ibProtocol::ibView::ibComposer::ibRequest::Expand)
+		return ibFetchComposerRequest(request, response, creator->GetMetaData());
 
 	const wxString text = request.GetValue<wxString>(ibProtocol::ibView::ibModule::Text);
 	const unsigned int caret = static_cast<unsigned int>(request.GetValue<s32>(ibProtocol::ibView::ibModule::Position));

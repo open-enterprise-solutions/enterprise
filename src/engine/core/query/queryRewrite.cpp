@@ -46,6 +46,74 @@ bool ibQueryMentionsAggregate(const ibQueryAstExprPtr& e)
 
 namespace {
 
+bool IsComputedAst(const ibQueryAstExpr& e);   // computed where it stands — below, with the pass that asks it too
+
+} // namespace
+
+// ⚠ IT IS NOT A QUESTION ABOUT THE TOP OF THE PROJECTION. `SUM(Price * Qty) / COUNT(*) * 1.2` is neither a bare
+// column nor a call, and a collector that looked only at what a projection IS held the columns inside it to no rule
+// at all — a free `Price` beside a folded `Qty` in one expression. An expression is a TREE; the rule reads it as one.
+void ibQueryCollectFoldedAndFree(const ibQueryAstExprPtr& e, bool insideAggregate,
+	std::vector<const ibQueryAstExpr*>& folded, std::vector<const ibQueryAstExpr*>& free,
+	const std::vector<wxString>* groupedExprs)
+{
+	if (!e)
+		return;
+	if (e->m_kind == ibQueryAstExprKind::Column) {
+		(insideAggregate ? folded : free).push_back(e.get());
+		return;
+	}
+	// ⭐ A SUBTREE THAT IS ITSELF A GROUP KEY reads nothing free — the execution matches the two as TEXT (the GROUP BY
+	// branch of the lowering's PopulateBuilder), so the walk does too. Refused here, it was the check against the
+	// engine, and the constructor's "complete the grouping" would have added the raw date — a different query.
+	if (!insideAggregate && groupedExprs != nullptr && IsComputedAst(*e)) {
+		const wxString written = ibRenderQueryExpr(*e);
+		for (const wxString& key : *groupedExprs)
+			if (key.IsSameAs(written, false))
+				return;
+	}
+	// A GROUP aggregate folds everything beneath it, however deep; a WINDOW aggregate keeps one answer per input row,
+	// so its argument is free with respect to any ordinary GROUP BY beside it.
+	const bool fold = insideAggregate
+		|| (e->m_kind == ibQueryAstExprKind::Func && ibIsAggregateKeyword(e->m_func) && !e->m_over);
+
+	ibQueryForEachOperand(*e, [&](const ibQueryAstExprPtr& child) {
+		ibQueryCollectFoldedAndFree(child, fold, folded, free, groupedExprs);
+	});
+	// Window keys live beside the ordinary operand tree: the window runs over grouped rows, so a raw key cannot escape
+	// grouping merely because it is written inside OVER (...).
+	if (e->m_over) {
+		for (const ibQueryAstExprPtr& partition : e->m_over->m_partitionBy)
+			ibQueryCollectFoldedAndFree(partition, insideAggregate, folded, free, groupedExprs);
+		for (const ibQueryOrderItem& order : e->m_over->m_orderBy)
+			ibQueryCollectFoldedAndFree(order.m_expr, insideAggregate, folded, free, groupedExprs);
+	}
+}
+
+ibQueryAstExprPtr ibQueryColumnCopy(const ibQueryAstExpr& column)
+{
+	ibQueryAstExprPtr copy = ibQueryAstExpr::Make(ibQueryAstExprKind::Column);
+	copy->m_path = column.m_path;
+	copy->m_line = column.m_line;
+	copy->m_col  = column.m_col;
+	return copy;
+}
+
+std::vector<ibQueryAstExprPtr> ibQueryAggregatedColumns(const ibQuerySelect& select)
+{
+	std::vector<ibQueryAstExprPtr> out;
+	for (const ibQueryProjection& projection : select.m_projections) {
+		std::vector<const ibQueryAstExpr*> folded, free;
+		ibQueryCollectFoldedAndFree(projection.m_expr, false, folded, free);
+		for (const ibQueryAstExpr* column : folded)
+			if (column != nullptr && !column->m_path.empty())
+				out.push_back(ibQueryColumnCopy(*column));
+	}
+	return out;
+}
+
+namespace {
+
 ibQuerySelectPtr CloneSelect(const ibQuerySelect& s);
 
 // Deep-clone an expression tree (the shallow struct copy shares children via

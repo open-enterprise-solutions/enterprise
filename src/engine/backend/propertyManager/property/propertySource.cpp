@@ -285,66 +285,68 @@ void AppendExplorerColumns(ibDataNode& parent, const ibSourceExplorer& explorer,
 
 }
 
-bool ibPropertySource::GetProtocolValue(ibDataNode& row)
+bool ibPropertySource::GetProtocolValue(ibDataNode& row, ibReader reader)
 {
-	if (!ibProperty::GetProtocolValue(row))
-		return false;
-
-	const ibBackendTypeSourceFactory* const factory =
-		dynamic_cast<const ibBackendTypeSourceFactory*>(GetPropertyObject());
+	const ibBackendTypeSourceFactory* const factory = get_cell_variant<ibVariantDataSource>()->GetSourceFactory();
 	const ibPropertyObject* const owner = m_owner;   // CONST: the non-const GetMetaData wxFAILs
 	const ibMetaData* const metaData = owner != nullptr ? owner->GetMetaData() : nullptr;
 
-	// …AND BESIDE THE PATH, IN THE SAME VALUE, THE TYPE IT HOLDS (SourceType) — the desktop's Type row beneath the cell
-	// (ibPGDataSourceProperty: shown bound, read only): the type as the binding resolves it from its leaf, its words, and
-	// whether it may be composite (Multiple — not in a table's shape). Only the protocol carries it: stored, the type is
-	// the leaf's (WriteNodeValue — the path alone). Unbound — none.
-	const ibDataValue* const held = row.FindProperty(ibProtocol::ibSchema::ibProperties::Value);
-	const std::shared_ptr<ibDataNode> value = held != nullptr ? held->AsChild() : nullptr;
-	if (value != nullptr && !IsEmptyProperty()) {
-		const ibSelectorDataType shape = factory != nullptr ? factory->GetFilterDataType() : ibSelectorDataType::ibSelectorDataType_reference;
-		ibDataValue typeDesc;
-		ibBackendTypeDescriptionMemory::WriteNode(typeDesc, GetValueAsTypeDesc(), metaData);
-		ibDataNode& sourceType = value->Child(ibProtocol::ibSchema::ibProperties::SourceType);
-		sourceType.SetProperty(ibProtocol::ibSchema::ibProperties::Value, typeDesc);
-		sourceType.SetValue(ibProtocol::ibSchema::ibProperties::Presentation,
-			wxVariant(get_cell_variant<ibVariantDataSource>()->CloneSourceAttribute()).MakeString());
-		sourceType.SetValue(ibProtocol::ibSchema::ibProperties::Multiple, shape != ibSelectorDataType::ibSelectorDataType_table);
+	if (reader == ibReader::Cell) {
+		if (!ibProperty::GetProtocolValue(row, reader))
+			return false;
 
-		// …and the classes the desktop's Type row offered (GetTypesByFilter by the control's shape, with what it holds),
-		// in that order (Classes — Type, Name, Picture), as the configuration names them: the client has none to name a
-		// type by, and the Type row and its window read them so.
-		std::vector<ibClassID> offered;
-		ibBackendTypeConfigFactory::GetTypesByFilter(shape, metaData, offered);
-		for (const ibClassID& clsid : GetValueAsTypeDesc().GetClsidList()) {
-			if (std::find(offered.begin(), offered.end(), clsid) == offered.end())
-				offered.push_back(clsid);
+		// …AND BESIDE THE PATH, IN THE SAME VALUE, THE TYPE IT HOLDS (SourceType) — the desktop's Type row beneath the
+		// cell (ibPGDataSourceProperty: shown bound, read only): the type as the binding resolves it from its leaf, its
+		// words, and whether it may be composite (Multiple — not in a table's shape). Only the protocol carries it:
+		// stored, the type is the leaf's (WriteNodeValue — the path alone). Unbound — none.
+		const ibDataValue* const held = row.FindProperty(ibProtocol::ibSchema::ibProperties::Value);
+		const std::shared_ptr<ibDataNode> value = held != nullptr ? held->AsChild() : nullptr;
+		if (value != nullptr && !IsEmptyProperty()) {
+			const ibSelectorDataType shape = factory != nullptr ? factory->GetFilterDataType() : ibSelectorDataType::ibSelectorDataType_reference;
+			ibDataValue typeDesc;
+			ibBackendTypeDescriptionMemory::WriteNode(typeDesc, GetValueAsTypeDesc(), metaData);
+			ibDataNode& sourceType = value->Child(ibProtocol::ibSchema::ibProperties::SourceType);
+			sourceType.SetProperty(ibProtocol::ibSchema::ibProperties::Value, typeDesc);
+			sourceType.SetValue(ibProtocol::ibSchema::ibProperties::Presentation,
+				wxVariant(get_cell_variant<ibVariantDataSource>()->CloneSourceAttribute()).MakeString());
+			sourceType.SetValue(ibProtocol::ibSchema::ibProperties::Multiple, shape != ibSelectorDataType::ibSelectorDataType_table);
+
+			// …and the classes the desktop's Type row offered (GetTypesByFilter by the control's shape, with what it
+			// holds), in that order (Classes — Type, Name, Picture), as the configuration names them: the client has none
+			// to name a type by, and the Type row and its window read them so.
+			std::vector<ibClassID> offered;
+			ibBackendTypeConfigFactory::GetTypesByFilter(shape, metaData, offered);
+			for (const ibClassID& clsid : GetValueAsTypeDesc().GetClsidList()) {
+				if (std::find(offered.begin(), offered.end(), clsid) == offered.end())
+					offered.push_back(clsid);
+			}
+			ibDataNode& named = row.Child(ibProtocol::ibSchema::ibProperties::Classes);
+			for (const ibClassID& clsid : offered) {
+				const ibCtorAbstractType* const ctor = metaData != nullptr
+					? metaData->GetAvailableCtor(clsid) : ibValue::GetAvailableCtor(clsid);
+				if (ctor == nullptr)
+					continue;
+				ibDataNode& entry = named.AddChild(0, static_cast<ibMetaID>(named.Children().size() + 1));
+				entry.SetValue(ibProtocol::ibSchema::ibProperties::Type, wxString::Format(wxT("%llu"), static_cast<unsigned long long>(clsid)));
+				entry.SetValue(ibProtocol::ibSchema::ibProperties::Name, ctor->GetClassName());
+				entry.SetValue(ibProtocol::ibSchema::ibProperties::Picture, ibBackendPicture::SendPicture(clsid));
+			}
 		}
-		ibDataNode& named = row.Child(ibProtocol::ibSchema::ibProperties::Classes);
-		for (const ibClassID& clsid : offered) {
-			const ibCtorAbstractType* const ctor = metaData != nullptr
-				? metaData->GetAvailableCtor(clsid) : ibValue::GetAvailableCtor(clsid);
-			if (ctor == nullptr)
-				continue;
-			ibDataNode& entry = named.AddChild(0, static_cast<ibMetaID>(named.Children().size() + 1));
-			entry.SetValue(ibProtocol::ibSchema::ibProperties::Type, wxString::Format(wxT("%llu"), static_cast<unsigned long long>(clsid)));
-			entry.SetValue(ibProtocol::ibSchema::ibProperties::Name, ctor->GetClassName());
-			entry.SetValue(ibProtocol::ibSchema::ibProperties::Picture, ibBackendPicture::SendPicture(clsid));
-		}
+
+		// What the desktop's source window filtered its tree by (the owner's GetFilterSourceDataType): a table, a column
+		// of the table its table box is bound to, or an attribute.
+		if (factory != nullptr)
+			row.SetValue(ibProtocol::ibSchema::ibProperties::SourceDataType, static_cast<s32>(factory->GetFilterSourceDataType()));
+		return true;
 	}
 
-	// What the desktop's source window filtered its tree by (the owner's GetFilterSourceDataType): a table, a column of
-	// the table its table box is bound to, or an attribute.
-	if (factory == nullptr)
-		return true;
+	// ITS EDITOR — ITS WINDOW'S TREE (Sources), the desktop's window's (ProcessAttribute, ProcessTableColumn), written as
+	// the attribute tree's rows: the roots and the rows under them; a reference's, asked as the tree opens it
+	// (Composition). Asked as the window opens, not with the row: every bindable control's row carried the whole of it.
+	if (factory == nullptr || metaData == nullptr)
+		return false;
+	ibDataNode& sources = row.Child(ibProtocol::ibSchema::ibProperties::Sources);
 	const ibSourceDataType filter = factory->GetFilterSourceDataType();
-	row.SetValue(ibProtocol::ibSchema::ibProperties::SourceDataType, static_cast<s32>(filter));
-
-	// …AND ITS TREE (Sources) — the desktop's window's (ProcessAttribute, ProcessTableColumn), written as the attribute
-	// tree's rows: the roots and the rows under them; a reference's, asked as the tree opens it (Composition).
-	if (metaData == nullptr)
-		return true;
-	auto sources = std::make_shared<ibDataNode>();
 	const std::vector<ibBackendFormAttributeValue*> holders = GetSourceList();
 	if (filter != ibSourceDataType::ibSourceDataType_tableColumn) {
 		// Each form attribute is the gate: path[0] = its id, then the binding walks its type. A table box — its table
@@ -355,7 +357,7 @@ bool ibPropertySource::GetProtocolValue(ibDataNode& row)
 				continue;
 			const std::vector<ibSourceHop> basePrefix{ { holder->GetId() } };
 			const wxString rootLabel = holder->GetName() + wxT(" (") + MakeTypeString(metaData, holder->GetTypeDesc()) + wxT(")");
-			ibDataNode& root = AppendSource(*sources, rootLabel, basePrefix, {}, IsTableType(metaData, holder->GetTypeDesc()));
+			ibDataNode& root = AppendSource(sources, rootLabel, basePrefix, {}, IsTableType(metaData, holder->GetTypeDesc()));
 			ibSourceDataObject* const attrSource = holder->GetSourceValue();
 			const ibSourceExplorer* const explorer = attrSource != nullptr ? attrSource->GetSourceExplorer() : nullptr;
 			if (explorer == nullptr)
@@ -393,7 +395,7 @@ bool ibPropertySource::GetProtocolValue(ibDataNode& row)
 			for (size_t i = 1; i < parentPath.size() && boundNode != nullptr; ++i)
 				boundNode = boundNode->FindById(parentPath[i].m_id);
 			if (boundNode != nullptr)
-				AppendExplorerColumns(AppendSource(*sources, boundNode->GetSourceName(), {}, {}, true), *boundNode, parentPath, metaData);
+				AppendExplorerColumns(AppendSource(sources, boundNode->GetSourceName(), {}, {}, true), *boundNode, parentPath, metaData);
 		}
 
 		std::vector<ibSourceId> seenRoots;   // GetSourceList is queried under two filters — a root once
@@ -404,7 +406,7 @@ bool ibPropertySource::GetProtocolValue(ibDataNode& row)
 			ibSourceDataObject* const source = holder->GetSourceValue();
 			if (source == nullptr) {
 				// A primitive attribute: its whole value, constant per row — a leaf.
-				AppendSource(*sources, holder->GetName(), { { holder->GetId() } }, {}, false);
+				AppendSource(sources, holder->GetName(), { { holder->GetId() } }, {}, false);
 				continue;
 			}
 			const ibSourceExplorer* const explorer = source->GetSourceExplorer();
@@ -414,14 +416,13 @@ bool ibPropertySource::GetProtocolValue(ibDataNode& row)
 				// The bound table; any other — not this column's.
 				if (boundHead != wxNOT_FOUND && holder->GetId() != boundHead)
 					continue;
-				AppendExplorerColumns(AppendSource(*sources, holder->GetName(), {}, {}, true), *explorer, parentPath, metaData);
+				AppendExplorerColumns(AppendSource(sources, holder->GetName(), {}, {}, true), *explorer, parentPath, metaData);
 			}
 			else {
-				AppendExplorerColumns(AppendSource(*sources, holder->GetName(), {}, {}, false), *explorer,
+				AppendExplorerColumns(AppendSource(sources, holder->GetName(), {}, {}, false), *explorer,
 					std::vector<ibSourceHop>{ { holder->GetId() } }, metaData);
 			}
 		}
 	}
-	row.SetProperty(ibProtocol::ibSchema::ibProperties::Sources, ibDataValue::Child(sources));
 	return true;
 }

@@ -5,6 +5,11 @@
 #include "frmclient/mainFrame/mainFrame.h"
 #include "frmclient/win/dlgs/settings/settingsFieldTree.h"   // ibReadSettingsFields — a field as the server writes it
 #include "protocol/protocol.h"
+#include "core/query/queryRender.h"   // ibRenderQueryPackage — the package, as the server is asked about it
+#include "core/exception.h"           // ibCoreException — the engine's verdict, in its words
+#include "core/guid.h"                // a configuration picture's name
+#include "core/serialize/dataBuilder.h"   // a type, as the server wrote it
+#include "frmclient/backend/serialize/dataProtocol.h"   // ibReadProtocolNode — …read off the answer
 
 #include <map>
 
@@ -144,4 +149,288 @@ std::vector<ibQueryConstructorField> ibQueryFieldsOfText(const wxString& text, c
 
 	// …A WINDOW THE SERVER ASKED reads the question's: the fields it described with it.
 	return ReadQueryFields(frame->GetRequest().FindChild(ibProtocol::ibView::ibComposer::Fields));
+}
+
+//////////////////////////////////////////////////////////////////////
+// ibQueryConstructorModel — the desktop's model, under its name
+//////////////////////////////////////////////////////////////////////
+
+namespace qc = ibProtocol::ibView::ibQueryConstructor;
+
+// WHAT THE TAB ALREADY ANSWERED, for the model's life: the sources once, each source's fields and parameters once, a
+// reference's fields once per target. The window asks at every edit; the server is asked once per question.
+struct ibQueryModelAnswers {
+	bool                                   m_sourcesAsked = false;
+	ibProtocolNode                         m_sources;
+	std::map<wxString, ibProtocolNode>     m_fields;       // by the source as written (and its slot)
+	std::map<wxString, ibProtocolNode>     m_parameters;   // by the source as written
+	std::map<ibMetaID, ibProtocolNode>     m_expanded;     // by a reference's target
+};
+
+namespace {
+
+// A FIELD'S PICTURE AS THE SERVER NAMED IT (ibBackendPicture::SendPicture): an engine picture by its number, a
+// configuration's by its guid. A picture sent as its data has no name to keep — the drawer's default.
+ibPictureDescription PictureOf(const wxString& sent)
+{
+	unsigned long long id = 0;
+	if (!sent.IsEmpty() && sent.ToULongLong(&id))
+		return ibPictureDescription(static_cast<ibPictureID>(id));
+	const ibGuid guid(sent);
+	if (!sent.IsEmpty() && guid.isValid())
+		return ibPictureDescription(guid);
+	return ibPictureDescription();
+}
+
+// ONE FIELD AS THE DESKTOP'S FieldOfExplorer MAKES IT — from a row the server wrote as a settings field tree reads it;
+// what its type refers to, asked of the references the server described with the same answer.
+ibQueryConstructorField FieldOfRow(const ibQueryConstructorModel& model, ibSettingsPlainField&& row)
+{
+	ibQueryConstructorField field;
+	field.m_name           = row.m_name;
+	field.m_presentation   = row.m_name;   // the constructor speaks the query's language — the name
+	field.m_caption        = row.m_presentation;
+	field.m_type           = std::move(row.m_type);
+	model.ResolveReference(field);
+	field.m_picture        = PictureOf(row.m_picture);
+	field.m_available      = row.m_available;
+	return field;
+}
+
+std::vector<ibQueryConstructorField> FieldsOfRows(const ibQueryConstructorModel& model, const ibProtocolNode& answer,
+	const char* rows, const char* references)
+{
+	ibValueReferenceDataObject::ReadReferences(answer.FindChild(references));
+	std::vector<ibQueryConstructorField> fields;
+	for (ibSettingsPlainField& row : ibReadSettingsFields(answer.FindChild(rows)))
+		fields.push_back(FieldOfRow(model, std::move(row)));
+	return fields;
+}
+
+// ASKED OF THE TAB THE WINDOW WAS OPENED FROM — the configuration's. Off a tab, nobody to ask: no answer.
+bool AskTab(const ibMetaData* metaData, const ibProtocolNode& request, ibProtocolNode& answer)
+{
+	ibFrontendMainFrame* const frame = ibFrontendMainFrame::GetFrame();
+	if (frame == nullptr || metaData == nullptr || metaData->GetTabId() == 0)
+		return false;
+	const ibTabDocument* const document = frame->FindDocument(metaData->GetTabId());
+	return document != nullptr && document->Fetch(request, answer);
+}
+
+// THE SOURCE AS A FROM WRITES IT, its arguments too — what decides its columns (a turnover's periodicity), and the key
+// its answer is kept by. No alias: the fields are the table's.
+wxString SourceText(const ibQuerySource& source)
+{
+	wxString text;
+	for (size_t i = 0; i < source.m_name.size(); ++i)
+		text += (i > 0 ? wxT(".") : wxT("")) + source.m_name[i];
+	if (!source.m_args.empty()) {
+		text += wxT("(");
+		for (size_t i = 0; i < source.m_args.size(); ++i) {
+			if (i > 0)
+				text += wxT(", ");
+			if (source.m_args[i])
+				text += ibRenderQueryExpr(*source.m_args[i]);
+		}
+		text += wxT(")");
+	}
+	return text;
+}
+
+} // namespace
+
+ibQueryConstructorModel::ibQueryConstructorModel(const ibMetaData* metaData)
+	: m_metaData(metaData), m_known(std::make_shared<ibQueryModelAnswers>())
+{
+}
+
+// THE WALK IS THE SERVER'S — the desktop walks its factory's descriptors; the tab answers with that walk, sorted
+// (request Sources).
+std::vector<ibQueryConstructorSource> ibQueryConstructorModel::GetSources() const
+{
+	if (!m_known->m_sourcesAsked) {
+		m_known->m_sourcesAsked = true;
+		ibProtocolNode request;
+		request.SetValue(qc::Kind, static_cast<long long>(qc::ibRequest::Sources));
+		if (!AskTab(m_metaData, request, m_known->m_sources))
+			m_known->m_sources = ibProtocolNode();
+	}
+	std::vector<ibQueryConstructorSource> out;
+	for (const ibProtocolNode& row : m_known->m_sources.FindChild(qc::Sources).Children()) {
+		ibQueryConstructorSource source;
+		for (const ibProtocolNode& segment : row.GetList(qc::Path))
+			source.m_path.push_back(segment.AsString());
+		source.m_presentation = row.GetString(qc::Presentation);
+		if (!source.m_path.empty())
+			out.push_back(std::move(source));
+	}
+	return out;
+}
+
+// THE KIND'S ROW of the same answer (request Sources) — its picture is the kind's, and every table of it wears it.
+wxString ibQueryConstructorModel::KindPicture(const wxString& kind) const
+{
+	GetSources();   // asked once, for the model's life
+	for (const ibProtocolNode& row : m_known->m_sources.FindChild(qc::Kinds).Children())
+		if (row.GetString(qc::Name).IsSameAs(kind, false))
+			return row.GetString(qc::Picture);
+	return wxString();
+}
+
+// THE DESKTOP'S ibQueryLowering::CheckNames, asked of the tab with the whole text (request Check) each time the window
+// asks it. Off a tab, nobody to ask: silence — the desktop's answer for what it cannot verify.
+void ibQueryConstructorModel::CheckNames(const ibQueryPackage& package) const
+{
+	ibProtocolNode request, answer;
+	request.SetValue(qc::Kind, static_cast<long long>(qc::ibRequest::Check))
+		.SetValue(qc::Text, ibRenderQueryPackage(package));
+	if (!AskTab(m_metaData, request, answer))
+		return;
+	const wxString error = answer.GetString(qc::Error);
+	if (!error.IsEmpty())
+		ibCoreException::Error(wxT("%s"), error);
+}
+
+// …AND ITS UngroupedProjections, of the select the window is on — the same request, with the select named.
+std::vector<ibQueryAstExprPtr> ibQueryConstructorModel::UngroupedProjections(const ibQueryPackage& package,
+	size_t statement, int unionBranch) const
+{
+	ibProtocolNode request, answer;
+	request.SetValue(qc::Kind, static_cast<long long>(qc::ibRequest::Check))
+		.SetValue(qc::Text, ibRenderQueryPackage(package))
+		.SetValue(qc::Statement, static_cast<long long>(statement))
+		.SetValue(qc::UnionBranch, static_cast<long long>(unionBranch));
+	std::vector<ibQueryAstExprPtr> out;
+	if (!AskTab(m_metaData, request, answer))
+		return out;
+	for (const ibProtocolNode& missing : answer.GetList(qc::UngroupedProjections))
+		if (ibQueryAstExprPtr column = ibQueryColumnFromPath(missing.AsString()))
+			out.push_back(std::move(column));
+	return out;
+}
+
+// THE DESCRIPTOR'S ANSWER, asked of the tab (request SourceParameters) — a source with fewer than two segments, or a
+// nested one, has no descriptor on the desktop either.
+std::vector<ibQuerySourceParameter> ibQueryConstructorModel::GetSourceParameters(const ibQuerySource& source) const
+{
+	std::vector<ibQuerySourceParameter> out;
+	if (source.m_name.size() < 2 || source.m_subquery)
+		return out;
+	const wxString text = SourceText(source);
+	auto known = m_known->m_parameters.find(text);
+	if (known == m_known->m_parameters.end()) {
+		ibProtocolNode request, answer;
+		request.SetValue(qc::Kind, static_cast<long long>(qc::ibRequest::SourceParameters)).SetValue(qc::Source, text);
+		if (!AskTab(m_metaData, request, answer))
+			answer = ibProtocolNode();
+		known = m_known->m_parameters.emplace(text, answer).first;
+	}
+	for (const ibProtocolNode& row : known->second.FindChild(qc::Parameters).Children()) {
+		ibQuerySourceParameter parameter;
+		parameter.m_name = row.GetString(qc::Name);
+		parameter.m_condition = row.GetBool(qc::Condition);
+		auto type = std::make_shared<ibDataNode>();
+		ibReadProtocolNode(row.FindChild(qc::Type), *type);
+		ibTypeDescriptionMemory::ReadNode(ibDataValue::Child(type), parameter.m_type);
+		parameter.m_required = row.GetBool(qc::Required);
+		for (const ibProtocolNode& choice : row.GetList(qc::Choices))
+			parameter.m_choices.push_back(choice.AsString());
+		parameter.m_description = row.GetString(qc::Description);
+		parameter.m_consumedBySource = row.GetBool(qc::ConsumedBySource);
+		parameter.m_default = row.GetString(qc::Default);
+		out.push_back(std::move(parameter));
+	}
+	return out;
+}
+
+// THE CONDITION'S OWN SET (the descriptor's FillConditionExplorer) — request Fields with the slot.
+std::vector<ibQueryConstructorField> ibQueryConstructorModel::GetConditionFields(const ibQuerySource& source,
+	const wxString& slot) const
+{
+	if (source.m_name.size() < 2 || source.m_subquery)
+		return {};
+	const wxString text = SourceText(source);
+	const wxString key = text + wxT("\n") + slot + wxT("\nslot");
+	auto known = m_known->m_fields.find(key);
+	if (known == m_known->m_fields.end()) {
+		ibProtocolNode request, answer;
+		request.SetValue(qc::Kind, static_cast<long long>(qc::ibRequest::Fields)).SetValue(qc::Source, text)
+			.SetValue(qc::Slot, slot);
+		if (!AskTab(m_metaData, request, answer))
+			answer = ibProtocolNode();
+		known = m_known->m_fields.emplace(key, answer).first;
+	}
+	return FieldsOfRows(*this, known->second, qc::Fields, qc::References);
+}
+
+// …A TABLE'S OWN REFERENCE TYPE, from the catalogue's answer (request Sources) — its row's Reference.
+ibClassID ibQueryConstructorModel::ReferenceOfTable(const std::vector<wxString>& path) const
+{
+	GetSources();   // the answer it is read from
+	for (const ibProtocolNode& row : m_known->m_sources.FindChild(qc::Sources).Children()) {
+		const std::vector<ibProtocolNode> segments = row.GetList(qc::Path);
+		if (segments.size() != path.size())
+			continue;
+		bool same = true;
+		for (size_t i = 0; i < path.size() && same; ++i)
+			same = segments[i].AsString().IsSameAs(path[i], false);
+		unsigned long long clsid = 0;
+		if (same && row.GetString(qc::Reference).ToULongLong(&clsid))
+			return static_cast<ibClassID>(clsid);
+	}
+	return 0;
+}
+
+// …and the table a reference type names: the row whose Reference it is, its path joined.
+wxString ibQueryConstructorModel::TableOfReference(ibClassID reference) const
+{
+	GetSources();   // the answer it is read from
+	for (const ibProtocolNode& row : m_known->m_sources.FindChild(qc::Sources).Children()) {
+		unsigned long long clsid = 0;
+		if (!row.GetString(qc::Reference).ToULongLong(&clsid) || static_cast<ibClassID>(clsid) != reference)
+			continue;
+		wxString name;
+		for (const ibProtocolNode& segment : row.GetList(qc::Path))
+			name += (name.IsEmpty() ? wxT("") : wxT(".")) + segment.AsString();
+		return name;
+	}
+	return wxString();
+}
+
+// A REAL SOURCE answers through its descriptor, the server's — asked with its arguments, which decide its columns.
+std::vector<ibQueryConstructorField> ibQueryConstructorModel::GetTableFields(const ibQuerySource& source) const
+{
+	const wxString text = SourceText(source);
+	auto known = m_known->m_fields.find(text);
+	if (known == m_known->m_fields.end()) {
+		ibProtocolNode request, answer;
+		request.SetValue(qc::Kind, static_cast<long long>(qc::ibRequest::Fields)).SetValue(qc::Source, text);
+		if (!AskTab(m_metaData, request, answer))
+			answer = ibProtocolNode();
+		known = m_known->m_fields.emplace(text, answer).first;
+	}
+	return FieldsOfRows(*this, known->second, qc::Fields, qc::References);
+}
+
+// ONE LEVEL DOWN A REFERENCE — the composer's Expand, asked of the same tab with the table (what the desktop's factory
+// resolves by its id).
+std::vector<ibQueryConstructorField> ibQueryConstructorModel::GetTableFields(ibMetaID table) const
+{
+	auto known = m_known->m_expanded.find(table);
+	if (known == m_known->m_expanded.end()) {
+		ibProtocolNode request, answer;
+		request.SetValue(ibProtocol::ibView::ibComposer::Kind,
+			static_cast<long long>(ibProtocol::ibView::ibComposer::ibRequest::Expand));
+		request.AddItem(ibProtocol::ibView::ibComposer::Targets, static_cast<long long>(table));
+		if (!AskTab(m_metaData, request, answer))
+			answer = ibProtocolNode();
+		known = m_known->m_expanded.emplace(table, answer).first;
+	}
+	return FieldsOfRows(*this, known->second, ibProtocol::ibView::ibComposer::Expanded,
+		ibProtocol::ibView::ibComposer::References);
+}
+
+std::vector<ibMetaID> ibQueryConstructorModel::ConvertToMetaIds(const std::vector<ibClassID>& clsids) const
+{
+	return ibValueReferenceDataObject::ConvertToMetaIds(clsids, m_metaData);
 }

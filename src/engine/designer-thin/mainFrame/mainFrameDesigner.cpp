@@ -95,7 +95,16 @@ void ibFrontendMainFrameDesigner::ShowRequest(const ibProtocolNode& request, ibP
 
 void ibFrontendMainFrameDesigner::DrawFrame(const ibProtocolNode& frame, const ibProtocolNode& patch)
 {
-	if (m_metaWindow == nullptr || (patch.IsNode() && !patch.Has(ibProtocol::ibFrame::MetaData)))
+	if (m_metaWindow == nullptr)
+		return;
+
+	// THE LAST TAB CLOSED — the focus goes back to the configuration's tree, and the inspector shows its row: the owner of
+	// the editor closed, as the desktop's went back to the tree the editor came from (ibMetaTreeBase::Activate). A frame
+	// sent whole is the start, not a close.
+	if (patch.Has(ibProtocol::ibFrame::ActiveTab) && frame.GetInt(ibProtocol::ibFrame::ActiveTab) == 0)
+		m_metaWindow->SetFocus();
+
+	if (patch.IsNode() && !patch.Has(ibProtocol::ibFrame::MetaData))
 		return;
 
 	const ibProtocolNode root = frame.FindChild(ibProtocol::ibFrame::MetaData);

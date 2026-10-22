@@ -1612,6 +1612,9 @@ void ibClientHost::DrawFrame(ibClientFrame* frame, ibDataNode& state, ibDataNode
 			node.SetValue(ibProtocol::ibFrame::ibTab::Icon, ibBackendPicture::SendPicture(tab->GetIcon()));
 		if (tab->IsLocked())
 			node.SetValue(ibProtocol::ibFrame::ibTab::Locked, true);
+		// What it shows takes no edit — the windows opened from it ask the client's configuration door, which reads this.
+		if (tab->GetDocument() != nullptr && !tab->GetDocument()->IsEditable())
+			node.SetValue(ibProtocol::ibFrame::ibTab::ReadOnly, true);
 		// What its view shows, when it is no form — the client draws it with the view of its own it has for that.
 		if (const ibView* const view = tab->GetView()) {
 			if (view->GetViewKind() != ibProtocol::ibView::ibKind::Form)
@@ -1663,6 +1666,9 @@ void ibClientHost::DrawFrame(ibClientFrame* frame, ibDataNode& state, ibDataNode
 	// Exit done — the client goes; its session goes when it logs out.
 	if (frame->TakeExitPending())
 		events.SetValue(ibProtocol::ibFrame::Exit, true);
+	// A debugger left its loop — the client's window raised, as the desktop's raised its own.
+	if (frame->TakeRaisePending())
+		events.SetValue(ibProtocol::ibFrame::Raise, true);
 	// The inspector's rows of what a door acted on (ShowProperties) — each by its object's id and tab: the client shows
 	// them without reading them again.
 	std::vector<ibDataNode> shown = frame->TakeShownProperties();

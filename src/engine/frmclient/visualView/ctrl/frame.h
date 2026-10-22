@@ -79,8 +79,8 @@ class FRMCLIENT_API ibValueFrame : public ibValue,
 	public ibPropertyObjectHelper<ibValueFrame> {
 public:
 
-	// The control drawn for a node of that type — none for a type this client does not draw yet; held once it is added to
-	// its parent.
+	// The control drawn for a node of that type — a placeholder in its place for a type this client does not draw yet
+	// (IsPlaceholder); held once it is added to its parent.
 	static ibValueFrame* Make(const wxString& type, ibVisualHostClient& host, long long controlId);
 
 	virtual ~ibValueFrame() = default;
@@ -93,6 +93,8 @@ public:
 	virtual wxString GetObjectTypeName() const override { return m_className; }
 	virtual bool IsEditable() const override { return true; }
 
+	// Its properties fetched as the inspector shows it, through its host (ibVisualHostClient::Fetch).
+	virtual bool Fetch() override;
 	// One of them edited — the desktop's, told to the editor the form is drawn for (g_visualHostContext there; its host
 	// here, which a designer's host passes on).
 	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue) override;
@@ -134,6 +136,8 @@ public:
 	virtual wxSizer*  GetSizer() const { return nullptr; }
 	// The window what is in it is built in: its own, a framed group's box; none — the one it was built in.
 	virtual wxWindow* GetChildParent() const { return GetWindow(); }
+	// A placeholder in the place of a control of a type this client does not draw yet (Make): what is in it is not built.
+	virtual bool IsPlaceholder() const { return false; }
 	// The group a table's column built in it hangs on: a table's root group, a column group; none — no table.
 	virtual ibDataViewColumnGroup* GetColumnHolder() const { return nullptr; }
 	// The view it holds of its own — a grid box's sheet, a text box's text (the desktop's GetControlView): what the
@@ -155,7 +159,7 @@ protected:
 	ibValueFrame(ibVisualHostClient& host, long long controlId) : m_host(host), m_controlId(controlId) {}
 
 	// …each of its rows, the server's property (ibPropertySerializable).
-	virtual ibProperty* CreateProperty(ibPropertyCategory* cat, const ibDataNode& row) override;
+	virtual ibProperty* CreateProperty(ibPropertyCategory* cat, ibDataNode&& row) override;
 
 	// The host it is drawn in — the desktop's visualHost its Create was given.
 	ibVisualHostClient& GetVisualHost() const { return m_host; }

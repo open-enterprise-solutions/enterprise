@@ -82,10 +82,10 @@ ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::ibVisualEditorHost(i
 	ibVisualHostClient(*ibFrontendMainFrame::GetFrame(), parent, tabId),
 	m_formHandler(handler)
 {
-	// The canvas the card sits on.
-	SetOwnBackgroundColour(wxColour(0xD8, 0xE2, 0xEB));  // #D8E2EB palest powder — light background so form card pops
+	// The canvas the card sits on — the window the host scrolls in.
+	GetContentWindow()->SetOwnBackgroundColour(wxColour(0xD8, 0xE2, 0xEB));  // #D8E2EB palest powder — light background so form card pops
 
-	m_back = new ibDesignerWindow(this, wxID_ANY, wxPoint(10, 10));
+	m_back = new ibDesignerWindow(GetContentWindow(), wxID_ANY, wxPoint(10, 10));
 	m_back->GetEventHandler()->Connect(wxID_ANY, wxEVT_LEFT_DOWN, wxMouseEventHandler(ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::OnClickBackPanel), nullptr, this);
 	// The card resized by its border — the form selected (the desktop's EVT_INNER_FRAME_RESIZED entry).
 	m_back->GetEventHandler()->Connect(wxID_ANY, wxEVT_INNER_FRAME_RESIZED, wxCommandEventHandler(ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::OnResizeBackPanel), nullptr, this);
@@ -294,23 +294,24 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::ScrollToObject(
 		return;
 
 	// The card scrolls in the canvas.
+	wxScrolledCanvas* const canvas = GetContentWindow();
 	int stepx, stepy;
-	GetScrollPixelsPerUnit(&stepx, &stepy);
-	const wxRect viewRect(GetClientRect());
-	const wxRect winRect(ScreenToClient(win->GetScreenPosition()), win->GetSize());
+	canvas->GetScrollPixelsPerUnit(&stepx, &stepy);
+	const wxRect viewRect(canvas->GetClientRect());
+	const wxRect winRect(canvas->ScreenToClient(win->GetScreenPosition()), win->GetSize());
 	if (viewRect.Contains(winRect) || stepx <= 0 || stepy <= 0)
 		return;
 
 	int startx, starty;
-	GetViewStart(&startx, &starty);
+	canvas->GetViewStart(&startx, &starty);
 	if (winRect.GetTop() < 0 || winRect.GetBottom() > viewRect.GetHeight())
 		starty += (winRect.GetTop() < 0 ? winRect.GetTop() : winRect.GetBottom() - viewRect.GetHeight() + stepy) / stepy;
 	if (winRect.GetLeft() < 0 || winRect.GetRight() > viewRect.GetWidth())
 		startx += (winRect.GetLeft() < 0 ? winRect.GetLeft() : winRect.GetRight() - viewRect.GetWidth() + stepx) / stepx;
 
-	Freeze();
-	Scroll(startx, starty);
-	Thaw();
+	canvas->Freeze();
+	canvas->Scroll(startx, starty);
+	canvas->Thaw();
 }
 
 void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::SetCaption(const wxString& strCaption)
@@ -326,9 +327,11 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorHost::UpdateVirtualSi
 	m_back->Layout();
 	m_back->SetClientSize(m_back->GetBestSize());
 
-	const wxPoint margin = m_back->GetPosition();
-	SetVirtualSize(m_back->GetSize() + wxSize(margin.x * 2, margin.y * 2));
-	Refresh();
+	// Unscrolled: scrolled, the card stands where the scrolling moved it, and the canvas would shrink by twice that.
+	wxScrolledCanvas* const canvas = GetContentWindow();
+	const wxPoint margin = canvas->CalcUnscrolledPosition(m_back->GetPosition());
+	canvas->SetVirtualSize(m_back->GetSize() + wxSize(margin.x * 2, margin.y * 2));
+	canvas->Refresh();
 }
 
 /////////////////////////////////////////////////////////////////////////////////

@@ -10,12 +10,13 @@
 
 // ONE PROPERTY'S ROW — a property's or an event's, of any object, a form's control or a metaobject: what the property
 // says of itself (GetProtocolValue), and what it may be set to (GetValueList, as the MCP server asks it) — one of them
-// (Multiple: several at once), by its id, with its picture as the desktop's list drew it beside its label. The client
-// shows it by its class (ibPropertyRegistry), knowing no property of its own. A property with no row is not sent.
+// (Multiple: several at once), by its id and its name, as the desktop's cell writes it (ValueToString), with its
+// picture as the desktop's list drew it beside it. The client shows it by its class (ibPropertyRegistry), knowing no
+// property of its own. A property with no row is not sent.
 void ibPropertyInspector::AppendProperty(ibDataNode& parent, ibBackendProperty* property)
 {
 	ibDataNode& row = parent.AddChild(0, static_cast<ibMetaID>(parent.Children().size() + 1));
-	if (!property->GetProtocolValue(row)) {
+	if (!property->GetProtocolValue(row, ibBackendProperty::ibReader::Cell)) {
 		parent.Children().pop_back();
 		return;
 	}
@@ -27,7 +28,7 @@ void ibPropertyInspector::AppendProperty(ibDataNode& parent, ibBackendProperty* 
 	for (unsigned int index = 0; index < choices.GetCount(); ++index) {
 		ibDataNode& choice = row.AddChild(0, static_cast<ibMetaID>(row.Children().size() + 1));
 		choice.SetValue(ibProtocol::ibSchema::ibProperties::Id, static_cast<s32>(choices.GetId(index)));
-		choice.SetValue(ibProtocol::ibSchema::ibProperties::Title, choices.GetLabel(index));
+		choice.SetValue(ibProtocol::ibSchema::ibProperties::Title, choices.GetName(index));
 		const ibPictureDescription& picture = choices.GetPicture(index);
 		if (!picture.IsEmptyPicture())
 			choice.SetValue(ibProtocol::ibSchema::ibProperties::Picture, ibBackendPicture::SendPicture(picture));

@@ -36,13 +36,13 @@ wxString ibCodeEditor::MakeProcedureTemplate(const wxString& name, const wxStrin
 // ⚠ THE SYNTAX IS THE TAB'S, and it comes with the tab's view (SetCodeStyle): until then — and for a text with no tab — the
 // stream reads the default a session's compile state starts with (ibCompileState: CES).
 ibCodeEditor::ibCodeEditor()
-	: wxStyledTextCtrl(), m_ac(this), m_ct(this), m_tc(CODE_CES), m_fp(this)
+	: wxStyledTextCtrl(), m_ac(this), m_ct(this), m_tc(CODE_CES)
 {
 }
 
 ibCodeEditor::ibCodeEditor(ibTabDocument* document, wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSize& size, long style, const wxString& name)
 	: wxStyledTextCtrl(parent, id, pos, size, style, name),
-	  m_document(document), m_ac(this), m_ct(this), m_tc(CODE_CES), m_fp(this)
+	  m_document(document), m_ac(this), m_ct(this), m_tc(CODE_CES)
 {
 	// initialize styles
 	StyleClearAll();
@@ -612,7 +612,7 @@ void ibCodeEditor::HighlightSyntaxAndCalculateFoldLevel(const int fromPos, const
 		}
 	}
 
-	m_fp.UpdateFoldLevel();
+	UpdateFoldLevel();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1053,10 +1053,12 @@ void ibCodeEditor::OnContextMenu(wxContextMenuEvent& event)
 	// (A module that cannot be changed still opens it, read-only: a query one may not edit is still
 	// one worth reading, and refusing would hide the only view of it there is.)
 	//
-	// ⚠ THE CONFIGURATION IS THE SERVER'S: the client's constructor is asked with none (it is a stub on the client yet).
+	// THE CONFIGURATION IS THE SERVER'S: the constructor asks it of this editor's tab (ibView::ibQueryConstructor). An
+	// editor on no tab (a window's own) has nobody to ask — the desktop's "no configuration open".
 	menu.Bind(wxEVT_MENU, [this, literal, caret](wxCommandEvent&) {
 		wxString text = literal.m_text;
-		if (!ibShowQueryConstructor(this, text, nullptr, !IsEditable()))
+		const ibMetaData metaData = m_document != nullptr ? m_document->GetMetaData() : ibMetaData();
+		if (!ibShowQueryConstructor(this, text, m_document != nullptr ? &metaData : nullptr, !IsEditable()))
 			return;
 		if (literal.Found()) ReplaceStringLiteral(literal, text);
 		else                 InsertStringLiteral(caret, text);
@@ -1154,4 +1156,14 @@ void ibCodeEditor::OnContextMenu(wxContextMenuEvent& event)
 		pt = ClientToScreen(wxPoint(PointFromPosition(pos).x, PointFromPosition(pos).y));
 	}
 	PopupMenu(&menu, ScreenToClient(pt));
+}
+
+void ibCodeEditor::UpdateFoldLevel()
+{
+	std::vector<int> levels;
+	if (!m_fp.UpdateFoldLevel(m_tc, GetLineCount(), levels))
+		return;
+
+	for (int line = 1; line < static_cast<int>(levels.size()); line++)
+		SetFoldLevel(line, levels[line]);
 }

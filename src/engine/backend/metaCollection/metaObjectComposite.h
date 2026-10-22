@@ -72,7 +72,7 @@ public:
 
 	// NO ROW — it carries composition (an inner attribute: Ref, Code, Description, …; a table), not a value to edit: the
 	// desktop's grid has no editor for it (advpropModule.cpp, RegisterNoEditor) and draws none.
-	virtual bool GetProtocolValue(ibDataNode& row) override { return false; }
+	virtual bool GetProtocolValue(ibDataNode& row, ibReader reader) override { return false; }
 
 private:
 

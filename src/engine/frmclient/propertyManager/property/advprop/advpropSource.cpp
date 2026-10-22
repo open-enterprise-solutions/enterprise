@@ -58,25 +58,22 @@ wxVariant ReadSourceType(const wxVariant& value)
 
 // register frontend property — ibPropertySource; the binding as the server stores it (ibSourceDescriptionMemory: the
 // hop path) and the type beside it, read as it wrote them (the row's Presentation, SourceType's), and back as a path;
-// its window's tree as the row brings it (Sources).
+// its window's tree asked as the window opens (the picker's).
 class ibPropertySourceLoader
 {
 public:
 	ibPropertySourceLoader()
 	{
 		ibPropertyRegistry::Register(wxT("ibPropertySource"), [](ibBackendProperty* property) -> wxPGProperty* {
-			// …what it may be bound to, as the row says (an older server's says nothing: an attribute), and the tree.
+			// …what it may be bound to, as the row says (an older server's says nothing: an attribute).
 			using ibSourceDataType = ibProtocol::ibSchema::ibProperties::ibSourceDataType;
 			ibSourceDataType filter = ibSourceDataType::Attribute;
-			ibDataNode sources;
 			std::vector<ibClassID> types;
 			wxVariant value = property->GetValue();
 			ibDataNode row;
 			if (property->GetProtocolValue(row)) {
 				if (row.FindField(ibProtocol::ibSchema::ibProperties::SourceDataType) != nullptr)
 					filter = static_cast<ibSourceDataType>(row.GetValue<s32>(ibProtocol::ibSchema::ibProperties::SourceDataType));
-				if (const std::shared_ptr<ibDataNode> offered = row.GetProperty(ibProtocol::ibSchema::ibProperties::Sources).AsChild())
-					sources = *offered;
 				// …the classes its Type row offers, in the server's order (Classes);
 				if (const ibDataNode* const classes = row.FindChild(ibProtocol::ibSchema::ibProperties::Classes)) {
 					for (const ibDataNode& entry : classes->Children()) {
@@ -94,15 +91,15 @@ public:
 					value = wxVariant(new ibVariantDataSerializable(value.GetType(), stated, value.GetString()));
 			}
 			return new ibPGDataSourceProperty(property->GetPropertyObject(), property->GetLabel(), property->GetName(),
-				value, filter, sources, types);
+				value, filter, types);
 		});
 	}
 }g_sourceLoader;
 
 ibPGDataSourceProperty::ibPGDataSourceProperty(const ibPropertyObject* property, const wxString& label,
 	const wxString& strName, const wxVariant& value, ibProtocol::ibSchema::ibProperties::ibSourceDataType filter,
-	const ibDataNode& sources, const std::vector<ibClassID>& types) :
-	wxPGProperty(label, strName), m_owner(property), m_filterSourceDataType(filter), m_sources(sources)
+	const std::vector<ibClassID>& types) :
+	wxPGProperty(label, strName), m_owner(property), m_filterSourceDataType(filter)
 {
 	// The Type row — the desktop's, over the type the binding holds (RefreshChildren), read only: its window offers the
 	// classes the row named (Classes — `types`), composite unless the control's is a table's shape (SourceType's Multiple).
@@ -164,7 +161,7 @@ wxPGEditorDialogAdapter* ibPGDataSourceProperty::GetEditorDialog() const
 			const wxVariant value = cell->GetValue();
 			const ibSourceDescription current = ReadSource(value);
 			ibSourceDescription binding = current;
-			if (!SourcePicker()(pg, cell->GetOwner(), cell->GetFilterSourceDataType(), cell->GetSources(), binding))
+			if (!SourcePicker()(pg, cell->GetOwner(), cell->GetName(), cell->GetFilterSourceDataType(), binding))
 				return false;
 			// …a binding the same as it was changes nothing.
 			if (binding.GetPath() == current.GetPath())

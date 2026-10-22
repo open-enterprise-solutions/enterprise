@@ -71,6 +71,9 @@
     <ClCompile Include="compiler\literal.cpp">
       <Filter>compiler</Filter>
     </ClCompile>
+    <ClCompile Include="compiler\scriptFoldCode.cpp">
+      <Filter>compiler</Filter>
+    </ClCompile>
     <ClCompile Include="compiler\scriptParseCode.cpp">
       <Filter>compiler</Filter>
     </ClCompile>
@@ -209,6 +212,9 @@
     <ClCompile Include="query\queryRewrite.cpp">
       <Filter>query</Filter>
     </ClCompile>
+    <ClCompile Include="query\anyQueryConstructorModel.cpp">
+      <Filter>query</Filter>
+    </ClCompile>
     <ClCompile Include="query\queryRefusal.cpp">
       <Filter>query</Filter>
     </ClCompile>
@@ -260,6 +266,9 @@
       <Filter>compiler</Filter>
     </ClInclude>
     <ClInclude Include="compiler\literal.h">
+      <Filter>compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="compiler\scriptFoldCode.h">
       <Filter>compiler</Filter>
     </ClInclude>
     <ClInclude Include="compiler\scriptParseCode.h">
@@ -407,6 +416,12 @@
       <Filter>query</Filter>
     </ClInclude>
     <ClInclude Include="query\queryConstructorField.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\anyQueryConstructorModel.h">
+      <Filter>query</Filter>
+    </ClInclude>
+    <ClInclude Include="query\querySourceParameter.h">
       <Filter>query</Filter>
     </ClInclude>
     <ClInclude Include="query\queryKeywords.h">

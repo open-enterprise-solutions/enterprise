@@ -88,6 +88,9 @@
     <ClCompile Include="docView\templates\docViewAuditLog.cpp">
       <Filter>docView\templates</Filter>
     </ClCompile>
+    <ClCompile Include="docView\templates\docViewHomePage.cpp">
+      <Filter>docView\templates</Filter>
+    </ClCompile>
     <ClCompile Include="docView\templates\docViewHelp.cpp">
       <Filter>docView\templates</Filter>
     </ClCompile>
@@ -134,6 +137,9 @@
       <Filter>backend\mcp</Filter>
     </ClCompile>
     <ClCompile Include="backend\userInfo.cpp">
+      <Filter>backend</Filter>
+    </ClCompile>
+    <ClCompile Include="backend\metaData.cpp">
       <Filter>backend</Filter>
     </ClCompile>
     <ClCompile Include="win\editor\textEditor\textEditor.cpp">
@@ -387,6 +393,9 @@
       <Filter>docView\templates</Filter>
     </ClInclude>
     <ClInclude Include="docView\templates\docViewAuditLog.h">
+      <Filter>docView\templates</Filter>
+    </ClInclude>
+    <ClInclude Include="docView\templates\docViewHomePage.h">
       <Filter>docView\templates</Filter>
     </ClInclude>
     <ClInclude Include="docView\templates\docViewHelp.h">
@@ -951,6 +960,9 @@
     <ClInclude Include="backend\query\queryConstructorModel.h">
       <Filter>backend\query</Filter>
     </ClInclude>
+    <ClInclude Include="backend\query\queryable.h">
+      <Filter>backend\query</Filter>
+    </ClInclude>
     <ClCompile Include="backend\query\queryConstructorModel.cpp">
       <Filter>backend\query</Filter>
     </ClCompile>
@@ -1329,17 +1341,50 @@
     <ClCompile Include="win\dlgs\linqConstructor\linqConstructor.cpp">
       <Filter>win\dlgs\linqConstructor</Filter>
     </ClCompile>
+    <ClCompile Include="win\dlgs\queryConstructor\queryCaseDialog.cpp">
+      <Filter>win\dlgs\queryConstructor</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\queryConstructor\queryConditionModel.cpp">
+      <Filter>win\dlgs\queryConstructor</Filter>
+    </ClCompile>
     <ClCompile Include="win\dlgs\queryConstructor\queryConstructor.cpp">
       <Filter>win\dlgs\queryConstructor</Filter>
     </ClCompile>
     <ClCompile Include="win\dlgs\queryConstructor\queryConstructorEdit.cpp">
       <Filter>win\dlgs\queryConstructor</Filter>
     </ClCompile>
+    <ClCompile Include="win\dlgs\queryConstructor\queryConstructorFill.cpp">
+      <Filter>win\dlgs\queryConstructor</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\queryConstructor\queryConstructorText.cpp">
+      <Filter>win\dlgs\queryConstructor</Filter>
+    </ClCompile>
     <ClCompile Include="win\dlgs\queryConstructor\queryExpressionDialog.cpp">
+      <Filter>win\dlgs\queryConstructor</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\queryConstructor\queryJoinDiagram.cpp">
+      <Filter>win\dlgs\queryConstructor</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\queryConstructor\queryLinkModel.cpp">
+      <Filter>win\dlgs\queryConstructor</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\queryConstructor\querySelectionLinkModel.cpp">
+      <Filter>win\dlgs\queryConstructor</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\queryConstructor\queryTempTableDialog.cpp">
+      <Filter>win\dlgs\queryConstructor</Filter>
+    </ClCompile>
+    <ClCompile Include="win\dlgs\queryConstructor\queryUnionModel.cpp">
       <Filter>win\dlgs\queryConstructor</Filter>
     </ClCompile>
     <ClInclude Include="win\dlgs\translateConstructor\translateConstructor.h">
       <Filter>win\dlgs\translateConstructor</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\queryConstructor\queryCaseDialog.h">
+      <Filter>win\dlgs\queryConstructor</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\queryConstructor\queryConditionModel.h">
+      <Filter>win\dlgs\queryConstructor</Filter>
     </ClInclude>
     <ClInclude Include="win\dlgs\queryConstructor\queryConstructor.h">
       <Filter>win\dlgs\queryConstructor</Filter>
@@ -1350,7 +1395,25 @@
     <ClInclude Include="win\dlgs\queryConstructor\queryExpressionDialog.h">
       <Filter>win\dlgs\queryConstructor</Filter>
     </ClInclude>
+    <ClInclude Include="win\dlgs\queryConstructor\queryFieldTree.h">
+      <Filter>win\dlgs\queryConstructor</Filter>
+    </ClInclude>
     <ClInclude Include="win\dlgs\queryConstructor\queryGridModel.h">
+      <Filter>win\dlgs\queryConstructor</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\queryConstructor\queryJoinDiagram.h">
+      <Filter>win\dlgs\queryConstructor</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\queryConstructor\queryLinkModel.h">
+      <Filter>win\dlgs\queryConstructor</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\queryConstructor\querySelectionLinkModel.h">
+      <Filter>win\dlgs\queryConstructor</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\queryConstructor\queryTempTableDialog.h">
+      <Filter>win\dlgs\queryConstructor</Filter>
+    </ClInclude>
+    <ClInclude Include="win\dlgs\queryConstructor\queryUnionModel.h">
       <Filter>win\dlgs\queryConstructor</Filter>
     </ClInclude>
     <ClInclude Include="win\dlgs\typeSelector.h">

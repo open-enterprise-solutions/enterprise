@@ -27,6 +27,7 @@
 #include "frmclient/docView/docManager.h"
 #include "frmclient/docView/templates/docViewFile.h"
 #include "frmclient/docView/templates/docViewAuditLog.h"   // the journal's tab — a view of its own (the tab's Kind)
+#include "frmclient/docView/templates/docViewHomePage.h"   // the start page's tab — its forms, laid out
 #include "frmclient/artProvider/artProvider.h"
 #include "frmclient/visualView/visualHostClient.h"
 #include "frmclient/win/picture.h"
@@ -978,6 +979,9 @@ void ibFrontendMainFrame::Draw(const ibProtocolNode& answer)
 	// client goes once its call has settled (Call, AllowClose).
 	if (answer.GetBool(ibProtocol::ibFrame::Exit))
 		m_exitGranted = true;
+	// A debugger left its loop — the window raised, as the desktop's raised its own after the loop.
+	if (answer.GetBool(ibProtocol::ibFrame::Raise))
+		RaiseFrame();
 	if (m_outputWindow != nullptr) {
 		if (answer.GetBool(ibProtocol::ibFrame::Clear))
 			m_outputWindow->Clear();
@@ -1118,6 +1122,8 @@ ibTabDocument* ibFrontendMainFrame::CreateDocument(ibProtocol::ibView::ibKind ki
 {
 	if (kind == ibProtocol::ibView::ibKind::AuditLog)
 		return new ibAuditLogDocument(tabId);
+	if (kind == ibProtocol::ibView::ibKind::HomePage)
+		return new ibHomePageDocument(tabId);
 	return new ibFormVisualDocument(tabId);
 }
 
@@ -1544,9 +1550,10 @@ void ibFrontendMainFrame::ShowRequest(const ibProtocolNode& request, ibProtocolN
 		// THE DESKTOP'S ibValueForm::ChangeForm — its editor over the form of the active tab; what a person may arrange of
 		// each control comes in the question (Controls). Its acts are answered on the way (UpdateForm, the setting's
 		// doors); closed — answered with no Act.
-		// ⚠ Asked only of a form's tab (ibValueForm::ChangeForm), so the active tab's document is a form's.
-		ibFormVisualDocument* const document = dynamic_cast<ibFormVisualDocument*>(FindDocument(GetActiveTab()));
-		ibFormVisualEditView* const view = document != nullptr ? document->GetFirstView() : nullptr;
+		// ⚠ Asked only of a form (ibValueForm::ChangeForm) — a form's tab, or a cell of the start page: the form the person
+		// is in, its view's host (the command bar took the focus as it was pressed).
+		const ibTabDocument* const document = FindDocument(GetActiveTab());
+		const ibVisualHostView* const view = document != nullptr ? dynamic_cast<const ibVisualHostView*>(document->GetFirstView()) : nullptr;
 		ibValueForm* const form = view != nullptr && view->GetVisualHost() != nullptr ? view->GetVisualHost()->GetValueForm() : nullptr;
 		if (form == nullptr)
 			break;

@@ -31,13 +31,25 @@ bool ibFormVisualCommandProcessor::CanRedo() const
 }
 
 // ----------------------------------------------------------------------------
-// ibFormVisualEditView
+// ibVisualHostView
 // ----------------------------------------------------------------------------
 
-void ibFormVisualEditView::Draw(const ibProtocolNode& view, const ibProtocolNode& patch)
+bool ibVisualHostView::OnCreate(ibFrontendDocument* doc, long flags)
 {
-	if (m_visualHost != nullptr)
-		m_visualHost->Draw(view, patch);
+	WatchFocus(true);
+	// EVERY command passes by: which ids are the active control's is its view's to say.
+	Bind(wxEVT_MENU, &ibVisualHostView::OnActiveControlCommand, this);
+	// …and so does a choice on its toolbar (a sheet's Zoom): the toolbar's controls send wxEVT_CHOICE, not wxEVT_MENU.
+	Bind(wxEVT_CHOICE, &ibVisualHostView::OnActiveControlCommand, this);
+
+	return ibFrontendView::OnCreate(doc, flags);
+}
+
+bool ibVisualHostView::OnClose(bool deleteWindow)
+{
+	// The focus watch comes off before the window is let go.
+	WatchFocus(false);
+	return ibFrontendView::OnClose(deleteWindow);
 }
 
 // What a control prints as — ONE answer for both searches below: the view it holds prints it (a grid box
@@ -49,7 +61,7 @@ static wxPrintout* CreateControlPrintout(const ibValueFrame* control)
 	return view != nullptr ? view->OnCreatePrintout() : nullptr;
 }
 
-wxPrintout* ibFormVisualEditView::OnCreatePrintout()
+wxPrintout* ibVisualHostView::OnCreatePrintout()
 {
 	ibValueForm* const form = m_visualHost != nullptr ? m_visualHost->GetValueForm() : nullptr;
 	if (form == nullptr)
@@ -89,37 +101,11 @@ wxPrintout* ibFormVisualEditView::OnCreatePrintout()
 	return nullptr;
 }
 
-bool ibFormVisualEditView::OnCreate(ibFrontendDocument* doc, long flags)
-{
-	// What the person does in the form goes to the server through the main window — a view that is no form, named by
-	// its tab.
-	m_visualHost = new ibVisualHostClient(*ibFrontendMainFrame::GetFrame(), m_viewFrame, static_cast<ibFormVisualDocument*>(doc)->GetTabId());
-
-	wxBoxSizer* const sizer = new wxBoxSizer(wxVERTICAL);
-	sizer->Add(m_visualHost, 1, wxEXPAND);
-	m_viewFrame->SetSizer(sizer);
-
-	WatchFocus(true);
-	// EVERY command passes by: which ids are the active control's is its view's to say.
-	Bind(wxEVT_MENU, &ibFormVisualEditView::OnActiveControlCommand, this);
-	// …and so does a choice on its toolbar (a sheet's Zoom): the toolbar's controls send wxEVT_CHOICE, not wxEVT_MENU.
-	Bind(wxEVT_CHOICE, &ibFormVisualEditView::OnActiveControlCommand, this);
-
-	return ibFrontendView::OnCreate(doc, flags);
-}
-
-bool ibFormVisualEditView::OnClose(bool deleteWindow)
-{
-	// The focus watch comes off before the window is let go.
-	WatchFocus(false);
-	return ibFrontendView::OnClose(deleteWindow);
-}
-
 //********************************************************************************************
 //*                          The facade over the active control                              *
 //********************************************************************************************
 
-ibFrontendView* ibFormVisualEditView::GetActiveControlView() const
+ibFrontendView* ibVisualHostView::GetActiveControlView() const
 {
 	const ibValueForm* const form = m_visualHost != nullptr ? m_visualHost->GetValueForm() : nullptr;
 	const ibValueFrame* const control = form != nullptr ? form->GetActiveControl() : nullptr;
@@ -127,7 +113,7 @@ ibFrontendView* ibFormVisualEditView::GetActiveControlView() const
 }
 
 #if wxUSE_MENUS
-wxMenuBar* ibFormVisualEditView::CreateMenuBar() const
+wxMenuBar* ibVisualHostView::CreateMenuBar() const
 {
 	if (ibFrontendView* view = GetActiveControlView())
 		return view->CreateMenuBar();
@@ -135,40 +121,45 @@ wxMenuBar* ibFormVisualEditView::CreateMenuBar() const
 }
 #endif
 
-void ibFormVisualEditView::OnCreateToolbar(wxAuiToolBar* toolbar)
+void ibVisualHostView::OnCreateToolbar(wxAuiToolBar* toolbar)
 {
 	if (ibFrontendView* view = GetActiveControlView())
 		view->OnCreateToolbar(toolbar);
 }
 
-void ibFormVisualEditView::OnActivateView(bool activate, ibFrontendView* WXUNUSED(activeView), ibFrontendView* deactiveView)
+void ibVisualHostView::OnActivateView(bool activate, ibFrontendView* WXUNUSED(activeView), ibFrontendView* deactiveView)
 {
 	if (ibFrontendView* view = GetActiveControlView())
 		view->OnActivateView(activate, view, deactiveView);
 }
 
-void ibFormVisualEditView::WatchFocus(bool watch)
+void ibVisualHostView::WatchFocus(bool watch)
 {
 	wxWindow* const frame = dynamic_cast<wxWindow*>(GetFrame());
 	if (frame == nullptr)
 		return;
 
 	if (watch)
-		frame->Bind(wxEVT_CHILD_FOCUS, &ibFormVisualEditView::OnChildFocus, this);
+		frame->Bind(wxEVT_CHILD_FOCUS, &ibVisualHostView::OnChildFocus, this);
 	else
-		frame->Unbind(wxEVT_CHILD_FOCUS, &ibFormVisualEditView::OnChildFocus, this);
+		frame->Unbind(wxEVT_CHILD_FOCUS, &ibVisualHostView::OnChildFocus, this);
 }
 
-// ⭐ THE ACTIVE CONTROL IS PUT WHERE THE FOCUS GOES — the first control of this form on the way from the
-// focused window up. A focus outside the form (a menu, a toolbar, the preview) leaves it where it was. The
-// chrome is rebuilt only when the view it comes from changes, and after the focus has settled.
-void ibFormVisualEditView::OnChildFocus(wxChildFocusEvent& event)
+// ⭐ THE ACTIVE CONTROL IS PUT WHERE THE FOCUS GOES — the host it went into is the one the person is in, and in it the
+// first control of its form on the way from the focused window up. A focus outside every host (a menu, a toolbar, the
+// preview, a cell's header) leaves both where they were. The chrome is rebuilt only when the view it comes from
+// changes, and after the focus has settled.
+void ibVisualHostView::OnChildFocus(wxChildFocusEvent& event)
 {
 	event.Skip();   // the focus goes where it was going; this only watches it
 
+	wxWindow* const focus = wxWindow::FindFocus();
+	if (ibVisualHostClient* const host = FindVisualHost(focus))
+		m_visualHost = host;
+
 	if (ibValueForm* const form = m_visualHost != nullptr ? m_visualHost->GetValueForm() : nullptr) {
 		wxWindow* const frame = dynamic_cast<wxWindow*>(GetFrame());
-		for (wxWindow* window = wxWindow::FindFocus(); window != nullptr && window != frame; window = window->GetParent()) {
+		for (wxWindow* window = focus; window != nullptr && window != frame; window = window->GetParent()) {
 			if (ibValueFrame* control = m_visualHost->GetObjectBase(window)) {
 				form->SetActiveControl(control);
 				break;
@@ -198,7 +189,7 @@ void ibFormVisualEditView::OnChildFocus(wxChildFocusEvent& event)
 // Save and Save as are asked of the document behind the control, as the desktop asks them — and here that document is
 // a copy of the server's, which saves itself where it is kept: handed to the server. Then they go on to the form's
 // document, which saves the server's (ibFormVisualDocument::Save) — after it, on the same road.
-void ibFormVisualEditView::OnActiveControlCommand(wxCommandEvent& event)
+void ibVisualHostView::OnActiveControlCommand(wxCommandEvent& event)
 {
 	ibFrontendView* const view = GetActiveControlView();
 	if (view == nullptr) {
@@ -214,6 +205,29 @@ void ibFormVisualEditView::OnActiveControlCommand(wxCommandEvent& event)
 
 	if (!view->ProcessEventLocally(event))
 		event.Skip();
+}
+
+// ----------------------------------------------------------------------------
+// ibFormVisualEditView
+// ----------------------------------------------------------------------------
+
+bool ibFormVisualEditView::OnCreate(ibFrontendDocument* doc, long flags)
+{
+	// What the person does in the form goes to the server through the main window — a view that is no form, named by
+	// its tab.
+	m_visualHost = new ibVisualHostClient(*ibFrontendMainFrame::GetFrame(), m_viewFrame, static_cast<ibFormVisualDocument*>(doc)->GetTabId());
+
+	wxBoxSizer* const sizer = new wxBoxSizer(wxVERTICAL);
+	sizer->Add(m_visualHost, 1, wxEXPAND);
+	m_viewFrame->SetSizer(sizer);
+
+	return ibVisualHostView::OnCreate(doc, flags);
+}
+
+void ibFormVisualEditView::Draw(const ibProtocolNode& view, const ibProtocolNode& patch)
+{
+	if (m_visualHost != nullptr)
+		m_visualHost->Draw(view, patch);
 }
 
 // ----------------------------------------------------------------------------
