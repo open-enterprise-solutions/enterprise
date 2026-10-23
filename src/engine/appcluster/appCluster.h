@@ -10,6 +10,7 @@
 // and steered by its tray (appcluster-tray), over the control socket (core/server/clusterControl.h).
 
 #include <memory>
+#include <mutex>
 #include <vector>
 
 #include <wx/app.h>
@@ -64,6 +65,13 @@ private:
 
 	// A verb a tray sent, for a server or for the cluster (ibClusterControl).
 	void Receive(const ibString& message);
+	// THE BASE'S SERVERS COUNTED AGAIN — server.conf's Processes of `base`, read now, as a tray starts or restarts one of
+	// them: servers added (started once its first serves, as at the start), or the last ones stopped and taken out of
+	// the list.
+	void ApplyProcesses(const ibString& base);
+
+	// The servers of `base` a client's socket may be carried to — asked by the port's threads as a socket opens.
+	std::vector<ibClusterWorker*> WorkersOf(const ibString& base);
 
 	// The servers' pipes read — what they said — and an ask to stop taken, a few times a second.
 	void OnTimer(wxTimerEvent& event);
@@ -73,6 +81,9 @@ private:
 	ibString                                      m_locale;
 	std::unique_ptr<ibServerConfig>               m_config;
 	std::vector<std::unique_ptr<ibClusterWorker>> m_workers;
+	std::mutex                                    m_workersMutex;   // the list changed while the port serves (WorkersOf)
+	std::vector<std::unique_ptr<ibClusterWorker>> m_retired;   // taken out of the list: sockets carried to them may
+	                                                           // still count on them, so they live till the cluster goes
 	std::vector<ibClusterWorker*>                 m_held;    // a base's others, not started till its first serves
 	ibHttpServer                                  m_http;
 	unsigned short                                m_port = 0;

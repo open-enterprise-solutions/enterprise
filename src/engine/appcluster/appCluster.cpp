@@ -154,20 +154,17 @@ bool ibAppCluster::OnInit()
 	if (instances.empty())
 		return Refuse(ibString::Format(wxT("the config %s names no base"), m_config->GetConfPath()));
 
-	// EACH BASE'S SERVERS, as many as its Processes, and its clients — every socket carried on to one of them
-	// (ibClusterRoute), on this machine, as it was asked for (the path and its query), in the clear: TLS ends here, at the
-	// port. A server not serving — starting, fallen — is not reached: the client is told so and comes again (the
-	// communicator logs in anew).
+	// EACH BASE'S SERVERS, as many as its Processes, and its clients — every socket carried on to one of them as they are
+	// when it opens (ibClusterRoute), on this machine, as it was asked for (the path and its query), in the clear: TLS
+	// ends here, at the port. A server not serving — starting, fallen — is not reached: the client is told so and comes
+	// again (the communicator logs in anew).
 	asio::io_context& io = m_http.GetContext();
 	for (const ibConfiguredInstance& instance : instances) {
-		std::vector<ibClusterWorker*> workers;
-		for (unsigned route = 1; route <= instance.m_processes; ++route) {
+		for (unsigned route = 1; route <= instance.m_processes; ++route)
 			m_workers.push_back(std::make_unique<ibClusterWorker>(*this, ibClusterServer{ instance.m_name, route }));
-			workers.push_back(m_workers.back().get());
-		}
-		const std::string path = "/" + instance.m_name.ToUtf8() + "/client";
-		m_http.WebSocket(path, [&io, workers](const std::shared_ptr<ibWebSocket>& socket) {
-			return std::make_shared<ibClusterRoute>(io, workers, socket);
+		const ibString base = instance.m_name;
+		m_http.WebSocket("/" + base.ToUtf8() + "/client", [this, &io, base](const std::shared_ptr<ibWebSocket>& socket) {
+			return std::make_shared<ibClusterRoute>(io, WorkersOf(base), socket);
 		});
 	}
 
@@ -250,6 +247,11 @@ int ibAppCluster::OnExit()
 	m_http.Stop();
 	m_trays.clear();
 	m_workers.clear();
+	m_retired.clear();
+	// The token goes with the cluster: the next one writes its own, and a tray finds none in between.
+	ibString error;
+	if (!m_config->RemoveClusterToken(error))
+		ibAppClusterSay(ibJournalMark::Warning, wxT("%s"), error);
 	ibAppClusterSay(ibJournalMark::Info, wxT("stopped"));
 
 	const int code = wxAppConsole::OnExit();
@@ -303,9 +305,11 @@ void ibAppCluster::OnWorkerChanged()
 			worker->Start();
 		return;
 	}
-	for (const std::unique_ptr<ibClusterWorker>& worker : m_workers) {
-		if (worker->GetServer().m_state != ibClusterState::Stopped)
-			return;
+	for (const std::vector<std::unique_ptr<ibClusterWorker>>* list : { &m_workers, &m_retired }) {
+		for (const std::unique_ptr<ibClusterWorker>& worker : *list) {
+			if (worker->GetServer().m_state != ibClusterState::Stopped)
+				return;
+		}
 	}
 	ExitMainLoop();
 }
@@ -329,6 +333,10 @@ void ibAppCluster::Receive(const ibString& message)
 		ibAppClusterSay(ibJournalMark::Warning, wxT("a tray's verb is not one: %s"), verb);
 		return;
 	}
+	// Started or restarted, its base's servers are counted again first: server.conf may say another Processes now.
+	if (verb != ibClusterControl::Stop)
+		ApplyProcesses(named.m_base);
+
 	// The server named, by its base and route. Held, it is held no more: the tray decides it.
 	const auto found = std::find_if(m_workers.begin(), m_workers.end(),
 		[&named](const std::unique_ptr<ibClusterWorker>& worker) {
@@ -349,6 +357,68 @@ void ibAppCluster::Receive(const ibString& message)
 		worker->Restart();
 }
 
+void ibAppCluster::ApplyProcesses(const ibString& base)
+{
+	const std::vector<ibConfiguredInstance> instances = m_config->ReadInstances();
+	const auto instance = std::find_if(instances.begin(), instances.end(),
+		[&base](const ibConfiguredInstance& one) { return one.m_name == base; });
+	if (instance == instances.end())
+		return;   // gone from the config: its servers stay as they are until the cluster starts again
+	const unsigned processes = instance->m_processes;
+	const auto ofBase = [&base](const std::unique_ptr<ibClusterWorker>& worker) {
+		return worker->GetServer().m_base == base;
+	};
+	// A base the cluster did not start with has no path on the port: it comes with the cluster's next start.
+	const unsigned count = static_cast<unsigned>(std::count_if(m_workers.begin(), m_workers.end(), ofBase));
+	if (count == 0 || processes == count)
+		return;
+	ibAppClusterSay(ibJournalMark::Info, wxT("base '%s': %u server(s), %u before (Processes in %s)"), base, processes,
+		count, m_config->GetConfPath());
+
+	if (processes > count) {
+		// After the base's last one, the list kept in order; held, as at the start, till the base's first serves.
+		std::lock_guard<std::mutex> lock(m_workersMutex);
+		auto at = std::find_if(m_workers.rbegin(), m_workers.rend(), ofBase).base();
+		for (unsigned route = count + 1; route <= processes; ++route) {
+			at = m_workers.insert(at, std::make_unique<ibClusterWorker>(*this, ibClusterServer{ base, route }));
+			m_held.push_back(at->get());
+			++at;
+		}
+	}
+	else {
+		// The last ones out of the list, then stopped — their sessions go with them, as with a tray's stop.
+		std::vector<std::unique_ptr<ibClusterWorker>> taken;
+		{
+			std::lock_guard<std::mutex> lock(m_workersMutex);
+			for (auto worker = m_workers.begin(); worker != m_workers.end();) {
+				if (ofBase(*worker) && (*worker)->GetServer().m_route > processes) {
+					taken.push_back(std::move(*worker));
+					worker = m_workers.erase(worker);
+				}
+				else
+					++worker;
+			}
+		}
+		for (std::unique_ptr<ibClusterWorker>& worker : taken) {
+			m_held.erase(std::remove(m_held.begin(), m_held.end(), worker.get()), m_held.end());
+			m_retired.push_back(std::move(worker));
+			m_retired.back()->Stop();
+		}
+	}
+	OnWorkerChanged();
+}
+
+std::vector<ibClusterWorker*> ibAppCluster::WorkersOf(const ibString& base)
+{
+	std::lock_guard<std::mutex> lock(m_workersMutex);
+	std::vector<ibClusterWorker*> workers;
+	for (const std::unique_ptr<ibClusterWorker>& worker : m_workers) {
+		if (worker->GetServer().m_base == base)
+			workers.push_back(worker.get());
+	}
+	return workers;
+}
+
 bool ibAppCluster::Refuse(const ibString& reason)
 {
 	ibAppClusterSay(ibJournalMark::Error, wxT("%s - nothing is served"), reason);
@@ -361,6 +431,9 @@ void ibAppCluster::OnTimer(wxTimerEvent&)
 {
 	if (s_stopAsked.exchange(false))
 		Stop();
-	for (const std::unique_ptr<ibClusterWorker>& worker : m_workers)
-		worker->ReadPipes();
+	// The retired ones too, while they go: a pipe nobody reads fills, and the server writing to it waits.
+	for (const std::vector<std::unique_ptr<ibClusterWorker>>* list : { &m_workers, &m_retired }) {
+		for (const std::unique_ptr<ibClusterWorker>& worker : *list)
+			worker->ReadPipes();
+	}
 }

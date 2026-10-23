@@ -155,6 +155,15 @@ bool ibServerConfig::ReadClusterToken(ibString& token, ibString& error) const
 	return true;
 }
 
+bool ibServerConfig::RemoveClusterToken(ibString& error) const
+{
+	const ibString path = wxFileName(m_folder, ibClusterControl::TokenFile).GetFullPath();
+	if (!ibFileExists(path) || ibRemoveFile(path))
+		return true;
+	error = ibString::Format(wxT("the cluster's token %s cannot be removed"), path);
+	return false;
+}
+
 std::vector<ibConfiguredInstance> ibServerConfig::ReadInstances() const
 {
 	std::vector<ibConfiguredInstance> instances;

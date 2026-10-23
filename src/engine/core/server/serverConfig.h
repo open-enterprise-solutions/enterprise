@@ -78,9 +78,11 @@ public:
 	bool LoadKey(ibString& error);
 
 	// THE CLUSTER'S TOKEN (core/server/clusterControl.h) — a new one written into the folder at each start of the cluster,
-	// and read by its tray. False, with the reason, when it cannot be.
+	// read by its tray, and removed as the cluster goes: a token left behind would be read by a tray as the next
+	// cluster's, before that one wrote its own. False, with the reason, when it cannot be.
 	bool WriteClusterToken(ibString& token, ibString& error) const;
 	bool ReadClusterToken(ibString& token, ibString& error) const;
+	bool RemoveClusterToken(ibString& error) const;
 
 	// Every base the config lists, as written.
 	std::vector<ibConfiguredInstance> ReadInstances() const;
