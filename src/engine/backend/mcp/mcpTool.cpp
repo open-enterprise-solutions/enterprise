@@ -14,6 +14,8 @@
 #include "backend/propertyManager/property/propertyChoiceLink.h"         // a choice reads in its own shape too
 #include "backend/propertyManager/property/variant/variantChoiceLink.h"  // …named as the inspector names it
 #include "backend/propertyManager/property/variant/variantMetaDesc.h"    // a set of objects, placed whole
+#include "backend/propertyManager/property/propertyCommandSource.h"      // a command binding reads in its own shape too
+#include "core/description/commandDescription.h"                        // ibCommandDescriptionMemory — that shape
 #include "backend/propertyManager/propertyObject.h"            // the whole property list, walked below
 
 #include "backend/backend_localization.h"                      // a caption is an array by language
@@ -1255,6 +1257,33 @@ void ibMcpSayProperties(const ibPropertyObject* object, ibDataNode& node,
 				"Set through metadata_set_choice {id, parameters}, in this shape - the rows given replace the "
 				"table. A row whose field was deleted is dropped by itself; `<gone>` is a field this one can no "
 				"longer name, and leaving it out of the rows sent removes it."));
+		}
+		else if (const ibPropertyCommandSource* wiring = dynamic_cast<const ibPropertyCommandSource*>(property)) {
+
+			// 🛑 THE SAME TRAP A FIFTH TIME: a command binding (a Button's Command, a bar item's) is a
+			// Child too — a hop path, not a Name/Id pair — so it fell into "a structure is named" and
+			// read back as {"name": ""} whether nothing was bound, a command was bound and working, or
+			// a bound command's hops no longer resolved to anything (a merged-in button whose command
+			// kept its old, now-foreign id: the designer's own property cell shows "<not found>" for
+			// exactly this, form_control showed nothing at all - right up to the moment a caller would
+			// have trusted the blank and never looked again).
+			//
+			// ⭐ SAID THE WAY THE CELL IS: GetValueAsString() walks the binding through the control
+			// that owns it (WalkCommand, the same call form_bind judges a new one by) and answers
+			// "<not selected>" with nothing bound, "<not found>" for a path that no longer resolves,
+			// or the command's live name - never blank regardless of which is true. The raw wiring
+			// rides beside it in the shape form_bind's own answer already uses, so a caller comparing
+			// the two needs no second lookup.
+			entry->SetValue(wxT("kind"), wxString(wxT("structure")));
+			entry->SetValue(wxT("value"), wiring->GetValueAsString());
+
+			ibDataValue described;
+			if (ibCommandDescriptionMemory::WriteNode(described, wiring->GetValueAsCommandDesc()))
+				entry->AddField(wxT("wiring"), described);
+
+			entry->SetValue(wxT("shape"), ibMcpText(
+				"Bound through form_bind {form, control, property, path}, not through this verb - a command is "
+				"a chain of hops too, the same as a field binding, and form_bind resolves either kind by name."));
 		}
 		else {
 			const ibDataValue value = property->GetNodeValue();
