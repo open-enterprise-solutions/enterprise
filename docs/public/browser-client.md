@@ -47,11 +47,18 @@ by a patch is updated in place, so the focus and the caret stay where they were.
   dropped. A cell keeps the server's text; its editor has the column's buttons (… ▷ ×).
 - **A narrow screen** (under 40 rem): the sizers fold into a column, fields take the full width, touch targets are
   44 px and more, nothing is reached by hover alone, a table scrolls sideways inside itself — never the page.
+- **A number's … opens a calculator, a date's a calendar**, dropped under the field, as the thin client's: the
+  calculator counts in exact decimals (0.1 + 0.2 is 0.3), keys typed work as keys pressed.
+- **Printing prints the active tab's content**, without the window around it; a sheet a script prints is drawn for the
+  printer alone. A sheet's frozen rows repeat on every page; a row's print break ends its page.
 - **Busy and offline are shown**: a call unanswered for 800 ms shows a spinner, a dropped connection a strip.
 
 ## Where it stops
 
-- The questions drawn are the message box, the choice, the menu and the error; the others are answered as cancelled.
+- The questions drawn are the message box, the choice, the menu, the calculator and the calendar, the error and the
+  print; the others are answered as cancelled.
+- A printed sheet is answered as printed: the browser does not say whether its print dialog was cancelled.
+- A number goes back from the calculator exact to 15 digits.
 - No files: nothing is uploaded or saved from the page.
 - A view that is no form — a text, a spreadsheet opened from a file — is not drawn.
 - The page's own captions are English; the server's texts come translated.

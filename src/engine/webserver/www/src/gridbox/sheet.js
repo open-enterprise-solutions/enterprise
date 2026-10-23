@@ -60,6 +60,8 @@ export function drawSheet(sheet, options) {
 	const body = document.createElement('tbody');
 	table.append(columns, head, body);
 
+	// A row's print break ends a page under it, where the desktop's grid draws its dashed line.
+	const breaks = new Set(sheet.rows?.breaks ?? []);
 	/** @type {HTMLTableRowElement[]} */
 	const rows = [];
 	for (let row = 0; row < rowCount; row++) {
@@ -67,6 +69,7 @@ export function drawSheet(sheet, options) {
 		const height = rowSizes.get(row);
 		if (height !== undefined)
 			line.style.height = `${height}px`;
+		line.classList.toggle('page-break', breaks.has(row));
 		if (folding)
 			line.append(foldOf(row, rows, levels));
 		for (let col = 0; col < colCount; col++) {

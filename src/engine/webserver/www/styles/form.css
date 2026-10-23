@@ -399,6 +399,27 @@ oes-gridbox .compose-state {
 	cursor: pointer;
 }
 
+/* A sheet on paper: its frozen rows are its head, so they come again on every page; a row is not cut across two; a
+   row's print break ends its page; the fold buttons are the screen's. */
+@media print {
+	.sheet td.fold button {
+		visibility: hidden;
+	}
+
+	.sheet thead,
+	.sheet td.frozen {
+		position: static;
+	}
+
+	.sheet tr {
+		break-inside: avoid;
+	}
+
+	.sheet tr.page-break {
+		break-after: page;
+	}
+}
+
 /* THE FORM FOLDED — a narrow form: rows become columns, items stretch across, captions stand over their fields. */
 @container form (max-width: 40rem) {
 	oes-clientform[orient="horizontal"],

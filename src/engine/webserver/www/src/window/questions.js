@@ -2,6 +2,9 @@
 // person), answered with respond {Id, Response}. The server's code waits where it asked, so a question is never left
 // standing: one this page cannot ask yet is answered as cancelled — the Response empty — and the person is told why.
 
+import { drawSheet } from '../gridbox/sheet.js';
+import { calculator, calendar } from './simpleChoice.js';
+
 /** @typedef {import('../protocol/session.js').Session} Session */
 /** @typedef {import('../protocol/patch.js').ProtocolNode} ProtocolNode */
 
@@ -9,7 +12,9 @@
 const message = 1;
 const choice = 2;
 const menu = 9;
+const simpleChoice = 12;
 const error = 14;
+const print = 15;
 
 // A message's buttons — wx's flags in its Style, wx's codes in the answer (ibMessage).
 const buttons = [
@@ -32,8 +37,15 @@ export class Questions {
 		this.shown = null;
 		/** where the person last pressed — a menu is asked there */
 		this.pointer = { x: 0, y: 0 };
+		/**
+		 * @type {Element | null} the field the person last pressed in — a calculator or a calendar drops under it. Taken
+		 * at the press: a table's cell editor is gone by the time the question comes, its cell is not.
+		 */
+		this.pressed = null;
 		document.addEventListener('pointerdown', (event) => {
 			this.pointer = { x: event.clientX, y: event.clientY };
+			const target = event.composedPath()[0];
+			this.pressed = target instanceof Element ? target.closest('wa-input, wa-textarea, .tabulator-cell') : null;
 		}, true);
 	}
 
@@ -54,8 +66,12 @@ export class Questions {
 			this.choice(request);
 		else if (request.Kind === menu)
 			this.menu(request);
+		else if (request.Kind === simpleChoice)
+			this.simpleChoice(request);
 		else if (request.Kind === error)
 			this.dialog(request.Caption ?? 'Error', request.Text ?? '', [{ caption: 'Close', answer: { Act: 1 } }], request);
+		else if (request.Kind === print)
+			this.print(request);
 		else
 			this.dialog('Not in the browser yet', `This question (${request.Kind}) cannot be asked here yet; it is answered as cancelled.`,
 				[{ caption: 'OK', answer: {} }], request);
@@ -101,8 +117,46 @@ export class Questions {
 	 * @param {ProtocolNode} request
 	 */
 	menu(request) {
+		const { popup, pick } = this.popup(request, 'popup-menu');
+		popup.append(...menuItems(request.NodeChildren ?? [], (id) => pick({ Id: id })));
+		popup.showPopover();
+		const size = popup.getBoundingClientRect();
+		popup.style.left = `${Math.max(0, Math.min(this.pointer.x, innerWidth - size.width))}px`;
+		popup.style.top = `${Math.max(0, Math.min(this.pointer.y, innerHeight - size.height))}px`;
+	}
+
+	/**
+	 * A number's calculator or a date's calendar, dropped under the field pressed, its right edge on the field's (the
+	 * thin client's). The value chosen goes back with the type it came with. Which of the two, the Value's payload
+	 * says: a number travels as one, a date as its text.
+	 * @param {ProtocolNode} request
+	 */
+	simpleChoice(request) {
+		const value = request.Value ?? {};
+		const { popup, pick } = this.popup(request, 'simple-choice');
+		/** @param {string | number} chosen */
+		const take = (chosen) => pick({ Value: { t: value.t, v: chosen } });
+		popup.append(typeof value.v === 'number'
+			// Sent as a number again: exact while it has no more than 15 digits, as a field's figures do.
+			? calculator(numberText(value.v), (chosen) => take(Number(chosen)))
+			: calendar(String(value.v ?? ''), take));
+		popup.showPopover();
+		const under = this.pressed?.isConnected
+			? this.pressed.getBoundingClientRect() : new DOMRect(this.pointer.x, this.pointer.y, 0, 0);
+		const size = popup.getBoundingClientRect();
+		popup.style.left = `${Math.max(0, Math.min(under.right - size.width, innerWidth - size.width))}px`;
+		popup.style.top = `${under.bottom + size.height <= innerHeight ? under.bottom : Math.max(0, under.top - size.height)}px`;
+	}
+
+	/**
+	 * A popup over the window, as the thin client's transient ones: a press outside it or Escape dismisses it, and it
+	 * is answered then with nothing; `pick` answers it.
+	 * @param {ProtocolNode} request
+	 * @param {string} className
+	 */
+	popup(request, className) {
 		const popup = /** @type {any} */ (document.createElement('div'));
-		popup.className = 'popup-menu';
+		popup.className = className;
 		popup.popover = 'auto';
 		/** @param {object} response */
 		const pick = (response) => {
@@ -110,7 +164,6 @@ export class Questions {
 			popup.hidePopover();
 			this.respond(request, response);
 		};
-		popup.append(...menuItems(request.NodeChildren ?? [], (id) => pick({ Id: id })));
 		popup.addEventListener('toggle', (event) => {
 			if (/** @type {ToggleEvent} */ (event).newState !== 'closed')
 				return;
@@ -120,10 +173,35 @@ export class Questions {
 		});
 		document.body.append(popup);
 		this.shown = popup;
-		popup.showPopover();
-		const size = popup.getBoundingClientRect();
-		popup.style.left = `${Math.max(0, Math.min(this.pointer.x, innerWidth - size.width))}px`;
-		popup.style.top = `${Math.max(0, Math.min(this.pointer.y, innerHeight - size.height))}px`;
+		return { popup, pick };
+	}
+
+	/**
+	 * A script's sheet printed: drawn for the printer alone, the browser's print dialog asked, the sheet taken away
+	 * after. The browser does not say whether the person printed or cancelled, so the answer is Done.
+	 * @param {ProtocolNode} request
+	 */
+	print(request) {
+		const sheet = document.createElement('div');
+		sheet.className = 'print-sheet';
+		sheet.append(drawSheet(request.Sheet ?? {}, { gridLines: false, onCell: () => {} }));
+		document.body.append(sheet);
+		document.body.classList.add('printing');
+		let printed = false;
+		const done = () => {
+			if (printed)
+				return;
+			printed = true;
+			sheet.remove();
+			document.body.classList.remove('printing');
+			this.respond(request, { Done: true });
+		};
+		addEventListener('afterprint', done, { once: true });
+		// After the frame is drawn: the dialog holds the page until it closes, where the browser has one that does.
+		setTimeout(() => {
+			window.print();
+			done();
+		}, 0);
 	}
 
 	/**
@@ -217,6 +295,15 @@ export class Questions {
 		shown.open = false;
 		shown.addEventListener('wa-after-hide', () => shown.remove(), { once: true });
 	}
+}
+
+/**
+ * A number as the calculator reads it — its digits, never the exponent a very small or large one is printed with.
+ * @param {number} number
+ */
+function numberText(number) {
+	const spelled = String(number);
+	return /e/i.test(spelled) ? number.toFixed(20).replace(/\.?0+$/, '') : spelled;
 }
 
 /**
