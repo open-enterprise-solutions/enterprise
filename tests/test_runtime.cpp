@@ -3434,12 +3434,22 @@ struct ReadableForm : ibValueForm {
 	bool ReadBound(const wxString& name, ibValue& out) { return GetBoundValue(name, out); }
 };
 
-TEST_F(BuiltInRuntime, AFormScriptWritesThroughDataSource) {
+// The base goes down with the test. A session's teardown waits behind its queue in the base's worker pool
+// (ibSession::Teardown), which starts a worker; left to the end of the process, the pool is stopped from the
+// backend's static teardown, and on Windows its workers are gone by then and the wait for them never ends.
+struct FormRuntime : BuiltInRuntime {
+	void TearDown() override {
+		if (ibApplicationInstance::Get() != nullptr)
+			ibApplicationInstance::DestroyAppDataEnv();
+	}
+};
+
+TEST_F(FormRuntime, AFormScriptWritesThroughDataSource) {
 	// UNLISTED, as a harness's session is (frontendFormFix.h): a listed one gives itself back to its base's registry as
 	// it goes, and this base's registry was never started — the request kept the session alive into the static
 	// teardown, past the map of current sessions (ASan: heap-use-after-free; macOS: mutex lock failed).
 	auto session = std::make_shared<FramedSession>(wxT("form-write"), ibSessionKind::Enterprise);
-	ibSessionHolder holder = ibSessionRegistry::MintUnlisted(session);
+	ibSessionHolder holder = ibApplicationInstance::GetSessionRegistry()->MintUnlisted(session);
 	KeyFrame frame(std::move(holder));
 	session->Attach(&frame);
 	ibSessionScope scope(session.get());

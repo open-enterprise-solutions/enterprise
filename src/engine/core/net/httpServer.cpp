@@ -240,7 +240,9 @@ bool ibIsLoopback(const ibString& address)
 		return true;
 	std::error_code error;
 	const asio::ip::address parsed = asio::ip::make_address(own, error);
-	return !error && parsed.is_v4() && parsed.is_loopback();
+	// Only in the spelling it prints back as: Windows reads a short form ("127.0.0") as an address and the other
+	// systems refuse it, and one rule answers the same on all of them.
+	return !error && parsed.is_v4() && parsed.is_loopback() && parsed.to_string() == own;
 }
 
 //*******************************************************************************************

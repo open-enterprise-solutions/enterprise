@@ -62,7 +62,7 @@ struct FrontendFormFix : FrontendRuntimeFix {
 		//
 		// Bind the THREAD before handing the holder over — after the move it is empty and
 		// the frame owns the session.
-		ibSessionHolder holder = ibSessionRegistry::MintUnlisted(
+		ibSessionHolder holder = ibApplicationInstance::GetSessionRegistry()->MintUnlisted(
 			std::make_shared<ibGUISession>(wxString(wxNewUniqueGuid), ibSessionKind::Enterprise));
 		if (!holder) return;                  // frameReady stays false
 		binding = std::make_unique<ibSessionThreadBinding>(holder.Get());

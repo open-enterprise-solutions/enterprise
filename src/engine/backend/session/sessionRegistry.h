@@ -243,9 +243,12 @@ public:
 	// connection timeout per session — around 30 seconds each in the GUI harness — for a row
 	// nobody reads. Imitating the session is the right answer there, not creating the table.
 	//
+	// Unlisted, and this base's all the same: the registry owns it and the base's pool gives its
+	// connection, as for a listed one (Connect). A session of no base makes a configuration of none.
+	//
 	// Ownership: the caller hands over a freshly built session and gets the only holder for
 	// it back, exactly as the registered factories do.
-	static ibSessionHolder MintUnlisted(std::shared_ptr<ibSession> session);
+	ibSessionHolder MintUnlisted(std::shared_ptr<ibSession> session);
 
 	// ---- Thread + queue ----
 	// Set whether the registry owns sys_session row I/O. Default false —

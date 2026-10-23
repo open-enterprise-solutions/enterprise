@@ -339,15 +339,12 @@ std::shared_ptr<ibBackgroundRun> ibJobManager::StartBackground(ibBackgroundBody 
 		// reads m_listed).
 		auto minted = std::make_shared<ibSession>(wxString(wxNewUniqueGuid),
 		                                          ibSessionKind::BackgroundJob);
-		minted->SetUnlisted();
-		// It reads for its parent in this manager's base: the base's registry is its owner, and the base's pool
-		// gives its connection — and takes it back on whatever thread the session dies.
-		minted->m_registry = registry;
-		minted->m_dbHolder.SetPool(ibApplicationInstance::GetConnectionPool(m_applicationInstance));
-		// …and in its parent's configuration — the one the parent works in, not the base's newest: a read for a
-		// session is read the way that session reads.
+		// It reads in its parent's configuration — the one the parent works in, not the base's newest: a read for
+		// a session is read the way that session reads.
 		minted->m_metaData = launch->m_parent->m_metaData;
-		run->m_holder = ibSessionHolder(std::move(minted));
+		// …for its parent in this manager's base: the base's registry is its owner, and the base's pool gives its
+		// connection — and takes it back on whatever thread the session dies.
+		run->m_holder = registry->MintUnlisted(std::move(minted));
 	}
 	else {
 		run->m_holder = registry->CreateSessionOfKind(

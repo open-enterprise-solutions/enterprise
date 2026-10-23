@@ -69,28 +69,33 @@ struct CodeStyleRestore {
 TEST_F(CommonModuleCheck, ConfigCheckReportsABrokenModuleAndOneThatWasNeverCompiled)
 {
 	CodeStyleRestore style;
-	// A session on the stack is not current: the scope keeps a weak
-	// pointer, and a designer that is not current builds no compile cache.
-	auto session = std::make_shared<ibSession>(wxT("module-check"), ibSessionKind::Designer);
-	ibSessionScope scope(session.get());
+	ibSessionRegistry* const registry = ibApplicationInstance::GetSessionRegistry();
+	ASSERT_NE(registry, nullptr);
+	// The base's session, unlisted: this base has no system tables to list it in. A session of no base makes a
+	// configuration of none. A session on the stack is not current: the scope keeps a weak pointer, and a designer
+	// that is not current builds no compile cache.
+	ibSessionHolder holder = registry->MintUnlisted(
+		std::make_shared<ibSession>(wxT("module-check"), ibSessionKind::Designer));
+	ibSession* const session = holder.Get();
+	ASSERT_NE(session, nullptr);
+	ibSessionScope scope(session);
 
 	// The configuration a designer edits is its session's own, made as the
 	// session is let in (NotifyAuthenticated → ibSession::AcquireMetaData) and
 	// let go as it leaves. The base's active one is not it.
-	ibSessionRegistry* const registry = ibApplicationInstance::GetSessionRegistry();
-	ASSERT_NE(registry, nullptr);
-	registry->NotifyAuthenticated(session.get());
+	registry->NotifyAuthenticated(session);
 	struct Leave {
 		ibSessionRegistry* m_registry;
 		ibSession* m_session;
 		~Leave() { m_registry->NotifyDisconnect(m_session); }
-	} leave{ registry, session.get() };
+	} leave{ registry, session };
 
 	ibMetaDataConfigurationBase* cfg = session->GetMetaData();
 	ASSERT_NE(cfg, nullptr);
 	ASSERT_EQ(activeMetaData, cfg);
-	if (cfg->IsConfigOpen())
+	if (cfg->IsConfigOpen()) {
 		ASSERT_TRUE(cfg->CloseDatabase(forceCloseFlag));
+	}
 
 	ibValueMetaObjectConfiguration* root = cfg->GetCommonMetaObject();
 	ASSERT_NE(root, nullptr);

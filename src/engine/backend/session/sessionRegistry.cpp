@@ -245,6 +245,8 @@ ibSessionHolder ibSessionRegistry::MintUnlisted(std::shared_ptr<ibSession> sessi
 	if (!session)
 		return ibSessionHolder();
 	session->SetUnlisted();
+	session->m_registry = this;
+	session->m_dbHolder.SetPool(ibApplicationInstance::GetConnectionPool(m_applicationInstance));
 	return ibSessionHolder(std::move(session));
 }
 

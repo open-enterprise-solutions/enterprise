@@ -1000,7 +1000,8 @@ jobs:
         run: cmake --build --preset macos-debug -- -k 0
 
       # lldb, not gdb — same intent as the Linux backtrace step (the tests that failed), and the same guard: no binary,
-      # no backtrace.
+      # no backtrace. The stack is asked with -k, not -o: in batch mode lldb runs no -o command after the target
+      # crashes, only the -k ones (2026-10-23: one frame of the crash, and no stack).
       - name: Backtrace on failure
         if: failure() && hashFiles('build/macos-debug/bin/Debug/oes_tests') != ''
         working-directory: build/macos-debug
@@ -1008,7 +1009,7 @@ jobs:
           failed=$(cut -d: -f2- Testing/Temporary/LastTestsFailed.log 2>/dev/null | head -n 5 || true)
           for t in ${failed:-CompilerTest.SimpleAssignmentEmitsBytecode RuntimeTest.ConstantAssignment}; do
             echo "=============== $t ==============="
-            lldb -b -o run -o "bt 40" -- ./bin/Debug/oes_tests --gtest_filter=$t || true
+            lldb -b -o run -k "bt 40" -k quit -- ./bin/Debug/oes_tests --gtest_filter=$t || true
           done
 
       - name: Compiler cache statistics
