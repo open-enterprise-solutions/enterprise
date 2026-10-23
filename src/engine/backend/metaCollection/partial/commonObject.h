@@ -2644,7 +2644,7 @@ protected:
 
 	bool m_objModified;
 	const ibValueMetaObjectRecordDataMutableRef* m_metaObject;
-	ibReference* m_reference_impl;
+	std::unique_ptr<ibReference> m_reference_impl;
 
 	// Captured at successful ReadData; compared against the row's
 	// current DataVersion at Write/Delete time. Empty for new objects.

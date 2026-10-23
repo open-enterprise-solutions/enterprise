@@ -146,10 +146,10 @@ bool ibPropertySource::CopyNodeValue(ibDataValue& value) const
 		const ibGuid typeGuid = IsMetaValue(hop.m_type) ? variant->GetGuidByID((ibMetaID)clsid_metaID(hop.m_type)) : wxNullGuid;
 		if (typeGuid.isValid()) {
 			writer.w_u8(kTypeMeta);
-			writer.w_u64((unsigned wxLongLong_t)clsid_any_of(hop.m_type));   // its kind and metaclass: the type less its metaID
+			writer.w_u64((unsigned long long)clsid_any_of(hop.m_type));   // its kind and metaclass: the type less its metaID
 			writer.w_stringZ(typeGuid.str());
 		}
-		else                    { writer.w_u8(kTypeRaw);  writer.w_u64((unsigned wxLongLong_t)hop.m_type); }
+		else                    { writer.w_u8(kTypeRaw);  writer.w_u64((unsigned long long)hop.m_type); }
 		idx++;
 	}
 	value = ibDataValue::Binary(writer.buffer());

@@ -58,7 +58,8 @@ private:
 	// module's close after its gate, so the document goes with it.
 	bool m_closeAllowed = false;
 
-	wxDECLARE_NO_COPY_CLASS(ibModuleTextDocument);
+	ibModuleTextDocument(const ibModuleTextDocument&) = delete;
+	ibModuleTextDocument& operator=(const ibModuleTextDocument&) = delete;
 	wxDECLARE_DYNAMIC_CLASS(ibModuleTextDocument);
 };
 

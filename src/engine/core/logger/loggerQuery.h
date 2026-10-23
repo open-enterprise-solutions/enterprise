@@ -18,7 +18,7 @@
 // (.olg / log_entry table) one-to-one; the wxLongLong_t timestamp is
 // raw ms-since-epoch — viewer formats with wxDateTime on display.
 struct ibLogRow {
-    wxLongLong_t ts_ms       = 0;
+    long long ts_ms       = 0;
     int          level       = 0;
     wxString     session_id;
     wxString     user_name;
@@ -40,8 +40,8 @@ struct ibLogRow {
 // Filter passed to ibLoggerReader::Query / Count. Zero / empty fields
 // mean "no constraint on this dimension". Combined with AND by the reader.
 struct ibLogFilter {
-    wxLongLong_t from_ms   = 0;     // inclusive; 0 = no lower bound
-    wxLongLong_t to_ms     = 0;     // exclusive; 0 = no upper bound
+    long long from_ms   = 0;     // inclusive; 0 = no lower bound
+    long long to_ms     = 0;     // exclusive; 0 = no upper bound
     int          min_level = -1;    // -1 = any; otherwise rows with level >= this
     wxString     user_name;         // empty = any
     // ⭐⭐ ONE RUN'S OWN ROWS. Every row already carries `session_id` — it is written on the way in —

@@ -60,7 +60,7 @@ const ibArg& ArgSample()
 	return s_a;
 }
 
-const wxChar* KindWord(ibFormatKind kind)
+const ibChar* KindWord(ibFormatKind kind)
 {
 	switch (kind) {
 	case ibFormatKind::Number:  return wxT("number");

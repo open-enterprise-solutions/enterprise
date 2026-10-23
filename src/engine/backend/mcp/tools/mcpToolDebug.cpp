@@ -732,7 +732,7 @@ public:
 
 	wxString GetName() const override { return wxT("debug_sessions"); }
 
-	wxString GetActivity(const ibDataNode& WXUNUSED(params)) const override
+	wxString GetActivity(const ibDataNode& /*params*/) const override
 	{
 		return ibMcpText("looking at what can be debugged");
 	}
@@ -752,7 +752,7 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& WXUNUSED(params), ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& /*params*/, ibDataNode& result, wxString& refusal) const override
 	{
 		if (debugClient == nullptr) {
 			refusal = ibMcpText("There is no debugger in this process.");
@@ -1026,7 +1026,7 @@ public:
 		bool ran = false;
 		wxString answer, json;
 		std::vector<wxString> printed;
-		wxLongLong_t microseconds = 0;
+		long long microseconds = 0;
 
 		if (!bridge->Sandbox(code, ran, answer, json, printed, microseconds)) {
 			refusal = ibMcpNoAnswer(ibMcpText("The runtime did not answer in time. Whatever the code did "

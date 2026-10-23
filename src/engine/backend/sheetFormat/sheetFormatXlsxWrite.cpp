@@ -19,9 +19,7 @@
 #include "backend/sheetFormat/sheetFormatXlsx.h"
 #include "backend/backend_localization.h"   // a caption goes out in one language
 
-#include <wx/wfstream.h>
 #include <wx/zipstrm.h>
-#include <wx/sstream.h>
 
 #include <algorithm>
 #include <map>
@@ -61,7 +59,7 @@ wxString CellRef(int row, int col)
 {
 	wxString letters;
 	for (int rest = col; ; rest = rest / 26 - 1) {
-		letters.Prepend(static_cast<wxChar>(wxT('A') + rest % 26));
+		letters.Prepend(static_cast<ibChar>(wxT('A') + rest % 26));
 		if (rest < 26)
 			break;
 	}
@@ -176,7 +174,7 @@ CellStyle StyleOf(const ibSpreadsheetCellDescription& cell)
 	const ibFont& font = cell.m_font;
 	if (font.IsOk()) {
 		style.m_fontFace   = font.m_faceName;
-		style.m_fontSize   = wxRound(font.m_pointSize);
+		style.m_fontSize   = font.GetPointSize();
 		style.m_bold       = font.m_weight >= ibFONTWEIGHT_BOLD;
 		style.m_italic     = font.m_style == ibFONTSTYLE_ITALIC;
 		style.m_underlined = font.m_underlined;
@@ -302,7 +300,7 @@ wxString Styles(const std::vector<CellStyle>& styles)
 	// file is a number that stops agreeing the day the first one changes.
 	const ibFont ordinary = ibDefaultSpreadsheetFont();
 	const int defaultSize = ordinary.m_pointSize > 0
-		? wxRound(ordinary.m_pointSize) : 8;
+		? ordinary.GetPointSize() : 8;
 
 	const wxString defaultFace = ordinary.m_faceName.IsEmpty()
 		? wxString(wxT("Arial")) : wxString(ordinary.m_faceName);
@@ -345,7 +343,7 @@ wxString Styles(const std::vector<CellStyle>& styles)
 	xml += wxString::Format(wxT("<borders count=\"%u\">"), static_cast<unsigned>(styles.size() + 1));
 	xml += wxT("<border><left/><right/><top/><bottom/><diagonal/></border>");
 	for (const CellStyle& style : styles) {
-		const wxChar* const names[4] = { wxT("left"), wxT("right"), wxT("top"), wxT("bottom") };
+		const ibChar* const names[4] = { wxT("left"), wxT("right"), wxT("top"), wxT("bottom") };
 		xml += wxT("<border>");
 		for (int i = 0; i < 4; i++) {
 			if (!style.m_borderStyle[i].IsEmpty())

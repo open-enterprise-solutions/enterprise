@@ -104,7 +104,7 @@ private:
               const wxString* refGuid   = nullptr,
               int             refMetaId = 0);
 
-    static wxLongLong_t NowMillis();
+    static long long NowMillis();
     static wxString     HostName();
 
     void SweepLoop();

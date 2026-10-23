@@ -51,7 +51,7 @@ public:
 
 	// A LITERAL IS A TEXT TOO — every property declares its default as one (wxT("Button")), and
 	// wxString-then-translate is two conversions deep, which the language will not do by itself.
-	ibTranslateString(const wxChar* strRawTranslate) { SetRawText(strRawTranslate); }
+	ibTranslateString(const ibChar* strRawTranslate) { SetRawText(strRawTranslate); }
 
 	// BY REFERENCE, both ways — a caller edits the cells in place.
 	ibLocalizationEntryArray& GetTranslations() { return m_translations; }

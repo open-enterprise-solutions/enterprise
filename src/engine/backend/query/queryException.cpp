@@ -18,7 +18,7 @@ void ibBackendQueryException::Throw(Kind kind, const wxString& message)
 // split, so the format checking and the locale build modes behave identically here.
 
 #if !wxUSE_UTF8_LOCALE_ONLY
-void ibBackendQuerySyntaxException::DoErrorAtWchar(unsigned int line, unsigned int col, const wxChar* format, ...)
+void ibBackendQuerySyntaxException::DoErrorAtWchar(unsigned int line, unsigned int col, const ibChar* format, ...)
 {
 	va_list args;
 	va_start(args, format);
@@ -28,7 +28,7 @@ void ibBackendQuerySyntaxException::DoErrorAtWchar(unsigned int line, unsigned i
 	throw ibBackendQuerySyntaxException(message, line, col);
 }
 
-void ibBackendQueryNameException::DoErrorAtWchar(unsigned int line, unsigned int col, const wxChar* format, ...)
+void ibBackendQueryNameException::DoErrorAtWchar(unsigned int line, unsigned int col, const ibChar* format, ...)
 {
 	va_list args;
 	va_start(args, format);
@@ -38,7 +38,7 @@ void ibBackendQueryNameException::DoErrorAtWchar(unsigned int line, unsigned int
 	throw ibBackendQueryNameException(message, line, col);
 }
 
-void ibBackendQueryNameException::DoErrorWchar(const wxChar* format, ...)
+void ibBackendQueryNameException::DoErrorWchar(const ibChar* format, ...)
 {
 	va_list args;
 	va_start(args, format);
@@ -50,7 +50,7 @@ void ibBackendQueryNameException::DoErrorWchar(const wxChar* format, ...)
 #endif
 
 #if wxUSE_UNICODE_UTF8
-void ibBackendQuerySyntaxException::DoErrorAtUtf8(unsigned int line, unsigned int col, const wxChar* format, ...)
+void ibBackendQuerySyntaxException::DoErrorAtUtf8(unsigned int line, unsigned int col, const ibChar* format, ...)
 {
 	va_list args;
 	va_start(args, format);
@@ -60,7 +60,7 @@ void ibBackendQuerySyntaxException::DoErrorAtUtf8(unsigned int line, unsigned in
 	throw ibBackendQuerySyntaxException(message, line, col);
 }
 
-void ibBackendQueryNameException::DoErrorAtUtf8(unsigned int line, unsigned int col, const wxChar* format, ...)
+void ibBackendQueryNameException::DoErrorAtUtf8(unsigned int line, unsigned int col, const ibChar* format, ...)
 {
 	va_list args;
 	va_start(args, format);
@@ -70,7 +70,7 @@ void ibBackendQueryNameException::DoErrorAtUtf8(unsigned int line, unsigned int 
 	throw ibBackendQueryNameException(message, line, col);
 }
 
-void ibBackendQueryNameException::DoErrorUtf8(const wxChar* format, ...)
+void ibBackendQueryNameException::DoErrorUtf8(const ibChar* format, ...)
 {
 	va_list args;
 	va_start(args, format);
@@ -82,7 +82,7 @@ void ibBackendQueryNameException::DoErrorUtf8(const wxChar* format, ...)
 #endif
 
 #if !wxUSE_UTF8_LOCALE_ONLY
-void ibBackendQueryLinqException::DoErrorWchar(const wxChar* format, ...)
+void ibBackendQueryLinqException::DoErrorWchar(const ibChar* format, ...)
 {
 	va_list args;
 	va_start(args, format);
@@ -94,7 +94,7 @@ void ibBackendQueryLinqException::DoErrorWchar(const wxChar* format, ...)
 #endif
 
 #if wxUSE_UNICODE_UTF8
-void ibBackendQueryLinqException::DoErrorUtf8(const wxChar* format, ...)
+void ibBackendQueryLinqException::DoErrorUtf8(const ibChar* format, ...)
 {
 	va_list args;
 	va_start(args, format);

@@ -447,7 +447,7 @@ BACKEND_API void ibMcpSayObject(const class ibValueMetaObject* object, ibDataNod
 //
 // The text is never rewritten — note_read is also how a note is read in order to be edited.
 BACKEND_API int ibMcpSayObjectLinks(const wxString& text, class ibMetaData* metaData,
-	std::vector<ibDataValue>& into, std::set<wxLongLong_t>& seen);
+	std::vector<ibDataValue>& into, std::set<long long>& seen);
 
 // ⭐⭐ EVERY PROPERTY THE OBJECT HAS — asked of the object, so a property added tomorrow is in the
 // answer tomorrow, with nothing here edited.

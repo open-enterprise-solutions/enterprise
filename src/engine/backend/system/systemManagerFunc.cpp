@@ -253,7 +253,7 @@ int ibValueSystemFunction::StrLineCount(const ibValue& cSource)
 
 	int lines = 1;   // text always has a first line, empty included
 	for (size_t pos = 0; pos < src.length(); ++pos) {
-		const wxChar ch = src[pos];
+		const ibChar ch = src[pos];
 		if (ch == wxT('\r')) {
 			if (pos + 1 < src.length() && src[pos + 1] == wxT('\n'))
 				++pos;   // CRLF is a single break
@@ -410,14 +410,16 @@ int ibValueSystemFunction::GetQuartOfYear(const ibValue& cData)  { return static
 
 #include <wx/filename.h>
 
+#include "core/fileSystem.h"   // ibCopyFile, ibRemoveFile
+
 bool ibValueSystemFunction::CopyFile(const wxString& src, const wxString& dst)
 {
-	return wxCopyFile(src, dst);
+	return ibCopyFile(src, dst);
 }
 
 bool ibValueSystemFunction::DeleteFile(const wxString& file)
 {
-	return wxRemoveFile(file);
+	return ibRemoveFile(file);
 }
 
 wxString ibValueSystemFunction::GetTempDir()
@@ -1024,8 +1026,6 @@ void ibValueSystemFunction::RollBackTransaction()
 //****************************************************************************
 //*                                  Jobs                                    *
 //****************************************************************************
-
-#include "backend/job/jobManager.h"
 
 int ibValueSystemFunction::RunScheduledJobs()
 {

@@ -50,7 +50,7 @@ struct CodeCur {
 	// Set only for a range: the cell the row arrives in. Null = ask the function record, as before.
 	const ibParamRunUnit* rowSlot = nullptr;
 
-	ibQueryAstExprPtr Refuse(const wxChar* what, unsigned int at) const {
+	ibQueryAstExprPtr Refuse(const ibChar* what, unsigned int at) const {
 		if (refusal != nullptr && refusal->IsEmpty())
 			*refusal = wxString::Format(wxT("%s (at %u)"), what, at);
 		return nullptr;
@@ -58,7 +58,7 @@ struct CodeCur {
 
 	// A slot at or below zero is THIS frame (procUnit.cpp, ResolveRead) — a temp carries
 	// DEF_VAR_TEMP rather than a depth, and both land on the same cell.
-	static wxLongLong_t FrameOf(const ibParamRunUnit& p) {
+	static long long FrameOf(const ibParamRunUnit& p) {
 		return p.m_numArray <= 0 ? 0 : p.m_numArray;
 	}
 	static bool SameSlot(const ibParamRunUnit& a, const ibParamRunUnit& b) {
@@ -74,12 +74,12 @@ struct CodeCur {
 	// The outer frames are not in the bytecode yet (the enclosing function is still being compiled),
 	// so their names come from whoever passed nameOfOuter — see the header.
 	wxString NameOfSlot(const ibParamRunUnit& p) const {
-		const wxLongLong_t frame = FrameOf(p);
+		const long long frame = FrameOf(p);
 		if (frame != 0 || fn == nullptr)
 			return nameOfOuter ? nameOfOuter((long)frame, (long)p.m_numIndex) : wxString();
 
 		for (const auto& var : fn->m_listLocals)
-			if ((wxLongLong_t)var.m_slotIndex == p.m_numIndex)
+			if ((long long)var.m_slotIndex == p.m_numIndex)
 				return var.m_strRealName;
 		return wxEmptyString;
 	}
@@ -426,7 +426,7 @@ wxString DescribeList(const std::vector<ibQueryAstExprPtr>& items)
 	return out;
 }
 
-const wxChar* CompareWord(ibQueryCompareOp op)
+const ibChar* CompareWord(ibQueryCompareOp op)
 {
 	switch (op) {
 	case ibQueryCompareOp::Eq: return wxT("=");
@@ -439,7 +439,7 @@ const wxChar* CompareWord(ibQueryCompareOp op)
 	return wxT("?");
 }
 
-const wxChar* ArithWord(ibQueryArithOp op)
+const ibChar* ArithWord(ibQueryArithOp op)
 {
 	switch (op) {
 	case ibQueryArithOp::Add: return wxT("+");
@@ -558,7 +558,7 @@ wxString ibDescribeQueryAst(const std::shared_ptr<ibQueryAstExpr>& expr, bool wi
 	for (size_t i = 0; i < said.length(); ++i) {
 		if (said[i] != wxT('@')) { out << said[i]; continue; }
 		size_t j = i + 1;
-		while (j < said.length() && (wxIsdigit(said[j]) || said[j] == wxT(':'))) ++j;
+		while (j < said.length() && (ibIsDigit(said[j]) || said[j] == wxT(':'))) ++j;
 		i = j - 1;   // skip the coordinate; the loop's ++i lands on the first char after it
 	}
 	return out;

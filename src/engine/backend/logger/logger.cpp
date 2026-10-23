@@ -83,7 +83,7 @@ void ibLogger::SweepLoop()
     }
 }
 
-wxLongLong_t ibLogger::NowMillis()
+long long ibLogger::NowMillis()
 {
     return wxDateTime::UNow().GetValue().GetValue();
 }

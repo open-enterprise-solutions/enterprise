@@ -1077,7 +1077,7 @@ void ibDebuggerServer::ibDebuggerServerConnection::EntryClient()
 
 	// 🔎 WHY THIS END STOPPED READING — the same word the designer's loop keeps for itself (debugClient.cpp), so the
 	// two journals can be read side by side: the end that printed its reason first is the end that ended the session.
-	const wxChar* leftBy = wxT("the slot emptied - Disconnect let the designer go");
+	const ibChar* leftBy = wxT("the slot emptied - Disconnect let the designer go");
 
 	while (listening && !m_stop) {
 
@@ -1712,7 +1712,7 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 
 			// MICROSECONDS, not milliseconds: the things worth measuring here are single queries and
 			// single postings, and a millisecond field reports most of them as "0" or "1".
-			commandChannel.w_u64((wxLongLong_t)
+			commandChannel.w_u64((long long)
 				std::chrono::duration_cast<std::chrono::microseconds>(elapsed).count());
 
 			if (IsSessionParked(sid))

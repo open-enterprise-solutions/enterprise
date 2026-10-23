@@ -10,6 +10,7 @@
 
 #include "core/syntaxHelper/helpCorpus.h"
 #include "core/syntaxHelper/helpEntry.h"
+#include "core/fileSystem.h"
 #include "core/stringUtils.h"
 
 #include <wx/dir.h>
@@ -531,7 +532,7 @@ std::unique_ptr<HelpBucketSource>
 ResolveSource(const wxString& sourceRoot, const wxString& localeCode) {
 	const wxString hbkPath =
 	    wxFileName(sourceRoot, localeCode + wxT(".hlk")).GetFullPath();
-	if (wxFileName::FileExists(hbkPath)) {
+	if (ibFileExists(hbkPath)) {
 		auto zip = std::make_unique<ZipSource>(hbkPath);
 		if (zip->Exists()) return zip;
 	}

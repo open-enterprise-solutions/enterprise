@@ -288,7 +288,7 @@ ibValueForm* ibFormVisualEditView::GetValueForm() const
 	return m_document->GetValueForm();
 }
 
-bool ibFormVisualEditView::OnCreate(ibDocument* WXUNUSED(doc), long WXUNUSED(flags))
+bool ibFormVisualEditView::OnCreate(ibDocument* /*doc*/, long /*flags*/)
 {
 	// The form has opened — its beforeOpen / onOpen ran before its document was made (ibValueForm::CreateDocForm):
 	// its controls are created. Nothing is drawn: the frame is written when a client asks for it (OnDraw).
@@ -361,7 +361,7 @@ void ibFormVisualEditView::SetCaption(const wxString& strCaption)
 	}
 }
 
-void ibFormVisualEditView::OnUpdate(ibView* WXUNUSED(sender), wxObject* WXUNUSED(hint))
+void ibFormVisualEditView::OnUpdate(ibView* /*sender*/, wxObject* /*hint*/)
 {
 	// The next frame drawn reads the form as it is; there is nothing kept to refresh.
 }
@@ -373,7 +373,7 @@ ibView* ibFormVisualEditView::GetActiveControlView() const
 	return control != nullptr ? control->GetControlView() : nullptr;
 }
 
-void ibFormVisualEditView::OnActivateView(bool activate, ibView* WXUNUSED(activeView), ibView* deactiveView)
+void ibFormVisualEditView::OnActivateView(bool activate, ibView* /*activeView*/, ibView* deactiveView)
 {
 	if (ibView* view = GetActiveControlView())
 		view->OnActivateView(activate, view, deactiveView);

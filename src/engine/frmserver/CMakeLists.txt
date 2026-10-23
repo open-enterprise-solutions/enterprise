@@ -33,10 +33,7 @@ target_link_libraries(frmserver
     PRIVATE
         backend
         wx::core
-        wx::html
-        wx::adv
         wx::base
-        wx::xml
 )
 
 set_target_properties(frmserver PROPERTIES

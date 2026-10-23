@@ -32,7 +32,6 @@ target_link_libraries(fileserver
     PRIVATE
         frmserver
         backend
-        wx::core
         wx::base
 )
 

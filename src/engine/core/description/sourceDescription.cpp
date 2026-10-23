@@ -46,7 +46,7 @@ bool ibSourceDescriptionMemory::SaveData(ibWriterMemory& writer, const ibSourceD
 	writer.w_u32((unsigned int)path.size());
 	for (const ibSourceHop& hop : path) {
 		writer.w_u32((unsigned int)hop.m_id);
-		writer.w_u64((unsigned wxLongLong_t)hop.m_type);
+		writer.w_u64((unsigned long long)hop.m_type);
 	}
 	return true;
 }
@@ -77,9 +77,9 @@ bool ibSourceDescriptionMemory::SaveData(ibWriterMemory& writer, const ibSourceD
 
 namespace {
 
-const wxChar* const kHopsField = wxT("hops");
-const wxChar* const kHopId     = wxT("id");
-const wxChar* const kHopType   = wxT("type");
+const ibChar* const kHopsField = wxT("hops");
+const ibChar* const kHopId     = wxT("id");
+const ibChar* const kHopType   = wxT("type");
 
 } // namespace
 

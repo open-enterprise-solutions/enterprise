@@ -92,10 +92,7 @@ target_link_libraries(frontend
         wx::aui
         wx::html
         wx::propgrid
-        wx::adv
         wx::stc
-        wx::xrc
-        wx::qa
         wx::base
         wx::xml
 )
@@ -229,15 +226,8 @@ target_link_libraries(wfrontend
     PRIVATE
         backend
         wx::core
-        wx::aui
-        wx::html
         wx::propgrid
-        wx::adv
-        wx::stc
-        wx::xrc
-        wx::qa
         wx::base
-        wx::xml
 )
 
 set_target_properties(wfrontend PROPERTIES

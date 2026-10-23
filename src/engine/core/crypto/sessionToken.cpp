@@ -46,8 +46,8 @@ wxString Hex(const unsigned char* bytes, std::size_t length)
 	wxString hex;
 	hex.reserve(length * 2);
 	for (std::size_t i = 0; i < length; ++i) {
-		hex += wxChar(kDigits[bytes[i] >> 4]);
-		hex += wxChar(kDigits[bytes[i] & 0x0F]);
+		hex += ibChar(kDigits[bytes[i] >> 4]);
+		hex += ibChar(kDigits[bytes[i] & 0x0F]);
 	}
 	return hex;
 }
@@ -72,7 +72,7 @@ bool ParseHex(const wxString& hex, unsigned char out[kBytes])
 {
 	if (out == nullptr || hex.length() != kBytes * 2)
 		return false;
-	auto nibble = [](wxChar c) -> int {
+	auto nibble = [](ibChar c) -> int {
 		if (c >= wxT('0') && c <= wxT('9'))
 			return c - wxT('0');
 		if (c >= wxT('a') && c <= wxT('f'))

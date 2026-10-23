@@ -10,9 +10,9 @@
 namespace {
 // THE NODE'S OWN FIELD NAMES — spelled once. A setting written under one spelling
 // and read under another is a setting lost.
-const wxChar* const kFieldId       = wxT("id");
-const wxChar* const kFieldName     = wxT("name");
-const wxChar* const kChildSettings = wxT("settings");
+const ibChar* const kFieldId       = wxT("id");
+const ibChar* const kFieldName     = wxT("name");
+const ibChar* const kChildSettings = wxT("settings");
 
 // NOBODY — what "there is no session and none was named" resolves to. Its guid is invalid, which
 // the storage reads as the shared row: a base with no users has exactly one person's settings.

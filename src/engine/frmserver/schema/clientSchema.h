@@ -34,7 +34,7 @@ public:
 	// does: a client asks for a schema by its number, past any menu that would have hidden it. The menu asks the
 	// same question (ibClientFrame), so it offers what the schema would let through. A schema without a right of
 	// its own is everybody's.
-	virtual bool AccessRight(const ibSession& WXUNUSED(session)) const { return true; }
+	virtual bool AccessRight(const ibSession& /*session*/) const { return true; }
 
 	// What the schema shows, into `result` — of the client's session, handed in: the configuration it works in, the
 	// base it works in — and of what its arguments name (the predefined items of that object), as Command takes them.

@@ -167,9 +167,6 @@ target_link_libraries(backend
         wx::base
         wx::core
         wx::xml
-        wx::propgrid
-        wx::aui
-        wx::stc
         # No Mbed TLS: a cipher, a random byte, TLS are the core's (core/crypto, core/net).
 )
 

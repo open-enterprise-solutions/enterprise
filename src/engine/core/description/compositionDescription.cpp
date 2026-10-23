@@ -315,10 +315,10 @@ namespace {
 // SetSort); this string is what the bytes on disk already say, and renaming it would make every
 // saved setting unreadable to buy a word. Same call the CLSID keys took when their concepts were
 // renamed (`MD_SKTB` after subconto → account dimension).
-const wxChar* const kOrderNode = wxT("Order");
-const wxChar* const kGroupNode = wxT("Group");
-const wxChar* const kFieldName = wxT("Field");
-const wxChar* const kDirName   = wxT("Ascending");
+const ibChar* const kOrderNode = wxT("Order");
+const ibChar* const kGroupNode = wxT("Group");
+const ibChar* const kFieldName = wxT("Field");
+const ibChar* const kDirName   = wxT("Ascending");
 
 // The nodes a settings record is written into. Named the way every other node here is — a stored
 // line is a RECORD inside the composition, not a registered value type, so nothing spells a class
@@ -332,25 +332,25 @@ constexpr ibClassID g_groupNodeClsid = make_clsid("CompositionGroupLine", ibClas
 // the user meets it, and the label they gave it. Nothing names a PARENT — a child is written under
 // its group, so standing there is the statement. `Kind` does double duty on purpose — on a group it
 // is the operator, on a condition the comparison — because a node is one or the other, never both.
-const wxChar* const kNodeKindName = wxT("Node");
-const wxChar* const kUseName      = wxT("Use");
-const wxChar* const kDisplayName  = wxT("Display");
-const wxChar* const kTextName     = wxT("Text");
+const ibChar* const kNodeKindName = wxT("Node");
+const ibChar* const kUseName      = wxT("Use");
+const ibChar* const kDisplayName  = wxT("Display");
+const ibChar* const kTextName     = wxT("Text");
 // ⚠ NAMED APART FROM THE LEVEL'S `kKindName` ABOVE, which is a different field of a different node
 // that happens to be spelled the same on disk. Two anonymous namespaces in one file are ONE
 // namespace, so the collision is a compile error rather than a subtle mix-up — but the reason the
 // two names exist is worth saying: a grouping LINE's unfold and a LEVEL's kind are not one thing.
-const wxChar* const kGroupKindName = wxT("Kind");
+const ibChar* const kGroupKindName = wxT("Kind");
 // BY PERIODS — the three parts of one answer, written only when the line has one (see the writer).
-const wxChar* const kPeriodUnitName = wxT("PeriodUnit");
-const wxChar* const kPeriodFromName = wxT("PeriodFrom");
-const wxChar* const kPeriodToName   = wxT("PeriodTo");
+const ibChar* const kPeriodUnitName = wxT("PeriodUnit");
+const ibChar* const kPeriodFromName = wxT("PeriodFrom");
+const ibChar* const kPeriodToName   = wxT("PeriodTo");
 
 // THE LIST'S OWN HALF — the main table, written only when there is one.
-const wxChar* const kMainTableName = wxT("MainTable");
+const ibChar* const kMainTableName = wxT("MainTable");
 // …AND THE QUERY, which is the composition's real source. Kept under the name the composition's own
 // property already used, so a record written before this file existed reads back unchanged.
-const wxChar* const kQueryName     = wxT("Query");
+const ibChar* const kQueryName     = wxT("Query");
 
 } // namespace
 
@@ -1261,9 +1261,9 @@ bool ibCompositionDescriptionMemory::WriteNode(ibDataValue& value, const ibCompo
 // ⭐⭐ ONE TABLE, READ BOTH WAYS. A second list would be a second thing to keep in step, and the day
 // it fell behind the failure would be a node silently arriving as type 0 — which is exactly the
 // failure this pair exists to end.
-static const std::pair<ibClassID, const wxChar*>* ibCompositionNodeTable(size_t& count)
+static const std::pair<ibClassID, const ibChar*>* ibCompositionNodeTable(size_t& count)
 {
-	static const std::pair<ibClassID, const wxChar*> s_names[] = {
+	static const std::pair<ibClassID, const ibChar*> s_names[] = {
 		{ g_variantNodeClsid,   wxT("CompositionVariant")    },
 		{ g_outputNodeClsid,    wxT("CompositionOutput")     },
 		{ g_levelNodeClsid,     wxT("CompositionLevel")      },
@@ -1285,7 +1285,7 @@ static const std::pair<ibClassID, const wxChar*>* ibCompositionNodeTable(size_t&
 wxString ibCompositionNodeName(ibClassID clsid)
 {
 	size_t count = 0;
-	const std::pair<ibClassID, const wxChar*>* const names = ibCompositionNodeTable(count);
+	const std::pair<ibClassID, const ibChar*>* const names = ibCompositionNodeTable(count);
 
 	for (size_t i = 0; i < count; ++i)
 		if (names[i].first == clsid)
@@ -1309,7 +1309,7 @@ ibClassID ibCompositionNodeClsid(const wxString& name)
 		return ibClassID(0);
 
 	size_t count = 0;
-	const std::pair<ibClassID, const wxChar*>* const names = ibCompositionNodeTable(count);
+	const std::pair<ibClassID, const ibChar*>* const names = ibCompositionNodeTable(count);
 
 	for (size_t i = 0; i < count; ++i)
 		if (name == names[i].second)

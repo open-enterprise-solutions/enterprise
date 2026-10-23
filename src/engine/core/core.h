@@ -12,6 +12,10 @@
 #define CORE_API WXIMPORT
 #endif
 
+// THE ENGINE'S CHARACTER — what an ibString (fstring.h) is made of, and what wx calls wxChar. Here, not in
+// fstring.h, because headers under it (this one, the number's separators, the boolean's words) name it too.
+#define ibChar wchar_t
+
 // `inline` IS A HINT AND THE INLINER DECLINES IT under a size budget — which it
 // does exactly where it hurts, inside the big dispatch functions. procUnit.cpp
 // found this first (its note: "the disassembly says so" — a two-instruction body
@@ -182,8 +186,8 @@ enum ibCtorObjectTypeEvent {
 // more than one place writes into that node: the value base writes the primitives, an enumeration
 // writes its member from the template that defines it, the client reads what the server wrote. Two
 // spellings of the same key is how a value gets written under one name and read under another.
-inline const wxChar* const kValueFieldClsid = wxT("t");   // the type — written and read FIRST
-inline const wxChar* const kValueFieldData  = wxT("v");   // the payload
+inline const ibChar* const kValueFieldClsid = wxT("t");   // the type — written and read FIRST
+inline const ibChar* const kValueFieldData  = wxT("v");   // the payload
 
 // THE CLIPBOARD'S FORMATS — what a copied object is put on the system's clipboard under. Here, not with a designer,
 // because both designers and the client copy and paste by them: one window pastes what another copied, so the

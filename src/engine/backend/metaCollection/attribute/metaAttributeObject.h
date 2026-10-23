@@ -35,12 +35,12 @@ inline wxString ibPhysicalFieldName(int metaId)
 		++digits;
 	const size_t length = 3 + digits;
 
-	wxChar text[3 + 10];   // "fld" and the ten digits a std::uint32_t can have
+	ibChar text[3 + 10];   // "fld" and the ten digits a std::uint32_t can have
 	text[0] = wxT('f');
 	text[1] = wxT('l');
 	text[2] = wxT('d');
 	for (size_t at = length; at > 3; v /= 10u)
-		text[--at] = static_cast<wxChar>(wxT('0') + v % 10u);
+		text[--at] = static_cast<ibChar>(wxT('0') + v % 10u);
 	return wxString(text, length);
 }
 

@@ -68,7 +68,8 @@ protected:
 	virtual bool DoOpenDocument(const wxString& filename) override;
 	virtual bool DoSaveDocument(const wxString& filename) override;
 
-	wxDECLARE_NO_COPY_CLASS(ibDataProcessorFileDocument);
+	ibDataProcessorFileDocument(const ibDataProcessorFileDocument&) = delete;
+	ibDataProcessorFileDocument& operator=(const ibDataProcessorFileDocument&) = delete;
 	wxDECLARE_DYNAMIC_CLASS(ibDataProcessorFileDocument);
 };
 

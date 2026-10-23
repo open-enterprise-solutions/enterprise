@@ -234,24 +234,24 @@ public:
 	ibPropertyList(ibPropertyCategory* cat, const wxString& name,
 		bool (optClass::* funcHandler)(ibPropertyList* prop), const long& value = wxNOT_FOUND) : ibProperty(cat, name, value)
 	{
-		m_functor = new ibPropertyValueFunctor<optClass>(funcHandler, (optClass*)cat->GetPropertyObject());
+		m_functor = std::make_unique<ibPropertyValueFunctor<optClass>>(funcHandler, (optClass*)cat->GetPropertyObject());
 	}
 
 	template <typename optClass>
 	ibPropertyList(ibPropertyCategory* cat, const wxString& name, const wxString& label,
 		bool (optClass::* funcHandler)(ibPropertyList* prop), const long& value = wxNOT_FOUND) : ibProperty(cat, name, label, value)
 	{
-		m_functor = new ibPropertyValueFunctor<optClass>(funcHandler, (optClass*)cat->GetPropertyObject());
+		m_functor = std::make_unique<ibPropertyValueFunctor<optClass>>(funcHandler, (optClass*)cat->GetPropertyObject());
 	}
 
 	template <typename optClass>
 	ibPropertyList(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString,
 		bool (optClass::* funcHandler)(ibPropertyList* prop), const long& value = wxNOT_FOUND) : ibProperty(cat, name, label, helpString, value)
 	{
-		m_functor = new ibPropertyValueFunctor<optClass>(funcHandler, (optClass*)cat->GetPropertyObject());
+		m_functor = std::make_unique<ibPropertyValueFunctor<optClass>>(funcHandler, (optClass*)cat->GetPropertyObject());
 	}
 
-	virtual ~ibPropertyList() { wxDELETE(m_functor); }
+	virtual ~ibPropertyList() {}
 
 	virtual bool IsEmptyProperty() const { return GetValueAsInteger() == wxNOT_FOUND; }
 
@@ -280,7 +280,7 @@ protected:
 private:
 
 	ibPropertyOptionList m_listPropValue;
-	ibPropertyFunctor* m_functor;
+	std::unique_ptr<ibPropertyFunctor> m_functor;
 
 	mutable std::shared_mutex m_listMutex;   // readers shared, a fill exclusive
 	std::atomic<bool>         m_listFilled { false };

@@ -104,7 +104,8 @@ protected:
 
 private:
 	wxDECLARE_CLASS(ibDocTemplate);
-	wxDECLARE_NO_COPY_CLASS(ibDocTemplate);
+	ibDocTemplate(const ibDocTemplate&) = delete;
+	ibDocTemplate& operator=(const ibDocTemplate&) = delete;
 };
 
 // ----------------------------------------------------------------------------

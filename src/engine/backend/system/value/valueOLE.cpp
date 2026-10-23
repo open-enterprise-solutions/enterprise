@@ -385,7 +385,7 @@ VARIANT ibValueOLE::FromValue(const ibValue& varRetValue) const
 	{
 		ibNumber fData = varRetValue.GetNumber();
 		if (fData == fData.Round()) {
-			wxLongLong_t llVal; fData.ToInt(llVal);
+			long long llVal; fData.ToInt(llVal);
 			oleVariant.vt = VT_I8;
 			oleVariant.llVal = llVal;
 		}

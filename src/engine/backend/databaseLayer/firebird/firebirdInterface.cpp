@@ -1,6 +1,8 @@
 #include "firebirdInterface.h"
 #include "firebirdBootstrap.h"
 
+#include "core/fileSystem.h"   // ibFileExists
+
 bool ibInterfaceFirebird::Init()
 {
 	// Locate _fb/ subfolder next to the executable + set DLL search
@@ -25,7 +27,7 @@ bool ibInterfaceFirebird::Init()
 #else
 		const wxString kitClient = fbDir + wxT("/lib/libfbclient.so.2");
 #endif
-		if (wxFileExists(kitClient))
+		if (ibFileExists(kitClient))
 			bLoaded = m_FirebirdDLL.Load(kitClient);
 	}
 #endif

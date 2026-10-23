@@ -7,7 +7,7 @@
 
 #include <wx/string.h>
 #include <wx/utils.h>
-#include "core/programFolder.h"
+#include "core/fileSystem.h"
 
 #include <wx/filename.h>
 #include <wx/file.h>
@@ -58,7 +58,7 @@ inline void ibTraceToFile(const wxString& text)
 	const wxString path = traceFile.GetFullPath();
 
 	wxFile file;
-	const bool opened = wxFileName::FileExists(path)
+	const bool opened = ibFileExists(path)
 		? file.Open(path, wxFile::write_append)
 		: file.Create(path, /*overwrite*/ false);
 	if (!opened)

@@ -22,7 +22,7 @@ void ibSpreadsheetTemplateView::OnDraw(ibDataNode& frame)
 	state.SetValue(ibProtocol::ibForm::ibSpreadsheet::GridArea, true);
 }
 
-bool ibSpreadsheetTemplateView::Fetch(const ibDataNode& WXUNUSED(request), ibDataNode& response)
+bool ibSpreadsheetTemplateView::Fetch(const ibDataNode& /*request*/, ibDataNode& response)
 {
 	const ibValueMetaObjectSpreadsheetBase* const creator =
 		GetDocument()->ConvertMetaObjectToType<ibValueMetaObjectSpreadsheetBase>();

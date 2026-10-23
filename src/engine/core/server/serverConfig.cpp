@@ -13,7 +13,7 @@
 #include "core/crypto/fieldCipher.h"
 #include "core/fstring.h"
 #include "core/guid.h"
-#include "core/programFolder.h"
+#include "core/fileSystem.h"
 #include "core/server/clusterControl.h"   // ibClusterControl::TokenFile
 #include "core/utils/base64.h"   // ibBase64 — the key's file and a sealed secret, in text
 
@@ -23,7 +23,7 @@ namespace {
 constexpr long kConfStyle = wxCONFIG_USE_LOCAL_FILE | wxCONFIG_USE_NO_ESCAPE_CHARACTERS;
 
 // What a sealed secret starts with.
-const wxChar* const kSealed = wxT("enc:");
+const ibChar* const kSealed = wxT("enc:");
 
 // The cluster's token: as many random bytes as a key has.
 constexpr std::size_t kTokenBytes = ibFieldCipher::kKeySize;
@@ -54,14 +54,14 @@ ibString ibServerConfig::DefaultFolder()
 
 bool ibServerConfig::HasConf() const
 {
-	return wxFileName::FileExists(m_confPath);
+	return ibFileExists(m_confPath);
 }
 
 bool ibServerConfig::LoadKey(ibString& error)
 {
 	const ibString path = wxFileName(m_folder, wxT("server.key")).GetFullPath();
 
-	if (wxFileName::FileExists(path)) {
+	if (ibFileExists(path)) {
 		wxFFile file(path, wxT("rb"));
 		wxString read;
 		if (!file.IsOpened() || !file.ReadAll(&read)) {
@@ -137,7 +137,7 @@ bool ibServerConfig::ReadClusterToken(ibString& token, ibString& error) const
 {
 	const ibString path = wxFileName(m_folder, ibClusterControl::TokenFile).GetFullPath();
 	// No file is an answer, not a fault — the tray asks every two seconds, and an open that fails says so in a box.
-	if (!wxFileName::FileExists(path)) {
+	if (!ibFileExists(path)) {
 		error = ibString::Format(wxT("there is no %s - the cluster has not started"), path);
 		return false;
 	}

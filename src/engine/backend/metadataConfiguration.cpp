@@ -23,6 +23,7 @@
 #include <fstream>
 #include <filesystem>
 
+#include "core/fileSystem.h"             // ibPathOf
 #include "backend/backend_exception.h"   // catch ibBackendException at the LoadCommonTree boundary
 #include "backend/query/schemaSnapshot.h"   // ibSchemaSnapshot / ibSchemaTable — ContributeTables drives data dump
 #include "backend/query/dataMover.h"         // ibDataMover::Dump / Restore (L3-3 row mover)
@@ -68,7 +69,7 @@ bool ibMetaDataConfigurationBase::SaveConfigToFile(const wxString& strFileName)
 	// a good existing config file. Temp sits next to the target so the rename
 	// stays on one filesystem (atomic). std::filesystem (C++17), no wx.
 	namespace fs = std::filesystem;
-	const fs::path dstPath(strFileName.ToStdWstring());
+	const fs::path dstPath = ibPathOf(strFileName);
 	fs::path tmpPath = dstPath;
 	tmpPath += L".tmp";
 

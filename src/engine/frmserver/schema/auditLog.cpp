@@ -14,7 +14,7 @@ bool ibSchemaAuditLog::AccessRight(const ibSession& session) const
 }
 
 std::function<void()> ibSchemaAuditLog::Command(const ibSession& session, std::int32_t command,
-	const ibDataNode& WXUNUSED(args), ibProtocol::ibRefusal& refusal, wxString& error) const
+	const ibDataNode& /*args*/, ibProtocol::ibRefusal& refusal, wxString& error) const
 {
 	if (static_cast<ibProtocol::ibSchema::ibCommand>(command) != ibProtocol::ibSchema::ibCommand::Open) {
 		refusal = ibProtocol::ibRefusal::NotFound;

@@ -135,9 +135,9 @@ class ibValueSpreadsheetDocumentParameterCollection : public ibValueDynamicMembe
 		enSet,
 	};
 
-	static wxVector<wxString> ParseBrackets(const wxString& str) {
+	static std::vector<wxString> ParseBrackets(const wxString& str) {
 
-		wxVector<wxString> tokens;
+		std::vector<wxString> tokens;
 
 		size_t start_pos = 0;
 		size_t end_pos = 0;
@@ -440,8 +440,8 @@ bool ibValueSpreadsheetDocument::CallAsFunc(const long lMethodNum, ibValue& pvar
 		// the content's own end (no empty cells made for it), and the answer is always a document. Two refusals
 		// stood here, heard by nobody (the return slot kept the call before), and the second checked the row END
 		// against the number of COLUMNS.
-		const int rowEnd = wxMin(paParams[1]->GetInteger(), m_spreadsheetDoc->GetNumberRows());
-		const int colEnd = lSizeArray > 3 ? wxMin(paParams[3]->GetInteger(), m_spreadsheetDoc->GetNumberCols()) : -1;
+		const int rowEnd = std::min(paParams[1]->GetInteger(), m_spreadsheetDoc->GetNumberRows());
+		const int colEnd = lSizeArray > 3 ? std::min(paParams[3]->GetInteger(), m_spreadsheetDoc->GetNumberCols()) : -1;
 		pvarRetValue = new ibValueSpreadsheetDocument(m_spreadsheetDoc->GetArea(
 			paParams[0]->GetInteger(), rowEnd, lSizeArray > 2 ? paParams[2]->GetInteger() : -1, colEnd));
 
@@ -521,7 +521,7 @@ bool ibValueSpreadsheetDocument::CallAsProc(const long lMethodNum, ibValue** paP
 		ibValuePtr<ibValueSpreadsheetDocument> valueSpreadsheet(
 			paParams[0]->ConvertToType<ibValueSpreadsheetDocument>());
 		const unsigned int groupLevel = (lSizeArray > 1)
-			? (unsigned int)wxMax(0, paParams[1]->GetInteger()) : 0u;
+			? (unsigned int)std::max(0, paParams[1]->GetInteger()) : 0u;
 		if (valueSpreadsheet)
 			m_spreadsheetDoc->PutArea(valueSpreadsheet->GetSpreadsheetDocument(), groupLevel);
 		return true;
@@ -530,7 +530,7 @@ bool ibValueSpreadsheetDocument::CallAsProc(const long lMethodNum, ibValue** paP
 		ibValuePtr<ibValueSpreadsheetDocument> valueSpreadsheet(
 			paParams[0]->ConvertToType<ibValueSpreadsheetDocument>());
 		const unsigned int groupLevel = (lSizeArray > 1)
-			? (unsigned int)wxMax(0, paParams[1]->GetInteger()) : 0u;
+			? (unsigned int)std::max(0, paParams[1]->GetInteger()) : 0u;
 		if (valueSpreadsheet)
 			m_spreadsheetDoc->JoinArea(valueSpreadsheet->GetSpreadsheetDocument(), groupLevel);
 		return true;

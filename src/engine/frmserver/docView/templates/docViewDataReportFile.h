@@ -68,7 +68,8 @@ protected:
 	virtual bool DoOpenDocument(const wxString& filename) override;
 	virtual bool DoSaveDocument(const wxString& filename) override;
 
-	wxDECLARE_NO_COPY_CLASS(ibReportFileDocument);
+	ibReportFileDocument(const ibReportFileDocument&) = delete;
+	ibReportFileDocument& operator=(const ibReportFileDocument&) = delete;
 	wxDECLARE_DYNAMIC_CLASS(ibReportFileDocument);
 };
 

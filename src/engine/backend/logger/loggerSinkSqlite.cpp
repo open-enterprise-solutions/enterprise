@@ -3,14 +3,14 @@
 #include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
 #include "backend/databaseLayer/databaseLayer.h"
 #include "backend/databaseLayer/preparedStatement.h"
+#include "core/fileSystem.h"
 
 #include <wx/filename.h>
-#include <wx/log.h>
 
 ibLoggerSinkSqlite::ibLoggerSinkSqlite(const wxString& dir)
     : m_dir(dir)
 {
-    if (!m_dir.IsEmpty() && !wxFileName::DirExists(m_dir))
+    if (!m_dir.IsEmpty() && !ibDirExists(m_dir))
         wxFileName::Mkdir(m_dir, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
 }
 

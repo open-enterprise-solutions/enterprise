@@ -1,9 +1,7 @@
 #include "backend/utils/dataVersion.hpp"
 
-#include <wx/datetime.h>
-#include <wx/longlong.h>
-
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 
 namespace ibDataVersion {
@@ -66,10 +64,10 @@ wxString Encode(std::uint64_t hi, std::uint64_t lo) {
 } // namespace
 
 wxString NewStamp() {
-    // Wall-clock milliseconds since Unix epoch. wxLongLong gives us a
-    // portable 64-bit value across the supported toolchains.
-    const wxLongLong ms = wxGetUTCTimeMillis();
-    const std::uint64_t msU = static_cast<std::uint64_t>(ms.GetValue());
+    // Wall-clock milliseconds since Unix epoch (system_clock's epoch on
+    // every supported toolchain).
+    const std::uint64_t msU = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count());
 
     const std::uint64_t counter = NextCounter();
 
@@ -86,7 +84,7 @@ bool IsValidStamp(const wxString& str) {
     if (str.length() != static_cast<size_t>(kStampLen))
         return false;
     for (size_t i = 0; i < str.length(); ++i) {
-        const wxChar c = str.GetChar(i);
+        const ibChar c = str.GetChar(i);
         const bool digit  = (c >= '0' && c <= '9');
         const bool upper  = (c >= 'A' && c <= 'Z');
         const bool lower  = (c >= 'a' && c <= 'z');

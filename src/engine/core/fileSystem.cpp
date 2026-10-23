@@ -1,4 +1,4 @@
-#include "core/programFolder.h"
+#include "core/fileSystem.h"
 
 #include <wx/filename.h>
 #include <wx/stdpaths.h>
@@ -42,16 +42,6 @@ wxString ibProgramFolder()
 	return ibProgramFolder(wxStandardPaths::Get().GetExecutablePath());
 }
 
-wxString ibBackendConfPath()
-{
-	const wxString working = wxGetCwd() + wxFILE_SEP_PATH + wxT("backend.conf");
-	if (wxFileName::FileExists(working))
-		return working;
-	// Inside a bundle the program folder is the one that contains the .app, which is where the file is shipped.
-	const wxString beside = ibProgramFolder() + wxFILE_SEP_PATH + wxT("backend.conf");
-	return wxFileName::FileExists(beside) ? beside : wxString();
-}
-
 wxString ibDiagnosticFolder()
 {
 #if defined(__WXOSX__)
@@ -71,4 +61,66 @@ wxString ibDiagnosticFolder()
 	}
 #endif
 	return ibProgramFolder();
+}
+
+wxString ibGetCwd()
+{
+	std::error_code error;
+	return wxString(std::filesystem::current_path(error).wstring());
+}
+
+wxString ibBackendConfPath()
+{
+	const wxString working = ibGetCwd() + wxFILE_SEP_PATH + wxT("backend.conf");
+	if (ibFileExists(working))
+		return working;
+	// Inside a bundle the program folder is the one that contains the .app, which is where the file is shipped.
+	const wxString beside = ibProgramFolder() + wxFILE_SEP_PATH + wxT("backend.conf");
+	return ibFileExists(beside) ? beside : wxString();
+}
+
+bool ibDirExists(const ibString& path)
+{
+	std::error_code error;
+	return std::filesystem::is_directory(ibPathOf(path), error);
+}
+
+bool ibFileExists(const ibString& path)
+{
+	std::error_code error;
+	return std::filesystem::is_regular_file(ibPathOf(path), error);
+}
+
+// A FILE: remove() alone would take an empty folder too.
+bool ibRemoveFile(const ibString& path)
+{
+	const std::filesystem::path file = ibPathOf(path);
+	std::error_code error;
+	return std::filesystem::is_regular_file(file, error) && std::filesystem::remove(file, error);
+}
+
+bool ibRenameFile(const ibString& from, const ibString& to)
+{
+	const std::filesystem::path source = ibPathOf(from);
+	const std::filesystem::path target = ibPathOf(to);
+	std::error_code error;
+	std::filesystem::rename(source, target, error);
+	if (!error)
+		return true;
+	// Another volume: a rename cannot cross it, so the file is copied and the original removed — as wx did.
+	if (!std::filesystem::copy_file(source, target, std::filesystem::copy_options::overwrite_existing, error))
+		return false;
+	std::filesystem::remove(source, error);
+	return true;
+}
+
+bool ibCopyFile(const ibString& from, const ibString& to)
+{
+	std::error_code error;
+	return std::filesystem::copy_file(ibPathOf(from), ibPathOf(to), std::filesystem::copy_options::overwrite_existing, error);
+}
+
+std::filesystem::path ibPathOf(const ibString& text)
+{
+	return std::filesystem::path(text.wc_str(), text.wc_str() + text.Len());
 }

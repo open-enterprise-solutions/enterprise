@@ -38,9 +38,6 @@ target_link_libraries(webserver PRIVATE
     core
     wx::base
 )
-if(WIN32)
-    target_link_libraries(webserver PRIVATE ws2_32)
-endif()
 if(APPLE)
     target_link_libraries(webserver PRIVATE "-framework CoreFoundation")
 endif()

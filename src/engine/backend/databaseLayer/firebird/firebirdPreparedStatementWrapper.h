@@ -14,6 +14,8 @@
 
 #include "engine/ibase.h"
 
+#include <memory>
+
 #include "backend/databaseLayer/databaseErrorReporter.h"
 #include "backend/databaseLayer/databaseStringConverter.h"
 
@@ -60,7 +62,7 @@ private:
 	isc_db_handle m_pDatabase;
 	isc_tr_handle m_pTransaction;
 
-	ibDatabaseParameterFirebirdCollection* m_pParameterCollection;
+	std::unique_ptr<ibDatabaseParameterFirebirdCollection> m_pParameterCollection;
 
 	ISC_STATUS_ARRAY m_Status;
 	ibInterfaceFirebird* m_pInterface;

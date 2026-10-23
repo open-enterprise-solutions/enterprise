@@ -30,7 +30,8 @@ public:
 
 	ibSpreadsheetTemplateDocument() : ibMetaDocument() {}
 
-	wxDECLARE_NO_COPY_CLASS(ibSpreadsheetTemplateDocument);
+	ibSpreadsheetTemplateDocument(const ibSpreadsheetTemplateDocument&) = delete;
+	ibSpreadsheetTemplateDocument& operator=(const ibSpreadsheetTemplateDocument&) = delete;
 	wxDECLARE_DYNAMIC_CLASS(ibSpreadsheetTemplateDocument);
 };
 

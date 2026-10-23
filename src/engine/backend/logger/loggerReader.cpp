@@ -4,6 +4,7 @@
 #include "backend/databaseLayer/databaseLayer.h"
 #include "backend/databaseLayer/preparedStatement.h"
 #include "backend/databaseLayer/databaseResultSet.h"
+#include "core/fileSystem.h"
 
 #include <wx/dir.h>
 #include <wx/filename.h>
@@ -28,7 +29,7 @@ bool ParseLogFileName(const wxString& name, int& year, int& month)
 // Returns true when the year-month bucket intersects the filter's
 // date range. Bounded by 0 → "no constraint".
 bool MonthInRange(int year, int month,
-                  wxLongLong_t from_ms, wxLongLong_t to_ms)
+                  long long from_ms, long long to_ms)
 {
     if (from_ms == 0 && to_ms == 0) return true;
 
@@ -37,8 +38,8 @@ bool MonthInRange(int year, int month,
     wxDateTime nextMonth = start;
     nextMonth.Add(wxDateSpan::Month());
 
-    const wxLongLong_t bucketStart = start.GetValue().GetValue();
-    const wxLongLong_t bucketEnd   = nextMonth.GetValue().GetValue();
+    const long long bucketStart = start.GetValue().GetValue();
+    const long long bucketEnd   = nextMonth.GetValue().GetValue();
 
     if (from_ms != 0 && bucketEnd   <= from_ms) return false;
     if (to_ms   != 0 && bucketStart >= to_ms)   return false;
@@ -57,7 +58,7 @@ bool MonthInRange(int year, int month,
 struct BoundFilter {
     wxString               where;       // "" or "ts_ms >= ? AND ..."
     std::vector<wxString>  strs;
-    std::vector<wxLongLong_t> nums;     // mixed int / longlong storage
+    std::vector<long long> nums;     // mixed int / longlong storage
     // Order in which params are bound 1..N:
     //   p[i].first  == 'S' → strs[stringIdx++]
     //   p[i].first  == 'L' → nums[longIdx++] as double
@@ -132,7 +133,7 @@ ibLoggerReader::ibLoggerReader(const wxString& dir)
 std::vector<wxString> ibLoggerReader::CollectFiles(const ibLogFilter& filter) const
 {
     std::vector<wxString> files;
-    if (m_dir.IsEmpty() || !wxFileName::DirExists(m_dir)) return files;
+    if (m_dir.IsEmpty() || !ibDirExists(m_dir)) return files;
 
     wxDir d(m_dir);
     if (!d.IsOpened()) return files;
@@ -198,7 +199,7 @@ std::vector<ibLogRow> ibLoggerReader::Query(const ibLogFilter& filter)
                     continue;
                 }
                 ibLogRow r;
-                r.ts_ms       = static_cast<wxLongLong_t>(rs->GetResultDouble(1));
+                r.ts_ms       = static_cast<long long>(rs->GetResultDouble(1));
                 r.level       = rs->GetResultInt(2);
                 r.session_id  = rs->GetResultString(3);
                 r.user_name   = rs->GetResultString(4);

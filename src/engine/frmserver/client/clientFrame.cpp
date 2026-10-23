@@ -97,7 +97,8 @@ ibClientFrame::~ibClientFrame()
 	// (ibClientInstance::OnExit). What is left are the tab shells, and the manager with nothing in it.
 	m_pendingCloses.clear();
 	m_tabs.clear();
-	wxDELETE(m_docManager);
+	delete m_docManager;
+	m_docManager = nullptr;
 
 	// Every request still waiting is withdrawn — nothing chosen — and its script woken, so it unwinds instead
 	// of waiting for a client nobody will respond for once the frame is gone.
@@ -417,7 +418,7 @@ bool ibClientFrame::ShowSpreadsheetDocument(const wxString& strTitle, std::share
 	return false;
 }
 
-bool ibClientFrame::PrintSpreadsheetDocument(const std::shared_ptr<ibSpreadsheetObject>& doc, bool WXUNUSED(showPrintDlg))
+bool ibClientFrame::PrintSpreadsheetDocument(const std::shared_ptr<ibSpreadsheetObject>& doc, bool /*showPrintDlg*/)
 {
 	// THE SHEET AS A SPREADSHEET'S FETCH WRITES IT (ibFetchSpreadsheet) — its texts as shown: the client's sheet holds no
 	// parameters, and prints it as the desktop's printed its own.

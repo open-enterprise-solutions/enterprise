@@ -22,9 +22,6 @@
 
 #include <wx/file.h>
 #include <wx/filename.h>
-#include <wx/stdpaths.h>
-#include <wx/tokenzr.h>
-#include <wx/regex.h>
 
 // Firebird SQL dialect — owned by the driver. Static holds the definition (a
 // test reads it without constructing the driver); virtual GetDialect() exposes
@@ -491,7 +488,7 @@ ibDatabaseLayerFirebird::~ibDatabaseLayerFirebird()
 {
 	Close();
 	ISC_STATUS_ARRAY* pStatus = (ISC_STATUS_ARRAY*)m_pStatus;
-	wxDELETEA(pStatus);
+	delete[] pStatus;
 	m_pStatus = NULL;
 	// m_pInterface is a shared_ptr: releasing our reference here frees the
 	// interface ONLY if the maintenance scheduler is not still holding it.
@@ -1658,7 +1655,7 @@ ibPreparedStatement* ibDatabaseLayerFirebird::DoPrepareStatement(const wxString&
 	{
 		SetErrorCode(pStatement->GetErrorCode(), pStatement->GetErrorKind());
 		SetErrorMessage(pStatement->GetErrorMessage());
-		wxDELETE(pStatement); // This sets the pointer to NULL after deleting it
+		delete pStatement;
 
 		ThrowDatabaseException();
 		return NULL;
@@ -2120,11 +2117,8 @@ bool ibDatabaseLayerFirebird::ReconnectIfLeaderChanged()
 
 bool ibDatabaseLayerFirebird::IsAvailable()
 {
-	bool bAvailable = false;
-	ibInterfaceFirebird* pInterface = new ibInterfaceFirebird();
-	bAvailable = pInterface && pInterface->Init();
-	wxDELETE(pInterface);
-	return bAvailable;
+	ibInterfaceFirebird library;
+	return library.Init();
 }
 
 

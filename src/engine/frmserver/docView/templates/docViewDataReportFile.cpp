@@ -11,7 +11,7 @@ bool ibReportEditView::OnCreate(ibDocument *doc, long flags)
 	return ibView::OnCreate(doc, flags);
 }
 
-void ibReportEditView::OnDraw(ibDataNode& WXUNUSED(frame))
+void ibReportEditView::OnDraw(ibDataNode& /*frame*/)
 {
 	// nothing to do here, wxTextCtrl draws itself
 }

@@ -24,7 +24,7 @@ void AppendQuotedWide(Wide& out, const wchar_t* text, size_t length)
 	const wchar_t* run = begin;
 	for (const wchar_t* p = begin; p != end; ++p) {
 		const unsigned long c = static_cast<unsigned long>(*p);
-		const wxChar* escape = nullptr;
+		const ibChar* escape = nullptr;
 		switch (c) {
 		case '"':  escape = wxT("\\\""); break;
 		case '\\': escape = wxT("\\\\"); break;

@@ -3,7 +3,6 @@
 #include "backend/databaseLayer/databaseErrorCodes.h"
 
 #include <atomic>   // the statement-name counter
-#include <wx/tokenzr.h>
 #include <wx/arrimpl.cpp>
 
 WX_DEFINE_OBJARRAY(ArrayOfPostgresPreparedStatementWrappers);
@@ -266,7 +265,7 @@ wxString ibPreparedStatementPostgres::TranslateSQL(const wxString& strOriginalSQ
 	unsigned int len = strOriginalSQL.length();
 	for (unsigned int i = 0; i < len; i++)
 	{
-		wxChar character = strOriginalSQL[i];
+		ibChar character = strOriginalSQL[i];
 		if (wxT('\'') == character)
 		{
 			// Signify that we are inside a string literal inside the SQL

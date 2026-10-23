@@ -22,7 +22,7 @@ ibDebuggerServer* SwitchableServer(const ibSession& session)
 
 }
 
-void ibSchemaDebugging::Build(const ibSession& session, const ibDataNode& WXUNUSED(args), ibDataNode& result) const
+void ibSchemaDebugging::Build(const ibSession& session, const ibDataNode& /*args*/, ibDataNode& result) const
 {
 	const ibDebuggerServer* const server = debugServer;
 	result.SetValue(ibProtocol::ibSchema::ibDebugging::Debugging, server != nullptr && server->EnableDebugging());
@@ -30,7 +30,7 @@ void ibSchemaDebugging::Build(const ibSession& session, const ibDataNode& WXUNUS
 }
 
 std::function<void()> ibSchemaDebugging::Command(const ibSession& session, std::int32_t command,
-	const ibDataNode& WXUNUSED(args), ibProtocol::ibRefusal& refusal, wxString& error) const
+	const ibDataNode& /*args*/, ibProtocol::ibRefusal& refusal, wxString& error) const
 {
 	const ibProtocol::ibSchema::ibCommand what = static_cast<ibProtocol::ibSchema::ibCommand>(command);
 	if (what != ibProtocol::ibSchema::ibCommand::Start && what != ibProtocol::ibSchema::ibCommand::Stop) {

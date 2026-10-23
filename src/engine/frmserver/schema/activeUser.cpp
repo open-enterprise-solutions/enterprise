@@ -17,7 +17,7 @@ bool ibSchemaActiveUser::AccessRight(const ibSession& session) const
 	return metaData != nullptr && metaData->AccessRight_ActiveUsers();
 }
 
-void ibSchemaActiveUser::Build(const ibSession& session, const ibDataNode& WXUNUSED(args), ibDataNode& result) const
+void ibSchemaActiveUser::Build(const ibSession& session, const ibDataNode& /*args*/, ibDataNode& result) const
 {
 	const ibApplicationInstance* const applicationInstance = session.GetApplicationInstance();
 

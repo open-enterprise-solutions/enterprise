@@ -2,8 +2,8 @@
 
 #include "backend/backend_exception.h"   // ibBackendException::DrainLastErrors — the reasons the base gave
 
-std::function<void()> ibClientSchema::Command(const ibSession& WXUNUSED(session),
-	std::int32_t WXUNUSED(command), const ibDataNode& WXUNUSED(args), ibProtocol::ibRefusal& refusal, wxString& error) const
+std::function<void()> ibClientSchema::Command(const ibSession& /*session*/,
+	std::int32_t /*command*/, const ibDataNode& /*args*/, ibProtocol::ibRefusal& refusal, wxString& error) const
 {
 	// A schema that only shows something takes no commands.
 	refusal = ibProtocol::ibRefusal::NotFound;

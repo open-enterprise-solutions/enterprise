@@ -188,7 +188,7 @@ void ibDebuggerClient::ibDebuggerClientAdapter::OnEvalMessage(const wxString& me
 }
 
 void ibDebuggerClient::ibDebuggerClientAdapter::OnSandboxResult(bool ran, const wxString& answer,
-	const wxString& json, wxLongLong_t microseconds)
+	const wxString& json, long long microseconds)
 {
 	IB_DEBUG_FANOUT(OnSandboxResult(ran, answer, json, microseconds));
 }

@@ -34,12 +34,12 @@ void ibQueryLexer::RaiseRefusal() const
 			wxString::Format(_("Query lexical error at line %u (position %u): %s"), currLine, currPos, errorDesc));
 }
 
-wxChar ibQueryLexer::PeekRawByte() const
+ibChar ibQueryLexer::PeekRawByte() const
 {
 	const unsigned int pos = GetCurrentPos();
 	if (pos < GetBufferSize())
 		return m_strBuffer[pos];
-	return wxChar(0);
+	return ibChar(0);
 }
 
 // THE LEXER'S OWN ANSWER, not a second opinion about it. Anything that lexes as one identifier and
@@ -168,20 +168,20 @@ std::vector<ibQueryToken> ibQueryLexer::Tokenize(const wxString& queryText)
 			wxUniChar c; GetByte(&c);
 			switch (c.GetValue()) {
 			case '<': {
-				const wxChar n = PeekRawByte();
+				const ibChar n = PeekRawByte();
 				if (n == wxT('=')) { GetByte(); t.m_kind = ibQueryTokenKind::Op; t.m_text = wxT("<="); }
 				else if (n == wxT('>')) { GetByte(); t.m_kind = ibQueryTokenKind::Op; t.m_text = wxT("<>"); }
 				else { t.m_kind = ibQueryTokenKind::Op; t.m_text = wxT("<"); }
 				break;
 			}
 			case '>': {
-				const wxChar n = PeekRawByte();
+				const ibChar n = PeekRawByte();
 				if (n == wxT('=')) { GetByte(); t.m_kind = ibQueryTokenKind::Op; t.m_text = wxT(">="); }
 				else { t.m_kind = ibQueryTokenKind::Op; t.m_text = wxT(">"); }
 				break;
 			}
 			case '!': {
-				const wxChar n = PeekRawByte();
+				const ibChar n = PeekRawByte();
 				if (n == wxT('=')) { GetByte(); t.m_kind = ibQueryTokenKind::Op; t.m_text = wxT("<>"); }
 				else { t.m_kind = ibQueryTokenKind::Op; t.m_text = wxT("!"); }
 				break;

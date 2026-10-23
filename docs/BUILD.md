@@ -349,7 +349,7 @@ the web is not built there.
   icon placed into `Resources` and `Info.plist` filled in (`CFBundleIdentifier`,
   `CFBundleExecutable`, icon name). Treat the `if(APPLE)` branches in the designer /
   enterprise / launcher CMake files as working code, not scaffolding
-- **Inside a bundle, the program folder is the one that holds the `.app`** (`core/programFolder.h`).
+- **Inside a bundle, the program folder is the one that holds the `.app`** (`core/fileSystem.h`).
   A program running from `X.app/Contents/MacOS/` looks beside the bundle for everything a Windows
   or Linux build keeps beside its executable: `backend.conf`, `lang/`, `help/`, `plugins/`, `_fb/`,
   `web/`, the application server's default `server/`, `libfileserver.dylib`, and the other
@@ -548,7 +548,7 @@ package. The kit's libraries find each other on their own — `$ORIGIN/../lib` o
 answered by the programs' rpath to `_fb` on macOS — and the engine loads `_fb/lib/libfbclient` by its
 full path (`firebirdInterface.cpp`; a POSIX loader has no `SetDllDirectory`, so a bare name found the
 system's alone), with `_fb` looked for in the program folder — beside the executable, or beside the
-`.app` for a program inside a bundle (`firebirdBootstrap.cpp`, `core/programFolder.h`).
+`.app` for a program inside a bundle (`firebirdBootstrap.cpp`, `core/fileSystem.h`).
 Each packing script then **creates a UTF8 base embedded, with a case-insensitive Unicode collation, and
 reads a row back** — Firebird's own `isql` put into the kit for that minute — because resolved libraries
 are not a working engine: the engine plugin, the character sets and ICU are loaded at run time.

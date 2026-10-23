@@ -30,10 +30,10 @@ protected:
 private:
 
 #if !wxUSE_UTF8_LOCALE_ONLY
-	static void DoErrorWchar(const wxChar* format, ...);
+	static void DoErrorWchar(const ibChar* format, ...);
 #endif
 #if wxUSE_UNICODE_UTF8
-	static void DoErrorUtf8(const wxChar* format, ...);
+	static void DoErrorUtf8(const ibChar* format, ...);
 #endif
 
 	std::string m_descriptionUtf8;

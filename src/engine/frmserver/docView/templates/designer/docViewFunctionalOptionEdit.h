@@ -46,7 +46,8 @@ public:
 
 	ibFunctionalOptionMembersDocument() : ibMetaDocument() {}
 
-	wxDECLARE_NO_COPY_CLASS(ibFunctionalOptionMembersDocument);
+	ibFunctionalOptionMembersDocument(const ibFunctionalOptionMembersDocument&) = delete;
+	ibFunctionalOptionMembersDocument& operator=(const ibFunctionalOptionMembersDocument&) = delete;
 	wxDECLARE_DYNAMIC_CLASS(ibFunctionalOptionMembersDocument);
 };
 

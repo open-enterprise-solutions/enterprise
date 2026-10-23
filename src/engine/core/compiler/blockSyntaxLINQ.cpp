@@ -36,7 +36,7 @@ bool Mentions(const wxString& expression, const wxString& name)
 {
 	if (name.IsEmpty())
 		return false;
-	const auto wordChar = [](wxUniChar c) { return wxIsalnum(c) || c == wxT('_'); };
+	const auto wordChar = [](wxUniChar c) { return ibIsAlnum(c) || c == wxT('_'); };
 	bool quoted = false;
 	for (size_t i = 0; i < expression.length(); ++i) {
 		const wxUniChar c = expression[i];
@@ -70,10 +70,10 @@ wxString MadeOne(const std::vector<std::pair<wxString, wxString>>& parts)
 
 bool IsName(const wxString& text)
 {
-	if (text.IsEmpty() || wxIsdigit(text[0]))
+	if (text.IsEmpty() || ibIsDigit(text[0]))
 		return false;
 	for (const wxUniChar c : text)
-		if (!wxIsalnum(c) && c != wxT('_'))
+		if (!ibIsAlnum(c) && c != wxT('_'))
 			return false;
 	return true;
 }
@@ -222,8 +222,8 @@ wxString ibLinqBlock::Write(const wxString& indent, wxString& refusal, bool draf
 		if (text.IsEmpty())
 			continue;
 		bool count = text[0] != wxT('"') && text[0] != wxT('\'');
-		if (count && wxIsdigit(text[0]))
-			count = std::all_of(text.begin(), text.end(), [](wxUniChar c) { return wxIsdigit(c) != 0; });
+		if (count && ibIsDigit(text[0]))
+			count = std::all_of(text.begin(), text.end(), [](wxUniChar c) { return ibIsDigit(c); });
 		if (!count)
 			refuse(wxString::Format(_("'%s' takes a number of rows: a whole number, or a variable that holds one."),
 				word(cut.first)));
@@ -542,7 +542,7 @@ bool ibLinqBlock::Parse(const wxString& text, ibLinqBlock& block, wxString& refu
 			return limit;
 		}
 		unsigned int at = from;
-		while (at < limit && !wxIsspace(source[at])
+		while (at < limit && !ibIsSpace(source[at])
 			&& !(source[at] == wxT('/') && at + 1 < limit && source[at + 1] == wxT('/')))
 			++at;
 		return at > from ? at : std::min(from + 1, limit);

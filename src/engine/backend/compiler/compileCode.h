@@ -116,7 +116,7 @@ public:
 	static void SetCodeStyle(short codeStyle);
 	static short GetCodeStyle();
 
-	ibCompileContext* GetContext() const { return m_rootContext; }
+	ibCompileContext* GetContext() const { return m_rootContext.get(); }
 
 	// Wire one bytecode dependency on this module's bytecode. Forward
 	// to ibByteCode::AddDependency, which atomically pushes pointer
@@ -161,7 +161,7 @@ public:
 	// compiler, which builds it, is the only one who names it.
 	ibByteExtCode		m_cByteCode;        // output array of bytecodes for execution by the virtual machine
 
-	ibCompileContext* m_rootContext; // root context 
+	std::unique_ptr<ibCompileContext> m_rootContext; // root context
 
 	// Cursor over the translator's lexems — "before the first token" is -1, and the
 	// INITIALISER is the only thing that says so on the eval path. A module

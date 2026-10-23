@@ -65,13 +65,13 @@ namespace {
 // (the server returns an InputRequiredResult and the client re-calls) — which is a rebuild of how
 // the assistant window asks the model anything, not a version bump. Naming 2025-11-25 states the
 // truth today; the dual-era work is its own piece.
-const wxChar* const kProtocolVersion = wxT("2025-11-25");
+const ibChar* const kProtocolVersion = wxT("2025-11-25");
 
 // The revisions a caller may name and still be served. They differ, on THIS server's side, only
 // in what the client is obliged to send — the header below arrived in 2025-06-18 — so one
 // implementation answers all three honestly. A version outside this list is refused rather than
 // answered as if it were ours: see IsProtocolVersionAcceptable.
-const wxChar* const kSupportedProtocolVersions[] = {
+const ibChar* const kSupportedProtocolVersions[] = {
 	wxT("2025-11-25"),
 	wxT("2025-06-18"),
 	wxT("2025-03-26"),
@@ -94,7 +94,7 @@ const wxChar* const kSupportedProtocolVersions[] = {
 std::vector<ibDataValue> SupportedVersionList()
 {
 	std::vector<ibDataValue> versions;
-	for (const wxChar* const* v = kSupportedProtocolVersions; *v != nullptr; ++v)
+	for (const ibChar* const* v = kSupportedProtocolVersions; *v != nullptr; ++v)
 		versions.push_back(ibDataValue::String(wxString(*v)));
 
 	return versions;
@@ -343,7 +343,7 @@ private:
 			return true;   // pre-2025-06-18 client — read as 2025-03-26, per the transport
 
 		const wxString asked = wxString::FromUTF8(header.c_str(), header.size()).Trim(true).Trim(false);
-		for (const wxChar* const* v = kSupportedProtocolVersions; *v != nullptr; ++v) {
+		for (const ibChar* const* v = kSupportedProtocolVersions; *v != nullptr; ++v) {
 			if (asked == *v)
 				return true;
 		}
@@ -685,7 +685,8 @@ private:
 	wxString           m_heldWord;
 	wxString           m_heldLine;
 
-	wxDECLARE_NO_COPY_CLASS(ibMcpMetaBridge);
+	ibMcpMetaBridge(const ibMcpMetaBridge&) = delete;
+	ibMcpMetaBridge& operator=(const ibMcpMetaBridge&) = delete;
 };
 
 ibMetaDataConfigurationBase* ibMcpServer::GetMetaData() const
@@ -714,7 +715,7 @@ namespace {
 // THE SERVER'S OWN ADDRESS in the settings store. A literal, because what is
 // configured here is the PLATFORM — it has no metaobject whose identity it
 // could borrow. Minted once; changing it orphans everything already saved.
-const wxChar* const kMcpSettingsObject = wxT("6d637073-6572-7665-7200-000000000001");
+const ibChar* const kMcpSettingsObject = wxT("6d637073-6572-7665-7200-000000000001");
 
 ibSettingsKey KeyFor(const ibSession* session)
 {
@@ -1289,7 +1290,7 @@ bool ibMcpServer::RunTool(const class ibMcpTool* tool, const ibDataNode& argumen
 	// with how long it took. Enough to tell "slow" from "never ran" without a debugger.
 	const wxString toolName = tool->GetName();
 	ibJournalInfo(wxT("mcp"), wxT("%s: handed to the main thread"), toolName);
-	const wxLongLong startedAt = wxGetUTCTimeMillis();
+	const auto startedAt = std::chrono::steady_clock::now();
 
 	std::future<void> done = pool->Submit(m_session, [call]() {
 		call->m_ok = call->m_tool->Call(call->m_arguments, call->m_payload, call->m_refusal);
@@ -1338,7 +1339,8 @@ bool ibMcpServer::RunTool(const class ibMcpTool* tool, const ibDataNode& argumen
 	// the work took four seconds or four minutes, and whether it succeeded anyway.
 	ibJournalInfo(wxT("mcp"), wxT("%s: %s in %lld ms"), toolName,
 		call->m_ok ? wxT("done") : (call->m_refusal.IsEmpty() ? wxT("refused") : call->m_refusal),
-		(wxGetUTCTimeMillis() - startedAt).GetValue());
+		static_cast<long long>(std::chrono::duration_cast<std::chrono::milliseconds>(
+			std::chrono::steady_clock::now() - startedAt).count()));
 
 	return call->m_ok;
 }
@@ -2126,7 +2128,7 @@ wxString BuildOrientation(const ibApplicationInstance* applicationInstance)
 		// in order to edit it, and a warning that arrives beside the sentence it is about is the
 		// one that gets read.
 		std::vector<ibDataValue> links;
-		std::set<wxLongLong_t> seen;
+		std::set<long long> seen;
 		if (ibMcpSayObjectLinks(direction, metaData, links, seen) > 0) {
 			out << wxT("STOP - THE LINKS ABOVE DO NOT ALL NAME WHAT THEY SAY. An `oes:<id>` link is ")
 				<< wxT("by number so it survives a rename; it does NOT survive the id moving, and ")
@@ -2403,7 +2405,7 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 		// speaks 2025-11-25 and below, so a modern caller is told exactly that and retries as a
 		// legacy client, which is the fallback the transport describes.
 		bool known = false;
-		for (const wxChar* const* v = kSupportedProtocolVersions; *v != nullptr; ++v) {
+		for (const ibChar* const* v = kSupportedProtocolVersions; *v != nullptr; ++v) {
 			if (asked == *v) { known = true; break; }
 		}
 		if (!known) {
@@ -2496,7 +2498,7 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 		if (const ibDataValue* asked = parsed.m_params.FindField(wxT("protocolVersion"))) {
 			if (asked->Kind() == ibDataKind::String) {
 				const wxString wanted = asked->AsString();
-				for (const wxChar* const* v = kSupportedProtocolVersions; *v != nullptr; ++v) {
+				for (const ibChar* const* v = kSupportedProtocolVersions; *v != nullptr; ++v) {
 					if (wanted == *v) { agreed = wanted; break; }
 				}
 			}
@@ -2583,7 +2585,7 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 	// hidden — it is simply not in the menu, the same trade `tools/list` makes above.
 	else if (parsed.m_method == wxT("prompts/list")) {
 
-		static const wxChar* const kDoors[] = {
+		static const ibChar* const kDoors[] = {
 			wxT("body-map"), wxT("intake"), wxT("where-to-start"), wxT("combining"),
 			wxT("same-shape-elsewhere"), wxT("document-chains"), wxT("unfamiliar-domain"),
 			wxT("where-behaviour-lives"), wxT("building-an-erp"), nullptr
@@ -2593,7 +2595,7 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 
 		const std::vector<std::pair<wxString, wxString>> index = ibMcpPatternIndex();
 
-		for (const wxChar* const* door = kDoors; *door != nullptr; ++door) {
+		for (const ibChar* const* door = kDoors; *door != nullptr; ++door) {
 
 			// ⚠ ASKED OF THE CORPUS RATHER THAN DESCRIBED HERE. A summary written out beside the
 			// name would be a second copy of a sentence that lives in the entry, and the day the
@@ -3217,7 +3219,7 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 			// that found nothing.
 			if (ok && name == wxT("chat_take")) {
 
-				auto empty = [&payload](const wxChar* field) {
+				auto empty = [&payload](const ibChar* field) {
 					const ibDataValue* list = payload.FindField(field);
 					return list == nullptr
 						|| list->Kind() != ibDataKind::Array

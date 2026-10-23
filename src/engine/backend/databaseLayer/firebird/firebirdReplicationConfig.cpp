@@ -1,9 +1,9 @@
 #include "firebirdReplicationConfig.h"
 #include "core/diagnostics/journal.h"   // ibJournal — this TU does not pull in backend_core.h
+#include "core/fileSystem.h"            // ibRemoveFile, ibRenameFile
 
 #include <wx/file.h>
 #include <wx/filename.h>
-#include <wx/log.h>
 
 namespace {
 
@@ -144,23 +144,23 @@ bool ibFirebirdReplicationConfig::WriteToRuntimeDir(
 			ibJournalError(wxT("db.firebird"),wxT("ibFirebirdReplicationConfig: short write on %s"),
 			           tempPath);
 			f.Close();
-			wxRemoveFile(tempPath);
+			ibRemoveFile(tempPath);
 			return false;
 		}
 		if (!f.Close()) {
 			ibJournalError(wxT("db.firebird"),wxT("ibFirebirdReplicationConfig: close failed on %s"),
 			           tempPath);
-			wxRemoveFile(tempPath);
+			ibRemoveFile(tempPath);
 			return false;
 		}
 	}
 
-	// wxRenameFile overwrites the destination by default — atomic on
+	// ibRenameFile overwrites the destination — atomic on
 	// the same volume on every supported platform (Win32 / POSIX).
-	if (!wxRenameFile(tempPath, finalPath, /*overwrite=*/true)) {
+	if (!ibRenameFile(tempPath, finalPath)) {
 		ibJournalError(wxT("db.firebird"),wxT("ibFirebirdReplicationConfig: rename %s -> %s failed"),
 		           tempPath, finalPath);
-		wxRemoveFile(tempPath);
+		ibRemoveFile(tempPath);
 		return false;
 	}
 	return true;

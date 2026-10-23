@@ -66,5 +66,5 @@ ibString ibFont::ToString() const
 	if (!IsOk())
 		return ibString();
 	return ibString::Format(wxT("%s,%d,%d,%d,%d,%d"), m_faceName, static_cast<int>(m_style),
-		m_weight, static_cast<int>(m_pointSize + 0.5), static_cast<int>(m_family), m_underlined ? 1 : 0);
+		m_weight, GetPointSize(), static_cast<int>(m_family), m_underlined ? 1 : 0);
 }

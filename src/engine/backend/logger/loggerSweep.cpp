@@ -1,5 +1,7 @@
 #include "backend/logger/loggerSweep.h"
 
+#include "core/fileSystem.h"   // ibRemoveFile
+
 #include <wx/dir.h>
 #include <wx/filename.h>
 #include <wx/datetime.h>
@@ -23,7 +25,7 @@ bool ParseLogFileMonth(const wxString& name, int& year, int& month)
 int ibLoggerSweep::RunOnce(const wxString& dir, int retentionDays)
 {
     if (retentionDays <= 0) return 0;
-    if (dir.IsEmpty() || !wxFileName::DirExists(dir)) return 0;
+    if (dir.IsEmpty() || !ibDirExists(dir)) return 0;
 
     // Cutoff = first instant we still want to keep. A file's month
     // bucket must END strictly after cutoff to survive — i.e. any
@@ -47,14 +49,12 @@ int ibLoggerSweep::RunOnce(const wxString& dir, int retentionDays)
             bucketEnd.Add(wxDateSpan::Month());
             if (bucketEnd <= cutoff) {
                 const wxString path = dir + wxFileName::GetPathSeparator() + name;
-                if (wxRemoveFile(path)) ++removed;
+                if (ibRemoveFile(path)) ++removed;
                 // Also clean up the WAL sidecar files SQLite leaves behind. They
                 // are transient — SQLite removes them on a clean close, so their
-                // absence is the NORMAL case. Only remove when present: a
-                // wxRemoveFile on a missing file raises wxLogError, which a GUI
-                // host turns into a modal "couldn't be removed" dialog.
-                if (wxFileExists(path + wxT("-wal"))) wxRemoveFile(path + wxT("-wal"));
-                if (wxFileExists(path + wxT("-shm"))) wxRemoveFile(path + wxT("-shm"));
+                // absence is the NORMAL case, and ibRemoveFile says nothing of it.
+                ibRemoveFile(path + wxT("-wal"));
+                ibRemoveFile(path + wxT("-shm"));
             }
         }
         more = d.GetNext(&name);

@@ -1468,8 +1468,8 @@ public:
 	// is converted from, and what the cell's text is read off (GetValue).
 	bool GetCompositionAttrByRow(const ibDataViewItem& row, unsigned int col, ibCompositionAttr& attr) const;
 
-	virtual bool IsEnabledByRow(const ibDataViewItem& WXUNUSED(row),
-		unsigned int WXUNUSED(col)) const {
+	virtual bool IsEnabledByRow(const ibDataViewItem& /*row*/,
+		unsigned int /*col*/) const {
 		return true;
 	}
 

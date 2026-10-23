@@ -148,7 +148,7 @@ bool ibPasswordHash::IsLegacy(const wxString& storedHash)
 	if (storedHash.length() != 32)
 		return false;
 	for (size_t i = 0; i < 32; ++i) {
-		const wxChar c = storedHash[i];
+		const ibChar c = storedHash[i];
 		const bool hex = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
 		if (!hex) return false;
 	}

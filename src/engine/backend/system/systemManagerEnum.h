@@ -102,7 +102,7 @@ class ibValueChars : public ibValueEnumeration<ibChars> {
 
 private:
 	void AddChar(ibChars c, const wxString& name) {
-		AddEnumeration(c, name, wxString(static_cast<wxChar>(c)));
+		AddEnumeration(c, name, wxString(static_cast<ibChar>(c)));
 	}
 };
 

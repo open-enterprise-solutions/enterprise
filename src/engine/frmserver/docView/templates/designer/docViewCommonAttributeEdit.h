@@ -42,7 +42,8 @@ public:
 
 	ibCommonAttributeCompositionDocument() : ibMetaDocument() {}
 
-	wxDECLARE_NO_COPY_CLASS(ibCommonAttributeCompositionDocument);
+	ibCommonAttributeCompositionDocument(const ibCommonAttributeCompositionDocument&) = delete;
+	ibCommonAttributeCompositionDocument& operator=(const ibCommonAttributeCompositionDocument&) = delete;
 	wxDECLARE_DYNAMIC_CLASS(ibCommonAttributeCompositionDocument);
 };
 

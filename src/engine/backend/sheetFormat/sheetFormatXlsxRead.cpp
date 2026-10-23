@@ -16,9 +16,7 @@
 #include "backend/sheetFormat/sheetFormatXlsx.h"
 #include "core/diagnostics/journal.h"   // ibJournalStopwatch / ibJournalInfo — what a read of a book cost, step by step
 
-#include <wx/wfstream.h>
 #include <wx/zipstrm.h>
-#include <wx/mstream.h>
 #include <wx/sstream.h>
 #include <wx/xml/xml.h>
 
@@ -32,8 +30,8 @@ bool CellAt(const wxString& ref, int& row, int& col)
 {
 	col = 0;
 	size_t at = 0;
-	for (; at < ref.length() && wxIsalpha(ref[at]); at++)
-		col = col * 26 + (wxToupper(ref[at]).GetValue() - wxT('A') + 1);
+	for (; at < ref.length() && ibIsAlpha(ref[at]); at++)
+		col = col * 26 + (ibToUpper(ref[at]) - wxT('A') + 1);
 
 	if (at == 0 || at >= ref.length())
 		return false;
@@ -487,7 +485,7 @@ void GroupsFromLevels(const std::map<int, int>& level, const std::map<int, bool>
 {
 	int deepest = 0;
 	for (const auto& at : level)
-		deepest = wxMax(deepest, at.second);
+		deepest = std::max(deepest, at.second);
 
 	for (int depth = 1; depth <= deepest; depth++) {
 		int start = -1, end = -1;
@@ -642,7 +640,7 @@ int ReadSheet(const wxString& partText, const std::vector<wxString>& strings,
 				continue;
 
 			const int documentRow = topRow + static_cast<int>(rowNumber) - 1;
-			usedRows = wxMax(usedRows, static_cast<int>(rowNumber));
+			usedRows = std::max(usedRows, static_cast<int>(rowNumber));
 
 			// The height comes across against the sheet's own default (see `rowScale` above), and a
 			// hidden row is a height of nothing, as «Hide» leaves it.
@@ -813,7 +811,7 @@ bool ibSheetFormatXlsx::Read(wxInputStream& input, ibSpreadsheetDescription& she
 			read.AddRowBrake(topRow - 1);
 
 		const int used = ReadSheet(part->second, strings, styles, read, topRow, parsed);
-		topRow += wxMax(used, 1);
+		topRow += std::max(used, 1);
 	}
 
 	// ⚠ MOVED, NOT COPIED: a copy's cell makes a font of its own (ibSpreadsheetCellDescription::SetCell) — a GDI font,

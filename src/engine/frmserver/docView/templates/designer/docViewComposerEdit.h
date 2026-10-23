@@ -37,7 +37,8 @@ class FRMSERVER_API ibComposerCompositionDocument : public ibMetaDocument {
 public:
 	ibComposerCompositionDocument() : ibMetaDocument() {}
 
-	wxDECLARE_NO_COPY_CLASS(ibComposerCompositionDocument);
+	ibComposerCompositionDocument(const ibComposerCompositionDocument&) = delete;
+	ibComposerCompositionDocument& operator=(const ibComposerCompositionDocument&) = delete;
 	wxDECLARE_DYNAMIC_CLASS(ibComposerCompositionDocument);
 };
 

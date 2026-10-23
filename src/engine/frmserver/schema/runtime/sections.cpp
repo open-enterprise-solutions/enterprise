@@ -127,7 +127,7 @@ std::vector<const ibValueMetaObjectSection*> UsedSections(const ibMetaDataConfig
 
 } // namespace
 
-void ibSchemaSections::Build(const ibSession& session, const ibDataNode& WXUNUSED(args), ibDataNode& result) const
+void ibSchemaSections::Build(const ibSession& session, const ibDataNode& /*args*/, ibDataNode& result) const
 {
 	const ibMetaDataConfigurationBase* const metaData = session.GetMetaData();
 	if (metaData == nullptr)

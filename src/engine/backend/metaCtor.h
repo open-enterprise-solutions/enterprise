@@ -39,7 +39,7 @@ public:
 	}
 
 	// The kinds a family is kept for, and the prefix each is written with (objCtorDefs.h).
-	static const wxChar* PrefixOf(ibCtorObjectMetaType memberKind) {
+	static const ibChar* PrefixOf(ibCtorObjectMetaType memberKind) {
 		switch (memberKind) {
 		case ibCtorObjectMetaType::ibCtorObjectMetaType_Reference: return prefixReference;
 		case ibCtorObjectMetaType::ibCtorObjectMetaType_Object:    return prefixObject;

@@ -66,7 +66,7 @@ ibHomePageDocument* ibHomePageDocument::ShowHomePage(const ibValueMetaObjectConf
 	// ones: an invisible attachment renders nothing.
 	if (homeDoc->GetDescription().GetShownItems(eHomePageColumn_Left).empty() &&
 		homeDoc->GetDescription().GetShownItems(eHomePageColumn_Right).empty()) {
-		wxDELETE(homeDoc);
+		delete homeDoc;
 		return nullptr;
 	}
 
@@ -97,7 +97,7 @@ bool ibHomePageDocument::Close()
 	return closed;
 }
 
-ibDocChildFrameAnyBase* ibHomePageDocument::GetChildDocumentWindow(const ibDocument* WXUNUSED(child)) const
+ibDocChildFrameAnyBase* ibHomePageDocument::GetChildDocumentWindow(const ibDocument* /*child*/) const
 {
 	// Every child of the page shows in the page's own tab: which cell it fills is the page's view's to draw.
 	// Reached through the doc PARENT link — that link IS the composition.
@@ -140,7 +140,7 @@ inline unsigned int ItemWeight(const ibHomePageItem& item)
 
 } // namespace
 
-bool ibHomePageView::OnCreate(ibDocument* doc, long WXUNUSED(flags))
+bool ibHomePageView::OnCreate(ibDocument* doc, long /*flags*/)
 {
 	ibHomePageDocument* const homeDoc = dynamic_cast<ibHomePageDocument*>(doc);
 	if (homeDoc == nullptr || m_viewFrame == nullptr)
@@ -277,7 +277,7 @@ ibValuePtr<ibValueForm> ibHomePageView::CreateFormValue(const ibValueMetaObjectF
 	return ibValuePtr<ibValueForm>(backendForm);
 }
 
-void ibHomePageView::OnUpdate(ibView* WXUNUSED(sender), wxObject* WXUNUSED(hint))
+void ibHomePageView::OnUpdate(ibView* /*sender*/, wxObject* /*hint*/)
 {
 	for (std::vector<ibHomePageCell>& column : m_columns) {
 		for (ibHomePageCell& cell : column) {

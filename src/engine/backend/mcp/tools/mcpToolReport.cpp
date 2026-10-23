@@ -96,7 +96,7 @@ const ibArg& ArgRemove()
 // THE COMPARISON AS A WORD. Spelled out in the schema and matched here, so the two cannot drift -
 // and so a caller reading the description knows the whole vocabulary without guessing at numbers.
 // ONE TABLE: the schema's choices, the descriptions and the refusals are all read off it.
-struct ibComparisonWord { const wxChar* m_word; ibComparisonKind m_kind; };
+struct ibComparisonWord { const ibChar* m_word; ibComparisonKind m_kind; };
 const std::vector<ibComparisonWord>& ComparisonWords()
 {
 	static const std::vector<ibComparisonWord> s_words = {
@@ -801,9 +801,9 @@ const ibArg& ArgLinePath()
 }
 
 // THE GROUP'S WORD — and, with none, not a group.
-const std::vector<std::pair<const wxChar*, ibFilterGroupKind>>& GroupWords()
+const std::vector<std::pair<const ibChar*, ibFilterGroupKind>>& GroupWords()
 {
-	static const std::vector<std::pair<const wxChar*, ibFilterGroupKind>> s_words = {
+	static const std::vector<std::pair<const ibChar*, ibFilterGroupKind>> s_words = {
 		{ wxT("and"), ibFilterGroupKind_And }, { wxT("or"), ibFilterGroupKind_Or }, { wxT("not"), ibFilterGroupKind_Not } };
 	return s_words;
 }
@@ -830,7 +830,7 @@ bool ConditionFromTree(const ibCompositionDescription& composition, const ibData
 		if (const ibDataValue* group = line.FindField(wxT("group"))) {
 			const wxString word = group->Kind() == ibDataKind::String ? group->AsString().ToWxString() : wxString();
 			const auto kind = std::find_if(GroupWords().begin(), GroupWords().end(),
-				[&word](const std::pair<const wxChar*, ibFilterGroupKind>& known) { return word.IsSameAs(known.first, false); });
+				[&word](const std::pair<const ibChar*, ibFilterGroupKind>& known) { return word.IsSameAs(known.first, false); });
 			if (kind == GroupWords().end()) {
 				refusal = wxString::Format(ibMcpText("'%s' is not a group - and, or or not."), word);
 				return false;

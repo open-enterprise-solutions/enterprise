@@ -62,7 +62,7 @@ bool ibSchemaAllFunctions::AccessRight(const ibSession& session) const
 	return metaData != nullptr && metaData->AccessRight_ModeAllFunction();
 }
 
-void ibSchemaAllFunctions::Build(const ibSession& session, const ibDataNode& WXUNUSED(args), ibDataNode& tree) const
+void ibSchemaAllFunctions::Build(const ibSession& session, const ibDataNode& /*args*/, ibDataNode& tree) const
 {
 	const ibMetaDataConfigurationBase* const metaData = session.GetMetaData();
 	if (metaData == nullptr)

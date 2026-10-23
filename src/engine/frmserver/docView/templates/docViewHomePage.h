@@ -100,7 +100,8 @@ private:
 	// Raised while the page tears its own children down (see IsClosingChildren).
 	bool m_closingChildren = false;
 
-	wxDECLARE_NO_COPY_CLASS(ibHomePageDocument);
+	ibHomePageDocument(const ibHomePageDocument&) = delete;
+	ibHomePageDocument& operator=(const ibHomePageDocument&) = delete;
 	wxDECLARE_DYNAMIC_CLASS(ibHomePageDocument);
 };
 

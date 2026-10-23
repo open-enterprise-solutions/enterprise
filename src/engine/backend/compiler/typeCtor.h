@@ -117,7 +117,8 @@ value_register<typeCtor>::value_register(typeCtor* so) : m_so(so) {
 #ifdef DEBUG
 		ibJournalError(wxT("value"), wxT("failed to register class: %s"), m_so->GetClassName());
 #endif
-		wxDELETE(m_so);
+		delete m_so;
+		m_so = nullptr;
 	}
 }
 
@@ -132,7 +133,7 @@ value_register<typeCtor>::~value_register() {
 #ifdef DEBUG
 		ibJournalError(wxT("value"), wxT("failed to unregister class: %s"), m_so->GetClassName());
 #endif
-		wxDELETE(m_so);
+		delete m_so;
 	}
 }
 

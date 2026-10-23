@@ -5,6 +5,7 @@
 #include "core/server/listener.h"
 
 #include "core/exception.h"   // a listener refused is an exception with the reason
+#include "core/fileSystem.h"  // ibFileExists
 
 #include <wx/confbase.h>
 #include <wx/ffile.h>
@@ -67,7 +68,7 @@ ibTlsFiles ibTlsFiles::FromConf(const wxConfigBase& conf, const wxString& folder
 
 ibTlsFiles ibTlsFiles::FromConf(const wxString& path)
 {
-	if (path.IsEmpty() || !wxFileName::FileExists(path))
+	if (path.IsEmpty() || !ibFileExists(path))
 		return ibTlsFiles();
 	// Read as the host reads it (ibApplicationHost::ReadBackendConf).
 	const wxFileConfig conf(wxT(""), wxT(""), path, wxT(""), wxCONFIG_USE_LOCAL_FILE | wxCONFIG_USE_NO_ESCAPE_CHARACTERS);
@@ -87,7 +88,7 @@ ibHttpServerOptions ibListenerOptions(const wxString& address, std::uint16_t por
 	if (tls.m_certificate.IsEmpty() || tls.m_privateKey.IsEmpty())
 		ibCoreException::Error(_("backend.conf names a Certificate without a PrivateKey, or the key without the certificate: the two go together."));
 	for (const wxString& file : { tls.m_certificate, tls.m_privateKey }) {
-		if (!wxFileName::FileExists(file))
+		if (!ibFileExists(file))
 			ibCoreException::Error(_("The file %s named in backend.conf is not there."), file);
 	}
 	// Both read here, or the whole listener is refused.

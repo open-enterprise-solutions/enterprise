@@ -134,10 +134,10 @@ private:
 		: ibBackendQuerySourceException(msg, line, col) {}
 
 #if !wxUSE_UTF8_LOCALE_ONLY
-	static void DoErrorAtWchar(unsigned int line, unsigned int col, const wxChar* format, ...);
+	static void DoErrorAtWchar(unsigned int line, unsigned int col, const ibChar* format, ...);
 #endif
 #if wxUSE_UNICODE_UTF8
-	static void DoErrorAtUtf8(unsigned int line, unsigned int col, const wxChar* format, ...);
+	static void DoErrorAtUtf8(unsigned int line, unsigned int col, const ibChar* format, ...);
 #endif
 };
 
@@ -161,12 +161,12 @@ private:
 		: ibBackendQuerySourceException(msg, line, col) {}
 
 #if !wxUSE_UTF8_LOCALE_ONLY
-	static void DoErrorAtWchar(unsigned int line, unsigned int col, const wxChar* format, ...);
-	static void DoErrorWchar(const wxChar* format, ...);
+	static void DoErrorAtWchar(unsigned int line, unsigned int col, const ibChar* format, ...);
+	static void DoErrorWchar(const ibChar* format, ...);
 #endif
 #if wxUSE_UNICODE_UTF8
-	static void DoErrorAtUtf8(unsigned int line, unsigned int col, const wxChar* format, ...);
-	static void DoErrorUtf8(const wxChar* format, ...);
+	static void DoErrorAtUtf8(unsigned int line, unsigned int col, const ibChar* format, ...);
+	static void DoErrorUtf8(const ibChar* format, ...);
 #endif
 };
 
@@ -196,10 +196,10 @@ private:
 		: ibBackendQueryException(Kind::UnsupportedNode, msg) {}
 
 #if !wxUSE_UTF8_LOCALE_ONLY
-	static void DoErrorWchar(const wxChar* format, ...);
+	static void DoErrorWchar(const ibChar* format, ...);
 #endif
 #if wxUSE_UNICODE_UTF8
-	static void DoErrorUtf8(const wxChar* format, ...);
+	static void DoErrorUtf8(const ibChar* format, ...);
 #endif
 };
 

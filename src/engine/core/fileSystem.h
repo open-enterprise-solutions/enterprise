@@ -1,7 +1,10 @@
-#ifndef __PROGRAM_FOLDER_H__
-#define __PROGRAM_FOLDER_H__
+#ifndef __FILE_SYSTEM_H__
+#define __FILE_SYSTEM_H__
 
 #include "core/core.h"
+#include "core/fstring.h"
+
+#include <filesystem>
 
 #include <wx/string.h>
 
@@ -30,9 +33,25 @@ CORE_API wxString ibProgramFolder(const wxString& executablePath);
 CORE_API wxString ibProgramFolder();
 CORE_API wxString ibDiagnosticFolder();
 
+// The process's working directory; empty when it cannot be read.
+CORE_API wxString ibGetCwd();
+
 // THE PROCESS'S backend.conf — the working directory's, when there is one there, else the one in the program folder;
 // empty when neither is. One rule for whoever reads it: the engine's host (the whole file) and the application
 // cluster and its tray (the certificate its port speaks TLS over, core/server/listener.h).
 CORE_API wxString ibBackendConfPath();
 
-#endif // __PROGRAM_FOLDER_H__
+// wx's FILE FUNCTIONS — wxGetCwd above, wxDirExists, wxFileExists, wxRemoveFile, wxRenameFile, wxCopyFile — through
+// std::filesystem. A file is a regular file only, true is "done", and a failure is the answer alone: nothing is
+// written into the log on the way, as wx did.
+CORE_API bool ibDirExists(const ibString& path);
+CORE_API bool ibFileExists(const ibString& path);
+CORE_API bool ibRemoveFile(const ibString& path);
+CORE_API bool ibRenameFile(const ibString& from, const ibString& to);   // replaces what `to` names
+CORE_API bool ibCopyFile(const ibString& from, const ibString& to);     // replaces what `to` names
+
+// THE ONE DOOR FROM TEXT TO A FILE SYSTEM PATH — every std::filesystem call takes its path from here, so a name is
+// read the same way everywhere: the wide characters as they are on Windows, UTF-8 elsewhere.
+CORE_API std::filesystem::path ibPathOf(const ibString& text);
+
+#endif // __FILE_SYSTEM_H__

@@ -51,7 +51,7 @@ bool ibHomePageDescription::MoveItem(ibHomePageColumn column, unsigned int index
 //                             node form                              //
 ////////////////////////////////////////////////////////////////////////
 
-static const wxChar* s_columnNodeName[eHomePageColumn_Count] = { wxT("Left"), wxT("Right") };
+static const ibChar* s_columnNodeName[eHomePageColumn_Count] = { wxT("Left"), wxT("Right") };
 
 bool ibHomePageDescription::ReadNode(const ibDataValue& value)
 {

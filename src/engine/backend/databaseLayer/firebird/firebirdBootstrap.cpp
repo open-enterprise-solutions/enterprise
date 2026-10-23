@@ -1,6 +1,6 @@
 #include "firebirdBootstrap.h"
 
-#include "core/programFolder.h"
+#include "core/fileSystem.h"
 
 #include <wx/filename.h>
 #include <wx/utils.h>
@@ -33,7 +33,7 @@ wxString DetectFbRuntimeDir() {
 	// Missing is tolerated. During early dev / unit tests the directory may not have been
 	// laid out, and the default DLL search still finds fbclient next to the executable.
 	const wxString candidate = ibProgramFolder() + wxFILE_SEP_PATH + wxT("_fb");
-	if (wxDirExists(candidate))
+	if (ibDirExists(candidate))
 		return candidate;
 	return wxEmptyString;
 }

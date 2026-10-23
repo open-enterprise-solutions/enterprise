@@ -721,13 +721,13 @@ bool ibView::ShowFrame(bool show)
     return m_docChildFrame != nullptr && m_docChildFrame->Show(show);
 }
 
-void ibView::OnActivateView(bool WXUNUSED(activate),
-                            ibView *WXUNUSED(activeView),
-                            ibView *WXUNUSED(deactiveView))
+void ibView::OnActivateView(bool /*activate*/,
+                            ibView */*activeView*/,
+                            ibView */*deactiveView*/)
 {
 }
 
-void ibView::OnUpdate(ibView *WXUNUSED(sender), wxObject *WXUNUSED(hint))
+void ibView::OnUpdate(ibView */*sender*/, wxObject */*hint*/)
 {
 }
 
@@ -767,7 +767,7 @@ void ibView::Activate(bool activate)
     else ibJournalInfo(wxT("docview"), "! <debug> deactivate view %s", GetViewName());
 }
 
-bool ibView::OnClose(bool WXUNUSED(deleteWindow))
+bool ibView::OnClose(bool /*deleteWindow*/)
 {
     return GetDocument() ? GetDocument()->Close() : true;
 }
@@ -1109,12 +1109,12 @@ ibView *ibDocManager::CreateView(ibDocument *doc, long flags)
 
 // Not yet implemented
 void
-ibDocManager::DeleteTemplate(ibDocTemplate *WXUNUSED(temp), long WXUNUSED(flags))
+ibDocManager::DeleteTemplate(ibDocTemplate */*temp*/, long /*flags*/)
 {
 }
 
 // Not yet implemented
-bool ibDocManager::FlushDoc(ibDocument *WXUNUSED(doc))
+bool ibDocManager::FlushDoc(ibDocument */*doc*/)
 {
     return false;
 }
@@ -1137,7 +1137,7 @@ wxString ibDocManager::MakeNewDocumentName()
 }
 
 // Not yet implemented
-ibDocTemplate *ibDocManager::MatchTemplate(const wxString& WXUNUSED(path))
+ibDocTemplate *ibDocManager::MatchTemplate(const wxString& /*path*/)
 {
     return nullptr;
 }
@@ -1455,12 +1455,12 @@ ibMetaDocument::ibMetaDocument(ibMetaDocument* docParent) :
 // (ibFormVisualDocument, which overrides DoCreateView) — gets a view + child
 // frame without needing a document template. Replaces the old one-liner that
 // delegated to ibDocTemplate::CreateView.
-bool ibDocument::OnCreate(const wxString& WXUNUSED(path), long flags)
+bool ibDocument::OnCreate(const wxString& /*path*/, long flags)
 {
 	if (ibSession::IsCurrentForceExit())
 		return false;
 
-	wxScopedPtr<ibView> view(DoCreateView());
+	std::unique_ptr<ibView> view(DoCreateView());
 	if (!view)
 		return false;
 

@@ -62,7 +62,7 @@
 // here is addressed to whoever opens the file, not to whoever is using the program. Only `Error`
 // reaches the screen, because that one says the thing the person asked for did not happen. See the
 // echo in journal.cpp for why the warning's dialog was taken away.
-enum class ibJournalMark : wxChar {
+enum class ibJournalMark : ibChar {
 	Info    = wxT('*'),
 	Warning = wxT('?'),
 	Error   = wxT('!'),
@@ -149,7 +149,7 @@ public:
 
 private:
 #if !wxUSE_UTF8_LOCALE_ONLY
-	static void DoPrintWchar(ibJournalMark mark, const wxString& source, const wxChar* format, ...);
+	static void DoPrintWchar(ibJournalMark mark, const wxString& source, const ibChar* format, ...);
 #endif
 #if wxUSE_UNICODE_UTF8
 	static void DoPrintUtf8(ibJournalMark mark, const wxString& source, const char* format, ...);

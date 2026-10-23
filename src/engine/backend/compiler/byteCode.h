@@ -90,8 +90,8 @@ class ibWriterMemory; // core/memory/memoryStream.h
 class ibReaderMemory; // core/memory/memoryStream.h
 
 struct ibParamRunUnit {
-	wxLongLong_t m_numArray = 0;
-	wxLongLong_t m_numIndex = 0;
+	long long m_numArray = 0;
+	long long m_numIndex = 0;
 };
 
 struct ibParamUnit : ibParamRunUnit {

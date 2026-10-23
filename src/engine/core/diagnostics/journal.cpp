@@ -3,7 +3,7 @@
 #include "crashGuard.h"          // the journal lives beside the dumps — same directory decision
 #include "core/diagnostics/debugTrace.h"   // ibDebugTraceEnabled — the house env-var switch
 #include "core/build.h"                    // GetBuildId, version_oes_last — what is running, said first
-#include "core/programFolder.h"            // journal/ sits with the dumps, in the diagnostic folder
+#include "core/fileSystem.h"               // journal/ sits with the dumps, in the diagnostic folder
 
 #include <wx/datetime.h>
 #include <wx/ffile.h>
@@ -76,7 +76,7 @@ protected:
 		if (info.GetNumValue(kEchoKey, &echoed))
 			return;                   // the journal's own line, on its way to the debugger
 
-		const wxChar* kind =
+		const ibChar* kind =
 			  level == wxLOG_FatalError ? wxT("wx.fatal")
 			: level == wxLOG_Error      ? wxT("wx.error")
 			: level == wxLOG_Warning    ? wxT("wx.warn")
@@ -193,7 +193,7 @@ void ibTechJournal::Open(const wxString& exeName)
 		wxDateTime::Now().Format(wxT("%Y-%m-%d %H:%M:%S")),
 		wxLocale::GetLanguageCanonicalName(wxLocale::GetSystemLanguage())));
 	Write(ibJournalMark::Info, wxT("start"), wxString::Format(wxT("user %s@%s, %s"),
-		wxGetUserId(), wxGetHostName(), wxGetCwd()));
+		wxGetUserId(), wxGetHostName(), ibGetCwd()));
 	Write(ibJournalMark::Info, wxT("start"), wxString::Format(wxT("binary: %s"),
 		wxStandardPaths::Get().GetExecutablePath()));
 	Write(ibJournalMark::Info, wxT("start"), wxString::Format(wxT("journal: %s"), s_path));
@@ -300,7 +300,7 @@ void ibTechJournal::Write(ibJournalMark mark, const wxString& source, const wxSt
 		//
 		// Padded to one width so the columns line up down the page: a reader's eye follows a column,
 		// and a ragged left edge costs more than the three spaces it saves.
-		const wxChar* kind =
+		const ibChar* kind =
 			  mark == ibJournalMark::Error   ? wxT("[error]  ")
 			: mark == ibJournalMark::Warning ? wxT("[warning]")
 			                                 : wxT("[info]   ");
@@ -483,7 +483,7 @@ bool Listened()
 } // namespace
 
 #if !wxUSE_UTF8_LOCALE_ONLY
-void ibTechJournal::DoPrintWchar(ibJournalMark mark, const wxString& source, const wxChar* format, ...)
+void ibTechJournal::DoPrintWchar(ibJournalMark mark, const wxString& source, const ibChar* format, ...)
 {
 	if (!Listened())
 		return;

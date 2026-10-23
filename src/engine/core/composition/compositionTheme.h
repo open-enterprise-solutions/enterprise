@@ -23,7 +23,7 @@
 #include <vector>
 
 struct ibCompositionTheme {
-	const wxChar* m_id;        // what a setting stores — never shown, never translated
+	const ibChar* m_id;        // what a setting stores — never shown, never translated
 	const char*   m_caption;   // what a window shows — marked for extraction, translated where it is read
 
 	ibColour m_headerFill;     // the column titles, and the foot of a table

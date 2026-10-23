@@ -22,8 +22,8 @@ namespace {
 // The node: one child per control, its id as the child's identity, the properties in the child's
 // property bag and the position as a field. Nothing else — the storage stores nodes, and this is
 // the smallest node that says what a form looks like.
-const wxChar* const s_fieldControl  = wxT("Control");
-const wxChar* const s_fieldPosition = wxT("Position");
+const ibChar* const s_fieldControl  = wxT("Control");
+const ibChar* const s_fieldPosition = wxT("Position");
 
 // ⭐⭐ A GENERATED FORM IS ADDRESSED BY WHAT IT SHOWS. Not every form is declared in the Designer —
 // a catalog with no list form of its own still opens as a list, built on the spot by `BuildForm`,
@@ -173,7 +173,7 @@ void ibApplyFormSettings(ibValueForm* form, const ibDataNode& root)
 		ibValueFrame* parent = control->GetParent();
 		if (position != wxNOT_FOUND && parent != nullptr && parent->GetChildCount() > 0) {
 			const int last = (int)parent->GetChildCount() - 1;
-			parent->ChangeChildPosition(control, (unsigned int)wxMax(0, wxMin(position, last)));
+			parent->ChangeChildPosition(control, (unsigned int)std::max(0, std::min(position, last)));
 		}
 	}
 

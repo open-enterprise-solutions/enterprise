@@ -37,7 +37,8 @@ private:
 
 	ibMcpServer* const m_server;
 
-	wxDECLARE_NO_COPY_CLASS(ibAssistantTranscriptDocument);
+	ibAssistantTranscriptDocument(const ibAssistantTranscriptDocument&) = delete;
+	ibAssistantTranscriptDocument& operator=(const ibAssistantTranscriptDocument&) = delete;
 	wxDECLARE_DYNAMIC_CLASS(ibAssistantTranscriptDocument);
 };
 

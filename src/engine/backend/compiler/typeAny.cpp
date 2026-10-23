@@ -40,7 +40,7 @@ namespace {
 // every control.
 class ibCtorAnyKind : public ibCtorValueTypeBase {
 public:
-	ibCtorAnyKind(const wxString& className, ibClassKind kind, const ibClassID& clsid, const wxChar* picture = nullptr)
+	ibCtorAnyKind(const wxString& className, ibClassKind kind, const ibClassID& clsid, const ibChar* picture = nullptr)
 		: ibCtorValueTypeBase(className, typeid(void), clsid), m_kind(kind), m_picture(picture) {
 	}
 
@@ -66,7 +66,7 @@ public:
 
 private:
 	ibClassKind m_kind;   // the family: the high byte every member carries
-	const wxChar* m_picture;   // PNG, base64; null — no picture
+	const ibChar* m_picture;   // PNG, base64; null — no picture
 	mutable wxIcon m_icon;     // …decoded on the first ask, when the image handlers are there
 };
 
@@ -88,7 +88,7 @@ public:
 } // namespace
 
 /* PNG — two chain links: a reference, whichever it is. The flat style of the families beside it, in a hue of its own */
-static const wxChar s_anyRef_16_png[] = wxT("iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAADTElEQVR42u2av67TMBTG7yP0EfocmSoxI2VixU8QRUhMgJQBJiQ6IjGkApYLAxnuwILIcAEJCdEBBiQkOrAwIPIIRl/lIPf0OE1C7di+jWQpbRLHv2P7/Pnas7PTEdaRZOUsyco0ycoiycplkpV1kpUr9VkkWTmPFXyhQGWPtoYxYprxqic4bRsYLvRZb0bC660IEV6YgK7feyHvPL2Uj6rP8uX7H/Lx6y/ywflHeeP+qy4jrIKHv/nwYgv85uuvf9D47taTt9vzi08/t9fwOdiVYILHbH/4/qcLbsdIaNduP+fuWQQHj9nG7BqA2NauCOaZTfTwuhGwEphrIgb4jUp+EClyU6iEAZhtsw4dPu8bNuET4BiZPuahwoseucPOM+iLCZEiOnit74r6AjRvQqJNeNV/rj8LH4C+vUiMbMNz26DNDUifdZTw6j0F3QJIpEi/yykKG+vw6l0b+g7UDpP5AFXSNo7gc9oXwiAKKPJ96tIAlSP4vS0GB2jIBmeTLX3sRxfw6B8FFJzgZBGAylgYDAblAh5GZpyfu4pQ7f0+ubkVeCb2o1UuZz+lSo4hL88dwTfW977+AhqPEYqYgW0cwdtd+pp6K7TvltT5HSMnHwkvbHv6hlpZ/Wixs/8Zj6zfn4YIL0wJBo0AGCDjAHOSxKxCht9Z0lxOzmyBisnk0lDh5d1n75ameyBKYMBDnVMw8BjM5bfftXbfnMvLGT/QmIzA5fbewmvprR4K1z1zc6miSK6cakGrulDgJQmFgssGGV9wsIUCv6e20JlsQYYYIST4PdmZqwjxTPsTFuMT9kpaFFCGwsZLeHFIptLh4BjbFYHPMAjO8Q5cO2Ak/+FNiRENkS00gDHbqB0YJSdM+EMrYWBrbBc2tnX7BRfierbKaknrWL0VNE/o+oeHdSXHpXpL3jtXxigUaK1K6UKJKs4ETFfqrX//5ZtAva3V+cwXA0ym3qKAQhWpLfmFU+Oc1NurqN52JSdRq7eGQV4N9bZjoIPU26jgx6i3UcGPVW+jgY9avR2Yi8el3o4wQjzq7bHidZDq7X8aIWz11kZFGIx6ayskBqHe2k6MvFZvXa8Er9RbRz7BT/V2ghDpj3o7ccY4vXp7Oo53/AXLECU7NCFXOwAAAABJRU5ErkJggg==");
+static const ibChar s_anyRef_16_png[] = wxT("iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAADTElEQVR42u2av67TMBTG7yP0EfocmSoxI2VixU8QRUhMgJQBJiQ6IjGkApYLAxnuwILIcAEJCdEBBiQkOrAwIPIIRl/lIPf0OE1C7di+jWQpbRLHv2P7/Pnas7PTEdaRZOUsyco0ycoiycplkpV1kpUr9VkkWTmPFXyhQGWPtoYxYprxqic4bRsYLvRZb0bC660IEV6YgK7feyHvPL2Uj6rP8uX7H/Lx6y/ywflHeeP+qy4jrIKHv/nwYgv85uuvf9D47taTt9vzi08/t9fwOdiVYILHbH/4/qcLbsdIaNduP+fuWQQHj9nG7BqA2NauCOaZTfTwuhGwEphrIgb4jUp+EClyU6iEAZhtsw4dPu8bNuET4BiZPuahwoseucPOM+iLCZEiOnit74r6AjRvQqJNeNV/rj8LH4C+vUiMbMNz26DNDUifdZTw6j0F3QJIpEi/yykKG+vw6l0b+g7UDpP5AFXSNo7gc9oXwiAKKPJ96tIAlSP4vS0GB2jIBmeTLX3sRxfw6B8FFJzgZBGAylgYDAblAh5GZpyfu4pQ7f0+ubkVeCb2o1UuZz+lSo4hL88dwTfW977+AhqPEYqYgW0cwdtd+pp6K7TvltT5HSMnHwkvbHv6hlpZ/Wixs/8Zj6zfn4YIL0wJBo0AGCDjAHOSxKxCht9Z0lxOzmyBisnk0lDh5d1n75ameyBKYMBDnVMw8BjM5bfftXbfnMvLGT/QmIzA5fbewmvprR4K1z1zc6miSK6cakGrulDgJQmFgssGGV9wsIUCv6e20JlsQYYYIST4PdmZqwjxTPsTFuMT9kpaFFCGwsZLeHFIptLh4BjbFYHPMAjO8Q5cO2Ak/+FNiRENkS00gDHbqB0YJSdM+EMrYWBrbBc2tnX7BRfierbKaknrWL0VNE/o+oeHdSXHpXpL3jtXxigUaK1K6UKJKs4ETFfqrX//5ZtAva3V+cwXA0ym3qKAQhWpLfmFU+Oc1NurqN52JSdRq7eGQV4N9bZjoIPU26jgx6i3UcGPVW+jgY9avR2Yi8el3o4wQjzq7bHidZDq7X8aIWz11kZFGIx6ayskBqHe2k6MvFZvXa8Er9RbRz7BT/V2ghDpj3o7ccY4vXp7Oo53/AXLECU7NCFXOwAAAABJRU5ErkJggg==");
 
 //**********************************************************************
 //*                       Runtime register                             *

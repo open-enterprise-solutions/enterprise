@@ -19,7 +19,7 @@ enum class ibLogLevel : int {
 // in the queue and moved into the sink's batch — wxString small-buffer
 // optimisation keeps short strings inline, ibMemoryBuffer is shared by a count.
 struct ibLogEntry {
-    wxLongLong_t   ts_ms = 0;      // ms since unix epoch, UTC
+    long long   ts_ms = 0;      // ms since unix epoch, UTC
     ibLogLevel     level = ibLogLevel::Info;
     wxString       session_id;
     wxString       user_name;

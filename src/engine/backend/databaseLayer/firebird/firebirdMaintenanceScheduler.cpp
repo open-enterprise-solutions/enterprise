@@ -5,6 +5,8 @@
 #include "backend/job/jobManager.h"
 #include "backend/session/session.h"
 
+#include <chrono>
+
 // THE SCHEDULE SAYS WHEN THE WORK IS DUE — that is the whole point of having one. It used to say
 // "ask every 60 seconds", with the real cadences (sweep every 6 h, backup/restore weekly) hidden in
 // process-local statics inside the driver. Two clocks, and the one that survived a restart was the
@@ -103,9 +105,10 @@ bool ibFirebirdMaintenanceJob::RunSweep(ibSession* session)
 		return false;   // nothing worth a pass — and nothing said, every quarter of an hour
 
 	ibJournalInfo(wxT("firebird.sweep"), wxT("sweeping: %lld transactions of garbage (threshold %lld)"), backlog, kSweepBacklog);
-	const wxLongLong started = wxGetLocalTimeMillis();
+	const auto started = std::chrono::steady_clock::now();
 	const bool ok = fb->RunSweepNow([run = session->RunState()] { return ibRunCancelled(run); });
-	const long long seconds = (wxGetLocalTimeMillis() - started).GetValue() / 1000;
+	const long long seconds = static_cast<long long>(
+		std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - started).count());
 
 	long long left = -1;
 	fb->GetSweepBacklog(left);

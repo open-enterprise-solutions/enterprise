@@ -30,6 +30,7 @@
 #include "backend/metadataConfiguration.h"
 #include "backend/sheetFormat/sheetFormat.h"   // a format registers itself and says what it reads
 #include "core/description/spreadsheetDescription.h"
+#include "core/fileSystem.h"   // ibFileExists
 #include <wx/colour.h>   // wxColour::Set — a colour from its name
 
 namespace {
@@ -691,7 +692,7 @@ public:
 		{
 			std::vector<ibDataValue> bands;
 
-			const auto band = [&bands](const wxChar* what, std::int64_t at, int size) {
+			const auto band = [&bands](const ibChar* what, std::int64_t at, int size) {
 				std::shared_ptr<ibDataNode> node = std::make_shared<ibDataNode>();
 				node->SetValue(wxT("band"), wxString(what));
 				node->AddField(wxT("at"), ibDataValue::Int(at));
@@ -1355,7 +1356,7 @@ public:
 
 		const wxString fileName = ArgFile().Text(params);
 
-		if (!wxFileExists(fileName)) {
+		if (!ibFileExists(fileName)) {
 			refusal = wxString::Format(ibMcpText("There is no file at '%s'."), fileName);
 			return false;
 		}

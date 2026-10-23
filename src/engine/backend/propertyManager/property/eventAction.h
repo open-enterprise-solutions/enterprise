@@ -151,24 +151,24 @@ public:
 	ibEventAction(ibPropertyCategory* cat, const wxString& name, const wxArrayString& args,
 		bool (optClass::* funcHandler)(ibEventAction* evt), const ibActionID& value) : ibEvent(cat, name, args, CreateVariantData(cat->GetPropertyObject(), value))
 	{
-		m_functor = new ibEventValueFunctor<optClass>(funcHandler, (optClass*)cat->GetPropertyObject());
+		m_functor = std::make_unique<ibEventValueFunctor<optClass>>(funcHandler, (optClass*)cat->GetPropertyObject());
 	}
 
 	template <typename optClass>
 	ibEventAction(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxArrayString& args,
 		bool (optClass::* funcHandler)(ibEventAction* evt), const ibActionID& value) : ibEvent(cat, name, label, args, CreateVariantData(cat->GetPropertyObject(), value))
 	{
-		m_functor = new ibEventValueFunctor<optClass>(funcHandler, (optClass*)cat->GetPropertyObject());
+		m_functor = std::make_unique<ibEventValueFunctor<optClass>>(funcHandler, (optClass*)cat->GetPropertyObject());
 	}
 
 	template <typename optClass>
 	ibEventAction(ibPropertyCategory* cat, const wxString& name, const wxString& label, const wxString& helpString, const wxArrayString& args,
 		bool (optClass::* funcHandler)(ibEventAction* evt), const ibActionID& value) : ibEvent(cat, name, label, helpString, args, CreateVariantData(cat->GetPropertyObject(), value))
 	{
-		m_functor = new ibEventValueFunctor<optClass>(funcHandler, (optClass*)cat->GetPropertyObject());
+		m_functor = std::make_unique<ibEventValueFunctor<optClass>>(funcHandler, (optClass*)cat->GetPropertyObject());
 	}
 
-	virtual ~ibEventAction() { wxDELETE(m_functor); }
+	virtual ~ibEventAction() {}
 
 	virtual bool IsEmptyProperty() const { return GetValueAsInteger() == wxNOT_FOUND; }
 
@@ -190,7 +190,7 @@ public:
 private:
 
 	ibEventOptionList m_listPropValue;
-	ibEventFunctor* m_functor;
+	std::unique_ptr<ibEventFunctor> m_functor;
 };
 
 #endif

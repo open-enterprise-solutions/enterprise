@@ -377,7 +377,7 @@ public:
 		// That is what makes the write the right place to ask: at the read there is nobody left who
 		// knows what was meant, while here the author is still holding it.
 		std::vector<ibDataValue> links;
-		std::set<wxLongLong_t> seen;
+		std::set<long long> seen;
 
 		if (ibMcpSayObjectLinks(text, metaData, links, seen) > 0) {
 

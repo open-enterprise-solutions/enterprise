@@ -25,7 +25,7 @@ m_metaRecordManager(new ibValueMetaObjectRecordManager())
 
 ibValueMetaObjectInformationRegister::~ibValueMetaObjectInformationRegister()
 {
-	wxDELETE(m_metaRecordManager);
+	delete m_metaRecordManager;
 }
 
 ibTotalsPeriod ibValueMetaObjectInformationRegister::GetPeriodicityUnit() const

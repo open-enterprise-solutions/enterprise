@@ -16,8 +16,8 @@ public:
 	virtual bool AccessRight(const ibSession& session) const override;
 
 	// Nothing — the window is a tab, opened by Open.
-	virtual void Build(const ibSession& WXUNUSED(session), const ibDataNode& WXUNUSED(args),
-		ibDataNode& WXUNUSED(result)) const override {}
+	virtual void Build(const ibSession& /*session*/, const ibDataNode& /*args*/,
+		ibDataNode& /*result*/) const override {}
 
 	// Open — the window's tab; ONE window, and the command means "show me it": an open one is raised.
 	virtual std::function<void()> Command(const ibSession& session, std::int32_t command,

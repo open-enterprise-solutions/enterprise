@@ -76,9 +76,9 @@ wxString Identity(const ibMcpTool* tool)
 	const wxString description = tool->GetDescription();
 	size_t end = description.length();
 	for (size_t i = 0; i + 1 < description.length(); ++i) {
-		const wxChar c = description[i];
+		const ibChar c = description[i];
 		if (c == wxT('\n')
-			|| ((c == wxT('.') || c == wxT('?') || c == wxT('!')) && wxIsspace(description[i + 1]))) {
+			|| ((c == wxT('.') || c == wxT('?') || c == wxT('!')) && ibIsSpace(description[i + 1]))) {
 			end = i;
 			break;
 		}

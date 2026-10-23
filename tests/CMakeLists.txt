@@ -315,8 +315,9 @@ set_tests_properties(oes_cross_zone_read PROPERTIES
 # Lightweight string-layer tests — ibString/fstring only.
 #
 # fstring.h is the facade and fstring.cpp the module behind it; both depend on
-# nothing but wxBase, so this target compiles the module IN (as if it were
-# core, CORE_EXPORTS) and does NOT link (or recompile) core.dll. Use it
+# nothing but wxBase and the pool a text's block is made in (memoryPool.cpp),
+# so this target compiles the two IN (as if they were core, CORE_EXPORTS) and
+# does NOT link (or recompile) core.dll. Use it
 # for fast iteration on the string type — it builds in seconds even after
 # touching core backend headers:
 #
@@ -329,6 +330,7 @@ add_executable(oes_string_tests
     test_string.cpp
     bench_string.cpp
     "${CMAKE_SOURCE_DIR}/src/engine/core/fstring.cpp"
+    "${CMAKE_SOURCE_DIR}/src/engine/core/memory/memoryPool.cpp"
 )
 target_compile_definitions(oes_string_tests PRIVATE CORE_EXPORTS)
 

@@ -122,8 +122,6 @@ ibCompileCode::~ibCompileCode()
 
 	m_listExternValue.clear();
 	m_listContextValue.clear();
-
-	wxDELETE(m_rootContext);
 }
 
 // THE CODE STYLE IS THE COMPILE STATE'S (ibCompileState) — the current session's, which holds its
@@ -1920,7 +1918,7 @@ ibParamUnit ibCompileCode::CompileLambdaExpression(ibCompileContext* context)
 	std::unique_ptr<ibCompileContext> functionContextOwner;
 	int errorPlace = 0;
 
-	if (!ParseFunctionSignature(m_rootContext, createdFunction,
+	if (!ParseFunctionSignature(GetContext(), createdFunction,
 		functionContextOwner, errorPlace)) {
 		return ibParamUnit();
 	}
@@ -2645,7 +2643,7 @@ bool ibCompileCode::CompileNewObject(ibCompileContext* context)
 	// handing back a name would only mean resolving it again, later, somewhere else."*
 	//
 	// The name stays in the const pool: a refusal has to be able to say which class it was.
-	code.m_param3.m_numIndex = (wxLongLong_t)ibValue::GetIDObjectFromString(strClassName);
+	code.m_param3.m_numIndex = (long long)ibValue::GetIDObjectFromString(strClassName);
 
 	ibParamUnit variable = context->CreateVariable();
 	code.m_param1 = variable;// variable into which the value is returned
@@ -3792,7 +3790,7 @@ ibParamUnit ibCompileCode::GetExpression(ibCompileContext* context, int nPriorit
 		code.m_param2.m_numIndex = numConst;//number of the called method from the list of encountered methods
 		code.m_param2.m_numArray = listParam.size();// number of parameters
 		// The id, decided here — see the twin emitter above for why.
-		code.m_param3.m_numIndex = (wxLongLong_t)ibValue::GetIDObjectFromString(strObjectName);
+		code.m_param3.m_numIndex = (long long)ibValue::GetIDObjectFromString(strObjectName);
 
 		variable = context->CreateVariable();
 		code.m_param1 = variable;// variable into which the value is returned
@@ -4324,7 +4322,7 @@ void ibCompileCode::SetParent(ibCompileCode* setParent)
 
 	if (setParent != nullptr) {
 		m_cByteCode.m_parent = &setParent->m_cByteCode;
-		m_rootContext->m_parentContext = setParent->m_rootContext;
+		m_rootContext->m_parentContext = setParent->GetContext();
 		AddDependency(&setParent->m_cByteCode);
 	}
 

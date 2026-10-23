@@ -12,7 +12,7 @@
 #include <wx/wx.h>
 #endif
 
-#include <wx/hashset.h>
+#include <unordered_set>
 
 #include "databaseLayerDef.h"
 #include "databaseErrorReporter.h"
@@ -20,7 +20,7 @@
 #include "databaseResultSet.h"
 #include "databaseQueryParser.h"
 
-WX_DECLARE_HASH_SET(ibDatabaseResultSet*, wxPointerHash, wxPointerEqual, StatementResultSetHashSet);
+typedef std::unordered_set<ibDatabaseResultSet*> StatementResultSetHashSet;
 
 class BACKEND_API ibPreparedStatement : public ibDatabaseErrorReporter, public ibDatabaseStringConverter,
 	public ibDatabaseResultSetOwner

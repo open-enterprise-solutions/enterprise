@@ -93,7 +93,8 @@ ibDebuggerClient::~ibDebuggerClient()
 			connection->m_stop = true;
 		m_connectionsCv.wait(lock, [this] { return m_listConnection.empty(); });
 	}
-	wxDELETE(m_adapter);
+	delete m_adapter;
+	m_adapter = nullptr;
 
 	if (ms_debugClient == this)
 		ms_debugClient = nullptr;
@@ -808,7 +809,7 @@ void ibDebuggerClient::ibDebuggerClientConnection::EntryClient()
 				// one question a log could answer and did not (Max, 2026-09-25: *"the connection is not
 				// being killed — it detaches by itself"*), so the answer travels in a word and is
 				// reported with the state the doors are judged on.
-				const wxChar* leftBy = wxT("the socket closing - by this end (DetachConnection) or the far one");
+				const ibChar* leftBy = wxT("the socket closing - by this end (DetachConnection) or the far one");
 
 				for (;;) {
 
@@ -1093,7 +1094,7 @@ void ibDebuggerClient::ibDebuggerClientConnection::RecvCommand(void* pointer, un
 		commandReader.r_stringZ(answer);
 		commandReader.r_stringZ(json);
 
-		const wxLongLong_t microseconds = commandReader.r_u64();
+		const long long microseconds = commandReader.r_u64();
 
 		ms_debugClient->CallAfter(
 			&ibDebuggerClient::ibDebuggerClientAdapter::OnSandboxResult, ran, answer, json, microseconds

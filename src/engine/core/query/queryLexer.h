@@ -46,10 +46,10 @@ struct ibQueryToken
 	bool IsKeyword(ibQueryKeyword kw) const {
 		return m_kind == ibQueryTokenKind::Keyword && m_keyword == kw;
 	}
-	bool IsPunct(wxChar c) const {
+	bool IsPunct(ibChar c) const {
 		return m_kind == ibQueryTokenKind::Punct && m_text.length() == 1 && m_text[0] == c;
 	}
-	bool IsOp(const wxChar* op) const {
+	bool IsOp(const ibChar* op) const {
 		return m_kind == ibQueryTokenKind::Op && m_text == op;
 	}
 	bool IsEnd() const { return m_kind == ibQueryTokenKind::End; }
@@ -95,7 +95,7 @@ private:
 
 	// Immediate next char WITHOUT skipping whitespace — so multi-char operators
 	// (<=, >=, <>, !=) only glue when contiguous. 0 at end of buffer.
-	wxChar PeekRawByte() const;
+	ibChar PeekRawByte() const;
 };
 
 #endif

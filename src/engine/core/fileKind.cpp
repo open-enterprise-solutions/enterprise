@@ -9,7 +9,7 @@ namespace {
 // row here and nothing else — no second list to keep in step.
 struct ibFileKindRow {
 	ibFileKind    kind;
-	const wxChar* extension;
+	const ibChar* extension;
 	// The SOURCE string, marked for extraction and left untranslated here: this
 	// table is static data, built before a locale is loaded. Translating at the
 	// point of use is what lets the same table answer in whatever language the

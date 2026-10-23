@@ -19,7 +19,7 @@ const wxString ibCoreException::GetErrorDescription() const
 }
 
 #if !wxUSE_UTF8_LOCALE_ONLY
-void ibCoreException::DoErrorWchar(const wxChar* format, ...)
+void ibCoreException::DoErrorWchar(const ibChar* format, ...)
 {
 	va_list args;
 	va_start(args, format);
@@ -30,7 +30,7 @@ void ibCoreException::DoErrorWchar(const wxChar* format, ...)
 #endif
 
 #if wxUSE_UNICODE_UTF8
-void ibCoreException::DoErrorUtf8(const wxChar* format, ...)
+void ibCoreException::DoErrorUtf8(const ibChar* format, ...)
 {
 	va_list args;
 	va_start(args, format);

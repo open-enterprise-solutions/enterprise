@@ -60,8 +60,8 @@ void ibClientFrameDesigner::OnDraw(ibDataNode& state)
 	m_metaTree.OnDraw(state.Child(ibProtocol::ibFrame::MetaData));
 }
 
-void ibClientFrameDesigner::BackendError(const wxString& WXUNUSED(strFileName),
-	const wxString& WXUNUSED(strDocPath), const long WXUNUSED(line),
+void ibClientFrameDesigner::BackendError(const wxString& /*strFileName*/,
+	const wxString& /*strDocPath*/, const long /*line*/,
 	const wxString& strErrorMessage)
 {
 	// ⚠ Without its place yet: the desktop's line opened the module at the error (ibOutputWindow), a message here is its

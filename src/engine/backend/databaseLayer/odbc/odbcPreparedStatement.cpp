@@ -439,7 +439,7 @@ void ibPreparedStatementODBC::InterpretErrorCodes(long nCode, SQLHSTMT stmth_ptr
 		SetErrorCode(ibDatabaseLayerODBC::TranslateErrorCode((int)iNativeCode, strSqlState),
 			ibDatabaseLayerODBC::ClassifySqlState(strSqlState, (int)iNativeCode));
 		//SetErrorMessage(ConvertFromUnicodeStream((char*)strBuffer));
-		SetErrorMessage(wxString((wxChar*)strBuffer));
+		SetErrorMessage(wxString((ibChar*)strBuffer));
 	}
 }
 

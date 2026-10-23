@@ -245,6 +245,7 @@ bool ibMetaDataDataProcessor::CloseDatabase(int flags)
 #include <fstream>
 #include <filesystem>
 
+#include "core/fileSystem.h"             // ibPathOf
 #include "backend/backend_exception.h"   // catch ibBackendException at the LoadCommonTree boundary
 #include "core/serialize/dataBuilder.h"  // ibDataBuilder / ibBinaryProvider — top-level structure builder
 #include "backend/temp/tempStorage.h"       // ibTempFile — LoadFromTempFile
@@ -368,7 +369,7 @@ bool ibMetaDataDataProcessor::SaveToFile(const wxString& strFileName)
 	// (single commit point — a partial/failed write never replaces a good file).
 	// std::filesystem (C++17), no wx.
 	namespace fs = std::filesystem;
-	const fs::path dstPath(strFileName.ToStdWstring());
+	const fs::path dstPath = ibPathOf(strFileName);
 	fs::path tmpPath = dstPath;
 	tmpPath += L".tmp";
 

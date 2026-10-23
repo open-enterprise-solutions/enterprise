@@ -18,8 +18,8 @@
 class ibString;          // core/fstring.h - the flag's text; the family meets in backend_core.h
 
 // THE FLAG AS THE LANGUAGE WRITES IT — what ibBoolean writes and reads, and the translator's keywords.
-inline constexpr const wxChar* g_booleanTrue  = wxT("True");
-inline constexpr const wxChar* g_booleanFalse = wxT("False");
+inline constexpr const ibChar* g_booleanTrue  = wxT("True");
+inline constexpr const ibChar* g_booleanFalse = wxT("False");
 
 class CORE_API ibBoolean
 {

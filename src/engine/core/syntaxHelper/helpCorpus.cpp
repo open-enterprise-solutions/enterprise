@@ -9,9 +9,7 @@
 
 #include "core/syntaxHelper/helpCorpus.h"
 #include "core/syntaxHelper/helpResolver.h"
-
-#include <wx/sstream.h>
-#include <wx/wxcrt.h>   // wxIsalnum — the backend's precompiled header supplied this
+#include "core/fstring.h"   // ibIsAlnum
 
 #include <algorithm>
 #include <cstdint>
@@ -31,14 +29,14 @@ wxString NormaliseKey(const wxString& s) {
 
 // Tokenise a string on non-letter/digit boundaries. Used to build the
 // token index and to tokenise search queries. Cyrillic identifiers are
-// preserved as single tokens (locale-aware wxIsalnum); ASCII punctuation
+// preserved as single tokens (locale-aware ibIsAlnum); ASCII punctuation
 // is dropped.
 std::vector<wxString> Tokenise(const wxString& s) {
 	std::vector<wxString> out;
 	wxString cur;
 	for (wxString::const_iterator it = s.begin(); it != s.end(); ++it) {
 		wxUniChar c = *it;
-		if (wxIsalnum(c) || c == wxT('_')) {
+		if (ibIsAlnum(c) || c == wxT('_')) {
 			cur += c;
 		} else if (!cur.empty()) {
 			out.push_back(NormaliseKey(cur));

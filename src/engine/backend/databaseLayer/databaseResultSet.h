@@ -12,11 +12,8 @@
 #include <wx/wx.h>
 #endif
 
-#include <wx/hashmap.h>
-#include <wx/hashset.h>
-#include <wx/datetime.h>
-
 #include <unordered_map>   // StringToIntMap — the field-name index
+#include <unordered_set>   // MetaDataHashSet
 
 #include "databaseLayerDef.h"
 #include "databaseErrorReporter.h"
@@ -57,7 +54,7 @@ struct ibFieldNameEqual {
 	}
 };
 typedef std::unordered_map<wxString, int, ibFieldNameHash, ibFieldNameEqual> StringToIntMap;
-WX_DECLARE_HASH_SET(ibResultSetMetaData*, wxPointerHash, wxPointerEqual, MetaDataHashSet);
+typedef std::unordered_set<ibResultSetMetaData*> MetaDataHashSet;
 
 // ⭐⭐ WHOEVER KEEPS BOOKS ON A RESULT SET. There are two of them — the layer for a result it produced
 // itself, and the prepared statement for one its own cursor vends — and a result set has to be able to

@@ -7,7 +7,7 @@
 #include <wx/filename.h>
 #include <wx/utils.h>   // wxExecute, wxKill
 
-#include "core/programFolder.h"
+#include "core/fileSystem.h"
 #include "core/server/serverConfig.h"   // ibWorkerPipe
 
 #include "appCluster.h"

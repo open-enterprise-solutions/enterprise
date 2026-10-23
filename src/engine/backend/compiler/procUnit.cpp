@@ -325,13 +325,9 @@ void ibProcUnitState::Raise()
 
 void ibProcUnit::Reset()
 {
-	if (m_ppArrayContext != nullptr) {
-		wxDELETEA(m_ppArrayContext);
-	}
-
-	if (m_ppArrayCode != nullptr) {
-		wxDELETEA(m_ppArrayCode);
-	}
+	delete[] m_ppArrayContext;
+	m_ppArrayContext = nullptr;
+	m_ppArrayCode.reset();
 
 	// Clear the active session's currentRunModule pointer if it was us.
 	// Hits the per-session interpreter state directly through GetPUState
@@ -343,8 +339,6 @@ void ibProcUnit::Reset()
 
 	m_numAutoDeleteParent = 0;
 
-	m_ppArrayContext = nullptr;
-	m_ppArrayCode = nullptr;
 	m_pByteCode = nullptr;
 	m_bExecuted = false;
 
@@ -365,7 +359,7 @@ void ibProcUnit::BuildScopeChain(ibRunContext* localScope)
 	// hierarchy being shorter at run time — look at what ELSE adds a rung on the compile side
 	// (an eval's host frame does; see GetVariable step 2).
 
-	m_ppArrayCode = new ibProcUnit * [nParentCount + 1];
+	m_ppArrayCode = std::make_unique<ibProcUnit*[]>(nParentCount + 1);
 	m_ppArrayCode[0] = this;
 
 	// ⭐⭐ ONE ROW MORE THAN THERE ARE FRAMES, AND IT IS NULL — a terminator (Max, 2026-09-01:

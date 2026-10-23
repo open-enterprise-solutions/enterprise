@@ -18,7 +18,7 @@ wxString ibMcpClipboardKindName(ibMcpClipboardKind kind)
 
 // The default slot has a NAME rather than a separate variable, so "one buffer"
 // and "several buffers" are the same code path with the same rules.
-static const wxChar* kDefaultSlot = wxT("default");
+static const ibChar* kDefaultSlot = wxT("default");
 
 static std::map<wxString, ibMcpClipboardSlot>& Board()
 {

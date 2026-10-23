@@ -10,7 +10,7 @@
 #include <wx/app.h>
 #include <wx/cmdline.h>
 #include <wx/filename.h>
-#include "core/programFolder.h"
+#include "core/fileSystem.h"
 
 #ifdef __WXMSW__
 #include <windows.h>

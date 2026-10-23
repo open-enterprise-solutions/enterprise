@@ -38,9 +38,6 @@ target_link_libraries(appcluster PRIVATE
     core
     wx::base
 )
-if(WIN32)
-    target_link_libraries(appcluster PRIVATE ws2_32)
-endif()
 
 find_package(Threads REQUIRED)
 target_link_libraries(appcluster PRIVATE Threads::Threads)

@@ -21,10 +21,9 @@
 
 #include "firebirdBootstrap.h"
 #include "firebirdCommon.h"
+#include "core/fileSystem.h"   // ibFileExists, ibRemoveFile
 
-#include <wx/file.h>
 #include <wx/filename.h>
-#include <wx/log.h>
 #include <wx/process.h>
 #include <wx/stdpaths.h>
 #include <wx/textfile.h>
@@ -127,8 +126,8 @@ void WritePidFile(long pid, int port) {
 
 void RemovePidFile() {
 	const wxString p = PidFilePath();
-	if (wxFileExists(p))
-		wxRemoveFile(p);
+	if (ibFileExists(p))
+		ibRemoveFile(p);
 }
 
 // Wait for the spawned firebird.exe to start listening on `port`.
@@ -262,7 +261,7 @@ int ibFirebirdLocalServer::EnsureStarted() {
 
 	wxFileName fbExeFn(fbDir, wxT("firebird.exe"));
 	const wxString fbExe = fbExeFn.GetFullPath();
-	if (!wxFileExists(fbExe)) {
+	if (!ibFileExists(fbExe)) {
 		ibJournalError(wxT("db.firebird"),wxT("ibFirebirdLocalServer: firebird.exe not found at %s. ")
 		           wxT("LocalServer mode requires the FB server binary in _fb/ ")
 		           wxT("(not vendored by default; operator must drop it in)."),

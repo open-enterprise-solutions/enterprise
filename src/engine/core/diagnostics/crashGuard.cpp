@@ -2,13 +2,11 @@
 
 #include "journal.h"                 // the technology journal opens with the guard, before anything else
 #include "core/exception.h"         // ibCoreException — a refusal, named as such in the dump's reason
-#include "core/programFolder.h"     // crashdumps/ sits with the journal, in the diagnostic folder
+#include "core/fileSystem.h"        // crashdumps/ sits with the journal, in the diagnostic folder
 
 #include <wx/datetime.h>
-#include <wx/ffile.h>
 #include <wx/file.h>
 #include <wx/filename.h>
-#include <wx/log.h>
 #include <wx/utils.h>
 
 #include <atomic>

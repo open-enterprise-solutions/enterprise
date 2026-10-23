@@ -167,7 +167,7 @@ void ibClientDebugger::OnLeaveLoop(const ibDebugLineData& data)
 	Notify(ibProtocol::ibDebug::ibEvent::LeaveLoop, event);
 }
 
-void ibClientDebugger::OnAutoComplete(const ibDebugAutoCompleteData& WXUNUSED(data))
+void ibClientDebugger::OnAutoComplete(const ibDebugAutoCompleteData& /*data*/)
 {
 }
 

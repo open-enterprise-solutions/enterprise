@@ -45,7 +45,7 @@ public:
 	virtual bool IsDesignerHost() const override { return true; }
 	// The card's title (the desktop's ibDesignerWindow) — the client draws the card, its title the View's State.Caption,
 	// composed with every frame (OnDraw); nothing is kept here.
-	virtual void SetCaption(const wxString& WXUNUSED(strCaption)) override {}
+	virtual void SetCaption(const wxString& /*strCaption*/) override {}
 
 	// THE DESKTOP EDITOR'S LOAD AND SAVE (ibVisualEditor::LoadForm / SaveForm): the form from the compile cache, else
 	// from its data, else built from its kind (a new form); written back into the metaobject (SaveFormData).
@@ -131,7 +131,8 @@ public:
 
 	ibFormDesignView* GetFirstView() const;
 
-	wxDECLARE_NO_COPY_CLASS(ibFormDesignDocument);
+	ibFormDesignDocument(const ibFormDesignDocument&) = delete;
+	ibFormDesignDocument& operator=(const ibFormDesignDocument&) = delete;
 	wxDECLARE_DYNAMIC_CLASS(ibFormDesignDocument);
 };
 

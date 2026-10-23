@@ -46,7 +46,8 @@ void ibDatabaseResultSetSQLite::Close()
 		if (m_pStatement != nullptr)
 		{
 			m_pStatement->Close();
-			wxDELETE(m_pStatement);
+			delete m_pStatement;
+			m_pStatement = nullptr;
 		}
 	}
 }

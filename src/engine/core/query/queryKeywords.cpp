@@ -94,7 +94,7 @@ namespace {
 struct ibQueryScalarFnEntry
 {
 	ibQueryScalarFn m_fn;
-	const wxChar*   m_text;
+	const ibChar*   m_text;
 	size_t          m_minArgs;
 	size_t          m_maxArgs;
 	// Which argument names a PERIOD UNIT (0 = none, 1-based otherwise). A property of the call: the

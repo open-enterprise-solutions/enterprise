@@ -471,11 +471,11 @@ bool ibMcpIsRegex(const wxString& query)
 	// regular expression — "cost adjustment (RAUZ)" compiles, and then matches nothing, because
 	// the brackets it happens to contain silently became grouping. Ordinary punctuation therefore
 	// does NOT switch modes; only the marks that have no business in prose do.
-	static const wxChar* s_marks[] = { wxT("|"), wxT("\\"), wxT("["), wxT("]"),
+	static const ibChar* s_marks[] = { wxT("|"), wxT("\\"), wxT("["), wxT("]"),
 		wxT(".*"), wxT(".+"), wxT("^"), wxT("$") };
 
 	bool looks = false;
-	for (const wxChar* mark : s_marks)
+	for (const ibChar* mark : s_marks)
 		looks = looks || query.Find(mark) != wxNOT_FOUND;
 
 	return looks && CompiledQuery(query) != nullptr;
@@ -534,7 +534,7 @@ void ibMcpWordsPresent(const wxString& haystack, const wxString& query, std::vec
 		// is honest and small: a word whose form differs by more than a third — `deleting` against
 		// "deleted" — is no longer met at the stem. It is met by the OTHER words of the same query,
 		// which is what asking in a sentence is for.
-		const size_t keep = wxMax<size_t>(4, (word.length() * 2 + 2) / 3);
+		const size_t keep = std::max<size_t>(4, (word.length() * 2 + 2) / 3);
 
 		for (size_t length = word.length(); length >= keep && !present; --length)
 			present = text.Find(word.Left(length)) != wxNOT_FOUND;
@@ -727,7 +727,7 @@ wxString ibMcpLineNaming(const wxString& text, const wxString& name)
 	// A NAME IS A WORD OF THE LANGUAGE, so what may not touch it is what may be part of an
 	// identifier. A dot on either side is fine and wanted: `Catalog.Goods.Ref` names Goods.
 	const auto partOfAWord = [](wxUniChar symbol) {
-		return wxIsalnum(symbol) != 0 || symbol == wxT('_');
+		return ibIsAlnum(symbol) || symbol == wxT('_');
 	};
 
 	const wxString wanted = name.Lower();
@@ -762,7 +762,7 @@ wxString ibMcpLineNaming(const wxString& text, const wxString& name)
 }
 
 int ibMcpSayObjectLinks(const wxString& text, ibMetaData* metaData,
-	std::vector<ibDataValue>& into, std::set<wxLongLong_t>& seen)
+	std::vector<ibDataValue>& into, std::set<long long>& seen)
 {
 	if (metaData == nullptr || text.IsEmpty())
 		return 0;
@@ -781,7 +781,7 @@ int ibMcpSayObjectLinks(const wxString& text, ibMetaData* metaData,
 
 		const size_t first = open + s_marker.length();
 		size_t last = first;
-		while (last < text.length() && wxIsdigit(text[last]))
+		while (last < text.length() && ibIsDigit(text[last]))
 			++last;
 
 		at = last;
@@ -793,7 +793,7 @@ int ibMcpSayObjectLinks(const wxString& text, ibMetaData* metaData,
 		if (!text.Mid(first, last - first).ToLong(&id))
 			continue;
 
-		if (!seen.insert((wxLongLong_t)id).second)
+		if (!seen.insert((long long)id).second)
 			continue;      // the same object linked twice is one fact, not two
 
 		// The label is what the WRITER believed the id names, and comparing the two is the whole
@@ -899,7 +899,7 @@ void ibMcpSayObject(const ibValueMetaObject* object, ibDataNode& node, bool with
 	if (ibMetaData* metaData = const_cast<ibMetaData*>(object->GetMetaData())) {
 
 		std::vector<ibDataValue> links;
-		std::set<wxLongLong_t> seen;
+		std::set<long long> seen;
 		int wrong = ibMcpSayObjectLinks(note, metaData, links, seen);
 		wrong += ibMcpSayObjectLinks(help, metaData, links, seen);
 		wrong += ibMcpSayObjectLinks(comment, metaData, links, seen);

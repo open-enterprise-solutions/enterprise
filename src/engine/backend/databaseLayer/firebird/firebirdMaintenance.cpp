@@ -1,9 +1,9 @@
 #include "firebirdMaintenance.h"
 #include "firebirdInterface.h"
 #include "core/diagnostics/journal.h"   // ibJournal — this TU does not pull in backend_core.h
+#include "core/fileSystem.h"            // ibFileExists, ibRemoveFile, ibRenameFile
 
 #include <wx/filename.h>
-#include <wx/log.h>
 
 #include <chrono>
 #include <string>
@@ -205,16 +205,12 @@ bool WaitForServiceCompletion(ibInterfaceFirebird* iface,
 // isc_service_detach the embedded Firebird engine can still hold the backup file for a moment — it
 // closes its OS handle asynchronously — so an immediate delete races and fails with a sharing
 // violation (Win32 error 32). That is harmless: a leftover temp is reclaimed by the next cycle's
-// pre-clean. Retry a few times, then give up SILENTLY — wxLogNull suppresses wxRemoveFile's
-// wxLogSysError so a benign shutdown race never pops a modal "couldn't be removed" dialog.
+// pre-clean. Retry a few times, then give up SILENTLY — ibRemoveFile writes nothing into the log, so a
+// benign shutdown race never pops a modal "couldn't be removed" dialog.
 void TryRemoveTempFile(const wxString& path) {
-	if (!wxFileExists(path)) return;
-	// ⚠ NOT a logging call, and so NOT migrated to the journal: wxLogNull is a SUPPRESSION scope for
-	// wx's own internals — wxRemoveFile raises wxLogSysError from inside, and this is the only way to
-	// stop it. The one-file rule is about who WRITES log lines; silencing someone else's stays here.
-	wxLogNull noLog;
+	if (!ibFileExists(path)) return;
 	for (int attempt = 0; attempt < 5; ++attempt) {
-		if (wxRemoveFile(path) || !wxFileExists(path))
+		if (ibRemoveFile(path) || !ibFileExists(path))
 			return;
 		std::this_thread::sleep_for(std::chrono::milliseconds(40));
 	}
@@ -406,14 +402,14 @@ ibFirebirdMaintenance::Status ibFirebirdMaintenance::RunBackupRestoreCycle(
 	// which is not crash-safe — caller responsibility to keep the
 	// .fdb on a local disk for this operation.
 	TryRemoveTempFile(rollbackPath);
-	if (!wxRenameFile(databasePath, rollbackPath)) {
+	if (!ibRenameFile(databasePath, rollbackPath)) {
 		TryRemoveTempFile(backupPath);
 		TryRemoveTempFile(restorePath);
 		return Status::IOError;
 	}
-	if (!wxRenameFile(restorePath, databasePath)) {
+	if (!ibRenameFile(restorePath, databasePath)) {
 		// Rollback: original is still under .bak. Restore it.
-		wxRenameFile(rollbackPath, databasePath);
+		ibRenameFile(rollbackPath, databasePath);
 		TryRemoveTempFile(backupPath);
 		TryRemoveTempFile(restorePath);
 		return Status::IOError;

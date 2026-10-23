@@ -6,7 +6,6 @@
 #include <csignal>
 #include <thread>
 
-#include <wx/dir.h>
 #include <wx/file.h>
 #include <wx/fileconf.h>
 #include <wx/filename.h>
@@ -26,6 +25,7 @@
 #include "core/net/httpClient.h"
 #include "core/net/webSocketFrame.h"
 #include "core/net/webSocketRelay.h"
+#include "core/fileSystem.h"   // ibDirExists
 
 namespace {
 
@@ -75,7 +75,7 @@ wxString Beside(const wxString& folder, const wxString& path)
 bool ReadPem(const wxString& path, std::string& text, wxString& error)
 {
 	wxFile file;
-	if (!wxFileName::FileExists(path) || !file.Open(path)) {
+	if (!ibFileExists(path) || !file.Open(path)) {
 		error = wxString::Format(wxT("%s is not there or not readable"), path);
 		return false;
 	}
@@ -185,7 +185,7 @@ bool ibWebConfig::Read(const wxString& folder, wxString& error)
 	m_folder = folder;
 	m_root = Beside(folder, wxT("www"));
 	const wxString path = folder + wxFileName::GetPathSeparator() + wxT("web.conf");
-	if (!wxFileName::FileExists(path))
+	if (!ibFileExists(path))
 		return true;
 
 	// Read as written: a Windows path keeps its backslashes.
@@ -400,10 +400,10 @@ int ibWebServer::Run()
 	const wxString pack = m_config.m_folder + wxFileName::GetPathSeparator() + wxT("www.wpk");
 	std::map<std::string, std::string> packed;
 	wxString site;
-	if (!m_config.m_root.IsEmpty() && wxDirExists(m_config.m_root)) {
+	if (!m_config.m_root.IsEmpty() && ibDirExists(m_config.m_root)) {
 		site = m_config.m_root;
 	}
-	else if (wxFileName::FileExists(pack)) {
+	else if (ibFileExists(pack)) {
 		wxString packError;
 		if (ReadPack(pack, packed, packError))
 			site = pack;

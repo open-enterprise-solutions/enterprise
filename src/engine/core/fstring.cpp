@@ -23,7 +23,6 @@
 #include <new>
 #include <sstream>       // ToCDouble — the classic locale, whatever the process has set
 #include <stdexcept>     // std::out_of_range — insert past the end, as basic_string refused it
-#include <wx/wxcrt.h>    // wxTolower / wxToupper (per-char case primitives)
 
 // --- the text and its owners ------------------------------------------------------
 //
@@ -104,7 +103,7 @@ bool SameText(const wchar_t* a, size_t an, const wchar_t* b, size_t bn, bool cas
 	if (an != bn) return false;
 	for (size_t i = 0; i < an; ++i) {
 		if (a[i] == b[i]) continue;
-		if (caseSensitive || wxTolower(a[i]) != wxTolower(b[i])) return false;
+		if (caseSensitive || ibToLower(a[i]) != ibToLower(b[i])) return false;
 	}
 	return true;
 }
@@ -463,7 +462,7 @@ ibString& ibString::MakeLower()
 {
 	if (IsEmpty()) return *this;
 	wchar_t* const chars = Own();
-	for (size_t i = 0, n = Len(); i < n; ++i) chars[i] = static_cast<wchar_t>(wxTolower(chars[i]));
+	for (size_t i = 0, n = Len(); i < n; ++i) chars[i] = ibToLower(chars[i]);
 	return *this;
 }
 
@@ -471,7 +470,7 @@ ibString& ibString::MakeUpper()
 {
 	if (IsEmpty()) return *this;
 	wchar_t* const chars = Own();
-	for (size_t i = 0, n = Len(); i < n; ++i) chars[i] = static_cast<wchar_t>(wxToupper(chars[i]));
+	for (size_t i = 0, n = Len(); i < n; ++i) chars[i] = ibToUpper(chars[i]);
 	return *this;
 }
 
@@ -660,7 +659,7 @@ bool ibString::IsSameAs(const wxString& s, bool caseSensitive) const
 bool ibString::IsSameAs(wchar_t c, bool caseSensitive) const
 {
 	const std::wstring_view text = View();
-	return text.size() == 1 && (caseSensitive ? text[0] == c : wxTolower(text[0]) == wxTolower(c));
+	return text.size() == 1 && (caseSensitive ? text[0] == c : ibToLower(text[0]) == ibToLower(c));
 }
 
 // The order of a case-folded index (stringUtils' ibStringCaseFoldLess): folded only where the characters
@@ -672,7 +671,7 @@ int ibString::CmpNoCase(const ibString& o) const
 	const size_t n = a.size() < b.size() ? a.size() : b.size();
 	for (size_t i = 0; i < n; ++i) {
 		if (a[i] == b[i]) continue;
-		const wint_t x = wxTolower(a[i]), y = wxTolower(b[i]);
+		const wint_t x = ibToLower(a[i]), y = ibToLower(b[i]);
 		if (x != y) return x < y ? -1 : 1;
 	}
 	return a.size() == b.size() ? 0 : (a.size() < b.size() ? -1 : 1);

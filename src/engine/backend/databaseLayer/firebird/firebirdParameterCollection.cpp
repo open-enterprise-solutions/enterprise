@@ -19,7 +19,7 @@ ibDatabaseParameterFirebirdCollection::~ibDatabaseParameterFirebirdCollection()
 	while (start != stop)
 	{
 		ibDatabaseParameterFirebird* pParameter = (ibDatabaseParameterFirebird*)(*start);
-		wxDELETE(pParameter);
+		delete pParameter;
 		(*start) = nullptr;
 		start++;
 	}
@@ -245,7 +245,8 @@ void ibDatabaseParameterFirebirdCollection::FreeParameterSpace()
 					// (type-mismatch UB), DATE was never freed (leak), INT64
 					// and INT128 used scalar delete on `new char[]` (array
 					// delete required).
-					wxDELETEA(pVar->sqldata);
+					delete[] pVar->sqldata;
+					pVar->sqldata = nullptr;
 					break;
 				case SQL_SHORT:
 				case SQL_LONG:

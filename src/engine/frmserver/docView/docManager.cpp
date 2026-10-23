@@ -261,7 +261,7 @@ ibMetaDocument* ibDocManager::GetCurrentMetaDocument() const
 
 // THE BASE SET: what every application's manager has — the shared templates and the shared schemas. An
 // application's own manager adds its own in its ctor (ibDocManagerRuntime, ibDocManagerDesigner).
-ibDocManager::ibDocManager(long WXUNUSED(flags), bool initialize)
+ibDocManager::ibDocManager(long /*flags*/, bool initialize)
 {
 	m_defaultDocumentNameCounter = 1;
 	m_currentView = nullptr;

@@ -26,7 +26,7 @@ const ibValueTypes s_castPrimitives[] = {
 	ibValueTypes::TYPE_NUMBER, ibValueTypes::TYPE_STRING, ibValueTypes::TYPE_DATE, ibValueTypes::TYPE_BOOLEAN };
 
 // …and a date's composition, as the word that qualifies `Date(…)`.
-const std::pair<ibDateFractions, const wxChar*> s_dateFractions[] = {
+const std::pair<ibDateFractions, const ibChar*> s_dateFractions[] = {
 	{ ibDateFractions_Date, wxT("Date") }, { ibDateFractions_Time, wxT("Time") }, { ibDateFractions_DateTime, wxT("DateTime") } };
 
 // The primitive a Cast names, with its qualifiers. False = the target is not a primitive (a narrowing CAST).
@@ -74,7 +74,7 @@ bool ReadCastPrimitive(const ibQueryAstExpr& cast, ibTypeDescription& type, wxSt
 	case ibValueTypes::TYPE_DATE: {
 		const auto fraction = words.size() == 1
 			? std::find_if(std::begin(s_dateFractions), std::end(s_dateFractions),
-				[&words](const std::pair<ibDateFractions, const wxChar*>& f) { return words[0].IsSameAs(f.second, false); })
+				[&words](const std::pair<ibDateFractions, const ibChar*>& f) { return words[0].IsSameAs(f.second, false); })
 			: std::end(s_dateFractions);
 		if (!numbers.empty() || words.size() > 1 || (words.size() == 1 && fraction == std::end(s_dateFractions)))
 			wrong = _("a Date is qualified by what it holds: Date(Date), Date(Time) or Date(DateTime)");
@@ -133,7 +133,7 @@ ibQueryAstExprPtr ibQueryMakeCast(ibQueryAstExprPtr value, const ibTypeDescripti
 	else if (vt == ibValueTypes::TYPE_STRING && type.GetLength() > 0)
 		qualify(ibLiteral(ibNumber(type.GetLength())));
 	else if (vt == ibValueTypes::TYPE_DATE && type.GetDateFraction() != ibDateFractions_DateTime) {
-		for (const std::pair<ibDateFractions, const wxChar*>& f : s_dateFractions)
+		for (const std::pair<ibDateFractions, const ibChar*>& f : s_dateFractions)
 			if (f.first == type.GetDateFraction()) qualify(ibLiteral(wxString(f.second)));
 	}
 	return cast;
@@ -149,19 +149,19 @@ bool ibQueryParser::AcceptKw(ibQueryKeyword kw)
 	return false;
 }
 
-void ibQueryParser::ExpectKw(ibQueryKeyword kw, const wxChar* what)
+void ibQueryParser::ExpectKw(ibQueryKeyword kw, const ibChar* what)
 {
 	if (!AcceptKw(kw))
 		ThrowQueryException(Cur(), wxString::Format(_("expected %s"), what));
 }
 
-bool ibQueryParser::AcceptPunct(wxChar c)
+bool ibQueryParser::AcceptPunct(ibChar c)
 {
 	if (Cur().IsPunct(c)) { ++m_pos; return true; }
 	return false;
 }
 
-void ibQueryParser::ExpectPunct(wxChar c, const wxChar* what)
+void ibQueryParser::ExpectPunct(ibChar c, const ibChar* what)
 {
 	if (!AcceptPunct(c))
 		ThrowQueryException(Cur(), wxString::Format(_("expected %s"), what));

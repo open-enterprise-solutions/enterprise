@@ -46,7 +46,8 @@ public:
 
 	ibRoleRightsDocument() : ibMetaDocument() {}
 
-	wxDECLARE_NO_COPY_CLASS(ibRoleRightsDocument);
+	ibRoleRightsDocument(const ibRoleRightsDocument&) = delete;
+	ibRoleRightsDocument& operator=(const ibRoleRightsDocument&) = delete;
 	wxDECLARE_DYNAMIC_CLASS(ibRoleRightsDocument);
 };
 

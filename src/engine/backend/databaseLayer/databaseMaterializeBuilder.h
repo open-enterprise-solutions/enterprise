@@ -495,11 +495,11 @@ BACKEND_API unsigned int EffectiveShardCount(const ibMaterializeSpec& spec,
 
 // Name of the shard column on a split table. Fixed, not configurable: it is an implementation
 // detail the view absorbs, and nothing above L3 ever names it.
-BACKEND_API const wxChar* ShardColumnName();
+BACKEND_API const ibChar* ShardColumnName();
 
 // Name of the key-hash column. Fixed for the same reason as the shard column: nothing above L3 names
 // it, and a configurable name would be one more thing two layers could spell differently.
-BACKEND_API const wxChar* KeyHashColumnName();
+BACKEND_API const ibChar* KeyHashColumnName();
 
 // ⭐⭐ CAN AN INDEX ON THIS CONNECTION'S ENGINE HOLD A KEY THIS WIDE?
 //

@@ -122,7 +122,7 @@ void ibDatabaseParameterFirebird::Set(const ibNumber& dblValue)
 	//
 	// ⚠ The description is DATA, so it rides as an ARGUMENT: `Error` is a printf-style vararg, and a
 	// value handed in as the format string would read any '%' inside it as a specifier.
-	const auto storedInteger = [](const ibNumber& stored, int64_t low, int64_t high, const wxChar* what) {
+	const auto storedInteger = [](const ibNumber& stored, int64_t low, int64_t high, const ibChar* what) {
 		int64_t out = 0;
 		if (stored.ToInt(out) != 0 || out < low || out > high) {
 			ibBackendCoreException::Error(

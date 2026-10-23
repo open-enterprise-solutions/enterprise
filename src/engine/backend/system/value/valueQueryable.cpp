@@ -327,7 +327,7 @@ ibString ibValueQueryable::GetString() const
 }
 
 void ibValueQueryable::MaterialiseThenRam(ibLinqMethod method, ibValue& ret, ibValue** args, long n,
-	const wxChar* why)
+	const ibChar* why)
 {
 	// ⭐⭐ AND IT SAYS SO. Dropping to RAM changes what this step COSTS — every row leaves the
 	// database and the op runs over the materialised set — and it used to happen in silence, at five

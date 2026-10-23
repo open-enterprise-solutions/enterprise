@@ -103,7 +103,7 @@ class BACKEND_API ibValueQueryable : public ibValueStaticMembers<&ibBindLinqMeth
 	// said by the caller because only the caller knows; it is REPORTED here, once, because that is
 	// the one place every fallback passes through.
 	void MaterialiseThenRam(ibLinqMethod method, ibValue& ret, ibValue** args, long n,
-		const wxChar* why);
+		const ibChar* why);
 
 	// L4-2 JOIN push-down: when the inner argument is ALSO a queryable and the two key
 	// selectors each lower to one column, build the JOIN on the L3 door and run the

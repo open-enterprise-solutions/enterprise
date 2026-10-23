@@ -2,7 +2,6 @@
 #define __LAUNCHER_WND_H__
 
 #include <wx/artprov.h>
-#include <wx/xrc/xmlres.h>
 #include <wx/string.h>
 #include <wx/listbox.h>
 #include <wx/gdicmn.h>

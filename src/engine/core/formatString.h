@@ -167,7 +167,7 @@ public:
 	// values it applies to.
 	static const std::vector<ibFormatCode>& Codes();
 	static bool FindCode(const wxString& name, ibFormatCode& code);
-	static const wxChar* CodeName(ibFormatCode code);
+	static const ibChar* CodeName(ibFormatCode code);
 	static ibFormatKind KindOf(ibFormatCode code);
 
 	// A preset's pattern (empty for Custom), and the preset a pattern is (Custom when none).

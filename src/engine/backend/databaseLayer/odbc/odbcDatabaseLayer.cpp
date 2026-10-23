@@ -125,7 +125,7 @@ ibDatabaseLayerODBC::~ibDatabaseLayerODBC()
 		ThrowDatabaseException();
 	}
 
-	wxDELETE(m_pInterface);
+	delete m_pInterface;
 }
 
 bool ibDatabaseLayerODBC::Open()
@@ -344,14 +344,14 @@ int ibDatabaseLayerODBC::DoRunQuery(const wxString& strQuery, bool bParseQuery)
 		try
 		{
 			int nRows = pStatement->RunQuery();
-			wxDELETE(pStatement);
+			delete pStatement;
 			return nRows;
 		}
 		catch (...)
 		{
 			SetErrorCode(pStatement->GetErrorCode(), pStatement->GetErrorKind());
 			SetErrorMessage(pStatement->GetErrorMessage());
-			wxDELETE(pStatement);
+			delete pStatement;
 			ThrowDatabaseException();
 			return DATABASE_LAYER_QUERY_RESULT_ERROR;
 		}
@@ -379,7 +379,7 @@ ibDatabaseResultSet* ibDatabaseLayerODBC::DoRunQueryWithResults(const wxString& 
 		{
 			SetErrorCode(pStatement->GetErrorCode(), pStatement->GetErrorKind());
 			SetErrorMessage(pStatement->GetErrorMessage());
-			wxDELETE(pStatement);
+			delete pStatement;
 			ThrowDatabaseException();
 			return nullptr;
 		}
@@ -762,10 +762,7 @@ ibBackendDatabaseException::Kind ibDatabaseLayerODBC::ClassifySqlState(const wxS
 
 bool ibDatabaseLayerODBC::IsAvailable()
 {
-	bool bAvailable = false;
-	ibInterfaceODBC* pInterface = new ibInterfaceODBC();
-	bAvailable = pInterface && pInterface->Init();
-	wxDELETE(pInterface);
-	return bAvailable;
+	ibInterfaceODBC library;
+	return library.Init();
 }
 

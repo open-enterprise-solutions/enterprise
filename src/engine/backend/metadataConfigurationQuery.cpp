@@ -357,7 +357,7 @@ bool ibMetaDataConfigurationStorage::OnAfterSaveDatabase(bool roolback, int flag
 
 		for (const ibRestructureInfo::Entry& entry : ledger) {
 
-			const wxChar* level =
+			const ibChar* level =
 				  entry.type == ibRestructure::error   ? wxT("error")
 				: entry.type == ibRestructure::warning ? wxT("warning")
 				                                       : wxT("info");

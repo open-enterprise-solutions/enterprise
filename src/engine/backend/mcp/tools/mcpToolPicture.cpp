@@ -28,7 +28,7 @@
 #include "backend/metaCollection/metaPictureObject.h"       // ibValueMetaObjectPicture — a configuration's own picture
 
 // The metatype's own name, resolved through ibResolveMetaKind like every other kind.
-static const wxChar* const kPictureKind = wxT("Picture");
+static const ibChar* const kPictureKind = wxT("Picture");
 
 #include <wx/mstream.h>
 #include <wx/image.h>
@@ -200,10 +200,10 @@ bool DrawSvg(const wxString& svg, const wxSize& side, const wxString& name,
 	drawn.m_height     = (unsigned int)image.GetHeight();
 	return true;
 #else
-	wxUnusedVar(svg);
-	wxUnusedVar(side);
-	wxUnusedVar(name);
-	wxUnusedVar(drawn);
+	(void)svg;
+	(void)side;
+	(void)name;
+	(void)drawn;
 	refusal = ibMcpText("This build of the platform cannot read SVG.");
 	return false;
 #endif
@@ -236,12 +236,12 @@ bool SvgFromImage(wxImage image, wxString& svg, wxString& refusal)
 	const unsigned char* alpha = image.GetAlpha();
 
 	// Alpha in the top byte, so a colour and its transparency are one key.
-	const auto colourAt = [&](int at) -> wxUint32 {
-		return ((wxUint32)alpha[at] << 24) | ((wxUint32)rgb[at * 3] << 16)
-			| ((wxUint32)rgb[at * 3 + 1] << 8) | (wxUint32)rgb[at * 3 + 2];
+	const auto colourAt = [&](int at) -> std::uint32_t {
+		return ((std::uint32_t)alpha[at] << 24) | ((std::uint32_t)rgb[at * 3] << 16)
+			| ((std::uint32_t)rgb[at * 3 + 1] << 8) | (std::uint32_t)rgb[at * 3 + 2];
 	};
 
-	struct Rect { int x, y, w, h; wxUint32 colour; };
+	struct Rect { int x, y, w, h; std::uint32_t colour; };
 	std::vector<Rect> done, open;   // `open` reach the row above, sorted by x
 
 	for (int y = 0; y < height; ++y) {
@@ -251,7 +251,7 @@ bool SvgFromImage(wxImage image, wxString& svg, wxString& refusal)
 
 		for (int x = 0; x < width; ) {
 
-			const wxUint32 colour = colourAt(y * width + x);
+			const std::uint32_t colour = colourAt(y * width + x);
 			int end = x + 1;
 			while (end < width && colourAt(y * width + end) == colour)
 				++end;
@@ -290,8 +290,8 @@ bool SvgFromImage(wxImage image, wxString& svg, wxString& refusal)
 	done.insert(done.end(), open.begin(), open.end());
 
 	// ONE PATH PER COLOUR, in the order the colours are first met.
-	std::vector<wxUint32> order;
-	std::unordered_map<wxUint32, wxString> paths;
+	std::vector<std::uint32_t> order;
+	std::unordered_map<std::uint32_t, wxString> paths;
 
 	for (const Rect& rect : done) {
 		auto found = paths.find(rect.colour);
@@ -305,7 +305,7 @@ bool SvgFromImage(wxImage image, wxString& svg, wxString& refusal)
 	svg = wxString::Format(wxT("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%d\" height=\"%d\" "
 		"viewBox=\"0 0 %d %d\">\n"), width, height, width, height);
 
-	for (wxUint32 colour : order) {
+	for (std::uint32_t colour : order) {
 		svg << wxString::Format(wxT("<path fill=\"#%06x\""), (unsigned int)(colour & 0xFFFFFF));
 
 		const unsigned int opacity = colour >> 24;

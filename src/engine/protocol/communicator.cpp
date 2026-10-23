@@ -9,7 +9,6 @@
 #include <thread>
 
 #include <wx/scopeguard.h>   // wxMakeGuard — a call's line, however it returns
-#include <wx/time.h>
 
 #include "core/diagnostics/journal.h"
 
@@ -363,15 +362,19 @@ bool ibCommunicator::CallLocked(ibProtocol::ibMethod method, const ibProtocolNod
 	// A LINE PER CALL, the client's side of it: what was asked, how long it took — and of that the exchange, the server's
 	// part with the way there and back (the rest is the client's: the request written, the answer read) — how it ended,
 	// however it returns.
-	const wxLongLong began = wxGetUTCTimeMillis();
-	wxLongLong exchanged = 0;
+	const auto msSince = [](std::chrono::steady_clock::time_point since) {
+		return static_cast<long long>(
+			std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - since).count());
+	};
+	const auto began = std::chrono::steady_clock::now();
+	long long exchanged = 0;
 	const wxScopeGuard said = wxMakeGuard([&]() {
 		if (refusal == ibProtocol::ibRefusal::None)
 			ibJournalInfo(wxT("call"), wxT("%s: %lld ms, the exchange %lld ms"), ibProtocol::MethodName(method),
-				(wxGetUTCTimeMillis() - began).GetValue(), exchanged.GetValue());
+				msSince(began), exchanged);
 		else
 			ibJournalWarning(wxT("call"), wxT("%s refused (%d) after %lld ms: %s"), ibProtocol::MethodName(method),
-				static_cast<int>(refusal), (wxGetUTCTimeMillis() - began).GetValue(), error);
+				static_cast<int>(refusal), msSince(began), error);
 	});
 
 	if (!m_connection) {
@@ -428,15 +431,15 @@ bool ibCommunicator::CallLocked(ibProtocol::ibMethod method, const ibProtocolNod
 	ibJournalInfo(wxT("protocol"), wxT("%s sent: %s"), ibProtocol::MethodName(method), Redacted(sent));
 
 	ibString answer;
-	const wxLongLong exchanging = wxGetUTCTimeMillis();
+	const auto exchanging = std::chrono::steady_clock::now();
 	if (ExchangeDelay() > 0)
 		std::this_thread::sleep_for(std::chrono::milliseconds(ExchangeDelay()));
 	if (!m_connection->Exchange(sent, answer, refusal, error) && !Resume(sent, answer, refusal, error))
 		return false;
-	exchanged = wxGetUTCTimeMillis() - exchanging;
+	exchanged = msSince(exchanging);
 
 	ibJournalInfo(wxT("protocol"), wxT("%s answered in %lld ms, %zu characters: %s"), ibProtocol::MethodName(method),
-		(wxGetUTCTimeMillis() - began).GetValue(), answer.length(), Redacted(answer));
+		msSince(began), answer.length(), Redacted(answer));
 
 	return ReadAnswer(answer, id, result, refusal, error);
 }

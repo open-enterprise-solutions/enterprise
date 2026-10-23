@@ -12,7 +12,7 @@
 
 #include <gtest/gtest.h>
 
-#include "core/programFolder.h"
+#include "core/fileSystem.h"
 
 #include <wx/filename.h>
 #include <wx/stdpaths.h>

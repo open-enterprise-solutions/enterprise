@@ -499,26 +499,26 @@ public:
 
 	explicit ibTableModelView(ibValueModelTableBox* table) : m_table(table) {}
 
-	virtual bool ItemInserted(const ibDataViewItem& WXUNUSED(parent), const ibDataViewItem& item) override {
+	virtual bool ItemInserted(const ibDataViewItem& /*parent*/, const ibDataViewItem& item) override {
 		m_table->OnRowAdded(item);
 		m_table->OnRowsChanged();
 		return true;
 	}
-	virtual bool ItemAppended(const ibDataViewItem& WXUNUSED(parent), const ibDataViewItem& item) override {
+	virtual bool ItemAppended(const ibDataViewItem& /*parent*/, const ibDataViewItem& item) override {
 		m_table->OnRowAdded(item);
 		m_table->OnRowsChanged();
 		return true;
 	}
-	virtual bool ItemDeleted(const ibDataViewItem& WXUNUSED(parent), const ibDataViewItem& item) override {
+	virtual bool ItemDeleted(const ibDataViewItem& /*parent*/, const ibDataViewItem& item) override {
 		m_table->OnRowDeleted(item);
 		m_table->OnRowsChanged();
 		return true;
 	}
-	virtual bool ItemChanged(const ibDataViewItem& WXUNUSED(item)) override {
+	virtual bool ItemChanged(const ibDataViewItem& /*item*/) override {
 		m_table->OnRowsChanged();
 		return true;
 	}
-	virtual bool ValueChanged(const ibDataViewItem& WXUNUSED(item), unsigned int WXUNUSED(col)) override {
+	virtual bool ValueChanged(const ibDataViewItem& /*item*/, unsigned int /*col*/) override {
 		m_table->OnRowsChanged();
 		return true;
 	}
@@ -1315,7 +1315,7 @@ bool ibValueModelTableBox::OnColumnMoved(const ibFormID& columnId, const ibFormI
 		oldHolder->RemoveChild(column);
 
 	column->SetParent(holder);
-	holder->AddChild(wxMin(position, holder->GetChildCount()), column);
+	holder->AddChild(std::min(position, holder->GetChildCount()), column);
 	return true;
 }
 

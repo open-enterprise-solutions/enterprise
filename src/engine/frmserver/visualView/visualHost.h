@@ -132,7 +132,7 @@ public:
 
 	virtual bool IsVisualDemonstrationDoc() const { return false; }
 
-	virtual bool OnCreate(const wxString& WXUNUSED(path), long flags) override;
+	virtual bool OnCreate(const wxString& /*path*/, long flags) override;
 	virtual bool OnCloseDocument() override;
 
 	virtual bool IsCloseOnOwnerClose() const override;

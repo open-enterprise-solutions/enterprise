@@ -43,12 +43,12 @@ bool ibPropertyCommandSource::IsEmptyProperty() const
 	return get_cell_variant<ibVariantDataCommandSource>()->IsEmptyCommand();
 }
 
-bool ibPropertyCommandSource::SetDataValue(const ibValue& WXUNUSED(varPropVal))
+bool ibPropertyCommandSource::SetDataValue(const ibValue& /*varPropVal*/)
 {
 	return false;   // a command source is bound + run by the button, never assigned as a script value
 }
 
-bool ibPropertyCommandSource::GetDataValue(ibValue& WXUNUSED(pvarPropVal)) const
+bool ibPropertyCommandSource::GetDataValue(ibValue& /*pvarPropVal*/) const
 {
 	return false;
 }

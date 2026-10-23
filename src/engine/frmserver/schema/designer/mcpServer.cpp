@@ -20,7 +20,7 @@ ibMcpSettings SettingsOf(const ibDataNode& args)
 
 }
 
-void ibSchemaMcpServer::Build(const ibSession& session, const ibDataNode& WXUNUSED(args), ibDataNode& result) const
+void ibSchemaMcpServer::Build(const ibSession& session, const ibDataNode& /*args*/, ibDataNode& result) const
 {
 	const ibMcpServer* const server = SwitchableServer(session);
 	result.SetValue(ibProtocol::ibSchema::ibMcpServer::Allowed, server != nullptr);

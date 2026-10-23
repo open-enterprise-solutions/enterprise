@@ -81,7 +81,7 @@ const ibArg& ArgQuery()
 
 // ONE ENTRY. `name` is the address, `summary` is what the listing shows, `text` is the whole of it.
 struct ibMcpPattern {
-	const wxChar* m_name;
+	const ibChar* m_name;
 	wxString      m_summary;
 	wxString      m_text;
 };
@@ -9336,7 +9336,7 @@ bool LooksLikeHeading(const wxString& line)
 	size_t at = 0;
 
 	// Past the indent and past whatever marker opens the line - a star, a stop sign, a bullet.
-	while (at < line.length() && !wxIsalpha(line[at]))
+	while (at < line.length() && !ibIsAlpha(line[at]))
 		at++;
 
 	int capitalised = 0;
@@ -9344,7 +9344,7 @@ bool LooksLikeHeading(const wxString& line)
 	while (at < line.length()) {
 
 		size_t start = at;
-		while (at < line.length() && wxIsalpha(line[at]))
+		while (at < line.length() && ibIsAlpha(line[at]))
 			at++;
 
 		const size_t length = at - start;
@@ -9371,7 +9371,7 @@ bool LooksLikeHeading(const wxString& line)
 		// most (caught by reading a live answer, 2026-09-02: the contents came back holding the
 		// ordinary paragraphs and none of the marked ones). So anything that is not a letter is
 		// stepped over between words; the run ends when a word is not in capitals.
-		while (at < line.length() && !wxIsalpha(line[at]))
+		while (at < line.length() && !ibIsAlpha(line[at]))
 			at++;
 	}
 
@@ -9445,7 +9445,7 @@ wxString TopicLabel(const wxString& title)
 	label.Trim(true).Trim(false);
 
 	// Cut at the first full stop or dash: the heading states its subject and then explains it.
-	for (const wxChar* stop : { wxT(". "), wxT(" - "), wxT(", ") }) {
+	for (const ibChar* stop : { wxT(". "), wxT(" - "), wxT(", ") }) {
 		const int at = label.Find(stop);
 		if (at != wxNOT_FOUND && at > 12) {
 			label = label.Left(at);
@@ -9688,14 +9688,14 @@ public:
 			// rather than a handful of notes.
 			result.AddField(wxT("count"), ibDataValue::Int((std::int64_t)out.size()));
 			{
-				static const wxChar* const s_start[] = {
+				static const ibChar* const s_start[] = {
 					wxT("intake"), wxT("combining"), wxT("same-shape-elsewhere"),
 					wxT("unfamiliar-domain"), wxT("document-chains"),
 					wxT("where-behaviour-lives"), wxT("building-an-erp"), wxT("body-map")
 				};
 
 				std::vector<ibDataValue> start;
-				for (const wxChar* const nm : s_start)
+				for (const ibChar* const nm : s_start)
 					start.push_back(ibDataValue::String(wxString(nm)));
 
 				result.AddField(wxT("start_here"), ibDataValue::Array(start));

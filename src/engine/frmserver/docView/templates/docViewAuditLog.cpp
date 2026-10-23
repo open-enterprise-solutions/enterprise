@@ -41,7 +41,7 @@ static ibClientFrame* ClientOf(const ibView* view)
 }
 
 // A time on the wire — ms since the epoch, past what an std::int32_t keeps.
-static wxLongLong_t MsOf(const ibDataNode& node, const wxString& name)
+static long long MsOf(const ibDataNode& node, const wxString& name)
 {
 	long long ms = 0;
 	node.GetValue<ibNumber>(name).ToInt(ms);

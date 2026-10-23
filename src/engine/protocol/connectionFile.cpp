@@ -1,6 +1,6 @@
 #include "connectionFile.h"
 
-#include "core/programFolder.h"
+#include "core/fileSystem.h"
 
 #include <wx/dynlib.h>
 #include <wx/filename.h>

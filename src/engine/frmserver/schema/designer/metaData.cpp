@@ -106,8 +106,8 @@ bool ibSchemaMetaData::AccessRight(const ibSession& session) const
 	return metaData != nullptr && metaData->AccessRight_Administration();
 }
 
-void ibSchemaMetaData::Build(const ibSession& WXUNUSED(session), const ibDataNode& WXUNUSED(args),
-	ibDataNode& WXUNUSED(result)) const
+void ibSchemaMetaData::Build(const ibSession& /*session*/, const ibDataNode& /*args*/,
+	ibDataNode& /*result*/) const
 {
 }
 

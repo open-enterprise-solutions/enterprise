@@ -232,7 +232,7 @@ struct ibQueryOutlineBinding {
 	// The frame cell the row lives in — the same number the instructions carry. Declared as the
 	// operand's own width (`wxLongLong_t`, byteCode.h) rather than a `long`, so the number that
 	// travels is the number that was written.
-	wxLongLong_t m_rowCell = 0;
+	long long m_rowCell = 0;
 
 	// ⭐⭐ WHAT THIS NAME OFFERS — the row's own fields, read by asking the source for a sample of
 	// what it yields, exactly as a `foreach` variable is answered after a dot. Empty when the source

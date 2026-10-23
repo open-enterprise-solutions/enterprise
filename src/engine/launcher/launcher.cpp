@@ -1,10 +1,8 @@
 #include "launcher.h"
 #include "backend/appData.h"
 #include "core/launchTicket.h"
-#include "core/programFolder.h"
+#include "core/fileSystem.h"
 
-#include <wx/config.h>
-#include <wx/fileconf.h>
 #include <wx/filename.h>
 #include <wx/log.h>
 #include <wx/msgdlg.h>   // wxMessageBox — a start that failed is said

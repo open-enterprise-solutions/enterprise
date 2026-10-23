@@ -279,7 +279,7 @@ protected:
 // exists. It lives HERE, beside the resolver that answers to it, so a caller needs no metaobject
 // header to say the name.
 namespace ibRefMember {
-	inline constexpr const wxChar* EmptyRef = wxT("EmptyRef");
+	inline constexpr const ibChar* EmptyRef = wxT("EmptyRef");
 }
 
 #endif

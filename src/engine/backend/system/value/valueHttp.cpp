@@ -44,7 +44,7 @@ const size_t kMostPemBytes = 16u * 1024u * 1024u;  // a bundle of every authorit
 
 // The fields a script may NOT set: they say how the message is framed and carried, and that is the engine's
 // (a Content-Length that is not the body's length is a request smuggled past a proxy). Refused by name.
-const wxChar* const kOwnedHeaders[] = {
+const ibChar* const kOwnedHeaders[] = {
 	wxT("Content-Length"), wxT("Transfer-Encoding"), wxT("Host"), wxT("Connection"), wxT("Expect"),
 	wxT("Proxy-Authorization"), wxT("Upgrade") };
 
@@ -71,7 +71,7 @@ std::string ibHttpEncode(const wxString& text, ibTextEncoding encoding)
 
 // bytes -> text, or a refusal: bytes that are not text in this encoding are not handed over as something else.
 // The same door a TextReader reads a file through, so a mark at the head of a body is a mark there too.
-wxString ibHttpDecode(const std::string& body, ibTextEncoding encoding, const wxChar* who)
+wxString ibHttpDecode(const std::string& body, ibTextEncoding encoding, const ibChar* who)
 {
 	wxString text;
 	if (!ibTextFromBytes(body.data(), body.size(), encoding, text))
@@ -509,7 +509,7 @@ ibValue ibValueHttpConnection::Send(ibHttpMethod method, const ibValueHttpReques
 		const std::string field = ibHttpUtf8(key);
 		if (!ibHttpIsToken(field))
 			ibBackendCoreException::Error(_("HTTPConnection: '%s' is not a header name"), key);
-		for (const wxChar* const owned : kOwnedHeaders) {
+		for (const ibChar* const owned : kOwnedHeaders) {
 			if (key.IsSameAs(owned, false))
 				ibBackendCoreException::Error(_("HTTPConnection: the header '%s' says how the message is carried, and that is not a script's to set"), key);
 		}

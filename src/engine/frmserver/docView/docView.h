@@ -102,9 +102,9 @@ enum
     ibDOC_READONLY = ibDOC_SILENT + 1
 };
 
-typedef wxVector<ibDocument*> ibDocVector;
-typedef wxVector<ibView*> ibViewVector;
-typedef wxVector<ibDocTemplate*> ibDocTemplateVector;
+typedef std::vector<ibDocument*> ibDocVector;
+typedef std::vector<ibView*> ibViewVector;
+typedef std::vector<ibDocTemplate*> ibDocTemplateVector;
 
 // Not an event handler, as wx's are: nothing here is a window, and nothing routes commands through the
 // documents — a client's events come in through the form's door (ibValueForm::DispatchEvent).
@@ -313,7 +313,8 @@ protected:
 
 private:
     wxDECLARE_ABSTRACT_CLASS(ibDocument);
-    wxDECLARE_NO_COPY_CLASS(ibDocument);
+    ibDocument(const ibDocument&) = delete;
+    ibDocument& operator=(const ibDocument&) = delete;
 };
 
 class FRMSERVER_API ibView: public wxObject
@@ -346,16 +347,16 @@ public:
     virtual ibProtocol::ibView::ibKind GetViewKind() const { return ibProtocol::ibView::ibKind::Form; }
     // WHAT A CLIENT READS OF THE VIEW ITSELF, a part at a time — a spreadsheet's cells, as a control of a form is read
     // (ibValueFrame::Fetch). False: this view has nothing to read.
-    virtual bool Fetch(const ibDataNode& WXUNUSED(request), ibDataNode& WXUNUSED(response)) { return false; }
+    virtual bool Fetch(const ibDataNode& /*request*/, ibDataNode& /*response*/) { return false; }
 
     // WHAT THE PERSON DID IN THE VIEW ITSELF, not in a control of a form — a text typed into a text document's view
     // (Change {Text}). False: this view takes no such event.
-    virtual bool OnClientEvent(ibProtocol::ibEvent::ibKind WXUNUSED(event), const ibDataNode& WXUNUSED(args)) { return false; }
+    virtual bool OnClientEvent(ibProtocol::ibEvent::ibKind /*event*/, const ibDataNode& /*args*/) { return false; }
     virtual void OnUpdate(ibView *sender, wxObject *hint = nullptr);
     virtual void OnClosingDocument() {}
     virtual void OnChangeFilename();
 
-    virtual bool OnCreate(ibDocument *WXUNUSED(doc), long WXUNUSED(flags))
+    virtual bool OnCreate(ibDocument */*doc*/, long /*flags*/)
         { return true; }
 
     virtual bool Close(bool deleteWindow = true);
@@ -385,7 +386,8 @@ protected:
 
 private:
     wxDECLARE_ABSTRACT_CLASS(ibView);
-    wxDECLARE_NO_COPY_CLASS(ibView);
+    ibView(const ibView&) = delete;
+    ibView& operator=(const ibView&) = delete;
 };
 
 // ibDocTemplate / ibMetaDocTemplate — full definitions in
@@ -605,7 +607,8 @@ protected:
     ibView*           m_currentView;
 
     wxDECLARE_DYNAMIC_CLASS(ibDocManager);
-    wxDECLARE_NO_COPY_CLASS(ibDocManager);
+    ibDocManager(const ibDocManager&) = delete;
+    ibDocManager& operator=(const ibDocManager&) = delete;
 };
 
 // Shortcut to the current session's doc manager. Previously hosted in
@@ -656,7 +659,7 @@ public:
 
     // Become the tab the client shows (or stop being it). The base has no
     // client to tell and answers false; a tab overrides it.
-    virtual bool Show(bool WXUNUSED(show) = true) { return false; }
+    virtual bool Show(bool /*show*/ = true) { return false; }
 
     // Closing the frame closes the view it shows, once the call that asked has
     // unwound. True when the frame took the close over (a client tab defers it
@@ -673,7 +676,8 @@ protected:
     ibView*           m_childView;
 
 private:
-    wxDECLARE_NO_COPY_CLASS(ibDocChildFrameAnyBase);
+    ibDocChildFrameAnyBase(const ibDocChildFrameAnyBase&) = delete;
+    ibDocChildFrameAnyBase& operator=(const ibDocChildFrameAnyBase&) = delete;
 };
 
 // ----------------------------------------------------------------------------
@@ -694,7 +698,8 @@ public:
 protected:
     ibDocManager *m_docManager;
 
-    wxDECLARE_NO_COPY_CLASS(ibDocParentFrameAnyBase);
+    ibDocParentFrameAnyBase(const ibDocParentFrameAnyBase&) = delete;
+    ibDocParentFrameAnyBase& operator=(const ibDocParentFrameAnyBase&) = delete;
 };
 
 // File-to-stream helpers (preserved for back-compat with existing formats).

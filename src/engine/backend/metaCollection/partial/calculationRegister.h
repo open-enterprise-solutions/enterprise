@@ -15,7 +15,6 @@
 
 #include <functional>   // ibCalcNarrowing
 #include <list>         // the base's sources (m_baseSources)
-#include <memory>
 #include <utility>      // std::pair — the Displacing section's named fields
 #include <vector>
 
@@ -682,9 +681,9 @@ struct ibCalcViewSpec {
 };
 
 // The columns the fact adds to a record's own — named so no register field can be one of them.
-constexpr const wxChar* ibCalcDisplacerTypePrefix = wxT("ib_y");  // a displacer's fields, each prefixed, in the fact's walk
-constexpr const wxChar* ibCalcPositionFirst  = wxT("ib_ps");      // the fact: the record's own action period
-constexpr const wxChar* ibCalcPositionLast   = wxT("ib_pe");
+constexpr const ibChar* ibCalcDisplacerTypePrefix = wxT("ib_y");  // a displacer's fields, each prefixed, in the fact's walk
+constexpr const ibChar* ibCalcPositionFirst  = wxT("ib_ps");      // the fact: the record's own action period
+constexpr const ibChar* ibCalcPositionLast   = wxT("ib_pe");
 
 // A reader's narrowing, asked of a table alias: the predicate its rows must meet there — `subject` says whether
 // the alias holds the records the reading produces or their displacers (above). Null — or a null answer —

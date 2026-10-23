@@ -16,7 +16,7 @@ void ibRole::InitRole(ibAccessObject* obj, const bool& value)
 
 ibAccessObject::~ibAccessObject()
 {
-	for (auto& role : m_roles) { wxDELETE(role.second); }
+	for (auto& role : m_roles) { delete role.second; }
 	m_roles.clear();
 }
 

@@ -68,7 +68,7 @@ public:
 	// ⭐ `microseconds` is how long the code itself ran, measured in the process that ran it — the
 	// only place holding both edges. The platform's own clock answers to the second (a business
 	// date), so code cannot time itself, and timing it from this end would measure the socket.
-	virtual void OnSandboxResult(bool ran, const wxString& answer, const wxString& json, wxLongLong_t microseconds) {}
+	virtual void OnSandboxResult(bool ran, const wxString& answer, const wxString& json, long long microseconds) {}
 
 	// A line printed by evaluated code. Not shown to the person: the designer drops these, and
 	// whoever asked for the evaluation reads them.

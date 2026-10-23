@@ -35,6 +35,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cwchar>        // std::swprintf — ibString::Format
+#include <cwctype>       // std::iswdigit, std::towlower… — a character's class and case
 #include <string>
 #include <string_view>   // std::hash<ibString> hashes a view of the buffer
 #include <tuple>         // std::apply — ibString::Format holds its arguments for the call
@@ -42,6 +43,17 @@
 #include <wx/string.h>   // ONLY for the boundary conversion (operator wxString / ctor)
 
 #include "core/core.h"   // CORE_API
+
+// --- a character: its class and its case ------------------------------------
+// The C library's wide answers — what wxIsdigit, wxTolower and the rest gave, without wx.
+
+inline bool ibIsDigit(ibChar c) { return std::iswdigit(c) != 0; }
+inline bool ibIsSpace(ibChar c) { return std::iswspace(c) != 0; }
+inline bool ibIsAlpha(ibChar c) { return std::iswalpha(c) != 0; }
+inline bool ibIsAlnum(ibChar c) { return std::iswalnum(c) != 0; }
+
+inline ibChar ibToLower(ibChar c) { return static_cast<ibChar>(std::towlower(c)); }
+inline ibChar ibToUpper(ibChar c) { return static_cast<ibChar>(std::towupper(c)); }
 
 // --- ibString ---------------------------------------------------------------
 
@@ -232,7 +244,7 @@ public:
 	// would otherwise loop forever). Nothing found leaves a shared text shared.
 	size_t Replace(const ibString& from, const ibString& to, bool replaceAll = true);
 
-	// --- comparison (native; case-insensitive folds per-char via wxTolower) ---
+	// --- comparison (native; case-insensitive folds per-char via ibToLower) ---
 	bool operator==(const ibString& o) const noexcept { return m_impl == o.m_impl || View() == o.View(); }
 	bool operator!=(const ibString& o) const noexcept { return !(*this == o); }
 	bool operator<(const ibString& o)  const noexcept { return View() < o.View(); }

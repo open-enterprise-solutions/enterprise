@@ -27,7 +27,7 @@
 // up on restart, which is the same granularity a rebuild used to give.
 ////////////////////////////////////////////////////////////////////////////
 
-#include "core/programFolder.h"
+#include "core/fileSystem.h"
 
 #include <wx/filename.h>
 #include <wx/stdpaths.h>

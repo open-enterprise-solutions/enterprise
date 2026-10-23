@@ -112,7 +112,7 @@ class BACKEND_API ibDebuggerClient {
 		// What the sandbox did — ran or failed, what it answered with, and the RESULT VALUE as
 		// text when it could be written (empty when the value cannot travel, which is not a
 		// failure of the run).
-		void OnSandboxResult(bool ran, const wxString& answer, const wxString& json, wxLongLong_t microseconds);
+		void OnSandboxResult(bool ran, const wxString& answer, const wxString& json, long long microseconds);
 
 		// The state of a filling run — one shape for all three requests, because starting one,
 		// asking after one and stopping one are the same question about the same thing. `which`

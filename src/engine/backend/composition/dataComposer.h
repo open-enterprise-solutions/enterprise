@@ -1351,7 +1351,7 @@ public:
 	// THE NAME AN AUTHOR'S QUERY ANSWERS TO once the settings are written over it — the alias of the
 	// nested source in `SELECT * FROM (<their query>) AS AuthorQuery WHERE …`. Exposed because a host
 	// that qualifies a filter path has to spell the same word the render does.
-	static const wxChar* AuthorQuerySourceName();
+	static const ibChar* AuthorQuerySourceName();
 
 	bool HasSource() const override { return !m_sourceText.IsEmpty() || !m_sources.empty(); }
 

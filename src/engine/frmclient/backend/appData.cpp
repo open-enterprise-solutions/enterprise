@@ -2,7 +2,7 @@
 
 #include <wx/filename.h>
 
-#include "core/programFolder.h"   // the binary next to this one — RunApplication
+#include "core/fileSystem.h"   // the binary next to this one — RunApplication
 
 #include "frmclient/backend/mcp/mcpServer.h"
 #include "frmclient/mainFrame/mainFrame.h"

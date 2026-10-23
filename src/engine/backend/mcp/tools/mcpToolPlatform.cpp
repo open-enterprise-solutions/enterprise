@@ -32,7 +32,7 @@ public:
 	// Asking what state the platform is in must work in every state it can be in, including this one.
 	bool RunsWhileBusy() const override { return true; }
 
-	wxString GetActivity(const ibDataNode& WXUNUSED(params)) const override
+	wxString GetActivity(const ibDataNode& /*params*/) const override
 	{
 		return ibMcpText("checking how this configuration is written");
 	}
@@ -54,8 +54,8 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& WXUNUSED(params), ibDataNode& result,
-		wxString& WXUNUSED(refusal)) const override
+	bool Call(const ibDataNode& /*params*/, ibDataNode& result,
+		wxString& /*refusal*/) const override
 	{
 		// ⚠ NO REFUSAL PATH. With no configuration open this still answers - the build and the
 		// account are facts either way, and `configurationOpen: false` is the answer to "what

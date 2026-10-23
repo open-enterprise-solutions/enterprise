@@ -107,7 +107,7 @@ bool ibMetadataFileDocument::DoOpenDocument(const wxString& filename)
 	return true;
 }
 
-bool ibMetadataFileDocument::DoSaveDocument(const wxString& WXUNUSED(filename))
+bool ibMetadataFileDocument::DoSaveDocument(const wxString& /*filename*/)
 {
 	// Read-only browser — nothing to write.
 	return true;

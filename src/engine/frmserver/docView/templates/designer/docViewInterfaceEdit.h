@@ -41,7 +41,8 @@ public:
 
 	ibInterfaceCompositionDocument() : ibMetaDocument() {}
 
-	wxDECLARE_NO_COPY_CLASS(ibInterfaceCompositionDocument);
+	ibInterfaceCompositionDocument(const ibInterfaceCompositionDocument&) = delete;
+	ibInterfaceCompositionDocument& operator=(const ibInterfaceCompositionDocument&) = delete;
 	wxDECLARE_DYNAMIC_CLASS(ibInterfaceCompositionDocument);
 };
 

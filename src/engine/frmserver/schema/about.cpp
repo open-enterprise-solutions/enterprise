@@ -8,7 +8,7 @@
 #include "backend/session/session.h"
 #include "backend/backend_picture.h"   // ibBackendPicture::SendPicture — the picture, by its id
 
-void ibSchemaAbout::Build(const ibSession& session, const ibDataNode& WXUNUSED(args), ibDataNode& result) const
+void ibSchemaAbout::Build(const ibSession& session, const ibDataNode& /*args*/, ibDataNode& result) const
 {
 	const ibApplicationInstance* const applicationInstance = session.GetApplicationInstance();
 

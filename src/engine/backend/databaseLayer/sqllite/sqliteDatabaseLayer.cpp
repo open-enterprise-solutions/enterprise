@@ -7,9 +7,7 @@
 
 #include "backend/databaseLayer/databaseErrorCodes.h"
 #include "backend/databaseLayer/databaseLayerException.h"
-
-#include <wx/tokenzr.h>
-#include <wx/filename.h>
+#include "core/fileSystem.h"
 
 // SQLite SQL dialect — owned by the driver (static definition + virtual access).
 const ibDialectDictionary& ibDatabaseLayerSQLite::Dialect()
@@ -261,7 +259,7 @@ static const int kBusyTimeoutMs = 5000;
 bool ibDatabaseLayerSQLite::Open(const wxString& strDatabase, bool mustExist)
 {
 	if (strDatabase != wxT(":memory:") && // :memory: is a special SQLite in-memory database
-		mustExist && !(wxFileName::FileExists(strDatabase)))
+		mustExist && !(ibFileExists(strDatabase)))
 	{
 		SetErrorCode(DATABASE_LAYER_ERROR);
 		SetErrorMessage(wxT("The specified database file '") + strDatabase + wxT("' does not exist."));
@@ -517,7 +515,7 @@ ibPreparedStatement* ibDatabaseLayerSQLite::DoPrepareStatement(const wxString& s
 				wxString strSQL;
 				if (szTail != 0)
 				{
-					strSQL = (wxChar*)szTail;
+					strSQL = (ibChar*)szTail;
 				}
 				else
 				{
@@ -536,7 +534,7 @@ ibPreparedStatement* ibDatabaseLayerSQLite::DoPrepareStatement(const wxString& s
 				{
 					SetErrorCode(ibDatabaseLayerSQLite::TranslateErrorCode(nReturn), ClassifyDatabaseError(nReturn));
 					SetErrorMessage(ConvertFromUnicodeStream(sqlite3_errmsg((sqlite3*)m_pDatabase)));
-					wxDELETE(pReturnStatement);
+					delete pReturnStatement;
 					ThrowDatabaseException();
 					return nullptr;
 				}

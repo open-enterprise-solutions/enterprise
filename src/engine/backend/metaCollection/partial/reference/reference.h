@@ -82,7 +82,7 @@ public:
 	// branch via wxNewUniqueGuid — see ibValueRecordDataObjectRef.)
 
 	ibReference* GetReferenceData() const {
-		return m_reference_impl;
+		return m_reference_impl.get();
 	}
 
 	// IDENTITY = type + guid, and it is expressed by the COMPARISON, not by a rendered key.
@@ -305,7 +305,7 @@ protected:
 
 	const ibValueMetaObjectRecordDataRef* m_metaObject;
 	ibClassMetaclass m_metaclass = ibClassMetaclass_None;   // the family m_metaObject is of — asked of it once; GetClassType composes the id
-	ibReference* m_reference_impl;
+	std::unique_ptr<ibReference> m_reference_impl;
 
 	bool m_foundedRef;
 

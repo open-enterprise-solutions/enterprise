@@ -57,7 +57,8 @@ protected:
 
 	wxString m_text;
 
-	wxDECLARE_NO_COPY_CLASS(ibHelpDocument);
+	ibHelpDocument(const ibHelpDocument&) = delete;
+	ibHelpDocument& operator=(const ibHelpDocument&) = delete;
 	wxDECLARE_ABSTRACT_CLASS(ibHelpDocument);
 };
 
@@ -97,7 +98,8 @@ protected:
 	virtual bool DoSaveDocument(const wxString& filename) override;
 	virtual bool DoOpenDocument(const wxString& filename) override;
 
-	wxDECLARE_NO_COPY_CLASS(ibHelpFileDocument);
+	ibHelpFileDocument(const ibHelpFileDocument&) = delete;
+	ibHelpFileDocument& operator=(const ibHelpFileDocument&) = delete;
 	wxDECLARE_DYNAMIC_CLASS(ibHelpFileDocument);
 };
 

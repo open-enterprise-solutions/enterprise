@@ -60,7 +60,8 @@ protected:
 
 	std::shared_ptr<ibMetaDataConfigurationBase> m_metaData;
 
-	wxDECLARE_NO_COPY_CLASS(ibMetadataBrowserDocument);
+	ibMetadataBrowserDocument(const ibMetadataBrowserDocument&) = delete;
+	ibMetadataBrowserDocument& operator=(const ibMetadataBrowserDocument&) = delete;
 	wxDECLARE_DYNAMIC_CLASS(ibMetadataBrowserDocument);
 };
 
@@ -79,7 +80,8 @@ protected:
 	virtual bool DoOpenDocument(const wxString& filename) override;
 	virtual bool DoSaveDocument(const wxString& filename) override;
 
-	wxDECLARE_NO_COPY_CLASS(ibMetadataFileDocument);
+	ibMetadataFileDocument(const ibMetadataFileDocument&) = delete;
+	ibMetadataFileDocument& operator=(const ibMetadataFileDocument&) = delete;
 	wxDECLARE_DYNAMIC_CLASS(ibMetadataFileDocument);
 };
 

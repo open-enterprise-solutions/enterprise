@@ -29,7 +29,7 @@ namespace {
 // The factory's kinds, in the caller's words. Kept as a table so the tool that
 // FILTERS and the answer that LABELS cannot disagree — they read the same rows.
 struct KindRow {
-	const wxChar*     m_word;
+	const ibChar*     m_word;
 	ibCtorObjectType  m_kind;
 };
 
@@ -575,7 +575,7 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& WXUNUSED(params), ibDataNode& result, wxString& WXUNUSED(refusal)) const override
+	bool Call(const ibDataNode& /*params*/, ibDataNode& result, wxString& /*refusal*/) const override
 	{
 		std::vector<ibDataValue> methods;
 

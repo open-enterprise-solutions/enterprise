@@ -189,6 +189,7 @@
     <ClCompile Include="fiber\fiber.cpp" />
     <ClCompile Include="fiber\fiberLocals.cpp" />
     <ClCompile Include="fileKind.cpp" />
+    <ClCompile Include="fileSystem.cpp" />
     <ClCompile Include="fnumber.cpp" />
     <ClCompile Include="formatString.cpp" />
     <ClCompile Include="fstring.cpp" />
@@ -226,7 +227,6 @@
     </ClCompile>
     <ClCompile Include="pictureRegistry.cpp" />
     <ClCompile Include="launchTicket.cpp" />
-    <ClCompile Include="programFolder.cpp" />
     <ClCompile Include="query\queryAggregates.cpp" />
     <ClCompile Include="query\queryKeywords.cpp" />
     <ClCompile Include="query\queryLexer.cpp" />
@@ -288,6 +288,7 @@
     <ClInclude Include="fiber\fiber.h" />
     <ClInclude Include="fiber\fiberLocals.h" />
     <ClInclude Include="fileKind.h" />
+    <ClInclude Include="fileSystem.h" />
     <ClInclude Include="fnumber.h" />
     <ClInclude Include="formatString.h" />
     <ClInclude Include="fstring.h" />
@@ -315,7 +316,6 @@
     <ClInclude Include="net\webSocketRelay.h" />
     <ClInclude Include="pictureRegistry.h" />
     <ClInclude Include="launchTicket.h" />
-    <ClInclude Include="programFolder.h" />
     <ClInclude Include="propertyChoiceMode.h" />
     <ClInclude Include="query\queryAggregates.h" />
     <ClInclude Include="query\queryAstExpr.h" />

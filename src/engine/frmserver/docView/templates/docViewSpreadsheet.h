@@ -47,7 +47,8 @@ public:
 	virtual void SetSpreadsheetDesc(ibSpreadsheetDescription&& spreadsheetDesc) = 0;
 
 private:
-	wxDECLARE_NO_COPY_CLASS(ibSheetDocument);
+	ibSheetDocument(const ibSheetDocument&) = delete;
+	ibSheetDocument& operator=(const ibSheetDocument&) = delete;
 	wxDECLARE_ABSTRACT_CLASS(ibSheetDocument);
 };
 
@@ -98,7 +99,8 @@ protected:
 
 private:
 
-	wxDECLARE_NO_COPY_CLASS(ibSheetFileDocument);
+	ibSheetFileDocument(const ibSheetFileDocument&) = delete;
+	ibSheetFileDocument& operator=(const ibSheetFileDocument&) = delete;
 	wxDECLARE_DYNAMIC_CLASS(ibSheetFileDocument);
 };
 
@@ -122,7 +124,8 @@ public:
 
 private:
 
-	wxDECLARE_NO_COPY_CLASS(ibSheetGridBoxDocument);
+	ibSheetGridBoxDocument(const ibSheetGridBoxDocument&) = delete;
+	ibSheetGridBoxDocument& operator=(const ibSheetGridBoxDocument&) = delete;
 	wxDECLARE_DYNAMIC_CLASS(ibSheetGridBoxDocument);
 };
 

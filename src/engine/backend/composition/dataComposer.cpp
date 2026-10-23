@@ -29,7 +29,7 @@
 // metaobject kind — the factory never resolves it; the auxiliary registry (ibTempSourceScope) catches
 // the name first and returns the registered queryable directly. Kept opaque on purpose: the value is
 // irrelevant to resolution (ResolveSource keys on the name alone), it only has to parse as <ns>.<name>.
-static const wxChar* const s_tempSourceNamespace = wxT("Temp");
+static const ibChar* const s_tempSourceNamespace = wxT("Temp");
 
 ibDataDBComposer& ibDataDBComposer::FromSource(const wxString& ns, const wxString& name)
 {
@@ -563,9 +563,9 @@ ibDataComposer& ibDataComposer::ClearSettings()
 
 // The nested source's alias when the settings are written over an author's query. ASCII, a legal
 // identifier, and unlikely to collide with anything a person names a table.
-static const wxChar* kAuthorQuerySource = wxT("AuthorQuery");
+static const ibChar* kAuthorQuerySource = wxT("AuthorQuery");
 
-const wxChar* ibDataDBComposer::AuthorQuerySourceName() { return kAuthorQuerySource; }
+const ibChar* ibDataDBComposer::AuthorQuerySourceName() { return kAuthorQuerySource; }
 
 // ⭐⭐ WHAT THE SELECT LIST IS WHEN NOBODY HAS CHOSEN A FIELD — and the answer is not one answer,
 // because it is not one question (see ibDataComposer::ReadsEveryField).

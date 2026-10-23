@@ -30,11 +30,11 @@
 
 // The names the fact publishes beside a record's own — what a query writes.
 namespace ibCalcFactColumn {
-	inline constexpr const wxChar* PositionStart  = wxT("PositionStart");
-	inline constexpr const wxChar* PositionEnd    = wxT("PositionEnd");
+	inline constexpr const ibChar* PositionStart  = wxT("PositionStart");
+	inline constexpr const ibChar* PositionEnd    = wxT("PositionEnd");
 }
 
-static const wxChar* const ibCalcFactName = wxT("ActualActionPeriod");
+static const ibChar* const ibCalcFactName = wxT("ActualActionPeriod");
 
 // ============================================================================
 // The records and the Displacing section by physical names
@@ -110,9 +110,9 @@ ibCalcViewSpec ibCalcViewSpecOf(const ibValueMetaObjectCalculationRegister* reg)
 
 namespace {
 
-const wxChar* const kFrom  = wxT("ib_from");    // a span of the fact's walk: its first day...
-const wxChar* const kTo    = wxT("ib_to");      // ...and the day after its last
-const wxChar* const kReach = wxT("ib_reach");   // how far the spans before it reach
+const ibChar* const kFrom  = wxT("ib_from");    // a span of the fact's walk: its first day...
+const ibChar* const kTo    = wxT("ib_to");      // ...and the day after its last
+const ibChar* const kReach = wxT("ib_reach");   // how far the spans before it reach
 
 ibQueryExprPtr Day(const wxString& q, const wxString& field)
 {
@@ -677,7 +677,7 @@ const ibBackendQueryable* ibCalcFactSourceDescriptor::CreateQueryable(ibValue** 
 // what the condition says of the records, and applies the whole of it over the pieces (ComputeRows).
 void ibCalcFactSourceDescriptor::DescribeParameters(std::vector<ibQuerySourceParameter>& out) const
 {
-	const auto time = [&out](const wxChar* name, const ibValueMetaObjectAttributeBase* typedBy, const wxString& description) {
+	const auto time = [&out](const ibChar* name, const ibValueMetaObjectAttributeBase* typedBy, const wxString& description) {
 		ibQuerySourceParameter parameter;
 		parameter.m_name = name;
 		parameter.m_description = description;
@@ -1252,9 +1252,9 @@ ibValue ibCalcReadBase(const ibValueMetaObjectCalculationRegister* reg, const ib
 namespace {
 
 // The table's name, before the base register's — and a figure's, after its resource's: `BaseAccruals`, `ResultBase`.
-static const wxChar* const ibCalcBaseName = wxT("Base");
+static const ibChar* const ibCalcBaseName = wxT("Base");
 // …and a section's, after its field's: `EmployeeSection`.
-static const wxChar* const ibCalcBaseSectionName = wxT("Section");
+static const ibChar* const ibCalcBaseSectionName = wxT("Section");
 
 // The numbers a base column is derived by, over the metaID of what it is OF (ibRegDerivedColumnId): a figure over the
 // base register's resource, a section over its field — so a register taking its base from itself publishes `Result`
@@ -1493,7 +1493,7 @@ const ibBackendQueryable* ibCalcBaseSourceDescriptor::CreateQueryable(ibValue** 
 // `BaseAccruals(&Month, , , "Employee", , "CalculationType")`.
 void ibCalcBaseSourceDescriptor::DescribeParameters(std::vector<ibQuerySourceParameter>& out) const
 {
-	const auto argument = [&out](const wxChar* name, const ibValueMetaObjectAttributeBase* typedBy, const wxString& description) {
+	const auto argument = [&out](const ibChar* name, const ibValueMetaObjectAttributeBase* typedBy, const wxString& description) {
 		ibQuerySourceParameter parameter;
 		parameter.m_name = name;
 		parameter.m_description = description;
@@ -1561,7 +1561,7 @@ void ibCalcBaseSourceDescriptor::FillConditionExplorer(ibSourceDataObject::ibSou
 
 namespace {
 
-static const wxChar* const ibCalcScheduleDataName = wxT("ScheduleData");
+static const ibChar* const ibCalcScheduleDataName = wxT("ScheduleData");
 
 // The four periods a schedule is summed over, in the order the columns stand, each numbered for its column id.
 enum ibCalcSchedulePeriod {
@@ -2254,7 +2254,7 @@ const ibBackendQueryable* ibCalcScheduleDataSourceDescriptor::CreateQueryable(ib
 // which days of action, then the condition — `ScheduleData(&Month, &Start, &End, Employee = &Employee)`.
 void ibCalcScheduleDataSourceDescriptor::DescribeParameters(std::vector<ibQuerySourceParameter>& out) const
 {
-	const auto time = [&out](const wxChar* name, const ibValueMetaObjectAttributeBase* typedBy, const wxString& description) {
+	const auto time = [&out](const ibChar* name, const ibValueMetaObjectAttributeBase* typedBy, const wxString& description) {
 		ibQuerySourceParameter parameter;
 		parameter.m_name = name;
 		parameter.m_description = description;

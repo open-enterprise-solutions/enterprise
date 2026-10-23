@@ -53,7 +53,7 @@ wxString Join(const std::vector<wxString>& items, const wxString& sep)
 
 // The suffix a period PROJECTION column carries. Fixed spellings: they become column names on a
 // view that scripts and reports address by name, so they are API.
-const wxChar* UnitSuffix(ibTotalsPeriod unit)
+const ibChar* UnitSuffix(ibTotalsPeriod unit)
 {
 	switch (unit) {
 		case ibTotalsPeriod::Second:   return wxT("Second");
@@ -521,8 +521,8 @@ void RenderDrops(ibMaterializeSql& out, const ibMaterializeSpec& spec, const ibM
 
 } // namespace
 
-const wxChar* ShardColumnName()   { return wxT("shard_"); }
-const wxChar* KeyHashColumnName() { return wxT("keyhash_"); }
+const ibChar* ShardColumnName()   { return wxT("shard_"); }
+const ibChar* KeyHashColumnName() { return wxT("keyhash_"); }
 
 unsigned int ibIndexFieldCapacity(const ibDatabaseLayer& conn)
 {

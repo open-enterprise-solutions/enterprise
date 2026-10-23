@@ -41,7 +41,7 @@
 #include "backend/logger/logger.h"
 #include "backend/logger/loggerReader.h"
 #include "backend/metadataConfiguration.h"   // activeMetaData - the door that knows configuration types
-#include "core/programFolder.h"          // the journal lives in the diagnostic folder
+#include "core/fileSystem.h"          // the journal lives in the diagnostic folder
 #include "core/serialize/dataBuilder.h"   // ibDataNode + ibBinaryProvider - the details payload
 
 #include <wx/datetime.h>
@@ -227,7 +227,7 @@ wxString TracePidOfDump(const wxString& fileName)
 
 		wxString digits;
 		const wxString& owner = parts[i - 1];
-		for (size_t c = owner.length(); c > 0 && wxIsdigit(owner[c - 1]); --c)
+		for (size_t c = owner.length(); c > 0 && ibIsDigit(owner[c - 1]); --c)
 			digits.Prepend(owner[c - 1]);
 
 		return digits;
@@ -426,8 +426,8 @@ public:
 
 		const std::int32_t sinceMinutes = (std::int32_t)ArgSinceMinutes().Whole(params);
 		if (sinceMinutes > 0) {
-			const wxLongLong_t now = wxDateTime::UNow().GetValue().GetValue();
-			filter.from_ms = now - (wxLongLong_t)sinceMinutes * 60000;
+			const long long now = wxDateTime::UNow().GetValue().GetValue();
+			filter.from_ms = now - (long long)sinceMinutes * 60000;
 		}
 
 		const wxString level = ArgLevel().Text(params);

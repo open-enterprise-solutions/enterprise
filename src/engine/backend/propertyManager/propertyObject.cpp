@@ -358,13 +358,13 @@ ibPropertyObject::~ibPropertyObject()
 			notifier->SetOwner(nullptr);
 	m_notifiers.clear();
 
-	wxDELETE(m_category);
+	delete m_category;
 
 	for (auto& property : m_properties)
-		wxDELETE(property.second);
+		delete property.second;
 
 	for (auto& event : m_events)
-		wxDELETE(event.second);
+		delete event.second;
 }
 
 wxString ibPropertyObject::GetIndentString(int indent) const

@@ -5,7 +5,7 @@
 #include "pluginManager.h"
 #include "pluginHost.h"   // ibPluginHostInstance — what initialize() receives
 
-#include "core/programFolder.h"
+#include "core/fileSystem.h"
 
 #include <wx/filename.h>
 #include <wx/dir.h>
@@ -43,7 +43,7 @@ size_t ibPluginManager::LoadAll()
 	UnloadAll();
 
 	const wxString dir = GetPluginsDir();
-	if (!wxDirExists(dir))
+	if (!ibDirExists(dir))
 		return 0;
 
 	// Use the platform's dynamic-library suffix via wxDynamicLibrary — avoids

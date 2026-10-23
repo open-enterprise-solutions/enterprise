@@ -9,7 +9,7 @@ public:
 
 	// The text keeps the date's count (fdatetime.h) - all 64 bits of it: through IntToStr / StrToInt,
 	// which are int, a date was cut to its low 32.
-	ibDateTime GetValueAsDateTime() const { wxLongLong_t value = 0; m_propValue.GetString().ToLongLong(&value); return ibDateTime(value); }
+	ibDateTime GetValueAsDateTime() const { long long value = 0; m_propValue.GetString().ToLongLong(&value); return ibDateTime(value); }
 	void SetValue(const ibDateTime& val = ibDateTime()) { m_propValue = TextOf(val); }
 
 	ibPropertyDate(ibPropertyCategory* cat, const wxString& name,

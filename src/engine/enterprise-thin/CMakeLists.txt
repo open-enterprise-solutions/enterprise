@@ -41,5 +41,5 @@ target_include_directories(enterprise-thin PRIVATE
 target_link_libraries(enterprise-thin PRIVATE
     protocol
     frmclient
-    wx::core wx::aui wx::stc wx::adv wx::base
+    wx::core wx::aui wx::base
 )

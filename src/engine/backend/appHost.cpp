@@ -16,7 +16,7 @@
 #include "backend/metadataConfiguration.h"   // a scope holds the configuration it works in
 #include "backend/plugin/pluginManager.h"
 #include "core/fiber/fiberLocals.h"
-#include "core/programFolder.h"   // backend.conf and lang/ sit in the program folder, not inside a bundle
+#include "core/fileSystem.h"   // backend.conf and lang/ sit in the program folder, not inside a bundle
 #include "backend/session/session.h"   // ibSession::CurrentCached — the journal's first question
 #include "backend/session/workerPoolHeadless.h"   // the process's worker pool
 #include "backend/compiler/value.h"   // ibValue::IsRegisterCtor / GetNameObjectFromID — the registry the help corpus checks by
@@ -378,7 +378,7 @@ bool ibApplicationHost::InitLocale(const wxString& locale)
 	// Independently of whether we succeeded to set the locale or not, try
 	// to load the translations (for the default system language) here.
 
-	const wxString& workingDir = wxGetCwd();
+	const wxString& workingDir = ibGetCwd();
 
 	// normally this wouldn't be necessary as the catalog files would be found
 	// in the default locations, but when the program is not installed the
@@ -399,7 +399,7 @@ bool ibApplicationHost::InitLocale(const wxString& locale)
 		wxFileName walk(fn.GetPath(), wxEmptyString);
 		for (int level = 0; level < 6; ++level) {
 			const wxString candidate = walk.GetPath() + wxFILE_SEP_PATH + wxT("lang");
-			if (wxFileName::DirExists(candidate)) {
+			if (ibDirExists(candidate)) {
 				wxLocale::AddCatalogLookupPathPrefix(candidate);
 				break;
 			}

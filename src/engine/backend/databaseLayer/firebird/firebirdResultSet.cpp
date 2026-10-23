@@ -652,10 +652,14 @@ void ibDatabaseResultSetFirebird::FreeFieldSpace()
 		// All sqldata slots are now `new char[size]` array allocations —
 		// uniform array delete is correct and previous typed scalar delete
 		// (e.g. `delete (char*)new ISC_TIME`) was UB.
-		if (pVar->sqldata != 0)
-			wxDELETEA(pVar->sqldata);
-		if ((pVar->sqltype & 1) && (pVar->sqlind != 0))
-			wxDELETE(pVar->sqlind);
+		if (pVar->sqldata != 0) {
+			delete[] pVar->sqldata;
+			pVar->sqldata = nullptr;
+		}
+		if ((pVar->sqltype & 1) && (pVar->sqlind != 0)) {
+			delete pVar->sqlind;
+			pVar->sqlind = nullptr;
+		}
 	}
 
 	// XSQLDA itself is allocated with malloc() (see firebirdDatabaseLayer

@@ -18,7 +18,7 @@
 #include <wx/filename.h>
 #include <wx/stdpaths.h>
 
-#include "core/programFolder.h"
+#include "core/fileSystem.h"
 #include "core/memory/memoryPool.h"   // Drain — the pool's free list handed back at teardown
 
 #include "backend/session/session.h"
@@ -107,8 +107,8 @@ wxString ibApplicationInstance::ResolveLogDir() const
 		// …and a journal kept under the name alone is MOVED to the new key once, so its history stays
 		// readable instead of starting over beside it. A move that fails (the folder in use) costs only that.
 		const wxString old = root + sanitised(legacy);
-		if (tag != sanitised(legacy) && !wxDirExists(root + tag) && wxDirExists(old))
-			wxRenameFile(old, root + tag);
+		if (tag != sanitised(legacy) && !ibDirExists(root + tag) && ibDirExists(old))
+			ibRenameFile(old, root + tag);
 
 		return root + tag + sep + wxT("logs");
 	}
@@ -244,7 +244,7 @@ static std::size_t PickConnectionMinIdle(ibRunMode runMode)
 static void WriteInfobaseConf(const wxString& folder)
 {
 	const wxString path = folder + wxFileName::GetPathSeparator() + wxT("infobase.conf");
-	if (folder.IsEmpty() || wxFileName::FileExists(path))
+	if (folder.IsEmpty() || ibFileExists(path))
 		return;
 	wxFFile file(path, wxT("w"));
 	if (!file.IsOpened() || !file.Write(
@@ -263,7 +263,7 @@ static void WriteInfobaseConf(const wxString& folder)
 static std::size_t ReadInfobaseConnections(const wxString& folder, std::size_t byDefault)
 {
 	const wxString path = folder + wxFileName::GetPathSeparator() + wxT("infobase.conf");
-	if (folder.IsEmpty() || !wxFileName::FileExists(path))
+	if (folder.IsEmpty() || !ibFileExists(path))
 		return byDefault;
 
 	const wxFileConfig conf(wxT(""), wxT(""), path, wxT(""), wxCONFIG_USE_LOCAL_FILE | wxCONFIG_USE_NO_ESCAPE_CHARACTERS);
@@ -745,7 +745,7 @@ ibApplicationInstance* ibApplicationInstance::Open(ibRunMode runMode, const ibIn
 		// what its settings name — left an empty sys.fdb behind and refused it without a word, at every start
 		// (2026-10-06). Whether to create is this opening's word, said once.
 		const wxString database = storage.m_directory + wxFileName::GetPathSeparator() + sys_db;
-		if (!create && !wxFileName::FileExists(database))
+		if (!create && !ibFileExists(database))
 			ibBackendCoreException::Error(_("There is no base in %s (no %s), and this opening does not create one."),
 				storage.m_directory, sys_db);
 
@@ -1150,7 +1150,7 @@ long ibApplicationInstance::SpawnWebServerWithManifest(wxString cmd, const ibLau
 	// Spawn detached so the caller can exit without killing the server.
 	const long pid = ibStartProcess(cmd, secrets);
 	if (pid == 0) {
-		wxRemoveFile(manifestPath);
+		ibRemoveFile(manifestPath);
 		return 0;
 	}
 
@@ -1186,7 +1186,7 @@ long ibApplicationInstance::SpawnWebServerWithManifest(wxString cmd, const ibLau
 		if (!url.IsEmpty())
 			break;
 	}
-	wxRemoveFile(manifestPath);
+	ibRemoveFile(manifestPath);
 	if (!url.IsEmpty())
 		wxLaunchDefaultBrowser(url);
 
@@ -1343,7 +1343,6 @@ bool ibApplicationInstance::Login(const wxString& strUserName,
 #include <wx/zipstrm.h>
 #include <wx/wfstream.h>
 #include <wx/mstream.h>
-#include <wx/filename.h>
 
 #include "core/memory/memoryStream.h"   // ibReaderMemory — a user/data member is walked before the base is touched
 

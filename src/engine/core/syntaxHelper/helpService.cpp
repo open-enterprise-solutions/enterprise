@@ -7,7 +7,7 @@
 
 #include "core/syntaxHelper/helpCorpus.h"
 
-#include "core/programFolder.h"
+#include "core/fileSystem.h"
 
 #include <wx/filename.h>
 #include <wx/stdpaths.h>
@@ -27,8 +27,8 @@ wxString ResolvePlatformDir(const wxString& locale)
 	const wxString programDir = ibProgramFolder(exeFile.GetFullPath());
 
 	auto hasLocale = [&](const wxString& root) -> bool {
-		return wxFileName::FileExists(root + wxFILE_SEP_PATH + locale + wxT(".hlk"))
-		    || wxFileName::DirExists(root + wxFILE_SEP_PATH + locale);
+		return ibFileExists(root + wxFILE_SEP_PATH + locale + wxT(".hlk"))
+		    || ibDirExists(root + wxFILE_SEP_PATH + locale);
 	};
 
 	// Candidate 1: <program folder>/help — prod layout. Inside a bundle that
@@ -67,7 +67,7 @@ wxString ResolvePlatformDir(const wxString& locale)
 
 	// Last resort: <cwd>/syntaxHelper — running from repo root.
 	if (!hasLocale(platformDir)) {
-		const wxString cwdCandidate = wxGetCwd() + wxFILE_SEP_PATH
+		const wxString cwdCandidate = ibGetCwd() + wxFILE_SEP_PATH
 			+ wxT("syntaxHelper");
 		if (hasLocale(cwdCandidate)) platformDir = cwdCandidate;
 	}

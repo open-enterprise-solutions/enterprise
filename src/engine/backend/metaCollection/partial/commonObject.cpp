@@ -2441,7 +2441,7 @@ ibValueRecordDataObjectRef::ibValueRecordDataObjectRef(const ibValueMetaObjectRe
 	m_reference_impl(nullptr)
 {
 	if (m_metaObject != nullptr)
-		m_reference_impl = new ibReference(m_objGuid);   // pure guid; type is the metaObject / _RTRef
+		m_reference_impl = std::make_unique<ibReference>(m_objGuid);   // pure guid; type is the metaObject / _RTRef
 }
 
 ibValueRecordDataObjectRef::ibValueRecordDataObjectRef(const ibValueRecordDataObjectRef& src) :
@@ -2451,12 +2451,11 @@ ibValueRecordDataObjectRef::ibValueRecordDataObjectRef(const ibValueRecordDataOb
 	m_reference_impl(nullptr)
 {
 	if (m_metaObject != nullptr)
-		m_reference_impl = new ibReference(m_objGuid);   // pure guid; type is the metaObject / _RTRef
+		m_reference_impl = std::make_unique<ibReference>(m_objGuid);   // pure guid; type is the metaObject / _RTRef
 }
 
 ibValueRecordDataObjectRef::~ibValueRecordDataObjectRef()
 {
-	wxDELETE(m_reference_impl);
 }
 
 bool ibValueRecordDataObjectRef::InitializeObject(const ibGuid& copyGuid)
@@ -2742,7 +2741,7 @@ void ibValueRecordDataObjectRef::PrepareEmptyObject(const ibValueRecordDataObjec
 		if (tableSection->LoadDataFromTable(source->GetTableByMetaID(object->GetMetaID())))
 			m_listObjectValue.insert_or_assign(object->GetMetaID(), tableSection);
 		else
-			wxDELETE(tableSection);
+			delete tableSection;
 	}
 	m_objModified = true;
 }
@@ -2960,7 +2959,7 @@ void ibValueRecordDataObjectHierarchyRef::PrepareEmptyObject(const ibValueRecord
 		if (tableSection->LoadDataFromTable(source->GetTableByMetaID(object->GetMetaID())))
 			m_listObjectValue.insert_or_assign(object->GetMetaID(), tableSection);
 		else
-			wxDELETE(tableSection);
+			delete tableSection;
 	}
 	m_objModified = true;
 }

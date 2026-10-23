@@ -23,7 +23,7 @@ void ibSheetView::OnDraw(ibDataNode& frame)
 	state.SetValue(ibProtocol::ibForm::ibSpreadsheet::GridLines, true);
 }
 
-bool ibSheetView::Fetch(const ibDataNode& WXUNUSED(request), ibDataNode& response)
+bool ibSheetView::Fetch(const ibDataNode& /*request*/, ibDataNode& response)
 {
 	const ibSheetDocument* const document = dynamic_cast<const ibSheetDocument*>(GetDocument());
 	return document != nullptr && ibFetchSpreadsheet(document->GetSpreadsheet(), response);

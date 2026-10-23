@@ -69,9 +69,7 @@ target_link_libraries(frmclient
         wx::aui
         wx::html
         wx::propgrid
-        wx::adv
         wx::stc
-        wx::xrc
         wx::base
         wx::xml
 )

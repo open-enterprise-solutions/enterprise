@@ -13,7 +13,6 @@ ibPreparedStatementFirebirdWrapper::ibPreparedStatementFirebirdWrapper(ibInterfa
 
 	m_pStatement = 0;
 	m_pParameters = NULL;
-	m_pParameterCollection = NULL;
 	m_bManageStatement = true;
 	m_bManageTransaction = false;
 
@@ -23,8 +22,6 @@ ibPreparedStatementFirebirdWrapper::ibPreparedStatementFirebirdWrapper(ibInterfa
 ibPreparedStatementFirebirdWrapper::~ibPreparedStatementFirebirdWrapper()
 {
 	ResetErrorCodes();
-
-	if (m_pParameterCollection) { wxDELETE(m_pParameterCollection); }
 
 	if (m_pStatement && m_bManageStatement)
 	{
@@ -117,7 +114,7 @@ bool ibPreparedStatementFirebirdWrapper::Prepare()
 		}
 	}
 
-	m_pParameterCollection = new ibDatabaseParameterFirebirdCollection(m_pInterface, m_pParameters);
+	m_pParameterCollection = std::make_unique<ibDatabaseParameterFirebirdCollection>(m_pInterface, m_pParameters);
 
 	return true;
 }
@@ -325,10 +322,10 @@ bool ibPreparedStatementFirebirdWrapper::IsSelectQuery()
 	static const wchar_t kSelect[] = L"SELECT ";
 	const std::wstring& text = m_strSQL.ToStdWstring();
 	size_t at = 0;
-	while (at < text.size() && wxIsspace(text[at]))
+	while (at < text.size() && ibIsSpace(text[at]))
 		++at;
 	for (size_t i = 0; kSelect[i] != L'\0'; ++i, ++at)
-		if (at >= text.size() || static_cast<wchar_t>(wxToupper(text[at])) != kSelect[i])
+		if (at >= text.size() || ibToUpper(text[at]) != kSelect[i])
 			return false;
 	return true;
 }

@@ -33,7 +33,7 @@ using ibCompileChain = std::vector<const ibCompileCode*>;
 // temp carries DEF_VAR_TEMP rather than a depth, and a variable reached through a block scope
 // carries it too (compileContext.cpp: `blockReturn ? DEF_VAR_TEMP : depth`), yet all three land on
 // the same cell. Reading the marker literally would make one cell look like three.
-wxLongLong_t FrameOf(const ibParamRunUnit& p)
+long long FrameOf(const ibParamRunUnit& p)
 {
 	return p.m_numArray <= 0 ? 0 : p.m_numArray;
 }
@@ -700,7 +700,7 @@ private:
 		// number, which is the whole of what a reader standing after the dot needs.
 		case OPER_CONSTN: {
 			ibValue made;
-			SetTypeNumber(made, ibNumber((wxLongLong_t)code.m_param2.m_numIndex));
+			SetTypeNumber(made, ibNumber((long long)code.m_param2.m_numIndex));
 			out = made;
 			if (outOrigin != nullptr) *outOrigin = ibNameOrigin::Declared;
 			return ibStep::Value;
@@ -873,7 +873,7 @@ private:
 		}
 	}
 
-	wxString ConstName(wxLongLong_t index) const
+	wxString ConstName(long long index) const
 	{
 		if (index < 0 || (size_t)index >= m_byteCode.m_listConst.size())
 			return wxEmptyString;
@@ -885,11 +885,11 @@ private:
 	// Only bind-required entries are considered — see the note at the call site.
 	wxString NameOfSlot(const ibParamRunUnit& slot) const
 	{
-		const wxLongLong_t index = slot.m_numIndex;
+		const long long index = slot.m_numIndex;
 
 		auto inTable = [index](const std::vector<ibByteCode::ibByteCodeVarInfo>& table) {
 			for (const auto& var : table)
-				if (var.IsBindRequired() && (wxLongLong_t)var.m_slotIndex == index)
+				if (var.IsBindRequired() && (long long)var.m_slotIndex == index)
 					return var.m_strRealName;
 			return wxString();
 		};
@@ -1116,7 +1116,7 @@ private:
 			const ibByteCode::ibByteFunction* const callee = m_byteCode.FindFunctionByEntry(entry);
 			if (callee != nullptr && returned.m_numArray <= 0
 				&& returned.m_numIndex >= 0
-				&& returned.m_numIndex < (wxLongLong_t)callee->m_listParam.size()) {
+				&& returned.m_numIndex < (long long)callee->m_listParam.size()) {
 
 				ibValue passed;
 				if (argumentOf((long)returned.m_numIndex, passed)) {
@@ -1496,7 +1496,7 @@ public:
 		const unsigned int asked = caret < text.length() ? caret : (unsigned int)text.length();
 
 		m_at = asked;
-		while (m_at > 0 && (wxIsalnum(text[m_at - 1]) || text[m_at - 1] == wxT('_')))
+		while (m_at > 0 && (ibIsAlnum(text[m_at - 1]) || text[m_at - 1] == wxT('_')))
 			m_at--;
 
 		m_typed = text.Mid(m_at, asked - m_at);
@@ -1824,7 +1824,7 @@ bool ibNamesAtCaret(const wxString& text, unsigned int caret,
 	//
 	// ⚠ ONLY WHAT DEPENDS ON ORDER IS GATED. Parameters are visible throughout their body, and a
 	// FUNCTION is callable from above its own declaration — so neither is asked this question.
-	std::map<wxLongLong_t, unsigned int> declaredAt;
+	std::map<long long, unsigned int> declaredAt;
 
 	// ⭐⭐ AND WHERE A NAME THE COMPILER MADE UP FIRST APPEARS IN THE TEXT. `a = X;` with no `var`
 	// is an implicit local, and the compiler deliberately writes NO declarator for one — so the
@@ -1837,7 +1837,7 @@ bool ibNamesAtCaret(const wxString& text, unsigned int caret,
 	// where the name first appears. The MINIMUM rather than the first one met, because a query's
 	// instructions are not emitted in text order (a join's build loop is emitted after the clauses
 	// that read its alias) — taking the first met would date such a name by its loop header.
-	std::map<wxLongLong_t, unsigned int> firstTouchAt;
+	std::map<long long, unsigned int> firstTouchAt;
 	{
 		const ibByteCode& bc = compiled.ByteCode();
 		long openEntry = -1;
@@ -1919,7 +1919,7 @@ bool ibNamesAtCaret(const wxString& text, unsigned int caret,
 		if (var.IsContext() || var.IsContextProp() || var.IsExternal())
 			return false;
 
-		const auto at = declaredAt.find((wxLongLong_t)var.m_slotIndex);
+		const auto at = declaredAt.find((long long)var.m_slotIndex);
 		if (at != declaredAt.end())
 			return at->second >= compiled.Caret();
 
@@ -1943,7 +1943,7 @@ bool ibNamesAtCaret(const wxString& text, unsigned int caret,
 		// and it has no tape declarator either, so without this it would have been dated by its
 		// FIRST USE and hidden from every caret above that.
 		if (!isAParameter(var.m_strRealName)) {
-			const auto touched = firstTouchAt.find((wxLongLong_t)var.m_slotIndex);
+			const auto touched = firstTouchAt.find((long long)var.m_slotIndex);
 			if (touched != firstTouchAt.end())
 				return touched->second >= compiled.Caret();
 		}
@@ -2021,7 +2021,7 @@ bool ibNamesAtCaret(const wxString& text, unsigned int caret,
 			// (`x = 1` with no `var`), which is a real local; and a real local may legitimately share
 			// a query alias's spelling, in which case it HAS a declarator and stays.
 			if (depth == 0 && boundByAQuery(var.m_strRealName)
-				&& declaredAt.find((wxLongLong_t)var.m_slotIndex) == declaredAt.end())
+				&& declaredAt.find((long long)var.m_slotIndex) == declaredAt.end())
 				continue;
 
 			// ⭐⭐ A PARENT'S PRIVATE LOCAL IS NOT IN SCOPE HERE, and the runtime already says so in

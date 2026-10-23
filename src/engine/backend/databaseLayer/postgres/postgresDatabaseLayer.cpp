@@ -406,7 +406,7 @@ ibDatabaseLayerPostgres::ibDatabaseLayerPostgres(const ibDatabaseLayerPostgres& 
 ibDatabaseLayerPostgres::~ibDatabaseLayerPostgres()
 {
 	Close();
-	wxDELETE(m_pInterface);
+	delete m_pInterface;
 }
 
 // open database
@@ -659,7 +659,7 @@ void ibDatabaseLayerPostgres::DoRollBack()
 // IsActiveTransaction inherits the base-class default (m_txDepth > 0).
 
 // query database
-int ibDatabaseLayerPostgres::DoRunQuery(const wxString& strQuery, bool WXUNUSED(bParseQuery))
+int ibDatabaseLayerPostgres::DoRunQuery(const wxString& strQuery, bool /*bParseQuery*/)
 {
 	// PostgreSQL takes care of parsing the queries itself so bParseQuery is ignored
 
@@ -1062,10 +1062,7 @@ ibBackendDatabaseException::Kind ibDatabaseLayerPostgres::ClassifySqlState(const
 
 bool ibDatabaseLayerPostgres::IsAvailable()
 {
-	bool bAvailable = false;
-	ibInterfacePostgres* pInterface = new ibInterfacePostgres();
-	bAvailable = pInterface && pInterface->Init();
-	wxDELETE(pInterface);
-	return bAvailable;
+	ibInterfacePostgres library;
+	return library.Init();
 }
 

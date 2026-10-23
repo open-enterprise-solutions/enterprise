@@ -233,7 +233,7 @@ m_strFileName(strFileName)
 
 ibTranslateCode::~ibTranslateCode()
 {
-	if (m_bAutoDeleteDefList) wxDELETE(m_defineList);
+	if (m_bAutoDeleteDefList) delete m_defineList;
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -728,13 +728,13 @@ bool ibTranslateCode::GetNumber(wxString* strNumber) const
 		Refuse(ibScriptError_TranslateNumber, first_pos);
 		return false;
 	}
-	else if (IsWord() && !wxIsspace(m_strBuffer[next_pos])) {
+	else if (IsWord() && !ibIsSpace(m_strBuffer[next_pos])) {
 		// Originally compared `!= ' '` — rejected `20\nselect` as
 		// "number-glued-to-word" because newline isn't the literal
 		// space char. IsWord() above calls SkipSpaces() (which advances
 		// past ALL whitespace incl. \n / \t), so the IsWord check
 		// might return true for a far-away identifier after a wide
-		// whitespace gap. Use wxIsspace at next_pos so any whitespace
+		// whitespace gap. Use ibIsSpace at next_pos so any whitespace
 		// separator (space / tab / newline / CR) is accepted.
 		Refuse(ibScriptError_TranslateNumber, error_pos);
 		return false;

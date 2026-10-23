@@ -2,7 +2,7 @@
 
 #include "backend/backend_exception.h"
 
-#include <wx/filefn.h>
+#include "core/fileSystem.h"   // ibFileExists
 
 namespace {
 
@@ -15,7 +15,7 @@ T* ibSecureHeld(const ibValue& value)
 }
 
 // A CertificateFile, or nothing said (Undefined), or a refusal by the name of the property.
-ibValueCertificateFile* ibSecureCertificateOrNone(const ibValue& value, const wxChar* what)
+ibValueCertificateFile* ibSecureCertificateOrNone(const ibValue& value, const ibChar* what)
 {
 	if (value.GetType() == ibValueTypes::TYPE_EMPTY)
 		return nullptr;
@@ -58,7 +58,7 @@ void ibValueCertificateFile::Open(const wxString& path, const wxString& password
 {
 	// The file has to be there NOW - a wrong path is found at the desk, not at the bank's door. What is in it
 	// is read by the library, when a connection is made, and refused there by this name.
-	if (path.empty() || !wxFileExists(path))
+	if (path.empty() || !ibFileExists(path))
 		ibBackendCoreException::Error(_("CertificateFile: there is no file '%s'"), path);
 	m_path = path;
 	m_password = password;

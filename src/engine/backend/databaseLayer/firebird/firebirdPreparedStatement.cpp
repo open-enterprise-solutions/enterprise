@@ -28,7 +28,7 @@ void ibPreparedStatementFirebird::Close()
 	while (start != stop)
 	{
 		ibPreparedStatementFirebirdWrapper* pWrapper = (ibPreparedStatementFirebirdWrapper*)(*start);
-		wxDELETE(pWrapper);
+		delete pWrapper;
 		(*start) = NULL;
 		start++;
 	}
@@ -130,8 +130,8 @@ ibPreparedStatementFirebird* ibPreparedStatementFirebird::CreateStatement(ibInte
 			bool succesStatement = pStatement->AddPreparedStatement((*start));
 			if (!succesStatement)
 			{
-				wxDELETE(pStatement); //It's probably better to manually iterate over the list and close the statements, but for now just let close do it
-				return pStatement;
+				delete pStatement; //It's probably better to manually iterate over the list and close the statements, but for now just let close do it
+				return nullptr;
 			}
 		}
 		catch (const ibCoreException&) {

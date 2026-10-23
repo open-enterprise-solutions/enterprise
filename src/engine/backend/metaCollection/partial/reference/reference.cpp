@@ -512,7 +512,7 @@ m_reference_impl(nullptr), m_foundedRef(false)
 	m_members.Bind(this, &ibValueReferenceDataObject::FillMembers);
 	// The stored key (_RRRef) is the pure object guid; the type is carried separately (metaObject / _RTRef).
 	// An unset reference is simply an empty guid — no normalization needed.
-	m_reference_impl = new ibReference(m_objGuid);
+	m_reference_impl = std::make_unique<ibReference>(m_objGuid);
 
 	// ⭐ REGISTERED HERE, not in the doors. Every reference is born through this constructor —
 	// all three Create overloads, and the value-ctor registry through them — so one line covers every
@@ -614,7 +614,6 @@ int ibValueReferenceDataObject::CompareValueLS(const ibValue& cParam) const
 
 ibValueReferenceDataObject::~ibValueReferenceDataObject()
 {
-	wxDELETE(m_reference_impl);
 	ibReferenceRegistry::Forget(this);   // the last owner let go — see the note above the registry
 }
 
@@ -841,8 +840,6 @@ ibValuePtr<ibValueRecordDataObjectRef> ibValueReferenceDataObject::GetObject() c
 	}
 	return nullptr;
 }
-
-#include "backend/objCtor.h"
 
 // ⭐⭐ A DYNAMIC VALUE'S CLSID IS CONSTRUCTIVE — kind, metaclass and metaID: `reference_to_clsid(metaID,
 // metaclass)` IS the id the registry would have handed back, by the same construction that put it there

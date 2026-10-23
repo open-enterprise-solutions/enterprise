@@ -58,6 +58,9 @@ struct CORE_API ibFont {
 
 	bool IsOk() const { return m_pointSize > 0; }
 
+	// The size in whole points — as wxFont::GetPointSize beside the fractional one.
+	int GetPointSize() const { return static_cast<int>(m_pointSize + 0.5); }
+
 	// A text — the form fonts were always written in (the sides' typeConv FontToString), byte for byte:
 	// `face,style,weight,pointSize,family,underlined`, e.g. "Arial,90,700,8,70,0". The size is whole points, the
 	// strikethrough is not in it. The text is the whole font, read leniently, as that reader read: a piece that

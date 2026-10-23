@@ -23,9 +23,9 @@
 
 // THE REQUEST'S FIELDS, declared once because two processes read them. A name that drifts here is a
 // field that silently stops arriving - which is not a compile error anywhere.
-constexpr const wxChar* kComposeSchema     = wxT("schema");
-constexpr const wxChar* kComposeSettings   = wxT("settings");
-constexpr const wxChar* kComposeParameters = wxT("parameters");
+constexpr const ibChar* kComposeSchema     = wxT("schema");
+constexpr const ibChar* kComposeSettings   = wxT("settings");
+constexpr const ibChar* kComposeParameters = wxT("parameters");
 
 class BACKEND_API ibComposeRunSchema {
 public:

@@ -57,7 +57,7 @@ void ibSchemaDebugger::Build(const ibSession& session, const ibDataNode& args, i
 	}
 }
 
-std::function<void()> ibSchemaDebugger::Command(const ibSession& WXUNUSED(session), std::int32_t command,
+std::function<void()> ibSchemaDebugger::Command(const ibSession& /*session*/, std::int32_t command,
 	const ibDataNode& args, ibProtocol::ibRefusal& refusal, wxString& error) const
 {
 	if (debugClient == nullptr) {

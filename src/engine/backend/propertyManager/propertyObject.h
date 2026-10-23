@@ -42,7 +42,7 @@ class BACKEND_API ibPropertyCategory final {
 public:
 
 	~ibPropertyCategory() {
-		for (auto& category : m_categories) wxDELETE(category);
+		for (auto& category : m_categories) delete category;
 	}
 
 	void AddProperty(ibProperty* property);

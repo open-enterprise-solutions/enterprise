@@ -109,7 +109,7 @@ void ibDatabaseLayer::RollBack()
 }
 
 #if !wxUSE_UTF8_LOCALE_ONLY
-int ibDatabaseLayer::DoRunQueryWchar(const wxChar* format, ...)
+int ibDatabaseLayer::DoRunQueryWchar(const ibChar* format, ...)
 {
 	va_list args;
 	va_start(args, format);
@@ -121,7 +121,7 @@ int ibDatabaseLayer::DoRunQueryWchar(const wxChar* format, ...)
 	return DoRunQuery(strQuery, true);
 }
 
-ibDatabaseResultSet* ibDatabaseLayer::DoRunQueryWithResultsWchar(const wxChar* format, ...)
+ibDatabaseResultSet* ibDatabaseLayer::DoRunQueryWithResultsWchar(const ibChar* format, ...)
 {
 	va_list args;
 	va_start(args, format);
@@ -133,7 +133,7 @@ ibDatabaseResultSet* ibDatabaseLayer::DoRunQueryWithResultsWchar(const wxChar* f
 	return DoRunQueryWithResults(strQuery);
 }
 
-ibPreparedStatement* ibDatabaseLayer::DoPrepareStatementWchar(const wxChar* format, ...)
+ibPreparedStatement* ibDatabaseLayer::DoPrepareStatementWchar(const ibChar* format, ...)
 {
 	va_list args;
 	va_start(args, format);
@@ -147,7 +147,7 @@ ibPreparedStatement* ibDatabaseLayer::DoPrepareStatementWchar(const wxChar* form
 #endif
 
 #if wxUSE_UNICODE_UTF8
-int ibDatabaseLayer::DoRunQueryUtf8(const wxChar* format, ...)
+int ibDatabaseLayer::DoRunQueryUtf8(const ibChar* format, ...)
 {
 	va_list args;
 	va_start(args, format);
@@ -159,7 +159,7 @@ int ibDatabaseLayer::DoRunQueryUtf8(const wxChar* format, ...)
 	return DoRunQuery(strQuery, true);
 }
 
-ibDatabaseResultSet* ibDatabaseLayer::DoRunQueryWithResultsUtf8(const wxChar* format, ...)
+ibDatabaseResultSet* ibDatabaseLayer::DoRunQueryWithResultsUtf8(const ibChar* format, ...)
 {
 	va_list args;
 	va_start(args, format);
@@ -171,7 +171,7 @@ ibDatabaseResultSet* ibDatabaseLayer::DoRunQueryWithResultsUtf8(const wxChar* fo
 	return DoRunQueryWithResults(strQuery);
 }
 
-ibPreparedStatement* ibDatabaseLayer::DoPrepareStatementUtf8(const wxChar* format, ...)
+ibPreparedStatement* ibDatabaseLayer::DoPrepareStatementUtf8(const ibChar* format, ...)
 {
 	va_list args;
 	va_start(args, format);
@@ -224,7 +224,8 @@ bool ibDatabaseLayer::CloseResultSet(ibDatabaseResultSet*& pResultSet)
 	// which the result set has known all along. It knows because whoever registered it said so, and it
 	// tells that owner on the way out (~ibDatabaseResultSet). So deleting it takes it out of the right
 	// books, whichever those are, and asking around is no longer any part of it.
-	wxDELETE(pResultSet);
+	delete pResultSet;
+	pResultSet = nullptr;
 	return true;
 }
 
@@ -237,7 +238,8 @@ bool ibDatabaseLayer::CloseStatement(ibPreparedStatement*& pStatement)
 	// (~ibPreparedStatement). This used to erase first and delete second, and the two halves were the
 	// defect — a statement freed by any other route stayed in the list as a dangling pointer, so
 	// "closed" and "released" were different things and only this door did both.
-	wxDELETE(pStatement);
+	delete pStatement;
+	pStatement = nullptr;
 	return true;
 }
 
@@ -867,21 +869,21 @@ ibNumber ibDatabaseLayer::GetSingleResultNumber(const wxString& strSQL, const wx
 	return value;
 }
 
-wxArrayInt ibDatabaseLayer::GetResultsArrayInt(const wxString& strSQL, int nField)
+std::vector<int> ibDatabaseLayer::GetResultsArrayInt(const wxString& strSQL, int nField)
 {
 	wxVariant variant((long)nField);
 	return GetResultsArrayInt(strSQL, &variant);
 }
 
-wxArrayInt ibDatabaseLayer::GetResultsArrayInt(const wxString& strSQL, const wxString& strField)
+std::vector<int> ibDatabaseLayer::GetResultsArrayInt(const wxString& strSQL, const wxString& strField)
 {
 	wxVariant variant(strField);
 	return GetResultsArrayInt(strSQL, &variant);
 }
 
-wxArrayInt ibDatabaseLayer::GetResultsArrayInt(const wxString& strSQL, const wxVariant* field)
+std::vector<int> ibDatabaseLayer::GetResultsArrayInt(const wxString& strSQL, const wxVariant* field)
 {
-	wxArrayInt returnArray;
+	std::vector<int> returnArray;
 
 	ibDatabaseResultSet* pResult = nullptr;
 	try {
@@ -890,9 +892,9 @@ wxArrayInt ibDatabaseLayer::GetResultsArrayInt(const wxString& strSQL, const wxV
 		while (pResult->Next())
 		{
 			if (field->IsType(wxT("string")))
-				returnArray.Add(pResult->GetResultInt(field->GetString()));
+				returnArray.push_back(pResult->GetResultInt(field->GetString()));
 			else
-				returnArray.Add(pResult->GetResultInt(field->GetLong()));
+				returnArray.push_back(pResult->GetResultInt(field->GetLong()));
 		}
 
 		if (pResult != nullptr)
@@ -961,21 +963,21 @@ wxArrayString ibDatabaseLayer::GetResultsArrayString(const wxString& strSQL, con
 	return returnArray;
 }
 
-wxArrayLong ibDatabaseLayer::GetResultsArrayLong(const wxString& strSQL, int nField)
+std::vector<long> ibDatabaseLayer::GetResultsArrayLong(const wxString& strSQL, int nField)
 {
 	wxVariant variant((long)nField);
 	return GetResultsArrayLong(strSQL, &variant);
 }
 
-wxArrayLong ibDatabaseLayer::GetResultsArrayLong(const wxString& strSQL, const wxString& strField)
+std::vector<long> ibDatabaseLayer::GetResultsArrayLong(const wxString& strSQL, const wxString& strField)
 {
 	wxVariant variant(strField);
 	return GetResultsArrayLong(strSQL, &variant);
 }
 
-wxArrayLong ibDatabaseLayer::GetResultsArrayLong(const wxString& strSQL, const wxVariant* field)
+std::vector<long> ibDatabaseLayer::GetResultsArrayLong(const wxString& strSQL, const wxVariant* field)
 {
-	wxArrayLong returnArray;
+	std::vector<long> returnArray;
 
 	ibDatabaseResultSet* pResult = nullptr;
 	try {
@@ -984,9 +986,9 @@ wxArrayLong ibDatabaseLayer::GetResultsArrayLong(const wxString& strSQL, const w
 		while (pResult->Next())
 		{
 			if (field->IsType(wxT("string")))
-				returnArray.Add(pResult->GetResultLong(field->GetString()));
+				returnArray.push_back(pResult->GetResultLong(field->GetString()));
 			else
-				returnArray.Add(pResult->GetResultLong(field->GetLong()));
+				returnArray.push_back(pResult->GetResultLong(field->GetLong()));
 		}
 
 		if (pResult != nullptr)
@@ -1008,22 +1010,21 @@ wxArrayLong ibDatabaseLayer::GetResultsArrayLong(const wxString& strSQL, const w
 	return returnArray;
 }
 
-#if wxCHECK_VERSION(2, 7, 0)
-wxArrayDouble ibDatabaseLayer::GetResultsArrayDouble(const wxString& strSQL, int nField)
+std::vector<double> ibDatabaseLayer::GetResultsArrayDouble(const wxString& strSQL, int nField)
 {
 	wxVariant variant((long)nField);
 	return GetResultsArrayDouble(strSQL, &variant);
 }
 
-wxArrayDouble ibDatabaseLayer::GetResultsArrayDouble(const wxString& strSQL, const wxString& strField)
+std::vector<double> ibDatabaseLayer::GetResultsArrayDouble(const wxString& strSQL, const wxString& strField)
 {
 	wxVariant variant(strField);
 	return GetResultsArrayDouble(strSQL, &variant);
 }
 
-wxArrayDouble ibDatabaseLayer::GetResultsArrayDouble(const wxString& strSQL, const wxVariant* field)
+std::vector<double> ibDatabaseLayer::GetResultsArrayDouble(const wxString& strSQL, const wxVariant* field)
 {
-	wxArrayDouble returnArray;
+	std::vector<double> returnArray;
 
 	ibDatabaseResultSet* pResult = nullptr;
 	try {
@@ -1032,9 +1033,9 @@ wxArrayDouble ibDatabaseLayer::GetResultsArrayDouble(const wxString& strSQL, con
 		while (pResult->Next())
 		{
 			if (field->IsType(wxT("string")))
-				returnArray.Add(pResult->GetResultDouble(field->GetString()));
+				returnArray.push_back(pResult->GetResultDouble(field->GetString()));
 			else
-				returnArray.Add(pResult->GetResultDouble(field->GetLong()));
+				returnArray.push_back(pResult->GetResultDouble(field->GetLong()));
 		}
 
 		if (pResult != nullptr)
@@ -1055,5 +1056,4 @@ wxArrayDouble ibDatabaseLayer::GetResultsArrayDouble(const wxString& strSQL, con
 
 	return returnArray;
 }
-#endif
 

@@ -252,7 +252,7 @@ namespace stringUtils
 			const wxUniChar::value_type wc = c.GetValue();
 			if (strSynonym.IsEmpty()) {
 				if (c.IsAscii()) {
-					strSynonym += wxToupper(c);
+					strSynonym += ibToUpper(c);
 				}
 				else {
 					strSynonym += c;
@@ -262,7 +262,7 @@ namespace stringUtils
 				(wc >= 0x0410 && wc <= 0x042F)) {
 				strSynonym += wxT(' ');
 				if (c.IsAscii()) {
-					strSynonym += wxTolower(c);
+					strSynonym += ibToLower(c);
 				}
 				else if (wc >= 0x0410 && wc <= 0x042F) {
 					// Cyrillic uppercase to lowercase: add 0x20

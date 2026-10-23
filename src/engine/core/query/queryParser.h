@@ -87,9 +87,9 @@ private:
 	const ibQueryToken& Peek() const { return m_toks[m_pos + 1 < m_toks.size() ? m_pos + 1 : m_toks.size() - 1]; }
 	const ibQueryToken& Next()       { const ibQueryToken& t = Cur(); if (m_pos < m_toks.size()) ++m_pos; return t; }
 	bool   AcceptKw(ibQueryKeyword kw);
-	void   ExpectKw(ibQueryKeyword kw, const wxChar* what);
-	bool   AcceptPunct(wxChar c);
-	void   ExpectPunct(wxChar c, const wxChar* what);
+	void   ExpectKw(ibQueryKeyword kw, const ibChar* what);
+	bool   AcceptPunct(ibChar c);
+	void   ExpectPunct(ibChar c, const ibChar* what);
 	// Reports a syntax error: formats line / position and throws ibBackendQuerySyntaxException —
 	// L4's own variety, carrying the token's span as data (query/queryException.h). The LOWERING has
 	// a variety of its own for a text that reads and names what is not there. Always throws, so
@@ -153,7 +153,7 @@ private:
 	// Is the token `offset` ahead this punctuation? Written for the one question a scalar call asks —
 	// "is this name being CALLED" — which needs to look one token past the current one without
 	// consuming it.
-	bool PeekIsPunct(size_t offset, wxChar ch) const {
+	bool PeekIsPunct(size_t offset, ibChar ch) const {
 		const size_t i = m_pos + offset;
 		return i < m_toks.size() && m_toks[i].IsPunct(ch);
 	}

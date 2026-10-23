@@ -50,9 +50,9 @@ ibDatabaseResultSetODBC::ibDatabaseResultSetODBC(ibInterfaceODBC* pInterface, ib
 		}
 
 #if wxUSE_UNICODE
-		wxString strField = ConvertFromUnicodeStream((const char*)(wxChar*)field_name);
+		wxString strField = ConvertFromUnicodeStream((const char*)(ibChar*)field_name);
 #else
-		wxString strField((wxChar*)field_name);
+		wxString strField((ibChar*)field_name);
 #endif
 		m_FieldLookupMap[strField] = i;   // as written: the map is case-blind (StringToIntMap)
 	}
@@ -82,7 +82,8 @@ void ibDatabaseResultSetODBC::Close()
 		if (m_pStatement != nullptr)
 		{
 			//m_pStatement->Close();
-			wxDELETE(m_pStatement);
+			delete m_pStatement;
+			m_pStatement = nullptr;
 		}
 	}
 }
@@ -565,7 +566,7 @@ void ibDatabaseResultSetODBC::InterpretErrorCodes(long nCode, SQLHSTMT stmth_ptr
 		SetErrorCode(ibDatabaseLayerODBC::TranslateErrorCode((int)iNativeCode, strSqlState),
 			ibDatabaseLayerODBC::ClassifySqlState(strSqlState, (int)iNativeCode));
 		//SetErrorMessage(ConvertFromUnicodeStream((char*)strBuffer));
-		SetErrorMessage(wxString((wxChar*)strBuffer));
+		SetErrorMessage(wxString((ibChar*)strBuffer));
 	}
 }
 

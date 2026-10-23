@@ -98,7 +98,7 @@ void ibMetaData::RegisterCtor(ibCtorMetaValueType* typeCtor)
 			// The register*() macros hand us a raw `new`; the raise leaves nobody to free it.
 			// (ibValue's path is covered by value_register's catch — the metadata macros have none.)
 			const wxString className = typeCtor->GetClassName();
-			wxDELETE(typeCtor);
+			delete typeCtor;
 			ibBackendCoreException::Error(_("Object '%s' is exist"), className);
 			return;
 		}

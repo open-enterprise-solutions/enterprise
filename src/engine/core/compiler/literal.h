@@ -21,7 +21,7 @@ public:
 
 	ibLiteral() = default;
 	ibLiteral(const wxString& text) : m_typeClass(ibValueTypes::TYPE_STRING), m_text(text) {}
-	ibLiteral(const wxChar* text) : m_typeClass(ibValueTypes::TYPE_STRING), m_text(text) {}
+	ibLiteral(const ibChar* text) : m_typeClass(ibValueTypes::TYPE_STRING), m_text(text) {}
 	// A narrow literal is a text too — without this one `ibLiteral("x")` is the flag TRUE (pointer-to-bool
 	// beats the conversion to wxString).
 	ibLiteral(const char* text) : m_typeClass(ibValueTypes::TYPE_STRING), m_text(text) {}

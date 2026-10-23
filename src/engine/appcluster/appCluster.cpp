@@ -11,7 +11,7 @@
 #include "core/diagnostics/crashGuard.h"   // ibCrashGuard::Install — the process's journal and dumps
 #include "core/exception.h"                // ibCoreException — the listener refused, with the reason
 #include "core/net/webSocketRelay.h"
-#include "core/programFolder.h"            // ibBackendConfPath — the certificate the port speaks TLS over
+#include "core/fileSystem.h"               // ibBackendConfPath — the certificate the port speaks TLS over
 #include "core/server/clusterControl.h"
 #include "core/server/listener.h"
 

@@ -15,7 +15,7 @@
 
 #include "core/diagnostics/crashGuard.h"   // ibCrashGuard::Install — the process's journal and dumps
 #include "core/net/httpClient.h"
-#include "core/programFolder.h"
+#include "core/fileSystem.h"
 #include "core/server/listener.h"   // ibTlsFiles — whether the cluster's port speaks TLS
 
 #include "clusterTray.h"

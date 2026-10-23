@@ -28,7 +28,7 @@ ibRuntimeModuleDataObject::~ibRuntimeModuleDataObject()
 		if (descId.isValid())
 			ibByteCode::Unregister(descId);
 	}
-	wxDELETE(m_compileModule);
+	delete m_compileModule;
 	// m_procUnit auto-destructs via shared_ptr when the last reference
 	// drops.
 }

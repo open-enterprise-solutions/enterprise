@@ -105,7 +105,7 @@ public:
 	// `microseconds` comes back with the rest: how long the code itself took, timed in the process
 	// that ran it. Measuring from this side would be measuring the socket and the wait.
 	bool Sandbox(const wxString& code, bool& ran, wxString& answer, wxString& json,
-		std::vector<wxString>& printed, wxLongLong_t& microseconds, int timeoutMs = 30000);
+		std::vector<wxString>& printed, long long& microseconds, int timeoutMs = 30000);
 
 	// ⭐⭐ PUTTING DATA IN, over there. What comes back for all three requests is the state of one
 	// run — starting one, asking after one and stopping one are the same question about the same
@@ -166,7 +166,7 @@ public:
 	void OnSetExpanded(const ibWatchWindowData& watchData) override;
 	void OnEvalMessage(const wxString& message, MessageType type) override;
 	void OnScreenshot(const ibMemoryBuffer& png, const wxString& focus) override;
-	void OnSandboxResult(bool ran, const wxString& answer, const wxString& json, wxLongLong_t microseconds) override;
+	void OnSandboxResult(bool ran, const wxString& answer, const wxString& json, long long microseconds) override;
 	void OnJobState(unsigned int which, const struct ibJobRunByteCodeState& state) override;
 	void OnComposed(bool answered, const wxString& refusal, const ibMemoryBuffer& result) override;
 
@@ -207,7 +207,7 @@ private:
 	wxString                m_answer;
 	bool                    m_sandboxRan = false;   // …and whether the sandbox got as far as running
 	wxString                m_sandboxJson;          // …and its result AS A VALUE, when it could travel
-	wxLongLong_t            m_sandboxMicroseconds = 0;  // …and how long it took, measured where it ran
+	long long            m_sandboxMicroseconds = 0;  // …and how long it took, measured where it ran
 	std::vector<wxString>   m_sandboxPrinted;       // …and every line it printed while it ran
 
 	// What the RUN printed outside any sandbox — the application talking, kept for whoever asked

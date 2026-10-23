@@ -86,7 +86,7 @@ public:
 		return s_arguments;
 	}
 
-	bool Call(const ibDataNode& WXUNUSED(params), ibDataNode& result, wxString& refusal) const override
+	bool Call(const ibDataNode& /*params*/, ibDataNode& result, wxString& refusal) const override
 	{
 		ibMcpServer* server = Server(refusal);
 		if (server == nullptr)
@@ -180,7 +180,7 @@ public:
 
 	wxString GetName() const override { return wxT("chat_history"); }
 
-	wxString GetActivity(const ibDataNode& WXUNUSED(params)) const override
+	wxString GetActivity(const ibDataNode& /*params*/) const override
 	{
 		return ibMcpText("reading back the conversation");
 	}

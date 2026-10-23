@@ -228,12 +228,12 @@ public:
 // ⚠ The PERIOD is deliberately not here: its column is named after the register's own period
 // attribute, so the name belongs to the metadata rather than to this list.
 namespace ibRegFigure {
-	inline constexpr const wxChar* Turnover       = wxT("Turnover");
-	inline constexpr const wxChar* Receipt        = wxT("Receipt");        // accumulation's two sides
-	inline constexpr const wxChar* Expense        = wxT("Expense");
-	inline constexpr const wxChar* Balance        = wxT("Balance");
-	inline constexpr const wxChar* OpeningBalance = wxT("OpeningBalance");
-	inline constexpr const wxChar* ClosingBalance = wxT("ClosingBalance");
+	inline constexpr const ibChar* Turnover       = wxT("Turnover");
+	inline constexpr const ibChar* Receipt        = wxT("Receipt");        // accumulation's two sides
+	inline constexpr const ibChar* Expense        = wxT("Expense");
+	inline constexpr const ibChar* Balance        = wxT("Balance");
+	inline constexpr const ibChar* OpeningBalance = wxT("OpeningBalance");
+	inline constexpr const ibChar* ClosingBalance = wxT("ClosingBalance");
 
 	// ⭐⭐ THE SAME BALANCE, NOT NETTED BETWEEN THE SIDES. An accounting balance is reported FOLDED: an
 	// active account carries what is left on the debit and nothing on the credit, and the two sides of
@@ -245,22 +245,22 @@ namespace ibRegFigure {
 	// GROSS / NET are the accounting words for the pair (the reference calls them the expanded and
 	// the collapsed balance); the ordinary `Balance` above stays the folded one, because that is what every
 	// reading of it has always meant.
-	inline constexpr const wxChar* GrossBalance        = wxT("GrossBalance");
-	inline constexpr const wxChar* OpeningGrossBalance = wxT("OpeningGrossBalance");
-	inline constexpr const wxChar* ClosingGrossBalance = wxT("ClosingGrossBalance");
+	inline constexpr const ibChar* GrossBalance        = wxT("GrossBalance");
+	inline constexpr const ibChar* OpeningGrossBalance = wxT("OpeningGrossBalance");
+	inline constexpr const ibChar* ClosingGrossBalance = wxT("ClosingGrossBalance");
 
 	// ⭐ WHAT THE CORRESPONDENT MOVED, beside what the account moved. A figure the two sides of an entry
 	// do not agree on (a quantity, a currency amount — `Balance` cleared) is two numbers on one line: what
 	// reached the debit account and what left the credit one. A turnover row about one account reports its
 	// own under `Turnover` and the other side's under this word, the way the reference does.
-	inline constexpr const wxChar* CorrTurnover = wxT("CorrTurnover");
+	inline constexpr const ibChar* CorrTurnover = wxT("CorrTurnover");
 }
 
 // The SIDE an accounting figure stands on. Not a third and fourth figure name — the same figures, said
 // of one side of an entry, which is exactly why the suffix is separate from the word.
 namespace ibRegSide {
-	inline constexpr const wxChar* Debit  = wxT("Dr");
-	inline constexpr const wxChar* Credit = wxT("Cr");
+	inline constexpr const ibChar* Debit  = wxT("Dr");
+	inline constexpr const ibChar* Credit = wxT("Cr");
 }
 
 // `<figure><side>` — built rather than written out, so a figure and its sided spelling cannot drift.

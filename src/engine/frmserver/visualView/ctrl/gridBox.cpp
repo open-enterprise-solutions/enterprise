@@ -85,8 +85,8 @@ ibValueGridBox::~ibValueGridBox()
 	if (m_spreadsheetModel)
 		m_spreadsheetModel->CancelFetch();
 
-	wxDELETE(m_gridView);   // the view first: it is the document's
-	wxDELETE(m_gridDocument);
+	delete m_gridView;   // the view first: it is the document's
+	delete m_gridDocument;
 }
 
 ibView* ibValueGridBox::GetControlView() const
@@ -202,7 +202,7 @@ void ibValueGridBox::ApplyDefaultSettings()
 //*                                   Fetch                                        *
 //**********************************************************************************
 
-bool ibValueGridBox::Fetch(const ibDataNode& WXUNUSED(request), ibDataNode& response)
+bool ibValueGridBox::Fetch(const ibDataNode& /*request*/, ibDataNode& response)
 {
 	// Of which sheet: the client takes it as the one of that version.
 	response.SetValue(ibProtocol::ibForm::ibSpreadsheet::Version, m_documentVersion);

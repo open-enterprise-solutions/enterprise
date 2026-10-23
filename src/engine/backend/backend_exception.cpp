@@ -519,7 +519,7 @@ bool ibBackendException::IsEvalComplete()
 ////////////////////////////////////////////////////////////////////
 
 #if !wxUSE_UTF8_LOCALE_ONLY
-wxString ibBackendException::DoFormatWchar(const wxChar* format, ...)
+wxString ibBackendException::DoFormatWchar(const ibChar* format, ...)
 {
 	va_list args;
 	va_start(args, format);
@@ -528,7 +528,7 @@ wxString ibBackendException::DoFormatWchar(const wxChar* format, ...)
 #endif
 
 #if wxUSE_UNICODE_UTF8
-wxString ibBackendException::DoFormatUtf8(const wxChar* format, ...)
+wxString ibBackendException::DoFormatUtf8(const ibChar* format, ...)
 {
 	va_list args;
 	va_start(args, format);
@@ -640,7 +640,7 @@ wxString ibBackendException::FindErrorCodeLine(const wxString& strBuffer, unsign
 //service error handling procedures
 
 #if !wxUSE_UTF8_LOCALE_ONLY
-void ibBackendCoreException::DoErrorWchar(const wxChar* format, ...)
+void ibBackendCoreException::DoErrorWchar(const ibChar* format, ...)
 {
 	va_list args;
 	va_start(args, format);
@@ -653,7 +653,7 @@ void ibBackendCoreException::DoErrorWchar(const wxChar* format, ...)
 #endif
 
 #if wxUSE_UNICODE_UTF8
-void ibBackendCoreException::DoErrorUtf8(const wxChar* format, ...)
+void ibBackendCoreException::DoErrorUtf8(const ibChar* format, ...)
 {
 	va_list args;
 	va_start(args, format);

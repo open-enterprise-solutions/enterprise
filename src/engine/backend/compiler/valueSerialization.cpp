@@ -37,8 +37,8 @@
 // file writes into a packed node — an enumeration writes its member from the template that
 // defines it — and a value written under one spelling and read under another is a value lost.
 namespace {
-const wxChar* const kFieldClsid = kValueFieldClsid;
-const wxChar* const kFieldData  = kValueFieldData;
+const ibChar* const kFieldClsid = kValueFieldClsid;
+const ibChar* const kFieldData  = kValueFieldData;
 } // namespace
 
 //////////////////////////////////////////////////////////////////////

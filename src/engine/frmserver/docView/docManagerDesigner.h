@@ -12,7 +12,8 @@ public:
 
 protected:
 	wxDECLARE_DYNAMIC_CLASS(ibDocManagerDesigner);
-	wxDECLARE_NO_COPY_CLASS(ibDocManagerDesigner);
+	ibDocManagerDesigner(const ibDocManagerDesigner&) = delete;
+	ibDocManagerDesigner& operator=(const ibDocManagerDesigner&) = delete;
 };
 
 #endif

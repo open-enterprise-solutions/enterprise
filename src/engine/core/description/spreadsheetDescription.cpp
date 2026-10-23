@@ -313,14 +313,14 @@ bool ibSpreadsheetDescriptionMemory::SaveData(ibWriterMemory& writer, const ibSp
 
 namespace {
 
-const wxChar* const kSheetCells   = wxT("cells");
-const wxChar* const kSheetRows    = wxT("rows");
-const wxChar* const kSheetCols    = wxT("cols");
-const wxChar* const kSheetFreeze  = wxT("freeze");
+const ibChar* const kSheetCells   = wxT("cells");
+const ibChar* const kSheetRows    = wxT("rows");
+const ibChar* const kSheetCols    = wxT("cols");
+const ibChar* const kSheetFreeze  = wxT("freeze");
 
 // One border, and only when it is drawn at all. A transparent border is the
 // absence of a border, so it says nothing rather than saying "transparent".
-void WriteBorder(ibDataNode& into, const wxChar* name,
+void WriteBorder(ibDataNode& into, const ibChar* name,
 	const ibSpreadsheetBorderDescription& border)
 {
 	if (border.m_style == ibPenStyle_Transparent)
@@ -332,7 +332,7 @@ void WriteBorder(ibDataNode& into, const wxChar* name,
 	node.SetValue(wxT("colour"), border.m_colour.ToString());
 }
 
-void ReadBorder(const ibDataNode& from, const wxChar* name,
+void ReadBorder(const ibDataNode& from, const ibChar* name,
 	ibSpreadsheetBorderDescription& border)
 {
 	const ibDataNode* node = from.FindChild(name);
@@ -476,7 +476,7 @@ bool ibSpreadsheetDescriptionMemory::ReadNode(const ibDataValue& value, ibSpread
 	// Rows and columns carry the same three things — an area is named, a break is
 	// a position, a size is a measurement — so they are read by one helper each
 	// side rather than two copies that could disagree.
-	auto readBand = [&](const wxChar* which, bool rows) {
+	auto readBand = [&](const ibChar* which, bool rows) {
 
 		const ibDataNode* band = sheet->FindChild(which);
 		if (band == nullptr)
@@ -580,7 +580,7 @@ bool ibSpreadsheetDescriptionMemory::WriteNode(ibDataValue& value, const ibSprea
 
 	sheet->AddField(kSheetCells, ibDataValue::Array(cells));
 
-	auto writeBand = [&](const wxChar* which, bool rows) {
+	auto writeBand = [&](const ibChar* which, bool rows) {
 
 		ibDataNode& band = sheet->Child(which);
 

@@ -1864,7 +1864,7 @@ const ibBackendQueryable* ibValueMetaObjectAccountingRegister::GetShapeQueryable
 	// wxString::Format to get there.
 	wxString key = wxString::Format(wxT("%d|%d|%d|"), static_cast<int>(shape),
 		static_cast<int>(fold.m_kind), static_cast<int>(fold.m_unit));
-	const auto appendKind = [&key](const wxChar side, const ibValue& kind) {
+	const auto appendKind = [&key](const ibChar side, const ibValue& kind) {
 		key += wxString::Format(wxT("%c%llu:%llu|"), side,
 			static_cast<unsigned long long>(kind.GetValueHash()),
 			static_cast<unsigned long long>(kind.GetClassType()));

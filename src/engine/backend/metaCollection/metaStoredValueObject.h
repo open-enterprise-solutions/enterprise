@@ -73,7 +73,7 @@ class BACKEND_API ibValueMetaObjectStoredValue :
 		// standing on rather than what you are reading off it. The table is the constant; the
 		// column is its value. (Physical storage is untouched — the field is still `fld<metaID>`,
 		// keyed on the constant's id, so nothing in the schema moves.)
-		static const wxChar* ValueColumnName() { return wxT("Value"); }
+		static const ibChar* ValueColumnName() { return wxT("Value"); }
 		virtual wxString GetName() const { return ValueColumnName(); }
 
 		// The SYNONYM has to be delegated explicitly, and the reason is a trap worth naming: the base

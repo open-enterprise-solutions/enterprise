@@ -43,13 +43,13 @@ bool ibSchemaDatabase::AccessRight(const ibSession& session) const
 	return metaData != nullptr && metaData->AccessRight_DataAdministration();
 }
 
-void ibSchemaDatabase::Build(const ibSession& WXUNUSED(session), const ibDataNode& WXUNUSED(args),
-	ibDataNode& WXUNUSED(result)) const
+void ibSchemaDatabase::Build(const ibSession& /*session*/, const ibDataNode& /*args*/,
+	ibDataNode& /*result*/) const
 {
 }
 
 std::function<void()> ibSchemaDatabase::Command(const ibSession& session, std::int32_t command,
-	const ibDataNode& WXUNUSED(args), ibProtocol::ibRefusal& refusal, wxString& error) const
+	const ibDataNode& /*args*/, ibProtocol::ibRefusal& refusal, wxString& error) const
 {
 	ibApplicationInstance* const applicationInstance = session.GetApplicationInstance();
 	if (applicationInstance == nullptr) {

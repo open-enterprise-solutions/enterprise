@@ -18,7 +18,6 @@
 #include "backend/sheetFormat/sheetFormatDocx.h"
 #include "backend/backend_localization.h"   // a caption goes out in one language
 
-#include <wx/wfstream.h>
 #include <wx/zipstrm.h>
 
 #include <set>
@@ -109,7 +108,7 @@ wxString Styles()
 		wxT("</w:pPr></w:pPrDefault>")
 		wxT("</w:docDefaults>")
 		wxT("</w:styles>"),
-		wxRound(ibDefaultSpreadsheetFont().m_pointSize) * 2);
+		ibDefaultSpreadsheetFont().GetPointSize() * 2);
 }
 
 wxString RootRels()
@@ -154,7 +153,7 @@ wxString BordersOf(const ibSpreadsheetCellDescription* cell)
 		return wxEmptyString;
 
 	static const int           s_ours[4]  = { 2, 0, 3, 1 };   // top, left, bottom, right
-	static const wxChar* const s_names[4] = { wxT("top"), wxT("left"), wxT("bottom"), wxT("right") };
+	static const ibChar* const s_names[4] = { wxT("top"), wxT("left"), wxT("bottom"), wxT("right") };
 
 	wxString edges;
 	for (int i = 0; i < 4; i++) {
@@ -162,7 +161,7 @@ wxString BordersOf(const ibSpreadsheetCellDescription* cell)
 		if (border.m_style == ibPenStyle_Transparent)
 			continue;
 
-		const wxChar* line = wxT("single");
+		const ibChar* line = wxT("single");
 		switch (border.m_style) {
 		case ibPenStyle_Dot:        line = wxT("dotted");  break;
 		case ibPenStyle_ShortDash:
@@ -172,7 +171,7 @@ wxString BordersOf(const ibSpreadsheetCellDescription* cell)
 		}
 
 		edges += wxString::Format(wxT("<w:%s w:val=\"%s\" w:sz=\"%d\" w:space=\"0\" w:color=\"%s\"/>"),
-			s_names[i], line, wxMax(border.m_width, 1) * 4, HexOf(border.m_colour));
+			s_names[i], line, std::max(border.m_width, 1) * 4, HexOf(border.m_colour));
 	}
 
 	return edges.IsEmpty() ? wxString() : wxT("<w:tcBorders>") + edges + wxT("</w:tcBorders>");
@@ -208,8 +207,8 @@ wxString RunOf(const ibSpreadsheetCellDescription* cell, const wxString& text)
 			// WORD COUNTS IN HALF-POINTS — and says nothing where the cell agrees with the size the
 			// styles part already declared for the whole document. On a sheet where every cell is
 			// the default size that is one element saved per cell, out of a hundred thousand.
-			if (wxRound(font.m_pointSize) > 0 && wxRound(font.m_pointSize) != wxRound(ibDefaultSpreadsheetFont().m_pointSize))
-				properties += wxString::Format(wxT("<w:sz w:val=\"%d\"/>"), wxRound(font.m_pointSize) * 2);
+			if (font.GetPointSize() > 0 && font.GetPointSize() != ibDefaultSpreadsheetFont().GetPointSize())
+				properties += wxString::Format(wxT("<w:sz w:val=\"%d\"/>"), font.GetPointSize() * 2);
 			if (font.m_underlined)
 				properties += wxT("<w:u w:val=\"single\"/>");
 		}
@@ -277,7 +276,7 @@ bool ContinuesMerge(const ibSpreadsheetDescription& sheet, int row, int numCols)
 
 } // namespace
 
-bool ibSheetFormatDocx::Read(wxInputStream& WXUNUSED(input), ibSpreadsheetDescription& WXUNUSED(sheet)) const
+bool ibSheetFormatDocx::Read(wxInputStream& /*input*/, ibSpreadsheetDescription& /*sheet*/) const
 {
 	// See the header: a Word file is a flow, not a sheet. Refused plainly rather
 	// than half-guessed.
@@ -344,7 +343,7 @@ bool ibSheetFormatDocx::Write(wxOutputStream& output, const ibSpreadsheetDescrip
 				int ownerRows = 1, ownerCols = 1;
 				if (const ibSpreadsheetCellDescription* owner = sheet.GetCell(ownerRow, ownerCol))
 					owner->GetSize(&ownerRows, &ownerCols);
-				continuedCols = wxMax(ownerCols, 1);
+				continuedCols = std::max(ownerCols, 1);
 			}
 
 			// ⚠ THE WIDTH IS THE GRID'S TO STATE, and it states it once at the top of the table.

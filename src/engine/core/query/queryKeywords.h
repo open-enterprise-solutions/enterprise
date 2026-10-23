@@ -145,7 +145,7 @@ enum class ibQueryKeyword
 struct ibQueryKeyWordEntry
 {
 	ibQueryKeyword m_kw;
-	const wxChar*  m_text;
+	const ibChar*  m_text;
 };
 
 // ⭐⭐ THE SCALAR CALLS — A SECOND VOCABULARY, AND DELIBERATELY NOT KEYWORDS.

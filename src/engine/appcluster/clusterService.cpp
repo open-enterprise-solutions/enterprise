@@ -32,7 +32,7 @@ DWORD                   s_refusal = 0;
 SERVICE_STATUS_HANDLE   s_handle = nullptr;
 std::function<void()>   s_stop;
 
-ibString Refusal(const wxChar* what, DWORD code)
+ibString Refusal(const ibChar* what, DWORD code)
 {
 	return ibString::Format(wxT("%s: %s"), what, wxSysErrorMsgStr(code));
 }

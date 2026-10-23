@@ -5,7 +5,6 @@
 #include "core/formatString.h"
 #include "core/anyValue.h"   // ibAnyValue — what Apply asks of a value
 
-#include <wx/datetime.h>
 #include <wx/wxcrt.h>   // wxAtoi — a code's number read
 
 #include <algorithm>   // std::max / std::min — the spelling of a date letter
@@ -14,7 +13,7 @@ namespace {
 
 struct ibFormatCodeInfo {
 	ibFormatCode  m_code;
-	const wxChar* m_name;
+	const ibChar* m_name;
 	ibFormatKind  m_kind;
 };
 
@@ -34,7 +33,7 @@ const ibFormatCodeInfo s_codes[] = {
 
 struct ibDatePresetInfo {
 	ibDatePreset  m_preset;
-	const wxChar* m_pattern;
+	const ibChar* m_pattern;
 };
 
 const ibDatePresetInfo s_presets[] = {
@@ -71,8 +70,8 @@ int DateLetter(wxUniChar c)
 
 void AppendTwoDigits(int value, wxString& out)
 {
-	out += static_cast<wxChar>(L'0' + value / 10 % 10);
-	out += static_cast<wxChar>(L'0' + value % 10);
+	out += static_cast<ibChar>(L'0' + value / 10 % 10);
+	out += static_cast<ibChar>(L'0' + value % 10);
 }
 
 // ⭐ THE DATE PATTERN WRITTEN STRAIGHT INTO `out` — no strftime pattern is built and wxDateTime::Format is
@@ -233,7 +232,7 @@ void ibFormatString::Clear(ibFormatCode code)
 	}
 }
 
-const wxChar* ibFormatString::CodeName(ibFormatCode code)
+const ibChar* ibFormatString::CodeName(ibFormatCode code)
 {
 	for (const ibFormatCodeInfo& info : s_codes) {
 		if (info.m_code == code) return info.m_name;

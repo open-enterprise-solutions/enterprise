@@ -183,10 +183,10 @@ private:
 	);
 
 #if !wxUSE_UTF8_LOCALE_ONLY
-	static wxString DoFormatWchar(const wxChar* format, ...);
+	static wxString DoFormatWchar(const ibChar* format, ...);
 #endif
 #if wxUSE_UNICODE_UTF8
-	static wxString DoFormatWchar(const wxChar* format, ...);
+	static wxString DoFormatWchar(const ibChar* format, ...);
 #endif
 
 	mutable bool m_errorHandled;
@@ -205,10 +205,10 @@ public:
 private:
 
 #if !wxUSE_UTF8_LOCALE_ONLY
-	static void DoErrorWchar(const wxChar* format, ...);
+	static void DoErrorWchar(const ibChar* format, ...);
 #endif
 #if wxUSE_UNICODE_UTF8
-	static void DoErrorUtf8(const wxChar* format, ...);
+	static void DoErrorUtf8(const ibChar* format, ...);
 #endif
 };
 

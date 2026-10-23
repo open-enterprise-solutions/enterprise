@@ -41,7 +41,7 @@ target_include_directories(launcher PRIVATE
 
 target_link_libraries(launcher PRIVATE
     backend
-    wx::core wx::aui wx::html wx::propgrid wx::adv wx::stc wx::xrc wx::qa wx::base wx::xml
+    wx::core wx::qa wx::base wx::xml
 )
 
 # Copy Firebird client library next to binaries on macOS

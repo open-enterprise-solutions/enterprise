@@ -59,8 +59,8 @@ bool ibCommandDescriptionMemory::SaveData(ibWriterMemory& writer, const ibComman
 
 namespace {
 
-const wxChar* const kHopsField = wxT("hops");
-const wxChar* const kTypeField = wxT("commandType");
+const ibChar* const kHopsField = wxT("hops");
+const ibChar* const kTypeField = wxT("commandType");
 
 } // namespace
 
