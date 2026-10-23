@@ -532,7 +532,9 @@ struct ibProcStackGuard {
 	//
 	// ⭐ A CANCEL IS FOR WHAT IS RUNNING (ibProcUnitState::m_runState). The stack at empty is where a run
 	// begins and ends, so the guard says so there: Running as the first frame comes, Idle as the last goes —
-	// which is also where a cancel that stopped the run comes down.
+	// which is also where a cancel that stopped the run comes down. Only the run it began: a script run inside
+	// a wait for the person finds the wait's run (ibWorkerPool::Await) and leaves it to the wait — a cancel it
+	// heard stays up for the wait to hear.
 	ibProcStackGuard(ibRunContext* runContext, ibProcUnitState* state) {
 		// Active state is required — ibProcUnit::Execute is reached only
 		// through a bound session (ibSessionScope / ibSessionThreadBinding).
@@ -561,10 +563,10 @@ struct ibProcStackGuard {
 		state->SetCurrentRunModule(runContext->GetProcUnit());
 
 		// Idle -> Running, and nothing else: a job's session cancelled before its script began stays Cancelled,
-		// and the script hears it at its first poll.
+		// and the script hears it at its first poll — and after it, a cancel this guard did not raise the run for.
 		if (state->GetCountRunContext() == 0) {
 			ibRunState idle = ibRunState::Idle;
-			state->m_runState.compare_exchange_strong(idle, ibRunState::Running);
+			m_raised = state->m_runState.compare_exchange_strong(idle, ibRunState::Running);
 		}
 		BeginByteCode(state, runContext);
 	}
@@ -583,7 +585,7 @@ struct ibProcStackGuard {
 				state->m_errorPlace.Reset();
 		}
 		EndByteCode(m_state);
-		if (m_state != nullptr && m_state->GetCountRunContext() == 0)
+		if (m_state != nullptr && m_raised)
 			m_state->m_runState = ibRunState::Idle;
 	}
 
@@ -593,6 +595,8 @@ private:
 	// Resolved once in the ctor and reused on the way out — the same state must
 	// see both ends of the call.
 	ibProcUnitState* m_state = nullptr;
+	// It made the run Running, and so lowers it — the first frame of a run it began.
+	bool             m_raised = false;
 };
 
 //**************************************************************************************************************

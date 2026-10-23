@@ -1115,8 +1115,9 @@ void ibSession::Cancel()
 		ibRunState running = ibRunState::Running;
 		m_procUnitState.m_runState.compare_exchange_strong(running, ibRunState::Cancelled);
 	}
-	// A script that waits for its client (ibWorkerPool::Await — a question on the web) hears it too: rung, it
-	// finds the run cancelled and throws the interruption up the script.
+	// Work that waits for its client (ibWorkerPool::Await — a question on the web) hears it too, a script's or the
+	// engine's own (the wait is a run of its own when no script is under it): rung, it finds the run cancelled and
+	// throws the interruption up the work that asked.
 	if (ibWorkerPool* const pool = GetWorkerPool())
 		pool->Wake(this);
 	for (const std::shared_ptr<ibSession>& tenant : tenants)

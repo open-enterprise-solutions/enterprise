@@ -305,6 +305,45 @@ TEST(WorkerPoolAwait, ACancelEndsTheWaitBeforeTheBarrierThatFollowsIt)
 	pool.Stop();
 }
 
+TEST(WorkerPoolAwait, ACancelEndsAWaitNoScriptIsUnder)
+{
+	// A client's session, and no script running: the engine itself asked — a report's drill-down menu. A cancel
+	// is for what runs, and the wait is a run of its own, so the client's exit ends it before its teardown's
+	// barrier. It did not (2026-10-23): the barrier ran inside the wait, and the frame the question stood in was
+	// gone when the wait woke.
+	ibWorkerPoolHeadless pool(2);
+	auto session = MakeSession(wxT("await-host"));
+
+	ibOrder order;
+	ibLatch waiting;
+	std::future<void> asked = pool.Submit(session.get(), [&]() {
+		try {
+			pool.Await(session.get(), [&waiting]() {
+				waiting.Signal();
+				return false;
+			});
+		}
+		catch (const ibBackendInterruptException&) {
+			order.Note("interrupted");
+			throw;
+		}
+	});
+	ASSERT_TRUE(waiting.Wait());
+
+	session->Cancel();
+	pool.Wake(session.get());   // a session without a registry has no pool of its own to ring through Cancel
+	std::future<void> barrier = pool.Submit(session.get(), [&order]() { order.Note("barrier"); });
+
+	ASSERT_EQ(asked.wait_for(std::chrono::seconds(5)), std::future_status::ready)
+		<< "the cancel did not end the wait";
+	EXPECT_THROW(asked.get(), ibBackendInterruptException);
+	ASSERT_EQ(barrier.wait_for(std::chrono::seconds(5)), std::future_status::ready);
+	EXPECT_EQ(order.Seen(), (std::vector<std::string>{ "interrupted", "barrier" }));
+	// …and the run the wait raised came down with it: the session's next work is not born cancelled.
+	EXPECT_EQ(session->RunState()->load(), ibRunState::Idle);
+	pool.Stop();
+}
+
 TEST(WorkerPoolAwait, StoppingThePoolEndsAWaitWithTheInterruption)
 {
 	ibWorkerPoolHeadless pool(1);

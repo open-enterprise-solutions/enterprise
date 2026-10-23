@@ -403,6 +403,15 @@ void ibWorkerPoolHeadless::Await(ibSession* session, const std::function<bool()>
 	// (or lifting the cap because of it) would put a thread back under every open question.
 	++q->waiting;
 
+	// ⭐ THE WAIT IS A RUN — the work that asked is on the stack, there to hear a cancel as a script is. A question
+	// asked by the engine with no script beneath (a report's drill-down menu) found the run Idle, and a cancel, being
+	// for what runs, passed it by: a client's exit then ran its teardown INSIDE the wait, and the frame the question
+	// stood in was gone when the wait woke (2026-10-23). Raised only from Idle — under a script the run is the
+	// script's — and lowered on the way out by the wait that raised it, as ibProcStackGuard lowers its own.
+	std::atomic<ibRunState>& run = ibSession::PUStateOf(session)->m_runState;
+	ibRunState idle = ibRunState::Idle;
+	const bool raised = run.compare_exchange_strong(idle, ibRunState::Running);
+
 	for (;;) {
 		// The cancel BEFORE the next task, and done() under this lock: a flag read, nothing that calls
 		// back into the pool. A teardown cancels, then submits its barrier, and the barrier must run
@@ -410,11 +419,15 @@ void ibWorkerPoolHeadless::Await(ibSession* session, const std::function<bool()>
 		// so a barrier submitted after the cancel cannot slip between them.
 		if (ShouldInterrupt(session)) {
 			--q->waiting;
+			if (raised)
+				run = ibRunState::Idle;
 			lk.unlock();
 			ibBackendInterruptException::Error();
 		}
 		if (done()) {
 			--q->waiting;
+			if (raised)
+				run = ibRunState::Idle;
 			return;
 		}
 		if (q->tasks.empty()) {
