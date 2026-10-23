@@ -52,13 +52,13 @@ clear does not cross a network.
 ## The clients' port: oess://
 
 - **Where.** `server.conf`'s `Host` and `Port` - the application cluster's, which takes every client and hands it
-  to the server of its base. `Host` left out is `127.0.0.1`: this machine alone. Another address - `0.0.0.0`, a
+  to a server of its base: the one its session lives in, else the least busy. `Host` left out is `127.0.0.1`: this machine alone. Another address - `0.0.0.0`, a
   network card's, empty (every interface) - wants a certificate in `backend.conf`; without one the cluster
   does not start, and its journal says why.
 - **What it speaks.** A certificate named: TLS, and the address a person gives a client is
   `oess://server[:port]/<base>` - the server prints it for every base. None: `oes://`, on this machine.
-- **The cluster** ends TLS at its port: the server it starts for each base listens on `127.0.0.1` in the
-  clear, and is reached through the cluster alone. Its tray speaks TLS to it too, on `127.0.0.1`, without
+- **The cluster** ends TLS at its port: the servers it starts for each base listen on `127.0.0.1` in the
+  clear, and are reached through the cluster alone. Its tray speaks TLS to it too, on `127.0.0.1`, without
   checking the certificate's name - it is let in by the folder's token.
 - **The client** - `enterprise-thin`, `designer-thin`, the web server's publication of a server's base -
   checks the server's certificate: its chain against the system's store, or against the authorities of a
@@ -76,8 +76,8 @@ as written; taken by another process, it is refused, never moved off.
 |---|---|---|
 | 7373 | the cluster: every client, and its tray | `server.conf` `Port` |
 | 7374 | the designer's assistant access (MCP) | the designer's settings |
-| 7500-7599 | the cluster's servers, one a base, on `127.0.0.1`: the first free one | - |
-| 7600-7699 | the assistant access of a server's base, one each | `server.conf` `McpPort` |
+| 7500-7599 | the cluster's servers, as many a base as its `Processes`, on `127.0.0.1`: the first free one | - |
+| 7600-7699 | the assistant access of a base, one each, held by its first server | `server.conf` `McpPort` |
 | 7700-7709 | the debugger: the first free one, the designer looks in all | - |
 | 8080 / 443 | the web server: HTTP / HTTPS, when `web.conf` names a certificate | `web.conf` `HttpPort`, `HttpsPort` |
 

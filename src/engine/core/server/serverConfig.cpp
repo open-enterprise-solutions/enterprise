@@ -178,6 +178,9 @@ std::vector<ibConfiguredInstance> ibServerConfig::ReadInstances() const
 		instance.m_ibUser     = conf.Read(at + wxT("IbUser"));
 		instance.m_ibPassword = conf.Read(at + wxT("IbPassword"));
 		instance.m_mcpPort    = conf.Read(at + wxT("McpPort"));
+		long processes = 1;
+		conf.Read(at + wxT("Processes"), &processes, 1L);
+		instance.m_processes  = processes > 1 ? static_cast<unsigned>(processes) : 1;
 
 		instances.push_back(instance);
 	}

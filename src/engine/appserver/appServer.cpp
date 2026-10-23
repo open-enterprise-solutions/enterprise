@@ -69,8 +69,8 @@ void ListenToCluster()
 
 } // namespace
 
-ibAppServer::ibAppServer(ibServerConfig& config, const wxString& locale, const ibString& workerBase) :
-	m_config(config), m_locale(locale), m_workerBase(workerBase)
+ibAppServer::ibAppServer(ibServerConfig& config, const wxString& locale, const ibString& workerBase, unsigned route) :
+	m_config(config), m_locale(locale), m_workerBase(workerBase), m_route(route)
 {
 }
 
@@ -145,8 +145,8 @@ int ibAppServer::Run()
 	std::printf("%s %u\n", ibWorkerPipe::Serving, static_cast<unsigned>(port));
 	std::fflush(stdout);
 
-	ibAppServerSay(ibJournalMark::Info, wxT("serving '%s' for the cluster on 127.0.0.1:%u"), m_workerBase,
-		static_cast<unsigned>(port));
+	ibAppServerSay(ibJournalMark::Info, wxT("serving '%s' (route %u) for the cluster on 127.0.0.1:%u"), m_workerBase,
+		m_route, static_cast<unsigned>(port));
 
 	while (s_state.load() == ibServeState::Serving)
 		std::this_thread::sleep_for(std::chrono::milliseconds(250));
@@ -212,9 +212,14 @@ bool ibAppServer::Open(const ibConfiguredInstance& instance)
 
 	// THE BASE'S CLIENTS — the protocol served for it (frmserver), and the base's MCP when its settings switch it
 	// on: an assistant reaches the clients through it (client_call), as a client. Whether it is on, and its key, are
-	// the base's settings; its port is the config's (McpPort) — the bases of one cluster never meet on one.
-	m_clientHosts[instance.m_name] = std::make_unique<ibClientHost>(applicationInstance);
-	if (ibMcpServer* const mcp = ibApplicationInstance::GetMcpServer(applicationInstance)) {
+	// the base's settings; its port is the config's (McpPort) — the bases of one cluster never meet on one, and of a
+	// base's servers the first one holds it.
+	m_clientHosts[instance.m_name] = std::make_unique<ibClientHost>(applicationInstance, m_route);
+	if (m_route > 1) {
+		ibAppServerSay(ibJournalMark::Info, wxT("base '%s': its MCP is the first server's, not this one's (route %u)"),
+			instance.m_name, m_route);
+	}
+	else if (ibMcpServer* const mcp = ibApplicationInstance::GetMcpServer(applicationInstance)) {
 		wxString refusal;
 		mcp->LoadSettings(session.Get());
 		unsigned long port = 0;

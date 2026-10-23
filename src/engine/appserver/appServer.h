@@ -20,7 +20,9 @@ class ibAppServer {
 public:
 	// `workerBase` — the one base the cluster started this server for: served on this machine alone, on the first free
 	// port of ibPort::Workers, said on stdout (ibWorkerPipe). Empty — refused: nothing else starts a server.
-	ibAppServer(ibServerConfig& config, const wxString& locale, const ibString& workerBase);
+	// `route` — which of the base's servers this one is (server.conf's Processes): its clients' tokens end in it, and
+	// the base's assistant access is the first one's. 0 — the base's only one.
+	ibAppServer(ibServerConfig& config, const wxString& locale, const ibString& workerBase, unsigned route);
 	~ibAppServer();
 
 	// The whole life: open, serve until Ctrl+C / SIGTERM / the console closing, stop. The process's exit code.
@@ -37,6 +39,7 @@ private:
 	ibServerConfig&              m_config;
 	wxString                     m_locale;
 	ibString                     m_workerBase;
+	unsigned                     m_route;
 	std::vector<ibSessionHolder> m_sessions;   // one per base served — the base is reached through its session
 
 	// The clients of each base, working through the protocol (frmserver) — one host per base served, by the

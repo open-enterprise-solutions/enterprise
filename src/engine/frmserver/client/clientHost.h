@@ -41,7 +41,9 @@ class ibClientFrame;
 class FRMSERVER_API ibClientHost {
 public:
 
-	explicit ibClientHost(ibApplicationInstance* applicationInstance);
+	// `route` — which of its base's servers this process is (appserver --route): the tokens it hands out end in it, so the
+	// cluster carries a client that comes back to this one (ibSessionToken::WithRoute). 0 — the base's only one.
+	explicit ibClientHost(ibApplicationInstance* applicationInstance, unsigned route = 0);
 	~ibClientHost();
 
 	// THE CALL — the method, its parameters, the answer into `result`; false with why it was refused in `refusal`
@@ -167,6 +169,7 @@ private:
 	void RoundBody();
 
 	ibApplicationInstance* m_applicationInstance;
+	unsigned               m_route;
 
 	mutable std::mutex                             m_mutex;
 	std::map<ibString, std::shared_ptr<Client>>    m_clients;

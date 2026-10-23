@@ -7,9 +7,12 @@
 // servers). The cluster sends the list of its servers as the socket opens and again whenever one of them changes; the
 // tray sends a verb, for one base or for the whole cluster. Both are JSON (ibJsonProvider), written and read here alone:
 //
-//   cluster → tray   { "Port": 7373, "Servers": [ { "Base": "trade", "State": "serving", "Pid": 4120, "Falls": 0,
-//                      "Cause": "…" }, … ] }
-//   tray → cluster   { "Verb": "restart", "Base": "trade" }      { "Verb": "stop-cluster" }
+//   cluster → tray   { "Port": 7373, "Servers": [ { "Base": "trade", "Route": 1, "State": "serving", "Pid": 4120,
+//                      "Falls": 0, "Cause": "…" }, … ] }
+//   tray → cluster   { "Verb": "restart", "Base": "trade", "Route": 2 }      { "Verb": "stop-cluster" }
+//
+// A base runs as many servers as server.conf's Processes says, numbered from 1 — the route (ibSessionToken::WithRoute).
+// A verb is for one server, named by both.
 //
 // The tray starts the cluster too, when the socket finds none: the service of that name, if one is installed — the
 // program beside it otherwise. Stopped, it is the same either way: the verb.
@@ -35,6 +38,7 @@ enum class ibClusterState {
 // ONE SERVER, as the list says it.
 struct ibClusterServer {
 	ibString       m_base;
+	unsigned       m_route = 1;   // which of the base's servers
 	ibClusterState m_state = ibClusterState::Stopped;
 	long           m_pid = 0;
 	unsigned       m_falls = 0;
@@ -55,6 +59,7 @@ namespace ibClusterControl {
 	inline constexpr const char* Port      = "Port";
 	inline constexpr const char* Servers   = "Servers";
 	inline constexpr const char* Base      = "Base";
+	inline constexpr const char* Route     = "Route";
 	inline constexpr const char* State     = "State";
 	inline constexpr const char* Pid       = "Pid";
 	inline constexpr const char* Falls     = "Falls";
@@ -109,6 +114,7 @@ namespace ibClusterControl {
 		for (const ibClusterServer& server : servers) {
 			const std::shared_ptr<ibDataNode> item = std::make_shared<ibDataNode>();
 			item->SetValue(Base, server.m_base);
+			item->SetValue(Route, static_cast<std::int32_t>(server.m_route));
 			item->SetValue(State, ibString(Word(server.m_state)));
 			item->SetValue(Pid, static_cast<std::int32_t>(server.m_pid));
 			item->SetValue(Falls, static_cast<std::int32_t>(server.m_falls));
@@ -137,6 +143,7 @@ namespace ibClusterControl {
 			const ibDataNode& read = *item.AsChild();
 			ibClusterServer server;
 			server.m_base      = read.GetValue<ibString>(Base);
+			server.m_route     = static_cast<unsigned>(read.GetValue<std::int32_t>(Route));
 			server.m_state     = StateOf(read.GetValue<ibString>(State));
 			server.m_pid       = read.GetValue<std::int32_t>(Pid);
 			server.m_falls     = static_cast<unsigned>(read.GetValue<std::int32_t>(Falls));
@@ -146,24 +153,33 @@ namespace ibClusterControl {
 		return true;
 	}
 
-	// A VERB — written by the tray, read by the cluster: for the server of `base`, or, `base` empty, for the cluster.
-	// False: not a verb.
-	inline ibString WriteVerb(const char* verb, const ibString& base)
+	// A VERB — written by the tray, read by the cluster: for the cluster…
+	inline ibString WriteVerb(const char* verb)
 	{
 		ibDataNode message;
 		message.SetValue(Verb, ibString(verb));
-		if (!base.IsEmpty())
-			message.SetValue(Base, base);
 		return Text(message);
 	}
 
-	inline bool ReadVerb(const ibString& text, ibString& verb, ibString& base)
+	// …or for one server of it, by its base and its route.
+	inline ibString WriteVerb(const char* verb, const ibClusterServer& server)
+	{
+		ibDataNode message;
+		message.SetValue(Verb, ibString(verb));
+		message.SetValue(Base, server.m_base);
+		message.SetValue(Route, static_cast<std::int32_t>(server.m_route));
+		return Text(message);
+	}
+
+	// `server` — the base and the route named; the base empty — the verb is the cluster's. False: not a verb.
+	inline bool ReadVerb(const ibString& text, ibString& verb, ibClusterServer& server)
 	{
 		ibDataNode message;
 		if (!ibJsonProvider().Read(text, message))
 			return false;
 		verb = message.GetValue<ibString>(Verb);
-		base = message.GetValue<ibString>(Base);
+		server.m_base  = message.GetValue<ibString>(Base);
+		server.m_route = static_cast<unsigned>(message.GetValue<std::int32_t>(Route));
 		return !verb.IsEmpty();
 	}
 }

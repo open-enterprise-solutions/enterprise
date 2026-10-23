@@ -1,14 +1,16 @@
 # =============================================================================
 # OES Enterprise — the application cluster
-# The server folder served by an application server for each base (appCluster.h): it starts them and carries the
-# clients' sockets on to them — by hand in a console, or as a service of the system (clusterService.h). It links the
-# core alone — no backend, no protocol. Of wx — the base. Its tray is appcluster-tray.
+# The server folder served by application servers, one or more for each base (appCluster.h): it starts them and
+# carries the clients' sockets on to them (clusterRoute.h) — by hand in a console, or as a service of the system
+# (clusterService.h). It links the core alone — no backend, and of the protocol only its names (protocol/protocol.h,
+# a header). Of wx — the base. Its tray is appcluster-tray.
 # =============================================================================
 
 cmake_minimum_required(VERSION 3.16)
 
 set(APPCLUSTER_SOURCES
     appCluster.cpp
+    clusterRoute.cpp
     clusterService.cpp
     clusterWorker.cpp
 )

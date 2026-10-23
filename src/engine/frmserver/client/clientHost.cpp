@@ -323,8 +323,8 @@ void DispatchEvent(ibClientFrame* frame, const ibDataNode& call)
 
 } // namespace
 
-ibClientHost::ibClientHost(ibApplicationInstance* applicationInstance)
-	: m_applicationInstance(applicationInstance)
+ibClientHost::ibClientHost(ibApplicationInstance* applicationInstance, unsigned route)
+	: m_applicationInstance(applicationInstance), m_route(route)
 {
 	{
 		std::lock_guard<std::mutex> lock(s_hostsMutex);
@@ -403,7 +403,10 @@ bool ibClientHost::ResumeByToken(const ibDataNode& params, ibDataNode& result, i
 {
 	unsigned char raw[ibSessionToken::kBytes];
 	unsigned char digest[ibSessionToken::kDigest];
-	const wxString token = params.GetValue<wxString>(ibProtocol::ibLogin::Token);
+	// The route it ends in was the cluster's to read; the bearer is the hex.
+	wxString token;
+	unsigned route = 0;
+	ibSessionToken::SplitRoute(params.GetValue<wxString>(ibProtocol::ibLogin::Token), token, route);
 	const auto refuse = [&refusal, &error](const wxString& text) {
 		refusal = ibProtocol::ibRefusal::LoginRefused;
 		error = text;
@@ -492,8 +495,9 @@ bool ibClientHost::RememberToken(Client& client, ibDataNode& result, ibProtocol:
 		std::memcpy(client.tokenDigest, digest, ibSessionToken::kDigest);
 		client.hasToken = true;
 	}
-	// The plaintext, once, on this answer. It is not kept.
-	result.SetValue(ibProtocol::ibLogin::Token, ibSessionToken::Hex(raw.data(), raw.size()));
+	// The plaintext, once, on this answer, ending in this server's route. It is not kept.
+	result.SetValue(ibProtocol::ibLogin::Token,
+		ibSessionToken::WithRoute(ibSessionToken::Hex(raw.data(), raw.size()), m_route));
 	return true;
 }
 
@@ -1345,7 +1349,9 @@ bool ibClientHost::Debug(Client& client, const ibDataNode& params, ibDataNode& r
 			std::memcpy(client.channelDigest, digest, ibSessionToken::kDigest);
 			client.hasChannelKey = true;
 		}
-		result.SetValue(ibProtocol::ibDebug::Channel, ibSessionToken::Hex(raw.data(), raw.size()));
+		// …ending in this server's route, as the token does: the second connection is carried to the same server.
+		result.SetValue(ibProtocol::ibDebug::Channel,
+			ibSessionToken::WithRoute(ibSessionToken::Hex(raw.data(), raw.size()), m_route));
 		return true;
 	}
 
@@ -1354,8 +1360,11 @@ bool ibClientHost::Debug(Client& client, const ibDataNode& params, ibDataNode& r
 		// once. A connection without a notifier is bound all the same, and is told nothing.
 		unsigned char raw[ibSessionToken::kBytes];
 		unsigned char digest[ibSessionToken::kDigest];
+		wxString key;
+		unsigned route = 0;
+		ibSessionToken::SplitRoute(params.GetValue<wxString>(ibProtocol::ibDebug::Channel), key, route);
 		const bool read = connection != nullptr
-			&& ibSessionToken::ParseHex(params.GetValue<wxString>(ibProtocol::ibDebug::Channel), raw)
+			&& ibSessionToken::ParseHex(key, raw)
 			&& ibSessionToken::Hash(raw, ibSessionToken::kBytes, digest);
 		bool bound = false;
 		{

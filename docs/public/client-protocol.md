@@ -479,6 +479,10 @@ WebSocket call whose connection is not the one that logged in is 401, including 
 `Token` is 32 bytes from a CSPRNG, returned once, on the password `login`. The server stores SHA-256 of it and
 compares that digest in constant time. The answer of `login` `{Token}` does not carry a new token.
 
+A server of the application cluster hands it out as `<hex>.<route>`: which of the base's servers holds the session.
+The client keeps the token as given. The cluster reads the first message of a socket and carries `login` `{Token}`
+to that server; the debugger's `Channel` key ends in the route the same way.
+
 ### The slot
 
 Only a client that named `resume` in `login`'s `Features`, and only when the server offers the window.

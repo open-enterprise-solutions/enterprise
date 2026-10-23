@@ -1,11 +1,11 @@
 #ifndef __APP_CLUSTER_H__
 #define __APP_CLUSTER_H__
 
-// THE APPLICATION CLUSTER — the server folder served by a server process for each base (appserver --worker=<base>): it
-// reads the folder's config, starts the servers, holds the port the clients come in by and carries each client's socket
-// on to the server of its base, and starts a server again when it falls. It runs no session and no code of a base, so
-// there is nothing in it to fall: a server that falls takes only its own base's clients with it
-// (docs/private/appcluster.md). It links the core alone, and of wx the base: it has no window. Started by hand it
+// THE APPLICATION CLUSTER — the server folder served by server processes, as many for each base as its Processes says
+// (appserver --worker=<base> --route=<n>): it reads the folder's config, starts the servers, holds the port the clients
+// come in by and carries each client's socket on to a server of its base — the one its session lives in, else the least
+// busy (ibClusterRoute) — and starts a server again when it falls. It runs no session and no code of a base, so
+// there is nothing in it to fall: a server that falls takes only its own clients with it (docs/private/appcluster.md). It links the core alone, and of wx the base: it has no window. Started by hand it
 // narrates in its console; as a service of the system (--service, clusterService.h) it has none. What it holds is shown
 // and steered by its tray (appcluster-tray), over the control socket (core/server/clusterControl.h).
 
@@ -50,8 +50,8 @@ public:
 	// Every server told to stop; the cluster goes once the last of them has gone.
 	void Stop();
 
-	// A server's state changed: every tray is told the list again — and, the cluster stopping, it goes with the last
-	// server.
+	// A server's state changed: every tray is told the list again; a base's first server serving, its others held are
+	// started — and, the cluster stopping, it goes with the last server.
 	void OnWorkerChanged();
 
 private:
@@ -73,6 +73,7 @@ private:
 	ibString                                      m_locale;
 	std::unique_ptr<ibServerConfig>               m_config;
 	std::vector<std::unique_ptr<ibClusterWorker>> m_workers;
+	std::vector<ibClusterWorker*>                 m_held;    // a base's others, not started till its first serves
 	ibHttpServer                                  m_http;
 	unsigned short                                m_port = 0;
 	ibString                                      m_token;   // what a tray opens the control socket with

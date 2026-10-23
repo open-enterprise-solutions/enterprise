@@ -324,7 +324,7 @@ The root `CMakeLists.txt` adds fifteen engine subdirectories, each with its own
 | fileserver | shared lib (`FILESERVER_EXPORTS`) |
 | frmclient | shared lib (`FRMCLIENT_EXPORTS`, links `core` + `protocol`) |
 | appserver | executable (console) — the application server; `daemon` is kept as an alias target |
-| appcluster | executable (console, or a service) — a server per base of the folder; links `core` alone |
+| appcluster | executable (console, or a service) — one or more servers per base of the folder; links `core` alone |
 | appcluster-tray | executable (GUI) — the cluster's tray; links `core` alone |
 | enterprise | executable (GUI) |
 | enterprise-thin | executable (GUI) — the thin client |

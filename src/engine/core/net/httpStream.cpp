@@ -9,8 +9,10 @@ std::string ibErrorText(const std::error_code& code)
 {
 #ifdef __WINDOWS__
 	// The standard library asks FormatMessageA: the ANSI code page, Cyrillic on a Russian Windows, which read as UTF-8
-	// is nothing at all — "Assistant access did not start: ." (2026-10-23). wx asks in Unicode.
-	if (code.category() == std::system_category())
+	// is nothing at all — "Assistant access did not start: ." (2026-10-23). wx asks in Unicode. So does asio, under a
+	// category of its own ("asio.system") for the same codes — every socket's error is of it: "the server's socket
+	// dropped: " said nothing more (2026-10-24, a cluster's server killed).
+	if (code.category() == std::system_category() || code.category() == asio::system_category())
 		return std::string(wxSysErrorMsgStr(static_cast<unsigned long>(code.value())).utf8_str());
 #endif
 	return code.message();

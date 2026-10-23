@@ -91,6 +91,26 @@ bool ParseHex(const wxString& hex, unsigned char out[kBytes])
 	return true;
 }
 
+wxString WithRoute(const wxString& hex, unsigned route)
+{
+	if (route == 0)
+		return hex;
+	return hex + wxString::Format(wxT(".%u"), route);
+}
+
+void SplitRoute(const wxString& token, wxString& hex, unsigned& route)
+{
+	route = 0;
+	const int dot = token.Find(wxT('.'), true);
+	unsigned long number = 0;
+	if (dot == wxNOT_FOUND || !token.Mid(dot + 1).ToULong(&number) || number == 0 || number > 0xFFFF) {
+		hex = token;
+		return;
+	}
+	hex = token.Left(dot);
+	route = static_cast<unsigned>(number);
+}
+
 bool DigestEqual(const unsigned char* left, const unsigned char* right)
 {
 	if (left == nullptr || right == nullptr)

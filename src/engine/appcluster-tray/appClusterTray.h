@@ -53,8 +53,9 @@ public:
 	const std::vector<ibClusterServer>& GetServers() const { return m_servers; }
 	const ibServerConfig&               GetConfig() const { return *m_config; }
 
-	// A verb for the server of `base`, or, `base` empty, for the cluster (ibClusterControl).
-	void Send(const char* verb, const ibString& base);
+	// A verb for the cluster, or for one server of it (ibClusterControl).
+	void Send(const char* verb);
+	void Send(const char* verb, const ibClusterServer& server);
 
 	// THE CLUSTER STARTED — its service, if one is installed; the program beside the tray otherwise, a process of its own.
 	void StartCluster();

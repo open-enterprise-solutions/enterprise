@@ -25,6 +25,7 @@ static const wxCmdLineEntryDesc s_cmdLineDesc[] = {
 	{ wxCMD_LINE_OPTION, "lc", "locale",       "The platform's locale for a base that names none (default: backend.conf's Locale, else the system's)", wxCMD_LINE_VAL_STRING, 0 },
 	{ wxCMD_LINE_OPTION, "sp", "set-password", "Seal a password into the config: <base>/Password or <base>/IbPassword, typed at the keyboard", wxCMD_LINE_VAL_STRING, 0 },
 	{ wxCMD_LINE_OPTION, "w",  "worker",       "Serve one base for the cluster that started this server (appcluster): its port said on standard output, stopped by 'stop' on standard input or by its closing", wxCMD_LINE_VAL_STRING, 0 },
+	{ wxCMD_LINE_OPTION, "r",  "route",        "Which of the base's servers this one is (server.conf's Processes, from 1): its sessions' tokens end in it, and the cluster carries their clients back to it", wxCMD_LINE_VAL_NUMBER, 0 },
 	{ wxCMD_LINE_SWITCH, "a",  "again",        "Started again after a fall (by the cluster): the first error takes no dump - the first start took one", wxCMD_LINE_VAL_NONE, 0 },
 	{ wxCMD_LINE_SWITCH, "h",  "help",         "Show this help message.", wxCMD_LINE_VAL_NONE,   wxCMD_LINE_OPTION_HELP },
 	{ wxCMD_LINE_NONE,   nullptr, nullptr,     nullptr,                   wxCMD_LINE_VAL_NONE,   0 }
@@ -134,6 +135,8 @@ int main(int argc, char** argv)
 	parser.Found(wxT("dir"), &folder);
 	parser.Found(wxT("locale"), &locale);
 	parser.Found(wxT("worker"), &workerBase);
+	long route = 0;
+	parser.Found(wxT("route"), &route);
 	ibServerConfig config(folder);
 
 	if (parser.Found(wxT("set-password"), &sealTarget))
@@ -143,5 +146,5 @@ int main(int argc, char** argv)
 	::DisableProcessWindowsGhosting();
 #endif
 
-	return ibAppServer(config, locale, workerBase).Run();
+	return ibAppServer(config, locale, workerBase, route > 0 ? static_cast<unsigned>(route) : 0).Run();
 }

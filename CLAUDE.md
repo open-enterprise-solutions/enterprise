@@ -142,7 +142,7 @@ enterprise/
         ├── designer/        # designer.exe  (IDE)
         ├── launcher/        # launcher.exe  (connection chooser)
         ├── appserver/       # appserver.exe (the application server)
-        ├── appcluster/      # appcluster.exe (a server per base, the port, restarts; console or a service)
+        ├── appcluster/      # appcluster.exe (servers per base, the port and routing, restarts; console or a service)
         ├── appcluster-tray/ # appcluster-tray.exe (the cluster's tray: its servers, its verbs, starting it)
         ├── codeRunner/      # codeRunner.exe
         └── simplePlugin/    # simplePlugin.dll (example)

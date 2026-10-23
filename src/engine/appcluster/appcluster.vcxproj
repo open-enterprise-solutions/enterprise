@@ -182,11 +182,13 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="appCluster.cpp" />
+    <ClCompile Include="clusterRoute.cpp" />
     <ClCompile Include="clusterService.cpp" />
     <ClCompile Include="clusterWorker.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="appCluster.h" />
+    <ClInclude Include="clusterRoute.h" />
     <ClInclude Include="clusterService.h" />
     <ClInclude Include="clusterWorker.h" />
   </ItemGroup>

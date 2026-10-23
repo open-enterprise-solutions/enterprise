@@ -10,11 +10,11 @@
 
 #include "core/diagnostics/crashGuard.h"   // ibCrashGuard::Install — the process's journal and dumps
 #include "core/exception.h"                // ibCoreException — the listener refused, with the reason
-#include "core/net/webSocketRelay.h"
 #include "core/fileSystem.h"               // ibBackendConfPath — the certificate the port speaks TLS over
 #include "core/server/clusterControl.h"
 #include "core/server/listener.h"
 
+#include "clusterRoute.h"
 #include "clusterService.h"
 #include "clusterWorker.h"
 
@@ -153,22 +153,21 @@ bool ibAppCluster::OnInit()
 	m_config->AssignMcpPorts(instances);
 	if (instances.empty())
 		return Refuse(ibString::Format(wxT("the config %s names no base"), m_config->GetConfPath()));
-	for (const ibConfiguredInstance& instance : instances)
-		m_workers.push_back(std::make_unique<ibClusterWorker>(*this, instance.m_name));
 
-	// EACH BASE'S CLIENTS — every socket carried on to the server of its base, on this machine, as it was asked for (the
-	// path and its query), in the clear: TLS ends here, at the port. A server not serving — starting, fallen — is not
-	// reached: the client is told so and comes again (the communicator logs in anew).
+	// EACH BASE'S SERVERS, as many as its Processes, and its clients — every socket carried on to one of them
+	// (ibClusterRoute), on this machine, as it was asked for (the path and its query), in the clear: TLS ends here, at the
+	// port. A server not serving — starting, fallen — is not reached: the client is told so and comes again (the
+	// communicator logs in anew).
 	asio::io_context& io = m_http.GetContext();
-	for (const std::unique_ptr<ibClusterWorker>& worker : m_workers) {
-		const ibClusterWorker* const held = worker.get();
-		const std::string path = "/" + held->GetBase().ToUtf8() + "/client";
-		m_http.WebSocket(path, [&io, held](const std::shared_ptr<ibWebSocket>& socket) {
-			const ibString base = held->GetBase();
-			return std::make_shared<ibWebSocketRelay>(io, "127.0.0.1", held->GetPort(), nullptr,
-				socket->GetRequest().GetTarget(), socket, [base](const ibString& reason) {
-					ibAppClusterSay(ibJournalMark::Warning, wxT("base '%s': %s"), base, reason);
-				});
+	for (const ibConfiguredInstance& instance : instances) {
+		std::vector<ibClusterWorker*> workers;
+		for (unsigned route = 1; route <= instance.m_processes; ++route) {
+			m_workers.push_back(std::make_unique<ibClusterWorker>(*this, ibClusterServer{ instance.m_name, route }));
+			workers.push_back(m_workers.back().get());
+		}
+		const std::string path = "/" + instance.m_name.ToUtf8() + "/client";
+		m_http.WebSocket(path, [&io, workers](const std::shared_ptr<ibWebSocket>& socket) {
+			return std::make_shared<ibClusterRoute>(io, workers, socket);
 		});
 	}
 
@@ -224,15 +223,22 @@ bool ibAppCluster::OnInit()
 	if (!written)
 		m_config->WritePort(m_port);
 
-	for (const std::unique_ptr<ibClusterWorker>& worker : m_workers)
-		worker->Start();
+	// Each base's first server; its others once it serves (OnWorkerChanged) — what a base's first opening makes, it makes
+	// alone.
+	for (const std::unique_ptr<ibClusterWorker>& worker : m_workers) {
+		if (worker->GetServer().m_route == 1)
+			worker->Start();
+		else
+			m_held.push_back(worker.get());
+	}
 
 	m_timer.Bind(wxEVT_TIMER, &ibAppCluster::OnTimer, this);
 	m_timer.Start(kTimerMs);
 
-	ibAppClusterSay(ibJournalMark::Info, wxT("serving %s on port %u (%s): %u base(s)"), m_config->GetFolder(),
-		static_cast<unsigned>(m_port), options.m_httpsPort ? wxT("oess://, TLS") : wxT("oes://, this machine only"),
-		static_cast<unsigned>(m_workers.size()));
+	ibAppClusterSay(ibJournalMark::Info, wxT("serving %s on port %u (%s): %u base(s), %u server(s)"),
+		m_config->GetFolder(), static_cast<unsigned>(m_port),
+		options.m_httpsPort ? wxT("oess://, TLS") : wxT("oes://, this machine only"),
+		static_cast<unsigned>(instances.size()), static_cast<unsigned>(m_workers.size()));
 	return true;
 }
 
@@ -269,15 +275,8 @@ void ibAppCluster::OnWorkerChanged()
 	if (!m_trays.empty()) {
 		std::vector<ibClusterServer> servers;
 		servers.reserve(m_workers.size());
-		for (const std::unique_ptr<ibClusterWorker>& worker : m_workers) {
-			ibClusterServer server;
-			server.m_base      = worker->GetBase();
-			server.m_state     = worker->GetState();
-			server.m_pid       = worker->GetPid();
-			server.m_falls     = worker->GetFalls();
-			server.m_cause     = worker->GetCause();
-			servers.push_back(std::move(server));
-		}
+		for (const std::unique_ptr<ibClusterWorker>& worker : m_workers)
+			servers.push_back(worker->GetServer());
 		const ibString list = ibClusterControl::WriteServers(m_port, servers);
 		for (const std::weak_ptr<ibWebSocket>& tray : m_trays) {
 			if (const std::shared_ptr<ibWebSocket> open = tray.lock())
@@ -285,10 +284,27 @@ void ibAppCluster::OnWorkerChanged()
 		}
 	}
 
-	if (!m_stopping)
+	if (!m_stopping) {
+		// The servers held till their base's first serves — taken out of the hold before they are started: a start tells
+		// this again.
+		std::vector<ibClusterWorker*> ready;
+		m_held.erase(std::remove_if(m_held.begin(), m_held.end(), [this, &ready](ibClusterWorker* held) {
+			const bool first = std::any_of(m_workers.begin(), m_workers.end(),
+				[held](const std::unique_ptr<ibClusterWorker>& worker) {
+					const ibClusterServer& server = worker->GetServer();
+					return server.m_base == held->GetServer().m_base && server.m_route == 1
+						&& server.m_state == ibClusterState::Serving;
+				});
+			if (first)
+				ready.push_back(held);
+			return first;
+		}), m_held.end());
+		for (ibClusterWorker* const worker : ready)
+			worker->Start();
 		return;
+	}
 	for (const std::unique_ptr<ibClusterWorker>& worker : m_workers) {
-		if (worker->GetState() != ibClusterState::Stopped)
+		if (worker->GetServer().m_state != ibClusterState::Stopped)
 			return;
 	}
 	ExitMainLoop();
@@ -296,8 +312,9 @@ void ibAppCluster::OnWorkerChanged()
 
 void ibAppCluster::Receive(const ibString& message)
 {
-	ibString verb, base;
-	if (!ibClusterControl::ReadVerb(message, verb, base)) {
+	ibString verb;
+	ibClusterServer named;
+	if (!ibClusterControl::ReadVerb(message, verb, named)) {
 		ibAppClusterSay(ibJournalMark::Warning, wxT("a tray's message is not a verb: %s"), message);
 		return;
 	}
@@ -308,20 +325,28 @@ void ibAppCluster::Receive(const ibString& message)
 		Stop();
 		return;
 	}
-	for (const std::unique_ptr<ibClusterWorker>& worker : m_workers) {
-		if (worker->GetBase() != base)
-			continue;
-		if (verb == ibClusterControl::Start)
-			worker->Start();
-		else if (verb == ibClusterControl::Stop)
-			worker->Stop();
-		else if (verb == ibClusterControl::Restart)
-			worker->Restart();
-		else
-			ibAppClusterSay(ibJournalMark::Warning, wxT("a tray's verb is not one: %s"), verb);
+	if (verb != ibClusterControl::Start && verb != ibClusterControl::Stop && verb != ibClusterControl::Restart) {
+		ibAppClusterSay(ibJournalMark::Warning, wxT("a tray's verb is not one: %s"), verb);
 		return;
 	}
-	ibAppClusterSay(ibJournalMark::Warning, wxT("a tray named no base of the cluster: '%s'"), base);
+	// The server named, by its base and route. Held, it is held no more: the tray decides it.
+	const auto found = std::find_if(m_workers.begin(), m_workers.end(),
+		[&named](const std::unique_ptr<ibClusterWorker>& worker) {
+			return worker->GetServer().m_base == named.m_base && worker->GetServer().m_route == named.m_route;
+		});
+	if (found == m_workers.end()) {
+		ibAppClusterSay(ibJournalMark::Warning, wxT("a tray named no server of the cluster: '%s' #%u"), named.m_base,
+			named.m_route);
+		return;
+	}
+	ibClusterWorker* const worker = found->get();
+	m_held.erase(std::remove(m_held.begin(), m_held.end(), worker), m_held.end());
+	if (verb == ibClusterControl::Start)
+		worker->Start();
+	else if (verb == ibClusterControl::Stop)
+		worker->Stop();
+	else
+		worker->Restart();
 }
 
 bool ibAppCluster::Refuse(const ibString& reason)

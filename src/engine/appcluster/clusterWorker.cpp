@@ -33,8 +33,8 @@ ibString ServerProgram()
 
 } // namespace
 
-ibClusterWorker::ibClusterWorker(ibAppCluster& cluster, const ibString& base) :
-	m_cluster(cluster), m_base(base)
+ibClusterWorker::ibClusterWorker(ibAppCluster& cluster, const ibClusterServer& server) :
+	m_cluster(cluster), m_server(server)
 {
 	m_timer.Bind(wxEVT_TIMER, &ibClusterWorker::OnTimer, this);
 }
@@ -57,13 +57,13 @@ void ibClusterWorker::Start()
 	if (m_process != nullptr)
 		return;
 
-	ibString command = ibString::Format(wxT("\"%s\" --dir=\"%s\" --worker=\"%s\""), ServerProgram(),
-		m_cluster.GetConfig().GetFolder(), m_base);
+	ibString command = ibString::Format(wxT("\"%s\" --dir=\"%s\" --worker=\"%s\" --route=%u"), ServerProgram(),
+		m_cluster.GetConfig().GetFolder(), m_server.m_base, m_server.m_route);
 	if (!m_cluster.GetLocale().IsEmpty())
 		command += ibString::Format(wxT(" --locale=%s"), m_cluster.GetLocale());
 	// Started again after a fall: its first start took the dump of its first error, and one at every start would fill
 	// the disk while the fault stays (a DBMS that is down).
-	if (m_falls != 0)
+	if (m_server.m_falls != 0)
 		command += wxT(" --again");
 
 	m_process = new wxProcess();
@@ -72,25 +72,25 @@ void ibClusterWorker::Start()
 	m_stdout.clear();
 	m_stderr.clear();
 	m_lastError.clear();
-	m_cause.clear();
+	m_server.m_cause.clear();
 	m_started = std::chrono::steady_clock::now();
 	// A group of its own: Ctrl+C in the cluster's console is the cluster's, which stops its servers itself — reaching a
 	// server past it, it would be one gone untold, a fall.
-	m_pid = wxExecute(command, wxEXEC_ASYNC | wxEXEC_HIDE_CONSOLE | wxEXEC_MAKE_GROUP_LEADER, m_process);
-	if (m_pid == 0) {
+	m_server.m_pid = wxExecute(command, wxEXEC_ASYNC | wxEXEC_HIDE_CONSOLE | wxEXEC_MAKE_GROUP_LEADER, m_process);
+	if (m_server.m_pid == 0) {
 		// Not started (wx said why) — the process object is still ours, and it falls as one that started would.
 		delete m_process;
 		m_process = nullptr;
-		m_cause = ibString::Format(wxT("%s did not start"), ServerProgram());
-		ibAppClusterSay(ibJournalMark::Error, wxT("base '%s': %s"), m_base, m_cause);
-		++m_falls;
+		m_server.m_cause = ibString::Format(wxT("%s did not start"), ServerProgram());
+		ibAppClusterSay(ibJournalMark::Error, wxT("base %s: %s"), Name(), m_server.m_cause);
+		++m_server.m_falls;
 		m_delay = std::min(m_delay * 2, kLongestWait);
 		m_timer.StartOnce(static_cast<int>(std::chrono::milliseconds(m_delay).count()));
 		SetState(ibClusterState::Fallen);
 		return;
 	}
 
-	ibAppClusterSay(ibJournalMark::Info, wxT("base '%s': its server started, process %ld"), m_base, m_pid);
+	ibAppClusterSay(ibJournalMark::Info, wxT("base %s: its server started, process %ld"), Name(), m_server.m_pid);
 	SetState(ibClusterState::Starting);
 }
 
@@ -138,7 +138,7 @@ void ibClusterWorker::ReadPipes()
 		if (port == 0 || port > 65535)
 			return;
 		m_port.store(static_cast<std::uint16_t>(port));
-		ibAppClusterSay(ibJournalMark::Info, wxT("base '%s' is served: process %ld, port %lu"), m_base, m_pid, port);
+		ibAppClusterSay(ibJournalMark::Info, wxT("base %s is served: process %ld, port %lu"), Name(), m_server.m_pid, port);
 		SetState(ibClusterState::Serving);
 	});
 	TakeLines(m_process->GetErrorStream(), m_stderr, [this](const std::string& line) {
@@ -185,30 +185,31 @@ void ibClusterWorker::OnEnded(wxProcessEvent& event)
 	// Freed once this event is done with it — wx leaves that to whoever handled it.
 	wxTheApp->ScheduleForDestruction(m_process);
 	m_process = nullptr;
-	const long pid = m_pid;
-	m_pid = 0;
+	const long pid = m_server.m_pid;
+	m_server.m_pid = 0;
 	m_port.store(0);
 
-	switch (m_state) {
+	switch (m_server.m_state) {
 	case ibClusterState::Stopping:
-		ibAppClusterSay(ibJournalMark::Info, wxT("base '%s': its server stopped, process %ld"), m_base, pid);
+		ibAppClusterSay(ibJournalMark::Info, wxT("base %s: its server stopped, process %ld"), Name(), pid);
 		SetState(ibClusterState::Stopped);
 		break;
 	case ibClusterState::Restarting:
-		ibAppClusterSay(ibJournalMark::Info, wxT("base '%s': its server stopped, process %ld - started again"), m_base, pid);
+		ibAppClusterSay(ibJournalMark::Info, wxT("base %s: its server stopped, process %ld - started again"), Name(), pid);
 		Start();
 		break;
 	default: {
 		// FALLEN — started again: at once after a long life, later and later after short ones (a base that does not open
 		// would otherwise be started without a pause).
-		++m_falls;
+		++m_server.m_falls;
 		const bool longLife = std::chrono::steady_clock::now() - m_started >= kLongLife;
 		m_delay = longLife ? std::chrono::seconds(1) : std::min(m_delay * 2, kLongestWait);
-		m_cause = m_lastError;
+		m_server.m_cause = m_lastError;
 		// A WARNING, not an error: the cluster did what it is for. The fault is the server's, in the server's journal; an
 		// error here would take the cluster's own dump for a fall it handled.
-		ibAppClusterSay(ibJournalMark::Warning, wxT("base '%s': its server fell, process %ld, code %d: %s - started again in %lld s"),
-			m_base, pid, event.GetExitCode(), m_cause.IsEmpty() ? ibString(wxT("no error said")) : m_cause,
+		ibAppClusterSay(ibJournalMark::Warning, wxT("base %s: its server fell, process %ld, code %d: %s - started again in %lld s"),
+			Name(), pid, event.GetExitCode(),
+			m_server.m_cause.IsEmpty() ? ibString(wxT("no error said")) : m_server.m_cause,
 			static_cast<long long>(m_delay.count()));
 		m_timer.StartOnce(static_cast<int>(std::chrono::milliseconds(m_delay).count()));
 		SetState(ibClusterState::Fallen);
@@ -219,19 +220,25 @@ void ibClusterWorker::OnEnded(wxProcessEvent& event)
 
 void ibClusterWorker::OnTimer(wxTimerEvent&)
 {
-	if (m_state == ibClusterState::Fallen) {
+	const ibClusterState state = m_server.m_state;
+	if (state == ibClusterState::Fallen) {
 		Start();
 		return;
 	}
-	if ((m_state == ibClusterState::Stopping || m_state == ibClusterState::Restarting) && m_pid != 0) {
-		ibAppClusterSay(ibJournalMark::Warning, wxT("base '%s': its server did not stop in %d s - killed, process %ld"),
-			m_base, kStopWaitMs / 1000, m_pid);
-		wxKill(m_pid, wxSIGKILL, nullptr, wxKILL_CHILDREN);
+	if ((state == ibClusterState::Stopping || state == ibClusterState::Restarting) && m_server.m_pid != 0) {
+		ibAppClusterSay(ibJournalMark::Warning, wxT("base %s: its server did not stop in %d s - killed, process %ld"),
+			Name(), kStopWaitMs / 1000, m_server.m_pid);
+		wxKill(m_server.m_pid, wxSIGKILL, nullptr, wxKILL_CHILDREN);
 	}
 }
 
 void ibClusterWorker::SetState(ibClusterState state)
 {
-	m_state = state;
+	m_server.m_state = state;
 	m_cluster.OnWorkerChanged();
+}
+
+ibString ibClusterWorker::Name() const
+{
+	return ibString::Format(wxT("'%s' #%u"), m_server.m_base, m_server.m_route);
 }

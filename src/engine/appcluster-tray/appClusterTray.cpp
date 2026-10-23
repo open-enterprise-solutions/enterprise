@@ -241,10 +241,16 @@ void ibAppClusterTray::OnClosed(const ibString& reason)
 	m_tray->Draw();
 }
 
-void ibAppClusterTray::Send(const char* verb, const ibString& base)
+void ibAppClusterTray::Send(const char* verb)
 {
 	if (m_socket != nullptr)
-		m_socket->Send(ibClusterControl::WriteVerb(verb, base));
+		m_socket->Send(ibClusterControl::WriteVerb(verb));
+}
+
+void ibAppClusterTray::Send(const char* verb, const ibClusterServer& server)
+{
+	if (m_socket != nullptr)
+		m_socket->Send(ibClusterControl::WriteVerb(verb, server));
 }
 
 void ibAppClusterTray::StartCluster()

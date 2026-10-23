@@ -24,6 +24,8 @@
 //   Kind=firebird             firebird — a file base, in <server folder>/<Id> unless Path names another;
 //                             postgresql — a server one: Server, Port, Database, User, Password
 //   Id=…                      written at the first start — the folder keeps it, not the name
+//   Processes=1               how many servers the cluster runs for the base, side by side: a client goes to the one
+//                             its session lives in (ibSessionToken::WithRoute), a new one to the least busy
 //   McpPort=7600              the base's assistant access (MCP), when its settings switch it on: written at the
 //                             first start — the first of ibPort::BaseAssistant no other base has
 //   IbUser=Admin              the base's user the server logs in as
@@ -61,6 +63,7 @@ struct ibConfiguredInstance {
 	ibString       m_ibUser;          // the base's user the server logs in as
 	ibString       m_ibPassword;      // as stored: empty or sealed
 	ibString       m_mcpPort;         // its assistant access's port, as written
+	unsigned       m_processes = 1;   // its servers side by side — at least one
 };
 
 class CORE_API ibServerConfig {

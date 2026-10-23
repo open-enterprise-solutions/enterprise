@@ -1,5 +1,7 @@
 #include "clusterTray.h"
 
+#include <algorithm>
+
 #include <wx/artprov.h>
 #include <wx/menu.h>
 #include <wx/utils.h>   // wxLaunchDefaultApplication
@@ -59,7 +61,7 @@ void ibClusterTray::Draw()
 	}
 	const size_t all = m_app.GetServers().size();
 	const wxArtID art = down != 0 ? wxART_ERROR : serving == all ? wxART_INFORMATION : wxART_WARNING;
-	const ibString tip = ibString::Format(_("Application cluster, port %u: %u of %u base(s) served"),
+	const ibString tip = ibString::Format(_("Application cluster, port %u: %u of %u server(s) serving"),
 		static_cast<unsigned>(m_app.GetPort()), static_cast<unsigned>(serving), static_cast<unsigned>(all));
 	SetIcon(wxArtProvider::GetBitmapBundle(art, wxART_OTHER, wxSize(16, 16)), tip);
 }
@@ -98,8 +100,13 @@ wxMenu* ibClusterTray::CreatePopupMenu()
 				verbs->Append(wxID_ANY, server.m_cause.Len() > kCauseShown
 					? server.m_cause.Left(kCauseShown) + wxT("...") : server.m_cause)->Enable(false);
 			}
-			menu->AppendSubMenu(verbs, ibString::Format(wxT("%s - %s"), server.m_base, StateText(server)));
-			m_shown.push_back(server.m_base);
+			// A base of several servers names each by its route.
+			const bool several = std::count_if(m_app.GetServers().begin(), m_app.GetServers().end(),
+				[&server](const ibClusterServer& other) { return other.m_base == server.m_base; }) > 1;
+			menu->AppendSubMenu(verbs, several
+				? ibString::Format(wxT("%s #%u - %s"), server.m_base, server.m_route, StateText(server))
+				: ibString::Format(wxT("%s - %s"), server.m_base, StateText(server)));
+			m_shown.push_back(server);
 		}
 
 		menu->AppendSeparator();
@@ -123,7 +130,7 @@ void ibClusterTray::OnMenu(wxCommandEvent& event)
 		m_app.StartCluster();
 		return;
 	case kStopCluster:
-		m_app.Send(ibClusterControl::StopCluster, ibString());
+		m_app.Send(ibClusterControl::StopCluster);
 		return;
 	case kExit:
 		m_app.ExitMainLoop();
@@ -135,9 +142,10 @@ void ibClusterTray::OnMenu(wxCommandEvent& event)
 	const size_t index = static_cast<size_t>((id - kFirstWorker) / kVerbs);
 	if (index >= m_shown.size())
 		return;
+	const ibClusterServer& server = m_shown[index];
 	switch ((id - kFirstWorker) % kVerbs) {
-	case kStart:   m_app.Send(ibClusterControl::Start, m_shown[index]);   break;
-	case kStop:    m_app.Send(ibClusterControl::Stop, m_shown[index]);    break;
-	case kRestart: m_app.Send(ibClusterControl::Restart, m_shown[index]); break;
+	case kStart:   m_app.Send(ibClusterControl::Start, server);   break;
+	case kStop:    m_app.Send(ibClusterControl::Stop, server);    break;
+	case kRestart: m_app.Send(ibClusterControl::Restart, server); break;
 	}
 }
