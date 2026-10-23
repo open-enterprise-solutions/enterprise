@@ -179,7 +179,7 @@ CmdArgs ParseArgs(int argc, char** argv)
 			std::cout <<
 				"Usage: wenterprise-server [options]\n"
 				"  --host=<addr>       bind address (default 127.0.0.1; any other needs Certificate and PrivateKey in backend.conf)\n"
-				"  --port=<N>          HTTP port (default 8080)\n"
+				"  --port=<N>          HTTP port (default 0 - the system chooses)\n"
 				"  --url=<segment>     URL prefix segment after /w/ (default derived from --file / --db)\n"
 				"\n"
 				"  File-mode DB (choose one mode):\n"

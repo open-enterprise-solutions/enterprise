@@ -399,8 +399,8 @@ struct ibWatchedExpression {
 
 /////////////////////////////////////////////////////////////////////////////////////////////
 
-#define defaultDebuggerPort 1650
-#define diapasonDebuggerPort 10
+// The ports — ibPort::Debugger: a debug server listens on the first free one, the designer looks in all of them.
+#include "core/net/ports.h"
 #define defaultHost wxT("localhost")
 
 /////////////////////////////////////////////////////////////////////////////////////////////

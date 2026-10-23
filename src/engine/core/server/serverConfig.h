@@ -4,8 +4,8 @@
 // THE SERVER FOLDER — what the application server serves, and the key its secrets are sealed with
 // (docs/private/multi-base-process.md § 5). Read by the backend: a server opens its base by the base's name and
 // reads where the base lives itself (ibApplicationInstance::CreateAppDataEnv(ibServerInstanceRequest)) — nobody
-// hands it a DBMS. The application server lists the bases and logs into each; the application cluster (appcluster,
-// docs/private/appcluster.md) lists them and starts a server for each.
+// hands it a DBMS. The application cluster (appcluster, docs/private/appcluster.md) lists the bases and starts a server
+// for each (appserver --worker=<base>), which logs into its own.
 //
 //   <server folder>/
 //     server.conf             the bases — one group each
@@ -14,15 +14,18 @@
 //                             infobase.conf and its journal (a PostgreSQL base: infobase.conf and journal)
 //
 //   ; server.conf
-//   Host=                     where the clients reach this server — the cluster, when it runs the bases: left out —
-//                             127.0.0.1, this machine alone; empty — every interface. Off this machine it speaks
-//                             TLS, over the certificate backend.conf names (core/server/listener.h): oess://
-//   Port=7373                 …and its port: chosen at the first start (the first free one from 7373 up)
-//                             and written here, so it stays the one clients are pointed at
+//   Host=                     where the clients reach the cluster that runs the bases: left out — 127.0.0.1, this
+//                             machine alone; empty — every interface. Off this machine it speaks TLS, over the
+//                             certificate backend.conf names (core/server/listener.h): oess://
+//   Port=7373                 …and its port: ibPort::Clients (core/net/ports.h) unless another is written; written
+//                             at the first start, so it stays the one clients are pointed at. Taken, it is refused,
+//                             never moved off
 //   [trade]                   the group is the base's name in the journal
 //   Kind=firebird             firebird — a file base, in <server folder>/<Id> unless Path names another;
 //                             postgresql — a server one: Server, Port, Database, User, Password
 //   Id=…                      written at the first start — the folder keeps it, not the name
+//   McpPort=7600              the base's assistant access (MCP), when its settings switch it on: written at the
+//                             first start — the first of ibPort::BaseAssistant no other base has
 //   IbUser=Admin              the base's user the server logs in as
 //   IbPassword=               empty, or enc:… — sealed by `appserver --set-password=trade/IbPassword`
 //
@@ -34,6 +37,7 @@
 #include "core/core.h"
 #include "core/fstring.h"
 #include "core/diagnostics/journal.h"
+#include "core/net/ports.h"
 
 // What the application server says goes through Print, not the journal macros: those compile to nothing in a
 // release build, and this is what a person watching the console must always see.
@@ -56,6 +60,7 @@ struct ibConfiguredInstance {
 	ibString       m_password;        // as stored: empty or sealed
 	ibString       m_ibUser;          // the base's user the server logs in as
 	ibString       m_ibPassword;      // as stored: empty or sealed
+	ibString       m_mcpPort;         // its assistant access's port, as written
 };
 
 class CORE_API ibServerConfig {
@@ -81,6 +86,10 @@ public:
 	// it, so renaming the group does not lose the folder — and every base learns its folder.
 	void AssignIds(std::vector<ibConfiguredInstance>& instances) const;
 
+	// …and its assistant access's port, the first of ibPort::BaseAssistant no other base has, written back too: two
+	// bases of one cluster never meet on one port. A port written by hand is kept as written.
+	void AssignMcpPorts(std::vector<ibConfiguredInstance>& instances) const;
+
 	// WHERE THE CLIENTS REACH THIS SERVER — the keys above the first base's group (a group IS a base). The host is
 	// this machine's own when none is written: a person has to mean it to widen that, and to name a certificate for it.
 	// The port is 0 when none is written yet; a port chosen at the first start is written back. False, with the reason,
@@ -88,11 +97,6 @@ public:
 	ibString ReadHost() const;
 	bool     ReadPort(unsigned short& port, ibString& error) const;
 	void     WritePort(unsigned short port) const;
-
-	// The port a server starts looking from — its own, beside MCP's 3737, the DBMSs' and the web's usual ones — and how
-	// many from it are tried.
-	static constexpr unsigned short s_defaultPort = 7373;
-	static constexpr unsigned int   s_choosePorts = 100;
 
 	// Where a server started without --dir keeps its bases — `server` in the program folder (beside the .app in a bundle).
 	static ibString DefaultFolder();

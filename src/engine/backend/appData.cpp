@@ -1189,7 +1189,7 @@ long ibApplicationInstance::SpawnWebServerWithManifest(wxString cmd, const ibLau
 		wxLaunchDefaultBrowser(url);
 
 	// Web debug attach: wes is up with --debug, its in-process
-	// ibDebuggerServer is listening on defaultDebuggerPort..+diapason
+	// ibDebuggerServer is listening on one of ibPort::Debugger
 	// in non-blocking (wait=false) mode. SearchServer scans + verifies
 	// each port, but verified+Scanner stays Scanner — designer never
 	// auto-promotes to Debugger on a non-waiting server. We retry

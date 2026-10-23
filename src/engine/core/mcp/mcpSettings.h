@@ -11,15 +11,18 @@
 
 #include <wx/string.h>
 
+#include "core/net/ports.h"
+
 struct ibMcpSettings {
 
 	// Off unless somebody turned it on. An open port that describes and edits a
 	// configuration is not something a platform should acquire by upgrading.
 	bool           m_enabled = false;
 
-	// Loopback by default, and a person has to mean it to widen that.
+	// Loopback by default, and a person has to mean it to widen that. The port is the designer's; a server's base takes
+	// its own from server.conf (McpPort).
 	wxString       m_address = wxT("127.0.0.1");
-	unsigned short m_port    = 3737;
+	unsigned short m_port    = ibPort::Assistant.m_first;
 
 	// ⭐ WHO IS ALLOWED TO SPEAK. Every request carries it as `Authorization: Bearer <token>`,
 	// and one without is refused before any tool is looked up.

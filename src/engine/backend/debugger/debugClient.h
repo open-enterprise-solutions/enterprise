@@ -278,7 +278,7 @@ public:
 
 	void SearchServer(bool run_debug_server = false,
 		const wxString& hostName = defaultHost,
-		unsigned short startPort = defaultDebuggerPort, unsigned short endPort = defaultDebuggerPort + diapasonDebuggerPort)
+		unsigned short startPort = ibPort::Debugger.m_first, unsigned short endPort = ibPort::Debugger.Last() + 1)
 	{
 		if (run_debug_server) {
 			m_connectionSuccess = false;

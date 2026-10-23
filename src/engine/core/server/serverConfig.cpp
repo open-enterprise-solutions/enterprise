@@ -1,5 +1,7 @@
 #include "serverConfig.h"
 
+#include <set>
+
 #include <wx/ffile.h>
 #include <wx/fileconf.h>
 #include <wx/filename.h>
@@ -175,6 +177,7 @@ std::vector<ibConfiguredInstance> ibServerConfig::ReadInstances() const
 		instance.m_password   = conf.Read(at + wxT("Password"));
 		instance.m_ibUser     = conf.Read(at + wxT("IbUser"));
 		instance.m_ibPassword = conf.Read(at + wxT("IbPassword"));
+		instance.m_mcpPort    = conf.Read(at + wxT("McpPort"));
 
 		instances.push_back(instance);
 	}
@@ -232,6 +235,42 @@ void ibServerConfig::AssignIds(std::vector<ibConfiguredInstance>& instances) con
 
 	if (assigned && !conf.Flush())
 		ibAppServerSay(ibJournalMark::Warning, wxT("the config %s cannot be written - the new Ids are not kept"), m_confPath);
+}
+
+void ibServerConfig::AssignMcpPorts(std::vector<ibConfiguredInstance>& instances) const
+{
+	// Every port written, a mistaken one too: what a person wrote is theirs, and said where it is read.
+	std::set<unsigned long> taken;
+	for (const ibConfiguredInstance& instance : instances) {
+		unsigned long port = 0;
+		if (instance.m_mcpPort.ToULong(&port))
+			taken.insert(port);
+	}
+
+	wxFileConfig conf(wxEmptyString, wxEmptyString, m_confPath, wxEmptyString, kConfStyle);
+
+	bool assigned = false;
+	unsigned long next = ibPort::BaseAssistant.m_first;
+	for (ibConfiguredInstance& instance : instances) {
+		if (!instance.m_mcpPort.IsEmpty())
+			continue;
+		while (taken.count(next) != 0)
+			++next;
+		if (next > ibPort::BaseAssistant.Last()) {
+			ibAppServerSay(ibJournalMark::Warning, wxT("base '%s': no assistant port left from %u to %u - write its McpPort"),
+				instance.m_name, static_cast<unsigned>(ibPort::BaseAssistant.m_first),
+				static_cast<unsigned>(ibPort::BaseAssistant.Last()));
+			continue;
+		}
+		instance.m_mcpPort = ibString::Format(wxT("%lu"), next);
+		conf.Write(wxT("/") + instance.m_name + wxT("/McpPort"), static_cast<long>(next));
+		taken.insert(next);
+		assigned = true;
+	}
+
+	if (assigned && !conf.Flush())
+		ibAppServerSay(ibJournalMark::Warning, wxT("the config %s cannot be written - the assistant ports are not kept"),
+			m_confPath);
 }
 
 bool ibServerConfig::OpenSecret(const ibString& base, const ibString& name, const ibString& stored, ibString& secret,

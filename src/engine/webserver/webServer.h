@@ -24,8 +24,9 @@
 //   ; web.conf
 //   Host=127.0.0.1                  where browsers reach it: empty — every interface (HTTP there only sends a
 //                                   browser on to HTTPS)
-//   HttpPort=8080                   left out — 8080; empty — no HTTP; 0 — the system chooses
-//   HttpsPort=                      left out or empty — no HTTPS; it speaks over Certificate and PrivateKey (PEM)
+//   HttpPort=8080                   left out — 8080 (ibPort::Web); empty — no HTTP; 0 — the system chooses
+//   HttpsPort=443                   left out — 443 when a Certificate is named (ibPort::WebSecure), else none; empty —
+//                                   no HTTPS; it speaks over Certificate and PrivateKey (PEM)
 //   Certificate=
 //   PrivateKey=
 //   Root=www                        the site's files — a folder: a site being written names its source here, and an
@@ -55,6 +56,7 @@
 #include "core/diagnostics/journal.h"
 
 #include "core/net/httpServer.h"
+#include "core/net/ports.h"
 
 class ibProtocolFileBase;
 
@@ -81,7 +83,7 @@ struct ibWebPublication {
 struct ibWebConfig {
 	wxString                      m_folder;
 	wxString                      m_host = wxT("127.0.0.1");
-	std::optional<std::uint16_t>  m_httpPort = s_defaultHttpPort;
+	std::optional<std::uint16_t>  m_httpPort = ibPort::Web.m_first;
 	std::optional<std::uint16_t>  m_httpsPort;
 	wxString                      m_certificate;   // paths
 	wxString                      m_privateKey;
@@ -93,9 +95,6 @@ struct ibWebConfig {
 	// web.conf in `folder`, when there is one; false with why in `error` — a port that is not one, a publication of
 	// no kind this server knows. No file is no error: nothing is published but what the command line says.
 	bool Read(const wxString& folder, wxString& error);
-
-	// The web server's default port — the web's usual one beside the application server's 7373.
-	static constexpr std::uint16_t s_defaultHttpPort = 8080;
 };
 
 class ibWebServer {

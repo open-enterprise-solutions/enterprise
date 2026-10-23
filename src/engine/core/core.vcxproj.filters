@@ -402,6 +402,9 @@
     <ClInclude Include="net\ioThreads.h">
       <Filter>net</Filter>
     </ClInclude>
+    <ClInclude Include="net\ports.h">
+      <Filter>net</Filter>
+    </ClInclude>
     <ClInclude Include="net\tlsStream.h">
       <Filter>net</Filter>
     </ClInclude>

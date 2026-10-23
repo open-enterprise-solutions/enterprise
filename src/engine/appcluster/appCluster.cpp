@@ -146,9 +146,11 @@ bool ibAppCluster::OnInit()
 	if (!m_config->LoadKey(error))
 		return Refuse(error);
 
-	// The Ids written before a server reads them: each base's folder is named by its Id.
+	// The Ids written before a server reads them: each base's folder is named by its Id. And each base's assistant port,
+	// here, once: the servers start side by side and only read.
 	std::vector<ibConfiguredInstance> instances = m_config->ReadInstances();
 	m_config->AssignIds(instances);
+	m_config->AssignMcpPorts(instances);
 	if (instances.empty())
 		return Refuse(ibString::Format(wxT("the config %s names no base"), m_config->GetConfPath()));
 	for (const ibConfiguredInstance& instance : instances)
@@ -195,16 +197,16 @@ bool ibAppCluster::OnInit()
 		});
 	});
 
-	// THE PORT THE CLIENTS COME IN BY — the config's, as the application server takes it alone (appserver,
-	// ibClientListener): the one written, or, at the first start, the first free one from the server's own, written back.
-	// A written port that is taken is refused, never moved off. Its transport is the listener's (core/server/listener.h):
-	// TLS over the certificate backend.conf names, else plain on this machine's own address only.
+	// THE PORT THE CLIENTS COME IN BY — the config's: the one written, or the coordinator's own (ibPort::Clients), written
+	// back at the first start. A port that is taken is refused, never moved off: the clients look for the cluster there.
+	// Its transport is the listener's (core/server/listener.h): TLS over the certificate backend.conf names, else plain
+	// on this machine's own address only.
 	unsigned short port = 0;
 	if (!m_config->ReadPort(port, error))
 		return Refuse(error);
-	const bool choose = port == 0;
-	if (choose)
-		port = ibServerConfig::s_defaultPort;
+	const bool written = port != 0;
+	if (!written)
+		port = ibPort::Clients.m_first;
 	ibHttpServerOptions options;
 	try {
 		options = ibListenerOptions(m_config->ReadHost(), port, ibTlsFiles::FromConf(ibBackendConfPath()));
@@ -213,15 +215,13 @@ bool ibAppCluster::OnInit()
 		return Refuse(err.GetErrorDescription());
 	}
 	std::string refused;
-	if (!m_http.Start(options, choose ? ibServerConfig::s_choosePorts : 1, refused)) {
-		return Refuse(choose
-			? ibString::Format(wxT("no free port from %u to %u (%s)"), static_cast<unsigned>(port),
-				static_cast<unsigned>(port + ibServerConfig::s_choosePorts - 1), ibString::FromUTF8(refused.data(), refused.size()))
-			: ibString::Format(wxT("port %u did not open - another server is probably holding it (%s)"),
-				static_cast<unsigned>(port), ibString::FromUTF8(refused.data(), refused.size())));
+	if (!m_http.Start(options, 1, refused)) {
+		return Refuse(ibString::Format(wxT("port %u did not open - another cluster is probably holding it; write another "
+			"Port in %s (%s)"), static_cast<unsigned>(port), m_config->GetConfPath(),
+			ibString::FromUTF8(refused.data(), refused.size())));
 	}
 	m_port = options.m_httpsPort ? m_http.GetHttpsPort() : m_http.GetHttpPort();
-	if (choose)
+	if (!written)
 		m_config->WritePort(m_port);
 
 	for (const std::unique_ptr<ibClusterWorker>& worker : m_workers)

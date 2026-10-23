@@ -131,7 +131,7 @@ public:
 			!m_socketConnectionThread->m_waitConnection : true;
 	}
 
-	bool CreateServer(const wxString& hostName = defaultHost, unsigned short startPort = defaultDebuggerPort, bool wait = false);
+	bool CreateServer(const wxString& hostName = defaultHost, unsigned short startPort = ibPort::Debugger.m_first, bool wait = false);
 	void ShutdownServer();
 
 	// Session is read out of runContext → GetProcUnit() → GetSession()

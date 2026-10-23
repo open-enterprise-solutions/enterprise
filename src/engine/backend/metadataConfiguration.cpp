@@ -474,7 +474,7 @@ bool ibMetaDataConfiguration::OnInitialize(const int flags)
 		// per-process search. Per-tab WebClient sessions stop at their
 		// own OnStart only after the listener exists.
 		const bool waitForClient = !appData->WebEnterpriseMode();
-		debugServer->CreateServer(defaultHost, defaultDebuggerPort, waitForClient);
+		debugServer->CreateServer(defaultHost, ibPort::Debugger.m_first, waitForClient);
 	}
 
 	return true;

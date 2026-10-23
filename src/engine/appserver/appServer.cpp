@@ -9,8 +9,6 @@
 #include <string>
 #include <thread>
 
-#include <wx/utils.h>   // wxGetFullHostName — the server named in a base's address
-
 #ifdef __WXMSW__
 #include <windows.h>   // SetConsoleCtrlHandler — the console window closing
 #endif
@@ -81,6 +79,14 @@ ibAppServer::~ibAppServer() = default;
 
 int ibAppServer::Run()
 {
+	// A SERVER OF ONE BASE, for the cluster: the clients come in by the cluster's port, and the cluster hands each to the
+	// server of its base. Nothing else starts one.
+	if (m_workerBase.IsEmpty()) {
+		ibAppServerSay(ibJournalMark::Error, wxT("a server serves one base for the application cluster - run appcluster, "
+			"which starts one for each base of %s"), m_config.GetConfPath());
+		return 1;
+	}
+
 	if (!m_config.HasConf()) {
 		ibAppServerSay(ibJournalMark::Error, wxT("no config at %s - nothing to serve"), m_config.GetConfPath());
 		return 1;
@@ -92,25 +98,19 @@ int ibAppServer::Run()
 		return 1;
 	}
 
+	// Its base as the cluster left the config: the Id and the assistant's port written before it was started.
 	std::vector<ibConfiguredInstance> instances = m_config.ReadInstances();
 	m_config.AssignIds(instances);
-	ibAppServerSay(ibJournalMark::Info, wxT("config %s: %u base(s)"),
-		m_config.GetConfPath(), static_cast<unsigned>(instances.size()));
-
-	// A SERVER THE CLUSTER STARTED serves its one base, and nothing else of the folder.
-	if (!m_workerBase.IsEmpty()) {
-		const auto base = std::find_if(instances.begin(), instances.end(),
-			[this](const ibConfiguredInstance& instance) { return instance.m_name == m_workerBase; });
-		if (base == instances.end()) {
-			ibAppServerSay(ibJournalMark::Error, wxT("the config %s has no base '%s' - nothing to serve"),
-				m_config.GetConfPath(), m_workerBase);
-			return 1;
-		}
-		instances = { *base };
+	const auto base = std::find_if(instances.begin(), instances.end(),
+		[this](const ibConfiguredInstance& instance) { return instance.m_name == m_workerBase; });
+	if (base == instances.end()) {
+		ibAppServerSay(ibJournalMark::Error, wxT("the config %s has no base '%s' - nothing to serve"),
+			m_config.GetConfPath(), m_workerBase);
+		return 1;
 	}
 
-	// Told to stop from here on — while the bases are still being opened too: what is open is then closed in
-	// order instead of the process being cut off with its bases in hand.
+	// Told to stop from here on — while the base is still being opened too: what is open is then closed in order
+	// instead of the process being cut off with its base in hand.
 	std::signal(SIGINT, OnStopSignal);
 	std::signal(SIGTERM, OnStopSignal);
 #ifdef SIGBREAK
@@ -119,85 +119,34 @@ int ibAppServer::Run()
 #ifdef __WXMSW__
 	::SetConsoleCtrlHandler(OnConsoleClose, TRUE);   // after the signals: asked first, it passes on what is theirs
 #endif
-	if (!m_workerBase.IsEmpty())
-		ListenToCluster();
+	ListenToCluster();
 
 	// However Run ends — served and stopped, or refused at any step — a console closing waits no longer.
 	struct ibStoppedMark { ~ibStoppedMark() { s_state.store(ibServeState::Stopped); } } stoppedMark;
 
-	for (const ibConfiguredInstance& instance : instances) {
-		if (s_state.load() != ibServeState::Serving)
-			break;
-		Open(instance);
-	}
-
-	if (m_sessions.empty()) {
-		// A server of one base (the cluster's) has said why already: its base's own line is the cause the cluster shows.
-		if (m_workerBase.IsEmpty())
-			ibAppServerSay(ibJournalMark::Error, wxT("no base could be served - stopping"));
+	// A base that did not open has said why already: its own line is the cause the cluster shows.
+	if (s_state.load() != ibServeState::Serving || !Open(*base)) {
 		ibApplicationInstance::DestroyAppDataEnv();
 		return 1;
 	}
 
-	wxString names;
-	for (const ibSessionHolder& session : m_sessions) {
-		if (!names.IsEmpty())
-			names += wxT(", ");
-		names += session->GetApplicationInstance()->GetInstanceName();
-	}
-
-	// THE PORT THE CLIENTS COME IN BY — the one written in the config, or, at the first start, the first free
-	// one from the server's own, written back so that it stays the one clients are pointed at. A written port
-	// that is taken is refused, never moved off: the clients look for this server there.
-	// A server the cluster started is reached through the cluster alone: on this machine, on a port of the system's
-	// choosing (0), said to the cluster once it serves — the config's port is the cluster's.
-	const bool worker = !m_workerBase.IsEmpty();
-	ibString portError;
-	unsigned short port = 0;
-	if (!worker && !m_config.ReadPort(port, portError)) {
-		ibAppServerSay(ibJournalMark::Error, wxT("%s - nothing is served"), portError);
-		Stop();
-		return 1;
-	}
-	const bool choose = !worker && port == 0;
-	if (choose)
-		port = ibServerConfig::s_defaultPort;
-
+	// THE PORT THE CLUSTER HANDS THE CLIENTS TO — on this machine alone, the first free one of the servers' own
+	// (ibPort::Workers), said to the cluster once it serves.
 	std::map<wxString, ibClientHost*> hosts;
 	for (const auto& entry : m_clientHosts)
 		hosts[entry.first] = entry.second.get();
-
-	// Off this machine, TLS over the certificate backend.conf names (core/server/listener.h). A server the cluster
-	// started speaks in the clear, on loopback: TLS ends at the cluster's port.
-	const ibString host = worker ? ibString(wxT("127.0.0.1")) : m_config.ReadHost();
-	ibTlsFiles tls;
-	if (!worker && ibApplicationHost::Get() != nullptr)
-		tls = ibApplicationHost::Get()->GetTlsFiles();
+	unsigned short port = 0;
 	wxString refusal;
-	if (!m_clientListener.Start(host, port, choose, tls, std::move(hosts), refusal)) {
+	if (!m_clientListener.Start(ibPort::Workers, port, std::move(hosts), refusal)) {
 		ibAppServerSay(ibJournalMark::Error, wxT("the clients' port did not open: %s - nothing is served"), refusal);
 		Stop();
 		return 1;
 	}
-	if (choose)
-		m_config.WritePort(port);
+	std::printf("%s %u\n", ibWorkerPipe::Serving, static_cast<unsigned>(port));
+	std::fflush(stdout);
 
-	if (worker) {
-		std::printf("%s %u\n", ibWorkerPipe::Serving, static_cast<unsigned>(port));
-		std::fflush(stdout);
-	}
-	else {
-		// EACH BASE'S ADDRESS, as a person gives it to a client — oes://<server>[:port]/<base>, oess:// over TLS, which
-		// the client opens as the WebSocket /<base>/client on that port. Listening on every interface, the server is
-		// named by this machine's name.
-		const ibString server = host.IsEmpty() ? ibString(wxGetFullHostName()) : host;
-		for (const auto& entry : m_clientHosts)
-			ibAppServerSay(ibJournalMark::Info, wxT("base '%s' for clients: %s://%s:%u/%s"), entry.first,
-				tls.IsNamed() ? wxT("oess") : wxT("oes"), server, static_cast<unsigned>(port), entry.first);
-	}
-
-	ibAppServerSay(ibJournalMark::Info, wxT("serving %u of %u base(s): %s - Ctrl+C to stop"),
-		static_cast<unsigned>(m_sessions.size()), static_cast<unsigned>(instances.size()), names);
+	ibAppServerSay(ibJournalMark::Info, wxT("serving '%s' for the cluster on 127.0.0.1:%u"), m_workerBase,
+		static_cast<unsigned>(port));
 
 	while (s_state.load() == ibServeState::Serving)
 		std::this_thread::sleep_for(std::chrono::milliseconds(250));
@@ -262,12 +211,22 @@ bool ibAppServer::Open(const ibConfiguredInstance& instance)
 	}
 
 	// THE BASE'S CLIENTS — the protocol served for it (frmserver), and the base's MCP when its settings switch it
-	// on: an assistant reaches the clients through it (client_call), as a client.
+	// on: an assistant reaches the clients through it (client_call), as a client. Whether it is on, and its key, are
+	// the base's settings; its port is the config's (McpPort) — the bases of one cluster never meet on one.
 	m_clientHosts[instance.m_name] = std::make_unique<ibClientHost>(applicationInstance);
 	if (ibMcpServer* const mcp = ibApplicationInstance::GetMcpServer(applicationInstance)) {
 		wxString refusal;
 		mcp->LoadSettings(session.Get());
-		if (mcp->Start(session.Get(), refusal))
+		unsigned long port = 0;
+		if (instance.m_mcpPort.ToULong(&port) && port != 0 && port <= 65535) {
+			ibMcpSettings settings = mcp->GetSettings();
+			settings.m_port = static_cast<unsigned short>(port);
+			mcp->Configure(settings);
+		}
+		else {
+			refusal = wxString::Format(wxT("McpPort=%s in %s is not a port"), instance.m_mcpPort, m_config.GetConfPath());
+		}
+		if (refusal.IsEmpty() && mcp->Start(session.Get(), refusal))
 			ibAppServerSay(ibJournalMark::Info, wxT("base '%s': MCP at %s"), instance.m_name, mcp->GetEndpoint());
 		else
 			ibAppServerSay(ibJournalMark::Info, wxT("base '%s': no MCP - %s"), instance.m_name, refusal);

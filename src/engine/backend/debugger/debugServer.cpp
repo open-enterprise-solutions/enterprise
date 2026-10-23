@@ -584,7 +584,7 @@ void ibDebuggerServer::SendErrorToClient(const wxString& strFileName,
 	const wxString& strDocPath, unsigned int numLine, const wxString& strErrorMessage)
 {
 	if (m_socketConnectionThread == nullptr)
-		CreateServer(defaultHost, defaultDebuggerPort, true);
+		CreateServer(defaultHost, ibPort::Debugger.m_first, true);
 
 	if (m_socketConnectionThread == nullptr || !m_socketConnectionThread->IsConnected() || !m_bUseDebug)
 		return;
@@ -953,14 +953,14 @@ bool ibDebuggerServer::ibDebuggerServerConnection::StartServer()
 	options.m_maxConnections = 8;
 
 	std::string error;
-	for (unsigned int port = m_numHostPort; port <= static_cast<unsigned int>(m_numHostPort) + diapasonDebuggerPort; ++port) {
+	for (unsigned int port = m_numHostPort; port < static_cast<unsigned int>(m_numHostPort) + ibPort::Debugger.m_count; ++port) {
 		options.m_httpPort = static_cast<std::uint16_t>(port);
 		if (m_socketServer->Start(options, error))
 			return true;
 	}
 
 	ibJournalWarning(wxT("debugger"), wxT("debug server: no port from %u to %u on %s: %s"),
-		static_cast<unsigned int>(m_numHostPort), static_cast<unsigned int>(m_numHostPort) + diapasonDebuggerPort,
+		static_cast<unsigned int>(m_numHostPort), static_cast<unsigned int>(m_numHostPort) + ibPort::Debugger.m_count - 1,
 		m_strHostName, wxString::FromUTF8(error));
 	m_socketServer.reset();
 	return false;

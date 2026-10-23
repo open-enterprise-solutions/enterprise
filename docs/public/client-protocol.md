@@ -20,7 +20,7 @@ is never renumbered.
 | In process: `ibClientHost::Call(method, params, result, refusal, error)` | the client's own process | a file base; the assistant's MCP tool (`client_call`) |
 
 The address is `oes://server[:port]/<base>`, or `oess://` when the server speaks TLS - its `backend.conf` names a
-certificate, which the client checks ([listeners.md](listeners.md)); the port is 7373 unless the server's
+certificate, which the client checks ([listeners.md](listeners.md)); the port is the cluster's, 7373 unless its
 `server.conf` says otherwise. A file base needs no server: the client opens it itself and makes the same calls in process. A thin designer's
 WebSocket, and a thin runtime's when `backend.conf` `Resume` is 0, ends its session when it closes. A thin runtime
 with the window on (left out, 120 seconds; 0 is off; never more than 30 minutes) keeps the session that long, and

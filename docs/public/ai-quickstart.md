@@ -24,7 +24,7 @@ by running it - instead of guessing.
 
 The key is made once and kept, so a connected assistant stays connected. Whoever holds it can do in
 this designer what you can.
-The server listens on `127.0.0.1:3737`; set another address to reach it from another machine - then `backend.conf` must name a certificate ([listeners.md](listeners.md)), or the server refuses to listen in the clear off this machine.
+The server listens on `127.0.0.1:7374` (a base on an application cluster: on its own port, `server.conf`'s `McpPort`); set another address to reach it from another machine - then `backend.conf` must name a certificate ([listeners.md](listeners.md)), or the server refuses to listen in the clear off this machine.
 
 ## The first request
 

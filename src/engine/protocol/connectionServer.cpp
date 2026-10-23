@@ -9,6 +9,7 @@
 
 #include "core/net/httpClient.h"   // ws:// — and wss://, the client's TLS (ibTlsClientContext)
 #include "core/net/ioThreads.h"
+#include "core/net/ports.h"        // ibPort::Clients — the port an address leaves out
 
 namespace {
 
@@ -56,7 +57,7 @@ bool ibProtocolConnectionServer::ParseAddress(const wxString& address, wxString&
 	if (base.EndsWith(wxT("/")))
 		base.RemoveLast();
 
-	port = kDefaultPort;
+	port = ibPort::Clients.m_first;
 	const int colon = authority.Find(wxT(':'), true);
 	if (colon != wxNOT_FOUND && !authority.EndsWith(wxT("]"))) {
 		long number = 0;
@@ -103,7 +104,7 @@ bool ibProtocolConnectionServer::Open(const wxString& address, const wxString& t
 	Close();
 
 	wxString host, base;
-	int port = kDefaultPort;
+	int port = 0;
 	bool secure = false;
 	if (!ParseAddress(address, host, port, base, secure)) {
 		error = wxString::Format(_("'%s' is not the address of a base: oes://server[:port]/<base> or oess://…"), address);

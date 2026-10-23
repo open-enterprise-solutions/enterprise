@@ -1,7 +1,7 @@
-// appserver — the application server: the process that serves the bases of its server folder without a window
-// (core/server/serverConfig.h — the folder; appServer.h — the serving; docs/private/multi-base-process.md § 5). It was
-// called `daemon` until 2026-10-01. Started by hand it narrates in its console — the technological journal
-// mirrored onto standard error — and stays until Ctrl+C; later it becomes a service and the journal stays.
+// appserver — the application server: the process that serves one base of its server folder for the application
+// cluster, without a window (core/server/serverConfig.h — the folder; appServer.h — the serving; appcluster — who
+// starts it, --worker=<base>). It was called `daemon` until 2026-10-01. It narrates in its console — the technological
+// journal mirrored onto standard error. By hand it only seals a password into the config (--set-password).
 
 #include <wx/app.h>
 #include <wx/cmdline.h>

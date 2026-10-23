@@ -2,8 +2,8 @@
 
 **What.** A server of this platform listens through one door, `core/server/listener.h`: TLS when
 `backend.conf` names a certificate, plain HTTP on this machine's own addresses when it names none, and a
-refusal on any other address. Through it listen the assistant access (MCP) inside the designer and in the
-application server, the application server's port for its clients, and the application cluster's. The
+refusal on any other address. Through it listen the assistant access (MCP) inside the designer and in a
+server's base, the application cluster's port for the clients, and the servers it hands them to. The
 server itself is the core's (`core/net/httpServer.h`), and so is its TLS: Mbed TLS is linked into the core
 and nowhere else.
 
@@ -55,9 +55,9 @@ clear does not cross a network.
 
 ## The clients' port: oess://
 
-- **Where.** `server.conf`'s `Host` and `Port` - the application server's, or the cluster's when it runs
-  the folder's bases. `Host` left out is `127.0.0.1`: this machine alone. Another address - `0.0.0.0`, a
-  network card's, empty (every interface) - wants a certificate in `backend.conf`; without one the server
+- **Where.** `server.conf`'s `Host` and `Port` - the application cluster's, which takes every client and hands it
+  to the server of its base. `Host` left out is `127.0.0.1`: this machine alone. Another address - `0.0.0.0`, a
+  network card's, empty (every interface) - wants a certificate in `backend.conf`; without one the cluster
   does not start, and its journal says why.
 - **What it speaks.** A certificate named: TLS, and the address a person gives a client is
   `oess://server[:port]/<base>` - the server prints it for every base. None: `oes://`, on this machine.
@@ -71,9 +71,23 @@ clear does not cross a network.
 - **The web server** makes its trust once per publication: every browser's socket to that server shares
   it.
 
+## The ports
+
+Each role has a range of its own, and no two meet (`core/net/ports.h`). A port written in a config is taken
+as written; taken by another process, it is refused, never moved off.
+
+| Port | Whose | Kept in |
+|---|---|---|
+| 7373 | the cluster: every client, and its tray | `server.conf` `Port` |
+| 7374 | the designer's assistant access (MCP) | the designer's settings |
+| 7500-7599 | the cluster's servers, one a base, on `127.0.0.1`: the first free one | - |
+| 7600-7699 | the assistant access of a server's base, one each | `server.conf` `McpPort` |
+| 7700-7709 | the debugger: the first free one, the designer looks in all | - |
+| 8080 / 443 | the web server: HTTP / HTTPS, when `web.conf` names a certificate | `web.conf` `HttpPort`, `HttpsPort` |
+
 ## Where it stops
 
-- The debugger's port (`1650`) is still plain off this machine.
+- The debugger's ports (7700-7709) are still plain off this machine.
 - The launcher's list of bases has no field for a trusted file: a base on a server with a self-signed
   certificate is opened from the command line (`--trusted`), or its authority is put into the system's store.
 - A base whose assistant access was set to an address off this machine's own, with no certificate named,

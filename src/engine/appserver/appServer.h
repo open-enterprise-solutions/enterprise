@@ -1,10 +1,10 @@
 #ifndef __APP_SERVER_H__
 #define __APP_SERVER_H__
 
-// THE APPLICATION SERVER — opens every base of its folder, holds each by a session of its own (kind Service:
-// while it lives the base admits other application servers and no client process), says what it serves, and
-// lets them go when told to stop.
-// A base that does not open is said and left; the rest are served (docs/private/multi-base-process.md § 5).
+// THE APPLICATION SERVER — one base of its folder, for the cluster that started it (appserver --worker=<base>,
+// appcluster): opens the base, holds it by a session of its own (kind Service: while it lives the base admits other
+// application servers and no client process), serves the clients the cluster hands it, and lets the base go when told
+// to stop. A base that does not open is said, and the server ends: the cluster shows that line as the cause.
 
 #include <map>
 #include <memory>
@@ -18,9 +18,8 @@ class ibClientHost;
 
 class ibAppServer {
 public:
-	// `workerBase` — the one base the cluster started this server for (appserver --worker=<base>, appcluster): served on
-	// this machine alone, on a port of the system's choosing, said on stdout (ibWorkerPipe); empty — every base of the
-	// folder, on the config's port.
+	// `workerBase` — the one base the cluster started this server for: served on this machine alone, on the first free
+	// port of ibPort::Workers, said on stdout (ibWorkerPipe). Empty — refused: nothing else starts a server.
 	ibAppServer(ibServerConfig& config, const wxString& locale, const ibString& workerBase);
 	~ibAppServer();
 

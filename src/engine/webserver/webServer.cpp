@@ -194,7 +194,7 @@ bool ibWebConfig::Read(const wxString& folder, wxString& error)
 
 	const auto port = [&conf, &path, &error](const wxString& key, std::optional<std::uint16_t>& value) {
 		if (!conf.HasEntry(key))
-			return true;   // left as it was: HTTP on its default, HTTPS off
+			return true;   // left as it was: HTTP on its default, HTTPS as the certificate says (below)
 		const wxString written = conf.Read(key, wxEmptyString).Strip(wxString::both);
 		if (written.IsEmpty()) {
 			value.reset();
@@ -214,6 +214,9 @@ bool ibWebConfig::Read(const wxString& folder, wxString& error)
 		return false;
 	m_certificate = Beside(folder, conf.Read(wxT("Certificate"), wxEmptyString).Strip(wxString::both));
 	m_privateKey = Beside(folder, conf.Read(wxT("PrivateKey"), wxEmptyString).Strip(wxString::both));
+	// A certificate named and no HTTPS port said: HTTPS on the web's own (ibPort::WebSecure). Written empty — none.
+	if (!conf.HasEntry(wxT("HttpsPort")) && !m_certificate.IsEmpty())
+		m_httpsPort = ibPort::WebSecure.m_first;
 	const wxString root = conf.Read(wxT("Root"), wxEmptyString).Strip(wxString::both);
 	if (!root.IsEmpty())
 		m_root = Beside(folder, root);
@@ -321,7 +324,7 @@ bool ibWebServer::Publish(const ibWebPublication& publication)
 
 	// AN APPLICATION SERVER'S BASE — reached over its port, for each browser.
 	wxString host, base;
-	int port = ibProtocolConnectionServer::kDefaultPort;
+	int port = 0;
 	bool secure = false;
 	if (!ibProtocolConnectionServer::ParseAddress(publication.m_address, host, port, base, secure)) {
 		ibWebServerSay(ibJournalMark::Error, wxT("publication '%s': '%s' is not the address of a base: oes://server[:port]/<base> or oess://…"),

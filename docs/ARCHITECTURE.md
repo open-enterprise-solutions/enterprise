@@ -257,32 +257,33 @@ Unit tests build subsystems directly (no full appData) — the test CMake target
 
 ### The application server (`appserver.exe`, `src/engine/appserver/`)
 
-A headless process that serves the bases of its **server folder** (`--dir`, by default `server` in the program folder — beside the executable, or beside the `.app` inside a macOS bundle):
+A headless process that serves **one base** of its **server folder** for the application cluster, which starts it (`--worker=<base>`); nothing else starts one. The folder is `--dir`, by default `server` in the program folder — beside the executable, or beside the `.app` inside a macOS bundle:
 
 ```
 <server folder>/
-  server.conf      one group per base: Kind=firebird|postgresql, Id, Path or Server/Port/Database/User/Password,
-                   IbUser/IbPassword — the Id is assigned at the first start and written back
+  server.conf      Host, Port — the cluster's; one group per base: Kind=firebird|postgresql, Id, Path or
+                   Server/Port/Database/User/Password, IbUser/IbPassword, McpPort — the Id and McpPort are
+                   assigned by the cluster at its first start and written back
   server.key       this installation's key, made at the first start
   <Id>/            one folder per base: its journal (oeslog) and infobase.conf; a Firebird base's sys.fdb too
 ```
 
 - **Settings in three layers**, key by key: built-in values → `backend.conf` (the process: `Locale`, `Workers`, `Bases`, the default `Connections`) → the base's `infobase.conf` (`Connections` to ITS DBMS). `Workers` and `Bases` are a maximum, 0 = no limit (the pool grows as sessions bring work); `Connections` 0 = the default; a value that cannot be used is said in the journal (`ibApplicationHost::ReadCount`).
 - **Secrets** are sealed in `server.conf` with AES-256-GCM (`ibFieldCipher`, key in `server.key`); plain text is refused. `appserver --set-password=<base>/<Password|IbPassword>` reads one from the keyboard and seals it.
-- **Opening:** every base through `CreateFile/ServerAppDataEnv` in `eSERVER_MODE`, then a session of kind `Service` logged into it. A base that does not open or refuses the login is said and closed alone; the rest are served. Firebird and PostgreSQL bases share one process.
+- **Opening:** its base through `CreateFile/ServerAppDataEnv` in `eSERVER_MODE`, then a session of kind `Service` logged into it. A base that does not open or refuses the login is said, and the server ends: the cluster shows that line as the cause.
 - **Who may come in** (`ibServiceExclusivePolicy`, asked at open by `CanOpen` and at every session by `CanAdd`): application servers (`eSERVER_MODE`) share a base with application servers, file bases with file bases — a file-base process (designer, enterprise, the web host) is refused while a server serves the base, and a server while a file base uses it. The row's run mode decides, whatever its kind: a server's thin clients are the server's. What several servers on one base share already lives in it: `sys_session`, `sys_lock`, a job's claim and its clock in `sys_job`.
 - **Journal:** every line about a base carries its name — `(trade1) source …`. The console shows the server's own lines and every warning and error; the running commentary stays in the file.
-- **Clients' port** (`Port`, 7373; `clientListener`): `WS /<base>/client` and `POST /<base>/client` over the core's HTTP (`core/net`, Asio) — a waiting socket costs a buffer, not a thread. Through the listener's door (`core/server/listener.h`): TLS when `backend.conf` names a certificate — the address is `oess://` — else plain on this machine alone; `Host` left out is `127.0.0.1`, and another address without a certificate is refused ([listeners.md](public/listeners.md)). `ClientConnections` (backend.conf, 1000) at once; a socket that has not logged in goes 15 s after it opened.
-- **Stop:** Ctrl+C, SIGTERM or the console closing raises a flag; the main thread ends the server's sessions, then closes every base newest first.
-- **One base for a cluster** (`--worker=<base>`): only that base, on `127.0.0.1` at a port the system chooses, said on stdout (`serving <port>`); `stop` on stdin, or stdin closing, stops it. Started again after a fall it is given `--again`: its first error takes no dump — the first start took one, and a dump at every start would fill the disk while a DBMS stays down.
+- **Its port** (`clientListener`): `WS /<base>/client` and `POST /<base>/client` over the core's HTTP (`core/net`, Asio) — a waiting socket costs a buffer, not a thread. On `127.0.0.1` in the clear, the first free one of 7500–7599 (`ibPort::Workers`, `core/net/ports.h`), said on stdout (`serving <port>`): the clients come in by the cluster's port, TLS there, and the cluster carries them on. `ClientConnections` (backend.conf, 1000) at once; a socket that has not logged in goes 15 s after it opened.
+- **Its base's assistant access** (MCP), when the base's settings switch it on: on `server.conf`'s `McpPort`, given by the cluster from 7600–7699 (`ibPort::BaseAssistant`), so the bases of one cluster never meet on one port; on and its key are the base's settings.
+- **Stop:** `stop` on stdin, stdin closing (the cluster gone), Ctrl+C, SIGTERM or the console closing raises a flag; the main thread ends the server's session, then closes the base. Started again after a fall it is given `--again`: its first error takes no dump — the first start took one, and a dump at every start would fill the disk while a DBMS stays down.
 - **Not yet:** creating a new base (only the designer creates the system tables). It is not a service of the system itself — the cluster is, and runs it.
 
 ### The application cluster (`appcluster.exe`, `src/engine/appcluster/`)
 
 A console program over the same server folder that links `core.dll` alone (of wx, the base). A base's fault stays in the base's process:
 
-- reads `server.conf` (`ibServerConfig`, `core/server/`) and starts `appserver --worker=<base>` for each base — a child whose pipes it holds (`ibWorkerPipe`);
-- holds the config's port and carries each client's WebSocket `/<base>/client` on to the server of its base (`ibWebSocketRelay`, `core/net/`); clients do not change. TLS ends there: the port goes through the listener's door with `backend.conf`'s certificate, the servers listen on `127.0.0.1` in the clear;
+- reads `server.conf` (`ibServerConfig`, `core/server/`), writes each new base's `Id` and `McpPort`, and starts `appserver --worker=<base>` for each base — a child whose pipes it holds (`ibWorkerPipe`);
+- holds the config's port — `Port`, 7373 (`ibPort::Clients`) unless another is written; taken, it is refused, never moved off — and carries each client's WebSocket `/<base>/client` on to the server of its base (`ibWebSocketRelay`, `core/net/`); clients do not change. TLS ends there: the port goes through the listener's door with `backend.conf`'s certificate, the servers listen on `127.0.0.1` in the clear;
 - a server that falls is started again (after 1 s, or later and later after short lives); its sessions are lost with it, the other bases do not notice;
 - **a service of the system**, as Apache is: `appcluster --install` (an administrator's) installs it to start with Windows, `--service` is how the service manager runs it, `--uninstall` removes it; under systemd a unit runs `appcluster --service` and SIGTERM stops it. Ctrl+C, SIGTERM and the manager's stop all stop it the same way: every server first;
 - **the control socket** `/cluster` on the same port (`core/server/clusterControl.h`): from this machine alone (`ibIsLoopback`) and with the token written into the server folder at each start (`cluster.token`). The cluster sends the list of its servers as the socket opens and on every change; a verb comes back — start, stop, restart a base's server, or stop the cluster.
@@ -975,7 +976,7 @@ the debuggee — whatever runs the configuration       the designer
 ibDebuggerServer ◄──── WebSocket /debugger ────────► ibDebuggerClient
 (backend/debugger/, on core/net)                     (backend/debugger/)
 
-Default port: 1650  (defined as defaultDebuggerPort in debugDefs.h)
+Ports: 7700–7709, the first free one  (ibPort::Debugger, core/net/ports.h)
 ```
 
 The thin designer's debugger is the server's: the engine's `ibDebuggerClient` lives in the designer's session where

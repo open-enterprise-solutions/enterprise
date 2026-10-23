@@ -174,7 +174,7 @@ public:
 
 		Route();
 
-		// ⭐ THE CONSEQUENCE FIRST, THEN THE CAUSE — and the likely holder named. "Port 3737 is already
+		// ⭐ THE CONSEQUENCE FIRST, THEN THE CAUSE — and the likely holder named. "The port is already
 		// taken" alone leaves the reader to work out that the assistant is therefore NOT LISTENING, and
 		// the symptom on the other side is a client that cannot connect, which looks exactly like the
 		// access being switched off (2026-09-23: two designers open, the second one silently without a
@@ -187,8 +187,7 @@ public:
 		if (!m_server.Start(options, error)) {
 			refusal = wxString::Format(
 				_("Assistant access did not start: %s.\n\n"
-				  "If another designer is open, or an application server serves a base with assistant access on, "
-				  "it holds the port - only one can. "
+				  "If another designer is open, it holds the port - only one can. "
 				  "Close it, or give this one a port of its own in Tools > Options > Assistant access."),
 				wxString::FromUTF8(error));
 			return false;

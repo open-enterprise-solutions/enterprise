@@ -90,7 +90,7 @@ bool ReadPublication(const wxCmdLineParser& parser, ibWebConfig& config)
 	}
 	else {
 		wxString host, base;
-		int port = ibProtocolConnectionServer::kDefaultPort;
+		int port = 0;
 		bool secure = false;
 		publication.m_kind = wxT("server");
 		publication.m_address = server;

@@ -10,6 +10,7 @@
 
 #include "core/exception.h"                   // ibCoreException — the listener refused, with the reason
 #include "core/net/webSocketFrame.h"         // ibWebSocketClose — what a socket that did not log in is told
+#include "core/server/listener.h"            // ibListenerOptions — the one door every listener opens through
 
 #include "frmserver/client/clientHost.h"
 
@@ -134,12 +135,12 @@ ibClientListener::~ibClientListener()
 	Stop();
 }
 
-bool ibClientListener::Start(const wxString& host, unsigned short& port, bool choose, const ibTlsFiles& tls,
-	std::map<wxString, ibClientHost*> hosts, wxString& refusal)
+bool ibClientListener::Start(const ibPortRange& ports, unsigned short& port, std::map<wxString, ibClientHost*> hosts,
+	wxString& refusal)
 {
 	ibHttpServerOptions options;
 	try {
-		options = ibListenerOptions(host, port, tls);
+		options = ibListenerOptions(wxT("127.0.0.1"), ports.m_first, ibTlsFiles());
 	}
 	catch (const ibCoreException& err) {
 		refusal = err.GetErrorDescription();
@@ -179,21 +180,16 @@ bool ibClientListener::Start(const wxString& host, unsigned short& port, bool ch
 
 	options.m_maxConnections = std::max<std::size_t>(connections, 1);
 
-	const std::string address = host.IsEmpty() ? std::string("0.0.0.0") : options.m_host;
-	const unsigned int first = port;
 	std::string error;
-	if (m_server->Start(options, choose ? ibServerConfig::s_choosePorts : 1, error)) {
-		port = options.m_httpsPort ? m_server->GetHttpsPort() : m_server->GetHttpPort();
+	if (m_server->Start(options, ports.m_count, error)) {
+		port = m_server->GetHttpPort();
 		ibAppServerSay(ibJournalMark::Info, wxT("client connections: up to %u"),
 			static_cast<unsigned>(options.m_maxConnections));
 		return true;
 	}
 
-	refusal = choose
-		? wxString::Format(wxT("no free port from %u to %u on %s (%s)"), first, first + ibServerConfig::s_choosePorts - 1,
-			wxString::FromUTF8(address), wxString::FromUTF8(error))
-		: wxString::Format(wxT("port %u on %s did not open - another application server is probably holding it (%s)"),
-			first, wxString::FromUTF8(address), wxString::FromUTF8(error));
+	refusal = wxString::Format(wxT("no free port from %u to %u on 127.0.0.1 (%s)"), static_cast<unsigned>(ports.m_first),
+		static_cast<unsigned>(ports.Last()), wxString::FromUTF8(error));
 	m_server.reset();
 	m_loginRound.reset();
 	return false;

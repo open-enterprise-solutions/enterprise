@@ -220,7 +220,7 @@ static void LaunchWebDebug(wxWindow* parent, bool withDebug)
 	// withDebug=true -> wes spawns with --debug so its debugServer comes
 	// up; the designer's debugClient then attaches via the manifest's
 	// pid/host (out-of-band of the manifest itself — debug-server still
-	// listens on defaultDebuggerPort+offset).
+	// listens on one of ibPort::Debugger).
 	if (appData->RunApplication(wxT("wenterprise-server"),
 			/*searchDebug=*/withDebug, /*useManifest=*/true) == 0) {
 		wxMessageBox(_("Failed to start wenterprise-server"),

@@ -306,6 +306,7 @@
     <ClInclude Include="net\httpServer.h" />
     <ClInclude Include="net\httpStream.h" />
     <ClInclude Include="net\ioThreads.h" />
+    <ClInclude Include="net\ports.h" />
     <ClInclude Include="net\tlsStream.h" />
     <ClInclude Include="net\webSocketFrame.h" />
     <ClInclude Include="net\webSocketRelay.h" />
