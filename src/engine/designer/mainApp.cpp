@@ -51,8 +51,8 @@ wxIMPLEMENT_APP(ibAppDesigner);
 
 void ibAppDesigner::OnInitCmdLine(wxCmdLineParser& parser)
 {
-	// Same layout as enterprise.exe — short names legacy, long names match
-	// wenterprise-server so RunApplication emits flags that parse in all bins.
+	// Same layout as enterprise.exe — short names legacy, long names one
+	// set so RunApplication emits flags that parse in all bins.
 	parser.AddOption(wxT("file"),   wxT("file"),     "Database file path",      wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL);
 	parser.AddOption(wxT("srv"),    wxT("server"),   "Database server address", wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL);
 	parser.AddOption(wxT("p"),      wxT("dbport"),   "Database server port",    wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL);

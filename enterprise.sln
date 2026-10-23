@@ -97,11 +97,6 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "wfrontend", "src\engine\fro
 		{35245A06-A72D-40B9-92FE-8EF2CCCC9D00} = {35245A06-A72D-40B9-92FE-8EF2CCCC9D00}
 	EndProjectSection
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "wenterprise-server", "src\engine\wenterprise-server\wenterprise-server.vcxproj", "{A1B2C3D4-0001-4E5F-8A9B-C0D1E2F30001}"
-	ProjectSection(ProjectDependencies) = postProject
-		{A1B2C3D4-0002-4E5F-8A9B-C0D1E2F30002} = {A1B2C3D4-0002-4E5F-8A9B-C0D1E2F30002}
-	EndProjectSection
-EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "mbedtls", "src\engine\core\tls\mbedtls.vcxproj", "{A1B2C3D4-0003-4E5F-8A9B-C0D1E2F30003}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "llhttp", "src\engine\core\net\llhttp\llhttp.vcxproj", "{A1B2C3D4-000B-4E5F-8A9B-C0D1E2F3000B}"
@@ -206,14 +201,6 @@ Global
 		{A1B2C3D4-0002-4E5F-8A9B-C0D1E2F30002}.Release|x64.Build.0 = Release|x64
 		{A1B2C3D4-0002-4E5F-8A9B-C0D1E2F30002}.Release|x86.ActiveCfg = Release|Win32
 		{A1B2C3D4-0002-4E5F-8A9B-C0D1E2F30002}.Release|x86.Build.0 = Release|Win32
-		{A1B2C3D4-0001-4E5F-8A9B-C0D1E2F30001}.Debug|x64.ActiveCfg = Debug|x64
-		{A1B2C3D4-0001-4E5F-8A9B-C0D1E2F30001}.Debug|x64.Build.0 = Debug|x64
-		{A1B2C3D4-0001-4E5F-8A9B-C0D1E2F30001}.Debug|x86.ActiveCfg = Debug|Win32
-		{A1B2C3D4-0001-4E5F-8A9B-C0D1E2F30001}.Debug|x86.Build.0 = Debug|Win32
-		{A1B2C3D4-0001-4E5F-8A9B-C0D1E2F30001}.Release|x64.ActiveCfg = Release|x64
-		{A1B2C3D4-0001-4E5F-8A9B-C0D1E2F30001}.Release|x64.Build.0 = Release|x64
-		{A1B2C3D4-0001-4E5F-8A9B-C0D1E2F30001}.Release|x86.ActiveCfg = Release|Win32
-		{A1B2C3D4-0001-4E5F-8A9B-C0D1E2F30001}.Release|x86.Build.0 = Release|Win32
 		{A1B2C3D4-0003-4E5F-8A9B-C0D1E2F30003}.Debug|x64.ActiveCfg = Debug|x64
 		{A1B2C3D4-0003-4E5F-8A9B-C0D1E2F30003}.Debug|x64.Build.0 = Debug|x64
 		{A1B2C3D4-0003-4E5F-8A9B-C0D1E2F30003}.Debug|x86.ActiveCfg = Debug|Win32

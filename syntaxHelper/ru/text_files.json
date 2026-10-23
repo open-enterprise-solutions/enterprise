@@ -21,7 +21,7 @@
       "parameters": "path — файл, который читаем. Файл, который не удалось открыть, — отказ, и в сообщении названо его имя.\nencoding — член TextEncoding; если опущен или пуст — UTF8, а он СТРОГИЙ: байты, которые не UTF-8, отвергаются, а не читаются с дырами.",
       "return_descr": "TextReader.",
       "example": "Reader = New TextReader(\"C:\\in\\sales.csv\", TextEncoding.UTF8);\nLine = Reader.ReadLine();\nwhile (Line <> Undefined) {              // Undefined, а не \"\": пустая строка — это строка\n    if (Line <> \"\") {\n        Cut = Find(Line, \";\");\n        Code = Left(Line, Cut - 1);      // первое поле\n    }\n    Line = Reader.ReadLine();\n}\nReader.Close();",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "cls.TextReader.ReadLine",
         "cls.TextReader.Read",
@@ -49,7 +49,7 @@
       "parameters": "path — файл, который читаем.\nencoding — член TextEncoding; если опущен или пуст — UTF8.",
       "return_descr": "",
       "example": "Reader = New TextReader(first);\nMessage(Reader.ReadLine());\nReader.Open(second);          // первый файл отпущен; читатель стоит на строке 1 второго\nMessage(Reader.ReadLine());\nReader.Close();",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "cls.TextReader",
         "cls.TextReader.Close",
@@ -73,7 +73,7 @@
       "parameters": "Нет.",
       "return_descr": "Строка — или Undefined в конце файла.",
       "example": "Line = Reader.ReadLine();\nwhile (Line <> Undefined) {       // а не while (Line <> \"\")\n    Message(Line);\n    Line = Reader.ReadLine();\n}",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "cls.TextReader",
         "cls.TextReader.Read",
@@ -98,7 +98,7 @@
       "parameters": "Нет.",
       "return_descr": "Строка — \"\", когда ничего не осталось.",
       "example": "Header = Reader.ReadLine();       // первая строка отдельно\nBody = Reader.Read();             // всё, что после неё, вместе с переводами строк\nReader.Close();",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "cls.TextReader",
         "cls.TextReader.ReadLine",
@@ -122,7 +122,7 @@
       "parameters": "Нет.",
       "return_descr": "Число.",
       "example": "Reader = New TextReader(path);\nfor (n = 1 To Reader.LineCount()) {\n    Message(Reader.GetLine(n));\n}\nReader.Close();",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "cls.TextReader",
         "cls.TextReader.GetLine",
@@ -147,7 +147,7 @@
       "parameters": "line — номер строки, считая с единицы. Меньше единицы или за последней — ответ Undefined.",
       "return_descr": "Строка — или Undefined, когда такой строки нет.",
       "example": "Reader = New TextReader(path);\nMessage(Reader.GetLine(1));                    // строка заголовка\nMessage(Reader.GetLine(Reader.LineCount()));   // последняя\nMessage(Reader.ReadLine());                    // по-прежнему строка 1: GetLine её не сдвинул\nReader.Close();",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "cls.TextReader",
         "cls.TextReader.LineCount",
@@ -172,7 +172,7 @@
       "parameters": "Нет.",
       "return_descr": "",
       "example": "Reader.Close();\nReader.Open(nextFile);        // тот же читатель, другой файл",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "cls.TextReader",
         "cls.TextReader.Open"
@@ -196,7 +196,7 @@
       "parameters": "path — файл, в который пишем. Файл, который не удалось открыть на запись, — отказ, и в сообщении названо его имя.\nencoding — член TextEncoding; если опущена или пуста — UTF8.\nappend — True дописывает в конец файла; False, по умолчанию, замещает его.",
       "return_descr": "TextWriter.",
       "example": "Writer = New TextWriter(GetTempDir() + \"sales.csv\", TextEncoding.UTF8);\nWriter.WriteLine(\"code;name;qty\");\nWriter.WriteLine(\"00001;Бумага;12\");\nWriter.Close();                      // выгрузка цела только после того, как это вернулось",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "cls.TextWriter.Write",
         "cls.TextWriter.WriteLine",
@@ -223,7 +223,7 @@
       "parameters": "path — файл, в который пишем.\nencoding — член TextEncoding; если опущена или пуста — UTF8.\nappend — True дописывает в конец файла; False, по умолчанию, замещает его.",
       "return_descr": "",
       "example": "Writer = New TextWriter(first);\nWriter.WriteLine(\"one\");\nWriter.Open(second);          // первый файл ЗАКРЫВАЕТСЯ здесь — и о неудавшемся закрытии скажут здесь\nWriter.WriteLine(\"two\");\nWriter.Close();",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "cls.TextWriter",
         "cls.TextWriter.Close",
@@ -247,7 +247,7 @@
       "parameters": "text — что положить, как есть.",
       "return_descr": "",
       "example": "Writer.Write(\"00001;\");\nWriter.Write(\"Бумага;\");\nWriter.WriteLine(\"12\");        // перевод строки, который заканчивает строку файла",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "cls.TextWriter",
         "cls.TextWriter.WriteLine",
@@ -272,7 +272,7 @@
       "parameters": "text — что положить; перевод строки после него добавляет сам этот глагол.",
       "return_descr": "",
       "example": "Writer.WriteLine(\"code;name;qty\");\nWriter.WriteLine(\"\");           // пустая строка — тоже строка: только перевод строки",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "cls.TextWriter",
         "cls.TextWriter.Write",
@@ -296,7 +296,7 @@
       "parameters": "Нет.",
       "return_descr": "",
       "example": "try {\n    Writer.Close();\n} except {\n    Message(\"выгрузка не дошла до диска: \" + ErrorDescription());\n}",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "cls.TextWriter",
         "cls.TextWriter.Write",
@@ -321,7 +321,7 @@
       "parameters": "base64 — байты, записанные в base64, в той же форме, какой значение показывается как текст; строго, всё прочее отвергается. Вместо него можно передать другое BinaryData — оно будет скопировано. Если аргумент опущен, значение байтов не держит.",
       "return_descr": "BinaryData.",
       "example": "Bytes = New BinaryData();\nBytes.Read(\"C:\\in\\logo.png\");\nMessage(Bytes.Size());\nBytes.Write(GetTempDir() + \"logo.png\");",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "cls.BinaryData.Size",
         "cls.BinaryData.Read",
@@ -347,7 +347,7 @@
       "parameters": "Нет.",
       "return_descr": "Число.",
       "example": "Bytes.Read(path);\nif (Bytes.Size() = 0) { Message(\"файл пуст\"); }",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "cls.BinaryData",
         "cls.BinaryData.Read"
@@ -370,7 +370,7 @@
       "parameters": "path — файл, который читаем.",
       "return_descr": "",
       "example": "Bytes = New BinaryData();\nBytes.Read(\"C:\\in\\price.zip\");\nMessage(Bytes.Size());",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "cls.BinaryData",
         "cls.BinaryData.Write",
@@ -395,7 +395,7 @@
       "parameters": "path — файл, в который пишем; он замещается.",
       "return_descr": "",
       "example": "Bytes.Write(GetTempDir() + \"answer.bin\");",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "cls.BinaryData",
         "cls.BinaryData.Read",
@@ -420,7 +420,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "Reader = New TextReader(\"C:\\in\\export.txt\", TextEncoding.OEM);   // файл от консольной программы\nMessage(Reader.ReadLine());\nReader.Close();",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "enum.TextEncoding.UTF8",
         "enum.TextEncoding.UTF16",
@@ -447,7 +447,7 @@
       "parameters": "",
       "return_descr": "TextEncoding.",
       "example": "Reader = New TextReader(path, TextEncoding.UTF8);   // то же, что New TextReader(path)",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "enum.TextEncoding",
         "cls.TextReader",
@@ -471,7 +471,7 @@
       "parameters": "",
       "return_descr": "TextEncoding.",
       "example": "Writer = New TextWriter(path, TextEncoding.UTF16);\nWriter.WriteLine(\"Привет\");\nWriter.Close();\nReader = New TextReader(path, TextEncoding.UTF16);   // метка говорит, какой конец идёт первым",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "enum.TextEncoding",
         "cls.TextReader",
@@ -495,7 +495,7 @@
       "parameters": "",
       "return_descr": "TextEncoding.",
       "example": "Reader = New TextReader(\"C:\\in\\export.txt\", TextEncoding.ANSI);\nMessage(Reader.ReadLine());\nReader.Close();",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "enum.TextEncoding",
         "enum.TextEncoding.OEM",
@@ -519,7 +519,7 @@
       "parameters": "",
       "return_descr": "TextEncoding.",
       "example": "Reader = New TextReader(\"C:\\in\\report.txt\", TextEncoding.OEM);   // записан консольной программой\nMessage(Reader.ReadLine());\nReader.Close();",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "enum.TextEncoding",
         "enum.TextEncoding.ANSI",
@@ -543,7 +543,7 @@
       "parameters": "",
       "return_descr": "TextEncoding.",
       "example": "Reader = New TextReader(path, TextEncoding.System);   // то, чем пишет эта машина\nMessage(Reader.ReadLine());\nReader.Close();",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "enum.TextEncoding",
         "enum.TextEncoding.ANSI",

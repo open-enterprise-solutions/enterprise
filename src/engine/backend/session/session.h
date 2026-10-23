@@ -926,7 +926,7 @@ public:
 	// under --debug, so attaching to a running application took the breakpoints and the Pause and every
 	// stop was dropped in DoDebugLoop without a word (Max, 2026-10-21, desktop and thin alike). Whether
 	// anything stops is the debug server's (m_bUseDebug, the breakpoints). Here and not on ibDebuggerServer
-	// so concurrent web sessions in wenterprise-server each enter their own debug loop without blocking
+	// so concurrent sessions of one server each enter their own debug loop without blocking
 	// the others.
 	struct ibDebugSession {
 		// True while ibProcUnit::Execute is parked in DoDebugLoop's CV

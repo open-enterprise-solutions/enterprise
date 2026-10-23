@@ -11,7 +11,7 @@
 // The debug CRT prints "Detected memory leaks!" on exit and names every surviving block by size
 // and by an allocation ordinal — never by WHO allocated it, which is the only thing worth knowing.
 // This module answers that, and it lives in backend so every binary that links backend gets it:
-// enterprise, designer, codeRunner, launcher, wenterprise-server. Same layering rule as
+// enterprise, designer, codeRunner, launcher, webserver. Same layering rule as
 // ibCrashGuard next door — no wx UI, linkable from anything.
 //
 //     set OES_TRACK_SIZE=116,32,64   record a call stack for every allocation of these sizes

@@ -8518,8 +8518,8 @@ msgid "Debugger is already running!"
 msgstr "Налагоджувач вже запущено!"
 
 #: src/engine/designer/mainFrame/mainFrameDesignerEvent.cpp:203
-msgid "Failed to start wenterprise-server"
-msgstr "Не вдалося запустити wenterprise-server"
+msgid "Failed to start webserver"
+msgstr "Не вдалося запустити webserver"
 
 #: src/engine/designer/mainFrame/mainFrameDesignerEvent.cpp:324
 #: src/engine/designer/mainFrameDesignerEvent.cpp:92
@@ -14667,10 +14667,9 @@ msgstr ""
 msgid "Launch OES"
 msgstr "Запуск OES"
 
-#: src/engine/launcher/launcher.cpp:379
-#, c-format
-msgid "Failed to start wenterprise-server: %s"
-msgstr "Не вдалося запустити wenterprise-server: %s"
+#: src/engine/launcher/launcher.cpp:318
+msgid "The web server publishes a file base, and this base is on a DBMS server."
+msgstr "Веб-сервер публікує файлову базу, а ця база — на сервері СУБД."
 
 #: src/engine/frmserver/client/clientFrameDesigner.cpp:27
 #: src/engine/frmserver/client/clientFrameRuntime.cpp:23

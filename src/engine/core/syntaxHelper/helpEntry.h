@@ -117,7 +117,7 @@ struct CORE_API ibHelpEntry {
 	wxString exampleVes;
 
 	// Free-form tier list — OES runtime targets the entry is valid on
-	// (e.g. "Designer, codeRunner, appserver, wenterprise-server").
+	// (e.g. "Thin client, Server").
 	// Localised string, no parsing required by readers.
 	wxString availability;
 

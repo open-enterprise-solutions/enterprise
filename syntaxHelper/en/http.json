@@ -21,7 +21,7 @@
       "parameters": "host - the machine's name, never an address: \"api.example\", \"10.0.0.5\", \"::1\".\nport - 1 to 65535; left out it is 80, and 443 once a SecureConnection is set.\nuser, password - sent as Basic authorization with every request, unless the request says who it is itself.\ntimeout - seconds, 1 to 86400 (a day); 30 when it is left out.",
       "return_descr": "HTTPConnection.",
       "example": "Connection = New HTTPConnection(\"api.example\", 8080, \"user\", \"password\", 30);\nRequest = New HTTPRequest(\"/v1/sales?shift=42\");\nRequest.Headers.Insert(\"Accept\", \"application/json\");\n\ntry {\n    Response = Connection.Get(Request);\n    if (Response.StatusCode = 200) {            // 404 and 500 are ANSWERS, not failures\n        Message(Response.GetBodyAsString());\n    } else {\n        Message(\"answered \" + Response.StatusCode);\n    }\n} except {\n    Message(\"no answer: \" + ErrorDescription());   // no resolve, no listener, or 30 s passed\n}",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.HTTPConnection.SecureConnection",
         "cls.HTTPRequest",
@@ -48,7 +48,7 @@
       "parameters": "",
       "return_descr": "String.",
       "example": "Message(Connection.Host);   // api.example",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.HTTPConnection",
         "cls.HTTPConnection.Port"
@@ -71,7 +71,7 @@
       "parameters": "",
       "return_descr": "Number.",
       "example": "Message(Connection.Port);   // 80 unless said, 443 once it is secure",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.HTTPConnection",
         "cls.HTTPConnection.Host"
@@ -94,7 +94,7 @@
       "parameters": "",
       "return_descr": "Number.",
       "example": "Connection.Timeout = 5;    // 0 raises, and 30 goes on standing",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.HTTPConnection"
       ],
@@ -116,7 +116,7 @@
       "parameters": "request - an HTTPRequest. It may be sent again, and over another connection: sending changes nothing in it.",
       "return_descr": "HTTPResponse.",
       "example": "Request = New HTTPRequest(\"/v1/sales?shift=42\");\nResponse = Connection.Get(Request);",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.HTTPConnection",
         "cls.HTTPRequest",
@@ -141,7 +141,7 @@
       "parameters": "request - an HTTPRequest. It may be sent again, and over another connection: sending changes nothing in it.",
       "return_descr": "HTTPResponse.",
       "example": "Request = New HTTPRequest(\"/v1/orders\");\nRequest.Headers.Insert(\"Content-Type\", \"application/json\");\nRequest.SetBodyFromString(\"{\"\"table\"\": 7}\");\nResponse = Connection.Post(Request);",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.HTTPConnection",
         "cls.HTTPRequest",
@@ -166,7 +166,7 @@
       "parameters": "request - an HTTPRequest. It may be sent again, and over another connection: sending changes nothing in it.",
       "return_descr": "HTTPResponse.",
       "example": "Request = New HTTPRequest(\"/v1/orders/17\");\nRequest.Headers.Insert(\"Content-Type\", \"application/json\");\nRequest.SetBodyFromString(\"{\"\"table\"\": 9}\");\nResponse = Connection.Put(Request);",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.HTTPConnection",
         "cls.HTTPRequest",
@@ -191,7 +191,7 @@
       "parameters": "request - an HTTPRequest. It may be sent again, and over another connection: sending changes nothing in it.",
       "return_descr": "HTTPResponse.",
       "example": "Request = New HTTPRequest(\"/v1/orders/17\");\nRequest.Headers.Insert(\"Content-Type\", \"application/json\");\nRequest.SetBodyFromString(\"{\"\"table\"\": 9}\");\nResponse = Connection.Patch(Request);",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.HTTPConnection",
         "cls.HTTPRequest",
@@ -216,7 +216,7 @@
       "parameters": "request - an HTTPRequest. It may be sent again, and over another connection: sending changes nothing in it.",
       "return_descr": "HTTPResponse.",
       "example": "Request = New HTTPRequest(\"/v1/orders/17\");\nResponse = Connection.Delete(Request);",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.HTTPConnection",
         "cls.HTTPRequest",
@@ -241,7 +241,7 @@
       "parameters": "request - an HTTPRequest. It may be sent again, and over another connection: sending changes nothing in it.",
       "return_descr": "HTTPResponse.",
       "example": "Request = New HTTPRequest(\"/v1/report.pdf\");\nResponse = Connection.Head(Request);\nMessage(Response.Headers[\"Content-Length\"]);",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.HTTPConnection",
         "cls.HTTPRequest",
@@ -266,7 +266,7 @@
       "parameters": "method - HTTPMethod.Get, .Post, .Put, .Patch, .Delete, .Head or .Options.\nrequest - an HTTPRequest.",
       "return_descr": "HTTPResponse.",
       "example": "Request = New HTTPRequest(\"/v1/orders\");\nResponse = Connection.CallMethod(HTTPMethod.Options, Request);\nMessage(Response.Headers[\"Allow\"]);",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.HTTPConnection",
         "cls.HTTPConnection.Get",
@@ -293,7 +293,7 @@
       "parameters": "resourceAddress - the path and the query, starting with '/'; left out, \"/\".\nheaders - a Structure of name = value; left out, an empty one.",
       "return_descr": "HTTPRequest.",
       "example": "Request = New HTTPRequest(\"/v1/orders\");\nRequest.Headers.Insert(\"Content-Type\", \"application/json\");\nRequest.Headers.Insert(\"Accept\", \"application/json\");\nRequest.SetBodyFromString(\"{\"\"table\"\": 7}\");",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.HTTPConnection",
         "cls.HTTPResponse",
@@ -319,7 +319,7 @@
       "parameters": "",
       "return_descr": "String.",
       "example": "Request.ResourceAddress = \"/v1/sales?shift=42\";",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.HTTPRequest",
         "cls.HTTPConnection"
@@ -342,7 +342,7 @@
       "parameters": "",
       "return_descr": "Structure.",
       "example": "Request.Headers.Insert(\"Authorization\", \"Bearer t0ken\");\nMessage(Request.Headers[\"authorization\"]);   // one entry: the name folds case",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.HTTPRequest",
         "cls.HTTPResponse.Headers",
@@ -366,7 +366,7 @@
       "parameters": "text - what to send.\nencoding - a TextEncoding: UTF8 (the default), UTF16, ANSI, OEM, System.",
       "return_descr": "",
       "example": "Request.Headers.Insert(\"Content-Type\", \"application/json\");\nRequest.SetBodyFromString(\"{\"\"shift\"\": 42}\");",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.HTTPRequest.GetBodyAsString",
         "cls.HTTPRequest.SetBodyFromBinaryData",
@@ -391,7 +391,7 @@
       "parameters": "data - a BinaryData.",
       "return_descr": "",
       "example": "Data = New BinaryData();\nData.Read(\"C:\\out\\receipt.pdf\");\nRequest.Headers.Insert(\"Content-Type\", \"application/pdf\");\nRequest.SetBodyFromBinaryData(Data);",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.HTTPRequest.SetBodyFromString",
         "cls.HTTPRequest.GetBodyAsBinaryData",
@@ -415,7 +415,7 @@
       "parameters": "encoding - a TextEncoding: UTF8 (the default), UTF16, ANSI, OEM, System.",
       "return_descr": "String.",
       "example": "Message(Request.GetBodyAsString());",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.HTTPRequest.SetBodyFromString",
         "cls.HTTPRequest.GetBodyAsBinaryData"
@@ -438,7 +438,7 @@
       "parameters": "None.",
       "return_descr": "BinaryData.",
       "example": "Message(Request.GetBodyAsBinaryData().Size());",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.HTTPRequest.SetBodyFromBinaryData",
         "cls.HTTPRequest.GetBodyAsString"
@@ -462,7 +462,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "Response = Connection.Get(Request);\nif (Response.StatusCode = 200) {\n    Message(Response.GetBodyAsString());\n} elseif (Response.StatusCode = 302) {\n    Message(\"it moved to \" + Response.Headers[\"Location\"]);\n} else {\n    Message(\"answered \" + Response.StatusCode);\n}",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.HTTPConnection",
         "cls.HTTPRequest",
@@ -488,7 +488,7 @@
       "parameters": "",
       "return_descr": "Number.",
       "example": "if (Response.StatusCode <> 200) { Message(\"answered \" + Response.StatusCode); }",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.HTTPResponse",
         "cls.HTTPResponse.Headers",
@@ -512,7 +512,7 @@
       "parameters": "",
       "return_descr": "Structure.",
       "example": "Message(Response.Headers[\"content-type\"]);   // the name folds case\nMessage(Response.Headers[\"Location\"]);       // after a 3xx",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.HTTPResponse",
         "cls.HTTPRequest.Headers",
@@ -536,7 +536,7 @@
       "parameters": "encoding - a TextEncoding: UTF8 (the default), UTF16, ANSI, OEM, System.",
       "return_descr": "String.",
       "example": "Text = Response.GetBodyAsString();             // UTF-8 unless said",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.HTTPResponse",
         "cls.HTTPResponse.GetBodyAsBinaryData",
@@ -560,7 +560,7 @@
       "parameters": "None.",
       "return_descr": "BinaryData.",
       "example": "Response.GetBodyAsBinaryData().Write(\"C:\\in\\answer.bin\");",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.HTTPResponse",
         "cls.HTTPResponse.GetBodyAsString",
@@ -585,7 +585,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "Request = New HTTPRequest(\"/v1/orders\");\nResponse = Connection.CallMethod(HTTPMethod.Options, Request);\nMessage(Response.Headers[\"Allow\"]);",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "cls.HTTPConnection.CallMethod",
         "cls.HTTPConnection",
@@ -610,7 +610,7 @@
       "parameters": "",
       "return_descr": "HTTPMethod.",
       "example": "Response = Connection.CallMethod(HTTPMethod.Get, Request);   // the same as Connection.Get(Request)",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "enum.HTTPMethod",
         "cls.HTTPConnection.Get",
@@ -634,7 +634,7 @@
       "parameters": "",
       "return_descr": "HTTPMethod.",
       "example": "Request.Headers.Insert(\"Content-Type\", \"application/json\");\nRequest.SetBodyFromString(\"{\"\"table\"\": 7}\");\nResponse = Connection.CallMethod(HTTPMethod.Post, Request);",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "enum.HTTPMethod",
         "cls.HTTPConnection.Post",
@@ -658,7 +658,7 @@
       "parameters": "",
       "return_descr": "HTTPMethod.",
       "example": "Response = Connection.CallMethod(HTTPMethod.Put, Request);   // the same as Connection.Put(Request)",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "enum.HTTPMethod",
         "cls.HTTPConnection.Put",
@@ -682,7 +682,7 @@
       "parameters": "",
       "return_descr": "HTTPMethod.",
       "example": "Response = Connection.CallMethod(HTTPMethod.Patch, Request);   // the same as Connection.Patch(Request)",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "enum.HTTPMethod",
         "cls.HTTPConnection.Patch",
@@ -706,7 +706,7 @@
       "parameters": "",
       "return_descr": "HTTPMethod.",
       "example": "Request = New HTTPRequest(\"/v1/orders/17\");\nResponse = Connection.CallMethod(HTTPMethod.Delete, Request);",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "enum.HTTPMethod",
         "cls.HTTPConnection.Delete",
@@ -730,7 +730,7 @@
       "parameters": "",
       "return_descr": "HTTPMethod.",
       "example": "Request = New HTTPRequest(\"/v1/report.pdf\");\nResponse = Connection.CallMethod(HTTPMethod.Head, Request);\nMessage(Response.Headers[\"Content-Length\"]);",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "enum.HTTPMethod",
         "cls.HTTPConnection.Head",
@@ -754,7 +754,7 @@
       "parameters": "",
       "return_descr": "HTTPMethod.",
       "example": "Request = New HTTPRequest(\"/v1/orders\");\nResponse = Connection.CallMethod(HTTPMethod.Options, Request);\nMessage(Response.Headers[\"Allow\"]);",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "enum.HTTPMethod",
         "cls.HTTPConnection.CallMethod",

@@ -18,7 +18,7 @@
       "parameters": "value — значення будь-якого типу.",
       "return_descr": "Булеве.",
       "example": "Message(Boolean(0));      // False\nMessage(Boolean(\"\"));     // False\nMessage(Boolean(42));     // True",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.Number", "fn.String", "fn.TypeOf"],
       "reviewed": true
     },
@@ -37,7 +37,7 @@
       "parameters": "value — значення будь-якого типу.",
       "return_descr": "Число.",
       "example": "Message(Number(\"3.14\"));   // 3.14\nMessage(Number(True));     // 1",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.String", "fn.Boolean", "fn.Int", "fn.Round"],
       "reviewed": true
     },
@@ -56,7 +56,7 @@
       "parameters": "year — 1..9999; month — 1..12; day — день, який існує в цьому місяці цього року; hour, minute, second — необов'язкові, за відсутності опівніч. Частина поза діапазоном відхиляється на ім'я, а не переноситься в наступний місяць.",
       "return_descr": "Дата",
       "example": "Date(2026, 9, 2)\nDate(2026, 9, 2, 10, 45, 25)\nDate(\"20260902104525\")",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [],
       "reviewed": true
     },
@@ -75,7 +75,7 @@
       "parameters": "value — значення будь-якого типу.",
       "return_descr": "Рядок.",
       "example": "Message(String(1250.5));\nMessage(Format(1250.5, \"ND=2\"));",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.Format", "fn.Number", "fn.Boolean"],
       "reviewed": true
     },
@@ -94,7 +94,7 @@
       "parameters": "num — число. number — кількість десяткових знаків (за замовчуванням 0). roundMode — RoundMode.Round15as20 (за замовчуванням) або RoundMode.Round15as10.",
       "return_descr": "Число, округлене.",
       "example": "Message(Round(1.5));                             // 2\nMessage(Round(1.5, 0, RoundMode.Round15as10));   // 1\nMessage(Round(1250.567, 2));                     // 1250.57\nMessage(Int(1.9));                               // 1",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.Int", "fn.Number", "fn.Format"],
       "reviewed": true
     },
@@ -113,7 +113,7 @@
       "parameters": "num — число (або значення, що приводиться до числа).",
       "return_descr": "Число — ціла частина аргументу.",
       "example": "Message(Int(3.9));    // 3\nMessage(Int(-3.9));   // -3\nMessage(Round(3.9));  // 4 — округлення, а не відкидання",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.Round"],
       "reviewed": true
     },
@@ -132,7 +132,7 @@
       "parameters": "num — додатне число.",
       "return_descr": "Число — логарифм.",
       "example": "Message(Log10(1000));   // 3",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.Ln", "fn.Sqrt"],
       "reviewed": true
     },
@@ -151,7 +151,7 @@
       "parameters": "num — додатне число.",
       "return_descr": "Число — логарифм.",
       "example": "Message(Ln(1));   // 0",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.Log10", "fn.Sqrt"],
       "reviewed": true
     },
@@ -170,7 +170,7 @@
       "parameters": "num, ... — два і більше значення; кожне читається як число. Виклик без аргументів спричиняє виняток.",
       "return_descr": "Найбільший аргумент.",
       "example": "Message(Max(2, 9, 4, 1));   // 9\nMessage(Min(2, 9, 4, 1));   // 1",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.Min", "fn.Round"],
       "reviewed": true
     },
@@ -189,7 +189,7 @@
       "parameters": "num, ... — два і більше значення; кожне читається як число. Виклик без аргументів спричиняє виняток.",
       "return_descr": "Найменший аргумент.",
       "example": "Message(Min(5, 3));   // 3",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.Max", "fn.Round"],
       "reviewed": true
     },
@@ -208,7 +208,7 @@
       "parameters": "num — невід'ємне число.",
       "return_descr": "Число — корінь.",
       "example": "Message(Sqrt(16));   // 4",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.Log10", "fn.Ln"],
       "reviewed": true
     },
@@ -227,7 +227,7 @@
       "parameters": "str — рядок (або значення, що читається як рядок).",
       "return_descr": "Число — довжина.",
       "example": "Message(StrLen(\"abc\"));   // 3",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.IsBlankString", "fn.TrimAll"],
       "reviewed": true
     },
@@ -246,7 +246,7 @@
       "parameters": "str — рядок.",
       "return_descr": "Булеве.",
       "example": "Message(IsBlankString(\"   \"));   // True\nMessage(IsBlankString(\"x\"));     // False",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.TrimAll", "fn.StrLen", "fn.ValueIsFilled"],
       "reviewed": true
     },
@@ -265,7 +265,7 @@
       "parameters": "str — рядок.",
       "return_descr": "Рядок.",
       "example": "Message(\"[\" + TrimL(\"  x  \") + \"]\");   // [x  ]",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.TrimR", "fn.TrimAll"],
       "reviewed": true
     },
@@ -284,7 +284,7 @@
       "parameters": "str — рядок.",
       "return_descr": "Рядок.",
       "example": "Message(\"[\" + TrimR(\"  x  \") + \"]\");   // [  x]",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.TrimL", "fn.TrimAll"],
       "reviewed": true
     },
@@ -303,7 +303,7 @@
       "parameters": "str — рядок.",
       "return_descr": "Рядок.",
       "example": "Message(\"[\" + TrimAll(\"  x  \") + \"]\");   // [x]",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.TrimL", "fn.TrimR", "fn.IsBlankString"],
       "reviewed": true
     },
@@ -322,7 +322,7 @@
       "parameters": "str — рядок. number — скільки символів.",
       "return_descr": "Рядок.",
       "example": "Message(Left(\"abcdef\", 3));   // abc",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.Right", "fn.Mid", "fn.StrLen"],
       "reviewed": true
     },
@@ -341,7 +341,7 @@
       "parameters": "str — рядок. number — скільки символів.",
       "return_descr": "Рядок.",
       "example": "Message(Right(\"abcdef\", 3));   // def",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.Left", "fn.Mid", "fn.StrLen"],
       "reviewed": true
     },
@@ -360,7 +360,7 @@
       "parameters": "str — рядок. number — початок, що відлічується від 1. number — скільки символів (за замовчуванням — до кінця рядка).",
       "return_descr": "Рядок — фрагмент.",
       "example": "Message(Mid(\"abcdef\", 2, 3));                  // bcd\nMessage(Mid(\"abcdef\", 2));                     // bcdef\nMessage(Mid(\"abcdef\", Find(\"abcdef\", \"c\")));   // cdef",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.Left", "fn.Right", "fn.Find", "fn.StrLen"],
       "reviewed": true
     },
@@ -379,7 +379,7 @@
       "parameters": "str — рядок, у якому шукаємо. string — що шукаємо. number — позиція початку пошуку, від 1 (за замовчуванням — з початку).",
       "return_descr": "Число — позиція від 1 або 0, якщо не знайдено.",
       "example": "Message(Find(\"abcdef\", \"c\"));   // 3\nMessage(Find(\"abcdef\", \"z\"));   // 0",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.StrCountOccur", "fn.Mid", "fn.StrReplace"],
       "reviewed": true
     },
@@ -398,7 +398,7 @@
       "parameters": "str — вихідний рядок. string — що замінюємо. string — на що замінюємо.",
       "return_descr": "Рядок — новий; вихідний не змінюється.",
       "example": "Message(StrReplace(\"a-b-c\", \"-\", \"+\"));   // a+b+c",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.Find", "fn.StrCountOccur"],
       "reviewed": true
     },
@@ -417,7 +417,7 @@
       "parameters": "str — рядок, у якому рахуємо. string — що рахуємо.",
       "return_descr": "Число — кількість (0, якщо не трапляється).",
       "example": "Message(StrCountOccur(\"aaa\", \"a\"));     // 3\nMessage(StrCountOccur(\"abcabc\", \"z\"));  // 0",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.Find", "fn.StrReplace"],
       "reviewed": true
     },
@@ -436,7 +436,7 @@
       "parameters": "str — текст.",
       "return_descr": "Число — кількість рядків (не менше 1).",
       "example": "text = \"a\" + Chr(10) + \"b\";\nFor i = 1 To StrLineCount(text) Do\n    Message(StrGetLine(text, i));\nEndDo;",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.StrGetLine", "fn.StrLen"],
       "reviewed": true
     },
@@ -455,7 +455,7 @@
       "parameters": "str — текст. line — номер рядка, від 1.",
       "return_descr": "Рядок — без символа переведення рядка; порожній, якщо такого рядка немає.",
       "example": "text = \"first\" + Chr(10) + \"second\";\nMessage(StrGetLine(text, 2));   // second",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.StrLineCount", "fn.StrLen"],
       "reviewed": true
     },
@@ -474,7 +474,7 @@
       "parameters": "str — рядок.",
       "return_descr": "Рядок.",
       "example": "Message(Upper(\"abc\"));   // ABC",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.Lower"],
       "reviewed": true
     },
@@ -493,7 +493,7 @@
       "parameters": "str — рядок.",
       "return_descr": "Рядок.",
       "example": "Message(Lower(\"ABC\"));   // abc",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.Upper"],
       "reviewed": true
     },
@@ -512,7 +512,7 @@
       "parameters": "num — код символа.",
       "return_descr": "Рядок з одного символа.",
       "example": "text = \"first\" + Chr(10) + \"second\";",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.Asc", "fn.StrGetLine"],
       "reviewed": true
     },
@@ -531,7 +531,7 @@
       "parameters": "str — рядок.",
       "return_descr": "Число — код символа.",
       "example": "Message(Asc(\"A\"));   // 65",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.Chr", "fn.Left"],
       "reviewed": true
     },
@@ -550,7 +550,7 @@
       "parameters": "text — вихідний рядок з усіма мовами: \"en = 'Total'; ru = 'Итого'; uk = 'Разом';\". langCode — яку мову прочитати ('en', 'ru', 'uk'); мови, оголошені конфігурацією, перелічує platform_state.",
       "return_descr": "Рядок — текст названої мови; якщо мов у рядку немає взагалі, повертається сам рядок, щоб звичайний текст не зникав.",
       "example": "Message(Tstr(\"en = 'Total'; ru = 'Итого'; uk = 'Разом';\", \"uk\"));",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.GeneralLanguage", "fn.String"],
       "reviewed": true
     },
@@ -569,7 +569,7 @@
       "parameters": "Немає.",
       "return_descr": "Дата з часом.",
       "example": "Message(CurrentDate());",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.WorkingDate", "fn.BegOfDay", "fn.GetYear"],
       "reviewed": true
     },
@@ -588,7 +588,7 @@
       "parameters": "Немає.",
       "return_descr": "Дата на 00:00:00.",
       "example": "doc.Date = WorkingDate();",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.CurrentDate", "fn.BegOfDay"],
       "reviewed": true
     },
@@ -607,7 +607,7 @@
       "parameters": "d — дата. num — скільки місяців додати (може бути від'ємним).",
       "return_descr": "Дата на 00:00:00.",
       "example": "Message(AddMonth(Date(2024, 1, 31), 1));\nMessage(AddMonth(Date(2024, 3, 15), -2));",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.BegOfMonth", "fn.EndOfMonth"],
       "reviewed": true
     },
@@ -626,7 +626,7 @@
       "parameters": "d — дата.",
       "return_descr": "Дата на 00:00:00.",
       "example": "// the month a document belongs to, as a period\nbegin = BegOfMonth(doc.Date);\nend   = EndOfMonth(doc.Date);",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.EndOfMonth", "fn.BegOfQuart", "fn.BegOfYear"],
       "reviewed": true
     },
@@ -645,7 +645,7 @@
       "parameters": "d — дата.",
       "return_descr": "Дата на 23:59:59.",
       "example": "Message(EndOfMonth(Date(2024, 2, 10)));",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.BegOfMonth", "fn.EndOfQuart", "fn.EndOfYear"],
       "reviewed": true
     },
@@ -664,7 +664,7 @@
       "parameters": "d — дата.",
       "return_descr": "Дата на 00:00:00.",
       "example": "Message(BegOfQuart(Date(2024, 5, 20)));",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.EndOfQuart", "fn.GetQuartOfYear", "fn.BegOfYear"],
       "reviewed": true
     },
@@ -683,7 +683,7 @@
       "parameters": "d — дата.",
       "return_descr": "Дата на 23:59:59.",
       "example": "Message(EndOfQuart(Date(2024, 5, 20)));",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.BegOfQuart", "fn.GetQuartOfYear", "fn.EndOfYear"],
       "reviewed": true
     },
@@ -702,7 +702,7 @@
       "parameters": "d — дата.",
       "return_descr": "Дата на 00:00:00.",
       "example": "Message(BegOfYear(Date(2024, 5, 20)));",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.EndOfYear", "fn.GetYear"],
       "reviewed": true
     },
@@ -721,7 +721,7 @@
       "parameters": "d — дата.",
       "return_descr": "Дата на 23:59:59.",
       "example": "Message(EndOfYear(Date(2024, 5, 20)));",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.BegOfYear", "fn.GetYear"],
       "reviewed": true
     },
@@ -740,7 +740,7 @@
       "parameters": "d — дата.",
       "return_descr": "Дата на 00:00:00.",
       "example": "Message(BegOfWeek(Date(2024, 1, 3)));   // 2024-01-01, a Monday",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.EndOfWeek", "fn.GetDayOfWeek", "fn.GetWeekOfYear"],
       "reviewed": true
     },
@@ -759,7 +759,7 @@
       "parameters": "d — дата.",
       "return_descr": "Дата на 23:59:59.",
       "example": "Message(EndOfWeek(Date(2024, 1, 3)));   // 2024-01-07, a Sunday",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.BegOfWeek", "fn.GetDayOfWeek"],
       "reviewed": true
     },
@@ -778,7 +778,7 @@
       "parameters": "d — дата.",
       "return_descr": "Дата на 00:00:00.",
       "example": "If BegOfDay(doc.Date) == WorkingDate() Then\n    Message(\"today's document\");\nEndIf;",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.EndOfDay", "fn.WorkingDate", "fn.CurrentDate"],
       "reviewed": true
     },
@@ -797,7 +797,7 @@
       "parameters": "d — дата.",
       "return_descr": "Дата на 23:59:59.",
       "example": "from = BegOfDay(d);\nto   = EndOfDay(d);",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.BegOfDay"],
       "reviewed": true
     },
@@ -816,7 +816,7 @@
       "parameters": "d — дата.",
       "return_descr": "Число — рік.",
       "example": "Message(GetYear(Date(2024, 5, 20)));   // 2024",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.GetMonth", "fn.GetDay", "fn.BegOfYear"],
       "reviewed": true
     },
@@ -835,7 +835,7 @@
       "parameters": "d — дата.",
       "return_descr": "Число, 1..12.",
       "example": "Message(GetMonth(Date(2024, 5, 20)));   // 5",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.GetYear", "fn.GetDay", "fn.GetQuartOfYear"],
       "reviewed": true
     },
@@ -854,7 +854,7 @@
       "parameters": "d — дата.",
       "return_descr": "Число, 1..31.",
       "example": "Message(GetDay(Date(2024, 5, 20)));   // 20",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.GetMonth", "fn.GetDayOfWeek", "fn.GetDayOfYear"],
       "reviewed": true
     },
@@ -873,7 +873,7 @@
       "parameters": "d — дата.",
       "return_descr": "Число, 0..23.",
       "example": "Message(GetHour(CurrentDate()));",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.GetMinute", "fn.GetSecond", "fn.BegOfDay"],
       "reviewed": true
     },
@@ -892,7 +892,7 @@
       "parameters": "d — дата.",
       "return_descr": "Число, 0..59.",
       "example": "Message(GetMinute(CurrentDate()));",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.GetHour", "fn.GetSecond"],
       "reviewed": true
     },
@@ -911,7 +911,7 @@
       "parameters": "d — дата.",
       "return_descr": "Число, 0..59.",
       "example": "Message(GetSecond(CurrentDate()));",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.GetHour", "fn.GetMinute"],
       "reviewed": true
     },
@@ -930,7 +930,7 @@
       "parameters": "d — дата.",
       "return_descr": "Число — тиждень року.",
       "example": "Message(GetWeekOfYear(Date(2024, 1, 1)));   // 1",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.BegOfWeek", "fn.GetDayOfWeek", "fn.GetDayOfYear"],
       "reviewed": true
     },
@@ -949,7 +949,7 @@
       "parameters": "d — дата.",
       "return_descr": "Число, 1..366.",
       "example": "Message(GetDayOfYear(Date(2024, 1, 1)));   // 1",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.GetWeekOfYear", "fn.GetDay"],
       "reviewed": true
     },
@@ -968,7 +968,7 @@
       "parameters": "d — дата.",
       "return_descr": "Число, 1 (понеділок) .. 7 (неділя).",
       "example": "If GetDayOfWeek(d) > 5 Then\n    Message(\"weekend\");\nEndIf;",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.BegOfWeek", "fn.EndOfWeek", "fn.GetWeekOfYear"],
       "reviewed": true
     },
@@ -987,7 +987,7 @@
       "parameters": "d — дата.",
       "return_descr": "Число, 1..4.",
       "example": "Message(GetQuartOfYear(Date(2024, 5, 20)));   // 2",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.BegOfQuart", "fn.EndOfQuart", "fn.GetMonth"],
       "reviewed": true
     },
@@ -1006,7 +1006,7 @@
       "parameters": "fileName — повний шлях.",
       "return_descr": "Булеве — чи видалено файл.",
       "example": "FileDelete(GetTempDir() + \"report.xlsx\");",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.FileCopy", "fn.GetTempFileName", "fn.GetTempDir"],
       "reviewed": true
     },
@@ -1025,7 +1025,7 @@
       "parameters": "fileDstName — куди копіювати. fileSrcName — що копіювати.",
       "return_descr": "Булеве — чи вдалося копіювання.",
       "example": "FileCopy(GetTempDir() + \"copy.txt\", \"C:\\\\data\\\\original.txt\");",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.FileDelete", "fn.GetTempDir"],
       "reviewed": true
     },
@@ -1044,7 +1044,7 @@
       "parameters": "Немає.",
       "return_descr": "Рядок — шлях.",
       "example": "path = GetTempDir() + \"export.csv\";",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.GetTempFileName", "fn.FileDelete"],
       "reviewed": true
     },
@@ -1063,7 +1063,7 @@
       "parameters": "Немає.",
       "return_descr": "Рядок — шлях.",
       "example": "file = GetTempFileName();\n// … write it, use it …\nFileDelete(file);",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.GetTempDir", "fn.FileDelete"],
       "reviewed": true
     },
@@ -1082,7 +1082,7 @@
       "parameters": "reader — JSONReader із заданим текстом.",
       "return_descr": "Structure, Array, String, Number, Boolean або Null.",
       "example": "reader = New JSONReader(\"{\"\"number\"\":\"\"A-17\"\",\"\"qty\"\":2}\");\norder = ReadJSON(reader);\nMessage(order.number);",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.WriteJSON", "guide.json"],
       "reviewed": false
     },
@@ -1101,7 +1101,7 @@
       "parameters": "writer — JSONWriter; value — String, Number, Boolean, Date, Null, Undefined або Structure / Container / Array з них.",
       "return_descr": "Нічого.",
       "example": "line = New Structure();\nline.Insert(\"item\", \"x\");\nwriter = New JSONWriter();\nWriteJSON(writer, line);\nMessage(writer.Close());",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.ReadJSON", "guide.json"],
       "reviewed": false
     },
@@ -1120,7 +1120,7 @@
       "parameters": "Немає.",
       "return_descr": "Активна форма або порожньо.",
       "example": "form = ActiveWindow();\nIf ValueIsFilled(form) Then\n    Message(\"running in a window\");\nEndIf;",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.GetCommonForm", "fn.ShowCommonForm"],
       "reviewed": true
     },
@@ -1139,7 +1139,7 @@
       "parameters": "<Рядок> — текст повідомлення.\n<Маркер> — StatusMessage.Information (за замовчуванням), StatusMessage.Warning або StatusMessage.Error.\n\nПомилка тут — слово ПРИКЛАДНЕ, а не платформи: документ, який відмовився проводитись, каже про це на цьому рівні, і нічого не зламалося.\n\nІмена в коді англійські: українські назви в цій довідці — для читання, компілятор їх не знає.",
       "return_descr": "",
       "example": "Message(\"Документ успішно збережено.\");\nMessage(\"Документ не проведено: немає залишку.\", StatusMessage.Error);",
-      "availability": "Enterprise, Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "fn.SetStatus",
         "fn.WriteJournalEvent"
@@ -1161,7 +1161,7 @@
       "parameters": "<Рядок> — текст.\n<Маркер> — СтатусПовідомлення.Інформація (за замовчуванням), СтатусПовідомлення.Попередження або СтатусПовідомлення.Помилка. Стає рівнем запису — тим, за чим потім відбирають.\n<Категорія> — тип події, щоб згрупувати однорідні рядки: \"import.line\", \"posting.skipped\". За замовчуванням \"script.event\".\n<Об'єкт> — значення, ПРО ЩО запис: посилання або будь-що варте згадки. Його представлення дописується до тексту, тож рядок читається як «… [Замовлення покупця 000012]» і знаходиться відбором за входженням. Це ТЕКСТ, а не посилання: у журналі є колонка для структурованого навантаження, але її поки ніхто не заповнює.",
       "return_descr": "",
       "example": "ЗаписЖурналуРеєстрації(\"Завантаження почато: 1240 рядків\");\nЗаписЖурналуРеєстрації(\"Рядок 17 пропущено: немає такої номенклатури\", СтатусПовідомлення.Попередження, \"import.line\");",
-      "availability": "Підприємство, Конфігуратор, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "fn.Message"
       ],
@@ -1182,7 +1182,7 @@
       "parameters": "message — текст.",
       "return_descr": "Нічого.",
       "example": "Alert(\"the period is closed\");",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.Message", "fn.Question", "fn.SetStatus"],
       "reviewed": true
     },
@@ -1201,7 +1201,7 @@
       "parameters": "message — запитання. questionMode — які кнопки запропонувати (QuestionMode).",
       "return_descr": "Обрана відповідь; порожньо, якщо запитати не було в кого.",
       "example": "answer = Question(\"Post the document?\", QuestionMode.YesNo);",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.Alert", "fn.Message"],
       "reviewed": true
     },
@@ -1220,7 +1220,7 @@
       "parameters": "text — рядок для показу.",
       "return_descr": "Нічого.",
       "example": "For Each row In rows Do\n    SetStatus(\"processing \" + String(row.LineNumber));\nEndDo;",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.Message", "fn.Alert"],
       "reviewed": true
     },
@@ -1239,7 +1239,7 @@
       "parameters": "Немає.",
       "return_descr": "Нічого.",
       "example": "ClearMessages();\nMessage(\"starting\");",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.Message", "fn.SetStatus"],
       "reviewed": true
     },
@@ -1258,7 +1258,7 @@
       "parameters": "string — повідомлення.",
       "return_descr": "Не повертає керування.",
       "example": "SetError(\"the period is closed\");",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.Raise", "fn.ErrorDescription"],
       "reviewed": true
     },
@@ -1277,7 +1277,7 @@
       "parameters": "string — повідомлення.",
       "return_descr": "Не повертає керування.",
       "example": "If IsEmptyValue(doc.Counterparty) Then\n    Raise(\"the counterparty is not filled in\");\nEndIf;",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.SetError", "fn.ErrorDescription", "kw.Raise", "kw.Try"],
       "reviewed": true
     },
@@ -1296,7 +1296,7 @@
       "parameters": "Немає.",
       "return_descr": "Рядок — повідомлення останньої збудженої помилки.",
       "example": "Try\n    doc.Write();\nExcept\n    Message(\"could not write: \" + ErrorDescription());\nEndTry;",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.Raise", "fn.SetError", "kw.Try", "kw.Except"],
       "reviewed": true
     },
@@ -1315,7 +1315,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "fn.IsEmptyValue",
         "fn.ValueIsFilled"
@@ -1337,7 +1337,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "fn.IsEmptyValue",
         "fn.IsNull"
@@ -1359,7 +1359,7 @@
       "parameters": "value — значення будь-якого типу.",
       "return_descr": "Булеве.",
       "example": "If IsEmptyValue(doc.Counterparty) Then\n    Raise(\"the counterparty is not filled in\");\nEndIf;",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.ValueIsFilled", "fn.IsNull", "fn.IsBlankString"],
       "reviewed": true
     },
@@ -1378,7 +1378,7 @@
       "parameters": "expr — вираз рядком.",
       "return_descr": "Те, що дав вираз.",
       "example": "var k = 40;\nMessage(Evaluate(\"k + 2\"));   // 42",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.Execute", "fn.Type", "fn.TypeOf"],
       "reviewed": true
     },
@@ -1397,7 +1397,7 @@
       "parameters": "expr — оператори рядком.",
       "return_descr": "Нічого.",
       "example": "Execute(\"total = total + 1;\");",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.Evaluate"],
       "reviewed": true
     },
@@ -1416,7 +1416,7 @@
       "parameters": "value — значення. format — рядок формату, наприклад \"NFD=2; NGS= \".",
       "return_descr": "Рядок.",
       "example": "Message(Format(1250.5, \"NFD=2\"));\nMessage(Format(0, \"NZ=-\"));\nMessage(Format(True, \"BT=yes; BF=no\"));",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.String", "fn.Number", "fn.Tstr"],
       "reviewed": true
     },
@@ -1435,7 +1435,7 @@
       "parameters": "strType — зареєстроване ім'я типу, наприклад \"Number\" або \"CatalogRef.Goods\".",
       "return_descr": "Тип.",
       "example": "If TypeOf(value) == Type(\"Number\") Then\n    Message(\"a number\");\nEndIf;",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.TypeOf", "fn.IsEmptyValue"],
       "reviewed": true
     },
@@ -1454,7 +1454,7 @@
       "parameters": "value — значення будь-якого типу.",
       "return_descr": "Тип.",
       "example": "Message(TypeOf(42) == Type(\"Number\"));   // True",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.Type", "fn.IsEmptyValue"],
       "reviewed": true
     },
@@ -1473,7 +1473,7 @@
       "parameters": "Немає.",
       "return_descr": "Число.",
       "example": "Message(Rand());",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.Int", "fn.Round"],
       "reviewed": true
     },
@@ -1492,7 +1492,7 @@
       "parameters": "Немає.",
       "return_descr": "Число.",
       "example": "For i = 0 To ArgCount() - 1 Do\n    Message(ArgValue(i));\nEndDo;",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.ArgValue"],
       "reviewed": true
     },
@@ -1511,7 +1511,7 @@
       "parameters": "index — позиція аргументу, від 0.",
       "return_descr": "Рядок — аргумент.",
       "example": "Message(ArgValue(0));   // the executable's path",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.ArgCount"],
       "reviewed": true
     },
@@ -1530,7 +1530,7 @@
       "parameters": "Немає.",
       "return_descr": "Рядок.",
       "example": "Message(ComputerName());",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.UserName", "fn.GeneralLanguage"],
       "reviewed": true
     },
@@ -1549,7 +1549,7 @@
       "parameters": "command — командний рядок для запуску.",
       "return_descr": "Нічого.",
       "example": "RunApp(\"notepad.exe \" + GetTempFileName());",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.GetTempFileName", "fn.ComputerName"],
       "reviewed": true
     },
@@ -1568,7 +1568,7 @@
       "parameters": "title — текст.",
       "return_descr": "Нічого.",
       "example": "SetAppTitle(\"Production base\");",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.ActiveWindow", "fn.SetStatus"],
       "reviewed": true
     },
@@ -1587,7 +1587,7 @@
       "parameters": "Немає.",
       "return_descr": "Рядок — зараз завжди порожній.",
       "example": "// use GetTempDir() instead\npath = GetTempDir();",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.GetTempDir", "fn.GetTempFileName"],
       "reviewed": true
     },
@@ -1606,7 +1606,7 @@
       "parameters": "Немає.",
       "return_descr": "Рядок.",
       "example": "doc.Author = UserName();",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.IsInRole", "fn.AccessRight", "fn.ComputerName"],
       "reviewed": true
     },
@@ -1625,7 +1625,7 @@
       "parameters": "Немає.",
       "return_descr": "Рядок.",
       "example": "// only where the same credentials are required again\nconnect(UserName(), UserPassword());",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.UserName"],
       "reviewed": true
     },
@@ -1644,7 +1644,7 @@
       "parameters": "Немає.",
       "return_descr": "Булеве.",
       "example": "If Not ExclusiveMode() Then\n    Raise(\"this operation needs exclusive access\");\nEndIf;",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.SetExclusive"],
       "reviewed": true
     },
@@ -1663,7 +1663,7 @@
       "parameters": "on — True, щоб забрати монопольний доступ, False, щоб звільнити.",
       "return_descr": "Нічого.",
       "example": "Try\n    SetExclusive(True);\nExcept\n    Message(ErrorDescription());\nEndTry;",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.ExclusiveMode"],
       "reviewed": true
     },
@@ -1682,7 +1682,7 @@
       "parameters": "Немає.",
       "return_descr": "Рядок — код мови.",
       "example": "Message(Tstr(\"en = 'Total'; ru = 'Итого'; uk = 'Разом';\", GeneralLanguage()));",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.Tstr", "fn.UserName"],
       "reviewed": true
     },
@@ -1701,7 +1701,7 @@
       "parameters": "force — False, щоб закрити звичайним шляхом (можна відмовити), True — щоб закрити в будь-якому разі.",
       "return_descr": "Нічого.",
       "example": "EndJob(False);",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.ActiveWindow"],
       "reviewed": true
     },
@@ -1720,7 +1720,7 @@
       "parameters": "Немає.",
       "return_descr": "Нічого — збуджує виняток, якщо переривання запитано.",
       "example": "For Each row In rows Do\n    UserInterruptProcessing();\n    // … the slow part …\nEndDo;",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.SetStatus", "fn.EndJob"],
       "reviewed": true
     },
@@ -1739,7 +1739,7 @@
       "parameters": "strRole — ім'я права (наприклад, \"Read\", \"Write\", \"Delete\"). metadata — об'єкт, про який запитують. ОБИДВА обов'язкові.",
       "return_descr": "Булеве.",
       "example": "If Not AccessRight(\"Delete\", Metadata.Catalogs.Goods) Then\n    button.Enabled = False;\nEndIf;",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.IsInRole", "fn.UserName"],
       "reviewed": true
     },
@@ -1758,7 +1758,7 @@
       "parameters": "strRole — ім'я ролі.",
       "return_descr": "Булеве.",
       "example": "If IsInRole(\"Accountant\") Then\n    ShowCommonForm(\"ClosingPeriod\");\nEndIf;",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.AccessRight", "fn.UserName"],
       "reviewed": true
     },
@@ -1777,7 +1777,7 @@
       "parameters": "name — ім'я спільної форми. owner — вікно-власник (необов'язково). id — ключ, що впізнає цю форму, щоб повторний запит перевикористав одне вікно (необов'язково).",
       "return_descr": "Форма.",
       "example": "form = GetCommonForm(\"Settings\");\nform.Open();",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.ShowCommonForm", "fn.ActiveWindow", "fn.GetCommonTemplate"],
       "reviewed": true
     },
@@ -1796,7 +1796,7 @@
       "parameters": "name — ім'я спільної форми. owner — вікно-власник (необов'язково). id — ключ, що впізнає цю форму, щоб повторний запит перевикористав одне вікно (необов'язково).",
       "return_descr": "Нічого.",
       "example": "ShowCommonForm(\"Settings\");",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.GetCommonForm", "fn.ActiveWindow"],
       "reviewed": true
     },
@@ -1815,7 +1815,7 @@
       "parameters": "Немає.",
       "return_descr": "Нічого.",
       "example": "BeginTransaction();\nTry\n    first.Write();\n    second.Write();\n    CommitTransaction();\nExcept\n    RollBackTransaction();\n    Raise(ErrorDescription());\nEndTry;",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.CommitTransaction", "fn.RollBackTransaction"],
       "reviewed": true
     },
@@ -1834,7 +1834,7 @@
       "parameters": "Немає.",
       "return_descr": "Нічого.",
       "example": "CommitTransaction();",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.BeginTransaction", "fn.RollBackTransaction"],
       "reviewed": true
     },
@@ -1853,7 +1853,7 @@
       "parameters": "Немає.",
       "return_descr": "Нічого.",
       "example": "Except\n    RollBackTransaction();\nEndTry;",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.BeginTransaction", "fn.CommitTransaction"],
       "reviewed": true
     },
@@ -1872,7 +1872,7 @@
       "parameters": "Немає.",
       "return_descr": "Число — скільки завдань запущено.",
       "example": "started = RunScheduledJobs();",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.RunJob", "fn.RunBackground"],
       "reviewed": true
     },
@@ -1891,7 +1891,7 @@
       "parameters": "name — ім'я регламентного завдання.",
       "return_descr": "Булеве — чи запущено.",
       "example": "If Not RunJob(\"NightlyRecalculation\") Then\n    Message(\"the job did not start\");\nEndIf;",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.RunScheduledJobs", "fn.RunBackground"],
       "reviewed": true
     },
@@ -1910,7 +1910,7 @@
       "parameters": "procedure — ім'я процедури, що запускається. args — Масив її аргументів (може бути порожнім).",
       "return_descr": "Запущене фонове завдання.",
       "example": "args = New Array();\nargs.Add(BegOfMonth(WorkingDate()));\njob = RunBackground(\"RecalculateTotals\", args);",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.RunJob", "fn.RunScheduledJobs"],
       "reviewed": true
     },
@@ -1929,7 +1929,7 @@
       "parameters": "value — будь-яке значення, яке може тримати ця конфігурація.",
       "return_descr": "Значення як текст JSON. Спричиняє виняток, коли значення непередаване (IsTransferable) або коли не відкрито конфігурацію: типи, які називає посилання, живуть у її власному реєстрі.",
       "example": "Selection = Query.Execute().Select();\nWhile Selection.Next() Do\n\tMessage(SerializeValue(Selection));\nEndDo;",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.DeserializeValue"],
       "reviewed": true
     },
@@ -1948,7 +1948,7 @@
       "parameters": "json — текст у тому вигляді, у якому його пише SerializeValue.",
       "return_descr": "Значення, описане текстом. Спричиняє виняток, коли текст не є JSON, з якого читається значення, коли він називає тип, якого немає в цій конфігурації, або коли конфігурацію не відкрито.",
       "example": "Value = DeserializeValue(\"{\\\"type\\\":\\\"Number\\\",\\\"value\\\":42}\");",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": ["fn.SerializeValue"],
       "reviewed": true
     }

@@ -18,7 +18,7 @@
       "parameters": "<Expression1>, <Expression2> — логические выражения.",
       "return_descr": "",
       "example": "if (userInfo.IsAdmin) {\n    EnableAdminMenu();\n} else {\n    HideAdminMenu();\n}",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "kw.Else",
         "kw.Elseif",
@@ -48,7 +48,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "kw.If",
         "kw.Else",
@@ -76,7 +76,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "kw.If",
         "kw.Elseif",
@@ -104,7 +104,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "kw.If",
         "kw.Else",
@@ -131,7 +131,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "kw.If"
       ],
@@ -155,7 +155,7 @@
       "parameters": "<Condition> — проверка: логическое значение или любое другое, истинное, когда оно не пустое.\n<ValueIfTrue> — результат, когда условие выполнено.\n<ValueIfFalse> — результат в остальных случаях.",
       "return_descr": "<ValueIfTrue> или <ValueIfFalse> — то, что выбрало условие.",
       "example": "var caption = ?(qty > 0, \"In stock\", \"Sold out\");\nvar size = ?(weight < 1, \"small\", ?(weight < 10, \"medium\", \"large\"));",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "kw.If"
       ],
@@ -182,7 +182,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "foreach (Order In Customer.Orders) {\n    Total = Total + Order.Amount;\n}",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "kw.Foreach",
         "kw.In",
@@ -214,7 +214,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "kw.For",
         "kw.In",
@@ -242,7 +242,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "kw.For"
       ],
@@ -268,7 +268,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "kw.For",
         "kw.Foreach"
@@ -294,7 +294,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "kw.While",
         "kw.For",
@@ -320,7 +320,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "kw.While",
         "kw.For",
@@ -346,7 +346,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "Counter = 0;\nwhile (Counter < 10) {\n    Counter = Counter + 1;\n}",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "kw.For",
         "kw.Break",
@@ -375,7 +375,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [],
       "reviewed": true,
       "modes": [
@@ -398,7 +398,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "If Not User.IsLoggedIn Then\n    ShowLoginForm();\nEndIf;",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "kw.And",
         "kw.Or"
@@ -424,7 +424,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "If User.IsLoggedIn And User.Role = \"admin\" Then\n    ShowAdminPanel();\nEndIf;",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "kw.Or",
         "kw.Not"
@@ -450,7 +450,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "If Doc = Undefined Or Doc.Posted Then\n    Return;\nEndIf;",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "kw.And",
         "kw.Not"
@@ -476,7 +476,7 @@
       "parameters": "<Name> — идентификатор. Val — модификатор «по значению». Public — делает процедуру доступной из других модулей (пишется после списка параметров).",
       "return_descr": "",
       "example": "Procedure LogMessage(Val Text) Public {\n    Message(Text);\n}",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "kw.Function",
         "kw.Return",
@@ -506,7 +506,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "kw.Procedure"
       ],
@@ -530,7 +530,7 @@
       "parameters": "<Name> — идентификатор. Val — модификатор «по значению». Модификаторы после списка параметров — это две независимые оси: один модификатор доступа (Public / Private / Protected, по умолчанию Private) и, необязательно, Cached, который сохраняет результат для каждой комбинации значений аргументов. Порядок между ними значения не имеет.",
       "return_descr": "Значение, переданное оператору Return.",
       "example": "Function Sum(Val A, Val B) Public {\n    Return A + B;\n}",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "kw.Procedure",
         "kw.Return",
@@ -560,7 +560,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "kw.Function",
         "kw.Return",
@@ -587,7 +587,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "Var Counter Public;\n\nFunction Read() Public {\n    Return Counter;\n}",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "kw.Private",
         "kw.Protected",
@@ -618,7 +618,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "Var cache Private;\n\nFunction Prepare() Private {\n    Return cache;\n}",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "kw.Public",
         "kw.Protected",
@@ -647,7 +647,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "Var lastTotal Protected;\n\nFunction Total() Protected {\n    Return lastTotal;\n}",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "kw.Public",
         "kw.Private",
@@ -676,7 +676,7 @@
       "parameters": "Ключом служат значения аргументов, и сравниваются они ПО ЗНАЧЕНИЮ: число 1 и строка \"1\" — разные ключи. Функция без аргументов вычисляется один раз.",
       "return_descr": "",
       "example": "Function Settings() Private Cached {\n    Return ReadSettingsFromDatabase();\n}\n\n// вызывается в цикле по 10000 строк — база читается один раз\nforeach (row In rows) {\n    row.Currency = Settings().Currency;\n}",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "guide.cached",
         "kw.Function",
@@ -706,7 +706,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "kw.Procedure",
         "kw.Function"
@@ -732,7 +732,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "Function Sign(Val X)\n    If X < 0 Then Return -1; EndIf;\n    If X > 0 Then Return 1;  EndIf;\n    Return 0;\nEndFunction",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "kw.Function",
         "kw.Procedure"
@@ -758,7 +758,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "try {\n    Result = ParseNumber(UserInput);\n} except {\n    Message(\"Not a valid number: \" + ErrorDescription());\n}",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "kw.Except",
         "kw.Raise"
@@ -787,7 +787,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "kw.Try",
         "kw.Endtry",
@@ -814,7 +814,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "kw.Try",
         "kw.Except"
@@ -840,7 +840,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "kw.For",
         "kw.While",
@@ -868,7 +868,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "kw.While",
         "kw.For",
@@ -895,7 +895,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "If Amount < 0 Then\n    Raise \"Negative amount is not allowed\";\nEndIf;",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "kw.Try",
         "kw.Except"
@@ -922,7 +922,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "kw.Undefined",
         "kw.Public"
@@ -948,7 +948,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "Items = New Array;\nItems.Add(\"first\");\nItems.Add(\"second\");\n\nQuery = New Query();\nQuery.Text = \"SELECT * FROM Catalog.Items\";",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "kw.Undefined"
       ],
@@ -973,7 +973,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "Var X;\nIf X = Undefined Then\n    X = ComputeDefault();\nEndIf;",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "kw.Null",
         "kw.New",
@@ -1000,7 +1000,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "If Selection.Manager = Null Then\n    ManagerName = \"<unassigned>\";\nEndIf;",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "kw.Undefined"
       ],
@@ -1025,7 +1025,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "kw.False",
         "kw.And",
@@ -1053,7 +1053,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "kw.True",
         "kw.And",
@@ -1081,7 +1081,7 @@
       "parameters": "Имя и, необязательно, текст, который оно обозначает.",
       "return_descr": "",
       "example": "#Define DEBUG\n\n#Ifdef DEBUG\n    Message(\"debug build\");\n#Endif",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "kw.PpUndef",
         "kw.PpIfdef",
@@ -1104,7 +1104,7 @@
       "parameters": "Имя, которое снимается.",
       "return_descr": "",
       "example": "#Define DEBUG\n// …\n#Undef DEBUG",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "kw.PpDefine",
         "kw.PpIfdef"
@@ -1126,7 +1126,7 @@
       "parameters": "Проверяемое имя.",
       "return_descr": "",
       "example": "#Ifdef SERVER\n    doc.Write();\n#Else\n    Message(\"client side\");\n#Endif",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "kw.PpIfndef",
         "kw.PpElse",
@@ -1150,7 +1150,7 @@
       "parameters": "Проверяемое имя.",
       "return_descr": "",
       "example": "#Ifndef PRODUCTION\n    Message(\"not a production build\");\n#Endif",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "kw.PpIfdef",
         "kw.PpElse",
@@ -1173,7 +1173,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "#Ifdef DEBUG\n    Message(\"debug\");\n#Else\n    Message(\"release\");\n#Endif",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "kw.PpIfdef",
         "kw.PpIfndef",
@@ -1196,7 +1196,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "#Ifdef DEBUG\n    Message(\"debug\");\n#Endif",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "kw.PpIfdef",
         "kw.PpIfndef",
@@ -1219,7 +1219,7 @@
       "parameters": "Имя области.",
       "return_descr": "",
       "example": "#Region EventHandlers\n\nProcedure OnOpen() Public\n    // …\nEndProcedure\n\n#EndRegion",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "kw.PpEndRegion"
       ],
@@ -1240,7 +1240,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "#Region Helpers\n// …\n#EndRegion",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "kw.PpRegion"
       ],
@@ -1261,7 +1261,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "guide.linq",
         "kw.Where",
@@ -1289,7 +1289,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "guide.linq",
         "kw.From",
@@ -1316,7 +1316,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "guide.linq",
         "kw.From",
@@ -1343,7 +1343,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "// по складу, внутри — сначала последние\nvar moves = from m in Data.AccumulationRegisters.GoodsInWarehouses\n            orderby m.Warehouse, m.Period descending\n            select { W = m.Warehouse, P = m.Period };",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "guide.linq",
         "kw.Ascending",
@@ -1370,7 +1370,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "guide.linq",
         "kw.OrderBy",
@@ -1397,7 +1397,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "guide.linq",
         "kw.OrderBy",
@@ -1424,7 +1424,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "guide.linq",
         "kw.Skip",
@@ -1451,7 +1451,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "guide.linq",
         "kw.Take",
@@ -1478,7 +1478,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "guide.linq",
         "kw.Select"
@@ -1504,7 +1504,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "guide.linq",
         "kw.On",
@@ -1531,7 +1531,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "guide.linq",
         "kw.Join",
@@ -1558,7 +1558,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "guide.linq",
         "kw.Join",
@@ -1585,7 +1585,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "guide.linq",
         "kw.By",
@@ -1612,7 +1612,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "guide.linq",
         "kw.Group",
@@ -1639,7 +1639,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "guide.linq",
         "kw.Group",
@@ -1668,7 +1668,7 @@
       "parameters": "",
       "return_descr": "Возвращает тот же источник с вложенным ограничением.",
       "example": "",
-      "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "guide.rls",
         "ev.Role.OnAccessRead",

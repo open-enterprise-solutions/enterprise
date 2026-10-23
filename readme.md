@@ -91,11 +91,9 @@ tree, forms, the language, queries and reports, and the pitfalls.
   ODBC; SQLite for tests and logging.
 - **Localisation** — the whole interface in English, Russian and Ukrainian; every caption of a
   configuration can be written per language.
-- **Web client — in progress.** `wenterprise-server` serves the same forms to a browser. Layout,
-  commands, navigation, text fields, check boxes and toolbars work today; tables and reference
-  pickers are the next controls to arrive, so a full document form does not assemble in the browser
-  yet. `webserver` is the transport the browser client is coming to: it carries a browser to a file
-  base or to an application server's base over the client protocol, with TLS.
+- **Web client — in progress.** `webserver` serves the same forms to a browser: it carries it to a
+  file base or to an application server's base over the client protocol, with TLS. List and
+  document forms draw today, on a desktop and on a phone; the rest of the controls are arriving.
 
 ### Measured
 
@@ -193,7 +191,7 @@ cmake --build build --parallel
 
 wxWidgets is built from its submodule as part of the tree; nothing has to be installed for it.
 
-The web runtime (`wfrontend` + `wenterprise-server`) builds with `-DOES_BUILD_WEB=ON` (default OFF).
+The old web frontend (`wfrontend`) builds with `-DOES_BUILD_WEB=ON` (default OFF).
 The unit tests (Google Test) build with the same tree: `-DBUILD_TESTING=ON`.
 
 ### wxWidgets Submodule
@@ -256,7 +254,6 @@ enterprise/
         ├── enterprise-thin/  # The thin client runtime executable
         ├── designer-thin/    # The thin designer executable
         ├── designer/         # Designer/IDE executable
-        ├── wenterprise-server/ # Web server (wes process)
         ├── webserver/        # The bases' transport for browsers (links protocol alone)
         ├── launcher/         # Launcher (connection chooser)
         ├── appserver/        # The application server

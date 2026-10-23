@@ -18,9 +18,8 @@
 // parked fiber has saved its lease, so a submit from another session
 // on the same OS thread does not look reentrant.
 //
-// Used by wenterprise-server.exe (replaces today's per-session worker
-// thread in ibWebApplication) and the future oes-server.exe compute
-// server. See docs/private/compute-server-tiering.md Phase 2 for the bigger
+// Used by every host but the launcher (appHost.cpp) and the future
+// oes-server.exe compute server. See docs/private/compute-server-tiering.md Phase 2 for the bigger
 // picture.
 
 #include "workerPool.h"

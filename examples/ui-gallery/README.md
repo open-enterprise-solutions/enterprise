@@ -78,34 +78,13 @@ These exist as C++ classes under `visualView/ctrl/` but are never passed through
 either client, until someone separately verifies their rendering and registers
 them. The gallery's 20th page names this gap instead of silently omitting them.
 
-### The web client renders almost none of this gallery — a real gap, bigger than expected
+### The web client
 
-The original plan for this gallery assumed the `visualView/ctrl` layer "already
-reaches the web client for free" through `src/engine/frontend/web/jsonAdapter.h`.
-That assumption was wrong: `jsonAdapter.h` is a 33-line `nlohmann::json` adapter
-for `wxString` only, not a serializer. The actual web-rendering path is each
-control's own `Create()`, conditionally compiled with `#ifdef OES_USE_WEB`
-(`frontend/web/webWindow.h` holds the `ibWeb*` widget classes it instantiates).
-Grepping `visualView/ctrl/*.cpp` for `new ibWeb` shows only:
-
-**Have a web implementation:** `Button`, `Checkbox`, `Textctrl`, `Toolbar` (+
-item/separator), `Statictext`, `Boxsizer`, `Staticboxsizer`, `Gridsizer`,
-`Wrapsizer`, and `Tablebox` (stub only — placeholder, not a real grid).
-
-**Have none at all** — under a web build their `Create()` still constructs a real
-native wx widget, which isn't an `ibWebWindow` and can't be walked into JSON, so
-the whole subtree (the control and everything inside it) is silently dropped from
-what the web client ever sees: `Notebook`, `NotebookPage`, `Radiobutton`,
-`Slider`, `Gauge`, `Gridbox`, `Textbox`, `Staticline`, `Htmlbox`, `Chartbox`,
-`Listbox`, `Choice`, `Combobox`.
-
-Since this gallery's root control is a `Notebook`, opening it in the web client
-(`wenterprise-server` + `webClient/client.html`) currently renders nothing at
-all — confirmed by inspecting the server's own `open-meta/<id>` JSON response,
-which comes back as `{"children":[{"type":"boxsizer","orient":8}]}`: an empty
-root sizer, no `Notebook`, no pages. Implementing the missing `ibWeb*` widgets
-for the 13 types above is real new engine work, not a gallery-authoring task —
-out of scope for this pass.
+The browser client is `webserver`'s: it draws the forms the server sends over the
+client protocol (`docs/public/client-protocol.md`), the same the thin client
+draws. List and document forms draw today; the rest of the controls, this
+gallery's among them, are arriving. The old web frontend (`wfrontend`, the
+`OES_USE_WEB` widgets) drew almost none of them, and no program starts it any more.
 
 ### Desktop: a page-selection bug and a tab-rendering bug
 
@@ -189,18 +168,11 @@ Still open:
 - `Textbox` has no value/text property and `Chartbox` no data binding, so neither
   can show configured sample content; toolbar tools have no action binding.
 
-### Protocol divergence
-
-`wenterprise-server`'s web protocol is a bespoke REST + JSON + SSE API over the
-control tree (`src/engine/wenterprise-server/main.cpp`), not the documented
-unified JSON-RPC protocol (`docs/public/client-protocol.md`). Aligning the two is
-a separate, larger task, independent of the gaps above.
-
 ## Opening it
 
 - Desktop: `designer.exe --file=examples/ui-gallery` /
   `enterprise.exe --file=examples/ui-gallery`, then Operations → Data processors
   → UI Component Gallery.
-- Web (`-DOES_BUILD_WEB=ON` build only — off by default, CI never turns it on):
-  `wenterprise-server --file=examples/ui-gallery`, open the served
-  `webClient/client.html`. Per the gap above, expect an empty form.
+- Web: `webserver --file=examples/ui-gallery`, then the publication's address it
+  prints (`http://127.0.0.1:8080/ui-gallery/`). Per the section above, expect what
+  the browser client draws so far.

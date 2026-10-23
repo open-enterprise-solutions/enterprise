@@ -67,11 +67,11 @@ endforeach()
 
 option(BUILD_TESTING       "Build unit tests (Google Test)"     OFF)
 
-# The web pair — wfrontend (the OES_USE_WEB frontend) and wenterprise-server.
-# Off by default: until the three CI toolchains have all built them, the desktop
+# The old web frontend — wfrontend (the OES_USE_WEB frontend); no program loads it.
+# Off by default: until the three CI toolchains have all built it, the desktop
 # suite is what `cmake -B build` is expected to produce, and a web source that
 # stops compiling somewhere must not be able to take that down with it.
-option(OES_BUILD_WEB       "Build the web runtime (wfrontend + wenterprise-server)" OFF)
+option(OES_BUILD_WEB       "Build the old web frontend (wfrontend)" OFF)
 
 option(OES_USE_FIREBIRD    "Enable Firebird database driver"    OFF)
 option(OES_USE_POSTGRESQL  "Enable PostgreSQL database driver"  OFF)
@@ -242,8 +242,8 @@ oes_require_submodule(nlohmann single_include/nlohmann/json.hpp)
 # Common to all platforms
 add_compile_definitions(_UNICODE UNICODE)
 
-# cpp-httplib, for every translation unit that includes it (wenterprise-server, the tests' reference servers
-# and clients): its inline functions read these, and two units compiled under two values of one macro are
+# cpp-httplib, for every translation unit that includes it (the tests' reference servers and clients): its
+# inline functions read these, and two units compiled under two values of one macro are
 # one definition too many - so the whole build says it once. ConfigurationDefs.props says the same for the
 # solution.
 #   EXPECT_100_THRESHOLD=0 - the client does not add `Expect: 100-continue` to a body of 1 KB or more by
@@ -610,8 +610,7 @@ endif()
 #   launcher      — executable      (GUI subsystem)
 #   codeRunner    — executable      (GUI subsystem)
 #   simplePlugin  — SHARED library  (plugin example)
-#   wfrontend     — SHARED library  (the web frontend, OES_BUILD_WEB)
-#   wenterprise-server — executable (the web HTTP server, OES_BUILD_WEB)
+#   wfrontend     — SHARED library  (the old web frontend, OES_BUILD_WEB)
 # ---------------------------------------------------------------------------
 
 add_subdirectory("${OES_ENGINE_DIR}/core")
@@ -632,10 +631,6 @@ add_subdirectory("${OES_ENGINE_DIR}/designer-thin")
 add_subdirectory("${OES_ENGINE_DIR}/launcher")
 add_subdirectory("${OES_ENGINE_DIR}/codeRunner")
 add_subdirectory("${OES_ENGINE_DIR}/simplePlugin")
-
-if(OES_BUILD_WEB)
-    add_subdirectory("${OES_ENGINE_DIR}/wenterprise-server")
-endif()
 
 # ---------------------------------------------------------------------------
 # Unit tests (Google Test)

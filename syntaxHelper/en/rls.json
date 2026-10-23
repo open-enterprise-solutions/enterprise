@@ -17,7 +17,7 @@
       "return_descr": "",
       "example": "// filter by the current user through an access register\nProcedure OnAccessRead(Source, Operation, Allowed)\n{\n    if (Source = \"Catalog.Product\") {\n        Source = restrict s in Source\n                     join a in Data.Registers.WarehouseAccess.Where(Function(a) { Return a.User = CurrentUser(); })\n                         on s.Warehouse = a.Warehouse;\n    }\n    Allowed = True;\n}",
       "example_ves": "// filter by the current user through an access register\nProcedure OnAccessRead(Source, Operation, Allowed)\n    If Source = \"Catalog.Product\" Then\n        Source = restrict s in Source\n                     join a in Data.Registers.WarehouseAccess.Where(Function(a) Return a.User = CurrentUser(); EndFunction)\n                         on s.Warehouse = a.Warehouse;\n    EndIf;\n    Allowed = True;\nEndProcedure",
-      "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+      "availability": "Thin client, Server",
       "see_also": ["ev.Role.OnAccessRead", "ev.Role.OnAccessWrite", "cls.QueryDecorator", "kw.Restrict", "guide.query"],
       "reviewed": true
     },
@@ -34,7 +34,7 @@
       "parameters": "Source — the source as a queryable object (see QueryDecorator); compares to the source's full name (`\"Catalog.Product\"`).\nOperation — the operation string; always `\"Read\"` for a read.\nAllowed — the by-ref verdict (default False): `True` grants access under the folded restriction.",
       "return_descr": "",
       "example": "// dot-walk works: the platform auto-joins the reference path\nProcedure OnAccessRead(Source, Operation, Allowed)\n{\n    if (Source = \"Document.Receipt\") {\n        Source = Source.Where(Function(x) { Return x.Contract.Company = CurrentCompany(); });\n    }\n    Allowed = True;\n}",
-      "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+      "availability": "Thin client, Server",
       "see_also": ["guide.rls", "ev.Role.OnAccessWrite", "cls.QueryDecorator", "kw.Restrict"],
       "reviewed": true
     },
@@ -51,7 +51,7 @@
       "parameters": "Source — the source as a queryable object; compares to its full name.\nOperation — `\"Create\"` | `\"Write\"` | `\"Delete\"`.\nAllowed — the by-ref verdict (default False).",
       "return_descr": "",
       "example": "",
-      "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+      "availability": "Thin client, Server",
       "see_also": ["guide.rls", "ev.Role.OnAccessRead", "cls.QueryDecorator"],
       "reviewed": true
     },
@@ -68,7 +68,7 @@
       "parameters": "",
       "return_descr": "Both return the same source carrying the folded restriction — assign the result back to Source.",
       "example": "",
-      "availability": "enterprise, wenterprise-server, daemon, codeRunner",
+      "availability": "Thin client, Server",
       "see_also": ["guide.rls", "kw.Restrict", "ev.Role.OnAccessRead"],
       "reviewed": true
     }

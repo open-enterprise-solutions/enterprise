@@ -17,7 +17,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [],
       "reviewed": true
     },
@@ -36,7 +36,7 @@
       "parameters": "",
       "return_descr": "Масив вибраних рядків (блочний синтаксис) або лінивий ітератор (ланцюговий синтаксис).",
       "example": "// ланцюговий синтаксис — лінивий конвеєр\nvar bigOnes = arr.Where(Function(x) { return x > 5; })\n                 .OrderByDescending(Function(x) { return x; })\n                 .Take(10)\n                 .ToArray();\n\n// агрегації з лямбда-селектором\nvar total = arr.Sum();\nvar avgK  = arr.Average(Function(x) { return x.K; });\n\n// group-into continuation\nvar pairs = from p in people\n            group p.Name by p.Country into g\n            where g.Values.Count() > 1\n            select { Country = g.Key, Names = g.Values };",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "kw.From",
         "kw.Where",
@@ -63,7 +63,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "// a callback given to a pipeline\nvar limit = 3;\nvar big = arr.Where(Function(x) { return x > limit; }).ToArray();\n\n// a rule passed to a generic routine\nFunction Apply(f, v) { return f(v); }\nvar doubled = Apply(Function(x) { return x * 2; }, 21);\n\n// a function that answers with a function\nvar adder = Function(n) { return Function(x) { return x + n; }; };\nvar add10 = adder(10);\nadd10(7);   // 17",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "kw.Function",
         "guide.linq"
@@ -84,7 +84,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "var text = \"{\"\"number\"\":\"\"A-17\"\",\"\"lines\"\":[{\"\"item\"\":\"\"x\"\",\"\"qty\"\":2}]}\";\n\n// the whole message\nvar reader = New JSONReader(text);\nvar order = reader.ReadValue();\nMessage(order.number + \": \" + order.lines.Count());\nforeach (line In order.lines) {\n    Message(line.item + \" x \" + line.qty);\n}\n\n// ...or only a part of it\nvar walker = New JSONReader(text);\nvar lines = Undefined;\nwhile (walker.Read()) {\n    if (walker.CurrentValueType = JSONValueType.PropertyName And walker.CurrentValue = \"lines\") {\n        lines = walker.ReadValue();\n    }\n}\n\n// writing\nvar writer = New JSONWriter(JSONFormatting.Indented);\nwriter.WriteStartObject();\nwriter.WritePropertyName(\"number\");  writer.WriteValue(\"A-17\");\nwriter.WritePropertyName(\"lines\");   writer.WriteValue(lines);      // an Array of Structures, whole\nwriter.WriteEndObject();\nvar result = writer.Close();",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [],
       "reviewed": false
     },
@@ -102,7 +102,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "// обробник події: будь-який елемент форми\nProcedure OnClick(AnyControl element)\n{\n    Message(element);\n}\n\n// будь-яке посилання — довідник, документ чи план\nFunction Describe(AnyRef link)\n{\n    Return String(link);\n}\n\n// будь-яке посилання на документ; прапорець зі значенням за замовчуванням\nProcedure Repost(DocumentRef doc, Boolean silent = False) Public\n{\n    If (Not silent) { Message(doc); }\n}\n\n// локальні змінні оголошуються так само\nProcedure Collect()\n{\n    Array rows;\n    Table lines;\n    Structure totals;\n    Number count = 0;\n}",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "kw.Procedure",
         "kw.Function",
@@ -125,7 +125,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "// політика на період: читається один раз на період, скільки б її не питали —\n// у спільному модулі на весь сеанс\nFunction InventoryMethod(Date period) Public Cached\n{\n    Return ReadPolicy(period);\n}\n\nFunction ReadPolicy(Date period) Private\n{\n    If (period < Date(2026, 1, 1)) { Return \"Average\"; }\n    Return \"FIFO\";\n}\n\n// той, хто викликає, просто питає, скільки треба\nvar method = \"\";\nfor (i = 1 To 1000) {\n    method = InventoryMethod(Date(2026, 3, 1));   // тіло виконалося один раз\n}",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "kw.Cached",
         "kw.Function",
@@ -147,7 +147,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "var connection = New HTTPConnection(\"api.example\", 8080, \"user\", \"password\", 30);\n\nvar request = New HTTPRequest(\"/v1/sales?shift=42\");\nrequest.Headers.Insert(\"Accept\", \"application/json\");\n\nvar response;\ntry {\n    response = connection.Get(request);\n}\nexcept {\n    Message(\"no answer: \" + ErrorDescription());          // the name does not resolve, the port is closed, 30 s passed\n    return;\n}\nif (response.StatusCode <> 200) {                           // 404 and 500 are ANSWERS, not failures\n    Message(\"answered \" + response.StatusCode + \": \" + response.GetBodyAsString());\n    return;\n}\nvar text = response.GetBodyAsString();                      // UTF-8 unless said; bytes that are not text are refused\n\nvar order = New HTTPRequest(\"/v1/orders\");\norder.Headers.Insert(\"Content-Type\", \"application/json\");   // say it: a body with no type goes out as text/plain\norder.SetBodyFromString(\"{\"\"table\"\": 7}\");\nresponse = connection.Post(order);\n\nresponse = connection.CallMethod(HTTPMethod.Options, order);\nresponse.GetBodyAsBinaryData().Write(\"C:\\in\\answer.bin\");     // to a file: the bytes, as they came\n\nvar secure = New SecureConnection();                        // the platform's own trust store, and the check on\nsecure.TrustedCertificates = New CertificateFile(\"C:\\certs\\bank-ca.pem\");   // ...or this authority alone\nsecure.ClientCertificate = New CertificateFile(\"C:\\certs\\client.pem\", \"key password\");\nvar bank = New HTTPConnection(\"api.bank.example\");          // no port given: 443, once it is secure\nbank.SecureConnection = secure;\nresponse = bank.Get(New HTTPRequest(\"/v1/balance\"));",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [],
       "reviewed": false
     },
@@ -165,7 +165,7 @@
       "parameters": "FillingData — посилання, з якого вводиться об'єкт; порожньо для просто нового об'єкта. StandardProcessing — на вході True; False відмовляє у створенні об'єкта.",
       "return_descr": "",
       "example": "// модуль об'єкта ДОКУМЕНТА, ЩО ВВОДИТЬСЯ (тут — надходження із замовлення)\nProcedure Filling(FillingData, StandardProcessing)\n{\n    If (Not ValueIsFilled(FillingData)) {\n        Return;                        // просто новий документ: лише типові значення\n    }\n    // шапка за іменами; рядки — з того, що за замовленням ще відкрито\n    Counterparty = FillingData.Counterparty;\n    Warehouse = FillingData.Warehouse;\n    foreach (line In FillingData.Goods) {\n        var row = Goods.Add();\n        row.Item = line.Item;\n        row.Quantity = line.Quantity;\n    }\n}\n\n// те саме з коду\nvar doc = Documents.GoodsReceipt.CreateDocument();\ndoc.Fill(order);\ndoc.Write();",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "kw.Procedure",
         "fn.ValueIsFilled",
@@ -187,7 +187,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "// у довідника Units ListOwner = Goods (задано в метаданих, не тут)\nvar unit = Catalogs.Units.CreateElement();\nunit.Owner = item;                 // обов'язково\nunit.Description = \"коробка 12 шт\";\nunit.Write();\n\n// одиниці однієї номенклатури\nvar units = From u In Data.Catalogs.Units Where u.Owner = item Select u;",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [
         "guide.linq",
         "guide.basedOn"
@@ -208,7 +208,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "var reader = New TextReader(\"C:\\in\\sales.csv\", TextEncoding.UTF8);\nvar line = reader.ReadLine();\nwhile (line <> Undefined) {          // Undefined, not \"\": an empty line is a line\n    if (line <> \"\") {\n        var cut = Find(line, \";\");\n        var code = Left(line, cut - 1);   // the first field\n    }\n    line = reader.ReadLine();\n}\nreader.Close();\n\nvar writer = New TextWriter(GetTempDir() + \"out.csv\", TextEncoding.UTF8);\nwriter.WriteLine(\"code;name;qty\");\nwriter.Close();\n\nvar bytes = New BinaryData();\nbytes.Read(\"C:\\in\\logo.png\");\nMessage(bytes.Size());\nbytes.Write(\"C:\\out\\logo.png\");",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клієнт, Сервер",
       "see_also": [],
       "reviewed": false
     }

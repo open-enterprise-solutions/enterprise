@@ -21,7 +21,7 @@
       "parameters": "path — файл, как его называет файловая система. Он должен быть на месте в момент создания значения, и именно это имя несёт позднейший отказ.\npassword — открывает закрытый ключ, лежащий в файле; не задан — считается, что ключа, требующего пароля, в файле нет. Задаётся один раз и обратно не читается.",
       "return_descr": "CertificateFile — путь и пароль, с которыми он создан.",
       "example": "var trust = New CertificateFile(\"C:\\certs\\bank-ca.pem\");\nvar mine = New CertificateFile(\"C:\\certs\\client.pem\", \"key password\");\n\nvar secure = New SecureConnection(mine, trust);      // предъявить свой, доверять только этому центру\nvar bank = New HTTPConnection(\"api.bank.example\");\nbank.SecureConnection = secure;                      // порт не задан: с защитой это 443\n\ntry {\n    var response = bank.Get(New HTTPRequest(\"/v1/balance\"));\n    Message(response.StatusCode);\n}\nexcept {\n    Message(ErrorDescription());   // ...the certificate file 'C:\\certs\\client.pem' could not be read...\n}",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "cls.CertificateFile.Path",
         "cls.SecureConnection",
@@ -48,7 +48,7 @@
       "parameters": "",
       "return_descr": "String — путь.",
       "example": "var trust = New CertificateFile(\"C:\\certs\\bank-ca.pem\");\nvar secure = New SecureConnection();\nsecure.TrustedCertificates = trust;\nMessage(secure.TrustedCertificates.Path);   // возвращается тем же",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "cls.CertificateFile",
         "cls.SecureConnection.TrustedCertificates",
@@ -74,7 +74,7 @@
       "parameters": "clientCertificate — сертификат, который предъявляет эта сторона, как CertificateFile с ним и его ключом; не задан или Undefined — не предъявляется ничего.\ntrustedCertificates — удостоверяющий центр, которому доверять, как CertificateFile; не задан или Undefined — собственное хранилище сертификатов платформы.",
       "return_descr": "SecureConnection — ничего не предъявляется, доверие платформы, проверка включена.",
       "example": "var secure = New SecureConnection();                 // доверять платформе, проверять сервер\nvar shop = New HTTPConnection(\"api.example\");\nshop.SecureConnection = secure;\nMessage(shop.Port);                                  // 443: порт никто не задавал\n\nvar bank = New HTTPConnection(\"api.bank.example\");   // ...а это доверяет одному центру\nbank.SecureConnection = New SecureConnection(\n    New CertificateFile(\"C:\\certs\\client.pem\", \"key password\"),\n    New CertificateFile(\"C:\\certs\\bank-ca.pem\"));\n\ntry {\n    var response = bank.Get(New HTTPRequest(\"/v1/balance\"));\n    Message(response.StatusCode);\n}\nexcept {\n    Message(ErrorDescription());   // не доверяем, не тот хост, файл не прочитан...\n}",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "cls.SecureConnection.ClientCertificate",
         "cls.SecureConnection.TrustedCertificates",
@@ -101,7 +101,7 @@
       "parameters": "",
       "return_descr": "CertificateFile или Undefined, когда не предъявляется ничего.",
       "example": "var secure = New SecureConnection();\nsecure.ClientCertificate = New CertificateFile(\"C:\\certs\\client.pem\", \"key password\");\nvar till = New HTTPConnection(\"api.till.example\");\ntill.SecureConnection = secure;\nvar response = till.Post(New HTTPRequest(\"/v1/shift\"));",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "cls.SecureConnection",
         "cls.CertificateFile",
@@ -126,7 +126,7 @@
       "parameters": "",
       "return_descr": "CertificateFile или Undefined, когда доверие — хранилище платформы.",
       "example": "var secure = New SecureConnection();\nsecure.TrustedCertificates = New CertificateFile(\"C:\\certs\\bank-ca.pem\");\nvar bank = New HTTPConnection(\"api.bank.example\");\nbank.SecureConnection = secure;\n// сертификат, подписанный кем-либо ещё, отвергается, каким бы хорошим он ни был",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "cls.SecureConnection",
         "cls.SecureConnection.VerifyServerCertificate",
@@ -151,7 +151,7 @@
       "parameters": "",
       "return_descr": "Boolean — True, пока не присвоено False.",
       "example": "var secure = New SecureConnection();\nMessage(secure.VerifyServerCertificate);   // True: иного никто не говорил\n\n// Стенд с самоподписанным сертификатом. В работе вместо этого называют центр:\n//   secure.TrustedCertificates = New CertificateFile(\"C:\\certs\\stand-ca.pem\");\nsecure.VerifyServerCertificate = False;\nvar stand = New HTTPConnection(\"stand.local\");\nstand.SecureConnection = secure;",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "cls.SecureConnection",
         "cls.SecureConnection.TrustedCertificates",
@@ -176,7 +176,7 @@
       "parameters": "",
       "return_descr": "SecureConnection или Undefined для обычного http://.",
       "example": "var bank = New HTTPConnection(\"api.bank.example\");   // НЕ \"https://api.bank.example\"\nMessage(bank.Port);                                  // 80\nbank.SecureConnection = New SecureConnection();\nMessage(bank.Port);                                  // 443\n\nvar response = bank.Get(New HTTPRequest(\"/v1/balance\"));",
-      "availability": "Designer, enterprise, codeRunner, daemon, wenterprise-server",
+      "availability": "Тонкий клиент, Сервер",
       "see_also": [
         "cls.HTTPConnection",
         "cls.SecureConnection",

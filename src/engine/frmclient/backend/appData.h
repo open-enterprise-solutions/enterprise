@@ -16,8 +16,9 @@ public:
 	bool DesignerMode() const;
 
 	// A client of the same base started beside this one, on this computer — `strAppName` the binary next to this one,
-	// given the base this one opened (the fields below; `--debug` when `searchDebug`). Its pid; 0 — not started. ⚠ The
-	// debugger's search for it, and the web server's manifest (`useManifest`), are not ported: the second answers 0.
+	// given the base this one opened (the fields below; `--debug` when `searchDebug`). Its pid; 0 — not started.
+	// `useManifest` — the web server (ibStartWebServer) publishing this base, its page opened in the browser. ⚠ The
+	// debugger's search for it is the caller's.
 	long RunApplication(const wxString& strAppName, bool searchDebug = true, bool useManifest = false) const;
 
 	// The file base's folder this client opened (the engine's: a Firebird base's — the VCS working copy root); empty: a

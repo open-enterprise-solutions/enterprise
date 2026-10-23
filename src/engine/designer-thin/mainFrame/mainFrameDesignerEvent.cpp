@@ -21,7 +21,7 @@
 #include "designer-thin/docManager/templates/docViewConfigCompare.h"
 
 // Common shape for the three places that save the configuration before
-// kicking off a child process (enterprise.exe / wenterprise-server.exe
+// kicking off a child process (enterprise.exe / webserver.exe
 // for debug). Returns true when the configuration is in a state safe to
 // launch — either no save was needed, the user declined to save, or the
 // save succeeded. Returns false only when a save was attempted and it
@@ -91,13 +91,16 @@ void ibFrontendMainFrameDesigner::OnStartDebugWithoutDebugThin(wxCommandEvent& W
 
 static void LaunchWebDebug(wxWindow* parent, bool withDebug)
 {
-	// URL prefix and port are derived by wes itself (from --file/--db
-	// basename and OS-picked ephemeral port). Manifest handshake reports
-	// the real URL back and opens the browser — no guessing here.
-	if (appData->RunApplication(wxT("wenterprise-server"),
+	// The publication's name and the port are the web server's own (the base's folder or its name on the server, a
+	// port the system picks); the manifest reports the page's address back and the browser opens it. Its debug server
+	// is looked for as the thin client's is.
+	if (appData->RunApplication(wxT("webserver"),
 			/*searchDebug=*/withDebug, /*useManifest=*/true) == 0) {
-		wxMessageBox(_("Failed to start wenterprise-server"),
+		wxMessageBox(_("Failed to start webserver"),
 			wxTheApp->GetAppDisplayName(), wxOK | wxICON_ERROR, parent);
+	}
+	else if (withDebug) {
+		debugClient->SearchServer(true);
 	}
 }
 

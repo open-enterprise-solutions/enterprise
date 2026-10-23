@@ -21,9 +21,9 @@ the three jobs first agreed, **1166** on 2026-08-07 (1197 `TEST` cases live in `
 jobs of their own — the GUI suite is 38). Locally, with nothing excluded, `ctest` reports 1208.
 Read the current figure off the last run rather than from here.
 
-Two boundaries, so the claim is not read wider than it is: the **web** targets
-(`wenterprise-server`, `wfrontend`) build under CMake only with `-DOES_BUILD_WEB=ON`, which CI does
-not set — so a break in the web keeps CI green; and of the five drivers, all compile everywhere and
+Two boundaries, so the claim is not read wider than it is: the old **web** frontend
+(`wfrontend`) builds under CMake only with `-DOES_BUILD_WEB=ON`, which CI does
+not set — so a break in it keeps CI green; and of the five drivers, all compile everywhere and
 **SQLite executes** in every job — Firebird and PostgreSQL load their clients at run time, which the
 general runners do not have, so each executes in a job of its own: `tests-firebird` (the pinned
 Firebird 5 kit laid out as `_fb/`, the embedded engine) and `tests-postgres` (a live PostgreSQL 16).
@@ -137,7 +137,7 @@ enterprise/
         ├── fileserver/      # fileserver.dll — a file base loaded into the thin client's process
         ├── enterprise-thin/ # enterprise-thin.exe (thin client)
         ├── enterprise/      # enterprise.exe (thick client)
-        ├── wenterprise-server/ # web server (wes process)
+        ├── webserver/       # webserver.exe (the bases' transport for browsers: the site + the client protocol)
         ├── designer-thin/   # designer-thin.exe (thin designer)
         ├── designer/        # designer.exe  (IDE)
         ├── launcher/        # launcher.exe  (connection chooser)

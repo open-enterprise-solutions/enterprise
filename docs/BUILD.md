@@ -192,7 +192,7 @@ bin\
       appcluster.exe
       appcluster-tray.exe
       codeRunner.exe
-      wenterprise-server.exe
+      webserver.exe
   Win64\            (Platform=x64)
     ...
 ```
@@ -206,8 +206,8 @@ product, copyright, and the version, which is the platform's (`OES_VERSION_MAJOR
 the same three `version_oes_last` is made of). Every program also merges `core/program.manifest` into the manifest
 the linker makes: Windows 10 and later, long paths. The linker adds asInvoker, wx the common controls 6 (its
 `defs.h`); per-monitor DPI awareness is not declared — wx's default. The vcxproj compiles them; CMake does not.
-`wfrontend.dll` + `wenterprise-server.exe` are the web runtime (headless
-server + web frontend). `protocol.dll`, `frmserver.dll`, `frmclient.dll`, `fileserver.dll`, `enterprise-thin.exe` and
+`webserver.exe` is the web server: the site and the client protocol for browsers. `wfrontend.dll` is the old web
+frontend; no program loads it. `protocol.dll`, `frmserver.dll`, `frmclient.dll`, `fileserver.dll`, `enterprise-thin.exe` and
 `designer-thin.exe` are the thin client and its server side ([thin-client.md](public/thin-client.md)). `simplePlugin.dll` is the plugin example; it builds into
 `bin\<Platform>\<Configuration>\plugins\` — the directory the plugin manager scans at
 startup.
@@ -334,9 +334,8 @@ The root `CMakeLists.txt` adds fifteen engine subdirectories, each with its own
 | codeRunner | executable (GUI) |
 | simplePlugin | shared lib (plugin example) |
 
-The web runtime targets (`wfrontend`, `wenterprise-server`) build under CMake with
-`-DOES_BUILD_WEB=ON` (default OFF) and under the MSBuild solution. CI does not set the option, so
-the web is not built there.
+The old web frontend (`wfrontend`) builds under CMake with `-DOES_BUILD_WEB=ON` (default OFF) and
+under the MSBuild solution. CI does not set the option, so it is not built there.
 
 ### macOS-specific Notes
 

@@ -124,7 +124,7 @@ int CountOtherLiveSessions()
 #include "backend/metadataConfiguration.h"
 
 // Common shape for the three places that save the configuration before
-// kicking off a child process (enterprise.exe / wenterprise-server.exe
+// kicking off a child process (enterprise.exe / webserver.exe
 // for debug). Returns true when the configuration is in a state safe to
 // launch — either no save was needed, the user declined to save, or the
 // save succeeded. Returns false only when a save was attempted and it
@@ -214,16 +214,15 @@ static bool SaveIfModifiedBeforeWebDebug(wxWindow* parent)
 
 static void LaunchWebDebug(wxWindow* parent, bool withDebug)
 {
-	// URL prefix and port are derived by wes itself (from --file/--db
-	// basename and OS-picked ephemeral port). Manifest handshake reports
-	// the real URL back and opens the browser — no guessing here.
-	// withDebug=true -> wes spawns with --debug so its debugServer comes
-	// up; the designer's debugClient then attaches via the manifest's
-	// pid/host (out-of-band of the manifest itself — debug-server still
-	// listens on one of ibPort::Debugger).
-	if (appData->RunApplication(wxT("wenterprise-server"),
+	// The publication's name and the port are the web server's own (the
+	// base's folder, a port the system picks); the manifest reports the
+	// page's address back and the browser opens it — no guessing here.
+	// withDebug=true -> the server starts with --debug so its debugServer
+	// comes up; the designer's debugClient then finds it on one of
+	// ibPort::Debugger, out-of-band of the manifest.
+	if (appData->RunApplication(wxT("webserver"),
 			/*searchDebug=*/withDebug, /*useManifest=*/true) == 0) {
-		wxMessageBox(_("Failed to start wenterprise-server"),
+		wxMessageBox(_("Failed to start webserver"),
 			wxTheApp->GetAppDisplayName(), wxOK | wxICON_ERROR, parent);
 	}
 }

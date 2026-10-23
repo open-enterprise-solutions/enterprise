@@ -86,7 +86,7 @@ ibDebuggerClient::ibDebuggerClientAdapter::ibDebuggerClientAdapter()
 //
 // The point of that is ahead of it (Max, 2026-09-06): to get this off the main thread, and to have
 // it already be off it the day there is a COMPUTE SERVER. workerPool.h names that host — the
-// headless pool serves "wenterprise-server.exe and the future oes-server.exe compute server" — and
+// headless pool serves "every host but the launcher, and the future oes-server.exe compute server" — and
 // on the day a session answers with one, debug replies stop touching the main loop and NOTHING HERE
 // CHANGES. That is the whole return on a change that is behaviour-neutral now, and it is invisible
 // from the code: whoever finds this later and sees a hop that lands where it started will be right

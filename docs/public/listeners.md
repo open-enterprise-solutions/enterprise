@@ -48,10 +48,6 @@ clear does not cross a network.
   `https://`, and the client has to trust the certificate: a self-signed one is given to Claude Code's
   runtime through `NODE_EXTRA_CA_CERTS`, and the address shown is the one bound - with `0.0.0.0` that is
   no address a certificate names, so reach it by the name the certificate carries.
-- **`wenterprise-server`** speaks no TLS, whatever `backend.conf` names: it binds this machine's own
-  address only (`127.0.0.1` unless `--host` names another of them), and any other is a refusal on its
-  console. The designer's web debugging, which starts it without `--host`, is unchanged. A browser over
-  `https://`, or on another machine, is the web server's (`webserver`).
 
 ## The clients' port: oess://
 

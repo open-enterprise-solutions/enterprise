@@ -14,8 +14,8 @@
 //   - ibWorkerPoolHeadless (in this directory): N threads, per-session
 //     queue + lease. A script that waits parks a fiber on its home
 //     thread and the thread serves other sessions; Wake resumes that
-//     fiber. Suitable for wenterprise-server.exe and the future
-//     oes-server.exe compute server.
+//     fiber. Every host but the launcher runs on it (appHost.cpp),
+//     and the future oes-server.exe compute server will.
 //   - ibWorkerPoolGUI (frontend/session/workerPoolGUI.{h,cpp}): wraps
 //     wxTheApp's CallAfter so tasks run on the wx main thread. Installed by
 //     ibGUISession; a task submitted on the main thread runs inline, so the

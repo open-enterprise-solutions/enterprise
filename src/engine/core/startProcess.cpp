@@ -1,9 +1,14 @@
 #include "core/startProcess.h"
 
 #include "core/diagnostics/journal.h"
+#include "core/fileSystem.h"   // ibRemoveFile
 
+#include <wx/ffile.h>
+#include <wx/filename.h>   // wxFileName::CreateTempFileName
 #include <wx/log.h>   // wxSysErrorMsgStr
 
+#include <chrono>
+#include <thread>
 #include <vector>
 
 #ifdef __WXMSW__
@@ -217,3 +222,34 @@ long ibStartProcess(const wxString& command, const std::vector<unsigned char>& i
 	return (long)pid;
 }
 #endif
+
+long ibStartWebServer(const wxString& command, wxString& url, const std::function<void()>& waiting)
+{
+	url.clear();
+
+	// The system picks the port; the server says it, with the page's address, in this file.
+	const wxString manifest = wxFileName::CreateTempFileName(wxT("oes-web-"));
+	const long pid = ibStartProcess(command + wxString::Format(wxT(" --port=0 --manifest=\"%s\""), manifest));
+	if (pid == 0) {
+		ibRemoveFile(manifest);
+		return 0;
+	}
+
+	// A file base is opened before the port is, so the first looks find the file empty. A line counts once its end
+	// is there - the server may be half way through writing it.
+	for (int waited = 0; waited < 5000 && url.IsEmpty(); waited += 100) {
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
+		if (waiting)
+			waiting();
+		wxFFile file(manifest, wxT("rb"));
+		wxString content;
+		if (!file.IsOpened() || !file.ReadAll(&content, wxConvUTF8))
+			continue;
+		const int at = content.Find(wxT("url="));
+		const wxString rest = at != wxNOT_FOUND ? content.Mid(at + 4) : wxString();
+		if (rest.Find(wxT('\n')) != wxNOT_FOUND)
+			url = rest.BeforeFirst(wxT('\n')).Trim().Trim(false);
+	}
+	ibRemoveFile(manifest);
+	return pid;
+}

@@ -23,7 +23,7 @@
   THICK DESKTOP                THIN CLIENTS                              SERVERS
   designer · enterprise        designer-thin · enterprise-thin           appserver
   launcher · codeRunner                  │                                       │
-  wenterprise-server (web)               ▼                                       ▼
+                                         ▼                                       ▼
             │                  ┌───────────────────┐  client protocol  ┌───────────────────┐
             │                  │  frmclient.dll    │  WS / POST,       │  frmserver.dll    │
             │                  │  protocol.dll     │◄─────────────────►│  fileserver.dll — │
@@ -73,7 +73,6 @@ engine into their process; the cluster and its tray link `core` alone:
 | `enterprise.exe` | `eFILE_MODE` | `Enterprise` | Desktop thick-client runtime (GUI, single user session per process) |
 | `designer-thin.exe` | its host's | `ThinDesigner` (on the server) | The designer as a thin client: an application server's base by its address (`oes://host:port/base`, `oess://` over TLS), or a file base opened in its own process |
 | `enterprise-thin.exe` | its host's | `ThinClient` (on the server) | The runtime as a thin client, by the same two roads; holds no base of its own and runs no code |
-| `wenterprise-server.exe` | `eFILE_MODE` | `WebServer` | Web runtime host — HTTP server, N per-cookie `WebClient` sessions, browser client; given its DBMS on the command line |
 | `appserver.exe` | `eSERVER_MODE` | `Service` | The application server: holds the bases of its server folder, headless; protocol clients are `ThinClient` / `ThinDesigner` |
 | `appcluster.exe` | — | — | The application cluster: a console program — or a service of the system — on `core.dll` alone; an `appserver --worker=<base>` per base of its folder, started again when it falls; holds the clients' port and carries their sockets on |
 | `appcluster-tray.exe` | — | — | The cluster's tray, on `core.dll` alone: shows the cluster's servers and steers them over its control socket; starts the cluster — its service, or the program — when none runs |
@@ -143,7 +142,7 @@ The backend is the core engine. It is self-contained — no GUI dependencies. Ke
 Two sibling DLLs share the same form/view/control code paths through `OES_USE_WEB` ifdefs and `ibFrontendWindow` typedef (`wxWindow` for desktop, `ibWebWindow` for web):
 
 - **`frontend.dll`** — wxWidgets GUI. Used by `enterprise.exe`, `designer.exe`, `codeRunner.exe`. (`launcher.exe` links `backend` alone; `appserver.exe` links `backend` and `frmserver`.)
-- **`wfrontend.dll`** — web UI (HTML serialisation of form control trees via `ToJSON()`). Used by `wenterprise-server.exe`, whose own HTTP is cpp-httplib's — the one program not on `core/net`.
+- **`wfrontend.dll`** — the old web UI (HTML serialisation of form control trees via `ToJSON()`). No program loads it since `wenterprise-server` was removed; the browser client is `webserver`'s (`webserver/www`), over the client protocol.
 
 ### Thin client layer (`protocol.dll`, `frmserver.dll`, `frmclient.dll`, `fileserver.dll`)
 
@@ -310,7 +309,7 @@ Two header-only helpers in `frontend/diagnostics/` cover the boilerplate a binar
 | Binary type | Helper | What it wires |
 |---|---|---|
 | GUI (`enterprise` / `designer` / `codeRunner` / `launcher`) | `ibWxApp` base class (`oesApp.h`) | `wxApp::OnInit` → `ibCrashGuard::Install` + `DoOnInit()`; `OnRun` → try/catch around `DoOnRun()`; 3 exception overrides (main-loop / unhandled / fatal). Subclass overrides only `GetExeName()` + optional `DoOnRun()`. |
-| Console (`appserver` / `webserver` / `wenterprise-server`) | `ibOesConsoleBoot` RAII (`oesConsole.h`) | Single object that holds a `wxInitializer` and calls `ibCrashGuard::Install`. `IsOk()` checks the wx init result. |
+| Console (`appserver` / `webserver`) | `ibOesConsoleBoot` RAII (`oesConsole.h`) | Single object that holds a `wxInitializer` and calls `ibCrashGuard::Install`. `IsOk()` checks the wx init result. |
 
 ### Crash plumbing layers
 
@@ -330,11 +329,6 @@ Two header-only helpers in `frontend/diagnostics/` cover the boilerplate a binar
   frontend/diagnostics/oesConsole.h       ─── Header-only. RAII boot helper for
                                               console binaries. Wraps wxInitializer +
                                               crashGuard::Install.
-
-  wfrontend layer (web)                   ─── cpp-httplib set_exception_handler in
-                                              wes' main.cpp emits JSON 500 with
-                                              Kind / native_code / sqlstate. crashGuard
-                                              handles process-level faults underneath.
 ```
 
 ### Exception taxonomy
@@ -770,22 +764,22 @@ OES distinguishes between **metadata** (compile-time, process-wide, shared) and 
 `ibSession` (`src/engine/backend/session/session.h`) is the unit of runtime state:
 
 - **Identity** (`ibSessionIdentity`) — guid, userName, userGuid, computer, address (host:port for web), appMode, started timestamp, pid
-- **Kind** (`ibSessionKind`) — Launcher / Designer / Enterprise / Service (a server's own login) / WebServer (wes process technical row) / WebClient (per-tab) / BackgroundJob / ScheduledJob / SystemJob / ThinClient / ThinDesigner (a client of the protocol, in the application or in the configuration). The kind, not the run mode, says what a session is: a job or a thin client lives in whatever process hosts it, and its run mode is its host's.
+- **Kind** (`ibSessionKind`) — Launcher / Designer / Enterprise / Service (a server's own login) / WebServer (the old web server's technical row) / WebClient (per-tab) / BackgroundJob / ScheduledJob / SystemJob / ThinClient / ThinDesigner (a client of the protocol, in the application or in the configuration). The kind, not the run mode, says what a session is: a job or a thin client lives in whatever process hosts it, and its run mode is its host's.
 - **State machine** — `ibSessionState` (Created / Added / Rejected / Stopping / Gone), `ibAuthState` (Anonymous / Authenticated / AuthFailed)
 - **User info** — `ibUserInfo` (formerly `ibApplicationDataUserInfo`) — OES-user (from `sys_user` table), distinct from the DB-level admin user used to open the database connection. Plus `m_sessionRawPassword` — plain-text cached only for Designer "Start debugging" so spawned children can re-authenticate without prompting. `ibUserInfo` itself owns sys_user CRUD as static factories — `appData` no longer mediates.
 - **Working date** — `m_workDate` per-session (replaces the legacy static `ibValueSystemFunction::ms_workDate` so two web sessions don't step on each other).
 - **Translate state** — `ibTranslateState`: explicit override, the user's language, the configuration's own, and the resolved code (`override || user || configuration`). Selects which metadata synonym / form-label translation is shown. Per-session, so concurrent web tabs each render their own user's language and two bases in one process each keep their own. Distinct from the platform's wxLocale (UI gettext, process-wide). Read through `ibBackendLocalization::GetUserLanguage()`.
 - **Compile state** — `ibCompileState`: the code style (CES / VES) the session's modules compile in, taken from its base's configuration. Like the interpreter's `ibProcUnitState`, a thread with no session (codeRunner, tests) has its own `thread_local` one.
 - **Root module manager** — `m_root : ibValuePtr<ibValueModuleManagerRuntimeConfiguration>`. Created via `EnsureRoot()` in `ibSessionRegistry::NotifyAuthenticated`, right after `AcquireMetaData` and before the `OnAuthenticated` listeners. Stays nullptr for sessions that never run scripts — **the Designer never creates a root** (`EnsureRoot` is gated on `DesignerMode()`; it uses the lightweight `ibValueModuleManagerDesigner` in the compile cache instead), and likewise WebServer technical / Launcher. Objects/records/modules reach the right manager through the `ibSession::GetEditModuleManager(metaData)` seam (Designer → compile-cache designer manager; runtime → `m_root`). See `module-manager-split.md`.
-- **Frame** — `virtual ibBackendDocFrame* GetFrame() const { return nullptr; }` on base `ibSession`. Frame storage lives on derived sessions that have a GUI surface (e.g. `ibWebClientSession::SetFrame(ibWebFrame*)`; `ibGUISession` desktop variants). Base has no `m_frame` field — null means "no frame on this session" (codeRunner / wenterprise-server technical session). The frame belongs to the session that created it, not to a process-wide singleton.
+- **Frame** — `virtual ibBackendDocFrame* GetFrame() const { return nullptr; }` on base `ibSession`. Frame storage lives on derived sessions that have a GUI surface (e.g. `ibWebClientSession::SetFrame(ibWebFrame*)`; `ibGUISession` desktop variants). Base has no `m_frame` field — null means "no frame on this session" (codeRunner, a server's technical session). The frame belongs to the session that created it, not to a process-wide singleton.
 - **Per-session debug** — optional `ibDebugSession` (CV/mutex + per-session watch expressions + run context) so concurrent web sessions can each enter their own debug loop without blocking.
 - **Exclusive (monopoly) mode** — `m_exclusive`. At most one session in the registry holds it; while held, every other Connect parks until release.
-- **Server back-link** — `m_server : weak_ptr<ibSession>` from a server-spawned client to the session that hosts it (e.g., wes's WebClient → wes's WebServer). Used by shutdown logic, cluster topology, and admin UI.
+- **Server back-link** — `m_server : weak_ptr<ibSession>` from a server-spawned client to the session that hosts it (e.g., a WebClient → its WebServer). Used by shutdown logic, cluster topology, and admin UI.
 
 `ibSession::Current()` is the canonical "session this code is currently working on". One rule in every host:
 
 - **The thread's binding** — a thread that bound a session (`ibSessionScope`, `ibSessionThreadBinding`, a job's run) works for it.
-- **Else the base's fallback** — the process's own session there (`IsProcessSessionKind`: the designer's or the client's window, the application server's login, wenterprise-server's `WebServer` row). A job or a web tab never becomes it.
+- **Else the base's fallback** — the process's own session there (`IsProcessSessionKind`: the designer's or the client's window, the application server's login). A job or a web tab never becomes it.
 
 `ibSessionScope` (legacy) and `ibSessionThreadBinding` (preferred for app entry points) are the RAII helpers that bind a session to the calling thread. The interpreter no longer reads global `thread_local` state directly: `ibProcUnitState` lives under `ibSession` (`session.h`), and the only `thread_local` slot in `session.cpp` is a fallback for sessionless callers (codeRunner sandbox / system bootstrap). The worker pool (`workerPool.h` + `workerPoolHeadless.cpp`) leases a session into a thread via `tl_currentLease` and runs the request on it.
 
@@ -970,7 +964,7 @@ verified 2026-07-29 by grepping `CONTROL_TYPE_REGISTER`:
 
 ```
 the debuggee — whatever runs the configuration       the designer
-(enterprise.exe, appserver, wenterprise-server,      designer.exe — the client in its own process
+(enterprise.exe, appserver, webserver,               designer.exe — the client in its own process
  a thin client's file base)                          designer-thin.exe — the client in its session
       │                                              on the server, reached over the client protocol
       │                                                     │
@@ -1054,23 +1048,6 @@ launcher.exe (or direct enterprise.exe with CLI creds)
                                                                 — main ProcUnit + Execute top-level
                                                                 — StartMainModule: BeforeStart / OnStart
                                                                 — wx main loop handles UI
-```
-
-### User Login (web — wenterprise-server)
-
-```
-HTTP: POST /w/<dbalias>/login  (body: user+pwd, cookie: tabSid UUID)
-  └─ wfrontendCreateSessionWithId(tabSid)      # if unknown cookie, create new session
-       └─ Sessions().Login(tabSid, user, pwd)
-            └─ registry.Connect(req)           # same path as desktop
-                 └─ ticket.Attach(user, pwd)   # AuthenticateUser on worker-side
-                      └─ NotifyAuthenticated phases (OnFirstConnect / AcquireMetaData + EnsureRoot / OnAuthenticated)
-                           └─ session->EnsureRoot + CompileRoot + mm->AttachRuntime(s)
-                                └─ ibSessionScope(session) on HTTP handler thread
-                                     └─ ibWebApplication::OnInit
-                                          └─ StartMainModule (BeforeStart / OnStart, under m_runtimeMutex)
-                                               └─ later HTTP calls run through RunOnWorker —
-                                                  on the process's worker pool, leased to this session
 ```
 
 ### Form Open

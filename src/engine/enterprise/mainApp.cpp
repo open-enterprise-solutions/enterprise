@@ -48,8 +48,8 @@ wxIMPLEMENT_APP(ibAppEnterprise);
 void ibAppEnterprise::OnInitCmdLine(wxCmdLineParser& parser)
 {
 	// Short names are legacy (matched what the /flag-style spawner used);
-	// long names match wenterprise-server so one builder emits flags that
-	// parse identically across enterprise/designer/appserver/wes.
+	// long names are one set, so one builder emits flags that
+	// parse identically across enterprise/designer/appserver.
 	parser.AddOption(wxT("file"),   wxT("file"),     "Database file path",      wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL);
 	parser.AddOption(wxT("srv"),    wxT("server"),   "Database server address", wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL);
 	parser.AddOption(wxT("p"),      wxT("dbport"),   "Database server port",    wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL);

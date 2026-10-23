@@ -53,7 +53,7 @@ const ibArg& ArgApplication()
 {
 	static const ibArg s_a(wxT("application"), ibArg::Kind::Text,
 		ibMcpText("Which one. Default is the thick client."),
-			/*required*/ false, { wxT("enterprise"), wxT("enterprise-thin"), wxT("wenterprise-server") });
+			/*required*/ false, { wxT("enterprise"), wxT("enterprise-thin"), wxT("webserver") });
 	return s_a;
 }
 
@@ -211,7 +211,7 @@ public:
 		}
 
 		const wxString useWeb = application.Lower();
-		const bool manifest = useWeb.IsSameAs(wxT("wenterprise-server"));
+		const bool manifest = useWeb.IsSameAs(wxT("webserver"));
 
 		const long pid = appData->RunApplication(useWeb, withDebug, manifest);
 

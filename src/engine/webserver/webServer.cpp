@@ -483,6 +483,16 @@ int ibWebServer::Run()
 	ibWebServerSay(ibJournalMark::Info, wxT("serving %u of %u publication(s) - Ctrl+C to stop"),
 		static_cast<unsigned>(published), static_cast<unsigned>(m_config.m_publications.size()));
 
+	// THE PAGE FOR WHOEVER STARTED IT (ibStartWebServer): the reader takes the line once its end is there. No page —
+	// the publication did not open, or no site is served — and nothing is written.
+	if (!m_config.m_manifest.IsEmpty() && !site.IsEmpty() && !origins.empty() && !m_config.m_publications.empty()
+		&& m_bases.count(m_config.m_publications.back().m_name) != 0) {
+		wxFile file;
+		if (!file.Create(m_config.m_manifest, true) || !file.Write(wxString::Format(wxT("url=%s/%s/\n"), origins.front(),
+			m_config.m_publications.back().m_name), wxConvUTF8))
+			ibWebServerSay(ibJournalMark::Error, wxT("the manifest %s was not written"), m_config.m_manifest);
+	}
+
 	while (s_state.load() == ibServeState::Serving)
 		std::this_thread::sleep_for(std::chrono::milliseconds(250));
 

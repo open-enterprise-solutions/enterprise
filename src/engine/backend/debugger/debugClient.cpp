@@ -988,9 +988,9 @@ void ibDebuggerClient::ibDebuggerClientConnection::RecvCommand(void* pointer, un
 	}
 	else if (commandFromServer == CommandId_EnterLoop) {
 
-		// New first field: sessionGuid (which session in wenterprise-server
+		// New first field: sessionGuid (which session of a server of many
 		// hit the breakpoint). On desktop enterprise.exe this is the main
-		// session's guid; on wes one of the per-tab WebClient sessions.
+		// session's guid; on a server one of its clients' sessions.
 		wxString sessionGuid;     commandReader.r_stringZ(sessionGuid);
 		wxString strFileName;     commandReader.r_stringZ(strFileName);
 		wxString strModuleName;   commandReader.r_stringZ(strModuleName);

@@ -8478,7 +8478,7 @@ msgid "Debugger is already running!"
 msgstr ""
 
 #: src/engine/designer/mainFrame/mainFrameDesignerEvent.cpp:203
-msgid "Failed to start wenterprise-server"
+msgid "Failed to start webserver"
 msgstr ""
 
 #: src/engine/designer/mainFrame/mainFrameDesignerEvent.cpp:324
@@ -14562,9 +14562,8 @@ msgstr ""
 msgid "Launch OES"
 msgstr ""
 
-#: src/engine/launcher/launcher.cpp:379
-#, c-format
-msgid "Failed to start wenterprise-server: %s"
+#: src/engine/launcher/launcher.cpp:318
+msgid "The web server publishes a file base, and this base is on a DBMS server."
 msgstr ""
 
 #: src/engine/frmserver/client/clientFrameDesigner.cpp:27

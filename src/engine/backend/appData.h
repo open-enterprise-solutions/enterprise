@@ -264,12 +264,12 @@ public:
 
 #pragma region execute
 	// RunApplication overloads spawn any OES bin (enterprise / designer /
-	// appserver / codeRunner / wenterprise-server). Connection flags are
+	// appserver / codeRunner / webserver). Connection flags are
 	// emitted in unified `--flag=value` form which every bin's parser
 	// accepts.
-	// useManifest=true switches to wenterprise-server's bind-handshake
-	// protocol: --port=0 --manifest=<tempfile>, poll manifest for the
-	// real URL and open the default browser. Returns pid.
+	// useManifest=true starts the web server (ibStartWebServer): it
+	// publishes this file base and the default browser opens its page.
+	// Returns pid.
 	long RunApplication(const wxString& strAppName,
 		bool searchDebug = true,
 		bool useManifest = false) const;
@@ -278,13 +278,6 @@ public:
 		const wxString& strUserPassword,
 		bool searchDebug = true,
 		bool useManifest = false) const;
-
-	// Append `--port=0 --manifest=<tempfile>` to cmd, spawn detached,
-	// poll the manifest for up to 5s and open the default browser at the
-	// reported URL. Returns pid on spawn-ok, 0 on failure. Exposed for
-	// callers that build the cmd from external connection data (e.g.
-	// launcher picks from a saved IB list, not the appData singleton).
-	static long SpawnWebServerWithManifest(wxString cmd, const struct ibLaunchSecrets& secrets, bool searchDebug = false);
 #pragma endregion
 
 	ibRunMode GetAppMode() const { return m_runMode; }

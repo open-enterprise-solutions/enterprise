@@ -13,8 +13,6 @@
 //                             pipeline on top of this guard. Inherited
 //                             by enterprise, designer, codeRunner,
 //                             launcher.
-//   - wfrontend (web): cpp-httplib JSON-500 exception handler bolted on
-//                      top of this guard. Used by wenterprise-server.
 //   - console (daemon-class): this guard alone — no wx UI, just dumps
 //                             and log files.
 //

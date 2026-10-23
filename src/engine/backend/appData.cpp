@@ -1035,11 +1035,11 @@ long ibApplicationInstance::RunApplication(const wxString& strAppName, bool sear
 
 long ibApplicationInstance::RunApplication(const wxString& strAppName, const wxString& strUserName, const wxString& strUserPassword, bool searchDebug, bool useManifest) const
 {
-	// All OES binaries spawn with unified `--flag=value` syntax using
-	// wenterprise-server's long-name set (server/dbport/db/user/
-	// file/ibuser/locale/debug). Passwords go on the child's stdin.
-	// enterprise.exe / designer.exe declare these as the long name of
-	// their legacy short options, so one builder feeds every parser.
+	// All OES binaries spawn with unified `--flag=value` syntax: one long-name
+	// set (server/dbport/db/user/file/ibuser/locale/debug). Passwords go on
+	// the child's stdin. enterprise.exe / designer.exe declare these as the
+	// long name of their legacy short options, so one builder feeds every
+	// parser - webserver aside, below.
 
 	const auto add = [](wxString& cmd, const wxString& name, const wxString& value) {
 		if (value.IsEmpty()) return;
@@ -1076,6 +1076,55 @@ long ibApplicationInstance::RunApplication(const wxString& strAppName, const wxS
 		? (wxT('"') + binary.GetFullPath() + wxT("\" "))
 		: (strAppName + wxT(' '));
 
+	ibApplicationHost* const host = ibApplicationHost::Get();
+
+	// THE WEB SERVER publishes a file base: the base, its debugger, its language - a login is the browser's, and a
+	// base on a DBMS server is no publication of it (webserver/webServer.h). Its page is opened once the server says
+	// where it is.
+	if (useManifest) {
+		if (m_strFile.IsEmpty()) {
+			ibJournalWarning(wxT("process"), wxT("%s publishes a file base, not one on a DBMS server"), strAppName);
+			return 0;
+		}
+		add(executeCmd, wxT("file"), m_strFile);
+		if (searchDebug)
+			executeCmd += wxT(" --debug");
+		add(executeCmd, wxT("locale"), host != nullptr ? host->GetLocaleName() : wxString());
+
+		// The window keeps painting while the base opens: the wait is on this thread, so the browser is launched
+		// before a caller closing right after it tears the application down.
+		wxString url;
+		const long pid = ibStartWebServer(executeCmd, url, []() { wxYieldIfNeeded(); });
+		if (!url.IsEmpty())
+			wxLaunchDefaultBrowser(url);
+
+		// Web debug attach: the server is up with --debug, its in-process
+		// ibDebuggerServer is listening on one of ibPort::Debugger
+		// in non-blocking (wait=false) mode. SearchServer scans + verifies
+		// each port, but verified+Scanner stays Scanner — designer never
+		// auto-promotes to Debugger on a non-waiting server. We retry
+		// SearchServer in rounds because a single sweep can race with the
+		// server's metadataCreate (debug server still coming up) — first sweep's
+		// scan threads exit on connect-refused, leaving counter=-1, which
+		// lets the next SearchServer call create fresh threads. Once verify
+		// succeeds (m_connectionSuccess), AttachAllVerified pushes
+		// CommandId_StartSession so the server flips to Debugger mode.
+		if (searchDebug && pid != 0) {
+			const int kRounds      = 20;   // 20 rounds * 250ms = ~5s
+			const int kRoundSleepMs = 250;
+			for (int round = 0; round < kRounds; ++round) {
+				if (debugClient == nullptr) break;
+				debugClient->SearchServer(true);
+				std::this_thread::sleep_for(std::chrono::milliseconds(kRoundSleepMs));
+				if (debugClient->GetConnectionSuccess())
+					break;
+			}
+			if (debugClient != nullptr && debugClient->GetConnectionSuccess())
+				debugClient->AttachAllVerified();
+		}
+		return pid;
+	}
+
 	if (m_strFile.IsEmpty()) {
 		add(executeCmd, wxT("server"), m_strServer);
 		add(executeCmd, wxT("dbport"), m_strPort);
@@ -1101,19 +1150,12 @@ long ibApplicationInstance::RunApplication(const wxString& strAppName, const wxS
 	secrets.m_ibUser     = strUserName;
 	secrets.m_ibPassword = strUserPassword;
 
-	ibApplicationHost* const host = ibApplicationHost::Get();
 	add(executeCmd, wxT("locale"), host != nullptr ? host->GetLocaleName() : wxString());
-
-	// Manifest-mode: wes-style spawn. Skip the debug-client handshake —
-	// that's enterprise.exe's in-process debugger attach, not relevant
-	// to a headless wes child.
-	if (useManifest)
-		return SpawnWebServerWithManifest(executeCmd, secrets, searchDebug);
 
 	const long execute = ibStartProcess(executeCmd, secrets);
 
 	if (searchDebug && execute != 0) {
-		// Scan in rounds, the same way the manifest path below does, and for the same
+		// Scan in rounds, the same way the web server's path above does, and for the same
 		// reason: one sweep races the process that was just started. Its debug server
 		// is created near the end of bootstrap, after the database is open, so the
 		// first sweep finds nothing listening and its threads exit on connect-refused
@@ -1137,85 +1179,6 @@ long ibApplicationInstance::RunApplication(const wxString& strAppName, const wxS
 	}
 
 	return execute;
-}
-
-long ibApplicationInstance::SpawnWebServerWithManifest(wxString cmd, const ibLaunchSecrets& secrets, bool searchDebug)
-{
-	// --port=0 → OS picks an ephemeral port. --manifest=<file> → wes writes
-	// host/port/prefix/url there once it is actually accepting connections.
-	const wxString manifestPath = wxFileName::CreateTempFileName(
-		wxT("oes-wes-"));
-	cmd += wxString::Format(wxT(" --port=0 --manifest=\"%s\""), manifestPath);
-
-	// Spawn detached so the caller can exit without killing the server.
-	const long pid = ibStartProcess(cmd, secrets);
-	if (pid == 0) {
-		ibRemoveFile(manifestPath);
-		return 0;
-	}
-
-	// Poll manifest up to 5s in the calling thread. wxYieldIfNeeded
-	// lets the GUI dispatch paint / mouse events so the window stays
-	// responsive while wes's InitBackend (metadata + DB connect) runs
-	// for ~1s. Detaching the poll to a worker thread was tried but
-	// raced with the caller's Close(true) / wxApp teardown — browser
-	// sometimes got launched after wx state was already half-torn-
-	// down, ending up on a URL the running wes wasn't yet serving.
-	// Synchronous poll keeps the caller alive long enough for
-	// wxLaunchDefaultBrowser to fully ShellExecute before return.
-	wxString url;
-	for (int waited = 0; waited < 5000; waited += 100) {
-		std::this_thread::sleep_for(std::chrono::milliseconds(100));
-		wxYieldIfNeeded();
-		wxFile f;
-		if (!f.Open(manifestPath, wxFile::read))
-			continue;
-		wxCharBuffer buf(static_cast<size_t>(f.Length()));
-		if (f.Read(buf.data(), f.Length()) <= 0) {
-			f.Close();
-			continue;
-		}
-		const wxString content = wxString::FromUTF8(buf.data(), f.Length());
-		f.Close();
-		const int pos = content.Find(wxT("url="));
-		if (pos == wxNOT_FOUND)
-			continue;
-		url = content.Mid(pos + 4);
-		url = url.BeforeFirst(wxT('\n'));
-		url.Trim().Trim(false);
-		if (!url.IsEmpty())
-			break;
-	}
-	ibRemoveFile(manifestPath);
-	if (!url.IsEmpty())
-		wxLaunchDefaultBrowser(url);
-
-	// Web debug attach: wes is up with --debug, its in-process
-	// ibDebuggerServer is listening on one of ibPort::Debugger
-	// in non-blocking (wait=false) mode. SearchServer scans + verifies
-	// each port, but verified+Scanner stays Scanner — designer never
-	// auto-promotes to Debugger on a non-waiting server. We retry
-	// SearchServer in rounds because a single sweep can race with wes's
-	// metadataCreate (debug server still coming up) — first sweep's
-	// scan threads exit on connect-refused, leaving counter=-1, which
-	// lets the next SearchServer call create fresh threads. Once verify
-	// succeeds (m_connectionSuccess), AttachAllVerified pushes
-	// CommandId_StartSession so wes flips to Debugger mode.
-	if (searchDebug && pid != 0) {
-		const int kRounds      = 20;   // 20 rounds * 250ms = ~5s
-		const int kRoundSleepMs = 250;
-		for (int round = 0; round < kRounds; ++round) {
-			if (debugClient == nullptr) break;
-			debugClient->SearchServer(true);
-			std::this_thread::sleep_for(std::chrono::milliseconds(kRoundSleepMs));
-			if (debugClient->GetConnectionSuccess())
-				break;
-		}
-		if (debugClient != nullptr && debugClient->GetConnectionSuccess())
-			debugClient->AttachAllVerified();
-	}
-
-	return pid;
 }
 
 #pragma endregion

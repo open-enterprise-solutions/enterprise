@@ -18,7 +18,7 @@
       "parameters": "value — a value of any type.",
       "return_descr": "Boolean.",
       "example": "Message(Boolean(0));      // False\nMessage(Boolean(\"\"));     // False\nMessage(Boolean(42));     // True",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.Number", "fn.String", "fn.TypeOf"],
       "reviewed": true
     },
@@ -37,7 +37,7 @@
       "parameters": "value — a value of any type.",
       "return_descr": "Number.",
       "example": "Message(Number(\"3.14\"));   // 3.14\nMessage(Number(True));     // 1",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.String", "fn.Boolean", "fn.Int", "fn.Round"],
       "reviewed": true
     },
@@ -56,7 +56,7 @@
       "parameters": "year — 1..9999; month — 1..12; day — a day that exists in that month of that year; hour, minute, second — optional, midnight when omitted. A part outside its range is refused by name rather than rolled over into the next month.",
       "return_descr": "Date",
       "example": "Date(2026, 9, 2)\nDate(2026, 9, 2, 10, 45, 25)\nDate(\"20260902104525\")",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [],
       "reviewed": true
     },
@@ -75,7 +75,7 @@
       "parameters": "value — a value of any type.",
       "return_descr": "String.",
       "example": "Message(String(1250.5));\nMessage(Format(1250.5, \"ND=2\"));",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.Format", "fn.Number", "fn.Boolean"],
       "reviewed": true
     },
@@ -94,7 +94,7 @@
       "parameters": "num — the number. number — decimal places (default 0). roundMode — RoundMode.Round15as20 (default) or RoundMode.Round15as10.",
       "return_descr": "Number, rounded.",
       "example": "Message(Round(1.5));                             // 2\nMessage(Round(1.5, 0, RoundMode.Round15as10));   // 1\nMessage(Round(1250.567, 2));                     // 1250.57\nMessage(Int(1.9));                               // 1",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.Int", "fn.Number", "fn.Format"],
       "reviewed": true
     },
@@ -113,7 +113,7 @@
       "parameters": "num — a number (or a value convertible to one).",
       "return_descr": "Number — the integer part of the argument.",
       "example": "Message(Int(3.9));    // 3\nMessage(Int(-3.9));   // -3\nMessage(Round(3.9));  // 4 — rounding, not truncation",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.Round"],
       "reviewed": true
     },
@@ -132,7 +132,7 @@
       "parameters": "num — a positive number.",
       "return_descr": "Number — the logarithm.",
       "example": "Message(Log10(1000));   // 3",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.Ln", "fn.Sqrt"],
       "reviewed": true
     },
@@ -151,7 +151,7 @@
       "parameters": "num — a positive number.",
       "return_descr": "Number — the logarithm.",
       "example": "Message(Ln(1));   // 0",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.Log10", "fn.Sqrt"],
       "reviewed": true
     },
@@ -170,7 +170,7 @@
       "parameters": "num, ... — two or more values; each is read as a number. Called with no arguments it raises.",
       "return_descr": "The largest argument.",
       "example": "Message(Max(2, 9, 4, 1));   // 9\nMessage(Min(2, 9, 4, 1));   // 1",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.Min", "fn.Round"],
       "reviewed": true
     },
@@ -189,7 +189,7 @@
       "parameters": "num, ... — two or more values; each is read as a number. Called with no arguments it raises.",
       "return_descr": "The smallest argument.",
       "example": "Message(Min(5, 3));   // 3",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.Max", "fn.Round"],
       "reviewed": true
     },
@@ -208,7 +208,7 @@
       "parameters": "num — a number that is not negative.",
       "return_descr": "Number — the root.",
       "example": "Message(Sqrt(16));   // 4",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.Log10", "fn.Ln"],
       "reviewed": true
     },
@@ -227,7 +227,7 @@
       "parameters": "str — a string (or a value read as one).",
       "return_descr": "Number — the length.",
       "example": "Message(StrLen(\"abc\"));   // 3",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.IsBlankString", "fn.TrimAll"],
       "reviewed": true
     },
@@ -246,7 +246,7 @@
       "parameters": "str — a string.",
       "return_descr": "Boolean.",
       "example": "Message(IsBlankString(\"   \"));   // True\nMessage(IsBlankString(\"x\"));     // False",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.TrimAll", "fn.StrLen", "fn.ValueIsFilled"],
       "reviewed": true
     },
@@ -265,7 +265,7 @@
       "parameters": "str — a string.",
       "return_descr": "String.",
       "example": "Message(\"[\" + TrimL(\"  x  \") + \"]\");   // [x  ]",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.TrimR", "fn.TrimAll"],
       "reviewed": true
     },
@@ -284,7 +284,7 @@
       "parameters": "str — a string.",
       "return_descr": "String.",
       "example": "Message(\"[\" + TrimR(\"  x  \") + \"]\");   // [  x]",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.TrimL", "fn.TrimAll"],
       "reviewed": true
     },
@@ -303,7 +303,7 @@
       "parameters": "str — a string.",
       "return_descr": "String.",
       "example": "Message(\"[\" + TrimAll(\"  x  \") + \"]\");   // [x]",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.TrimL", "fn.TrimR", "fn.IsBlankString"],
       "reviewed": true
     },
@@ -322,7 +322,7 @@
       "parameters": "str — a string. number — how many characters.",
       "return_descr": "String.",
       "example": "Message(Left(\"abcdef\", 3));   // abc",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.Right", "fn.Mid", "fn.StrLen"],
       "reviewed": true
     },
@@ -341,7 +341,7 @@
       "parameters": "str — a string. number — how many characters.",
       "return_descr": "String.",
       "example": "Message(Right(\"abcdef\", 3));   // def",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.Left", "fn.Mid", "fn.StrLen"],
       "reviewed": true
     },
@@ -360,7 +360,7 @@
       "parameters": "str — a string. number — the start, counted from 1. number — how many characters (default: to the end of the string).",
       "return_descr": "String — the slice.",
       "example": "Message(Mid(\"abcdef\", 2, 3));                  // bcd\nMessage(Mid(\"abcdef\", 2));                     // bcdef\nMessage(Mid(\"abcdef\", Find(\"abcdef\", \"c\")));   // cdef",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.Left", "fn.Right", "fn.Find", "fn.StrLen"],
       "reviewed": true
     },
@@ -379,7 +379,7 @@
       "parameters": "str — the string to search. string — what to look for. number — the position to start from, counted from 1 (default: the beginning).",
       "return_descr": "Number — the position from 1, or 0 if not found.",
       "example": "Message(Find(\"abcdef\", \"c\"));   // 3\nMessage(Find(\"abcdef\", \"z\"));   // 0",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.StrCountOccur", "fn.Mid", "fn.StrReplace"],
       "reviewed": true
     },
@@ -398,7 +398,7 @@
       "parameters": "str — the source. string — what to replace. string — what to put in its place.",
       "return_descr": "String — a new string; the source is unchanged.",
       "example": "Message(StrReplace(\"a-b-c\", \"-\", \"+\"));   // a+b+c",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.Find", "fn.StrCountOccur"],
       "reviewed": true
     },
@@ -417,7 +417,7 @@
       "parameters": "str — the string to search. string — what to count.",
       "return_descr": "Number — the count (0 when it does not occur).",
       "example": "Message(StrCountOccur(\"aaa\", \"a\"));     // 3\nMessage(StrCountOccur(\"abcabc\", \"z\"));  // 0",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.Find", "fn.StrReplace"],
       "reviewed": true
     },
@@ -436,7 +436,7 @@
       "parameters": "str — the text.",
       "return_descr": "Number — the count of lines (at least 1).",
       "example": "text = \"a\" + Chr(10) + \"b\";\nFor i = 1 To StrLineCount(text) Do\n    Message(StrGetLine(text, i));\nEndDo;",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.StrGetLine", "fn.StrLen"],
       "reviewed": true
     },
@@ -455,7 +455,7 @@
       "parameters": "str — the text. line — the line number, from 1.",
       "return_descr": "String — the line without its line break; empty when there is no such line.",
       "example": "text = \"first\" + Chr(10) + \"second\";\nMessage(StrGetLine(text, 2));   // second",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.StrLineCount", "fn.StrLen"],
       "reviewed": true
     },
@@ -474,7 +474,7 @@
       "parameters": "str — a string.",
       "return_descr": "String.",
       "example": "Message(Upper(\"abc\"));   // ABC",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.Lower"],
       "reviewed": true
     },
@@ -493,7 +493,7 @@
       "parameters": "str — a string.",
       "return_descr": "String.",
       "example": "Message(Lower(\"ABC\"));   // abc",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.Upper"],
       "reviewed": true
     },
@@ -512,7 +512,7 @@
       "parameters": "num — a character code.",
       "return_descr": "String of one character.",
       "example": "text = \"first\" + Chr(10) + \"second\";",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.Asc", "fn.StrGetLine"],
       "reviewed": true
     },
@@ -531,7 +531,7 @@
       "parameters": "str — a string.",
       "return_descr": "Number — the character code.",
       "example": "Message(Asc(\"A\"));   // 65",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.Chr", "fn.Left"],
       "reviewed": true
     },
@@ -550,7 +550,7 @@
       "parameters": "text — the source, carrying every language: \"en = 'Total'; ru = 'Itogo'; uk = 'Razom';\". langCode — which one to read out ('en', 'ru', 'uk'); platform_state lists the languages this configuration declares.",
       "return_descr": "String — the named language's text; the source unchanged when it carries no languages at all, so a plain string passes through rather than vanishing.",
       "example": "Message(Tstr(\"en = 'Total'; ru = 'Itogo'; uk = 'Razom';\", \"uk\"));",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.GeneralLanguage", "fn.String"],
       "reviewed": true
     },
@@ -569,7 +569,7 @@
       "parameters": "None.",
       "return_descr": "Date, with the time of day.",
       "example": "Message(CurrentDate());",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.WorkingDate", "fn.BegOfDay", "fn.GetYear"],
       "reviewed": true
     },
@@ -588,7 +588,7 @@
       "parameters": "None.",
       "return_descr": "Date at 00:00:00.",
       "example": "doc.Date = WorkingDate();",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.CurrentDate", "fn.BegOfDay"],
       "reviewed": true
     },
@@ -607,7 +607,7 @@
       "parameters": "d — a date. num — months to add (may be negative).",
       "return_descr": "Date at 00:00:00.",
       "example": "Message(AddMonth(Date(2024, 1, 31), 1));\nMessage(AddMonth(Date(2024, 3, 15), -2));",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.BegOfMonth", "fn.EndOfMonth"],
       "reviewed": true
     },
@@ -626,7 +626,7 @@
       "parameters": "d — a date.",
       "return_descr": "Date at 00:00:00.",
       "example": "// the month a document belongs to, as a period\nbegin = BegOfMonth(doc.Date);\nend   = EndOfMonth(doc.Date);",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.EndOfMonth", "fn.BegOfQuart", "fn.BegOfYear"],
       "reviewed": true
     },
@@ -645,7 +645,7 @@
       "parameters": "d — a date.",
       "return_descr": "Date at 23:59:59.",
       "example": "Message(EndOfMonth(Date(2024, 2, 10)));",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.BegOfMonth", "fn.EndOfQuart", "fn.EndOfYear"],
       "reviewed": true
     },
@@ -664,7 +664,7 @@
       "parameters": "d — a date.",
       "return_descr": "Date at 00:00:00.",
       "example": "Message(BegOfQuart(Date(2024, 5, 20)));",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.EndOfQuart", "fn.GetQuartOfYear", "fn.BegOfYear"],
       "reviewed": true
     },
@@ -683,7 +683,7 @@
       "parameters": "d — a date.",
       "return_descr": "Date at 23:59:59.",
       "example": "Message(EndOfQuart(Date(2024, 5, 20)));",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.BegOfQuart", "fn.GetQuartOfYear", "fn.EndOfYear"],
       "reviewed": true
     },
@@ -702,7 +702,7 @@
       "parameters": "d — a date.",
       "return_descr": "Date at 00:00:00.",
       "example": "Message(BegOfYear(Date(2024, 5, 20)));",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.EndOfYear", "fn.GetYear"],
       "reviewed": true
     },
@@ -721,7 +721,7 @@
       "parameters": "d — a date.",
       "return_descr": "Date at 23:59:59.",
       "example": "Message(EndOfYear(Date(2024, 5, 20)));",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.BegOfYear", "fn.GetYear"],
       "reviewed": true
     },
@@ -740,7 +740,7 @@
       "parameters": "d — a date.",
       "return_descr": "Date at 00:00:00.",
       "example": "Message(BegOfWeek(Date(2024, 1, 3)));   // 2024-01-01, a Monday",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.EndOfWeek", "fn.GetDayOfWeek", "fn.GetWeekOfYear"],
       "reviewed": true
     },
@@ -759,7 +759,7 @@
       "parameters": "d — a date.",
       "return_descr": "Date at 23:59:59.",
       "example": "Message(EndOfWeek(Date(2024, 1, 3)));   // 2024-01-07, a Sunday",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.BegOfWeek", "fn.GetDayOfWeek"],
       "reviewed": true
     },
@@ -778,7 +778,7 @@
       "parameters": "d — a date.",
       "return_descr": "Date at 00:00:00.",
       "example": "If BegOfDay(doc.Date) == WorkingDate() Then\n    Message(\"today's document\");\nEndIf;",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.EndOfDay", "fn.WorkingDate", "fn.CurrentDate"],
       "reviewed": true
     },
@@ -797,7 +797,7 @@
       "parameters": "d — a date.",
       "return_descr": "Date at 23:59:59.",
       "example": "from = BegOfDay(d);\nto   = EndOfDay(d);",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.BegOfDay"],
       "reviewed": true
     },
@@ -816,7 +816,7 @@
       "parameters": "d — a date.",
       "return_descr": "Number — the year.",
       "example": "Message(GetYear(Date(2024, 5, 20)));   // 2024",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.GetMonth", "fn.GetDay", "fn.BegOfYear"],
       "reviewed": true
     },
@@ -835,7 +835,7 @@
       "parameters": "d — a date.",
       "return_descr": "Number, 1..12.",
       "example": "Message(GetMonth(Date(2024, 5, 20)));   // 5",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.GetYear", "fn.GetDay", "fn.GetQuartOfYear"],
       "reviewed": true
     },
@@ -854,7 +854,7 @@
       "parameters": "d — a date.",
       "return_descr": "Number, 1..31.",
       "example": "Message(GetDay(Date(2024, 5, 20)));   // 20",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.GetMonth", "fn.GetDayOfWeek", "fn.GetDayOfYear"],
       "reviewed": true
     },
@@ -873,7 +873,7 @@
       "parameters": "d — a date.",
       "return_descr": "Number, 0..23.",
       "example": "Message(GetHour(CurrentDate()));",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.GetMinute", "fn.GetSecond", "fn.BegOfDay"],
       "reviewed": true
     },
@@ -892,7 +892,7 @@
       "parameters": "d — a date.",
       "return_descr": "Number, 0..59.",
       "example": "Message(GetMinute(CurrentDate()));",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.GetHour", "fn.GetSecond"],
       "reviewed": true
     },
@@ -911,7 +911,7 @@
       "parameters": "d — a date.",
       "return_descr": "Number, 0..59.",
       "example": "Message(GetSecond(CurrentDate()));",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.GetHour", "fn.GetMinute"],
       "reviewed": true
     },
@@ -930,7 +930,7 @@
       "parameters": "d — a date.",
       "return_descr": "Number — the week of the year.",
       "example": "Message(GetWeekOfYear(Date(2024, 1, 1)));   // 1",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.BegOfWeek", "fn.GetDayOfWeek", "fn.GetDayOfYear"],
       "reviewed": true
     },
@@ -949,7 +949,7 @@
       "parameters": "d — a date.",
       "return_descr": "Number, 1..366.",
       "example": "Message(GetDayOfYear(Date(2024, 1, 1)));   // 1",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.GetWeekOfYear", "fn.GetDay"],
       "reviewed": true
     },
@@ -968,7 +968,7 @@
       "parameters": "d — a date.",
       "return_descr": "Number, 1 (Monday) .. 7 (Sunday).",
       "example": "If GetDayOfWeek(d) > 5 Then\n    Message(\"weekend\");\nEndIf;",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.BegOfWeek", "fn.EndOfWeek", "fn.GetWeekOfYear"],
       "reviewed": true
     },
@@ -987,7 +987,7 @@
       "parameters": "d — a date.",
       "return_descr": "Number, 1..4.",
       "example": "Message(GetQuartOfYear(Date(2024, 5, 20)));   // 2",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.BegOfQuart", "fn.EndOfQuart", "fn.GetMonth"],
       "reviewed": true
     },
@@ -1006,7 +1006,7 @@
       "parameters": "fileName — the full path.",
       "return_descr": "Boolean — whether the file was deleted.",
       "example": "FileDelete(GetTempDir() + \"report.xlsx\");",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.FileCopy", "fn.GetTempFileName", "fn.GetTempDir"],
       "reviewed": true
     },
@@ -1025,7 +1025,7 @@
       "parameters": "fileDstName — where to copy TO. fileSrcName — what to copy FROM.",
       "return_descr": "Boolean — whether the copy succeeded.",
       "example": "FileCopy(GetTempDir() + \"copy.txt\", \"C:\\\\data\\\\original.txt\");",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.FileDelete", "fn.GetTempDir"],
       "reviewed": true
     },
@@ -1044,7 +1044,7 @@
       "parameters": "None.",
       "return_descr": "String — the path.",
       "example": "path = GetTempDir() + \"export.csv\";",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.GetTempFileName", "fn.FileDelete"],
       "reviewed": true
     },
@@ -1063,7 +1063,7 @@
       "parameters": "None.",
       "return_descr": "String — the path.",
       "example": "file = GetTempFileName();\n// … write it, use it …\nFileDelete(file);",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.GetTempDir", "fn.FileDelete"],
       "reviewed": true
     },
@@ -1082,7 +1082,7 @@
       "parameters": "reader — a JSONReader with a text set.",
       "return_descr": "Structure, Array, String, Number, Boolean or Null.",
       "example": "reader = New JSONReader(\"{\"\"number\"\":\"\"A-17\"\",\"\"qty\"\":2}\");\norder = ReadJSON(reader);\nMessage(order.number);",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.WriteJSON", "guide.json"],
       "reviewed": false
     },
@@ -1101,7 +1101,7 @@
       "parameters": "writer — a JSONWriter; value — a String, Number, Boolean, Date, Null, Undefined, or a Structure / Container / Array of those.",
       "return_descr": "Nothing.",
       "example": "line = New Structure();\nline.Insert(\"item\", \"x\");\nwriter = New JSONWriter();\nWriteJSON(writer, line);\nMessage(writer.Close());",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.ReadJSON", "guide.json"],
       "reviewed": false
     },
@@ -1120,7 +1120,7 @@
       "parameters": "None.",
       "return_descr": "The active form, or empty.",
       "example": "form = ActiveWindow();\nIf ValueIsFilled(form) Then\n    Message(\"running in a window\");\nEndIf;",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.GetCommonForm", "fn.ShowCommonForm"],
       "reviewed": true
     },
@@ -1139,7 +1139,7 @@
       "parameters": "<String> — message text.\n<Marker> — StatusMessage.Information (the default), StatusMessage.Warning or StatusMessage.Error.\n\nError here is the APPLICATION's word, not the platform's: a document declining to post says so at that level and nothing has broken.",
       "return_descr": "",
       "example": "Message(\"Document saved successfully.\");\nMessage(\"The document did not post: no stock left.\", StatusMessage.Error);",
-      "availability": "Enterprise, Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "fn.SetStatus",
         "fn.WriteJournalEvent"
@@ -1161,7 +1161,7 @@
       "parameters": "<String> — the text.\n<Marker> — StatusMessage.Information (the default), StatusMessage.Warning or StatusMessage.Error. It becomes the line's level, which is what a reader filters by.\n<Category> — the event type, for grouping lines of one kind: \"import.line\", \"posting.skipped\". Defaults to \"script.event\".\n<Object> — the value the line is ABOUT: a reference, or anything else worth naming. Its presentation is appended to the text, so the line reads '... [Sales order 000012]' and is found with a `contains` search. It is TEXT, not a link: the journal has a structured payload column and nothing fills it yet, so there is no click-through to the object today.",
       "return_descr": "",
       "example": "WriteJournalEvent(\"Import started: 1240 rows\");\nWriteJournalEvent(\"Row 17 skipped: no such item\", StatusMessage.Warning, \"import.line\");\nWriteJournalEvent(\"Reposted\", StatusMessage.Information, \"posting\", Doc.Ref);",
-      "availability": "Enterprise, Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "fn.Message"
       ],
@@ -1182,7 +1182,7 @@
       "parameters": "message — the text.",
       "return_descr": "Nothing.",
       "example": "Alert(\"the period is closed\");",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.Message", "fn.Question", "fn.SetStatus"],
       "reviewed": true
     },
@@ -1201,7 +1201,7 @@
       "parameters": "message — the question. questionMode — which buttons to offer (QuestionMode).",
       "return_descr": "The chosen answer; empty when nobody could be asked.",
       "example": "answer = Question(\"Post the document?\", QuestionMode.YesNo);",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.Alert", "fn.Message"],
       "reviewed": true
     },
@@ -1220,7 +1220,7 @@
       "parameters": "text — the line to show.",
       "return_descr": "Nothing.",
       "example": "For Each row In rows Do\n    SetStatus(\"processing \" + String(row.LineNumber));\nEndDo;",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.Message", "fn.Alert"],
       "reviewed": true
     },
@@ -1239,7 +1239,7 @@
       "parameters": "None.",
       "return_descr": "Nothing.",
       "example": "ClearMessages();\nMessage(\"starting\");",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.Message", "fn.SetStatus"],
       "reviewed": true
     },
@@ -1258,7 +1258,7 @@
       "parameters": "string — the message.",
       "return_descr": "Does not return.",
       "example": "SetError(\"the period is closed\");",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.Raise", "fn.ErrorDescription"],
       "reviewed": true
     },
@@ -1277,7 +1277,7 @@
       "parameters": "string — the message.",
       "return_descr": "Does not return.",
       "example": "If IsEmptyValue(doc.Counterparty) Then\n    Raise(\"the counterparty is not filled in\");\nEndIf;",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.SetError", "fn.ErrorDescription", "kw.Raise", "kw.Try"],
       "reviewed": true
     },
@@ -1296,7 +1296,7 @@
       "parameters": "None.",
       "return_descr": "String — the message of the last raised error.",
       "example": "Try\n    doc.Write();\nExcept\n    Message(\"could not write: \" + ErrorDescription());\nEndTry;",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.Raise", "fn.SetError", "kw.Try", "kw.Except"],
       "reviewed": true
     },
@@ -1315,7 +1315,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "fn.IsEmptyValue",
         "fn.ValueIsFilled"
@@ -1337,7 +1337,7 @@
       "parameters": "",
       "return_descr": "",
       "example": "",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "fn.IsEmptyValue",
         "fn.IsNull"
@@ -1359,7 +1359,7 @@
       "parameters": "value — a value of any type.",
       "return_descr": "Boolean.",
       "example": "If IsEmptyValue(doc.Counterparty) Then\n    Raise(\"the counterparty is not filled in\");\nEndIf;",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.ValueIsFilled", "fn.IsNull", "fn.IsBlankString"],
       "reviewed": true
     },
@@ -1378,7 +1378,7 @@
       "parameters": "expr — the expression, as a string.",
       "return_descr": "Whatever the expression produced.",
       "example": "var k = 40;\nMessage(Evaluate(\"k + 2\"));   // 42",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.Execute", "fn.Type", "fn.TypeOf"],
       "reviewed": true
     },
@@ -1397,7 +1397,7 @@
       "parameters": "expr — the statements, as a string.",
       "return_descr": "Nothing.",
       "example": "Execute(\"total = total + 1;\");",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.Evaluate"],
       "reviewed": true
     },
@@ -1416,7 +1416,7 @@
       "parameters": "value — the value. format — the format string, e.g. \"NFD=2; NGS= \".",
       "return_descr": "String.",
       "example": "Message(Format(1250.5, \"NFD=2\"));\nMessage(Format(0, \"NZ=-\"));\nMessage(Format(True, \"BT=yes; BF=no\"));",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.String", "fn.Number", "fn.Tstr"],
       "reviewed": true
     },
@@ -1435,7 +1435,7 @@
       "parameters": "strType — the registered type name, e.g. \"Number\" or \"CatalogRef.Goods\".",
       "return_descr": "Type.",
       "example": "If TypeOf(value) == Type(\"Number\") Then\n    Message(\"a number\");\nEndIf;",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.TypeOf", "fn.IsEmptyValue"],
       "reviewed": true
     },
@@ -1454,7 +1454,7 @@
       "parameters": "value — a value of any type.",
       "return_descr": "Type.",
       "example": "Message(TypeOf(42) == Type(\"Number\"));   // True",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.Type", "fn.IsEmptyValue"],
       "reviewed": true
     },
@@ -1473,7 +1473,7 @@
       "parameters": "None.",
       "return_descr": "Number.",
       "example": "Message(Rand());",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.Int", "fn.Round"],
       "reviewed": true
     },
@@ -1492,7 +1492,7 @@
       "parameters": "None.",
       "return_descr": "Number.",
       "example": "For i = 0 To ArgCount() - 1 Do\n    Message(ArgValue(i));\nEndDo;",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.ArgValue"],
       "reviewed": true
     },
@@ -1511,7 +1511,7 @@
       "parameters": "index — the argument's position, from 0.",
       "return_descr": "String — the argument.",
       "example": "Message(ArgValue(0));   // the executable's path",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.ArgCount"],
       "reviewed": true
     },
@@ -1530,7 +1530,7 @@
       "parameters": "None.",
       "return_descr": "String.",
       "example": "Message(ComputerName());",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.UserName", "fn.GeneralLanguage"],
       "reviewed": true
     },
@@ -1549,7 +1549,7 @@
       "parameters": "command — the command line to run.",
       "return_descr": "Nothing.",
       "example": "RunApp(\"notepad.exe \" + GetTempFileName());",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.GetTempFileName", "fn.ComputerName"],
       "reviewed": true
     },
@@ -1568,7 +1568,7 @@
       "parameters": "title — the text.",
       "return_descr": "Nothing.",
       "example": "SetAppTitle(\"Production base\");",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.ActiveWindow", "fn.SetStatus"],
       "reviewed": true
     },
@@ -1587,7 +1587,7 @@
       "parameters": "None.",
       "return_descr": "String — always empty at present.",
       "example": "// use GetTempDir() instead\npath = GetTempDir();",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.GetTempDir", "fn.GetTempFileName"],
       "reviewed": true
     },
@@ -1606,7 +1606,7 @@
       "parameters": "None.",
       "return_descr": "String.",
       "example": "doc.Author = UserName();",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.IsInRole", "fn.AccessRight", "fn.ComputerName"],
       "reviewed": true
     },
@@ -1625,7 +1625,7 @@
       "parameters": "None.",
       "return_descr": "String.",
       "example": "// only where the same credentials are required again\nconnect(UserName(), UserPassword());",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.UserName"],
       "reviewed": true
     },
@@ -1644,7 +1644,7 @@
       "parameters": "None.",
       "return_descr": "Boolean.",
       "example": "If Not ExclusiveMode() Then\n    Raise(\"this operation needs exclusive access\");\nEndIf;",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.SetExclusive"],
       "reviewed": true
     },
@@ -1663,7 +1663,7 @@
       "parameters": "on — True to take exclusive access, False to release it.",
       "return_descr": "Nothing.",
       "example": "Try\n    SetExclusive(True);\nExcept\n    Message(ErrorDescription());\nEndTry;",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.ExclusiveMode"],
       "reviewed": true
     },
@@ -1682,7 +1682,7 @@
       "parameters": "None.",
       "return_descr": "String — the language code.",
       "example": "Message(Tstr(\"en = 'Total'; ru = 'Itogo'; uk = 'Razom';\", GeneralLanguage()));",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.Tstr", "fn.UserName"],
       "reviewed": true
     },
@@ -1701,7 +1701,7 @@
       "parameters": "force — False to close the normal way (can be refused), True to close regardless.",
       "return_descr": "Nothing.",
       "example": "EndJob(False);",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.ActiveWindow"],
       "reviewed": true
     },
@@ -1720,7 +1720,7 @@
       "parameters": "None.",
       "return_descr": "Nothing — it raises when an interrupt is pending.",
       "example": "For Each row In rows Do\n    UserInterruptProcessing();\n    // … the slow part …\nEndDo;",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.SetStatus", "fn.EndJob"],
       "reviewed": true
     },
@@ -1739,7 +1739,7 @@
       "parameters": "strRole — the right's name (e.g. \"Read\", \"Write\", \"Delete\"). metadata — the object it is asked about. BOTH are required.",
       "return_descr": "Boolean.",
       "example": "If Not AccessRight(\"Delete\", Metadata.Catalogs.Goods) Then\n    button.Enabled = False;\nEndIf;",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.IsInRole", "fn.UserName"],
       "reviewed": true
     },
@@ -1758,7 +1758,7 @@
       "parameters": "strRole — the role's name.",
       "return_descr": "Boolean.",
       "example": "If IsInRole(\"Accountant\") Then\n    ShowCommonForm(\"ClosingPeriod\");\nEndIf;",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.AccessRight", "fn.UserName"],
       "reviewed": true
     },
@@ -1777,7 +1777,7 @@
       "parameters": "name — the common form's name. owner — the owning window (optional). id — a key that identifies this form, so asking twice reuses one window (optional).",
       "return_descr": "The form.",
       "example": "form = GetCommonForm(\"Settings\");\nform.Open();",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.ShowCommonForm", "fn.ActiveWindow", "fn.GetCommonTemplate"],
       "reviewed": true
     },
@@ -1796,7 +1796,7 @@
       "parameters": "name — the common form's name. owner — the owning window (optional). id — a key that identifies this form, so asking twice reuses one window (optional).",
       "return_descr": "Nothing.",
       "example": "ShowCommonForm(\"Settings\");",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.GetCommonForm", "fn.ActiveWindow"],
       "reviewed": true
     },
@@ -1815,7 +1815,7 @@
       "parameters": "None.",
       "return_descr": "Nothing.",
       "example": "BeginTransaction();\nTry\n    first.Write();\n    second.Write();\n    CommitTransaction();\nExcept\n    RollBackTransaction();\n    Raise(ErrorDescription());\nEndTry;",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.CommitTransaction", "fn.RollBackTransaction"],
       "reviewed": true
     },
@@ -1834,7 +1834,7 @@
       "parameters": "None.",
       "return_descr": "Nothing.",
       "example": "CommitTransaction();",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.BeginTransaction", "fn.RollBackTransaction"],
       "reviewed": true
     },
@@ -1853,7 +1853,7 @@
       "parameters": "None.",
       "return_descr": "Nothing.",
       "example": "Except\n    RollBackTransaction();\nEndTry;",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.BeginTransaction", "fn.CommitTransaction"],
       "reviewed": true
     },
@@ -1872,7 +1872,7 @@
       "parameters": "value - any value this configuration can hold.",
       "return_descr": "The value as JSON text. Raises when the value cannot travel (IsTransferable) or when no configuration is open - the types a reference names live in the configuration's own registry.",
       "example": "Selection = Query.Execute().Select();\nWhile Selection.Next() Do\n\tMessage(SerializeValue(Selection));\nEndDo;",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "fn.DeserializeValue"
       ],
@@ -1893,7 +1893,7 @@
       "parameters": "json - text as SerializeValue writes it.",
       "return_descr": "The value the text describes. Raises when the text is not JSON a value can be read from, when it names a type this configuration does not have, or when no configuration is open.",
       "example": "Value = DeserializeValue(\"{\\\"type\\\":\\\"Number\\\",\\\"value\\\":42}\");",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": [
         "fn.SerializeValue"
       ],
@@ -1914,7 +1914,7 @@
       "parameters": "None.",
       "return_descr": "Number — how many jobs were started.",
       "example": "started = RunScheduledJobs();",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.RunJob", "fn.RunBackground"],
       "reviewed": true
     },
@@ -1933,7 +1933,7 @@
       "parameters": "name — the scheduled job's name.",
       "return_descr": "Boolean — whether it was started.",
       "example": "If Not RunJob(\"NightlyRecalculation\") Then\n    Message(\"the job did not start\");\nEndIf;",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.RunScheduledJobs", "fn.RunBackground"],
       "reviewed": true
     },
@@ -1952,7 +1952,7 @@
       "parameters": "procedure — the name of the procedure to run. args — an Array of its arguments (may be empty).",
       "return_descr": "The background job that was started.",
       "example": "args = New Array();\nargs.Add(BegOfMonth(WorkingDate()));\njob = RunBackground(\"RecalculateTotals\", args);",
-      "availability": "Designer, codeRunner, daemon, wenterprise-server",
+      "availability": "Thin client, Server",
       "see_also": ["fn.RunJob", "fn.RunScheduledJobs"],
       "reviewed": true
     }

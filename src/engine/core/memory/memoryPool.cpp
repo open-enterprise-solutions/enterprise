@@ -38,7 +38,7 @@ namespace detail {
 #ifndef _WIN32
 		// POSIX has no DLL_THREAD_DETACH, so the drain that covers worker threads on Windows has
 		// no place to live here — and without it every thread that ends keeps its cache forever,
-		// which on a long-running server (wenterprise-server spawns per session) accumulates
+		// which on a long-running server (its workers come and go with the sessions) accumulates
 		// thread after thread. So off Windows the pool destroys itself on thread exit, which is
 		// exactly what thread_local destructors are for.
 		//

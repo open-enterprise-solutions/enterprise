@@ -318,7 +318,7 @@ public:
 	}
 
 	// Auto-attach every verified Scanner connection. Used by the web
-	// debug path (SpawnWebServerWithManifest): wes's debug server runs
+	// debug path (RunApplication, useManifest): the web server's debug server runs
 	// with wait=false so its connection-type is Scanner, which means
 	// designer's RecvCommand does NOT auto-promote to Debugger on verify.
 	// Manual UI attach works (ibDialogDebugItem → OnAvailableItemSelected
