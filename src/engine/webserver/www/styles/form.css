@@ -206,10 +206,83 @@ oes-tablebox {
 	min-width: 0;
 }
 
-oes-tablebox .grid {
+oes-tablebox .grid-frame {
+	position: relative;
 	flex: 1 1 auto;
 	min-height: 8rem;
-	contain: size;
+}
+
+/* Laid in its frame, not flowing in it: what the grid holds never makes the frame taller. */
+oes-tablebox .grid {
+	position: absolute;
+	inset: 0;
+}
+
+oes-tablebox .grid-frame.paged .grid {
+	right: var(--oes-pager);
+}
+
+/* The scrollbar over the window of rows the grid holds (src/tablebox/tablebox.js, updatePager) — the grid's own measures
+   only what is held, so it is not shown; a row too wide still scrolls sideways under its own. */
+oes-tablebox .pager {
+	display: none;
+	position: absolute;
+	right: 0;
+	width: var(--oes-pager);
+	background: var(--oes-table-header-bg);
+	border-left: 1px solid var(--oes-table-border);
+	box-sizing: border-box;
+	touch-action: none;
+}
+
+oes-tablebox .grid-frame.paged .pager {
+	display: block;
+}
+
+oes-tablebox .pager .thumb {
+	position: absolute;
+	left: 2px;
+	right: 2px;
+	border-radius: 4px;
+	background: var(--oes-muted);
+	opacity: 0.55;
+	cursor: grab;
+}
+
+oes-tablebox .pager .thumb:hover,
+oes-tablebox .pager .thumb:active {
+	opacity: 0.8;
+}
+
+oes-tablebox .pager[data-thumb="top"] .thumb {
+	top: 0;
+	height: 50%;
+}
+
+oes-tablebox .pager[data-thumb="bottom"] .thumb {
+	bottom: 0;
+	height: 50%;
+}
+
+oes-tablebox .pager[data-thumb="middle"] .thumb {
+	top: 33.333%;
+	height: 33.333%;
+}
+
+oes-tablebox .tabulator .tabulator-tableholder::-webkit-scrollbar {
+	width: 0;
+	height: 10px;
+}
+
+oes-tablebox .tabulator .tabulator-tableholder::-webkit-scrollbar-thumb {
+	border-radius: 5px;
+	background: var(--oes-border);
+}
+
+@supports not selector(::-webkit-scrollbar) {
+	oes-tablebox .tabulator .tabulator-tableholder {
+		scrollbar-width: none;
+	}
 }
 
 oes-tablebox .tabulator {
@@ -445,9 +518,17 @@ oes-gridbox .compose-state {
 		overflow: visible;
 	}
 
-	oes-gridbox .sheet-host,
-	oes-tablebox .grid {
+	oes-gridbox .sheet-host {
 		contain: none;
+	}
+
+	oes-tablebox .grid {
+		position: relative;
+		inset: auto;
+	}
+
+	oes-tablebox .pager {
+		display: none !important;
 	}
 
 	.sheet thead,

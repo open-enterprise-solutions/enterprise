@@ -43,10 +43,14 @@
 
 	/* Something to press is at least this tall — a finger, not a pointer, on a touch screen. */
 	--oes-touch: 2rem;
+
+	/* A table's scrollbar over the window of rows it holds. */
+	--oes-pager: 12px;
 }
 
 @media (pointer: coarse) {
 	:root {
 		--oes-touch: 44px;
+		--oes-pager: 16px;
 	}
 }

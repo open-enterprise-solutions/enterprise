@@ -6,10 +6,18 @@
 // the one this follows.
 //
 // The first page comes in the State (Rows, protocol 5) or is fetched from the top; the next ones are fetched as the
-// person scrolls, half a window ahead — after the last row held (Direction 1) and before the first (Direction -1),
-// keyset, never an offset. A new Version is the rows read anew IN PLACE: around the row at the top of the window, which
-// stays where it stood — from the State's page when it holds that row, else fetched. A read is one of a generation: a
-// page asked before the rows were read anew is dropped when it comes.
+// person scrolls — after the last row held (Direction 1) and before the first (Direction -1), keyset, never an offset.
+// A new Version is the rows read anew IN PLACE: around the row at the top of the window, which stays where it stood —
+// from the State's page when it holds that row, else fetched. A read is one of a generation: a page asked before the
+// rows were read anew is dropped when it comes.
+//
+// ⭐ A WINDOW OF ROWS, NOT ALL OF THEM — the thin client's (frmclient/win/ctrls/dataview, datavgen.paged.cpp): a page is
+// as many rows as the window shows, asked when fewer than `slack` rows are left past its edge the way the person goes,
+// and the rows held are kept to the window and `slack` on each side — the side left behind let go, never a row on view
+// nor the current one. Read to the end of a long list, the browser holds what it shows, not the list. So the grid's own
+// scrollbar would measure nothing; the thin client's stands beside it instead (updatePager): three places — at the
+// top, in the middle, at the bottom — from whether there are rows before and after the window, not from a length
+// nobody knows.
 //
 // What the person does goes back as the thin client's table sends it: the cursor moved (Row, held until the next call),
 // a row activated (Open {Row}) — its cell's editor opened at once when the row has one that may be edited, else the one
@@ -25,8 +33,8 @@ import { readPage } from './rows.js';
 /** @typedef {import('../protocol/patch.js').ProtocolNode} ProtocolNode */
 /** @typedef {import('tabulator').TabulatorFull} TabulatorFull */
 
-/** The rows asked for at a time. */
-const pageSize = 50;
+/** The rows held past the window on each side (the thin client's kBufferSlack). */
+const slack = 5;
 
 // Which way a fetch reads from its Anchor (ibTable::ibDirection).
 const backward = -1;
@@ -66,9 +74,18 @@ class Tablebox extends Control {
 	/** @param {ProtocolNode} node */
 	build(node) {
 		this.bar = new CommandBar(this);
+		// The grid, and beside it the scrollbar over the window of rows it holds.
+		this.frame = document.createElement('div');
+		this.frame.className = 'grid-frame';
 		this.host = document.createElement('div');
 		this.host.className = 'grid';
-		this.append(this.bar.element, this.host);
+		this.pager = document.createElement('div');
+		this.pager.className = 'pager';
+		this.thumb = document.createElement('div');
+		this.thumb.className = 'thumb';
+		this.pager.append(this.thumb);
+		this.frame.append(this.host, this.pager);
+		this.append(this.bar.element, this.frame);
 		/** @type {TabulatorFull | null} */
 		this.table = null;
 		/** @type {Promise<TabulatorFull> | null} */
@@ -86,6 +103,8 @@ class Tablebox extends Control {
 		this.lastHandle = 0;
 		this.fetchingAhead = false;
 		this.fetchingBack = false;
+		/** where the window stood at the last scroll — which way the person goes */
+		this.scrolled = 0;
 		/** the row and the column the cursor stands on */
 		this.currentRow = 0;
 		this.currentColumn = 0;
@@ -98,6 +117,13 @@ class Tablebox extends Control {
 		this.host.addEventListener('pointerdown', (event) => {
 			this.pressedColumn = columnUnder(event.target);
 		}, true);
+		this.listenPager();
+		// A window grown taller shows more rows than are held past it: read on, and the scrollbar placed again.
+		this.resized = new ResizeObserver(() => {
+			this.updatePager();
+			this.fill();
+		});
+		this.resized.observe(this.frame);
 		this.update(node);
 	}
 
@@ -228,14 +254,123 @@ class Tablebox extends Control {
 				this.send(EventKind.Resize, { Column: id, Width: Math.round(column.getWidth()) });
 		});
 		table.on('scrollVertical', (top) => {
+			const direction = Math.sign(top - this.scrolled);
+			this.scrolled = top;
+			this.edge(direction);
+			this.updatePager();
+		});
+	}
+
+	/**
+	 * A page read the way the person goes when fewer than `slack` rows are left past the window's edge — only that way:
+	 * read the other way too, a window short of rows behind it jumped as its far side was let go (the thin client's
+	 * OnScrollEvent).
+	 * @param {number} direction 1 down, -1 up
+	 */
+	edge(direction) {
+		const holder = this.holder();
+		if (holder === null)
+			return;
+		const margin = slack * this.rowHeight();
+		if (direction > 0 && holder.scrollHeight - holder.scrollTop - holder.clientHeight < margin)
+			this.more();
+		else if (direction < 0 && holder.scrollTop < margin)
+			this.back();
+	}
+
+	/** Rows read on while those held do not reach `slack` past the window — a short first page, a window grown. */
+	fill() {
+		const holder = this.holder();
+		if (holder !== null && holder.scrollHeight - holder.clientHeight < slack * this.rowHeight())
+			this.more();
+	}
+
+	/** The rows the window shows (the thin client's GetCountPerPage) — the size of a page. */
+	perPage() {
+		const holder = this.holder();
+		return Math.max(1, Math.ceil((holder?.clientHeight ?? 0) / this.rowHeight()));
+	}
+
+	/** A row's height, as drawn; before any is, the touch target's. */
+	rowHeight() {
+		const row = /** @type {HTMLElement | null} */ (this.host.querySelector('.tabulator-row'));
+		return row?.offsetHeight || 32;
+	}
+
+	/**
+	 * The scrollbar over the window, the thin client's three-place one (datavgen.scrollbar.cpp): at the top with
+	 * nothing before what is shown, at the bottom with nothing after it, in the middle with rows both ways; none at all
+	 * when every row is held and on view. It stands over the grid's rows, under its header.
+	 */
+	updatePager() {
+		const holder = this.holder();
+		if (holder === null)
+			return;
+		const atTop = holder.scrollTop <= 0;
+		const atBottom = holder.scrollTop + holder.clientHeight >= holder.scrollHeight - 1;
+		const ahead = !this.end || !atBottom;
+		const behind = !this.begin || !atTop;
+		this.frame.classList.toggle('paged', ahead || behind);
+		this.pager.dataset.thumb = ahead && behind ? 'middle' : behind ? 'bottom' : 'top';
+		this.pager.style.top = `${holder.offsetTop}px`;
+		this.pager.style.height = `${holder.clientHeight}px`;
+	}
+
+	/**
+	 * What the scrollbar takes: a press beside the thumb turns a page that way, the wheel scrolls the rows, and the thumb
+	 * dragged turns a page the way it went — let go at the very top, the list is read again from its first row (the
+	 * thin client's snap to the start). Dragged, it follows the pointer and comes back to its place.
+	 */
+	listenPager() {
+		/** @type {number | null} */
+		let pressed = null;
+		/** where the thumb rests and the track it moves in, as the drag began */
+		let rest = new DOMRect();
+		let track = new DOMRect();
+		const page = (/** @type {number} */ direction) => {
+			const holder = this.holder();
+			if (holder !== null)
+				holder.scrollTop += direction * holder.clientHeight;
+		};
+		this.pager.addEventListener('wheel', (event) => {
 			const holder = this.holder();
 			if (holder === null)
 				return;
-			const ahead = holder.clientHeight / 2;
-			if (top + holder.clientHeight >= holder.scrollHeight - ahead)
-				this.more();
-			if (top <= ahead)
-				this.back();
+			event.preventDefault();
+			holder.scrollTop += event.deltaY;
+		}, { passive: false });
+		this.pager.addEventListener('pointerdown', (event) => {
+			event.preventDefault();
+			if (event.target !== this.thumb) {
+				const thumb = this.thumb.getBoundingClientRect();
+				page(event.clientY < thumb.top ? -1 : 1);
+				return;
+			}
+			pressed = event.clientY;
+			rest = this.thumb.getBoundingClientRect();
+			track = this.pager.getBoundingClientRect();
+			this.thumb.setPointerCapture(event.pointerId);
+		});
+		this.thumb.addEventListener('pointermove', (event) => {
+			if (pressed === null)
+				return;
+			const shift = Math.min(Math.max(event.clientY - pressed, track.top - rest.top), track.bottom - rest.bottom);
+			this.thumb.style.translate = `0 ${shift}px`;
+		});
+		this.thumb.addEventListener('pointerup', (event) => {
+			if (pressed === null)
+				return;
+			const shift = event.clientY - pressed;
+			pressed = null;
+			this.thumb.style.translate = '';
+			if (rest.top + shift <= track.top && !this.begin)
+				this.fromTop();
+			else if (shift !== 0)
+				page(Math.sign(shift));
+		});
+		this.thumb.addEventListener('pointercancel', () => {
+			pressed = null;
+			this.thumb.style.translate = '';
 		});
 	}
 
@@ -434,7 +569,7 @@ class Tablebox extends Control {
 	 */
 	async load(rows, current) {
 		const generation = ++this.generation;
-		const page = rows ?? await this.fetch({ Direction: reset, Count: pageSize, Before: 0 });
+		const page = rows ?? await this.fetch({ Direction: reset, Count: this.perPage() + slack, Before: 0 });
 		if (page === null || generation !== this.generation || this.table === null)
 			return;
 		const read = readPage(page);
@@ -443,6 +578,24 @@ class Tablebox extends Control {
 		const at = read.current || current;
 		if (at !== 0 && !this.select(at))
 			this.around(at);
+		this.updatePager();
+		this.fill();
+	}
+
+	/** The list read again from its first row, the window at its top — the thumb let go at the very top. */
+	async fromTop() {
+		if (this.table === null)
+			return;
+		const generation = ++this.generation;
+		const page = await this.fetch({ Direction: reset, Count: this.perPage() + slack, Before: 0 });
+		if (page === null || generation !== this.generation || this.table === null)
+			return;
+		const read = readPage(page);
+		await this.table.replaceData(read.records);
+		this.take(read, 0);
+		this.scrollTo(0);
+		this.restore(read);
+		this.updatePager();
 	}
 
 	/**
@@ -459,10 +612,10 @@ class Tablebox extends Control {
 		const top = visible[0]?.getData().handle ?? 0;
 		const place = this.placeOf(top);
 		const held = rows !== undefined && (top === 0 || (rows.NodeChildren ?? []).some((row) => row.NodeId === top));
-		const ahead = held ? (rows?.Anchor ? rows.Count ?? 0 : 0) : top !== 0 ? pageSize : 0;
+		const ahead = held ? (rows?.Anchor ? rows.Count ?? 0 : 0) : top !== 0 ? slack : 0;
 		const page = held ? rows : await this.fetch(top !== 0
-			? { Direction: reset, Anchor: top, Count: pageSize + visible.length, Before: pageSize }
-			: { Direction: reset, Count: pageSize, Before: 0 });
+			? { Direction: reset, Anchor: top, Count: this.perPage() + slack, Before: slack }
+			: { Direction: reset, Count: this.perPage() + slack, Before: 0 });
 		if (page === null || generation !== this.generation || this.table === null)
 			return;
 		const read = readPage(page);
@@ -473,6 +626,8 @@ class Tablebox extends Control {
 			this.select(read.current);
 		else if (this.currentRow !== 0)
 			this.select(this.currentRow, false);
+		this.updatePager();
+		this.fill();
 	}
 
 	/**
@@ -481,13 +636,14 @@ class Tablebox extends Control {
 	 */
 	async around(handle) {
 		const generation = ++this.generation;
-		const page = await this.fetch({ Direction: reset, Anchor: handle, Count: pageSize, Before: pageSize });
+		const page = await this.fetch({ Direction: reset, Anchor: handle, Count: this.perPage() + slack, Before: slack });
 		if (page === null || generation !== this.generation || this.table === null)
 			return;
 		const read = readPage(page);
 		await this.table.setData(read.records);
-		this.take(read, pageSize);
+		this.take(read, slack);
 		this.select(read.current || handle);
+		this.updatePager();
 	}
 
 	/**
@@ -503,47 +659,142 @@ class Tablebox extends Control {
 		this.lastHandle = read.records.at(-1)?.handle ?? 0;
 	}
 
-	/** The page after the last row held, when there is one. */
+	/** The page after the last row held, when there is one — and the rows above the window let go of. */
 	async more() {
 		if (this.end || this.fetchingAhead || this.lastHandle === 0 || this.table === null)
 			return;
 		const generation = this.generation;
+		const count = this.perPage();
 		this.fetchingAhead = true;
 		try {
-			const page = await this.fetch({ Direction: forward, Anchor: this.lastHandle, Count: pageSize });
+			const page = await this.fetch({ Direction: forward, Anchor: this.lastHandle, Count: count });
 			if (page === null || generation !== this.generation || this.table === null)
 				return;
 			const read = readPage(page);
 			await this.table.addData(read.records);
-			this.end = read.end || read.records.length < pageSize;
+			this.end = read.end || read.records.length < count;
 			this.lastHandle = read.records.at(-1)?.handle ?? this.lastHandle;
+			this.restore(read);
+			await this.trimFront();
 		}
 		finally {
 			this.fetchingAhead = false;
 		}
+		// Scrolled on past the page while it was read: the next one.
+		this.edge(1);
+		this.updatePager();
 	}
 
-	/** The page before the first row held, when the rows held do not reach the top — the window stays on its rows. */
+	/** The page before the first row held, when the rows held do not reach the top — the window stays on its rows, and
+	 * the rows under it are let go of. */
 	async back() {
 		if (this.begin || this.fetchingBack || this.firstHandle === 0 || this.table === null)
 			return;
 		const generation = this.generation;
+		const count = this.perPage();
 		this.fetchingBack = true;
 		try {
 			const first = this.firstHandle;
-			const page = await this.fetch({ Direction: backward, Anchor: first, Count: pageSize });
+			const page = await this.fetch({ Direction: backward, Anchor: first, Count: count });
 			if (page === null || generation !== this.generation || this.table === null)
 				return;
 			const read = readPage(page);
-			const place = this.placeOf(first);
-			await this.table.addData(read.records, true);
-			this.begin = read.records.length < pageSize;
+			const holder = this.holder();
+			const stood = holder?.scrollTop ?? 0;
+			// A copy: the grid turns the rows it adds at the top round in place, and the page's first would be its last.
+			await this.table.addData([...read.records], true);
+			this.begin = read.records.length < count;
 			this.firstHandle = read.records[0]?.handle ?? first;
-			await this.putBack(first, place);
+			this.restore(read);
+			this.scrollTo(stood + read.records.length * this.rowHeight());
+			await this.trimTail();
 		}
 		finally {
 			this.fetchingBack = false;
 		}
+		this.edge(-1);
+		this.updatePager();
+	}
+
+	/**
+	 * The rows held kept to the window and `slack` on each side, the ones above let go of — never one on view or within
+	 * `slack` of it; the window stays on its rows (the thin client's trim of the front).
+	 *
+	 * 🛑 THE CURRENT ROW IS LET GO OF TOO, unlike the thin client's, which pins it: the cursor stands on the first row of
+	 * a list just opened, so a pinned one kept every row read past it — the whole list, scrolled to its end. The server
+	 * keeps the current row; a page that brings it back selects it again (restore).
+	 */
+	async trimFront() {
+		const shown = this.shown();
+		if (shown === null)
+			return;
+		const { rows, top, stood } = shown;
+		const cut = Math.min(rows.length - (this.perPage() + 2 * slack), top - slack);
+		if (cut <= 0)
+			return;
+		await this.table?.deleteRow(rows.slice(0, cut));
+		this.begin = false;
+		this.firstHandle = rows[cut].getData().handle;
+		this.scrollTo(stood - cut * this.rowHeight());
+	}
+
+	/**
+	 * The current row selected again when a page brings it back — let go of while the window was away from it. Read
+	 * again, a row is a new object with a new handle; the server names the current one by it (CurrentRow).
+	 * @param {ReturnType<typeof readPage>} read
+	 */
+	restore(read) {
+		const current = read.current || this.currentRow;
+		if (current !== 0 && read.records.some((record) => record.handle === current))
+			this.select(current, false);
+	}
+
+	/** …and the rows under it, after a page read above (the thin client's trim of the tail). */
+	async trimTail() {
+		const shown = this.shown();
+		if (shown === null)
+			return;
+		const { rows, bottom } = shown;
+		const cut = Math.min(rows.length - (this.perPage() + 2 * slack), rows.length - 1 - bottom - slack);
+		if (cut <= 0)
+			return;
+		await this.table?.deleteRow(rows.slice(rows.length - cut));
+		this.end = false;
+		this.lastHandle = rows[rows.length - cut - 1].getData().handle;
+	}
+
+	/**
+	 * The rows held, and the first and the last of them the window shows — by where it stands and the rows' height (the
+	 * thin client's line height), not by what the grid drew last: it draws a scroll a frame later, and a trim that read
+	 * its drawing let go of rows coming into view. Null before the grid is built.
+	 */
+	shown() {
+		const holder = this.holder();
+		if (this.table === null || holder === null)
+			return null;
+		const rows = this.table.getRows();
+		const height = this.rowHeight();
+		const stood = holder.scrollTop;
+		const last = rows.length - 1;
+		return {
+			rows,
+			stood,
+			top: Math.min(last, Math.floor(stood / height)),
+			bottom: Math.min(last, Math.ceil((stood + holder.clientHeight) / height) - 1),
+		};
+	}
+
+	/**
+	 * The window put where it stood over its rows after rows went or came above it — set, not scrolled by the person:
+	 * no way taken, nothing read for it.
+	 * @param {number} top
+	 */
+	scrollTo(top) {
+		const holder = this.holder();
+		if (holder === null)
+			return;
+		holder.scrollTop = Math.max(0, top);
+		this.scrolled = holder.scrollTop;
 	}
 
 	/**
@@ -599,8 +850,11 @@ class Tablebox extends Control {
 			return;
 		await this.table.scrollToRow(handle, 'top', false).catch(() => {});
 		const holder = this.holder();
-		if (holder !== null)
-			holder.scrollTop -= place;
+		if (holder === null)
+			return;
+		holder.scrollTop -= place;
+		// Put back, not scrolled by the person: no way taken, nothing read for it.
+		this.scrolled = holder.scrollTop;
 	}
 
 	/**
@@ -622,6 +876,7 @@ class Tablebox extends Control {
 
 	dispose() {
 		this.disposed = true;
+		this.resized.disconnect();
 		this.table?.destroy();
 		this.table = null;
 	}

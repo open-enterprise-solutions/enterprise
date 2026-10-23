@@ -48,6 +48,10 @@ by a patch is updated in place, so the focus and the caret stay where they were.
   form gives it and scrolls its rows inside itself.
 - **The table** keeps its place: a list read again is read around its top visible row, paged both ways, a stale page
   dropped. A cell keeps the server's text; its editor has the column's buttons (… ▷ ×).
+- **A table holds a window of rows, not the list** — the thin client's: a page is as many rows as the window shows,
+  read when fewer than five are left past its edge, and the side left behind is let go, so a list scrolled to its end
+  holds about two windows. Its scrollbar says only whether there are rows before and after (at the top, in the middle,
+  at the bottom); the thumb let go at the very top reads the list from its first row.
 - **A narrow screen** (under 40 rem): the sizers fold into a column, fields take the full width, touch targets are
   44 px and more, nothing is reached by hover alone, a table scrolls sideways inside itself — never the page.
 - **A number's … opens a calculator, a date's a calendar**, dropped under the field, as the thin client's: the
