@@ -100,7 +100,7 @@ protected:
 	//frame owner 
 	ibValueForm* m_formOwner;
 
-	ibPropertyUString* m_propertyName = ibPropertyObject::CreateProperty<ibPropertyUString>(wxT("Name"), _("Name"), _("Object name"), wxT(""));
+	ibPropertyUString* m_propertyName = ibPropertyObject::CreateProperty<ibPropertyUString>(m_category, wxT("Name"), _("Name"), _("Object name"), wxT(""));
 
 	// USER VISIBILITY — a group of its own: the functional options the element is available under. Empty =
 	// available whatever the options are.

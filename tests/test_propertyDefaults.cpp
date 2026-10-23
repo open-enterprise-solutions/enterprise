@@ -43,9 +43,9 @@ public:
 
 	// true / 8 / "on" — every one of them survives only if "absent" is not read
 	// as "the type's zero".
-	ibPropertyBoolean* m_propertyFlagOn  = CreateProperty<ibPropertyBoolean>(wxT("FlagOn"),  true);
-	ibPropertyBoolean* m_propertyFlagOff = CreateProperty<ibPropertyBoolean>(wxT("FlagOff"), false);
-	ibPropertyInteger* m_propertyShards  = CreateProperty<ibPropertyInteger>(wxT("Shards"), 8);
+	ibPropertyBoolean* m_propertyFlagOn  = CreateProperty<ibPropertyBoolean>(m_category, wxT("FlagOn"),  true);
+	ibPropertyBoolean* m_propertyFlagOff = CreateProperty<ibPropertyBoolean>(m_category, wxT("FlagOff"), false);
+	ibPropertyInteger* m_propertyShards  = CreateProperty<ibPropertyInteger>(m_category, wxT("Shards"), 8);
 };
 
 }  // namespace
