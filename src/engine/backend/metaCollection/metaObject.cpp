@@ -40,7 +40,11 @@ bool ibValueMetaObject::BuildNewName()
 {
 	// Both halves are the metadata's: GetNewName hands the name back while nobody else carries it (the
 	// bare name is its first candidate) and the next free one otherwise; RenameMetaObject takes it.
-	const wxString newName = m_metaData->GetNewName(GetClassType(), GetParent(), GetName(), /*forConstructor*/ true);
+	// `self` (this object) is excluded from the collision scan: by the time this runs the object is
+	// often already attached under GetParent() under its own current name (e.g. an external data
+	// processor merged into a configuration), and without the exclusion that name always "collides"
+	// with itself.
+	const wxString newName = m_metaData->GetNewName(GetClassType(), GetParent(), GetName(), /*forConstructor*/ true, this);
 	if (newName == GetName())
 		return true;
 	m_metaData->RenameMetaObject(this, newName);
