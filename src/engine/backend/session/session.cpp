@@ -1569,6 +1569,10 @@ ibSession::OpenResult ibSession::Open(const wxString& user, const wxString& pass
 		reg.NotifyAuthenticated(this);
 		return OpenResult::Authenticated;
 	}
+	// The registry did not answer at all: nothing was said of the creds, and a dialog would ask for a password that
+	// was never the question.
+	if (res == ibAuthState::Anonymous)
+		return OpenResult::Timeout;
 
 	// Interactive fallback — GUI override shows login dialog (shared for
 	// designer + enterprise via ibGUISession::OnShowAuthenticate). Pin
@@ -1594,7 +1598,7 @@ ibSession::OpenResult ibSession::Open(const wxString& user, const wxString& pass
 		reg.NotifyAuthenticated(this);
 		return OpenResult::Authenticated;
 	}
-	return OpenResult::Failed;
+	return res == ibAuthState::Anonymous ? OpenResult::Timeout : OpenResult::Failed;
 }
 
 // --- ibSessionThreadBinding --------------------------------------------

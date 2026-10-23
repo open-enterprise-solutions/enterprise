@@ -1732,6 +1732,26 @@ void ibSessionRegistry::JobSweepStale()
 	catch (...) { /* swallowed: the next sweep retries */ }
 }
 
+// ⭐ ONE STATEMENT FOR MANY ROWS — the beat and the signal check name this process's rows by their ids, a part at a
+// time. A web server holds hundreds of sessions in one process, and a statement a row on every beat kept the
+// registry thread a tick behind itself: Add and Attach waited out their 20 seconds behind it, and people were
+// refused at the login (2026-10-23, 180 at once: ~1000 statements in 40 s, 20 of them the INSERTs people waited
+// for). A part stays under the 1500 values Firebird takes in an IN list.
+constexpr std::size_t kRowsInAStatement = 1000;
+
+std::vector<std::vector<ibQueryExprPtr>> ibSessionRegistry::InsertedRowIds() const
+{
+	std::vector<std::vector<ibQueryExprPtr>> parts;
+	for (const auto& kv : m_own) {
+		auto s = kv.second.Share();
+		if (!s || !s->Inserted()) continue;
+		if (parts.empty() || parts.back().size() == kRowsInAStatement)
+			parts.emplace_back();
+		parts.back().push_back(ibConst(ibValue(kv.first)));
+	}
+	return parts;
+}
+
 void ibSessionRegistry::JobHeartbeatOwn()
 {
 	if (!m_ownsSysSession || !m_writeConn) return;
@@ -1753,20 +1773,29 @@ void ibSessionRegistry::JobHeartbeatOwn()
 	// previous leader's spawned firebird.exe.
 	try {
 		const ibDateTime now = ibDateTime::Now();
-		for (const auto& kv : m_own) {
-			auto s = kv.second.Share();
-			if (!s || !s->Inserted()) continue;
-			// One transaction per row. A row the apply still holds must not keep the others,
-			// and must not keep this thread: Add is waiting behind it.
+		for (const std::vector<ibQueryExprPtr>& ids : InsertedRowIds()) {
+			// The part in one statement…
 			try {
 				ibRegistryNoWait tx(m_writeHolder);
 				tx.Query().Execute(ibUpdate(session_table,
 					{ { wxT("lastActive"), ibConst(ibValue(now)) } },
-					ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("session")),
-					        ibConst(ibValue(wxString::FromUTF8(kv.first.c_str()))))));
+					ibIn(ibCol(wxT("session")), ids)));
 				tx.Commit();
+				continue;
 			}
-			catch (...) { /* transient, or the row is locked — next tick retries */ }
+			catch (...) { /* a row of it locked — the part goes a row at a time */ }
+			// …and a row at a time when one of them is locked: a row the apply still holds must not keep the
+			// others, and must not keep this thread: Add is waiting behind it.
+			for (const ibQueryExprPtr& id : ids) {
+				try {
+					ibRegistryNoWait tx(m_writeHolder);
+					tx.Query().Execute(ibUpdate(session_table,
+						{ { wxT("lastActive"), ibConst(ibValue(now)) } },
+						ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("session")), id)));
+					tx.Commit();
+				}
+				catch (...) { /* transient, or the row is locked — next tick retries */ }
+			}
 		}
 	}
 	catch (...) {
@@ -1909,24 +1938,20 @@ void ibSessionRegistry::JobCheckSignal()
 	if (!m_ownsSysSession || !m_writeConn) return;
 	if (m_own.empty()) return;
 
-	// Read-phase: collect (guid, signal) for each own row — one L2 SELECT per own row
-	// (a handful per tick; parameterised IN isn't portable, so per-row stays simplest).
+	// Read-phase: collect (guid, signal) for the own rows — one L2 SELECT a part (InsertedRowIds).
 	struct Pending { wxString guid; wxString signal; };
 	std::vector<Pending> pending;
 	try {
 		ibRegistryNoWait tx(m_writeHolder);
-		for (const auto& kv : m_own) {
-			auto s = kv.second.Share();
-			if (!s || !s->Inserted()) continue;
-			const wxString guid = wxString::FromUTF8(kv.first.c_str());
+		for (std::vector<ibQueryExprPtr>& ids : InsertedRowIds()) {
 			ibQueryResult rs = tx.Query().ExecuteIR(ibQueryIR(ibProject(
-				ibFilter(ibScan(session_table),
-					ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("session")), ibConst(ibValue(guid)))),
-				{ { ibCol(wxT("signal")), wxEmptyString } })));
-			if (!rs.Next()) continue;
-			const wxString sig = rs.GetResultString(wxT("signal"));
-			if (sig.IsEmpty()) continue;
-			pending.push_back({ guid, sig });
+				ibFilter(ibScan(session_table), ibIn(ibCol(wxT("session")), std::move(ids))),
+				{ { ibCol(wxT("session")), wxEmptyString }, { ibCol(wxT("signal")), wxEmptyString } })));
+			while (rs.Next()) {
+				const wxString sig = rs.GetResultString(wxT("signal"));
+				if (!sig.IsEmpty())
+					pending.push_back({ rs.GetResultString(wxT("session")), sig });
+			}
 		}
 		tx.Commit();
 	} catch (...) { /* signal column may be missing on legacy schema, or the table is locked */ return; }

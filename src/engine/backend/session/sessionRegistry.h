@@ -47,6 +47,7 @@
 #include <vector>
 
 class ibSessionSnapshot;
+struct ibQueryExpr;   // InsertedRowIds — the ids as the query builder takes them
 
 // Connection-holder identity for ibSessionRegistry's pool checkouts.
 // Empty subclass — exists purely so the type itself names the owner,
@@ -543,6 +544,10 @@ private:
 	// stale sweep every 3 s (kRefreshInterval / kSweepInterval).
 	void JobSweepStale();
 	void JobRefreshSnapshot();
+
+	// The ids of the rows this process inserted, in parts of one statement each: the beat and the signal check
+	// name a part in one IN list (sessionRegistry.cpp, kRowsInAStatement).
+	std::vector<std::vector<std::shared_ptr<ibQueryExpr>>> InsertedRowIds() const;
 
 	// Refresh lastActive on every own row. Companion to JobSweepStale's
 	// fallback-cutoff path — peers use lastActive staleness to detect

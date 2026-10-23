@@ -255,6 +255,7 @@ public:
 		Authenticated,   // creds accepted (silent or via dialog)
 		Failed,          // creds rejected — show "Authentication failed"
 		Cancelled,       // user cancelled the interactive dialog — silent exit
+		Timeout,         // the registry did not answer in time — a busy server, not the creds (ibConnectResult::Timeout)
 	};
 	OpenResult Open(const wxString& user, const wxString& password);
 
