@@ -2,6 +2,9 @@
 // separator, a group whose commands are its children. An entry pressed goes back as its owner's event Command {Id};
 // one command of a group, {Id, Member} — its place among the group's. Drawn as the owner's first child, ahead of its
 // controls, and carrying no control id: the folding of the controls leaves it where it is.
+//
+// ONE LINE, AND WHAT DOES NOT FIT GOES UNDER », as on the thin client's bar (wxAuiToolBar's overflow button): the
+// entries past the bar's end are hidden and offered in the menu of its last button, in their order.
 
 import { EventKind } from './control.js';
 
@@ -18,6 +21,10 @@ export class CommandBar {
 		this.element = document.createElement('div');
 		this.element.className = 'command-bar';
 		this.drawn = '';
+		/** @type {ProtocolNode[]} */
+		this.entries = [];
+		this.overflow = this.overflowMenu();
+		new ResizeObserver(() => this.fit()).observe(this.element);
 	}
 
 	/** @param {ProtocolNode | undefined} bar the State's CommandBar */
@@ -29,8 +36,37 @@ export class CommandBar {
 		if (drawn === this.drawn)
 			return;
 		this.drawn = drawn;
-		this.element.replaceChildren(...entries.map((entry) => this.entry(entry)));
+		this.entries = entries;
+		this.element.replaceChildren(...entries.map((entry) => this.entry(entry)), this.overflow);
 		this.element.hidden = entries.length === 0;
+		this.fit();
+	}
+
+	/** Hides the entries past the bar's end and offers them under ». */
+	fit() {
+		const drawn = /** @type {HTMLElement[]} */ ([...this.element.children].slice(0, this.entries.length));
+		for (const element of drawn)
+			element.hidden = false;
+		this.overflow.hidden = false;
+		const style = getComputedStyle(this.element);
+		const end = this.element.getBoundingClientRect().right - parseFloat(style.paddingRight) - parseFloat(style.borderRightWidth);
+		// A dropdown has no box of its own (display: contents): its button is what stands on the bar.
+		const boxOf = (/** @type {Element} */ element) =>
+			(element.localName === 'wa-dropdown' ? element.querySelector(':scope > [slot="trigger"]') ?? element : element).getBoundingClientRect();
+		const right = (/** @type {Element} */ element) => boxOf(element).right;
+		if (drawn.every((element) => right(element) <= end)) {
+			this.overflow.hidden = true;
+			return;
+		}
+		const room = end - boxOf(this.overflow).width - (parseFloat(style.columnGap) || 0);
+		let cut = drawn.findIndex((element) => right(element) > room);
+		// A separator does not end the bar.
+		while (cut > 0 && this.entries[cut - 1].Separator)
+			cut--;
+		for (const element of drawn.slice(cut))
+			element.hidden = true;
+		const [trigger] = this.overflow.children;
+		this.overflow.replaceChildren(trigger, ...this.overflowItems(this.entries.slice(cut)));
 	}
 
 	/** @param {ProtocolNode} entry */
@@ -66,6 +102,78 @@ export class CommandBar {
 			this.owner.send(EventKind.Command, { Id: entry.Id, Member: member });
 		});
 		return dropdown;
+	}
+
+	/** The » at the bar's end, its menu filled by fit(). */
+	overflowMenu() {
+		const dropdown = document.createElement('wa-dropdown');
+		dropdown.className = 'overflow';
+		dropdown.setAttribute('placement', 'bottom-end');
+		const trigger = document.createElement('wa-button');
+		trigger.slot = 'trigger';
+		trigger.setAttribute('size', 's');
+		trigger.setAttribute('appearance', 'plain');
+		trigger.setAttribute('aria-label', 'More');
+		trigger.title = 'More';
+		trigger.textContent = '»';
+		dropdown.append(trigger);
+		dropdown.addEventListener('wa-select', (event) => {
+			this.owner.send(EventKind.Command, JSON.parse(/** @type {any} */ (event).detail.item.value));
+		});
+		return dropdown;
+	}
+
+	/**
+	 * The menu's lines for the entries past the bar's end: a command, a group as its caption with its commands under
+	 * it — as the window's menu draws one — and a separator between them.
+	 * @param {ProtocolNode[]} entries
+	 */
+	overflowItems(entries) {
+		/** @type {HTMLElement[]} */
+		const items = [];
+		for (const entry of entries) {
+			if (entry.Separator) {
+				if (items.length > 0 && items[items.length - 1].localName !== 'wa-divider')
+					items.push(document.createElement('wa-divider'));
+				continue;
+			}
+			if (entry.Kind !== group) {
+				items.push(this.overflowItem(entry, { Id: entry.Id }));
+				continue;
+			}
+			const caption = this.overflowItem(entry, undefined);
+			caption.toggleAttribute('disabled', true);
+			items.push(caption);
+			(entry.NodeChildren ?? []).forEach((member, place) => {
+				const item = this.overflowItem(member, { Id: entry.Id, Member: member.Position ?? place });
+				item.style.paddingInlineStart = '1em';
+				items.push(item);
+			});
+		}
+		if (items.length > 0 && items[items.length - 1].localName === 'wa-divider')
+			items.pop();
+		return items;
+	}
+
+	/**
+	 * @param {ProtocolNode} entry
+	 * @param {{Id: number, Member?: number} | undefined} command what goes back when it is chosen
+	 */
+	overflowItem(entry, command) {
+		const item = document.createElement('wa-dropdown-item');
+		const picture = this.owner.context.picture(entry.Picture);
+		if (picture) {
+			const image = document.createElement('img');
+			image.src = picture;
+			image.alt = '';
+			image.slot = 'icon';
+			item.append(image);
+		}
+		item.append(entry.Caption || entry.Tooltip || '');
+		item.toggleAttribute('disabled', entry.Enabled === false);
+		if (command !== undefined)
+			item.value = JSON.stringify(command);
+		return item;
 	}
 
 	/** @param {ProtocolNode} entry */

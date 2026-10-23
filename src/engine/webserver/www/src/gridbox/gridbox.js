@@ -3,12 +3,14 @@
 // gridbox also says what its sheet is to the report (ComposeState): composing — the old sheet stays on show under
 // the word until the new one is delivered; outdated — the settings changed, and it waits for the person to compose.
 // A double click on a cell is the report's to answer (Cell {Row, Col}, from 1) — a drill-down, a document opened.
+// Cells are taken, copied and summed as in a spreadsheet program (selection.js).
 //
 // Read-only for now: a sheet edited here would go back whole (Change {Sheet}), as the thin client's does.
 
 import { Control, EventKind, defineControl } from '../controls/control.js';
 import { CommandBar } from '../controls/commandBar.js';
 import { drawSheet } from './sheet.js';
+import { CellSelection } from './selection.js';
 
 /** @typedef {import('../protocol/patch.js').ProtocolNode} ProtocolNode */
 
@@ -24,7 +26,11 @@ class Gridbox extends Control {
 		this.composing = document.createElement('div');
 		this.composing.className = 'compose-state';
 		this.composing.hidden = true;
-		this.append(this.bar.element, this.host, this.composing);
+		const summary = document.createElement('div');
+		summary.className = 'selection-summary';
+		summary.hidden = true;
+		this.selection = new CellSelection(this.host, summary);
+		this.append(this.bar.element, this.host, this.composing, summary);
 		/** @type {number | undefined} the Version of the sheet on show */
 		this.version = undefined;
 		this.composeState = ComposeState.Composed;
@@ -74,10 +80,12 @@ class Gridbox extends Control {
 	 * @param {boolean} gridLines
 	 */
 	draw(sheet, gridLines) {
-		this.host.replaceChildren(drawSheet(sheet, {
+		const table = drawSheet(sheet, {
 			gridLines,
 			onCell: (row, col) => this.send(EventKind.Cell, { Row: row, Col: col }),
-		}));
+		});
+		this.host.replaceChildren(table);
+		this.selection.attach(table);
 	}
 
 	/** @param {number} state */

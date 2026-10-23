@@ -24,6 +24,8 @@
 	/* The leading bar on the selected row: the fill alone is a shade off the row beside it, and the selected row is
 	   the one the server stands on — it has to be read at a glance. */
 	--oes-table-row-selected-accent: var(--oes-accent);
+	/* The cells taken on a sheet: a tint laid over a cell's own fill, which stays readable under it. */
+	--oes-sheet-cell-selected: rgb(59 80 160 / 0.15);
 
 	/* The section panel, as the thin client paints it: a light dusty column, the sections all but white on it, the open
 	   one white; its page's links in the forms' ink. */

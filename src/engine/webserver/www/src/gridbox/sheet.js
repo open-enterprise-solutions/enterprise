@@ -37,6 +37,7 @@ export function drawSheet(sheet, options) {
 	const folding = levels.some((level) => level > 0);
 	/** @type {Map<string, SheetNode>} */
 	const byPlace = new Map(cells.map((cell) => [`${cell.row}:${cell.col}`, cell]));
+	const cover = coverOf(cells);
 
 	// A frozen column stays at its place from the left edge: the widths before it, the folds' column first.
 	const frozenCols = sheet.freeze?.col ?? 0;
@@ -54,7 +55,6 @@ export function drawSheet(sheet, options) {
 
 	const table = document.createElement('table');
 	table.className = 'sheet';
-	table.classList.toggle('grid-lines', options.gridLines);
 	table.style.width = `${width}px`;
 	const head = document.createElement('thead');
 	const body = document.createElement('tbody');
@@ -77,6 +77,10 @@ export function drawSheet(sheet, options) {
 			if ((cell?.rowSpan ?? 1) <= 0 || (cell?.colSpan ?? 1) <= 0)
 				continue;
 			const element = cellOf(cell, row, col, options);
+			for (const [side, line] of Object.entries(linesOf(cell, row, col, cover, options.gridLines))) {
+				if (line !== undefined)
+					element.style[`border${side}`] = line;
+			}
 			const next = col + Math.max(1, cell?.colSpan ?? 1);
 			element.classList.toggle('spills', next < colCount && !byPlace.get(`${row}:${next}`)?.value);
 			if (col < frozenCols) {
@@ -99,12 +103,10 @@ export function drawSheet(sheet, options) {
  */
 function cellOf(cell, row, col, options) {
 	const element = document.createElement('td');
+	// Its place, for the cells taken (selection.js); a double click is the report's.
+	element.dataset.row = String(row);
+	element.dataset.col = String(col);
 	element.addEventListener('dblclick', () => options.onCell(row + 1, col + 1));
-	// A double click is the report's, not a word selected; a drag still selects, to copy.
-	element.addEventListener('mousedown', (event) => {
-		if (event.detail > 1)
-			event.preventDefault();
-	});
 	if (cell === undefined)
 		return element;
 	element.textContent = cell.value ?? '';
@@ -121,17 +123,56 @@ function cellOf(cell, row, col, options) {
 	const vertical = cell.alignVert ?? 0;
 	element.style.verticalAlign = (vertical & alignCentreVertical) !== 0 ? 'middle'
 		: (vertical & alignBottom) !== 0 ? 'bottom' : '';
-	for (const side of ['Left', 'Right', 'Top', 'Bottom']) {
-		const border = cell[side.toLowerCase()];
-		if (border === undefined)
-			continue;
-		const style = penStyles[border.style] ?? 'solid';
-		element.style[`border${side}`] = style === 'none' ? 'none'
-			: `${border.width ?? 1}px ${style} ${colour(border.colour) || 'currentColor'}`;
-	}
 	// A cell a report fills with a value it can decode on a double click.
 	element.classList.toggle('decoded', Boolean(cell.parameter));
 	return element;
+}
+
+/**
+ * The lines a cell draws. ONE LINE BETWEEN TWO CELLS, drawn once: the desktop's grid draws on the line two cells share
+ * the border either of them names, and the table here keeps its cells' borders apart (collapsed, Chromium paints the
+ * rows scrolled under a frozen head over it). So a cell draws its right and its bottom — its own border there, else the
+ * one the cell beyond names, else the grid's — and its top and its left only at the sheet's edge. The folds' column is
+ * a margin, as the desktop's: it draws none.
+ * @param {SheetNode | undefined} cell
+ * @param {number} row
+ * @param {number} col
+ * @param {Map<string, SheetNode>} cover
+ * @param {boolean} gridLines
+ */
+function linesOf(cell, row, col, cover, gridLines) {
+	const grid = gridLines ? '1px solid var(--oes-table-border)' : undefined;
+	const below = row + Math.max(1, cell?.rowSpan ?? 1);
+	const beyond = col + Math.max(1, cell?.colSpan ?? 1);
+	return {
+		Top: row === 0 ? lineOf(cell?.top) ?? grid : undefined,
+		Left: col === 0 ? lineOf(cell?.left) ?? grid : undefined,
+		Right: lineOf(cell?.right) ?? lineOf(cover.get(`${row}:${beyond}`)?.left) ?? grid,
+		Bottom: lineOf(cell?.bottom) ?? lineOf(cover.get(`${below}:${col}`)?.top) ?? grid,
+	};
+}
+
+/** A border a cell keeps, as CSS; none for one that draws nothing. @param {SheetNode | undefined} border */
+function lineOf(border) {
+	const style = penStyles[border?.style] ?? 'solid';
+	if (border === undefined || style === 'none')
+		return undefined;
+	return `${border.width ?? 1}px ${style} ${colour(border.colour) || 'currentColor'}`;
+}
+
+/** The cell over each place, by `row:col` — a spanning cell over every place it spans. @param {SheetNode[]} cells */
+function coverOf(cells) {
+	/** @type {Map<string, SheetNode>} */
+	const cover = new Map();
+	for (const cell of cells) {
+		if ((cell.rowSpan ?? 1) <= 0 || (cell.colSpan ?? 1) <= 0)
+			continue;
+		for (let row = cell.row; row < cell.row + (cell.rowSpan ?? 1); row++) {
+			for (let col = cell.col; col < cell.col + (cell.colSpan ?? 1); col++)
+				cover.set(`${row}:${col}`, cell);
+		}
+	}
+	return cover;
 }
 
 /** @param {number} width */

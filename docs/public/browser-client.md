@@ -45,7 +45,10 @@ by a patch is updated in place, so the focus and the caret stay where they were.
   dialog: the dialog blocks the form, so a tab beneath it could not be seen.
 - **A form's command bar stays on top**; the controls under it fill the tab while they fit, what grows sharing what is
   left, and scroll under the bar when they do not — the thin client's layout. A table or a sheet takes the height the
-  form gives it and scrolls its rows inside itself.
+  form gives it and scrolls its rows inside itself. A command bar keeps one line; what does not fit is under its ».
+- **A sheet's cells are taken as in a spreadsheet program**: a click, a drag, Shift and Ctrl with a click, the arrows,
+  Ctrl+A. Ctrl+C copies them as cells — a figure as a number — and the figures taken are summed in the sheet's corner:
+  average, count, sum. A row folded away is neither summed nor copied.
 - **The table** keeps its place: a list read again is read around its top visible row, paged both ways, a stale page
   dropped. A cell keeps the server's text; its editor has the column's buttons (… ▷ ×).
 - **A table holds a window of rows, not the list** — the thin client's: a page is as many rows as the window shows,

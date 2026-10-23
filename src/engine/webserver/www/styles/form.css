@@ -88,17 +88,28 @@ oes-clientform [disabled] {
 	opacity: 0.55;
 }
 
-/* A command bar: a strip of buttons that wraps on a narrow form — a strip of its own, as the thin client's (its toolbar
-   art, wxAuiLunaToolBarArt): its background lighter at the top and darker at the bottom than whatever it stands on,
-   edged above and below, so it does not melt into the form. */
+/* A command bar: a strip of buttons on one line, what does not fit under its » — a strip of its own, as the thin
+   client's (its toolbar art, wxAuiLunaToolBarArt): its background lighter at the top and darker at the bottom than
+   whatever it stands on, edged above and below, so it does not melt into the form. */
 .command-bar {
 	display: flex;
-	flex-wrap: wrap;
+	flex-wrap: nowrap;
+	overflow: hidden;
 	align-items: center;
 	gap: 2px;
 	padding: 0.125rem 0.25rem;
 	background-image: linear-gradient(to bottom, rgb(255 255 255 / 0.5), rgb(0 0 0 / 0.05));
 	border-block: 1px solid var(--oes-border);
+}
+
+/* A button keeps its width — squeezed, its caption ran over the next one — and one past the end is hidden, a
+   component's own display notwithstanding. */
+.command-bar > * {
+	flex-shrink: 0;
+}
+
+.command-bar > [hidden] {
+	display: none !important;
 }
 
 .command-bar wa-button img,
@@ -426,6 +437,11 @@ oes-gridbox .sheet-host {
 	border: 1px solid var(--oes-table-border);
 }
 
+/* It takes the keys; where they go is the current cell's frame, not a ring round the sheet. */
+oes-gridbox .sheet-host:focus {
+	outline: none;
+}
+
 oes-gridbox .compose-state {
 	position: absolute;
 	top: 33%;
@@ -442,14 +458,33 @@ oes-gridbox .compose-state {
 	box-shadow: 0 2px 8px rgb(0 0 0 / 0.12);
 }
 
-/* A cell with no font of its own is in the desktop grid's — 9pt — and its row the font's height and 8px. */
+/* The figures taken, summed over the sheet's lower corner, clear of its scrollbars — as a spreadsheet program's status
+   line says them. */
+oes-gridbox .selection-summary {
+	position: absolute;
+	right: 1.25rem;
+	bottom: 1.25rem;
+	padding: 0.125rem 0.5rem;
+	font-size: 0.8rem;
+	white-space: pre;
+	color: var(--oes-text);
+	background: var(--oes-window-bg);
+	border: 1px solid var(--oes-border);
+	border-radius: 4px;
+	pointer-events: none;
+}
+
+/* A cell with no font of its own is in the desktop grid's — 9pt — and its row the font's height and 8px. A drag takes
+   cells, not the text in them (selection.js). */
 .sheet {
 	table-layout: fixed;
-	border-collapse: collapse;
+	border-collapse: separate;   /* collapsed, the rows scrolled under a frozen head paint over it; see linesOf */
+	border-spacing: 0;
 	font-size: 9pt;
 	line-height: 1.25;
 	color: var(--oes-table-text);
 	background: var(--oes-table-bg);
+	user-select: none;
 }
 
 .sheet td {
@@ -458,10 +493,6 @@ oes-gridbox .compose-state {
 	white-space: pre;
 	vertical-align: top;
 	background-clip: padding-box;
-}
-
-.sheet.grid-lines td {
-	border: 1px solid var(--oes-table-border);
 }
 
 /* A text runs on over the empty cell beside it, as the desktop's grid draws it — a report's title is one cell. */
@@ -473,10 +504,26 @@ oes-gridbox .compose-state {
 	cursor: pointer;
 }
 
+/* The cells taken tinted over their own fill; the current one framed. */
+.sheet td.selected {
+	background-image: linear-gradient(var(--oes-sheet-cell-selected), var(--oes-sheet-cell-selected));
+}
+
+.sheet td.current {
+	outline: 2px solid var(--oes-accent);
+	outline-offset: -2px;
+}
+
 .sheet thead {
 	position: sticky;
 	top: 0;
 	z-index: 2;
+}
+
+/* …and covers what scrolls under it: a cell with no fill of its own — the title, the empty lines under it — would let
+   the rows beneath show through. */
+.sheet thead td {
+	background-color: var(--oes-table-bg);
 }
 
 .sheet td.frozen {
@@ -503,10 +550,22 @@ oes-gridbox .compose-state {
 }
 
 /* A sheet on paper: its frozen rows are its head, so they come again on every page; a row is not cut across two; a
-   row's print break ends its page; the fold buttons are the screen's. */
+   row's print break ends its page; the fold buttons and the cells taken are the screen's. */
 @media print {
 	.sheet td.fold button {
 		visibility: hidden;
+	}
+
+	.sheet td.selected {
+		background-image: none;
+	}
+
+	.sheet td.current {
+		outline: none;
+	}
+
+	oes-gridbox .selection-summary {
+		display: none;
 	}
 
 	/* On paper the form is as long as what it holds, and so is its sheet. */
@@ -579,12 +638,5 @@ oes-gridbox .compose-state {
 	oes-tablebox,
 	oes-gridbox {
 		min-height: 60dvh;
-	}
-
-	/* A bar keeps one line and scrolls sideways: four lines of buttons would push the form off a phone's screen. */
-	.command-bar {
-		flex-wrap: nowrap;
-		overflow-x: auto;
-		scrollbar-width: none;
 	}
 }
