@@ -9,11 +9,11 @@
 #include <wx/file.h>
 #include <wx/filename.h>
 #include <wx/log.h>
-#include <wx/thread.h>
 #include <wx/utils.h>
 
 #include <atomic>
 #include <cstdarg>      // va_list — the journal's vararg door
+#include <cstdint>      // std::uint64_t — a thread's id on macOS
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>
@@ -30,7 +30,9 @@
 // Wrap behind a feature check if a future port lacks it.
 #include <execinfo.h>
 #include <fcntl.h>
+#include <pthread.h>        // pthread_threadid_np — a thread's id on macOS
 #include <sys/mman.h>
+#include <sys/syscall.h>    // SYS_gettid — on Linux
 #include <unistd.h>
 #endif
 
@@ -51,11 +53,6 @@ char s_exeName[64] = {};
 unsigned int CurrentPidPortable()
 {
 	return static_cast<unsigned int>(wxGetProcessId());
-}
-
-unsigned long CurrentTidPortable()
-{
-	return static_cast<unsigned long>(wxThread::GetCurrentId());
 }
 
 #ifdef __WXMSW__
@@ -338,6 +335,19 @@ void ArmCurrentThread()
 	hold.mem = mem;
 	hold.bytes = bytes;
 	armed = true;
+#endif
+}
+
+unsigned long CurrentTidPortable()
+{
+#ifdef __WXMSW__
+	return static_cast<unsigned long>(::GetCurrentThreadId());
+#elif defined(__APPLE__)
+	std::uint64_t tid = 0;
+	::pthread_threadid_np(nullptr, &tid);
+	return static_cast<unsigned long>(tid);
+#else
+	return static_cast<unsigned long>(::syscall(SYS_gettid));
 #endif
 }
 

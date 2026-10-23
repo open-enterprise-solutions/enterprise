@@ -10,11 +10,11 @@
 #include <wx/filename.h>
 #include <wx/log.h>
 #include <wx/stdpaths.h>
-#include <wx/thread.h>
 #include <wx/utils.h>
 
 #include <atomic>
 #include <cstdarg>
+#include <mutex>
 
 #ifdef __WXMSW__
 #include <windows.h>
@@ -27,8 +27,11 @@ namespace {
 //
 // ⚠ The file is opened by Open() and stays open for the life of the process, so a line written
 // during teardown — after wx has torn its own logging down — still lands.
+//
+// ⚠ THE LOCK IS RECURSIVE: a write the file refuses is said by wx (wxLogSysError), and on the main thread wx's
+// line comes back here at once through the chain (ibJournalLogTarget) — under the lock this thread holds.
 wxFFile            s_file;
-wxCriticalSection  s_lock;
+std::recursive_mutex s_lock;
 wxString           s_path;
 wxString           s_program;   // the name the program opened the journal with — its own lines carry it as their source
 
@@ -57,11 +60,6 @@ std::atomic<ibTechJournal::ContextFn> s_context{ nullptr };
 // application server's journal, 2026-10-01: 260 of its 876 lines, all at exit). A record keeps its values when
 // wx buffers it.
 const char* const kEchoKey = "oes.journal.echo";
-
-unsigned long CurrentTid()
-{
-	return static_cast<unsigned long>(wxThread::GetCurrentId());
-}
 
 // (The build number is NOT computed here. `GetBuildId()` in backend_core already derives it from
 // __DATE__, and the About box prints that one — a journal with a second, independently correct
@@ -122,7 +120,7 @@ ibTechJournal& ibTechJournal::Instance()
 void ibTechJournal::Open(const wxString& exeName)
 {
 	{
-		wxCriticalSectionLocker lock(s_lock);
+		std::lock_guard<std::recursive_mutex> lock(s_lock);
 		s_program = exeName;
 	}
 #ifdef NDEBUG
@@ -142,7 +140,7 @@ void ibTechJournal::Open(const wxString& exeName)
 	// exactly the run a person is reporting the moment they restart to try again.
 	const wxString stamp = wxDateTime::Now().Format(wxT("%Y%m%dT%H%M%S"));
 	{
-		wxCriticalSectionLocker lock(s_lock);
+		std::lock_guard<std::recursive_mutex> lock(s_lock);
 		s_path = dir + wxFILE_SEP_PATH
 			+ wxString::Format(wxT("%s_%s_%u.log"), exeName, stamp,
 				static_cast<unsigned>(wxGetProcessId()));
@@ -218,7 +216,7 @@ void ibTechJournal::Open(const wxString& exeName)
 
 void ibTechJournal::Close()
 {
-	wxCriticalSectionLocker lock(s_lock);
+	std::lock_guard<std::recursive_mutex> lock(s_lock);
 	s_open.store(false, std::memory_order_relaxed);
 	if (s_file.IsOpened()) {
 		s_file.Flush();
@@ -262,7 +260,7 @@ bool ibTechJournal::IsOpen()
 
 wxString ibTechJournal::Path()
 {
-	wxCriticalSectionLocker lock(s_lock);
+	std::lock_guard<std::recursive_mutex> lock(s_lock);
 	return s_path;
 }
 
@@ -280,7 +278,7 @@ void ibTechJournal::Write(ibJournalMark mark, const wxString& source, const wxSt
 	bool forConsole = false;   // what a program that narrates (EchoToStderr) shows in its console — see below
 	bool kept = false;         // the file has it — and only then the debugger's echo and the error's dump, below
 	{
-		wxCriticalSectionLocker lock(s_lock);
+		std::lock_guard<std::recursive_mutex> lock(s_lock);
 		kept = s_file.IsOpened();
 		forConsole = s_toStderr
 			|| ((mark != ibJournalMark::Info || source == s_program) && s_echoToStderr.load(std::memory_order_relaxed));
@@ -310,7 +308,7 @@ void ibTechJournal::Write(ibJournalMark mark, const wxString& source, const wxSt
 		line = wxString::Format(wxT("%s %s  t%-5lu  %-14s  %s\n"),
 			kind,
 			wxDateTime::UNow().Format(wxT("%H:%M:%S.%l")),
-			CurrentTid(),
+			ibCrashGuard::CurrentTidPortable(),
 			about.IsEmpty() ? source : wxT("(") + about + wxT(") ") + source,
 			message);
 

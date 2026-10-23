@@ -7,7 +7,8 @@
 #include <memory>
 #include <mutex>
 #include <condition_variable>
-#include <wx/thread.h>
+#include <shared_mutex>
+#include <thread>
 
 struct ibRunContext;
 class ibSession;
@@ -31,7 +32,7 @@ class BACKEND_API ibDebuggerServer {
 	// designer at a time, each command one binary message. Its threads only move bytes — what arrives is handed to
 	// THIS thread, in order, and dispatched here, because this is the thread the session registry knows as the
 	// debugger's (RegisterDebugThread) and the one COM is initialised on for an OLE value.
-	class BACKEND_API ibDebuggerServerConnection : public wxThread {
+	class BACKEND_API ibDebuggerServerConnection {
 	public:
 
 		// A designer is on the port.
@@ -43,18 +44,12 @@ class BACKEND_API ibDebuggerServer {
 		ConnectionType GetConnectionType() const { return m_connectionType; }
 
 		ibDebuggerServerConnection(const wxString& hostName, unsigned short startPort);
-		virtual ~ibDebuggerServerConnection();
-
-		// entry point for the thread - called by Run() and executes in the context
-		// of this thread.
-		virtual ExitCode Entry() override;
-
-		// This one is called by Kill() before killing the thread and is executed
-		// in the context of the thread that called Kill().
-		virtual void OnKill() override;
+		~ibDebuggerServerConnection();
 
 	protected:
 
+		// The thread's own body (m_thread), and the loop it runs.
+		void Entry();
 		void EntryClient();
 
 		void RecvCommand(void* pointer, unsigned int length);
@@ -68,6 +63,11 @@ class BACKEND_API ibDebuggerServer {
 
 		// The port, on the first free one from m_numHostPort up.
 		bool StartServer();
+
+		// The connection's thread (Entry), and the word that it is to end; it asks between reads. The connection's end
+		// says it and waits the thread out (~ibDebuggerServerConnection).
+		std::thread       m_thread;
+		std::atomic<bool> m_stop{ false };
 
 		std::atomic<bool> m_waitConnection;
 
@@ -182,10 +182,6 @@ public:
 
 protected:
 
-	void SetConnectSocket(ibDebuggerServerConnection* socketConnectionThread) {
-		m_socketConnectionThread = socketConnectionThread;
-	}
-
 	void ResetDebugger() {
 
 		m_bUseDebug = false;
@@ -233,7 +229,12 @@ private:
 
 	// module -> (line -> condition). An empty condition stops always; any other stops only where it is true
 	// in the frame that reaches the line (EnterDebugger).
+	//
+	// 🛑 UNDER ITS LOCK, every touch: read shared by each script thread on every line it runs while debugged
+	// (EnterDebugger), changed exclusively by the debug thread's commands and by a reset, which a script's thread
+	// reaches too (ResetDebugger).
 	std::map<wxString, std::map<unsigned int, wxString>> m_listBreakpoint;
+	std::shared_mutex m_breakpointsMutex;
 
 	// WHAT IS WATCHED HERE, AND FOR WHOM — refreshed at every stop by SendExpressions, which answers each
 	// asker in its own name. See ibWatchedExpression (debugDefs.h) for why the name is kept and not
@@ -244,9 +245,7 @@ private:
 	std::map <unsigned int, ibWatchedExpression> m_listExpression;
 #endif
 
-	wxCriticalSection m_clearBreakpointsCS;
-
-	ibDebuggerServerConnection* m_socketConnectionThread;
+	std::unique_ptr<ibDebuggerServerConnection> m_socketConnectionThread;
 
 	friend class ibBackendException;
 };

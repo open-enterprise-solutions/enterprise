@@ -1,6 +1,8 @@
 #include <gtest/gtest.h>
 
+#include <chrono>
 #include <cstdlib>
+#include <thread>
 
 #include <wx/file.h>
 #include <wx/filename.h>
@@ -87,7 +89,7 @@ TEST(LaunchSecrets, AChildReadsThePasswordTwiceAndTheCommandLineDoesNotCarryIt)
 		ASSERT_GT(pid, 0);
 		// ibStartProcess reaps its own child, so the test waits for what the child writes, not for the child.
 		for (int i = 0; i < 100 && ReadFile(out).IsEmpty(); ++i)
-			wxMilliSleep(100);
+			std::this_thread::sleep_for(std::chrono::milliseconds(100));
 	};
 
 	once(first);

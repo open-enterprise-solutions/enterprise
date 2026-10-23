@@ -37,7 +37,9 @@
 #endif
 
 #include <atomic>
+#include <chrono>
 #include <mutex>
+#include <thread>
 
 namespace {
 
@@ -151,7 +153,7 @@ bool WaitForListenReady(int port, int timeoutMs) {
 			}
 			closesocket(s);
 		}
-		wxMilliSleep(100);
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
 	}
 	WSACleanup();
 	return ok;
@@ -347,7 +349,7 @@ int ibFirebirdLocalServer::EnsureStarted() {
 	// (e.g. isc_io_error / plugin-not-loaded) instead of a clean
 	// timeout. 500 ms is enough on every machine I've measured;
 	// the cost is paid once per OES process at first attach.
-	wxMilliSleep(500);
+	std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
 #ifdef __WXMSW__
 	// Bind child to a Job Object so it dies with us — even on crash,
@@ -394,7 +396,7 @@ void ibFirebirdLocalServer::Stop() {
 		wxKill(pid, wxSIGTERM);
 		for (int waited = 0; waited < 2000; waited += 100) {
 			if (!wxProcess::Exists(pid)) break;
-			wxMilliSleep(100);
+			std::this_thread::sleep_for(std::chrono::milliseconds(100));
 		}
 		if (wxProcess::Exists(pid)) {
 			wxKill(pid, wxSIGKILL);

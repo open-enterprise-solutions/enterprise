@@ -35,7 +35,7 @@ public:
 
 	// The port it listens on — 0 while it is not up yet.
 	static std::uint16_t GetHttpPort(const ibDebuggerServer& server) {
-		const ibDebuggerServer::ibDebuggerServerConnection* thread = server.m_socketConnectionThread;
+		const ibDebuggerServer::ibDebuggerServerConnection* thread = server.m_socketConnectionThread.get();
 		if (thread == nullptr || !thread->m_bindReady.load(std::memory_order_acquire) || thread->m_socketServer == nullptr)
 			return 0;
 		return thread->m_socketServer->GetHttpPort();

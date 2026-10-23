@@ -1,11 +1,13 @@
 #ifndef __DEBUGGER_CLIENT_H__
 #define __DEBUGGER_CLIENT_H__
 
-#include <wx/thread.h>
 #include <atomic>   // the flags a connection's thread sets and any thread reads
+#include <condition_variable>   // the client's end waits for its connections to go
 #include <functional>   // std::function — the deferred call the pack below is wrapped in
 #include <memory>   // the adapter owns its bridges
 #include <mutex>    // the connection's socket slot, the client's lists
+#include <system_error>   // std::system_error — a thread the system would not start
+#include <thread>   // each connection's thread
 #include <vector>
 
 // Lifecycle: owned by ibMetaDataConfigurationStorage as a unique_ptr
@@ -141,7 +143,7 @@ class BACKEND_API ibDebuggerClient {
 		bool           m_bound = false;   // there was a session to watch at all — see Defer
 	};
 
-	class BACKEND_API ibDebuggerClientConnection : public wxThread {
+	class BACKEND_API ibDebuggerClientConnection {
 	public:
 
 		bool IsVerifiedConnection() const {
@@ -175,7 +177,6 @@ class BACKEND_API ibDebuggerClient {
 		void DetachConnection(bool kill = false);
 
 		ibDebuggerClientConnection(ibDebuggerClient* client, const wxString& hostName, unsigned short port) :
-			wxThread(wxTHREAD_DETACHED),
 			m_verifiedConnection(false),
 			m_hostName(hostName),
 			m_port(port),
@@ -184,19 +185,9 @@ class BACKEND_API ibDebuggerClient {
 
 			if (debugClient != nullptr)
 				debugClient->AppendConnection(this);
-
-			wxThread::SetPriority(wxPRIORITY_MIN);
 		}
 
-		virtual ~ibDebuggerClientConnection();
-
-		// entry point for the thread - called by Run() and executes in the context
-		// of this thread.
-		virtual ExitCode Entry() override;
-
-		// This one is called by Kill() before killing the thread and is executed
-		// in the context of the thread that called Kill().
-		virtual void OnKill() override;
+		~ibDebuggerClientConnection();
 
 	protected:
 
@@ -208,6 +199,8 @@ class BACKEND_API ibDebuggerClient {
 			return m_number_connection_attempts != wxNOT_FOUND;
 		}
 
+		// The thread's own body — a thread of its own, detached: the connection goes with it — and the loop it runs.
+		void Entry();
 		void EntryClient();
 
 		void RecvCommand(void* pointer, unsigned int length);
@@ -239,6 +232,9 @@ class BACKEND_API ibDebuggerClient {
 		wxString		m_compName;
 
 		std::atomic<short> m_number_connection_attempts;
+
+		// The word that the thread is to end (~ibDebuggerClient); it asks between reads.
+		std::atomic<bool> m_stop{ false };
 
 		ConnectionType	m_connectionType;
 		friend class ibDebuggerClient;
@@ -293,28 +289,20 @@ public:
 				[hostName, port](ibDebuggerClientConnection* client) { return client->m_hostName == hostName && client->m_port == port; }
 			);
 
-			if (iterator == m_listConnection.end()) {
+			// A connection to the port goes on scanning — unless it is on its way out (its counter is not reset).
+			if (iterator != m_listConnection.end() && (*iterator)->ResetConnectionCounter())
+				continue;
 
-				ibDebuggerClientConnection* createdConnection = new ibDebuggerClientConnection(this, hostName, port);
-				if (createdConnection->Run() == wxTHREAD_NO_ERROR) {
-					//if (run_debug_server)
-					//	break;
-					continue;
-				}
-				createdConnection->Delete();
+			// The connection is its thread's once the thread runs — it goes as the thread ends (Entry); one the system
+			// gives no thread goes with the pointer here.
+			std::unique_ptr<ibDebuggerClientConnection> createdConnection = std::make_unique<ibDebuggerClientConnection>(this, hostName, port);
+			try {
+				std::thread(&ibDebuggerClientConnection::Entry, createdConnection.get()).detach();
+				(void)createdConnection.release();
 			}
-			else {
-
-				bool create_new_connection = !(*iterator)->ResetConnectionCounter();
-				if (create_new_connection) {
-					ibDebuggerClientConnection* createdConnection = new ibDebuggerClientConnection(this, hostName, port);
-					if (createdConnection->Run() == wxTHREAD_NO_ERROR) {
-						//if (run_debug_server)
-						//	break;
-						continue;
-					}
-					createdConnection->Delete();
-				}
+			catch (const std::system_error& err) {
+				ibJournalWarning(wxT("debugger"), wxT("debug client: no thread to scan port %u: %s"),
+					static_cast<unsigned>(port), wxString::FromUTF8(err.what()));
 			}
 		}
 	}
@@ -556,6 +544,7 @@ protected:
 			std::remove(m_listConnection.begin(), m_listConnection.end(), client), m_listConnection.end()
 		);
 		if (m_listConnection.size() == 0) m_enterLoop = false;
+		m_connectionsCv.notify_all();   // the client's end may be waiting for it (~ibDebuggerClient)
 	}
 
 	void RecvCommand(void* pointer, unsigned int length) {}
@@ -611,6 +600,7 @@ private:
 	// bridges' lock is: a call made under it may tell a listener at once (Defer with no session), who asks
 	// HasConnections. Taken after m_breakpointsMutex, never before it.
 	mutable std::recursive_mutex             m_connectionsMutex;
+	std::condition_variable_any              m_connectionsCv;   // a connection took itself out of the list
 	std::vector<ibDebuggerClientConnection*> m_listConnection;
 	ibDebuggerClientConnection*              m_activeSocket = nullptr;   // the one a runtime is parked on
 	// Session guid of the runtime currently parked at a breakpoint.

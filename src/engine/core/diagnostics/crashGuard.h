@@ -56,6 +56,10 @@ CORE_API void Install(const wxString& exeName);
 // The guard page is not restored there: that belongs after an unwind.
 CORE_API void ArmCurrentThread();
 
+// The calling thread's id as the system numbers it — what a debugger, a profiler and the dumps show; the journal's
+// lines carry it too. Windows: GetCurrentThreadId; Linux: gettid; macOS: pthread_threadid_np.
+CORE_API unsigned long CurrentTidPortable();
+
 
 // Append `message` to `<exeName>_startup.log` next to the binary. No UI.
 // Frontend / web / console wrappers add their own user-visible surface.

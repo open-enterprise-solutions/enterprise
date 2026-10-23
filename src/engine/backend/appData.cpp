@@ -8,6 +8,7 @@
 #include "core/launchTicket.h"
 
 #include <thread>
+#include <chrono>
 #include <algorithm>
 #include <sstream>
 #include <utility>   // std::exchange — the active configuration handed over
@@ -1128,7 +1129,7 @@ long ibApplicationInstance::RunApplication(const wxString& strAppName, const wxS
 				break;
 
 			debugClient->SearchServer(true);
-			wxMilliSleep(kRoundSleepMs);
+			std::this_thread::sleep_for(std::chrono::milliseconds(kRoundSleepMs));
 
 			if (debugClient->GetConnectionSuccess())
 				break;
@@ -1164,7 +1165,7 @@ long ibApplicationInstance::SpawnWebServerWithManifest(wxString cmd, const ibLau
 	// wxLaunchDefaultBrowser to fully ShellExecute before return.
 	wxString url;
 	for (int waited = 0; waited < 5000; waited += 100) {
-		wxMilliSleep(100);
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
 		wxYieldIfNeeded();
 		wxFile f;
 		if (!f.Open(manifestPath, wxFile::read))
@@ -1206,7 +1207,7 @@ long ibApplicationInstance::SpawnWebServerWithManifest(wxString cmd, const ibLau
 		for (int round = 0; round < kRounds; ++round) {
 			if (debugClient == nullptr) break;
 			debugClient->SearchServer(true);
-			wxMilliSleep(kRoundSleepMs);
+			std::this_thread::sleep_for(std::chrono::milliseconds(kRoundSleepMs));
 			if (debugClient->GetConnectionSuccess())
 				break;
 		}

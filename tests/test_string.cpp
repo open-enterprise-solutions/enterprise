@@ -102,10 +102,10 @@ TEST(IbString, Utf8MultilingualRoundTrip) {
     // a codepage. Each is BMP, so 1 wchar per char, matching wxString::Length.
     const char* const arabic  = "\xD9\x85\xD8\xB1\xD8\xAD\xD8\xA8\xD8\xA7";  // مرحبا
     const char* const chinese = "\xE4\xBD\xA0\xE5\xA5\xBD";                   // 你好
-    for (const char* std::uint8_t : { arabic, chinese }) {
-        ibString s(std::uint8_t);
-        EXPECT_EQ(s.ToUtf8(), std::string(std::uint8_t));
-        const wxString w = wxString::FromUTF8(std::uint8_t);
+    for (const char* u8 : { arabic, chinese }) {
+        ibString s(u8);
+        EXPECT_EQ(s.ToUtf8(), std::string(u8));
+        const wxString w = wxString::FromUTF8(u8);
         EXPECT_TRUE(s.ToWxString() == w);
         EXPECT_EQ(s.Len(), w.length());
     }

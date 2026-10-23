@@ -85,19 +85,13 @@ ibDebuggerClient::ibDebuggerClient(ibMetaDataConfigurationBase* metaData) :
 
 ibDebuggerClient::~ibDebuggerClient()
 {
-	// Each connection told to stop, and waited for — taken from the list under its lock, waited for outside it: a
-	// connection on its way out tells its listeners and takes itself out of the list, both under that lock. (Delete keeps
-	// the thread's object alive while it waits — wxThreadKeepAlive; a thread that ends by itself between the pick and the
-	// Delete is the self-deleting thread's own window.)
-	for (;;) {
-		ibDebuggerClientConnection* connection = nullptr;
-		{
-			std::lock_guard<std::recursive_mutex> lock(m_connectionsMutex);
-			if (m_listConnection.empty())
-				break;
-			connection = m_listConnection.back();
-		}
-		connection->Delete();
+	// Each connection told to stop, and waited for: a connection on its way out tells its listeners and takes itself out
+	// of the list (DeleteConnection), both under the list's lock — which the wait lets go of.
+	{
+		std::unique_lock<std::recursive_mutex> lock(m_connectionsMutex);
+		for (ibDebuggerClientConnection* connection : m_listConnection)
+			connection->m_stop = true;
+		m_connectionsCv.wait(lock, [this] { return m_listConnection.empty(); });
 	}
 	wxDELETE(m_adapter);
 
@@ -727,39 +721,18 @@ void ibDebuggerClient::ibDebuggerClientConnection::DetachConnection(bool kill)
 	}
 }
 
-wxThread::ExitCode ibDebuggerClient::ibDebuggerClientConnection::Entry()
+void ibDebuggerClient::ibDebuggerClientConnection::Entry()
 {
-	ExitCode retCode = (ExitCode)0;
+	// Detached: nobody joins this thread, and the connection goes with it — out of the list on its way (the destructor).
+	const std::unique_ptr<ibDebuggerClientConnection> connection(this);
 
+	// An escape ends the connection, not the process — out of a std::thread it would terminate it.
 	try {
 		EntryClient();
 	}
 	catch (...) {
-		retCode = (ExitCode)1;
+		ibJournalError(wxT("debugger"), wxT("debug client: the connection's thread left by an exception"));
 	}
-
-	return retCode;
-}
-
-void ibDebuggerClient::ibDebuggerClientConnection::OnKill()
-{
-	if (ms_debugClient != nullptr && m_connectionType == ConnectionType::ConnectionType_Debugger) {
-
-		// 🔎 The third way a session can end — the connection's thread being killed outright, which
-		// nothing above it announces.
-		ibJournalInfo(wxT("debugger"),
-			wxT("debug client: the connection thread was killed while debugging"));
-
-		// Send the exit event message to the UI.
-		ms_debugClient->CallAfter(&ibDebuggerClient::ibDebuggerClientAdapter::OnSessionEnd);
-
-		// Delete connection 
-		ms_debugClient->DeleteConnection(this);
-	}
-
-	m_number_connection_attempts = -1;
-
-	CloseConnection();
 }
 
 void ibDebuggerClient::ibDebuggerClientConnection::EntryClient()
@@ -767,7 +740,7 @@ void ibDebuggerClient::ibDebuggerClientConnection::EntryClient()
 	// step wait connect  
 	m_number_connection_attempts = 0;
 
-	while (!TestDestroy()) {
+	while (!m_stop) {
 
 		if (ms_debugClient == nullptr || m_number_connection_attempts > ms_debugClient->m_numberOfConnectionAttempts) {
 			m_number_connection_attempts = -1;
@@ -791,7 +764,7 @@ void ibDebuggerClient::ibDebuggerClientConnection::EntryClient()
 
 		std::string command;
 
-		while (!m_verifiedConnection && !TestDestroy()) {
+		while (!m_verifiedConnection && !m_stop) {
 			if (commandQueue->Pop(command, waitDebuggerTimeout)) {
 				connected = true;
 				if (!command.empty()) {
@@ -809,7 +782,7 @@ void ibDebuggerClient::ibDebuggerClientConnection::EntryClient()
 				break;
 		}
 
-		if (!TestDestroy() && connected) {
+		if (!m_stop && connected) {
 
 			if (m_verifiedConnection && m_connectionType == ConnectionType::ConnectionType_Debugger) {
 				ibWriterMemory startSessionChannel;
@@ -875,7 +848,7 @@ void ibDebuggerClient::ibDebuggerClientConnection::EntryClient()
 						break;
 					}
 
-					if (TestDestroy()) {
+					if (m_stop) {
 						leftBy = wxT("this thread was told to stop");
 						break;
 					}

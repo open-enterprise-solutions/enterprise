@@ -33,7 +33,8 @@
 #include "backend/metadataConfiguration.h"    // …and the configuration must already be in the base
 
 #include <wx/process.h>                       // wxProcess::Exists — has the previous run actually gone
-#include <wx/utils.h>                         // wxMilliSleep — the wait while it goes
+#include <chrono>
+#include <thread>                             // the wait while it goes
 
 namespace {
 
@@ -187,10 +188,10 @@ public:
 				// second one a lock error that reads like a corrupt installation.
 				if (lastStarted != 0) {
 					for (int waited = 0; waited < 100 && wxProcess::Exists((int)lastStarted); ++waited)
-						wxMilliSleep(50);
+						std::this_thread::sleep_for(std::chrono::milliseconds(50));
 				}
 				else {
-					wxMilliSleep(1000);   // started by somebody else - there is no pid to watch
+					std::this_thread::sleep_for(std::chrono::milliseconds(1000));   // started by somebody else - there is no pid to watch
 				}
 			}
 		}
@@ -201,11 +202,11 @@ public:
 		else if (restart && lastStarted != 0 && wxProcess::Exists((int)lastStarted)) {
 			wxProcess::Kill((int)lastStarted, wxSIGTERM, wxKILL_CHILDREN);
 			for (int waited = 0; waited < 100 && wxProcess::Exists((int)lastStarted); ++waited)
-				wxMilliSleep(50);
+				std::this_thread::sleep_for(std::chrono::milliseconds(50));
 			if (wxProcess::Exists((int)lastStarted))
 				wxProcess::Kill((int)lastStarted, wxSIGKILL, wxKILL_CHILDREN);
 			for (int waited = 0; waited < 100 && wxProcess::Exists((int)lastStarted); ++waited)
-				wxMilliSleep(50);
+				std::this_thread::sleep_for(std::chrono::milliseconds(50));
 			ended = true;
 		}
 

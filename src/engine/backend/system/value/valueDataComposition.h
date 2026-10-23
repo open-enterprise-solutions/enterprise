@@ -12,6 +12,7 @@
 #include "backend/query/queryConstructorModel.h"      // ibQueryConstructorField — what a window offers to pick from
 
 #include <atomic>   // the rented read says WHICH THREAD it is on — see m_fetchThread
+#include <thread>   // …by its std::thread::id
 
 class ibBackendQueryable;
 class ibBackendQueryColumn;
@@ -477,7 +478,7 @@ private:
 	// …AND WHICH THREAD IT IS ON, so a rebuild can tell "somebody is reading" from "I am the reader".
 	// A rebuild cancels the read and waits it out (RebuildSource); asked from inside the read itself,
 	// that would wait for this very thread. Set by the run, cleared however it leaves.
-	std::atomic<unsigned long> m_fetchThread{ 0 };
+	std::atomic<std::thread::id> m_fetchThread{ std::thread::id() };
 
 	// (The sheet lives on the model base — ibValueSpreadsheetModel::m_spreadsheetDoc, a
 	//  wxObjectDataPtr: the backend document carries a refcount of its OWN, parallel to the value

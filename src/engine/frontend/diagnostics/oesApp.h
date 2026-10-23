@@ -308,7 +308,7 @@ public:
 				wxT("A fatal error occurred on a background thread (tid=%lu).\n\n")
 				wxT("A crash dump has been saved to:\n%s\n\n")
 				wxT("The application will now close."),
-				static_cast<unsigned long>(wxThread::GetCurrentId()),
+				ibCrashGuard::CurrentTidPortable(),
 				ibCrashGuard::GetCrashDir());
 			ibCrashGuard::PlatformNativeMessage(caption, msg);
 			ibCrashGuard::TerminateProcessFast(EXIT_FAILURE);

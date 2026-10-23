@@ -1020,7 +1020,7 @@ Designer                           Enterprise
    │ ◄────────────────────────────────│
 ```
 
-The port's I/O threads only move bytes: each command is one binary WebSocket message (`SendCommand` / `RecvCommand`), handed in order to the debug thread — a `wxThread` (`ibDebuggerServer::ibDebuggerServerConnection`), the one the session registry knows as the debugger's. A packet that cannot be read — shorter than what it claims to hold, or a string with no terminator — ends that connection, with a line in the technology journal; the debuggee goes on running. The designer's end does the same with a packet it cannot read.
+The port's I/O threads only move bytes: each command is one binary WebSocket message (`SendCommand` / `RecvCommand`), handed in order to the debug thread — a `std::thread` of `ibDebuggerServer::ibDebuggerServerConnection`, the one the session registry knows as the debugger's. A packet that cannot be read — shorter than what it claims to hold, or a string with no terminator — ends that connection, with a line in the technology journal; the debuggee goes on running. The designer's end does the same with a packet it cannot read.
 
 ---
 

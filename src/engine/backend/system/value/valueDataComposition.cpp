@@ -184,7 +184,7 @@ void ibValueDataComposition::RebuildSource()
 	// ⚠ …UNLESS WE ARE THAT READ. A compose asks for the source to be built (Compose ->
 	// EnsureSourceBuilt -> here) on the very thread the run owns, and cancelling there would wait for
 	// this thread to finish — which is this thread. Asked by the id recorded when the run started.
-	if (m_fetchThread != wxThread::GetCurrentId())
+	if (m_fetchThread.load() != std::this_thread::get_id())
 		CancelFetch();
 
 	// WHAT THIS BUILD IS FOR — recorded before anything else, so an EnsureSourceBuilt after it knows
@@ -919,9 +919,9 @@ void ibValueDataComposition::SubmitFetchAsync(std::function<void()> work)
 			m_fetchRun = jobs->StartBackground(
 				[work, this](ibSession*) -> ibValue {
 					struct ibOnThisThread {
-						std::atomic<unsigned long>& m_slot;
-						explicit ibOnThisThread(std::atomic<unsigned long>& slot) : m_slot(slot) { m_slot = wxThread::GetCurrentId(); }
-						~ibOnThisThread() { m_slot = 0; }
+						std::atomic<std::thread::id>& m_slot;
+						explicit ibOnThisThread(std::atomic<std::thread::id>& slot) : m_slot(slot) { m_slot = std::this_thread::get_id(); }
+						~ibOnThisThread() { m_slot = std::thread::id(); }
 					} onThisThread{ m_fetchThread };
 					work();
 					return ibValue();
