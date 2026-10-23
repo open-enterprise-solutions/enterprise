@@ -2,8 +2,11 @@
 // orientation says. Its caption is the tab's, drawn by the window; its Key is what every event of its controls names
 // it by. It is the container the narrow screen is measured on (styles/form.css): its width, not the window's, decides
 // when a row folds into a column.
+//
+// The controls are drawn in a window of their own under the bar, as the thin client's are (ibVisualHostClient,
+// m_contentWindow): they fill it while they fit and scroll in it when they do not, and the bar stays where it is.
 
-import { Control, defineControl } from './control.js';
+import { Control, defineControl, reconcileChildren } from './control.js';
 import { CommandBar } from './commandBar.js';
 import { alignLabels } from './labels.js';
 
@@ -16,7 +19,9 @@ class ClientForm extends Control {
 	/** @param {ProtocolNode} node */
 	build(node) {
 		this.bar = new CommandBar(this);
-		this.append(this.bar.element);
+		this.content = document.createElement('div');
+		this.content.className = 'content';
+		this.append(this.bar.element, this.content);
 		this.update(node);
 	}
 
@@ -33,7 +38,7 @@ class ClientForm extends Control {
 	 * @param {ProtocolNode} node
 	 */
 	drawChildren(node) {
-		super.drawChildren(node);
+		reconcileChildren(this.content, node.NodeChildren ?? [], this.context);
 		alignLabels(this);
 	}
 }

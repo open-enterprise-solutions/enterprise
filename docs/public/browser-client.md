@@ -43,6 +43,9 @@ by a patch is updated in place, so the focus and the caret stay where they were.
   answered as cancelled, and the person is told so.
 - **A choice form opens as a tab**, as any form. Asked from a modal dialog — a report's settings — it opens over that
   dialog: the dialog blocks the form, so a tab beneath it could not be seen.
+- **A form's command bar stays on top**; the controls under it fill the tab while they fit, what grows sharing what is
+  left, and scroll under the bar when they do not — the thin client's layout. A table or a sheet takes the height the
+  form gives it and scrolls its rows inside itself.
 - **The table** keeps its place: a list read again is read around its top visible row, paged both ways, a stale page
   dropped. A cell keeps the server's text; its editor has the column's buttons (… ▷ ×).
 - **A narrow screen** (under 40 rem): the sizers fold into a column, fields take the full width, touch targets are
