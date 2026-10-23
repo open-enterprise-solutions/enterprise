@@ -165,7 +165,7 @@ void ibValueTextReader::Open(const wxString& fileName, ibTextEncoding encoding)
 	Close();
 
 	// The bytes come whole, by the one road a file is read into memory (it refuses a file that does not fit).
-	wxMemoryBuffer bytes;
+	ibMemoryBuffer bytes;
 	ibValueBinaryData::ReadWholeFile(fileName, wxT("TextReader"), bytes);
 
 	// Bytes that do not spell text in this encoding decode to NOTHING - and an empty text out of a file that

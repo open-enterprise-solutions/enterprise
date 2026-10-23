@@ -42,7 +42,7 @@ void ibModuleTextView::OnDraw(ibDataNode& frame)
 	// a fresh one, and the form's title and command bar went).
 	ibDataNode* const drawn = frame.FindChild(ibProtocol::ibView::State);
 	ibDataNode& state = drawn != nullptr ? *drawn : frame.Child(ibProtocol::ibView::State);
-	state.SetValue(ibProtocol::ibView::ibModule::Syntax, static_cast<s32>(ibCompileCode::GetCodeStyle()));
+	state.SetValue(ibProtocol::ibView::ibModule::Syntax, static_cast<std::int32_t>(ibCompileCode::GetCodeStyle()));
 	if (!creator->IsEditable())
 		state.SetValue(ibProtocol::ibView::ibModule::ReadOnly, true);
 	// Whether the configuration the module is in is modified — the document itself never is (ibMetaDocument::IsModified),
@@ -72,7 +72,7 @@ namespace {
 void AppendName(ibDataNode& response, ibContentType kind, const wxString& name, const wxString& help)
 {
 	ibDataNode& row = response.AddChild(0, 0);
-	row.SetValue(ibProtocol::ibView::ibModule::Kind, static_cast<s32>(kind));
+	row.SetValue(ibProtocol::ibView::ibModule::Kind, static_cast<std::int32_t>(kind));
 	row.SetValue(ibProtocol::ibView::ibModule::Name, name);
 	row.SetValue(ibProtocol::ibView::ibModule::Help, help);
 }
@@ -434,7 +434,7 @@ unsigned int WriteLinqOpen(ibDataNode& response, const wxString& text, unsigned 
 			ibLinqBlock opened(ibCompileCode::GetCodeStyle());
 			wxString refusal;
 			size_t consumed = 0;
-			response.Child(linq::Query).SetValue(linq::From, static_cast<s32>(here->m_textFrom));
+			response.Child(linq::Query).SetValue(linq::From, static_cast<std::int32_t>(here->m_textFrom));
 			if (ibLinqBlock::Parse(rest, opened, refusal, &consumed)) {
 				const wxString read = rest.Left(consumed);
 				const wxString trimmedLeft = wxString(read).Trim(false);
@@ -442,7 +442,7 @@ unsigned int WriteLinqOpen(ibDataNode& response, const wxString& text, unsigned 
 			}
 		}
 	}
-	response.SetValue(linq::Anchor, static_cast<s32>(anchor));
+	response.SetValue(linq::Anchor, static_cast<std::int32_t>(anchor));
 
 	const wxString probeHead = LinqProbeHead(text, anchor);
 
@@ -551,7 +551,7 @@ void WriteLinqVerdict(ibDataNode& response, const wxString& text, unsigned int a
 			ibDataNode& row = bindings.AddChild(0, 0);
 			row.SetValue(linq::Name, binding.m_name);
 			row.SetValue(linq::Origin, binding.m_origin);
-			row.SetValue(linq::Offers, static_cast<s32>(binding.m_offers.size()));
+			row.SetValue(linq::Offers, static_cast<std::int32_t>(binding.m_offers.size()));
 		}
 	}
 	ibDataNode& columns = written.Child(linq::Columns);
@@ -572,14 +572,14 @@ bool ibModuleTextView::Fetch(const ibDataNode& request, ibDataNode& response)
 	// fields and parameters, and a reference's fields one level down (the composer's Expand).
 	if (ibFetchQueryConstructorRequest(request, response, creator->GetMetaData()))
 		return true;
-	if (static_cast<ibProtocol::ibView::ibComposer::ibRequest>(request.GetValue<s32>(ibProtocol::ibView::ibComposer::Kind))
+	if (static_cast<ibProtocol::ibView::ibComposer::ibRequest>(request.GetValue<std::int32_t>(ibProtocol::ibView::ibComposer::Kind))
 	    == ibProtocol::ibView::ibComposer::ibRequest::Expand)
 		return ibFetchComposerRequest(request, response, creator->GetMetaData());
 
 	const wxString text = request.GetValue<wxString>(ibProtocol::ibView::ibModule::Text);
-	const unsigned int caret = static_cast<unsigned int>(request.GetValue<s32>(ibProtocol::ibView::ibModule::Position));
+	const unsigned int caret = static_cast<unsigned int>(request.GetValue<std::int32_t>(ibProtocol::ibView::ibModule::Position));
 
-	switch (static_cast<ibProtocol::ibView::ibModule::ibRequest>(request.GetValue<s32>(ibProtocol::ibView::ibModule::Kind))) {
+	switch (static_cast<ibProtocol::ibView::ibModule::ibRequest>(request.GetValue<std::int32_t>(ibProtocol::ibView::ibModule::Kind))) {
 	case ibProtocol::ibView::ibModule::ibRequest::Complete:
 		LoadAutoComplete(response, text, caret, creator);
 		return true;
@@ -627,7 +627,7 @@ bool ibModuleTextView::OnClientEvent(ibProtocol::ibEvent::ibKind event, const ib
 	if (event == ibProtocol::ibEvent::ibKind::Command) {
 		const ibModuleTextDocument* const moduleDocument = dynamic_cast<const ibModuleTextDocument*>(document);
 		if (moduleDocument == nullptr
-			|| static_cast<ibProtocol::ibView::ibModule::ibCommand>(args.GetValue<s32>(ibProtocol::ibView::ibModule::Id)) != ibProtocol::ibView::ibModule::ibCommand::SyntaxControl)
+			|| static_cast<ibProtocol::ibView::ibModule::ibCommand>(args.GetValue<std::int32_t>(ibProtocol::ibView::ibModule::Id)) != ibProtocol::ibView::ibModule::ibCommand::SyntaxControl)
 			return false;
 		moduleDocument->SyntaxControl(true);
 		return true;

@@ -183,7 +183,7 @@ ibDateTime ibDatabaseResultSetPostgres::GetResultDate(int nField)
 	return date;
 }
 
-void* ibDatabaseResultSetPostgres::GetResultBlob(int nField, wxMemoryBuffer& buffer)
+void* ibDatabaseResultSetPostgres::GetResultBlob(int nField, ibMemoryBuffer& buffer)
 {
 	//int nLength = m_pInterface->GetPQgetlength()(m_pResult, m_nCurrentRow, nIndex);
 	unsigned char* pBlob = (unsigned char*)m_pInterface->GetPQgetvalue()(m_pResult, m_nCurrentRow, nField - 1);
@@ -194,7 +194,7 @@ void* ibDatabaseResultSetPostgres::GetResultBlob(int nField, wxMemoryBuffer& buf
 #endif
 	unsigned char* pUnescapedBlob = m_pInterface->GetPQunescapeBytea()(pBlob, &nUnescapedLength);
 
-	wxMemoryBuffer tempBuffer(nUnescapedLength);
+	ibMemoryBuffer tempBuffer(nUnescapedLength);
 	void* pUnescapedBuffer = tempBuffer.GetWriteBuf(nUnescapedLength);
 	memcpy(pUnescapedBuffer, pUnescapedBlob, nUnescapedLength);
 	m_pInterface->GetPQfreemem()(pUnescapedBlob);

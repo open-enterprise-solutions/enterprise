@@ -208,7 +208,7 @@ RegisterShape Declare(ibMetaDataConfigurationFile& cfg)
 	return shape;
 }
 
-wxString HexOf(const wxMemoryBuffer& buffer)
+wxString HexOf(const ibMemoryBuffer& buffer)
 {
 	wxString hex;
 	const auto* bytes = static_cast<const unsigned char*>(buffer.GetData());
@@ -241,7 +241,7 @@ std::map<wxString, KeySum> ReadFigures(const wxString& table, const wxString& ta
 	std::map<wxString, KeySum> sums;
 	ibQueryResult rows = query.Execute();
 	while (rows.Next()) {
-		wxMemoryBuffer id;
+		ibMemoryBuffer id;
 		if (!rows.IsResultNull(wxT("guid_")))
 			rows.GetResultBlob(wxT("guid_"), id);
 		// _RTRef is a BIGINT. Firebird's reader refuses a number asked for as text

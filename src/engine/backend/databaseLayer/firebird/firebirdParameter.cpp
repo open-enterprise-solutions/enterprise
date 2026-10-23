@@ -349,7 +349,7 @@ void ibDatabaseParameterFirebird::Set(const void* pData, long nDataLength)
 		// magic and decompresses transparently; legacy BLOBs that
 		// pre-date this code path have no magic and pass through
 		// untouched.
-		wxMemoryBuffer wrapped = ibFirebirdBlobCompression::Wrap(pData, nDataLength);
+		ibMemoryBuffer wrapped = ibFirebirdBlobCompression::Wrap(pData, nDataLength);
 		const size_t wrappedSize = wrapped.GetDataLen();
 		void* pBuffer = m_BufferValue.GetWriteBuf(wrappedSize);
 		memcpy(pBuffer, wrapped.GetData(), wrappedSize);
@@ -372,7 +372,7 @@ void ibDatabaseParameterFirebird::Set(const void* pData, long nDataLength)
 	else if (nType == SQL_VARYING) {
 		// Variable-length VARCHAR / VARBINARY — FB describes unnamed
 		// `?` parameters bound for CHAR(N) columns as SQL_VARYING in
-		// some builds.  Layout in sqldata is [u16 length][N data bytes]
+		// some builds.  Layout in sqldata is [std::uint16_t length][N data bytes]
 		// (length prefix is little-endian on x86/x64). Without this
 		// branch SetParamBlob was a silent no-op against varying-typed
 		// params, leaving sqldata zero-init and breaking equality

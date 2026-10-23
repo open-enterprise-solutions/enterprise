@@ -211,14 +211,14 @@ void ibGridEditor::Paste()
 
 			wxVector<ibSpreadsheetCellDescription> cells;
 
-			wxMemoryBuffer buf;
+			ibMemoryBuffer buf;
 			if (reader.r_chunk(1, buf)) {
 
 				ibReaderMemory readerData(buf);
 
 				while (!readerData.eof()) {
 
-					u64 id = 0;
+					std::uint64_t id = 0;
 
 					ibReaderMemory* readerCellMemory = readerData.open_chunk_iterator(id, prevReaderCellMemory);
 					if (!readerCellMemory)

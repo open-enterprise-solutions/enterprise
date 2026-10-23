@@ -438,7 +438,7 @@ ibNumber ibDatabaseResultSetFirebird::GetResultNumber(int nField)
 	return dblReturn;
 }
 
-void* ibDatabaseResultSetFirebird::GetResultBlob(int nField, wxMemoryBuffer& buffer)
+void* ibDatabaseResultSetFirebird::GetResultBlob(int nField, ibMemoryBuffer& buffer)
 {
 	ResetErrorCodes();
 
@@ -446,7 +446,7 @@ void* ibDatabaseResultSetFirebird::GetResultBlob(int nField, wxMemoryBuffer& buf
 	if (IsNull(pVar))
 	{
 		// The column is NULL
-		wxMemoryBuffer tempBuffer(0);
+		ibMemoryBuffer tempBuffer(0);
 		tempBuffer.SetBufSize(0);
 		tempBuffer.SetDataLen(0);
 		buffer = tempBuffer;
@@ -478,7 +478,7 @@ void* ibDatabaseResultSetFirebird::GetResultBlob(int nField, wxMemoryBuffer& buf
 				return NULL;
 			}
 
-			wxMemoryBuffer tempBuffer;
+			ibMemoryBuffer tempBuffer;
 			unsigned int bufferSize = 0;
 			for (;;)
 			{
@@ -525,7 +525,7 @@ void* ibDatabaseResultSetFirebird::GetResultBlob(int nField, wxMemoryBuffer& buf
 		}
 		else if (nType == SQL_TEXT)
 		{
-			wxMemoryBuffer tempBuffer(pVar->sqllen);
+			ibMemoryBuffer tempBuffer(pVar->sqllen);
 			tempBuffer.AppendData(pVar->sqldata, pVar->sqllen);		
 			buffer = tempBuffer;
 		}
@@ -533,7 +533,7 @@ void* ibDatabaseResultSetFirebird::GetResultBlob(int nField, wxMemoryBuffer& buf
 		{
 			// Incompatible field type
 			// Set error codes and throw an exception here
-			wxMemoryBuffer tempBuffer(0);
+			ibMemoryBuffer tempBuffer(0);
 			tempBuffer.SetBufSize(0);
 			tempBuffer.SetDataLen(0);
 			buffer = tempBuffer;

@@ -88,9 +88,9 @@ bool ibValueMetaObject::Send(const wxString& name, const ibDataValue& value) con
 		return false;
 
 	ibDataNode args;
-	args.SetValue(ibProtocol::ibSchema::ibProperties::Id, static_cast<s32>(m_metaId));
+	args.SetValue(ibProtocol::ibSchema::ibProperties::Id, static_cast<std::int32_t>(m_metaId));
 	args.SetValue(ibProtocol::ibSchema::ibProperties::Name, name);
-	args.SetValue(ibProtocol::ibSchema::ibProperties::Tab, static_cast<s32>(m_metaData.GetTabId()));
+	args.SetValue(ibProtocol::ibSchema::ibProperties::Tab, static_cast<std::int32_t>(m_metaData.GetTabId()));
 	if (value.Kind() == ibDataKind::Child)
 		args.SetProperty(ibProtocol::ibSchema::ibProperties::Value, value);
 	else

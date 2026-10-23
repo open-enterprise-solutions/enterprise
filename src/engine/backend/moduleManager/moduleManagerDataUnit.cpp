@@ -86,7 +86,7 @@ void ibValueModuleManager::ibValueDataUnit::FillMembers(ibMemberTable& helper) c
 	// The QUERYABLE kinds only — mirrors the query language's source coverage
 	// (queryableFactory): data-reference records, registers, constants.
 	// clsid narrowed into the (long) tag slot on purpose — GetPropVal keys by ordinal and re-supplies
-	// the clsid, so only the tag identity matters; static_cast makes the u64->long explicit (no C4305/C4309).
+	// the clsid, so only the tag identity matters; static_cast makes the std::uint64_t->long explicit (no C4305/C4309).
 	helper.AppendProp("Constants", true, false, static_cast<long>(g_metaConstantCLSID));
 	helper.AppendProp("Catalogs", true, false, static_cast<long>(g_metaCatalogCLSID));
 	helper.AppendProp("Documents", true, false, static_cast<long>(g_metaDocumentCLSID));

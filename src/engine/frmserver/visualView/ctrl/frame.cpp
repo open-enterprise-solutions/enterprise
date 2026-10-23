@@ -107,7 +107,7 @@ bool ibValueFrame::SaveControl(const ibValueMetaObjectFormBase* metaForm, ibWrit
 // the form is one transparent node tree (the provider frames each child in kChildBlock).
 bool ibValueFrame::LoadNode(const ibDataNode& node)
 {
-	m_controlId = (ibFormID)node.GetValue<s32>(ibProtocol::ibForm::ControlId);
+	m_controlId = (ibFormID)node.GetValue<std::int32_t>(ibProtocol::ibForm::ControlId);
 	SetControlName(node.GetValue<wxString>(ibProtocol::ibForm::Name));
 	m_expanded = node.GetValue<bool>(ibProtocol::ibForm::Expanded);
 	if (!ReadData(node))
@@ -138,7 +138,7 @@ bool ibValueFrame::LoadNode(const ibDataNode& node)
 
 bool ibValueFrame::SaveNode(ibDataNode& node) const
 {
-	node.SetValue(ibProtocol::ibForm::ControlId, (s32)m_controlId);
+	node.SetValue(ibProtocol::ibForm::ControlId, (std::int32_t)m_controlId);
 	node.SetValue(ibProtocol::ibForm::Name,      GetControlName());
 	node.SetValue(ibProtocol::ibForm::Expanded,  m_expanded);
 	if (!WriteData(node))
@@ -165,9 +165,9 @@ bool ibValueFrame::OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibData
 	const ibFormVisualDocument* const visualDoc = GetVisualDocument();
 	if (visualDoc != nullptr && visualDoc->IsVisualDemonstrationDoc())
 		return true;
-	const ibActionID id = args.GetValue<s32>(ibProtocol::ibEvent::Id);
+	const ibActionID id = args.GetValue<std::int32_t>(ibProtocol::ibEvent::Id);
 	if (args.FindField(ibProtocol::ibEvent::Member) != nullptr)
-		GetCommandBar()->ExecuteCommand(id, static_cast<size_t>(args.GetValue<s32>(ibProtocol::ibEvent::Member)));
+		GetCommandBar()->ExecuteCommand(id, static_cast<size_t>(args.GetValue<std::int32_t>(ibProtocol::ibEvent::Member)));
 	else
 		GetCommandBar()->ExecuteCommand(id, GetOwnerForm());
 	return true;
@@ -179,7 +179,7 @@ bool ibValueFrame::OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibData
 // source property rides its hops on guids and re-homes them onto the pasted object. Children recurse the same pair.
 bool ibValueFrame::CopyNode(ibDataNode& node) const
 {
-	node.SetValue(ibProtocol::ibForm::ControlId, (s32)m_controlId);
+	node.SetValue(ibProtocol::ibForm::ControlId, (std::int32_t)m_controlId);
 	node.SetValue(ibProtocol::ibForm::Name,      GetControlName());
 	node.SetValue(ibProtocol::ibForm::Expanded,  m_expanded);
 
@@ -214,7 +214,7 @@ bool ibValueFrame::CopyNode(ibDataNode& node) const
 
 bool ibValueFrame::PasteNode(const ibDataNode& node)
 {
-	m_controlId = (ibFormID)node.GetValue<s32>(ibProtocol::ibForm::ControlId);
+	m_controlId = (ibFormID)node.GetValue<std::int32_t>(ibProtocol::ibForm::ControlId);
 	SetControlName(node.GetValue<wxString>(ibProtocol::ibForm::Name));
 	m_expanded = node.GetValue<bool>(ibProtocol::ibForm::Expanded);
 

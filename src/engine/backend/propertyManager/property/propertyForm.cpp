@@ -20,7 +20,7 @@ wxString ibPropertyForm::GetValueAsString() const
 	return get_cell_variant<ibVariantDataForm>()->GetModuleText();
 }
 
-wxMemoryBuffer& ibPropertyForm::GetValueAsMemoryBuffer() const
+ibMemoryBuffer& ibPropertyForm::GetValueAsMemoryBuffer() const
 {
 	return get_cell_variant<ibVariantDataForm>()->GetFormData();
 }
@@ -30,7 +30,7 @@ void ibPropertyForm::SetValue(const wxString& val)
 	get_cell_variant<ibVariantDataForm>()->SetModuleText(val);
 }
 
-void ibPropertyForm::SetValue(const wxMemoryBuffer& val)
+void ibPropertyForm::SetValue(const ibMemoryBuffer& val)
 {
 	get_cell_variant<ibVariantDataForm>()->SetFormData(val);
 }
@@ -104,7 +104,7 @@ bool ibPropertyForm::GetProtocolValue(ibDataNode& row, ibReader reader)
 {
 	if (!ibProperty::GetProtocolValue(row, reader))
 		return false;
-	row.SetValue(ibProtocol::ibSchema::ibProperties::Object, static_cast<s32>(static_cast<const ibValueMetaObject*>(m_owner)->GetMetaID()));
+	row.SetValue(ibProtocol::ibSchema::ibProperties::Object, static_cast<std::int32_t>(static_cast<const ibValueMetaObject*>(m_owner)->GetMetaID()));
 	return true;
 }
 

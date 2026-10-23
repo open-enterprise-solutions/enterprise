@@ -67,9 +67,9 @@ bool ibMetaDataConfiguration::LoadDatabase(int flags)
 			return false;
 		}
 
-		wxMemoryBuffer binaryData;
+		ibMemoryBuffer binaryData;
 		result.GetResultBlob(wxT("binary_data"), binaryData);
-		ibReaderMemory metaReader(binaryData.GetData(), binaryData.GetBufSize());
+		ibReaderMemory metaReader(binaryData);
 
 		//check is file empty
 		if (metaReader.eof())
@@ -639,7 +639,7 @@ bool ibMetaDataConfigurationStorage::LoadSequenceFromBuffer(const ibReaderMemory
 	if (!db_query->TableExists(sequence_table))
 		return false;
 
-	u64 seq_idx = 0;
+	std::uint64_t seq_idx = 0;
 	ibReaderMemory* seqReaderPrev = nullptr;
 
 	while (true) {

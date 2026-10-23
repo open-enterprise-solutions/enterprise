@@ -29,7 +29,7 @@ void ibSchemaDebugging::Build(const ibSession& session, const ibDataNode& WXUNUS
 	result.SetValue(ibProtocol::ibSchema::ibDebugging::Allowed, SwitchableServer(session) != nullptr);
 }
 
-std::function<void()> ibSchemaDebugging::Command(const ibSession& session, s32 command,
+std::function<void()> ibSchemaDebugging::Command(const ibSession& session, std::int32_t command,
 	const ibDataNode& WXUNUSED(args), ibProtocol::ibRefusal& refusal, wxString& error) const
 {
 	const ibProtocol::ibSchema::ibCommand what = static_cast<ibProtocol::ibSchema::ibCommand>(command);

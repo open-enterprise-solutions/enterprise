@@ -74,10 +74,10 @@ TEST(IbStringBench, DISABLED_Compare) {
     }
     // 4) UTF-8 decode (cached on neither side — fair) — "Привет" x4 = 24 wchar
     {
-        std::string u8;
-        for (int i = 0; i < 4; ++i) u8 += "\xD0\x9F\xD1\x80\xD0\xB8\xD0\xB2\xD0\xB5\xD1\x82";
-        const char* const p = u8.data();
-        const size_t      n = u8.size();
+        std::string std::uint8_t;
+        for (int i = 0; i < 4; ++i) std::uint8_t += "\xD0\x9F\xD1\x80\xD0\xB8\xD0\xB2\xD0\xB5\xD1\x82";
+        const char* const p = std::uint8_t.data();
+        const size_t      n = std::uint8_t.size();
         const double ib = TimeNsPerOp(N, [&](int){ ibString s; s.SetUtf8(p, n);             g_sink += s.Len(); });
         const double wx = TimeNsPerOp(N, [&](int){ wxString s = wxString::FromUTF8(p, n);   g_sink += s.length(); });
         Row("utf8 decode", ib, wx);

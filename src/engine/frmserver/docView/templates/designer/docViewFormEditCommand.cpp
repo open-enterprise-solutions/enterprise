@@ -33,9 +33,9 @@ void ibFormDesignView::ReadPath(const ibDataNode& node, ibCommandDescription& de
 		return;
 	for (const ibDataValue& hop : hops->AsArray()) {
 		if (hop.Kind() == ibDataKind::Child && hop.AsChild() != nullptr)
-			desc.AppendCommand(static_cast<ibMetaID>(hop.AsChild()->GetValue<s32>(ibProtocol::ibView::ibFormDesigner::Id)));
+			desc.AppendCommand(static_cast<ibMetaID>(hop.AsChild()->GetValue<std::int32_t>(ibProtocol::ibView::ibFormDesigner::Id)));
 	}
-	const s32 kind = node.GetValue<s32>(ibProtocol::ibView::ibFormDesigner::Kind);
+	const std::int32_t kind = node.GetValue<std::int32_t>(ibProtocol::ibView::ibFormDesigner::Kind);
 	desc.SetCommandType(kind != 0 ? static_cast<ibInterfaceCommandType>(kind) : ibInterfaceCommandType_Default);
 }
 
@@ -47,13 +47,13 @@ bool ibFormDesignView::FetchFormCommand(const ibDataNode& request, ibDataNode& r
 {
 	// The desktop's tree's handlers, on the form the client holds. A form command is a form-LOCAL event (NOT a
 	// metaobject — nothing goes into the metadata tree).
-	const ibMetaID id = request.GetValue<s32>(ibProtocol::ibView::ibFormDesigner::FormCommand);
+	const ibMetaID id = request.GetValue<std::int32_t>(ibProtocol::ibView::ibFormDesigner::FormCommand);
 	ibFormCommandValue* const cmd = id != 0 ? m_valueForm->FindFormCommandById(id) : nullptr;
 	if (id != 0 && cmd == nullptr)
 		return false;
 
 	ibFormCommandValue* shown = cmd;
-	switch (static_cast<ibProtocol::ibView::ibFormDesigner::ibCommand>(request.GetValue<s32>(ibProtocol::ibView::ibFormDesigner::Command))) {
+	switch (static_cast<ibProtocol::ibView::ibFormDesigner::ibCommand>(request.GetValue<std::int32_t>(ibProtocol::ibView::ibFormDesigner::Command))) {
 	case ibProtocol::ibView::ibFormDesigner::ibCommand::Create:
 		// Uniquely named, its Action EMPTY — the handler procedure does not exist yet; the developer creates it later
 		// through the event editor (the desktop's AddCommand).
@@ -90,6 +90,6 @@ bool ibFormDesignView::FetchFormCommand(const ibDataNode& request, ibDataNode& r
 
 	WriteForm(response);
 	if (shown != nullptr)
-		response.SetValue(ibProtocol::ibView::ibFormDesigner::FormCommand, static_cast<s32>(shown->GetId()));
+		response.SetValue(ibProtocol::ibView::ibFormDesigner::FormCommand, static_cast<std::int32_t>(shown->GetId()));
 	return true;
 }

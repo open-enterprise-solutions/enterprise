@@ -101,7 +101,7 @@ ibPredefinedOwner* Owner(const ibDataNode& params, wxString& refusal)
 		return nullptr;
 	}
 
-	const s32 id = (s32)ArgObject().Whole(params);
+	const std::int32_t id = (std::int32_t)ArgObject().Whole(params);
 	if (id <= 0) {
 		refusal = ibMcpText("Pass the object's NodeId - metadata_list gives it.");
 		return nullptr;
@@ -188,7 +188,7 @@ public:
 				items.push_back(ItemEntry(item.get()));
 		}
 
-		result.AddField(wxT("count"), ibDataValue::Int((s64)items.size()));
+		result.AddField(wxT("count"), ibDataValue::Int((std::int64_t)items.size()));
 		result.AddField(wxT("items"), ibDataValue::Array(items));
 
 		if (items.empty())

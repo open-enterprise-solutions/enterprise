@@ -95,7 +95,7 @@ bool ibPropertyDynamicSource::GetProtocolValue(ibDataNode& row, ibReader reader)
 		if (tableId == 0 || tableId == wxNOT_FOUND)
 			continue;   // a source with no table id (temp, computed) cannot be stored
 		ibDataNode& choice = row.AddChild(0, static_cast<ibMetaID>(row.Children().size() + 1));
-		choice.SetValue(ibProtocol::ibSchema::ibProperties::Id, static_cast<s32>(tableId));
+		choice.SetValue(ibProtocol::ibSchema::ibProperties::Id, static_cast<std::int32_t>(tableId));
 		choice.SetValue(ibProtocol::ibSchema::ibProperties::Title, descriptor->GetNamespace() + wxT(".") + descriptor->GetName());
 		// …drawn as the desktop's drop-down draws it: the picture of the metaobject behind the source (its class's, as
 		// CreateValueList draws a metaobject); a source with no metaobject behind it goes without.

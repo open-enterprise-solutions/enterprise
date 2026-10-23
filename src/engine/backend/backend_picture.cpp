@@ -338,7 +338,7 @@ ibString ibBackendPicture::CreateBase64Image(const wxImage& image) {
 }
 
 wxImage ibBackendPicture::GetImageFromBase64(const wxString& src, const wxSize& size) {
-	wxMemoryBuffer buffer;
+	ibMemoryBuffer buffer;
 	if (!ibBase64::Read(src.wc_str(), src.length(), buffer))
 		return wxImage();
 	wxMemoryInputStream stream(buffer.GetData(), buffer.GetDataLen());

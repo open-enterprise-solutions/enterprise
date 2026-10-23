@@ -759,11 +759,9 @@ ibValue ibValueSystemFunction::DeserializeValue(const wxString& strJson)
 		return activeMetaData != nullptr
 			? activeMetaData->GetIDObjectFromString(name) : ibClassID(0); });
 
-	// ⚠ THE BUFFER OUTLIVES THE READER, deliberately — a reader BORROWS its bytes (fs.h), and
-	// handing it a temporary leaves it reading freed memory.
 	const wxScopedCharBuffer utf8 = strJson.utf8_str();
 
-	wxMemoryBuffer bytes;
+	ibMemoryBuffer bytes;
 	bytes.AppendData(utf8.data(), utf8.length());
 
 	ibReaderMemory reader(bytes);

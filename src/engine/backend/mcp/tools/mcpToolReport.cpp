@@ -1654,7 +1654,7 @@ public:
 		std::vector<ibConditionalAppearanceRuleDescription>& rules = settings->m_conditionalAppearance.m_rules;
 
 		// THE RULE — the one `at` names, or a new one.
-		const s64 at = ArgRuleAt().Given(params) ? ArgRuleAt().Whole(params) : 0;
+		const std::int64_t at = ArgRuleAt().Given(params) ? ArgRuleAt().Whole(params) : 0;
 		if (ArgRuleAt().Given(params) && (at < 1 || static_cast<size_t>(at) > rules.size())) {
 			refusal = rules.empty()
 				? ibMcpText("These settings have no rules yet - omit `at` to add one.")
@@ -1766,7 +1766,7 @@ public:
 		for (size_t i = 0; i < rules.size(); ++i) {
 			const ibConditionalAppearanceRuleDescription& rule = rules[i];
 			std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
-			entry->SetValue(wxT("at"), static_cast<s32>(i + 1));
+			entry->SetValue(wxT("at"), static_cast<std::int32_t>(i + 1));
 			if (!rule.m_use)
 				entry->AddField(wxT("use"), ibDataValue::Bool(false));
 			// THE WHOLE CONDITION, groups included, in the shape `condition` takes. (It read the lines of the top only,
@@ -2041,7 +2041,7 @@ public:
 		// refused six good columns because the seventh was misspelled would teach a caller to go
 		// back to one field per call, which is what this is here to end.
 		std::vector<ibDataValue> refused;
-		s32 at = (s32)ArgAt().Whole(params);
+		std::int32_t at = (std::int32_t)ArgAt().Whole(params);
 
 		for (const wxString& path : wanted) {
 
@@ -2251,7 +2251,7 @@ public:
 					if (word.IsSameAs(ibBalanceRoleWord(known), false))
 						role = known;
 			}
-			const s64 number = ArgPeriodNumber().Given(params) ? ArgPeriodNumber().Whole(params) : 0;
+			const std::int64_t number = ArgPeriodNumber().Given(params) ? ArgPeriodNumber().Whole(params) : 0;
 			if (number != 0 && role != ibBalanceRole::Moment) {
 				refusal = ibMcpText("A number orders PERIODS: give `period_number` to a field whose role is `period`.");
 				return false;
@@ -2276,7 +2276,7 @@ public:
 		result.SetValue(wxT("title"), field->TitleInForce(caption));
 		result.SetValue(wxT("role"), wxString(ibBalanceRoleWord(field->RoleInForce(sourceRole))).Lower());
 		if (field->m_useRole && field->m_periodRank > 0)
-			result.SetValue(wxT("period_number"), static_cast<s32>(field->m_periodRank));
+			result.SetValue(wxT("period_number"), static_cast<std::int32_t>(field->m_periodRank));
 		result.SetValue(wxT("format"),
 			wxString(ibStoredValue(field->m_appearance.ValueInForce(ibAppearanceParameter::Format), nullptr).GetString()));
 		ibMcpSayComposerComplaints(composition, result);
@@ -2654,7 +2654,7 @@ public:
 			composer->SetCompositionDesc(composition);
 			activeMetaData->Modify(true);
 
-			result.AddField(wxT("removed"), ibDataValue::Int((s64)(before - levels.size())));
+			result.AddField(wxT("removed"), ibDataValue::Int((std::int64_t)(before - levels.size())));
 			result.SetValue(wxT("output"), outputName);
 			ibMcpSayComposerComplaints(composition, result);
 			return true;
@@ -2985,7 +2985,7 @@ public:
 		activeMetaData->Modify(true);
 
 		result.SetValue(wxT("composer"), composer->GetName());
-		result.AddField(wxT("characters"), ibDataValue::Int((s64)text.Length()));
+		result.AddField(wxT("characters"), ibDataValue::Int((std::int64_t)text.Length()));
 
 		// ⭐ WHAT IT NOW OFFERS, in the same breath. The next question after "the query is set" is
 		// always "so what can I group by", and answering it here saves the round trip — and shows

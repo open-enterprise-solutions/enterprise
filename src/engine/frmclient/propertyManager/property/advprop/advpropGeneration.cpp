@@ -113,7 +113,7 @@ wxPGEditorDialogAdapter* ibPGGenerationProperty::GetEditorDialog() const
 		// ⭐ WHAT THE PROPERTY OFFERS, grouped by kind — the choices it was built with (ibPropertyGeneration::GetValueList),
 		// not a list of kinds of this dialog's own. Each one's kind is its data — its class, as the server's property
 		// listed it — named and drawn as the server registered it (the row's Classes).
-		void FillFromChoices(const wxPGChoices& choices, const std::vector<u64>& choiceData,
+		void FillFromChoices(const wxPGChoices& choices, const std::vector<std::uint64_t>& choiceData,
 			ibCheckTree* tc, const ibMetaDescription& held) {
 
 			wxImageList* imageList = tc->GetImageList();

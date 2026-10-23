@@ -408,7 +408,7 @@ wxString BindAtCreation(ibValueMetaObject* created, const wxString& property, co
 
 	for (const wxString& target : targets) {
 		ibDataNode params;
-		params.AddField(wxT("id"), ibDataValue::Int((s64)created->GetMetaID()));
+		params.AddField(wxT("id"), ibDataValue::Int((std::int64_t)created->GetMetaID()));
 		params.AddField(wxT("property"), ibDataValue::String(property));
 		params.AddField(wxT("target"), ibDataValue::String(target));
 
@@ -518,7 +518,7 @@ public:
 		std::vector<ibDataValue> children;
 		Walk(from, depth, withDeleted, children);
 
-		result.AddField(wxT("id"), ibDataValue::Int((s64)from->GetMetaID()));
+		result.AddField(wxT("id"), ibDataValue::Int((std::int64_t)from->GetMetaID()));
 		result.SetValue(wxT("kind"), from->GetClassName());
 		result.SetValue(wxT("name"), from->GetName());
 
@@ -561,7 +561,7 @@ private:
 				continue;
 
 			std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
-			entry->AddField(wxT("id"), ibDataValue::Int((s64)child->GetMetaID()));
+			entry->AddField(wxT("id"), ibDataValue::Int((std::int64_t)child->GetMetaID()));
 			entry->SetValue(wxT("kind"), child->GetClassName());
 			entry->SetValue(wxT("name"), child->GetName());
 
@@ -671,7 +671,7 @@ public:
 		for (const ibValueMetaObject* object : ibListMetaObjects(metaData, kind)) {
 
 			std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
-			entry->AddField(wxT("id"), ibDataValue::Int((s64)object->GetMetaID()));
+			entry->AddField(wxT("id"), ibDataValue::Int((std::int64_t)object->GetMetaID()));
 			entry->SetValue(wxT("name"), object->GetName());
 
 			// The glance line and the flag that says there is more to read — the same two the map
@@ -874,7 +874,7 @@ void CollectNeighbours(const ibValueMetaObject* node, const ibValueMetaObject* s
 
 		if (NearlyTheSameName(name, child->GetName()) && into.size() < 8) {
 			std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
-			entry->AddField(wxT("id"), ibDataValue::Int((s64)child->GetMetaID()));
+			entry->AddField(wxT("id"), ibDataValue::Int((std::int64_t)child->GetMetaID()));
 			entry->SetValue(wxT("name"), child->GetName());
 			entry->SetValue(wxT("kind"), child->GetClassName());
 			// WHERE IT BELONGS — the half that turns "something similar exists" into a decision.
@@ -1632,7 +1632,7 @@ public:
 		if (metaData == nullptr)
 			return false;
 
-		const s32 asked = (s32)ArgId().Whole(params);
+		const std::int32_t asked = (std::int32_t)ArgId().Whole(params);
 		if (asked <= 0) {
 			refusal = ibMcpText("Pass the object's NodeId.");
 			return false;
@@ -1647,7 +1647,7 @@ public:
 
 		// SAID BEFORE IT IS TRUE, because afterwards there is nothing left to name.
 		const wxString name = object->GetName();
-		const s32      id = (s32)object->GetMetaID();
+		const std::int32_t      id = (std::int32_t)object->GetMetaID();
 
 		// A CONFIGURATION IS NOT AN OBJECT, and deleting the root would take the
 		// whole tree with it. There is no legitimate caller for that here.
@@ -1662,7 +1662,7 @@ public:
 
 		result.AddField(wxT("deleted"), ibDataValue::Bool(true));
 		result.SetValue(wxT("name"), name);
-		result.AddField(wxT("id"), ibDataValue::Int((s64)id));
+		result.AddField(wxT("id"), ibDataValue::Int((std::int64_t)id));
 		return true;
 	}
 };
@@ -1704,7 +1704,7 @@ public:
 		if (metaData == nullptr)
 			return false;
 
-		const s32 asked = (s32)ArgId().Whole(params);
+		const std::int32_t asked = (std::int32_t)ArgId().Whole(params);
 		if (asked <= 0) {
 			refusal = ibMcpText("Pass the object's NodeId.");
 			return false;
@@ -1733,8 +1733,8 @@ public:
 				kind.push_back(child);
 		}
 
-		const s32 position = (s32)ArgPosition().Whole(params);
-		if (position < 0 || position >= (s32)kind.size()) {
+		const std::int32_t position = (std::int32_t)ArgPosition().Whole(params);
+		if (position < 0 || position >= (std::int32_t)kind.size()) {
 			refusal = wxString::Format(
 				ibMcpText("Position %i is past the objects of this kind - there are %i, counted from 0. "
 					  "Nothing was moved."), (int)position, (int)kind.size());
@@ -1750,7 +1750,7 @@ public:
 		}
 
 		result.SetValue(wxT("name"), object->GetName());
-		result.AddField(wxT("id"), ibDataValue::Int((s64)object->GetMetaID()));
+		result.AddField(wxT("id"), ibDataValue::Int((std::int64_t)object->GetMetaID()));
 		result.AddField(wxT("moved"), ibDataValue::Bool(parent->GetChildPosition(object) != from));
 
 		// WHAT THE ORDER IS NOW, of the objects of the same kind - the answer to "did that put it where
@@ -2204,7 +2204,7 @@ public:
 		}
 
 
-		s32 length = 10, precision = 10, scale = 0;
+		std::int32_t length = 10, precision = 10, scale = 0;
 		params.GetValue(wxT("length"), length);
 		params.GetValue(wxT("precision"), precision);
 		params.GetValue(wxT("scale"), scale);
@@ -3189,7 +3189,7 @@ public:
 		ibMcpSayObject(object, result);
 		ibMcpSayProperties(object, result, only, ArgEditableOnly().Flag(params));
 
-		if (result.GetValue<s32>(wxT("count")) == 0)
+		if (result.GetValue<std::int32_t>(wxT("count")) == 0)
 			result.SetValue(wxT("note"), only.IsEmpty()
 				? ibMcpText("This object has no properties of its own.")
 				: ibMcpText("It has no property of that name. Omit `property` to see the ones it has."));

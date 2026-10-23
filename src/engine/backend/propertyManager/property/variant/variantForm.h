@@ -8,11 +8,11 @@ class BACKEND_API ibVariantDataForm : public ibVariantDataModule {
 public:
 
 	//set form code 
-	void SetFormData(const wxMemoryBuffer& formData) { m_formData = formData; }
-	wxMemoryBuffer& GetFormData() { return m_formData; }
+	void SetFormData(const ibMemoryBuffer& formData) { m_formData = formData; }
+	ibMemoryBuffer& GetFormData() { return m_formData; }
 
 	ibVariantDataForm(
-		const wxMemoryBuffer& memory = wxMemoryBuffer(),
+		const ibMemoryBuffer& memory = ibMemoryBuffer(),
 		const wxString& moduleData = wxEmptyString
 	) : ibVariantDataModule(moduleData), m_formData(memory) {
 	}
@@ -42,7 +42,7 @@ public:
 	virtual wxString GetType() const { return wxT("ibVariantDataForm"); }
 
 private:
-	wxMemoryBuffer m_formData;
+	ibMemoryBuffer m_formData;
 };
 
 #endif

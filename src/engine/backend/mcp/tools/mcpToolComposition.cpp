@@ -145,7 +145,7 @@ public:
 			for (const ibMetaID& id : composition->GetCompositions()) {
 				ibValueMetaObject* const declaration = ibFindMetaObjectById(metaData, id);
 				std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
-				entry->AddField(wxT("id"), ibDataValue::Int((s64)id));
+				entry->AddField(wxT("id"), ibDataValue::Int((std::int64_t)id));
 				entry->SetValue(wxT("name"),
 					declaration != nullptr ? declaration->GetName() : wxString(wxT("?")));
 				in.push_back(ibDataValue::Child(entry));

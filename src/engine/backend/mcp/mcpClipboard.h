@@ -61,11 +61,6 @@ struct BACKEND_API ibMcpClipboardSlot {
 	// themselves as the chunked memory their own CopyObject writes, which goes
 	// in as one Binary field. One member either way — so a later "hand me the
 	// copy as JSON" is this, rendered, and not a second thing to build.
-	//
-	// ⚠ ibReaderMemory BORROWS its bytes and never copies them, so a caller
-	// reading the Binary field out must bind it to a NAMED local first: the
-	// getter returns by value, and the rvalue overload is deleted precisely
-	// because that mistake reads freed memory (see fs.h).
 	ibDataNode m_payload;
 
 	bool IsEmpty() const { return m_kind == ibMcpClipboardKind::None; }

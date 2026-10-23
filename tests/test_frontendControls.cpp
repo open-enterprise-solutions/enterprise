@@ -18,7 +18,7 @@
 #include "frontend/visualView/ctrl/notebook.h"   // ibValueNotebook + g_controlNotebook*CLSID
 #include "backend/compiler/value.h"
 
-#include <wx/buffer.h>                            // wxMemoryBuffer (form serialize round-trip)
+#include "core/memory/memoryBuffer.h"                            // ibMemoryBuffer (form serialize round-trip)
 
 namespace {
 
@@ -213,7 +213,7 @@ TEST_F(FrontendFormFix, FormSerializeRoundTripPreservesControls)
 	const size_t srcCount = src->GetControlList().size();
 	ASSERT_GE(srcCount, 2u) << "the source form has the controls we added";
 
-	wxMemoryBuffer buffer;
+	ibMemoryBuffer buffer;
 	ASSERT_TRUE(src->SaveForm(buffer)) << "SaveForm serialises the control tree";
 
 	ibValueForm* dst = NewForm();

@@ -140,7 +140,7 @@ ibJobManager::ibJobSettings ibJobManager::ReadSharedSettings(const ibGuid& key)
 
 			// The schedule rides as opaque bytes — read through the blob door, not as a value: it
 			// is a description, and its format belongs to ibJobScheduleDescriptionMemory alone.
-			wxMemoryBuffer blob;
+			ibMemoryBuffer blob;
 			rs.GetResultBlob(wxT("schedule"), blob);
 			if (blob.GetDataLen() > 0)
 				ibJobScheduleDescriptionMemory::ReadBuffer(blob.GetData(), blob.GetDataLen(), settings.m_schedule);
@@ -160,7 +160,7 @@ ibJobManager::ibWriteOutcome ibJobManager::WriteSharedSettings(const ibJobSettin
 		return ibWriteOutcome::Refused;   // no key, no record — there is nothing this row would be about
 
 	try {
-		wxMemoryBuffer blob;
+		ibMemoryBuffer blob;
 		ibJobScheduleDescriptionMemory::WriteBuffer(blob, settings.m_schedule);
 
 		// UPSERT for the same reason the clock uses one: the dialects spell it differently, and

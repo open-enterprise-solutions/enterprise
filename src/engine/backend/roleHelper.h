@@ -77,7 +77,7 @@ struct ibRoleUserInfo {
 	std::vector<ibUserRoleEntry> m_arrayRole;
 };
 
-#include "core/fileSystem/fs.h"
+#include "core/memory/memoryStream.h"
 
 class BACKEND_API ibAccessObject {
 public:

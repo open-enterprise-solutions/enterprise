@@ -48,11 +48,11 @@ int ibDialogFormEditor::ShowModal()
 	long long result = wxNOT_FOUND;
 	for (;;) {
 		ibDataNode request;
-		request.SetValue(ibProtocol::ibRequest::Kind, static_cast<s32>(ibProtocol::ibRequest::ibKind::FormEditor));
+		request.SetValue(ibProtocol::ibRequest::Kind, static_cast<std::int32_t>(ibProtocol::ibRequest::ibKind::FormEditor));
 		request.SetValue(ibProtocol::ibRequest::ibFormEditor::Picture, ibBackendPicture::SendPicture(g_picChangeFormCLSID));
 		request.SetValue(ibProtocol::ibRequest::ibFormEditor::HasSetting, ibHasFormSettings(m_owner));
 		if (result != wxNOT_FOUND)
-			request.SetValue(ibProtocol::ibRequest::ibFormEditor::Result, static_cast<s32>(result));
+			request.SetValue(ibProtocol::ibRequest::ibFormEditor::Result, static_cast<std::int32_t>(result));
 
 		// The controls' classes and their pictures — what the desktop's editor lists its tree's icons from.
 		ibDataNode& classes = request.Child(ibProtocol::ibRequest::ibFormEditor::Classes);
@@ -68,7 +68,7 @@ int ibDialogFormEditor::ShowModal()
 		if (!frame->Request(request, response) || response.FindField(ibProtocol::ibRequest::ibFormEditor::Act) == nullptr)
 			return wxID_OK;   // closed
 
-		switch (static_cast<ibProtocol::ibRequest::ibFormEditor::ibAct>(response.GetValue<s32>(ibProtocol::ibRequest::ibFormEditor::Act))) {
+		switch (static_cast<ibProtocol::ibRequest::ibFormEditor::ibAct>(response.GetValue<std::int32_t>(ibProtocol::ibRequest::ibFormEditor::Act))) {
 		case ibProtocol::ibRequest::ibFormEditor::ibAct::Apply:
 			if (const ibDataNode* const controls = response.FindChild(ibProtocol::ibRequest::ibFormEditor::Controls))
 				ibApplyFormSettings(m_owner, *controls);

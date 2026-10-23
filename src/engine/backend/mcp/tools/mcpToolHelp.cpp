@@ -238,7 +238,7 @@ public:
 			return false;
 		}
 
-		s32 limit = 40;
+		std::int32_t limit = 40;
 		params.GetValue(wxT("limit"), limit);
 		if (limit <= 0)
 			limit = 40;
@@ -252,13 +252,13 @@ public:
 
 		std::vector<ibDataValue> entries;
 		for (const ibHelpEntry* entry : found) {
-			if ((s32)entries.size() >= limit)
+			if ((std::int32_t)entries.size() >= limit)
 				break;
 			if (entry != nullptr)
 				entries.push_back(Brief(*entry));
 		}
 
-		result.AddField(wxT("found"), ibDataValue::Int((s64)found.size()));
+		result.AddField(wxT("found"), ibDataValue::Int((std::int64_t)found.size()));
 		result.AddField(wxT("entries"), ibDataValue::Array(entries));
 
 		// ⭐ THIS IS THE SYNTAX HELPER, AND ONLY THAT — the same corpus the designer shows beside the

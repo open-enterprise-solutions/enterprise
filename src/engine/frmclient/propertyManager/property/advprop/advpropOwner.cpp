@@ -114,7 +114,7 @@ wxPGEditorDialogAdapter* ibPGOwnerProperty::GetEditorDialog() const
 		// ⭐ WHAT THE PROPERTY OFFERS — the choices it was built with, one item each, under a group of their class as the
 		// desktop's walked the configuration's catalogs (FillByClsid). Each one's kind is its data — its class, as the
 		// server's property listed it — named and drawn as the server registered it (the row's Classes).
-		void FillFromChoices(const wxPGChoices& choices, const std::vector<u64>& choiceData,
+		void FillFromChoices(const wxPGChoices& choices, const std::vector<std::uint64_t>& choiceData,
 			ibCheckTree* tc, const ibMetaDescription& held) {
 
 			wxImageList* imageList = tc->GetImageList();

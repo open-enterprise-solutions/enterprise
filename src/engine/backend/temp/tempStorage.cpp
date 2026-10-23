@@ -117,7 +117,7 @@ bool ibTempStorage::WritePart(const ibGuid& session, const wxString& id, int ind
 	}
 }
 
-bool ibTempStorage::ReadPart(const ibGuid& session, const wxString& id, int index, wxMemoryBuffer& data) const
+bool ibTempStorage::ReadPart(const ibGuid& session, const wxString& id, int index, ibMemoryBuffer& data) const
 {
 	std::lock_guard<std::recursive_mutex> serialised(m_mtx);
 
@@ -280,7 +280,7 @@ wxString ibTempFile::GetName() const
 	return m_storage != nullptr ? m_storage->GetName(m_session, m_id) : wxString();
 }
 
-bool ibTempFile::ReadPart(int index, wxMemoryBuffer& data) const
+bool ibTempFile::ReadPart(int index, ibMemoryBuffer& data) const
 {
 	return m_storage != nullptr && m_storage->ReadPart(m_session, m_id, index, data);
 }
@@ -290,7 +290,7 @@ bool ibTempFile::ReadAll(wxString* str, const wxMBConv& conv)
 	if (m_storage == nullptr || str == nullptr)
 		return false;
 
-	wxMemoryBuffer content, part;
+	ibMemoryBuffer content, part;
 	for (int index = 0; ReadPart(index, part); ++index)
 		content.AppendData(part.GetData(), part.GetDataLen());
 

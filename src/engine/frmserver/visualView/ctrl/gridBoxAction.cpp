@@ -35,7 +35,7 @@ void ibChooseVariant(ibDataComposer& composer)
 	std::vector<ibMenuItem> menu;
 	for (size_t i = 0; i < variants.size(); ++i) {
 		ibMenuItem item;
-		item.id = static_cast<s32>(i);
+		item.id = static_cast<std::int32_t>(i);
 		// WHAT THE PICKER SHOWS — the synonym in the configuration's language, else the name, else its place
 		// in the list: not a caption anybody wrote, but what an unnamed variant HAS, and a blank line in a menu
 		// cannot be clicked with any confidence.
@@ -49,7 +49,7 @@ void ibChooseVariant(ibDataComposer& composer)
 		menu.push_back(item);
 	}
 
-	s32 chosen = 0;
+	std::int32_t chosen = 0;
 	if (!ibRequestMenu(menu, chosen))
 		return;   // closed without choosing — nothing changes
 

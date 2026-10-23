@@ -22,7 +22,7 @@ public:
 	// Create {Id, Name, Code, Description, IsFolder, Parent} — one more item; Set {Id, Guid, …} — the item of that Guid
 	// given these, or one more of that Guid (the engine's SetPredefinedValue); Remove {Id, Guid}. Refused, nothing done:
 	// no such object or item, a name it has already, a parent that holds nothing.
-	virtual std::function<void()> Command(const ibSession& session, s32 command,
+	virtual std::function<void()> Command(const ibSession& session, std::int32_t command,
 		const ibDataNode& args, ibProtocol::ibRefusal& refusal, wxString& error) const override;
 };
 

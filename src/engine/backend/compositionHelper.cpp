@@ -7,7 +7,7 @@
 
 bool ibCompositionObject::LoadComposition(ibReaderMemory& dataReader)
 {
-	wxMemoryBuffer buf;
+	ibMemoryBuffer buf;
 	if (dataReader.r_chunk(compositionBlock, buf)) {
 		std::shared_ptr<ibReaderMemory> dataCompositionReader(new ibReaderMemory(buf));
 		unsigned int countComposition = dataCompositionReader->r_u32(); m_compositions.clear();

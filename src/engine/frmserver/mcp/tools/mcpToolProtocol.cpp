@@ -100,7 +100,7 @@ public:
 		if (host->Call(ibProtocol::MethodFromName(ArgMethod().Text(params).utf8_str()), given != nullptr ? *given : ibDataNode(),
 				result, why, error))
 			return true;
-		refusal = wxString::Format(wxT("refused %d: %s"), static_cast<s32>(why), error);
+		refusal = wxString::Format(wxT("refused %d: %s"), static_cast<std::int32_t>(why), error);
 		return false;
 	}
 };

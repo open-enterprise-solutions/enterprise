@@ -15,6 +15,7 @@
 #include "core/fnumber.h"
 #include "core/fdatetime.h"
 #include "core/fstring.h"
+#include "core/memory/memoryBuffer.h"
 #include "core/stringUtils.h"
 
 //*******************************************************************************************

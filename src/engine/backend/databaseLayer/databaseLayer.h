@@ -981,8 +981,8 @@ public:
 	/// Retrieve a single Blob value from a query
 	/// If multiple records are returned from the query, a DATABASE_LAYER_NON_UNIQUE_RESULTSET exception
 	///  is thrown unless bRequireUniqueResult is false
-	virtual void* GetSingleResultBlob(const wxString& strSQL, int nField, wxMemoryBuffer& buffer, bool bRequireUniqueResult = true);
-	virtual void* GetSingleResultBlob(const wxString& strSQL, const wxString& strField, wxMemoryBuffer& buffer, bool bRequireUniqueResult = true);
+	virtual void* GetSingleResultBlob(const wxString& strSQL, int nField, ibMemoryBuffer& buffer, bool bRequireUniqueResult = true);
+	virtual void* GetSingleResultBlob(const wxString& strSQL, const wxString& strField, ibMemoryBuffer& buffer, bool bRequireUniqueResult = true);
 
 	/// Retrieve a single double value from a query
 	/// If multiple records are returned from the query, a DATABASE_LAYER_NON_UNIQUE_RESULTSET exception
@@ -1204,7 +1204,7 @@ private:
 	long GetSingleResultLong(const wxString& strSQL, const wxVariant* field, bool bRequireUniqueResult = true);
 	bool GetSingleResultBool(const wxString& strSQL, const wxVariant* field, bool bRequireUniqueResult = true);
 	ibDateTime GetSingleResultDate(const wxString& strSQL, const wxVariant* field, bool bRequireUniqueResult = true);
-	void* GetSingleResultBlob(const wxString& strSQL, const wxVariant* field, wxMemoryBuffer& buffer, bool bRequireUniqueResult = true);
+	void* GetSingleResultBlob(const wxString& strSQL, const wxVariant* field, ibMemoryBuffer& buffer, bool bRequireUniqueResult = true);
 	double GetSingleResultDouble(const wxString& strSQL, const wxVariant* field, bool bRequireUniqueResult = true);
 	ibNumber GetSingleResultNumber(const wxString& strSQL, const wxVariant* field, bool bRequireUniqueResult = true);
 	wxArrayInt GetResultsArrayInt(const wxString& strSQL, const wxVariant* field);

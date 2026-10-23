@@ -361,7 +361,7 @@ public:
 		const ibBackendException::ibEvalModeScope answering(eval_complete);
 
 		const wxString text = ArgText().Text(params);
-		s32 position = 0;
+		std::int32_t position = 0;
 		params.GetValue(wxT("position"), position);
 
 		if (position < 0 || (size_t)position > text.length()) {
@@ -661,8 +661,8 @@ public:
 			if (!element.m_params.empty() || kind != wxT("variable"))
 				entry->SetValue(wxT("declare"), ibModuleCallForm(element));
 
-			entry->AddField(wxT("lineFrom"), ibDataValue::Int((s64)(element.m_lineStart + 1)));
-			entry->AddField(wxT("lineTo"), ibDataValue::Int((s64)(element.m_lineEnd + 1)));
+			entry->AddField(wxT("lineFrom"), ibDataValue::Int((std::int64_t)(element.m_lineStart + 1)));
+			entry->AddField(wxT("lineTo"), ibDataValue::Int((std::int64_t)(element.m_lineEnd + 1)));
 
 			declared.push_back(ibDataValue::Child(entry));
 		}

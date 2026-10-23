@@ -8,7 +8,7 @@
 #include "backend/backend_mainFrame.h"   // ibBackendDocFrame — the person told how the merge went
 #include "core/diagnostics/journal.h"    // the merge's refusals
 #include "core/exception.h"              // ibCoreException — a walk that cannot be made is refused
-#include "core/fileSystem/fs.h"
+#include "core/memory/memoryStream.h"
 #include "core/serialize/dataBuilder.h"
 
 #include "frmserver/schema/designer/metaData.h"
@@ -18,22 +18,22 @@ namespace {
 using ibMode = ibProtocol::ibSchema::ibConfigCompare::ibMode;
 using ibOp   = ibProtocol::ibSchema::ibConfigCompare::ibOp;
 
-wxMemoryBuffer ReadTempFile(const wxString& id, ibProtocol::ibRefusal& refusal, wxString& error)
+ibMemoryBuffer ReadTempFile(const wxString& id, ibProtocol::ibRefusal& refusal, wxString& error)
 {
-	wxMemoryBuffer bytes;
+	ibMemoryBuffer bytes;
 	const ibTempFile file(id);
 	if (!file.IsOpened()) {
 		refusal = ibProtocol::ibRefusal::NotFound;
 		error = wxT("no such file");
 		return bytes;
 	}
-	wxMemoryBuffer part;
+	ibMemoryBuffer part;
 	for (int index = 0; file.ReadPart(index, part); ++index)
 		bytes.AppendData(part.GetData(), part.GetDataLen());
 	return bytes;
 }
 
-bool WriteTempFile(const wxString& id, const wxMemoryBuffer& bytes, ibProtocol::ibRefusal& refusal, wxString& error)
+bool WriteTempFile(const wxString& id, const ibMemoryBuffer& bytes, ibProtocol::ibRefusal& refusal, wxString& error)
 {
 	ibTempFile file;
 	if (!file.Create(id, true)) {
@@ -53,7 +53,7 @@ bool WriteTempFile(const wxString& id, const wxMemoryBuffer& bytes, ibProtocol::
 std::shared_ptr<ibMetaDataConfigurationFile> LoadFileConfig(const wxString& fileId,
 	ibProtocol::ibRefusal& refusal, wxString& error)
 {
-	const wxMemoryBuffer bytes = ReadTempFile(fileId, refusal, error);
+	const ibMemoryBuffer bytes = ReadTempFile(fileId, refusal, error);
 	if (refusal != ibProtocol::ibRefusal::None)
 		return nullptr;
 	auto holder = ibMetaData::MakeShared<ibMetaDataConfigurationFile>();
@@ -76,7 +76,7 @@ struct ibCompareSides {
 bool ResolveSides(const ibSession& session, const ibDataNode& args, ibCompareSides& sides,
 	ibProtocol::ibRefusal& refusal, wxString& error)
 {
-	const ibMode mode = static_cast<ibMode>(args.GetValue<s32>(ibProtocol::ibSchema::ibConfigCompare::Mode));
+	const ibMode mode = static_cast<ibMode>(args.GetValue<std::int32_t>(ibProtocol::ibSchema::ibConfigCompare::Mode));
 	ibMetaDataConfigurationBase* const active = session.GetMetaData();
 	if (active == nullptr) {
 		refusal = ibProtocol::ibRefusal::NoSession;
@@ -131,7 +131,7 @@ void WriteRecords(const std::vector<ibMetaDiffRecord>& records, ibDataNode& resu
 	ibDataNode& list = result.Child(ibProtocol::ibSchema::ibConfigCompare::Records);
 	for (const ibMetaDiffRecord& rec : records) {
 		ibDataNode& row = list.AddChild(0, 0);
-		row.SetValue(ibProtocol::ibSchema::ibConfigCompare::Status, static_cast<s32>(rec.m_status));
+		row.SetValue(ibProtocol::ibSchema::ibConfigCompare::Status, static_cast<std::int32_t>(rec.m_status));
 		row.SetValue(ibProtocol::ibSchema::ibConfigCompare::Parent, rec.m_parentIndex);
 		row.SetValue(ibProtocol::ibSchema::ibConfigCompare::Depth, rec.m_depth);
 		if (rec.IsGroup()) {
@@ -155,10 +155,10 @@ void WriteRecords(const std::vector<ibMetaDiffRecord>& records, ibDataNode& resu
 			}
 			if (rec.m_left != nullptr)
 				row.SetValue(ibProtocol::ibSchema::ibConfigCompare::LeftId,
-					static_cast<s32>(rec.m_left->GetMetaID()));
+					static_cast<std::int32_t>(rec.m_left->GetMetaID()));
 			if (rec.m_right != nullptr)
 				row.SetValue(ibProtocol::ibSchema::ibConfigCompare::RightId,
-					static_cast<s32>(rec.m_right->GetMetaID()));
+					static_cast<std::int32_t>(rec.m_right->GetMetaID()));
 			// Side summaries for object rows (name on each side).
 			if (rec.m_left != nullptr)
 				row.SetValue(ibProtocol::ibSchema::ibConfigCompare::Left, rec.m_left->GetName());
@@ -217,7 +217,7 @@ bool ApplyReplace(ibMetaData* targetMeta, ibMetaData* sourceMeta,
 	return true;
 }
 
-ibValueMetaObject* FindById(ibMetaData* meta, s32 id)
+ibValueMetaObject* FindById(ibMetaData* meta, std::int32_t id)
 {
 	return (meta != nullptr && id > 0) ? ibFindMetaObjectById(meta, id) : nullptr;
 }
@@ -244,7 +244,7 @@ void ibSchemaConfigCompare::Build(const ibSession& session, const ibDataNode& ar
 	WriteRecords(records, result);
 }
 
-std::function<void()> ibSchemaConfigCompare::Command(const ibSession& session, s32 command,
+std::function<void()> ibSchemaConfigCompare::Command(const ibSession& session, std::int32_t command,
 	const ibDataNode& args, ibProtocol::ibRefusal& refusal, wxString& error) const
 {
 	if (static_cast<ibProtocol::ibSchema::ibCommand>(command) != ibProtocol::ibSchema::ibCommand::Merge) {
@@ -258,7 +258,7 @@ std::function<void()> ibSchemaConfigCompare::Command(const ibSession& session, s
 		return nullptr;
 
 	const bool pull = args.GetValue<bool>(ibProtocol::ibSchema::ibConfigCompare::Pull);
-	const ibMode mode = static_cast<ibMode>(args.GetValue<s32>(ibProtocol::ibSchema::ibConfigCompare::Mode));
+	const ibMode mode = static_cast<ibMode>(args.GetValue<std::int32_t>(ibProtocol::ibSchema::ibConfigCompare::Mode));
 
 	// Database compare has no Push target (matches the desktop: no right-save callback).
 	if (!pull && mode == ibMode::Database) {
@@ -269,9 +269,9 @@ std::function<void()> ibSchemaConfigCompare::Command(const ibSession& session, s
 
 	struct ibOpSpec {
 		ibOp op = ibOp::Add;
-		s32 leftId = 0;
-		s32 rightId = 0;
-		s32 parentId = 0;
+		std::int32_t leftId = 0;
+		std::int32_t rightId = 0;
+		std::int32_t parentId = 0;
 	};
 	// No ops — the rows chosen were all of a kind the tab does not send (a reorder): nothing applied, and said so, as the
 	// desktop's "applied to 0".
@@ -279,10 +279,10 @@ std::function<void()> ibSchemaConfigCompare::Command(const ibSession& session, s
 	if (const ibDataNode* const opsNode = args.FindChild(ibProtocol::ibSchema::ibConfigCompare::Ops)) {
 		for (const ibDataNode& node : opsNode->Children()) {
 			ibOpSpec spec;
-			spec.op = static_cast<ibOp>(node.GetValue<s32>(ibProtocol::ibSchema::ibConfigCompare::Op));
-			spec.leftId = node.GetValue<s32>(ibProtocol::ibSchema::ibConfigCompare::LeftId);
-			spec.rightId = node.GetValue<s32>(ibProtocol::ibSchema::ibConfigCompare::RightId);
-			spec.parentId = node.GetValue<s32>(ibProtocol::ibSchema::ibConfigCompare::ParentId);
+			spec.op = static_cast<ibOp>(node.GetValue<std::int32_t>(ibProtocol::ibSchema::ibConfigCompare::Op));
+			spec.leftId = node.GetValue<std::int32_t>(ibProtocol::ibSchema::ibConfigCompare::LeftId);
+			spec.rightId = node.GetValue<std::int32_t>(ibProtocol::ibSchema::ibConfigCompare::RightId);
+			spec.parentId = node.GetValue<std::int32_t>(ibProtocol::ibSchema::ibConfigCompare::ParentId);
 			specs.push_back(spec);
 		}
 	}
@@ -343,7 +343,7 @@ std::function<void()> ibSchemaConfigCompare::Command(const ibSession& session, s
 		if (!pull) {
 			ibProtocol::ibRefusal refuse = ibProtocol::ibRefusal::None;
 			wxString err;
-			wxMemoryBuffer bytes;
+			ibMemoryBuffer bytes;
 			ibMetaDataConfigurationBase* rightBase = dynamic_cast<ibMetaDataConfigurationBase*>(right);
 			savedRight = rightBase != nullptr && rightBase->SaveConfigToBuffer(bytes)
 				&& WriteTempFile(mode == ibMode::TwoFiles ? file2Id : fileId, bytes, refuse, err);

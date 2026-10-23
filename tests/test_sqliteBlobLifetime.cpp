@@ -36,7 +36,7 @@ TEST(SqliteBlob, BoundBytesSurviveTheCallerBuffer)
 	ASSERT_TRUE(static_cast<bool>(rows));
 	ASSERT_TRUE(rows->Next());
 
-	wxMemoryBuffer readBack;
+	ibMemoryBuffer readBack;
 	rows->GetResultBlob(1, readBack);
 	ASSERT_EQ(16u, readBack.GetDataLen());
 	const unsigned char* got = static_cast<const unsigned char*>(readBack.GetData());

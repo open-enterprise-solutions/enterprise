@@ -9,7 +9,7 @@
 #include "frmserver/schema/clientSchema.h"
 
 // The commands of Sections — a number on the wire (schema's Command), a type here.
-enum class ibSchemaSectionsCommand : s32 {
+enum class ibSchemaSectionsCommand : std::int32_t {
 	Open = 1,   // {Item, Type} — an item a page offers, as its link opens it (Type: the item's own, ibInterfaceCommandType)
 };
 
@@ -23,7 +23,7 @@ public:
 	virtual void Build(const ibSession& session, const ibDataNode& args, ibDataNode& result) const override;
 
 	// Open — only an item a page offers this person, as that page offers it; anything else is refused.
-	virtual std::function<void()> Command(const ibSession& session, s32 command,
+	virtual std::function<void()> Command(const ibSession& session, std::int32_t command,
 		const ibDataNode& args, ibProtocol::ibRefusal& refusal, wxString& error) const override;
 };
 

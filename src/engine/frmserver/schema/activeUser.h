@@ -20,7 +20,7 @@ public:
 
 	// The dialog's context menus, the designer's (OnKickSelected, OnReloadSelected, OnForceReleaseSelected there):
 	// Kick {Session}, Reload {Session} — not the asking session's own; Release {Lock}. Done in the asking.
-	virtual std::function<void()> Command(const ibSession& session, s32 command,
+	virtual std::function<void()> Command(const ibSession& session, std::int32_t command,
 		const ibDataNode& args, ibProtocol::ibRefusal& refusal, wxString& error) const override;
 };
 

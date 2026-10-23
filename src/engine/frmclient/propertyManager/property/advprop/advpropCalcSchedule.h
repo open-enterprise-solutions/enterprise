@@ -29,7 +29,7 @@ private:
 	// A list the row brought, as a row's choices — nothing chosen first.
 	static wxPGChoices GetChoices(const std::vector<const ibDataNode*>& items);
 	// The row's lists of one kind (`Schedule`'s children of that Kind).
-	std::vector<const ibDataNode*> GetItems(s32 kind) const;
+	std::vector<const ibDataNode*> GetItems(std::int32_t kind) const;
 public:
 
 	ibPGCalcScheduleProperty(ibBackendProperty* property = nullptr, const wxString& label = wxPG_LABEL,

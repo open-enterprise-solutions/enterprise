@@ -68,7 +68,7 @@ template<class Text> void PutNumber(Text& out, const ibNumber& number)
 }
 
 // A binary as the view writes it — "base64:<...>", ASCII all through.
-template<class Text> void PutBase64(Text& out, const wxMemoryBuffer& b)
+template<class Text> void PutBase64(Text& out, const ibMemoryBuffer& b)
 {
 	Put(out, "\"base64:");
 	ibBase64::Append(out, b.GetData(), b.GetDataLen());
@@ -261,14 +261,14 @@ void ibJsonProvider::EmitNode(const ibDataNode& node, Text& out, int depth) cons
 
 // The room asked once, for what the tree weighs (ibDataNode::Weight): a text that grows as it is written is copied
 // every time it does.
-bool ibJsonProvider::Write(const ibDataNode& root, ibWriter& writer) const
+bool ibJsonProvider::Write(const ibDataNode& root, ibWriterMemory& writer) const
 {
 	std::string out;
 	out.reserve(root.Weight());
 	EmitNode(root, out, 0);
 	if (!m_compact)
 		Put(out, "\n");
-	writer.w(out.data(), (u32)out.size());
+	writer.w(out.data(), (std::uint32_t)out.size());
 	return true;
 }
 
@@ -520,7 +520,7 @@ bool ibJsonReader<Char>::ParseNode(ibDataNode& node)
 // wired into any load path — the round-trip path stays ibBinaryProvider — because the
 // view is lossy in three places the parser cannot undo (header). Use it for tooling that
 // reads a JSON dump back into a tree, not to load a configuration.
-bool ibJsonProvider::Read(ibReader& reader, ibDataNode& root) const
+bool ibJsonProvider::Read(ibReaderMemory& reader, ibDataNode& root) const
 {
 	const int size = reader.elapsed();
 	if (size <= 0)
@@ -604,10 +604,9 @@ ibDataValue ibJsonProvider::ReadString(const ibString& text)
 	// NOT a String. Everything else stays a String, INCLUDING an emitted Date (see
 	// the header): an ISO string and a string that looks like one are the same text —
 	// and so does one after the prefix that is not base64: EmitValue did not write it.
-	// The buffer only for that shape: a wxMemoryBuffer takes a kilobyte from the heap as it is made.
 	static const ibString kB64 = wxT("base64:");
 	if (text.StartsWith(kB64)) {
-		wxMemoryBuffer bytes;
+		ibMemoryBuffer bytes;
 		if (ibBase64::Read(text.wc_str() + kB64.length(), text.length() - kB64.length(), bytes))
 			return ibDataValue::Binary(bytes);
 	}

@@ -349,7 +349,7 @@ public:
 		if (trimmed)
 			places.resize(8);
 
-		result.AddField(wxT("found"), ibDataValue::Int((s64)found.size()));
+		result.AddField(wxT("found"), ibDataValue::Int((std::int64_t)found.size()));
 		result.AddField(wxT("tools"), ibDataValue::Array(found));
 
 		if (!places.empty()) {

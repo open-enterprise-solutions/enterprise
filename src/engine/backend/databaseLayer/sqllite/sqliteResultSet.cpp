@@ -155,7 +155,7 @@ ibNumber ibDatabaseResultSetSQLite::GetResultNumber(int nField)
 	return dblValue;
 }
 
-void* ibDatabaseResultSetSQLite::GetResultBlob(int nField, wxMemoryBuffer& buffer)
+void* ibDatabaseResultSetSQLite::GetResultBlob(int nField, ibMemoryBuffer& buffer)
 {
 	int nLength = 0;
 	if (m_pSqliteStatement == nullptr)
@@ -163,7 +163,7 @@ void* ibDatabaseResultSetSQLite::GetResultBlob(int nField, wxMemoryBuffer& buffe
 	nLength = sqlite3_column_bytes(m_pSqliteStatement, nField - 1);
 	if (nLength < 1)
 	{
-		wxMemoryBuffer tempBuffer(0);
+		ibMemoryBuffer tempBuffer(0);
 		tempBuffer.SetDataLen(0);
 		tempBuffer.SetBufSize(0);
 		buffer = tempBuffer;
@@ -173,7 +173,7 @@ void* ibDatabaseResultSetSQLite::GetResultBlob(int nField, wxMemoryBuffer& buffe
 
 	const void* pBlob = sqlite3_column_blob(m_pSqliteStatement, nField - 1);
 
-	wxMemoryBuffer tempBuffer(nLength);
+	ibMemoryBuffer tempBuffer(nLength);
 	void* pBuffer = tempBuffer.GetWriteBuf(nLength);
 	memcpy(pBuffer, pBlob, nLength);
 	tempBuffer.UngetWriteBuf(nLength);

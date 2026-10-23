@@ -29,7 +29,7 @@ std::shared_ptr<ibDataNode> RowNode(const ibDataNode& row, const char* name)
 void AddItem(ibPropertyChoiceList& list, const ibDataNode& item)
 {
 	const wxString title = item.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Title);
-	const s32 id = item.GetValue<s32>(ibProtocol::ibSchema::ibProperties::Id);
+	const std::int32_t id = item.GetValue<std::int32_t>(ibProtocol::ibSchema::ibProperties::Id);
 	list.Add(id, title, wxEmptyString, wxVariant((long)id),
 		ibProtocolPicture(item.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Picture)));
 }
@@ -38,7 +38,7 @@ const ibDataNode* Target(const ibDataNode& row, const ibMetaID& type)
 {
 	if (const std::shared_ptr<ibDataNode> targets = RowNode(row, ibProtocol::ibSchema::ibProperties::Targets)) {
 		for (const ibDataNode& target : targets->Children()) {
-			if ((ibMetaID)target.GetValue<s32>(ibProtocol::ibSchema::ibProperties::Id) == type)
+			if ((ibMetaID)target.GetValue<std::int32_t>(ibProtocol::ibSchema::ibProperties::Id) == type)
 				return &target;
 		}
 	}
@@ -108,12 +108,12 @@ void ibChoiceParametersForSource(const ibBackendProperty* property, const ibMeta
 	if (sources == nullptr)
 		return;
 	for (const ibDataNode& source : sources->Children()) {
-		if ((ibMetaID)source.GetValue<s32>(ibProtocol::ibSchema::ibProperties::Id) != sourceId)
+		if ((ibMetaID)source.GetValue<std::int32_t>(ibProtocol::ibSchema::ibProperties::Id) != sourceId)
 			continue;
 		for (const ibDataNode& fit : source.Children())
-			out.push_back((ibMetaID)fit.GetValue<s32>(ibProtocol::ibSchema::ibProperties::Id));
+			out.push_back((ibMetaID)fit.GetValue<std::int32_t>(ibProtocol::ibSchema::ibProperties::Id));
 		if (obvious != nullptr)
-			*obvious = (ibMetaID)source.GetValue<s32>(ibProtocol::ibSchema::ibProperties::Default);
+			*obvious = (ibMetaID)source.GetValue<std::int32_t>(ibProtocol::ibSchema::ibProperties::Default);
 		return;
 	}
 }

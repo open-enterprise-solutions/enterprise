@@ -92,7 +92,7 @@ void WriteParameters(ibDataNode& response, const std::vector<ibQuerySourceParame
 }
 
 // THE SELECT THE WINDOW IS ON — its Current(): a statement's select, or one of its union branches.
-const ibQuerySelect* SelectAt(const ibQueryPackage& package, s32 statement, s32 unionBranch)
+const ibQuerySelect* SelectAt(const ibQueryPackage& package, std::int32_t statement, std::int32_t unionBranch)
 {
 	if (statement < 0 || static_cast<size_t>(statement) >= package.m_statements.size())
 		return nullptr;
@@ -123,7 +123,7 @@ void WriteCheck(ibDataNode& response, const ibDataNode& request)
 
 	std::vector<ibDataValue> projections;
 	const ibQuerySelect* const select =
-		SelectAt(package, request.GetValue<s32>(qc::Statement), request.GetValue<s32>(qc::UnionBranch));
+		SelectAt(package, request.GetValue<std::int32_t>(qc::Statement), request.GetValue<std::int32_t>(qc::UnionBranch));
 	if (select != nullptr)
 		for (const ibQueryAstExprPtr& missing : ibQueryLowering::UngroupedProjections(*select, std::map<wxString, ibValue>()))
 			if (missing)
@@ -143,7 +143,7 @@ wxString ibKindPicture(const wxString& kind, const ibMetaData* metaData)
 
 bool ibFetchQueryConstructorRequest(const ibDataNode& request, ibDataNode& response, const ibMetaData* metaData)
 {
-	const qc::ibRequest kind = static_cast<qc::ibRequest>(request.GetValue<s32>(qc::Kind));
+	const qc::ibRequest kind = static_cast<qc::ibRequest>(request.GetValue<std::int32_t>(qc::Kind));
 	if (kind != qc::ibRequest::Sources && kind != qc::ibRequest::Fields && kind != qc::ibRequest::SourceParameters
 	    && kind != qc::ibRequest::Check)
 		return false;

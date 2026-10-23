@@ -19,12 +19,6 @@
     <Filter Include="fiber">
       <UniqueIdentifier>{5d0c7a3e-6b1f-4e2a-9c84-1f7e2b9d4a60}</UniqueIdentifier>
     </Filter>
-    <Filter Include="fileSystem">
-      <UniqueIdentifier>{3e658492-3710-4562-a676-5eecced213a9}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="fileSystem\lz">
-      <UniqueIdentifier>{a606016d-466d-412e-ab20-5490f6a2e37f}</UniqueIdentifier>
-    </Filter>
     <Filter Include="graphics">
       <UniqueIdentifier>{1c39467f-583e-4ee5-9fda-86472983e336}</UniqueIdentifier>
     </Filter>
@@ -36,6 +30,12 @@
     </Filter>
     <Filter Include="mcp">
       <UniqueIdentifier>{9047548b-5914-4dc5-9f68-0cb257b06510}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="memory">
+      <UniqueIdentifier>{3e658492-3710-4562-a676-5eecced213a9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="memory\lz">
+      <UniqueIdentifier>{a606016d-466d-412e-ab20-5490f6a2e37f}</UniqueIdentifier>
     </Filter>
     <Filter Include="net">
       <UniqueIdentifier>{3c1d7f52-8e4a-4b9d-a6f0-5e2b9c7d1a84}</UniqueIdentifier>
@@ -147,12 +147,6 @@
     <ClCompile Include="fiber\fiberLocals.cpp">
       <Filter>fiber</Filter>
     </ClCompile>
-    <ClCompile Include="fileSystem\fs.cpp">
-      <Filter>fileSystem</Filter>
-    </ClCompile>
-    <ClCompile Include="fileSystem\lz\lzhuf.cpp">
-      <Filter>fileSystem\lz</Filter>
-    </ClCompile>
     <ClCompile Include="fileKind.cpp" />
     <ClCompile Include="fnumber.cpp" />
     <ClCompile Include="formatString.cpp" />
@@ -171,6 +165,18 @@
       <Filter>job</Filter>
     </ClCompile>
     <ClCompile Include="localization.cpp" />
+    <ClCompile Include="memory\lz\lzhuf.cpp">
+      <Filter>memory\lz</Filter>
+    </ClCompile>
+    <ClCompile Include="memory\memoryBuffer.cpp">
+      <Filter>memory</Filter>
+    </ClCompile>
+    <ClCompile Include="memory\memoryPool.cpp">
+      <Filter>memory</Filter>
+    </ClCompile>
+    <ClCompile Include="memory\memoryStream.cpp">
+      <Filter>memory</Filter>
+    </ClCompile>
     <ClCompile Include="net\asio.cpp">
       <Filter>net</Filter>
     </ClCompile>
@@ -354,15 +360,6 @@
     <ClInclude Include="fiber\fiberLocals.h">
       <Filter>fiber</Filter>
     </ClInclude>
-    <ClInclude Include="fileSystem\fs.h">
-      <Filter>fileSystem</Filter>
-    </ClInclude>
-    <ClInclude Include="fileSystem\lz\lzhuf.h">
-      <Filter>fileSystem\lz</Filter>
-    </ClInclude>
-    <ClInclude Include="fileSystem\types.h">
-      <Filter>fileSystem</Filter>
-    </ClInclude>
     <ClInclude Include="fnumber.h" />
     <ClInclude Include="formatString.h" />
     <ClInclude Include="fstring.h" />
@@ -389,6 +386,18 @@
     </ClInclude>
     <ClInclude Include="mcp\mcpSettings.h">
       <Filter>mcp</Filter>
+    </ClInclude>
+    <ClInclude Include="memory\lz\lzhuf.h">
+      <Filter>memory\lz</Filter>
+    </ClInclude>
+    <ClInclude Include="memory\memoryBuffer.h">
+      <Filter>memory</Filter>
+    </ClInclude>
+    <ClInclude Include="memory\memoryPool.h">
+      <Filter>memory</Filter>
+    </ClInclude>
+    <ClInclude Include="memory\memoryStream.h">
+      <Filter>memory</Filter>
     </ClInclude>
     <ClInclude Include="net\httpClient.h">
       <Filter>net</Filter>

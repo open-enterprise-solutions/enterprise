@@ -4,7 +4,7 @@
 #include "backend/backend.h"
 
 #include <wx/string.h>
-#include <wx/buffer.h>
+#include "core/memory/memoryBuffer.h"
 
 // Log severity. Audit = business events (login / document save / DDL apply
 // / session start-stop). Info/Warn/Error = technical traces.
@@ -17,7 +17,7 @@ enum class ibLogLevel : int {
 
 // Single record passed from producers to the writer thread. Held by value
 // in the queue and moved into the sink's batch — wxString small-buffer
-// optimisation keeps short strings inline, wxMemoryBuffer is ref-counted.
+// optimisation keeps short strings inline, ibMemoryBuffer is shared by a count.
 struct ibLogEntry {
     wxLongLong_t   ts_ms = 0;      // ms since unix epoch, UTC
     ibLogLevel     level = ibLogLevel::Info;
@@ -36,7 +36,7 @@ struct ibLogEntry {
     wxString       ref_guid;       // string form of ibGuid; empty when no ref
     int            ref_meta_id = 0;// ibMetaID; 0 when no ref
 
-    wxMemoryBuffer details;        // serialised ibValue (empty when unused)
+    ibMemoryBuffer details;        // serialised ibValue (empty when unused)
 };
 
 #endif

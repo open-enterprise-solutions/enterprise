@@ -7,12 +7,12 @@
 #include <string>
 #include <vector>
 #include <wx/string.h>
-#include <wx/buffer.h>
+#include "core/memory/memoryBuffer.h"
 
 #include "core/core.h"  // CORE_API
 
-class ibReaderMemory; // core/fileSystem/fs.h
-class ibWriterMemory; // core/fileSystem/fs.h
+class ibReaderMemory; // core/memory/memoryStream.h
+class ibWriterMemory; // core/memory/memoryStream.h
 class ibString;       // core/fstring.h
 
 // ibNumber — exact-decimal number, 8 bytes total.
@@ -298,13 +298,13 @@ public:
 	//         writer.w_chunk(chunkNumber, value.GetBuffer());
 	//   - Out-parameter overload — reuses caller's buffer capacity, clears it
 	//     first, then writes. For tight loops over many numbers:
-	//         wxMemoryBuffer buf;
+	//         ibMemoryBuffer buf;
 	//         for (...) { n.GetBuffer(buf); writer.w_chunk(id, buf); }
-	wxMemoryBuffer GetBuffer() const;
-	void           GetBuffer(wxMemoryBuffer& out) const;
+	ibMemoryBuffer GetBuffer() const;
+	void           GetBuffer(ibMemoryBuffer& out) const;
 	bool           GetBuffer(ibWriterMemory& writer) const; // chunked stream write
 
-	bool SetBuffer(const wxMemoryBuffer& in);
+	bool SetBuffer(const ibMemoryBuffer& in);
 	bool SetBuffer(const void* data, size_t len);
 	bool SetBuffer(const ibReaderMemory& reader); // chunked stream read
 

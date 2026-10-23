@@ -743,7 +743,7 @@ bool ibMcpServer::LoadSettings(ibSession* session)
 	node.GetValue(wxT("enabled"), settings.m_enabled);
 	node.GetValue(wxT("address"), settings.m_address);
 
-	s32 port = settings.m_port;
+	std::int32_t port = settings.m_port;
 	node.GetValue(wxT("port"), port);
 	settings.m_port = (unsigned short)port;
 
@@ -775,7 +775,7 @@ bool ibMcpServer::SaveSettings(ibSession* session) const
 	ibDataNode node;
 	node.SetValue(wxT("enabled"), m_settings.m_enabled);
 	node.SetValue(wxT("address"), m_settings.m_address);
-	node.SetValue(wxT("port"), (s32)m_settings.m_port);
+	node.SetValue(wxT("port"), (std::int32_t)m_settings.m_port);
 	node.SetValue(wxT("token"), m_settings.m_token);
 
 	return storage->Save(KeyFor(session), node);
@@ -1197,7 +1197,7 @@ bool ibMcpServer::AskModel(const wxString& question, wxString& refusal)
 
 	ibDataNode ask;
 	ask.SetValue(wxT("jsonrpc"), wxString(wxT("2.0")));
-	ask.AddField(wxT("id"), ibDataValue::Int((s64)id));
+	ask.AddField(wxT("id"), ibDataValue::Int((std::int64_t)id));
 	ask.SetValue(wxT("method"), wxString(wxT("sampling/createMessage")));
 
 	ibDataNode& params = ask.Child(wxT("params"));
@@ -1519,7 +1519,7 @@ static wxString ibMcpArgumentsOnOffer(const ibMcpTool* tool, const wxString& giv
 
 void ibMcpDescribePlatform(const ibApplicationInstance* applicationInstance, ibDataNode& into)
 {
-	into.AddField(wxT("build"), ibDataValue::Int((s64)GetBuildId()));
+	into.AddField(wxT("build"), ibDataValue::Int((std::int64_t)GetBuildId()));
 
 	// ⭐⭐ AND WHICH BASE THIS IS. Every tool here answers for the process that happens to hold the port,
 	// and two designers can stand open on two different bases — so an answer naming the configuration but
@@ -1592,7 +1592,7 @@ void ibMcpDescribePlatform(const ibApplicationInstance* applicationInstance, ibD
 		// reports it: it appears in no listing (it is not of a listable KIND) and in no answer
 		// about anything else. Telling a caller to write on the root without this is telling them
 		// to address an object they have no way to name.
-		into.AddField(wxT("configurationId"), ibDataValue::Int((s64)root->GetMetaID()));
+		into.AddField(wxT("configurationId"), ibDataValue::Int((std::int64_t)root->GetMetaID()));
 	}
 
 	// ⭐⭐ THE ONE A CALLER MUST RE-ASK. Everything else here drifts slowly; this can be flipped
@@ -1634,7 +1634,7 @@ void ibMcpDescribePlatform(const ibApplicationInstance* applicationInstance, ibD
 	// metadata_properties takes for every enumerated property. Not decoded here from the integer:
 	// that would be this file keeping a private copy of a list the enumeration already owns, and
 	// the copy would be wrong the first time a member was added.
-	into.AddField(wxT("compatibilityVersion"), ibDataValue::Int((s64)metaData->GetVersion()));
+	into.AddField(wxT("compatibilityVersion"), ibDataValue::Int((std::int64_t)metaData->GetVersion()));
 
 	if (ibValueMetaObject* root = metaData->GetCommonMetaObject()) {
 
@@ -1789,8 +1789,8 @@ void ibMcpDescribePlatform(const ibApplicationInstance* applicationInstance, ibD
 		});
 
 		ibDataNode& debugger = into.Child(wxT("debugger"));
-		debugger.AddField(wxT("runtimes"), ibDataValue::Int((s64)seen));
-		debugger.AddField(wxT("attached"), ibDataValue::Int((s64)attached));
+		debugger.AddField(wxT("runtimes"), ibDataValue::Int((std::int64_t)seen));
+		debugger.AddField(wxT("attached"), ibDataValue::Int((std::int64_t)attached));
 
 		if (seen > 0 && attached == 0)
 			debugger.SetValue(wxT("note"),

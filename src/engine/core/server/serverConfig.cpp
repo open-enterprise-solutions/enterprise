@@ -70,7 +70,7 @@ bool ibServerConfig::LoadKey(ibString& error)
 		}
 		ibString text(read);
 		text.Trim().Trim(false);
-		wxMemoryBuffer raw;
+		ibMemoryBuffer raw;
 		if (!ibBase64::Read(text.wc_str(), text.Len(), raw) || raw.GetDataLen() != ibFieldCipher::kKeySize) {
 			error = ibString::Format(wxT("the key %s is not a key"), path);
 			return false;
@@ -287,7 +287,7 @@ bool ibServerConfig::OpenSecret(const ibString& base, const ibString& name, cons
 		return false;
 	}
 
-	wxMemoryBuffer raw;
+	ibMemoryBuffer raw;
 	const bool decoded = ibBase64::Read(sealed.wc_str(), sealed.Len(), raw);
 	const unsigned char* bytes = static_cast<const unsigned char*>(raw.GetData());
 	std::vector<unsigned char> plain;

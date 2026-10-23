@@ -18,6 +18,7 @@
 #include <wx/stdpaths.h>
 
 #include "core/programFolder.h"
+#include "core/memory/memoryPool.h"   // Drain — the pool's free list handed back at teardown
 
 #include "backend/session/session.h"
 #include "backend/session/sessionRegistry.h"
@@ -972,13 +973,13 @@ bool ibApplicationInstance::DestroyAppDataEnv()
 		// tracker able to produce its stack. A mutex and a set on every construction, in every
 		// Debug run, to re-answer a settled question was the wrong trade.
 
-		// Last: hand the string pool's free list back. It is a cache, but the CRT cannot tell a
+		// Last: hand the pool's free list (texts' and buffers' blocks) back. It is a cache, but the CRT cannot tell a
 		// cache from a leak — every cached block sits in the exit dump holding its old contents,
 		// which is where the "leaked" fragments of metadata names came from. Draining here, past
 		// the metadata tree and every session, leaves the dump saying only what actually leaked.
 		// Per-module and per-thread (see the note on Drain), so this covers the backend's main
 		// thread — the one that churns strings.
-		ibFStringPool::Drain();
+		ibMemoryPool::Drain();
 
 		return true;
 	}
@@ -1343,11 +1344,11 @@ bool ibApplicationInstance::Login(const wxString& strUserName,
 #include <wx/mstream.h>
 #include <wx/filename.h>
 
-#include "core/fileSystem/fs.h"   // ibReaderMemory — a user/data member is walked before the base is touched
+#include "core/memory/memoryStream.h"   // ibReaderMemory — a user/data member is walked before the base is touched
 
 namespace {
 
-bool ReadZipEntry(wxZipInputStream& zis, wxZipEntry& entry, wxMemoryBuffer& out)
+bool ReadZipEntry(wxZipInputStream& zis, wxZipEntry& entry, ibMemoryBuffer& out)
 {
 	if (!zis.OpenEntry(entry))
 		return false;
@@ -1372,14 +1373,14 @@ bool ReadZipEntry(wxZipInputStream& zis, wxZipEntry& entry, wxMemoryBuffer& out)
 // The same walk LoadUserInfoFromBuffer uses. A member whose chunk header does
 // not fit is a truncated backup: false, and the caller has not cleared anything.
 // An empty member is a real backup (no users, or no rows).
-bool BufferWalks(const wxMemoryBuffer& buffer)
+bool BufferWalks(const ibMemoryBuffer& buffer)
 {
 	if (buffer.GetDataLen() == 0)
 		return true;
 
 	try {
 		ibReaderMemory reader(buffer);
-		u64 id = 0;
+		std::uint64_t id = 0;
 		ibReaderMemory* last = nullptr;
 		while (!reader.eof()) {
 			// The iterator closes `last` itself before reading the next header.
@@ -1422,9 +1423,9 @@ bool ibApplicationInstance::LoadDatabase(wxInputStream& stream)
 		return false;
 	}
 
-	wxMemoryBuffer config;
-	wxMemoryBuffer user;
-	wxMemoryBuffer data;
+	ibMemoryBuffer config;
+	ibMemoryBuffer user;
+	ibMemoryBuffer data;
 	bool sawConfig = false;
 	bool sawUser = false;
 	bool sawData = false;
@@ -1443,7 +1444,7 @@ bool ibApplicationInstance::LoadDatabase(wxInputStream& stream)
 		if (!isConfig && !isUser && !isData)
 			continue;
 
-		wxMemoryBuffer buffer;
+		ibMemoryBuffer buffer;
 		if (!ReadZipEntry(zis, *entry, buffer)) {
 			ibJournalError(wxT("appdata"), "The archive entry '%s' could not be read. Nothing was cleared.", name);
 			return false;
@@ -1562,7 +1563,7 @@ bool ibApplicationInstance::SaveDatabase(wxOutputStream& out)
 	// PutNextEntry sets up the new entry in the archive
 	if (zip.PutNextEntry(wxT("config"))) {
 		//save configuration — a backup without it restores nothing, so it is not written
-		wxMemoryBuffer bufferConfig;
+		ibMemoryBuffer bufferConfig;
 		if (!activeMetaData->SaveConfigToBuffer(bufferConfig))
 			return false;
 		// Wrap the content in an input stream to write it easily
@@ -1572,7 +1573,7 @@ bool ibApplicationInstance::SaveDatabase(wxOutputStream& out)
 
 	if (zip.PutNextEntry(wxT("user"))) {
 		//save users 
-		wxMemoryBuffer bufferUser;
+		ibMemoryBuffer bufferUser;
 		if (!SaveUserInfoToBuffer(bufferUser))
 			return false;
 		// Wrap the content in an input stream to write it easily
@@ -1582,7 +1583,7 @@ bool ibApplicationInstance::SaveDatabase(wxOutputStream& out)
 
 	if (zip.PutNextEntry(wxT("data"))) {
 		//save data
-		wxMemoryBuffer bufferData;
+		ibMemoryBuffer bufferData;
 		if (!activeMetaData->DumpDataToBuffer(bufferData))
 			return false;
 		// Wrap the content in an input stream to write it easily

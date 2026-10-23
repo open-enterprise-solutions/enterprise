@@ -27,7 +27,7 @@ void ibWriteSettingsField(ibDataNode& fields, const wxString& name, const wxStri
 	field.SetValue(ibProtocol::ibRequest::ibListSettings::Name, name);
 	if (!presentation.IsEmpty())
 		field.SetValue(ibProtocol::ibRequest::ibListSettings::Presentation, presentation);
-	field.SetValue(ibProtocol::ibRequest::ibListSettings::Id, static_cast<s32>(id));
+	field.SetValue(ibProtocol::ibRequest::ibListSettings::Id, static_cast<std::int32_t>(id));
 	field.SetValue(ibProtocol::ibRequest::ibListSettings::Available, available);
 	// A field's picture is its source's, of the configuration the fields were read from.
 	if (!picture.IsEmptyPicture())
@@ -131,7 +131,7 @@ void WriteTargetFields(ibDataNode& expanded, ibDataNode& references, const std::
 class ibListSettingsChoice : public ibControlFrame, public ibTypeControlFactory {
 public:
 
-	ibListSettingsChoice(const ibMetaData* metaData, const ibClassID& clsid, const ibValue& value, s32 choice)
+	ibListSettingsChoice(const ibMetaData* metaData, const ibClassID& clsid, const ibValue& value, std::int32_t choice)
 		: m_metaData(metaData), m_typeDesc(clsid), m_value(value), m_choice(choice) {
 	}
 
@@ -186,7 +186,7 @@ private:
 	mutable ibTypeDescription   m_typeDesc;
 	mutable ibSourceDescription m_sourceDesc;
 	ibValue                     m_value;
-	const s32                   m_choice;
+	const std::int32_t                   m_choice;
 	const ibGuid                m_guid = ibGuid::newGuid();
 	unsigned                    m_refCount = 0;
 	bool                        m_chosen = false;
@@ -221,7 +221,7 @@ void ChooseValue(const ibDataNode& act, const ibMetaData* metaData, ibListSettin
 	if (value.GetClassType() != clsid && metaData->IsRegisterCtor(clsid))
 		value = metaData->CreateObject(clsid);
 
-	choosing = new ibListSettingsChoice(metaData, clsid, value, act.GetValue<s32>(ibProtocol::ibRequest::ibListSettings::Choice));
+	choosing = new ibListSettingsChoice(metaData, clsid, value, act.GetValue<std::int32_t>(ibProtocol::ibRequest::ibListSettings::Choice));
 	choosing->ControlIncrRef();
 	ibTypeControlFactory::ChooseValue(choosing);
 }
@@ -275,7 +275,7 @@ bool ibRequestSettings(const ibDataNode& question, ibSettingsDescription& edited
 		// ON THE WAY — a reference field opened: the fields of its targets, and the window asked again with them; a cell's
 		// value to choose: chosen, and the window asked again — with it, when the choice was made at once.
 		if (response.FindField(ibProtocol::ibRequest::ibListSettings::Act) != nullptr) {
-			const ibProtocol::ibRequest::ibListSettings::ibAct act = static_cast<ibProtocol::ibRequest::ibListSettings::ibAct>(response.GetValue<s32>(ibProtocol::ibRequest::ibListSettings::Act));
+			const ibProtocol::ibRequest::ibListSettings::ibAct act = static_cast<ibProtocol::ibRequest::ibListSettings::ibAct>(response.GetValue<std::int32_t>(ibProtocol::ibRequest::ibListSettings::Act));
 			request = SettingsRequest(question, shown, error);
 			if (act == ibProtocol::ibRequest::ibListSettings::ibAct::Expand) {
 				std::vector<ibMetaID> targets;

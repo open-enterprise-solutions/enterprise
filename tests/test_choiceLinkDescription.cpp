@@ -20,9 +20,7 @@ ibDataValue CrossTheWire(const ibDataValue& value)
 	root.SetProperty(wxT("Value"), value);
 	ibWriterMemory writer;
 	ibJsonProvider().Write(root, writer);
-	// ibReaderMemory borrows its bytes — writer.buffer() returns by value, so a temporary
-	// would leave the reader on freed memory (fs.h deletes the rvalue ctor for that reason).
-	wxMemoryBuffer bytes = writer.buffer();
+	ibMemoryBuffer bytes = writer.buffer();
 	ibReaderMemory reader(bytes);
 	ibDataNode read;
 	ibJsonProvider().Read(reader, read);

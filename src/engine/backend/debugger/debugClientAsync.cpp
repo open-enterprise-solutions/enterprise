@@ -177,7 +177,7 @@ void ibDebuggerClient::ibDebuggerClientAdapter::OnSetStack(const ibStackData& da
 	IB_DEBUG_FANOUT(OnSetStack(data));
 }
 
-void ibDebuggerClient::ibDebuggerClientAdapter::OnScreenshot(const wxMemoryBuffer& png, const wxString& focus)
+void ibDebuggerClient::ibDebuggerClientAdapter::OnScreenshot(const ibMemoryBuffer& png, const wxString& focus)
 {
 	IB_DEBUG_FANOUT(OnScreenshot(png, focus));
 }
@@ -200,7 +200,7 @@ void ibDebuggerClient::ibDebuggerClientAdapter::OnJobState(unsigned int which,
 }
 
 void ibDebuggerClient::ibDebuggerClientAdapter::OnComposed(bool answered, const wxString& refusal,
-	const wxMemoryBuffer& result)
+	const ibMemoryBuffer& result)
 {
 	IB_DEBUG_FANOUT(OnComposed(answered, refusal, result));
 }

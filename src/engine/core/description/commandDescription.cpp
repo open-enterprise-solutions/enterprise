@@ -1,11 +1,11 @@
 #include "commandDescription.h"
-#include "core/fileSystem/fs.h"                // ibReaderMemory / ibWriterMemory
+#include "core/memory/memoryStream.h"                // ibReaderMemory / ibWriterMemory
 #include "core/serialize/dataBuilder.h"        // ibDataValue — node form (Binary blob)
 
 ////////////////////////////////////////////////////////////////////////
 
 // A DUMB serializer: it writes / reads the id path AS-IS, nothing else. No metadata, no copy awareness — the
-// id path is stored verbatim ([count : u32][ id : u32 ] per hop). What the ids MEAN (a source vs a command) is
+// id path is stored verbatim ([count : std::uint32_t][ id : std::uint32_t ] per hop). What the ids MEAN (a source vs a command) is
 // resolved by the command OBJECT at walk time, exactly like ibSourceDescriptionMemory leaves meaning to the walk.
 
 bool ibCommandDescriptionMemory::LoadData(ibReaderMemory& reader, ibCommandDescription& cmdDesc)
@@ -16,11 +16,11 @@ bool ibCommandDescriptionMemory::LoadData(ibReaderMemory& reader, ibCommandDescr
 	// admits that (it lets a pre-object-item blob end early); the loop has to admit it too, or a
 	// short one walks the reader past the end of the buffer. See sourceDescription.cpp for the same
 	// guard and the crash that asked for it.
-	if (reader.elapsed() < static_cast<int>(sizeof(u32)))
+	if (reader.elapsed() < static_cast<int>(sizeof(std::uint32_t)))
 		return true;
 	const unsigned int count = reader.r_u32();
 	for (unsigned int i = 0; i < count; i++) {
-		if (reader.elapsed() < static_cast<int>(sizeof(u32)))
+		if (reader.elapsed() < static_cast<int>(sizeof(std::uint32_t)))
 			break;
 		cmdDesc.AppendCommand((ibMetaID)reader.r_u32());
 	}
@@ -75,7 +75,7 @@ bool ibCommandDescriptionMemory::ReadNode(const ibDataValue& value, ibCommandDes
 			cmdDesc.AppendCommand((ibMetaID)hop.AsInt());
 	}
 
-	cmdDesc.SetCommandType((ibInterfaceCommandType)node->GetValue<s32>(kTypeField));
+	cmdDesc.SetCommandType((ibInterfaceCommandType)node->GetValue<std::int32_t>(kTypeField));
 	return true;
 }
 
@@ -85,10 +85,10 @@ bool ibCommandDescriptionMemory::WriteNode(ibDataValue& value, const ibCommandDe
 
 	std::vector<ibDataValue> hops;
 	for (const ibCommandHop& hop : cmdDesc.GetPath())
-		hops.push_back(ibDataValue::Int((s64)hop.m_id));
+		hops.push_back(ibDataValue::Int((std::int64_t)hop.m_id));
 
 	node->AddField(kHopsField, ibDataValue::Array(hops));
-	node->AddField(kTypeField, ibDataValue::Int((s64)cmdDesc.GetCommandType()));
+	node->AddField(kTypeField, ibDataValue::Int((std::int64_t)cmdDesc.GetCommandType()));
 
 	value = ibDataValue::Child(node);
 	return true;

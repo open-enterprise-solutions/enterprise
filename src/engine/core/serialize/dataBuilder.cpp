@@ -55,10 +55,10 @@ ibDateTime ibDataValue::AsDate() const {
 	return date != nullptr ? *date : ibDateTime();
 }
 
-const wxMemoryBuffer& ibDataValue::AsBinary() const {
+const ibMemoryBuffer& ibDataValue::AsBinary() const {
 	Expect(ibDataKind::Binary);
-	static const wxMemoryBuffer s_empty(0);
-	const wxMemoryBuffer* const data = std::get_if<wxMemoryBuffer>(&m_payload);
+	static const ibMemoryBuffer s_empty(0);
+	const ibMemoryBuffer* const data = std::get_if<ibMemoryBuffer>(&m_payload);
 	return data != nullptr ? *data : s_empty;
 }
 
@@ -90,8 +90,8 @@ bool ibDataValue::operator==(const ibDataValue& other) const
 	case ibDataKind::Number: return std::get<ibNumber>(m_payload) == std::get<ibNumber>(other.m_payload);
 	case ibDataKind::Date:   return std::get<ibDateTime>(m_payload) == std::get<ibDateTime>(other.m_payload);
 	case ibDataKind::Binary: {
-		const wxMemoryBuffer& data = std::get<wxMemoryBuffer>(m_payload);
-		const wxMemoryBuffer& otherData = std::get<wxMemoryBuffer>(other.m_payload);
+		const ibMemoryBuffer& data = std::get<ibMemoryBuffer>(m_payload);
+		const ibMemoryBuffer& otherData = std::get<ibMemoryBuffer>(other.m_payload);
 		return data.GetDataLen() == otherData.GetDataLen()
 			&& (data.GetDataLen() == 0 || std::memcmp(data.GetData(), otherData.GetData(), data.GetDataLen()) == 0);
 	}
@@ -125,7 +125,7 @@ std::size_t ibDataValue::Weight() const
 {
 	switch (Kind()) {
 	case ibDataKind::String: return std::get<ibString>(m_payload).length() + 2;
-	case ibDataKind::Binary: return std::get<wxMemoryBuffer>(m_payload).GetDataLen();
+	case ibDataKind::Binary: return std::get<ibMemoryBuffer>(m_payload).GetDataLen();
 	case ibDataKind::Child: {
 		const std::shared_ptr<ibDataNode>& child = std::get<std::shared_ptr<ibDataNode>>(m_payload);
 		return child ? child->Weight() : 1;
@@ -163,17 +163,17 @@ ibDataValue ibDataValue::Bool(bool value) {
 ibDataValue ibDataValue::Number(const ibNumber& value) {
 	ibDataValue v; v.m_payload.emplace<ibNumber>(value); return v;
 }
-ibDataValue ibDataValue::Int(s64 value) {
+ibDataValue ibDataValue::Int(std::int64_t value) {
 	ibDataValue v; v.m_payload.emplace<ibNumber>((int64_t)value); return v;
 }
-ibDataValue ibDataValue::UInt(u64 value) {
+ibDataValue ibDataValue::UInt(std::uint64_t value) {
 	ibDataValue v; v.m_payload.emplace<ibNumber>((uint64_t)value); return v;
 }
 ibDataValue ibDataValue::Date(const ibDateTime& date) {
 	ibDataValue v; v.m_payload.emplace<ibDateTime>(date); return v;
 }
-ibDataValue ibDataValue::Binary(const wxMemoryBuffer& data) {
-	ibDataValue v; v.m_payload.emplace<wxMemoryBuffer>(data); return v;
+ibDataValue ibDataValue::Binary(const ibMemoryBuffer& data) {
+	ibDataValue v; v.m_payload.emplace<ibMemoryBuffer>(data); return v;
 }
 ibDataValue ibDataValue::Child(const std::shared_ptr<ibDataNode>& child) {
 	ibDataValue v; v.m_payload.emplace<std::shared_ptr<ibDataNode>>(child); return v;
@@ -211,17 +211,17 @@ ibDataNode* ibDataNode::ChildOf(const ibDataValue* value) {
 // Block ids are a binary-format detail (they live here, not on the node).
 ////////////////////////////////////////////////////////////////////////////
 namespace {
-	const u64 kMetaBlock   = 0x2350; // node's own data: version + fields + props + raw remainder
-	const u64 kChildBlock  = 0x2370; // node's children (full forms)
+	const std::uint64_t kMetaBlock   = 0x2350; // node's own data: version + fields + props + raw remainder
+	const std::uint64_t kChildBlock  = 0x2370; // node's children (full forms)
 	// Per-node stamp; bump on any field-encoding change. A Date entry, by the stamp (ReadEntry):
 	//   3 (2026-09-30) - an ibDateTime's count: milliseconds of the wall from 0001-01-01 (fdatetime.h);
 	//   2              - the same reading counted from 1970-01-01, the first form of it (PR #217);
 	//   1              - an instant of the writing machine's clock.
-	const u32 kFormatVersion = 3;
+	const std::uint32_t kFormatVersion = 3;
 }
 
 // A named entry = name + value payload (used by the fields / properties areas).
-void ibBinaryProvider::WriteEntry(ibWriter& writer, const ibString& name, const ibDataValue& v) const {
+void ibBinaryProvider::WriteEntry(ibWriterMemory& writer, const ibString& name, const ibDataValue& v) const {
 	writer.w_stringZ(name);
 	WriteValue(writer, v);
 }
@@ -229,24 +229,24 @@ void ibBinaryProvider::WriteEntry(ibWriter& writer, const ibString& name, const 
 // A value payload = kind + value. Composites recurse: a Child writes its sub-node
 // (fields + props); an Array writes its items (each a nameless value). This is the
 // JSON-shaped model — scalars, objects (Child), arrays (Array). Binary is a leaf.
-void ibBinaryProvider::WriteValue(ibWriter& writer, const ibDataValue& v) const {
-	writer.w_u8((u8)v.Kind());
+void ibBinaryProvider::WriteValue(ibWriterMemory& writer, const ibDataValue& v) const {
+	writer.w_u8((std::uint8_t)v.Kind());
 	switch (v.Kind()) {
 	case ibDataKind::String: writer.w_stringZ(v.AsString()); break;
 	case ibDataKind::Bool:   writer.w_u8(v.AsBool() ? 1 : 0); break;
 	case ibDataKind::Date:   writer.w_s64(v.AsDate().GetValue()); break;
 	case ibDataKind::Number: {
-		const wxMemoryBuffer b = v.AsNumber().GetBuffer();
-		writer.w_u32((u32)b.GetDataLen());
+		const ibMemoryBuffer b = v.AsNumber().GetBuffer();
+		writer.w_u32((std::uint32_t)b.GetDataLen());
 		if (b.GetDataLen())
-			writer.w(b.GetData(), (u32)b.GetDataLen());
+			writer.w(b.GetData(), (std::uint32_t)b.GetDataLen());
 		break;
 	}
 	case ibDataKind::Binary: {
-		const wxMemoryBuffer& b = v.AsBinary();
-		writer.w_u32((u32)b.GetDataLen());
+		const ibMemoryBuffer& b = v.AsBinary();
+		writer.w_u32((std::uint32_t)b.GetDataLen());
 		if (b.GetDataLen())
-			writer.w(b.GetData(), (u32)b.GetDataLen());
+			writer.w(b.GetData(), (std::uint32_t)b.GetDataLen());
 		break;
 	}
 	case ibDataKind::Child: {
@@ -258,7 +258,7 @@ void ibBinaryProvider::WriteValue(ibWriter& writer, const ibDataValue& v) const 
 	}
 	case ibDataKind::Array: {
 		const std::vector<ibDataValue>& a = v.AsArray();
-		writer.w_u32((u32)a.size());
+		writer.w_u32((std::uint32_t)a.size());
 		for (const ibDataValue& item : a)
 			WriteValue(writer, item);
 		break;
@@ -277,7 +277,7 @@ void RefuseIfBinaryStackLow()
 
 }
 
-ibDataValue ibBinaryProvider::ReadEntry(ibReader& reader, u32 version) const {
+ibDataValue ibBinaryProvider::ReadEntry(ibReaderMemory& reader, std::uint32_t version) const {
 	RefuseIfBinaryStackLow();
 	const ibDataKind kind = (ibDataKind)reader.r_u8();
 	switch (kind) {
@@ -295,7 +295,7 @@ ibDataValue ibBinaryProvider::ReadEntry(ibReader& reader, u32 version) const {
 		// -62135604000000 and 0 for "no date": both are the empty date, and any other instant crosses the
 		// bridge - the parts THIS machine's clock shows for it, which are the parts the writer saw wherever
 		// this machine stands in the writer's zone (a configuration and its files rarely change zones).
-		const s64 stored = reader.r_s64();
+		const std::int64_t stored = reader.r_s64();
 		if (version >= 3)
 			return ibDataValue::Date(ibDateTime(stored));
 		if (stored == 0 || (version == 1 && stored == -62135604000000ll))
@@ -305,8 +305,8 @@ ibDataValue ibBinaryProvider::ReadEntry(ibReader& reader, u32 version) const {
 		return ibDataValue::Date(ibDateTime::OfWxDateTime(wxDateTime(wxLongLong(stored))));
 	}
 	case ibDataKind::Number: {
-		const u32 len = reader.r_u32();
-		wxMemoryBuffer b;
+		const std::uint32_t len = reader.r_u32();
+		ibMemoryBuffer b;
 		if (len) {
 			reader.r(b.GetAppendBuf(len), len);
 			b.UngetAppendBuf(len);
@@ -315,8 +315,8 @@ ibDataValue ibBinaryProvider::ReadEntry(ibReader& reader, u32 version) const {
 		return ibDataValue::Number(n);
 	}
 	case ibDataKind::Binary: {
-		const u32 len = reader.r_u32();
-		wxMemoryBuffer b;
+		const std::uint32_t len = reader.r_u32();
+		ibMemoryBuffer b;
 		if (len) {
 			reader.r(b.GetAppendBuf(len), len);
 			b.UngetAppendBuf(len);
@@ -331,10 +331,10 @@ ibDataValue ibBinaryProvider::ReadEntry(ibReader& reader, u32 version) const {
 		return ibDataValue::Child(c);
 	}
 	case ibDataKind::Array: {
-		const u32 count = reader.r_u32();
+		const std::uint32_t count = reader.r_u32();
 		std::vector<ibDataValue> a;
 		a.reserve(count);
-		for (u32 i = 0; i < count; i++)
+		for (std::uint32_t i = 0; i < count; i++)
 			a.push_back(ReadEntry(reader, version));
 		return ibDataValue::Array(a);
 	}
@@ -342,32 +342,32 @@ ibDataValue ibBinaryProvider::ReadEntry(ibReader& reader, u32 version) const {
 	}
 }
 
-void ibBinaryProvider::WriteFields(const ibDataNode& node, ibWriter& writer) const {
+void ibBinaryProvider::WriteFields(const ibDataNode& node, ibWriterMemory& writer) const {
 	const auto& fields = node.Fields();
-	writer.w_u32((u32)fields.size());
+	writer.w_u32((std::uint32_t)fields.size());
 	for (const auto& f : fields)
 		WriteEntry(writer, f.first, f.second);
 }
 
-void ibBinaryProvider::ReadFields(ibReader& reader, ibDataNode& node, u32 version) const {
-	const u32 count = reader.r_u32();
-	for (u32 i = 0; i < count; i++) {
+void ibBinaryProvider::ReadFields(ibReaderMemory& reader, ibDataNode& node, std::uint32_t version) const {
+	const std::uint32_t count = reader.r_u32();
+	for (std::uint32_t i = 0; i < count; i++) {
 		ibString name;
 		reader.r_stringZ(name);
 		node.AddField(name, ReadEntry(reader, version));
 	}
 }
 
-void ibBinaryProvider::WriteProps(const ibDataNode& node, ibWriter& writer) const {
+void ibBinaryProvider::WriteProps(const ibDataNode& node, ibWriterMemory& writer) const {
 	const auto& props = node.Properties();
-	writer.w_u32((u32)props.size());
+	writer.w_u32((std::uint32_t)props.size());
 	for (const auto& p : props)
 		WriteEntry(writer, p.first, p.second);
 }
 
-void ibBinaryProvider::ReadProps(ibReader& reader, ibDataNode& node, u32 version) const {
-	const u32 count = reader.r_u32();
-	for (u32 i = 0; i < count; i++) {
+void ibBinaryProvider::ReadProps(ibReaderMemory& reader, ibDataNode& node, std::uint32_t version) const {
+	const std::uint32_t count = reader.r_u32();
+	for (std::uint32_t i = 0; i < count; i++) {
 		ibString name;
 		reader.r_stringZ(name);
 		node.SetProperty(name, ReadEntry(reader, version));
@@ -378,22 +378,22 @@ void ibBinaryProvider::ReadProps(ibReader& reader, ibDataNode& node, u32 version
 // own children, recursive). This is what lets a whole control tree — a form's header plus
 // its subordinate controls — ride inside ONE property value. Distinct from the top-level
 // chunk-framed WriteNode/kChildBlock used for the metaobject tree.
-void ibBinaryProvider::WriteChildren(const ibDataNode& node, ibWriter& writer) const {
+void ibBinaryProvider::WriteChildren(const ibDataNode& node, ibWriterMemory& writer) const {
 	const auto& children = node.Children();
-	writer.w_u32((u32)children.size());
+	writer.w_u32((std::uint32_t)children.size());
 	for (const ibDataNode& child : children) {
-		writer.w_u64((u64)child.GetClsid());
-		writer.w_s32((s32)child.GetMetaId());
+		writer.w_u64((std::uint64_t)child.GetClsid());
+		writer.w_s32((std::int32_t)child.GetMetaId());
 		WriteFields(child, writer);
 		WriteProps(child, writer);
 		WriteChildren(child, writer);
 	}
 }
 
-void ibBinaryProvider::ReadChildren(ibReader& reader, ibDataNode& node, u32 version) const {
+void ibBinaryProvider::ReadChildren(ibReaderMemory& reader, ibDataNode& node, std::uint32_t version) const {
 	RefuseIfBinaryStackLow();
-	const u32 count = reader.r_u32();
-	for (u32 i = 0; i < count; i++) {
+	const std::uint32_t count = reader.r_u32();
+	for (std::uint32_t i = 0; i < count; i++) {
 		const ibClassID clsid  = (ibClassID)reader.r_u64();
 		const ibMetaID  metaId = (ibMetaID)reader.r_s32();
 		ibDataNode& child = node.AddChild(clsid, metaId);
@@ -408,16 +408,16 @@ void ibBinaryProvider::ReadChildren(ibReader& reader, ibDataNode& node, u32 vers
 // root with its known clsid; a standalone node like a form control needs none). This is the
 // exact INNER that ReadNode consumes, so Write and Read are true inverses. CHILDREN inside
 // kChildBlock ARE framed (WriteNode) so the load can iterate them by clsid/metaId.
-void ibBinaryProvider::WriteInner(const ibDataNode& node, ibWriter& writer) const {
+void ibBinaryProvider::WriteInner(const ibDataNode& node, ibWriterMemory& writer) const {
 	// meta block = version + fields + props + raw remainder
 	ibWriterMemory metaBuf;
 	metaBuf.w_u32(kFormatVersion);
 	WriteFields(node, metaBuf);
 	WriteProps(node, metaBuf);
-	const wxMemoryBuffer& raw = node.RawData();
-	metaBuf.w_u32((u32)raw.GetDataLen());
+	const ibMemoryBuffer& raw = node.RawData();
+	metaBuf.w_u32((std::uint32_t)raw.GetDataLen());
 	if (raw.GetDataLen())
-		metaBuf.w(raw.GetData(), (u32)raw.GetDataLen());
+		metaBuf.w(raw.GetData(), (std::uint32_t)raw.GetDataLen());
 
 	// child block = children as full (identity-framed) forms
 	ibWriterMemory childBuf;
@@ -430,32 +430,32 @@ void ibBinaryProvider::WriteInner(const ibDataNode& node, ibWriter& writer) cons
 
 // A node framed by identity: chunk(clsid){ chunk(metaId){ inner } }. The CHILD form — the
 // parent's ReadNode iterates kChildBlock by clsid/metaId and reads each child's inner.
-void ibBinaryProvider::WriteNode(const ibDataNode& node, ibWriter& writer) const {
+void ibBinaryProvider::WriteNode(const ibDataNode& node, ibWriterMemory& writer) const {
 	ibWriterMemory inner;
 	WriteInner(node, inner);
 
 	ibWriterMemory meta;
-	meta.w_chunk((u64)node.GetMetaId(), inner.pointer(), inner.size());
-	writer.w_chunk((u64)node.GetClsid(), meta.pointer(), meta.size());
+	meta.w_chunk((std::uint64_t)node.GetMetaId(), inner.pointer(), inner.size());
+	writer.w_chunk((std::uint64_t)node.GetClsid(), meta.pointer(), meta.size());
 }
 
-void ibBinaryProvider::ReadNode(ibReader& reader, ibDataNode& node) const {
+void ibBinaryProvider::ReadNode(ibReaderMemory& reader, ibDataNode& node) const {
 	RefuseIfBinaryStackLow();
 	// `reader` is this node's INNER content { kMetaBlock, kChildBlock }.
 	// Children — each a full form chunk(clsid){chunk(metaId){inner}}. The
 	// iterator self-closes the previous reader on every call (incl. the final
 	// null-returning one), so the whole chain is freed without explicit close.
-	if (ibReader* childBlock = reader.open_chunk(kChildBlock)) {
-		ibReader* prevClsid = nullptr;
+	if (ibReaderMemory* childBlock = reader.open_chunk(kChildBlock)) {
+		ibReaderMemory* prevClsid = nullptr;
 		for (;;) {
-			u64 clsid = 0;
-			ibReader* clsidChunk = childBlock->open_chunk_iterator(clsid, prevClsid);
+			std::uint64_t clsid = 0;
+			ibReaderMemory* clsidChunk = childBlock->open_chunk_iterator(clsid, prevClsid);
 			if (!clsidChunk)
 				break;
-			ibReader* prevMeta = nullptr;
+			ibReaderMemory* prevMeta = nullptr;
 			for (;;) {
-				u64 metaId = 0;
-				ibReader* metaChunk = clsidChunk->open_chunk_iterator(metaId, prevMeta);
+				std::uint64_t metaId = 0;
+				ibReaderMemory* metaChunk = clsidChunk->open_chunk_iterator(metaId, prevMeta);
 				if (!metaChunk)
 					break;
 				ibDataNode& child = node.AddChild((ibClassID)clsid, (ibMetaID)metaId);
@@ -467,13 +467,13 @@ void ibBinaryProvider::ReadNode(ibReader& reader, ibDataNode& node) const {
 		childBlock->close();
 	}
 
-	if (ibReader* metaBlock = reader.open_chunk(kMetaBlock)) {
-		const u32 version = metaBlock->r_u32();   // the node's format stamp - a Date entry reads by it
+	if (ibReaderMemory* metaBlock = reader.open_chunk(kMetaBlock)) {
+		const std::uint32_t version = metaBlock->r_u32();   // the node's format stamp - a Date entry reads by it
 		ReadFields(*metaBlock, node, version);
 		ReadProps(*metaBlock, node, version);
-		const u32 rawLen = metaBlock->r_u32();
+		const std::uint32_t rawLen = metaBlock->r_u32();
 		if (rawLen) {
-			wxMemoryBuffer raw;
+			ibMemoryBuffer raw;
 			metaBlock->r(raw.GetAppendBuf(rawLen), rawLen);
 			raw.UngetAppendBuf(rawLen);
 			node.SetRawData(raw);
@@ -482,7 +482,7 @@ void ibBinaryProvider::ReadNode(ibReader& reader, ibDataNode& node) const {
 	}
 }
 
-bool ibBinaryProvider::Write(const ibDataNode& root, ibWriter& writer) const {
+bool ibBinaryProvider::Write(const ibDataNode& root, ibWriterMemory& writer) const {
 	// Root CONTENT only — symmetric with Read. A container that needs an identity frame
 	// (config: chunk(clsid){chunk(metaId){...}}) wraps this; a standalone node (form
 	// control) needs no frame. Children are framed internally (WriteInner -> WriteNode).
@@ -490,7 +490,7 @@ bool ibBinaryProvider::Write(const ibDataNode& root, ibWriter& writer) const {
 	return true;
 }
 
-bool ibBinaryProvider::Read(ibReader& reader, ibDataNode& root) const {
+bool ibBinaryProvider::Read(ibReaderMemory& reader, ibDataNode& root) const {
 	// `reader` is the root's INNER content (what Write produced). A framed container
 	// (config) peeled clsid/metaId before calling; a standalone node passes it straight.
 	ReadNode(reader, root);

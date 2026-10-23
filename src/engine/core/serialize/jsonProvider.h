@@ -49,8 +49,8 @@ public:
 	// text and for a tree another reader made of the same text (the thin client's, ibReadProtocolNode).
 	static ibDataValue ReadString(const ibString& text);
 
-	bool Write(const ibDataNode& root, ibWriter& writer) const override;
-	bool Read(ibReader& reader, ibDataNode& root) const override;  // messages, before any login (see above)
+	bool Write(const ibDataNode& root, ibWriterMemory& writer) const override;
+	bool Read(ibReaderMemory& reader, ibDataNode& root) const override;  // messages, before any login (see above)
 
 	// …and the same view as the ENGINE'S TEXT — the characters written straight into it, and read back from the very
 	// buffer they lie in: a text that stays in the process (a file base's answer, its client's request) is never

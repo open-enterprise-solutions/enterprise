@@ -2,7 +2,7 @@
 #include "backend/propertyManager/property/variant/variantSource.h"   // GetGuidByID / GetIdByGuid — the hop <-> guid resolve
 #include "core/serialize/dataBuilder.h"   // ibDataValue — node value (Binary)
 #include "core/description/sourceDescription.h"       // ibSourceDescription / ibSourceHop (the id path the variant holds)
-#include "core/fileSystem/fs.h"           // ibReaderMemory / ibWriterMemory — the guid-keyed node blob
+#include "core/memory/memoryStream.h"           // ibReaderMemory / ibWriterMemory — the guid-keyed node blob
 #include "backend/functionalOption/functionalOptionGate.h"   // ibFunctionalOptionGate::AnyUnavailable — IsAvailable
 
 
@@ -158,14 +158,14 @@ bool ibPropertySource::CopyNodeValue(ibDataValue& value) const
 
 bool ibPropertySource::PasteNodeValue(const ibDataValue& value)
 {
-	const wxMemoryBuffer& data = value.AsBinary();
+	const ibMemoryBuffer& data = value.AsBinary();
 	if (data.GetDataLen() == 0)
 		return true;
 	const ibVariantDataSource* variant = get_cell_variant<ibVariantDataSource>();
 	ibSourceDescription& desc = GetValueAsSourceDesc();
 	desc.ClearSource();
 	ibReaderMemory reader(data);
-	if (reader.elapsed() < static_cast<int>(sizeof(u32)))
+	if (reader.elapsed() < static_cast<int>(sizeof(std::uint32_t)))
 		return true;
 	const unsigned int count = reader.r_u32();
 	for (unsigned int i = 0; i < count; i++) {
@@ -247,7 +247,7 @@ ibDataNode& AppendSource(ibDataNode& parent, const wxString& label, const std::v
 	std::vector<ibDataValue> hops;
 	for (const ibSourceHop& hop : path) {
 		std::shared_ptr<ibDataNode> node = std::make_shared<ibDataNode>();
-		node->SetValue(ibProtocol::ibView::ibFormDesigner::Id, static_cast<s32>(hop.m_id));
+		node->SetValue(ibProtocol::ibView::ibFormDesigner::Id, static_cast<std::int32_t>(hop.m_id));
 		if (hop.m_type != g_valueUndefinedCLSID)
 			node->SetValue(ibProtocol::ibView::ibFormDesigner::Type, wxString::Format(wxT("%llu"), static_cast<unsigned long long>(hop.m_type)));
 		hops.push_back(ibDataValue::Child(node));
@@ -336,7 +336,7 @@ bool ibPropertySource::GetProtocolValue(ibDataNode& row, ibReader reader)
 		// What the desktop's source window filtered its tree by (the owner's GetFilterSourceDataType): a table, a column
 		// of the table its table box is bound to, or an attribute.
 		if (factory != nullptr)
-			row.SetValue(ibProtocol::ibSchema::ibProperties::SourceDataType, static_cast<s32>(factory->GetFilterSourceDataType()));
+			row.SetValue(ibProtocol::ibSchema::ibProperties::SourceDataType, static_cast<std::int32_t>(factory->GetFilterSourceDataType()));
 		return true;
 	}
 

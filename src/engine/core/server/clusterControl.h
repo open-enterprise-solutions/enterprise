@@ -110,13 +110,13 @@ namespace ibClusterControl {
 			const std::shared_ptr<ibDataNode> item = std::make_shared<ibDataNode>();
 			item->SetValue(Base, server.m_base);
 			item->SetValue(State, ibString(Word(server.m_state)));
-			item->SetValue(Pid, static_cast<s32>(server.m_pid));
-			item->SetValue(Falls, static_cast<s32>(server.m_falls));
+			item->SetValue(Pid, static_cast<std::int32_t>(server.m_pid));
+			item->SetValue(Falls, static_cast<std::int32_t>(server.m_falls));
 			item->SetValue(Cause, server.m_cause);
 			items.push_back(ibDataValue::Child(item));
 		}
 		ibDataNode list;
-		list.SetValue(Port, static_cast<s32>(port));
+		list.SetValue(Port, static_cast<std::int32_t>(port));
 		list.SetField(Servers, ibDataValue::Array(std::move(items)));
 		return Text(list);
 	}
@@ -129,7 +129,7 @@ namespace ibClusterControl {
 		const ibDataValue* const items = list.FindField(Servers);
 		if (items == nullptr || items->Kind() != ibDataKind::Array)
 			return false;
-		port = static_cast<std::uint16_t>(list.GetValue<s32>(Port));
+		port = static_cast<std::uint16_t>(list.GetValue<std::int32_t>(Port));
 		servers.clear();
 		for (const ibDataValue& item : items->AsArray()) {
 			if (item.Kind() != ibDataKind::Child || item.AsChild() == nullptr)
@@ -138,8 +138,8 @@ namespace ibClusterControl {
 			ibClusterServer server;
 			server.m_base      = read.GetValue<ibString>(Base);
 			server.m_state     = StateOf(read.GetValue<ibString>(State));
-			server.m_pid       = read.GetValue<s32>(Pid);
-			server.m_falls     = static_cast<unsigned>(read.GetValue<s32>(Falls));
+			server.m_pid       = read.GetValue<std::int32_t>(Pid);
+			server.m_falls     = static_cast<unsigned>(read.GetValue<std::int32_t>(Falls));
 			server.m_cause     = read.GetValue<ibString>(Cause);
 			servers.push_back(std::move(server));
 		}

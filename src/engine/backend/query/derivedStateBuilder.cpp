@@ -413,7 +413,7 @@ bool Collapse(const ibSchemaTable& derived, ibDatabaseConnectionHolder* holder)
 				break;
 			}
 			default: {   // Blob / Binary / Guid — the bytes as they are stored
-				wxMemoryBuffer bytes(0);
+				ibMemoryBuffer bytes(0);
 				rows.GetResultBlob(f.m_name, bytes);
 				// An empty but present blob has no spelling a statement can bind (ibParamOfConst takes it
 				// for a NULL), so a row that holds one cannot be named - it is read, and left alone.

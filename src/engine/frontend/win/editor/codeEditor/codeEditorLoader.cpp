@@ -989,7 +989,6 @@ bool ibCodeEditor::LoadFromKeyWord(const wxString& keyword)
 	return true;
 }
 
-#include "core/fileSystem/fs.h"
 
 void ibCodeEditor::ShowAutoComplete(const ibDebugAutoCompleteData& autoCompleteData)
 {

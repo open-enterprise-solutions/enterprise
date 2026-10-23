@@ -127,7 +127,7 @@ namespace {
 ibDataNode& AppendItem(ibDataNode& parent, const ibPropertyChoiceList& list, unsigned int index, const ibMetaData* metaData)
 {
 	ibDataNode& item = parent.AddChild(0, static_cast<ibMetaID>(parent.Children().size() + 1));
-	item.SetValue(ibProtocol::ibSchema::ibProperties::Id, static_cast<s32>(list.GetId(index)));
+	item.SetValue(ibProtocol::ibSchema::ibProperties::Id, static_cast<std::int32_t>(list.GetId(index)));
 	item.SetValue(ibProtocol::ibSchema::ibProperties::Title, list.GetName(index));
 	const ibPictureDescription& picture = list.GetPicture(index);
 	if (!picture.IsEmptyPicture())
@@ -185,10 +185,10 @@ bool ibPropertyChoiceParameters::GetProtocolValue(ibDataNode& row, ibReader read
 		ibMetaID obvious = 0;
 		ibChoiceParametersForSource(m_owner, static_cast<ibMetaID>(neighbours.GetId(index)), fits, &obvious);
 		if (obvious != 0)
-			source.SetValue(ibProtocol::ibSchema::ibProperties::Default, static_cast<s32>(obvious));
+			source.SetValue(ibProtocol::ibSchema::ibProperties::Default, static_cast<std::int32_t>(obvious));
 		for (const ibMetaID& fit : fits) {
 			ibDataNode& item = source.AddChild(0, static_cast<ibMetaID>(source.Children().size() + 1));
-			item.SetValue(ibProtocol::ibSchema::ibProperties::Id, static_cast<s32>(fit));
+			item.SetValue(ibProtocol::ibSchema::ibProperties::Id, static_cast<std::int32_t>(fit));
 		}
 	}
 	row.SetProperty(ibProtocol::ibSchema::ibProperties::Sources, ibDataValue::Child(sources));

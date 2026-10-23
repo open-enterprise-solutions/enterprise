@@ -81,7 +81,7 @@ ibDataNode& AppendRow(ibDataNode& parent, ibMetaID id, const wxString& label, co
 	std::vector<ibDataValue> hops;
 	for (const ibSourceHop& hop : path) {
 		std::shared_ptr<ibDataNode> node = std::make_shared<ibDataNode>();
-		node->SetValue(ibProtocol::ibView::ibFormDesigner::Id, static_cast<s32>(hop.m_id));
+		node->SetValue(ibProtocol::ibView::ibFormDesigner::Id, static_cast<std::int32_t>(hop.m_id));
 		if (hop.m_type != g_valueUndefinedCLSID)
 			node->SetValue(ibProtocol::ibView::ibFormDesigner::Type, ClsidText(hop.m_type));
 		hops.push_back(ibDataValue::Child(node));
@@ -201,7 +201,7 @@ void ibFormDesignView::ReadPath(const ibDataNode& node, ibSourceDescription& des
 			continue;
 		unsigned long long type = 0;
 		hop.AsChild()->GetValue<wxString>(ibProtocol::ibView::ibFormDesigner::Type).ToULongLong(&type);
-		desc.AppendSource(static_cast<ibSourceId>(hop.AsChild()->GetValue<s32>(ibProtocol::ibView::ibFormDesigner::Id)),
+		desc.AppendSource(static_cast<ibSourceId>(hop.AsChild()->GetValue<std::int32_t>(ibProtocol::ibView::ibFormDesigner::Id)),
 			type != 0 ? static_cast<ibClassID>(type) : g_valueUndefinedCLSID);
 	}
 }
@@ -268,20 +268,20 @@ bool ibFormDesignView::FetchAttribute(const ibDataNode& request, ibDataNode& res
 {
 	// The desktop's tree's handlers, on the form the client holds — not undoable here: the client takes the form answered
 	// as an edit of its own.
-	const ibMetaID id = request.GetValue<s32>(ibProtocol::ibView::ibFormDesigner::Attribute);
+	const ibMetaID id = request.GetValue<std::int32_t>(ibProtocol::ibView::ibFormDesigner::Attribute);
 	ibFormAttributeValue* const entry = id != 0 ? m_valueForm->FindAttributeById(id) : nullptr;
 	if (id != 0 && entry == nullptr)
 		return false;
 
 	// A value table's column of it — the row under the attribute (the desktop's SelectColumnInInspector).
-	const ibMetaID columnId = request.GetValue<s32>(ibProtocol::ibView::ibFormDesigner::Column);
+	const ibMetaID columnId = request.GetValue<std::int32_t>(ibProtocol::ibView::ibFormDesigner::Column);
 	ibPropertyObject* const column = columnId != 0 ? FindColumnById(entry, columnId) : nullptr;
 	if (columnId != 0 && column == nullptr)
 		return false;
 
 	ibFormAttributeValue* shown = entry;
 	ibMetaID shownColumn = columnId;
-	switch (static_cast<ibProtocol::ibView::ibFormDesigner::ibCommand>(request.GetValue<s32>(ibProtocol::ibView::ibFormDesigner::Command))) {
+	switch (static_cast<ibProtocol::ibView::ibFormDesigner::ibCommand>(request.GetValue<std::int32_t>(ibProtocol::ibView::ibFormDesigner::Command))) {
 	case ibProtocol::ibView::ibFormDesigner::ibCommand::Create:
 		// Never empty: a unique name and the default type (String), the type changed in the inspector after — the
 		// desktop's OnAdd, the new one shown.
@@ -363,8 +363,8 @@ bool ibFormDesignView::FetchAttribute(const ibDataNode& request, ibDataNode& res
 
 	WriteForm(response);
 	if (shown != nullptr)
-		response.SetValue(ibProtocol::ibView::ibFormDesigner::Attribute, static_cast<s32>(shown->GetId()));
+		response.SetValue(ibProtocol::ibView::ibFormDesigner::Attribute, static_cast<std::int32_t>(shown->GetId()));
 	if (shown != nullptr && shownColumn != 0)
-		response.SetValue(ibProtocol::ibView::ibFormDesigner::Column, static_cast<s32>(shownColumn));
+		response.SetValue(ibProtocol::ibView::ibFormDesigner::Column, static_cast<std::int32_t>(shownColumn));
 	return true;
 }

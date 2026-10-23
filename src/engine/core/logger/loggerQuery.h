@@ -9,7 +9,7 @@
 // asks it — the desktop's beside it, the client's through the tab that shows it. The question and the row
 // are one shape for both, so they live here.
 
-#include <wx/buffer.h>
+#include "core/memory/memoryBuffer.h"
 #include <wx/string.h>
 
 #include <cstddef>
@@ -34,7 +34,7 @@ struct ibLogRow {
     // 🛑 IT WAS WRITTEN AND NEVER SELECTED. The column has existed since 2026-06-28 and the reader's
     // SELECT stopped one field short of it, so even after the writer was fixed the value would have
     // gone into a column nobody reads — the same defect twice, at the two ends of one row.
-    wxMemoryBuffer details;
+    ibMemoryBuffer details;
 };
 
 // Filter passed to ibLoggerReader::Query / Count. Zero / empty fields

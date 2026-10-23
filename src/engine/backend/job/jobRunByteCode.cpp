@@ -17,7 +17,7 @@
 #include "backend/compiler/compileModule.h" // ...parented to the root, which is what it must see
 #include "backend/moduleInfo.h"             // GetCompileModule - which is how the root is asked for
 #include "core/stringUtils.h"            // CompareString - how this tree compares a NAME
-#include "core/fileSystem/fs.h"          // ibWriterMemory / ibReaderMemory - the wire format below
+#include "core/memory/memoryStream.h"          // ibWriterMemory / ibReaderMemory - the wire format below
 
 #include <wx/app.h>                         // wxTheApp - the thread that may touch a window
 
@@ -129,10 +129,10 @@ void ibJobRunByteCodeState::Write(ibWriterMemory& to) const
 	to.w_stringZ(m_result);
 	to.w_u8(m_complete ? 1 : 0);
 	to.w_u8(m_known ? 1 : 0);
-	to.w_u32((u32)m_output.size());
+	to.w_u32((std::uint32_t)m_output.size());
 	for (const ibLine& line : m_output) {
 		to.w_stringZ(line.m_text);
-		to.w_u8((u8)line.m_status);
+		to.w_u8((std::uint8_t)line.m_status);
 	}
 }
 

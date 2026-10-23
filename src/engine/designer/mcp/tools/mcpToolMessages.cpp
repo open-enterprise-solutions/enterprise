@@ -167,7 +167,7 @@ public:
 		if (params.FindField(ArgProblemsOnly().Name()) != nullptr)
 			problemsOnly = ArgProblemsOnly().Flag(params);
 
-		const s32 asked = (s32)ArgLimit().Whole(params);
+		const std::int32_t asked = (std::int32_t)ArgLimit().Whole(params);
 		const size_t limit = (asked > 0) ? (size_t)asked : 40;
 
 		std::vector<ibDataValue> lines;
@@ -189,7 +189,7 @@ public:
 			if (!message.m_docPath.IsEmpty())
 				entry->SetValue(wxT("module"), message.m_docPath);
 			if (message.m_line != wxNOT_FOUND)
-				entry->AddField(wxT("line"), ibDataValue::Int((s64)message.m_line));
+				entry->AddField(wxT("line"), ibDataValue::Int((std::int64_t)message.m_line));
 
 			lines.push_back(ibDataValue::Child(entry));
 		}
@@ -198,7 +198,7 @@ public:
 		if (lines.size() > limit)
 			lines.erase(lines.begin(), lines.begin() + (lines.size() - limit));
 
-		result.AddField(wxT("count"), ibDataValue::Int((s64)lines.size()));
+		result.AddField(wxT("count"), ibDataValue::Int((std::int64_t)lines.size()));
 		result.AddField(wxT("messages"), ibDataValue::Array(lines));
 
 		if (lines.empty())

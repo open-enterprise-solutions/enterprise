@@ -279,7 +279,7 @@ TEST(JobSchedule, Serialization_AbsentFieldsKeepTheirDefaults)
 	// existed must read back as "not restricted" — never as "restricted to
 	// nothing", which would be a job that silently never runs.
 	auto root = std::make_shared<ibDataNode>();
-	root->SetValue(wxT("IntervalSeconds"), (s32)3600);   // an old blob knowing one field
+	root->SetValue(wxT("IntervalSeconds"), (std::int32_t)3600);   // an old blob knowing one field
 	const ibDataValue value = ibDataValue::Child(root);
 
 	ibJobScheduleDescription s;
@@ -302,7 +302,7 @@ TEST(JobSchedule, Serialization_ReadsDatesThatCrossedTheWireAsText)
 	// (jsonProvider.h), the empty date as "". The thin designer's schedule cell reads such a node and
 	// writes one back, so the reader takes either kind; a text that names no date leaves the default.
 	auto root = std::make_shared<ibDataNode>();
-	root->SetValue(wxT("IntervalSeconds"), (s32)7200);
+	root->SetValue(wxT("IntervalSeconds"), (std::int32_t)7200);
 	root->SetValue(wxT("PeriodAnchor"), wxString(wxT("2026-01-05 12:00:00")));
 	root->SetValue(wxT("ActiveFrom"),   wxString());
 	root->SetValue(wxT("ActiveTo"),     wxString(wxT("not a date")));
@@ -343,7 +343,7 @@ TEST(JobSchedule, Buffer_RoundTripsEveryField)
 	src.m_activeFrom         = At(2026, wxDateTime::Jan, 1);
 	src.m_activeTo           = At(2027, wxDateTime::Jan, 1);
 
-	wxMemoryBuffer blob;
+	ibMemoryBuffer blob;
 	ibJobScheduleDescriptionMemory::WriteBuffer(blob, src);
 	ASSERT_GT(blob.GetDataLen(), 0u);
 
@@ -367,7 +367,7 @@ TEST(JobSchedule, Buffer_ReadsAVersionOneBlobsDatesAsInstants)
 	src.m_activeFrom   = At(2026, wxDateTime::Jan, 1);
 	ASSERT_TRUE(src.m_activeTo.IsEmpty());
 
-	wxMemoryBuffer blob;
+	ibMemoryBuffer blob;
 	ibJobScheduleDescriptionMemory::WriteBuffer(blob, src);
 	ASSERT_GT(blob.GetDataLen(), 0u);
 	unsigned char* bytes = static_cast<unsigned char*>(blob.GetData());
@@ -393,7 +393,7 @@ TEST(JobSchedule, Buffer_ReadsAVersionTwoBlobsDatesFrom1970)
 	src.m_periodAnchor = At(2026, wxDateTime::Jan, 5, 12, 0);
 	ASSERT_TRUE(src.m_activeTo.IsEmpty());
 
-	wxMemoryBuffer blob;
+	ibMemoryBuffer blob;
 	ibJobScheduleDescriptionMemory::WriteBuffer(blob, src);
 	unsigned char* bytes = static_cast<unsigned char*>(blob.GetData());
 	ASSERT_EQ(3u, bytes[0]) << "written under version 3";
@@ -414,7 +414,7 @@ TEST(JobSchedule, Buffer_KeepsAnInvalidDateInvalid)
 	ibJobScheduleDescription src = ibJobScheduleDescription::EverySeconds(600);
 	ASSERT_TRUE(src.m_activeFrom.IsEmpty());
 
-	wxMemoryBuffer blob;
+	ibMemoryBuffer blob;
 	ibJobScheduleDescriptionMemory::WriteBuffer(blob, src);
 
 	ibJobScheduleDescription dst;
@@ -442,7 +442,7 @@ TEST(JobSchedule, Buffer_RefusesWhatItCannotRead)
 	EXPECT_FALSE(ibJobScheduleDescriptionMemory::ReadBuffer(future, sizeof(future), dst));
 
 	// Right version, truncated body.
-	wxMemoryBuffer blob;
+	ibMemoryBuffer blob;
 	ibJobScheduleDescriptionMemory::WriteBuffer(blob, ibJobScheduleDescription::Nightly(2, 5));
 	ASSERT_GT(blob.GetDataLen(), 4u);
 	EXPECT_FALSE(ibJobScheduleDescriptionMemory::ReadBuffer(blob.GetData(), 3, dst));

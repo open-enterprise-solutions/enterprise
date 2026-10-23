@@ -64,7 +64,7 @@ void ibSchemaActiveUser::Build(const ibSession& session, const ibDataNode& WXUNU
 	}
 }
 
-std::function<void()> ibSchemaActiveUser::Command(const ibSession& session, s32 command,
+std::function<void()> ibSchemaActiveUser::Command(const ibSession& session, std::int32_t command,
 	const ibDataNode& args, ibProtocol::ibRefusal& refusal, wxString& error) const
 {
 	// The designer's actions — the desktop's dialog offered them in the designer alone (DesignerMode there).

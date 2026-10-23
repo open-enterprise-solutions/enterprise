@@ -18,7 +18,7 @@ public:
 		ibDataNode& WXUNUSED(result)) const override {}
 
 	// Open — the journal's tab, as the desktop's menu item opened it, in the session's configuration.
-	virtual std::function<void()> Command(const ibSession& session, s32 command,
+	virtual std::function<void()> Command(const ibSession& session, std::int32_t command,
 		const ibDataNode& args, ibProtocol::ibRefusal& refusal, wxString& error) const override;
 };
 

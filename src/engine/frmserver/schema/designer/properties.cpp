@@ -53,11 +53,11 @@ void ibSchemaProperties::Build(const ibSession& session, const ibDataNode& args,
 
 	// …as the desktop's grid showed it: registered on it, asked what its state hides, its rows written — for this answer.
 	ibPropertyInspector inspector;
-	inspector.SelectObject(object, args.GetValue<s32>(ibProtocol::ibSchema::ibProperties::Tab));
+	inspector.SelectObject(object, args.GetValue<std::int32_t>(ibProtocol::ibSchema::ibProperties::Tab));
 	inspector.OnDraw(properties);
 }
 
-std::function<void()> ibSchemaProperties::Command(const ibSession& session, s32 command,
+std::function<void()> ibSchemaProperties::Command(const ibSession& session, std::int32_t command,
 	const ibDataNode& args, ibProtocol::ibRefusal& refusal, wxString& error) const
 {
 	if (static_cast<ibProtocol::ibSchema::ibCommand>(command) != ibProtocol::ibSchema::ibCommand::Save) {
@@ -81,7 +81,7 @@ std::function<void()> ibSchemaProperties::Command(const ibSession& session, s32 
 		return nullptr;
 	}
 
-	const s32 tabId = args.GetValue<s32>(ibProtocol::ibSchema::ibProperties::Tab);
+	const std::int32_t tabId = args.GetValue<std::int32_t>(ibProtocol::ibSchema::ibProperties::Tab);
 	return [object, name, value, tabId]() {
 		if (ibProperty* const property = object->GetProperty(name))
 			ibPropertyGate::SetValue(object, property, value);

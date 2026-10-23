@@ -127,7 +127,7 @@ ibRole* ibAccessObject::GetRole(unsigned int idx) const
 
 bool ibAccessObject::LoadRole(ibReaderMemory& dataReader)
 {
-	wxMemoryBuffer buf;
+	ibMemoryBuffer buf;
 	if (dataReader.r_chunk(roleBlock, buf)) {
 		std::shared_ptr<ibReaderMemory> dataRoleReader(new ibReaderMemory(buf));
 		unsigned int countRole = dataRoleReader->r_u32(); m_valRoles.clear();

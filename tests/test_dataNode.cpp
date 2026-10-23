@@ -12,8 +12,8 @@
 
 namespace {
 
-wxMemoryBuffer Blob(const char* s) {
-	wxMemoryBuffer b;
+ibMemoryBuffer Blob(const char* s) {
+	ibMemoryBuffer b;
 	b.AppendData(s, (size_t)strlen(s));
 	return b;
 }
@@ -35,7 +35,7 @@ ibDataNode MakeTree() {
 	return root;
 }
 
-wxMemoryBuffer WriteFull(const ibDataNode& root) {
+ibMemoryBuffer WriteFull(const ibDataNode& root) {
 	// Frame the root with its clsid/metaId identity (what the config container adds),
 	// then the provider writes the INNER content — symmetric with ReadFull, which peels
 	// the same two frames before handing the inner to Read. (Provider.Write is content
@@ -43,20 +43,20 @@ wxMemoryBuffer WriteFull(const ibDataNode& root) {
 	ibWriterMemory inner;
 	ibBinaryProvider().Write(root, inner);
 	ibWriterMemory meta;
-	meta.w_chunk((u64)root.GetMetaId(), inner.pointer(), inner.size());
+	meta.w_chunk((std::uint64_t)root.GetMetaId(), inner.pointer(), inner.size());
 	ibWriterMemory w;
-	w.w_chunk((u64)root.GetClsid(), meta.pointer(), meta.size());
+	w.w_chunk((std::uint64_t)root.GetClsid(), meta.pointer(), meta.size());
 	return w.buffer();
 }
 
 // Peel the root's clsid + metaId framing (as the config container does), then
 // hand the INNER content to provider.Read.
-ibDataNode ReadFull(const wxMemoryBuffer& buf, ibClassID& clsidOut, ibMetaID& metaOut) {
+ibDataNode ReadFull(const ibMemoryBuffer& buf, ibClassID& clsidOut, ibMetaID& metaOut) {
 	ibReaderMemory reader(buf);
-	u64 clsid = 0;
+	std::uint64_t clsid = 0;
 	ibReaderMemory* clsidChunk = reader.open_chunk_iterator(clsid);
 	EXPECT_TRUE(clsidChunk != nullptr);
-	u64 metaId = 0;
+	std::uint64_t metaId = 0;
 	ibReaderMemory* metaChunk = clsidChunk->open_chunk_iterator(metaId);
 	EXPECT_TRUE(metaChunk != nullptr);
 	clsidOut = (ibClassID)clsid;
@@ -73,7 +73,7 @@ ibDataNode ReadFull(const wxMemoryBuffer& buf, ibClassID& clsidOut, ibMetaID& me
 // The linchpin: write -> read -> write must be byte-for-byte identical.
 TEST(DataNode, BinaryProvider_RoundTrip_ByteIdentical) {
 	ibDataNode tree = MakeTree();
-	wxMemoryBuffer buf1 = WriteFull(tree);
+	ibMemoryBuffer buf1 = WriteFull(tree);
 
 	ibClassID clsid = 0;
 	ibMetaID metaId = 0;
@@ -81,7 +81,7 @@ TEST(DataNode, BinaryProvider_RoundTrip_ByteIdentical) {
 	EXPECT_EQ(clsid, (ibClassID)1001);
 	EXPECT_EQ(metaId, (ibMetaID)1);
 
-	wxMemoryBuffer buf2 = WriteFull(tree2);
+	ibMemoryBuffer buf2 = WriteFull(tree2);
 
 	ASSERT_EQ(buf1.GetDataLen(), buf2.GetDataLen());
 	EXPECT_EQ(0, memcmp(buf1.GetData(), buf2.GetData(), buf1.GetDataLen()));
@@ -89,7 +89,7 @@ TEST(DataNode, BinaryProvider_RoundTrip_ByteIdentical) {
 
 TEST(DataNode, BinaryProvider_RoundTrip_StructurePreserved) {
 	ibDataNode tree = MakeTree();
-	wxMemoryBuffer buf1 = WriteFull(tree);
+	ibMemoryBuffer buf1 = WriteFull(tree);
 	ibClassID clsid = 0;
 	ibMetaID metaId = 0;
 	ibDataNode t2 = ReadFull(buf1, clsid, metaId);
@@ -100,7 +100,7 @@ TEST(DataNode, BinaryProvider_RoundTrip_StructurePreserved) {
 	ASSERT_EQ(t2.Children()[0].Children().size(), (size_t)1);
 	EXPECT_EQ(t2.Children()[0].Children()[0].GetClsid(), (ibClassID)3003);
 
-	const wxMemoryBuffer& rd = t2.Children()[1].RawData();
+	const ibMemoryBuffer& rd = t2.Children()[1].RawData();
 	ASSERT_EQ(rd.GetDataLen(), strlen("child-B"));
 	EXPECT_EQ(0, memcmp(rd.GetData(), "child-B", rd.GetDataLen()));
 
@@ -110,7 +110,7 @@ TEST(DataNode, BinaryProvider_RoundTrip_StructurePreserved) {
 	EXPECT_EQ(fName->AsString(), wxT("RootName"));
 	const ibDataValue* fId = t2.FindField(wxT("id"));
 	ASSERT_TRUE(fId != nullptr);
-	EXPECT_EQ(fId->AsInt(), (s64)99);
+	EXPECT_EQ(fId->AsInt(), (std::int64_t)99);
 	const ibDataValue* fFlag = t2.FindField(wxT("flag"));
 	ASSERT_TRUE(fFlag != nullptr);
 	EXPECT_TRUE(fFlag->AsBool());
@@ -121,11 +121,11 @@ TEST(DataNode, NamedFields_TypedValues_RoundTrip) {
 	ibDataNode n;
 	n.SetValue(wxT("name"), wxString(wxT("Catalog1")));
 	n.SetValue(wxT("flag"), true);
-	n.SetValue(wxT("num"), (s32)-42);
+	n.SetValue(wxT("num"), (std::int32_t)-42);
 
 	EXPECT_EQ(n.GetValue<wxString>(wxT("name")), wxT("Catalog1"));
 	EXPECT_TRUE(n.GetValue<bool>(wxT("flag")));
-	EXPECT_EQ(n.GetValue<s32>(wxT("num")), -42);
+	EXPECT_EQ(n.GetValue<std::int32_t>(wxT("num")), -42);
 }
 
 // ⭐ A DATE IS STORED AS ITSELF (format 3): an ibDateTime's count, read back as the same date, the empty
@@ -165,9 +165,9 @@ TEST(DataNode, NamedFields_OptimisticCursor_ReorderedAndMissing) {
 }
 
 // The stream of a node with its format stamp lowered: the entries' bytes are the same, only what they
-// MEAN differs, which is exactly what the stamp is for. The meta block is chunk id 0x2350 (u64), size
-// (u64), then the stamp (u32).
-static void LowerTheStamp(wxMemoryBuffer& buf, unsigned char to)
+// MEAN differs, which is exactly what the stamp is for. The meta block is chunk id 0x2350 (std::uint64_t), size
+// (std::uint64_t), then the stamp (std::uint32_t).
+static void LowerTheStamp(ibMemoryBuffer& buf, unsigned char to)
 {
 	const unsigned char id[8] = { 0x50, 0x23, 0, 0, 0, 0, 0, 0 };
 	unsigned char* bytes = static_cast<unsigned char*>(buf.GetData());
@@ -198,7 +198,7 @@ TEST(DataNode, AFormatOneNodeReadsItsDatesAsInstants) {
 	auto inner = std::make_shared<ibDataNode>();
 	inner->AddField(wxT("when"), ibDataValue::Date(raw));
 	written.AddField(wxT("child"), ibDataValue::Child(inner));
-	wxMemoryBuffer buf = WriteFull(written);
+	ibMemoryBuffer buf = WriteFull(written);
 	LowerTheStamp(buf, 1);
 
 	ibClassID clsid = 0; ibMetaID metaId = 0;
@@ -228,7 +228,7 @@ TEST(DataNode, AFormatTwoNodeCountsItsDatesFrom1970) {
 	written.AddField(wxT("a_date"),    ibDataValue::Date(ibDateTime(from1970)));
 	written.AddField(wxT("was_empty"), ibDataValue::Date(ibDateTime(-62135596800000ll)));
 	written.AddField(wxT("no_date"),   ibDataValue::Date(ibDateTime(0ll)));
-	wxMemoryBuffer buf = WriteFull(written);
+	ibMemoryBuffer buf = WriteFull(written);
 	LowerTheStamp(buf, 2);
 
 	ibClassID clsid = 0; ibMetaID metaId = 0;

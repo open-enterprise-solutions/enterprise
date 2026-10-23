@@ -830,12 +830,12 @@ TEST(SubscribedEventsClient, HeldEventsGoWithTheNextCall)
 	ASSERT_EQ(read->AsArray().size(), 4u);
 	const ibDataValue& last = read->AsArray()[3];
 	ASSERT_EQ(last.Kind(), ibDataKind::Child);
-	EXPECT_EQ(last.AsChild()->GetValue<s32>(ibProtocol::ibEvent::Event),
-		static_cast<s32>(ibProtocol::ibEvent::ibKind::Row));
-	EXPECT_EQ(last.AsChild()->GetValue<s32>(ibProtocol::ibEvent::Control), 7);
+	EXPECT_EQ(last.AsChild()->GetValue<std::int32_t>(ibProtocol::ibEvent::Event),
+		static_cast<std::int32_t>(ibProtocol::ibEvent::ibKind::Row));
+	EXPECT_EQ(last.AsChild()->GetValue<std::int32_t>(ibProtocol::ibEvent::Control), 7);
 	const ibDataNode* const args = last.AsChild()->FindChild(ibProtocol::ibEvent::Args);
 	ASSERT_NE(args, nullptr);
-	EXPECT_EQ(args->GetValue<s32>(ibProtocol::ibEvent::Row), 500);
+	EXPECT_EQ(args->GetValue<std::int32_t>(ibProtocol::ibEvent::Row), 500);
 
 	// Taken once.
 	ASSERT_TRUE(communicator.Call(ibProtocol::ibMethod::Frame, params, result, refusal, error)) << error;

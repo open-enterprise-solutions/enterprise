@@ -59,7 +59,7 @@ public:
 	long long  GetResultLong(int) override { return 0; }
 	bool       GetResultBool(int) override { return false; }
 	ibDateTime GetResultDate(int) override { return ibDateTime(); }
-	void*      GetResultBlob(int, wxMemoryBuffer&) override { return nullptr; }
+	void*      GetResultBlob(int, ibMemoryBuffer&) override { return nullptr; }
 	double     GetResultDouble(int) override { return 0.0; }
 	ibNumber   GetResultNumber(int) override { return ibNumber(); }
 	bool       IsFieldNull(int) override { return true; }

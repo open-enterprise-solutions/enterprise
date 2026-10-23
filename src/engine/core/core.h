@@ -79,7 +79,7 @@ typedef int ibActionID;
 // must likewise keep bit 12 clear.
 constexpr ibActionID eStartEditingFlag = 0x1000;
 
-typedef uint64_t ibPictureID;   // same base as ibClassID / u64 — see the note in clsid.h
+typedef uint64_t ibPictureID;   // same base as ibClassID / std::uint64_t — see the note in clsid.h
 typedef unsigned int ibVersionID;
 
 //*******************************************************************************************

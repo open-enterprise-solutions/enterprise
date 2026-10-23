@@ -105,7 +105,7 @@ class BACKEND_API ibDebuggerClient {
 
 		// The picture the running application was asked for. Empty when its user declined, which is
 		// an answer and not a failure.
-		void OnScreenshot(const wxMemoryBuffer& png, const wxString& focus);
+		void OnScreenshot(const ibMemoryBuffer& png, const wxString& focus);
 
 		// What the sandbox did — ran or failed, what it answered with, and the RESULT VALUE as
 		// text when it could be written (empty when the value cannot travel, which is not a
@@ -120,7 +120,7 @@ class BACKEND_API ibDebuggerClient {
 
 		// What a composition answered, still serialised — the tables, or a refusal saying why there
 		// are none. Left as bytes because only the asker knows what to do with them.
-		void OnComposed(bool answered, const wxString& refusal, const wxMemoryBuffer& result);
+		void OnComposed(bool answered, const wxString& refusal, const ibMemoryBuffer& result);
 
 	private:
 		std::vector<std::unique_ptr<ibDebuggerClientBridge> > m_debugBridges;
@@ -416,7 +416,7 @@ public:
 	// ⚠ It carries a SCHEMA rather than the name of one, which is what lets a caller run a report
 	// that exists nowhere. And, like the fill, it needs no breakpoint: what happens over there is a
 	// rented read on a connection of its own.
-	void RequestCompose(const wxMemoryBuffer& request);
+	void RequestCompose(const ibMemoryBuffer& request);
 
 	//support calc strExpression in debugloop
 	void EvaluateAutocomplete(const wxString& strFileName, const wxString& strModuleName, const wxString& strExpression, const wxString& keyWord, int currline);

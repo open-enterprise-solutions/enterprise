@@ -29,14 +29,14 @@
 
 namespace {
 
-wxMemoryBuffer Blob(const char* s) {
-	wxMemoryBuffer b;
+ibMemoryBuffer Blob(const char* s) {
+	ibMemoryBuffer b;
 	b.AppendData(s, (size_t)strlen(s));
 	return b;
 }
 
 // Emit a node as JSON text.
-wxMemoryBuffer Emit(const ibDataNode& node) {
+ibMemoryBuffer Emit(const ibDataNode& node) {
 	ibWriterMemory w;
 	ibJsonProvider().Write(node, w);
 	return w.buffer();
@@ -44,7 +44,7 @@ wxMemoryBuffer Emit(const ibDataNode& node) {
 
 // Parse JSON text back into a node. `lookup` maps a type NAME to a clsid — the
 // inverse of the emitter's resolver; unset means a name-form NodeType stays 0.
-ibDataNode Parse(const wxMemoryBuffer& text,
+ibDataNode Parse(const ibMemoryBuffer& text,
 	std::function<ibClassID(const ibString&)> lookup = nullptr) {
 	ibJsonProvider provider;
 	if (lookup) provider.SetTypeLookup(std::move(lookup));
@@ -76,7 +76,7 @@ TEST(JsonProvider, Scalars_SurviveRoundTrip) {
 	EXPECT_EQ(back.GetValue<wxString>(wxT("name")), wxT("RootName"));
 	EXPECT_TRUE (back.GetValue<bool>(wxT("flag")));
 	EXPECT_FALSE(back.GetValue<bool>(wxT("off")));
-	EXPECT_EQ(back.GetValue<s32>(wxT("id")), -42);
+	EXPECT_EQ(back.GetValue<std::int32_t>(wxT("id")), -42);
 
 	const ibDataValue* wide = back.FindField(wxT("wide"));
 	ASSERT_TRUE(wide != nullptr);
@@ -138,7 +138,7 @@ TEST(JsonProvider, Array_KeepsOrderAndKinds) {
 	const ibDataValue* list = back.FindField(wxT("list"));
 	ASSERT_TRUE(list != nullptr);
 	ASSERT_EQ(list->AsArray().size(), (size_t)3);
-	EXPECT_EQ(list->AsArray()[0].AsInt(), (s64)1);
+	EXPECT_EQ(list->AsArray()[0].AsInt(), (std::int64_t)1);
 	EXPECT_EQ(list->AsArray()[1].AsString(), wxT("two"));
 	EXPECT_TRUE(list->AsArray()[2].AsBool());
 
@@ -164,7 +164,7 @@ TEST(JsonProvider, Children_RecurseWithIdentity) {
 	ASSERT_EQ(back.Children()[0].Children().size(), (size_t)1);
 	EXPECT_EQ(back.Children()[0].Children()[0].GetMetaId(), (ibMetaID)4);
 
-	const wxMemoryBuffer& rd = back.Children()[1].RawData();
+	const ibMemoryBuffer& rd = back.Children()[1].RawData();
 	ASSERT_EQ(rd.GetDataLen(), strlen("child-B"));
 	EXPECT_EQ(0, memcmp(rd.GetData(), "child-B", rd.GetDataLen()));
 }
@@ -294,7 +294,7 @@ TEST(JsonProvider, TypeDesc_IsDroppedNotMaterialised) {
 	EXPECT_TRUE(back.FindProperty(wxT("TypeDesc")) == nullptr);
 	const ibDataValue* typeId = back.FindField(wxT("typeId"));
 	ASSERT_TRUE(typeId != nullptr);
-	EXPECT_EQ(typeId->AsUInt(), (u64)777);
+	EXPECT_EQ(typeId->AsUInt(), (std::uint64_t)777);
 }
 
 // ---------------------------------------------------------------------------
@@ -303,7 +303,7 @@ TEST(JsonProvider, TypeDesc_IsDroppedNotMaterialised) {
 
 // Malformed input throws rather than handing back a half-built tree.
 TEST(JsonProvider, MalformedInput_Throws) {
-	wxMemoryBuffer bad;
+	ibMemoryBuffer bad;
 	const char* text = "{ \"a\": [1, 2 ";
 	bad.AppendData(text, strlen(text));
 
@@ -314,7 +314,7 @@ TEST(JsonProvider, MalformedInput_Throws) {
 
 // An empty buffer is "nothing to read", not a parse error.
 TEST(JsonProvider, EmptyInput_ReturnsFalse) {
-	wxMemoryBuffer empty;
+	ibMemoryBuffer empty;
 	ibReaderMemory reader(empty);
 	ibDataNode out;
 	EXPECT_FALSE(ibJsonProvider().Read(reader, out));
@@ -330,15 +330,15 @@ TEST(JsonProvider, EmptyInput_ReturnsFalse) {
 
 namespace {
 
-wxMemoryBuffer Text(const std::string& text)
+ibMemoryBuffer Text(const std::string& text)
 {
-	wxMemoryBuffer buf;
+	ibMemoryBuffer buf;
 	buf.AppendData(text.data(), text.size());
 	return buf;
 }
 
 // A root object whose field "v" is `arrays` nested arrays around the number 1.
-wxMemoryBuffer NestedArrays(int arrays)
+ibMemoryBuffer NestedArrays(int arrays)
 {
 	std::string text;
 	text.reserve(static_cast<size_t>(arrays) * 2 + 16);
@@ -351,7 +351,7 @@ wxMemoryBuffer NestedArrays(int arrays)
 }
 
 // `levels` nested objects, the outermost being the root. The innermost field is n = 1.
-wxMemoryBuffer NestedObjects(int levels)
+ibMemoryBuffer NestedObjects(int levels)
 {
 	std::string text;
 	text.reserve(static_cast<size_t>(levels) * 8);
@@ -407,7 +407,7 @@ TEST(JsonProvider, Nesting_AtTheLimit_IsRead) {
 	const ibDataValue* leaf = InnermostArray(arrays, limit - 1);
 	ASSERT_NE(leaf, nullptr);
 	EXPECT_EQ(leaf->Kind(), ibDataKind::Number);
-	EXPECT_EQ(leaf->AsInt(), (s64)1);
+	EXPECT_EQ(leaf->AsInt(), (std::int64_t)1);
 
 	const ibDataNode objects = Parse(NestedObjects(limit));
 	const ibDataNode* inner = &objects;
@@ -415,7 +415,7 @@ TEST(JsonProvider, Nesting_AtTheLimit_IsRead) {
 		inner = inner->FindChild(wxT("c"));
 		ASSERT_NE(inner, nullptr);
 	}
-	EXPECT_EQ(inner->GetValue<s32>(wxT("n")), 1);
+	EXPECT_EQ(inner->GetValue<std::int32_t>(wxT("n")), 1);
 }
 
 // One container past the ceiling is a parse error, not a deeper call.

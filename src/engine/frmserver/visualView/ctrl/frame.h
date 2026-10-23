@@ -40,7 +40,7 @@ class FRMSERVER_API ibVisualHost;   // visualHost.h — who holds the form; ever
 #define ibDefaultStyleFGColour ibColour(0x3F, 0x5C, 0x77)  // #3F5C77 deep dusty blue
 #define ibDefaultStyleBGColour ibColour(0xFA, 0xF7, 0xF0)  // #FAF7F0 cream content
 
-#include "core/fileSystem/fs.h"
+#include "core/memory/memoryStream.h"
 
 class FRMSERVER_API ibFormVisualDocument;
 

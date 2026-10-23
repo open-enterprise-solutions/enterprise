@@ -127,7 +127,7 @@ bool FileKindOf(const ibClassID& clsid, ibFileKind& kind)
 void AppendFileItem(ibDataNode& menu, const wxString& name, const wxString& caption, ibFileKind kind)
 {
 	ibDataNode& row = menu.AddChild(0, static_cast<ibMetaID>(menu.Children().size() + 1));
-	row.SetValue(ibProtocol::ibSchema::ibMetaData::Kind, static_cast<s32>(ibMetaMenuKind::Editor));
+	row.SetValue(ibProtocol::ibSchema::ibMetaData::Kind, static_cast<std::int32_t>(ibMetaMenuKind::Editor));
 	row.SetValue(ibProtocol::ibSchema::ibMetaData::Name, name);
 	row.SetValue(ibProtocol::ibSchema::ibMetaData::Title, caption);
 	row.SetValue(ibProtocol::ibSchema::ibMetaData::Extension, ibFileExtension(kind));
@@ -391,7 +391,7 @@ ibDataNode& ibMetaTreeBase::AppendItem(ibDataNode& parent, ibValueMetaObject* me
 	// …and its guid — what a record of the base keeps it by (a user's roles and language: ibDialogUserItem).
 	item.SetValue(ibProtocol::ibSchema::ibMetaData::Guid, metaObject->GetDocPath());
 	if (const ibValueMetaObject* const owner = metaObject->GetParent())
-		item.SetValue(ibProtocol::ibSchema::ibMetaData::Position, static_cast<s32>(owner->GetChildPosition(metaObject)));
+		item.SetValue(ibProtocol::ibSchema::ibMetaData::Position, static_cast<std::int32_t>(owner->GetChildPosition(metaObject)));
 	AppendMenu(item, metaObject);
 	return item;
 }
@@ -411,13 +411,13 @@ void ibMetaTreeBase::AppendMenu(ibDataNode& item, ibValueMetaObject* metaObject)
 
 	for (const ibMetaMenuItem& entry : items) {
 		ibDataNode& row = menu.AddChild(0, static_cast<ibMetaID>(menu.Children().size() + 1));
-		row.SetValue(ibProtocol::ibSchema::ibMetaData::Kind, static_cast<s32>(entry.m_kind));
+		row.SetValue(ibProtocol::ibSchema::ibMetaData::Kind, static_cast<std::int32_t>(entry.m_kind));
 		row.SetValue(ibProtocol::ibSchema::ibMetaData::Name, entry.m_name);
 		row.SetValue(ibProtocol::ibSchema::ibMetaData::Title, entry.m_caption);
 		// What it opens, by its id — and of what class, so a module no row shows (an object's inner module) is made
 		// on the far side, under the object whose row this is.
 		if (entry.m_metaObject != nullptr) {
-			row.SetValue(ibProtocol::ibSchema::ibMetaData::Object, static_cast<s32>(entry.m_metaObject->GetMetaID()));
+			row.SetValue(ibProtocol::ibSchema::ibMetaData::Object, static_cast<std::int32_t>(entry.m_metaObject->GetMetaID()));
 			row.SetValue(ibProtocol::ibSchema::ibMetaData::Type, ClsidText(entry.m_metaObject->GetClassType()));
 		}
 		// Its picture — of what it opens, else its own (the desktop's AppendMetaMenu).
@@ -426,7 +426,7 @@ void ibMetaTreeBase::AppendMenu(ibDataNode& item, ibValueMetaObject* metaObject)
 		else if (entry.m_picture != 0)
 			row.SetValue(ibProtocol::ibSchema::ibMetaData::Picture, ibBackendPicture::SendPicture(entry.m_picture));
 		if (entry.m_id != wxNOT_FOUND)
-			row.SetValue(ibProtocol::ibSchema::ibMetaData::Command, static_cast<s32>(entry.m_id));
+			row.SetValue(ibProtocol::ibSchema::ibMetaData::Command, static_cast<std::int32_t>(entry.m_id));
 	}
 
 	// …and the file it is kept in apart, as the desktop's tree offered it (PrepareReplaceMenu): read over it, written out.
@@ -701,7 +701,7 @@ void ibConfigurationTree::ExpandMetaItem(ibValueMetaObject* metaItem, ibDataNode
 
 	// A ROLE SAYS HOW IT COMBINES — what a user's membership of it is written with (ibDialogUserItem).
 	else if (clsid == g_metaRoleCLSID)
-		item.SetValue(ibProtocol::ibSchema::ibMetaData::Mode, static_cast<s32>(static_cast<ibValueMetaObjectRole*>(metaItem)->GetRoleCompositionMode()));
+		item.SetValue(ibProtocol::ibSchema::ibMetaData::Mode, static_cast<std::int32_t>(static_cast<ibValueMetaObjectRole*>(metaItem)->GetRoleCompositionMode()));
 
 	// A COMMAND HOLDS COMMANDS.
 	else if (clsid == g_metaCommandCLSID || clsid == g_metaCommonCommandCLSID) {
@@ -756,7 +756,7 @@ void ibConfigurationTree::FillData(ibDataNode& root)
 	root.SetValue(ibProtocol::ibSchema::ibMetaData::Picture, ibBackendPicture::SendPicture(g_metaCommonMetadataCLSID));
 	root.SetValue(ibProtocol::ibSchema::ibMetaData::Type, ClsidText(commonMetadata->GetClassType()));
 	// …the dialect its modules are written in — what the desktop's process held (ibCompileCode::GetCodeStyle).
-	root.SetValue(ibProtocol::ibSchema::ibMetaData::Syntax, static_cast<s32>(m_metaData->GetCommonMetaObject()->GetCompileSyntax()));
+	root.SetValue(ibProtocol::ibSchema::ibMetaData::Syntax, static_cast<std::int32_t>(m_metaData->GetCommonMetaObject()->GetCompileSyntax()));
 	// …and its state — what the desktop's caption asked of it (ibFrontendMainFrameDesigner::Modify).
 	root.SetValue(ibProtocol::ibSchema::ibMetaData::Modified, m_metaData->IsModified());
 	root.SetValue(ibProtocol::ibSchema::ibMetaData::Edited, m_metaData->IsEdited());

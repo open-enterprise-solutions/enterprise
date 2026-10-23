@@ -16,7 +16,7 @@ public:
 			ibDataNode row;
 			property->GetProtocolValue(row);
 			const ibPropertyObject* const owner = property->GetPropertyObject();   // CONST: the non-const GetMetaData wxFAILs
-			return new ibPGHyperLinkProperty(static_cast<ibMetaID>(row.GetValue<s32>(ibProtocol::ibSchema::ibProperties::Object)),
+			return new ibPGHyperLinkProperty(static_cast<ibMetaID>(row.GetValue<std::int32_t>(ibProtocol::ibSchema::ibProperties::Object)),
 				*owner->GetMetaData(), property->GetLabel(), property->GetName(), property->GetValue());
 		});
 	}

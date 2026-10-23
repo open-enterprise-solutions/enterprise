@@ -14,7 +14,7 @@ namespace {
 ibDataNode ChoiceRequest(const wxString& caption, const std::vector<ibChoiceItem>& items, const ibMetaData* metaData)
 {
 	ibDataNode request;
-	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<s32>(ibProtocol::ibRequest::ibKind::Choice));
+	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<std::int32_t>(ibProtocol::ibRequest::ibKind::Choice));
 	request.SetValue(ibProtocol::ibRequest::ibChoice::Caption, caption);
 	for (const ibChoiceItem& item : items) {
 		ibDataNode& node = request.AddChild(0, 0);
@@ -30,7 +30,7 @@ ibDataNode ChoiceRequest(const wxString& caption, const std::vector<ibChoiceItem
 
 } // namespace
 
-bool ibRequestChoice(const wxString& caption, const std::vector<ibChoiceItem>& items, s32& chosen)
+bool ibRequestChoice(const wxString& caption, const std::vector<ibChoiceItem>& items, std::int32_t& chosen)
 {
 	ibBackendDocFrame* const frame = ibSession::CurrentFrame();
 	if (frame == nullptr || items.empty())
@@ -41,7 +41,7 @@ bool ibRequestChoice(const wxString& caption, const std::vector<ibChoiceItem>& i
 	if (!frame->Request(request, response))
 		return false;
 
-	const s32 id = response.GetValue<s32>(ibProtocol::ibRequest::ibChoice::Id);
+	const std::int32_t id = response.GetValue<std::int32_t>(ibProtocol::ibRequest::ibChoice::Id);
 	for (const ibChoiceItem& item : items) {
 		if (item.id == id) {
 			chosen = id;
@@ -51,7 +51,7 @@ bool ibRequestChoice(const wxString& caption, const std::vector<ibChoiceItem>& i
 	return false;
 }
 
-bool ibRequestChoice(const wxString& caption, const std::vector<ibChoiceItem>& items, std::vector<s32>& chosen)
+bool ibRequestChoice(const wxString& caption, const std::vector<ibChoiceItem>& items, std::vector<std::int32_t>& chosen)
 {
 	ibBackendDocFrame* const frame = ibSession::CurrentFrame();
 	if (frame == nullptr || items.empty())
@@ -97,7 +97,7 @@ void WriteMenu(ibDataNode& parent, const std::vector<ibMenuItem>& items)
 }
 
 // …and whether `id` is a command of it that may be picked.
-bool IsMenuCommand(const std::vector<ibMenuItem>& items, s32 id)
+bool IsMenuCommand(const std::vector<ibMenuItem>& items, std::int32_t id)
 {
 	for (const ibMenuItem& item : items) {
 		if (item.items.empty() ? item.id == id && item.enabled : IsMenuCommand(item.items, id))
@@ -108,21 +108,21 @@ bool IsMenuCommand(const std::vector<ibMenuItem>& items, s32 id)
 
 } // namespace
 
-bool ibRequestMenu(const std::vector<ibMenuItem>& items, s32& chosen)
+bool ibRequestMenu(const std::vector<ibMenuItem>& items, std::int32_t& chosen)
 {
 	ibBackendDocFrame* const frame = ibSession::CurrentFrame();
 	if (frame == nullptr || items.empty())
 		return false;
 
 	ibDataNode request;
-	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<s32>(ibProtocol::ibRequest::ibKind::Menu));
+	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<std::int32_t>(ibProtocol::ibRequest::ibKind::Menu));
 	WriteMenu(request, items);
 
 	ibDataNode response;
 	if (!frame->Request(request, response) || response.FindField(ibProtocol::ibRequest::ibMenu::Id) == nullptr)
 		return false;   // dismissed
 
-	const s32 id = response.GetValue<s32>(ibProtocol::ibRequest::ibMenu::Id);
+	const std::int32_t id = response.GetValue<std::int32_t>(ibProtocol::ibRequest::ibMenu::Id);
 	if (!IsMenuCommand(items, id))
 		return false;
 	chosen = id;

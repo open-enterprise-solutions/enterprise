@@ -53,7 +53,7 @@ void ibValueButton::OnUpdate(ibDataNode& state, ibVisualHost* host)
 	// The caption is always written — it names the button even when only the picture is shown; the
 	// representation says which of the two are shown. The picture travels by its id, and only when it is shown at all.
 	state.SetValue(ibProtocol::ibForm::ibState::Caption, title);
-	state.SetValue(ibProtocol::ibForm::ibState::Representation, static_cast<s32>(rep));
+	state.SetValue(ibProtocol::ibForm::ibState::Representation, static_cast<std::int32_t>(rep));
 	if (rep != ibRepresentation::ibRepresentation_Text && !picture.IsEmptyPicture())
 		state.SetValue(ibProtocol::ibForm::ibState::Picture, ibBackendPicture::SendPicture(picture, GetMetaData()));
 
@@ -93,7 +93,7 @@ void ibValueButton::WalkGroup(const std::vector<ibFrontendCommandReceiver::ibCom
 			continue;
 		}
 		if (member != nullptr)                        // a LEAF -> a place the press names
-			member->SetValue(ibProtocol::ibForm::ibButton::Member, static_cast<s32>(leaves.size()));
+			member->SetValue(ibProtocol::ibForm::ibButton::Member, static_cast<std::int32_t>(leaves.size()));
 		leaves.push_back(sub.desc);
 	}
 }

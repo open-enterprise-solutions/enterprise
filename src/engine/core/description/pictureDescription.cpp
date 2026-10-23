@@ -10,10 +10,10 @@ bool ibExternalPictureDescriptionMemory::ReadNode(const ibDataValue& value, ibEx
 		return false;
 	const wxString name = root->GetValue<wxString>(wxT("Name"));
 	pictureDesc.m_img_name = std::string(name.utf8_str());
-	const wxMemoryBuffer buf = root->GetValue<wxMemoryBuffer>(wxT("Buffer"));
+	const ibMemoryBuffer buf = root->GetValue<ibMemoryBuffer>(wxT("Buffer"));
 	pictureDesc.m_img_buffer.assign((const char*)buf.GetData(), buf.GetDataLen());
-	pictureDesc.m_width  = (unsigned int)root->GetValue<s32>(wxT("Width"));
-	pictureDesc.m_height = (unsigned int)root->GetValue<s32>(wxT("Height"));
+	pictureDesc.m_width  = (unsigned int)root->GetValue<std::int32_t>(wxT("Width"));
+	pictureDesc.m_height = (unsigned int)root->GetValue<std::int32_t>(wxT("Height"));
 	return true;
 }
 
@@ -21,12 +21,12 @@ bool ibExternalPictureDescriptionMemory::WriteNode(ibDataValue& value, const ibE
 {
 	auto root = std::make_shared<ibDataNode>();
 	root->SetValue(wxT("Name"), wxString::FromUTF8(pictureDesc.m_img_name.c_str(), pictureDesc.m_img_name.size()));
-	wxMemoryBuffer buf;
+	ibMemoryBuffer buf;
 	if (!pictureDesc.m_img_buffer.empty())
 		buf.AppendData(pictureDesc.m_img_buffer.data(), pictureDesc.m_img_buffer.size());
 	root->SetValue(wxT("Buffer"), buf);
-	root->SetValue(wxT("Width"),  (s32)pictureDesc.m_width);
-	root->SetValue(wxT("Height"), (s32)pictureDesc.m_height);
+	root->SetValue(wxT("Width"),  (std::int32_t)pictureDesc.m_width);
+	root->SetValue(wxT("Height"), (std::int32_t)pictureDesc.m_height);
 	value = ibDataValue::Child(root);
 	return true;
 }
@@ -40,7 +40,7 @@ bool ibPictureDescriptionMemory::ReadNode(const ibDataValue& value, ibPictureDes
 	// READ WHOLE, THEN TAKEN — a refusal below leaves the description it was reading into as it was,
 	// rather than with a new Type over the old id.
 	ibPictureDescription read;
-	read.m_type = (ibPictureType)root->GetValue<s32>(wxT("Type"));
+	read.m_type = (ibPictureType)root->GetValue<std::int32_t>(wxT("Type"));
 	if (read.m_type == ibPictureType::eFromBackend) {
 		// A NUMBER, both ways. Sixty-four bits do not survive a JSON number, so the MCP door hands the id
 		// over as digits in a string and takes it back the same way (mcpTool.h, ibMcpPictureIdAsText /
@@ -66,7 +66,7 @@ bool ibPictureDescriptionMemory::ReadNode(const ibDataValue& value, ibPictureDes
 bool ibPictureDescriptionMemory::WriteNode(ibDataValue& value, const ibPictureDescription& pictureDesc)
 {
 	auto root = std::make_shared<ibDataNode>();
-	root->SetValue(wxT("Type"), (s32)pictureDesc.m_type);
+	root->SetValue(wxT("Type"), (std::int32_t)pictureDesc.m_type);
 	if (pictureDesc.m_type == ibPictureType::eFromBackend) {
 		root->AddField(wxT("ClassId"), ibDataValue::UInt(pictureDesc.m_class_identifier));
 	}

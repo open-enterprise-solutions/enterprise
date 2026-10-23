@@ -3,7 +3,7 @@
 
 #include "backend/compiler/value.h"
 
-#include <wx/buffer.h>
+#include "core/memory/memoryBuffer.h"
 
 // ⭐⭐ BYTES ARE A TYPE, NOT A STRING THAT HAPPENS TO HOLD THEM.
 //
@@ -32,16 +32,16 @@ class BACKEND_API ibValueBinaryData : public ibValueStaticMembers<&ibValueBinary
 	};
 public:
 
-	operator wxMemoryBuffer() const {
+	operator ibMemoryBuffer() const {
 		return m_data;
 	}
 
 	ibValueBinaryData();
-	ibValueBinaryData(const wxMemoryBuffer& data);
+	ibValueBinaryData(const ibMemoryBuffer& data);
 	ibValueBinaryData(const void* data, size_t length);
 
 	// The bytes themselves — for a caller that stores or writes them (the codec, the wire).
-	const wxMemoryBuffer& GetBuffer() const { return m_data; }
+	const ibMemoryBuffer& GetBuffer() const { return m_data; }
 	size_t GetLength() const { return m_data.GetDataLen(); }
 
 	virtual bool Init();
@@ -55,7 +55,7 @@ public:
 
 	// A file's bytes, whole - the one place a file is read into memory (TextReader decodes what this hands
 	// over). `who` opens the refusal, so the message names the type the script was talking to.
-	static void ReadWholeFile(const wxString& fileName, const wxString& who, wxMemoryBuffer& bytes);
+	static void ReadWholeFile(const wxString& fileName, const wxString& who, ibMemoryBuffer& bytes);
 
 	// The TEXT projection: base64. Not the storage — GetBuffer is.
 	virtual ibString GetString() const;
@@ -72,7 +72,7 @@ public:
 	virtual bool CompareValueNE(const ibValue& cParam) const;
 
 private:
-	wxMemoryBuffer m_data;
+	ibMemoryBuffer m_data;
 };
 
 #endif // !_VALUE_BINARY_DATA_H__

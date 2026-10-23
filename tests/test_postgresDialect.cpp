@@ -197,7 +197,7 @@ TEST_F(PostgresDialect, BlobBytesAreReturnedIntact)
 	ASSERT_TRUE(static_cast<bool>(rs));
 	ASSERT_TRUE(rs->Next());
 
-	wxMemoryBuffer readBack;
+	ibMemoryBuffer readBack;
 	rs->GetResultBlob(1, readBack);
 	ASSERT_EQ(sizeof(payload), readBack.GetDataLen());
 	EXPECT_EQ(0, memcmp(payload, readBack.GetData(), sizeof(payload)));

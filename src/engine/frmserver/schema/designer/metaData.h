@@ -30,7 +30,7 @@ public:
 	// empty, done in the asking; how each went is said to the person by the server. Refused, nothing done: no such
 	// object, a class its parent does not take, no such file, no such right. Each with Tab — in that tab's tree, an
 	// external file's (ibMetaDataDocument), not the configuration's: the configuration's own refused there.
-	virtual std::function<void()> Command(const ibSession& session, s32 command,
+	virtual std::function<void()> Command(const ibSession& session, std::int32_t command,
 		const ibDataNode& args, ibProtocol::ibRefusal& refusal, wxString& error) const override;
 
 	// WHOSE TREE THE DOOR IS IN — the tab's, by its id (Tab): the file its document holds, an external data processor's or

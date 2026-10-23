@@ -107,9 +107,9 @@ ibValue ValueFrom(const ibDataValue& given)
 ibDataValue NodeEntry(const ibComposedNode& node)
 {
 	std::shared_ptr<ibDataNode> out = std::make_shared<ibDataNode>();
-	out->SetValue(wxT("level"), (s32)node.m_level);
+	out->SetValue(wxT("level"), (std::int32_t)node.m_level);
 	if (node.m_indent != 0)
-		out->SetValue(wxT("indent"), (s32)node.m_indent);
+		out->SetValue(wxT("indent"), (std::int32_t)node.m_indent);
 	out->SetValue(wxT("heading"), node.m_isHeading);
 	// The fold's fact and the output's promise - two questions, and a reader checking whether a
 	// report adds up wants the first; one deciding whether to offer an expander wants the second.
@@ -155,7 +155,7 @@ ibDataValue ColumnEntry(const ibComposedColumn& column)
 	if (!column.m_alias.IsEmpty())
 		out->SetValue(wxT("alias"), column.m_alias);
 	if (column.m_hasId)
-		out->SetValue(wxT("id"), (s32)column.m_id);
+		out->SetValue(wxT("id"), (std::int32_t)column.m_id);
 	return ibDataValue::Child(out);
 }
 

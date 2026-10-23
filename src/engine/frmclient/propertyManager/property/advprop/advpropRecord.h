@@ -39,7 +39,7 @@ public:
 
 protected:
 	const ibPropertyObject* m_ownerProperty = nullptr;
-	std::vector<u64> m_choiceData;   // each choice's data — its class — by its index (ibPropertyChoiceList::GetData)
+	std::vector<std::uint64_t> m_choiceData;   // each choice's data — its class — by its index (ibPropertyChoiceList::GetData)
 private:
 	WX_PG_DECLARE_PROPERTY_CLASS(ibPGRecordProperty);
 };

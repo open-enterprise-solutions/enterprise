@@ -42,7 +42,7 @@ ibDataNode& ibAppendValue(ibDataNode& at, std::vector<ibDesignerRefItem>& values
 {
 	ibDataNode& value = at.AddChild(0, 0);
 	value.SetValue(ibProtocol::ibRequest::ibPredefinedSelector::Name, name);
-	value.SetValue(ibProtocol::ibRequest::ibPredefinedSelector::Id, static_cast<s32>(values.size()));
+	value.SetValue(ibProtocol::ibRequest::ibPredefinedSelector::Id, static_cast<std::int32_t>(values.size()));
 	values.push_back(ibDesignerRefItem{ recordRef, guid, name });
 	return value;
 }
@@ -183,13 +183,13 @@ bool ibShowPredefinedSelector(ibControlFrame* ownerValue, const ibTypeDescriptio
 
 	std::vector<ibDesignerRefItem> values;
 	ibDataNode request;
-	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<s32>(ibProtocol::ibRequest::ibKind::PredefinedSelector));
+	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<std::int32_t>(ibProtocol::ibRequest::ibKind::PredefinedSelector));
 	ibFillDesignerRefTree(request, values, types);
 
 	ibDataNode response;
 	if (!frame->Request(request, response) || response.FindField(ibProtocol::ibRequest::ibPredefinedSelector::Id) == nullptr)
 		return false;   // the window was closed
-	const s32 id = response.GetValue<s32>(ibProtocol::ibRequest::ibPredefinedSelector::Id);
+	const std::int32_t id = response.GetValue<std::int32_t>(ibProtocol::ibRequest::ibPredefinedSelector::Id);
 	if (id < 0 || static_cast<size_t>(id) >= values.size())
 		return false;
 	const ibDesignerRefItem& chosen = values[static_cast<size_t>(id)];

@@ -1,11 +1,11 @@
 #include "sourceDescription.h"
-#include "core/fileSystem/fs.h"                // ibReaderMemory / ibWriterMemory
+#include "core/memory/memoryStream.h"                // ibReaderMemory / ibWriterMemory
 #include "core/serialize/dataBuilder.h"        // ibDataValue — node form (Binary blob)
 
 ////////////////////////////////////////////////////////////////////////
 
 // A DUMB serializer: it writes / reads the hop path AS-IS, nothing else. No metadata, no copy awareness — the id
-// path is stored verbatim ([count : u32][ id : u32, type : u64 ] per hop). What the ids MEAN and how a paste
+// path is stored verbatim ([count : std::uint32_t][ id : std::uint32_t, type : std::uint64_t ] per hop). What the ids MEAN and how a paste
 // transforms them is NOT its business: that contract lives in the OWNER (ibPropertySource::CopyNodeValue /
 // PasteNodeValue), which processes the path before writing / after reading.
 
@@ -22,14 +22,14 @@ bool ibSourceDescriptionMemory::LoadData(ibReaderMemory& reader, ibSourceDescrip
 	// Caught opening a saved form: a text control's source property, several levels down
 	// ibValueFrame::LoadNode. What a bad blob deserves is an empty description — the control then
 	// binds to nothing, which is visible and harmless — not a crash and not invented data.
-	if (reader.elapsed() < static_cast<int>(sizeof(u32)))
+	if (reader.elapsed() < static_cast<int>(sizeof(std::uint32_t)))
 		return true;   // nothing stored at all
 
 	const unsigned int count = reader.r_u32();
 
-	// ONE HOP = id (u32) + type (u64). Ask before reading each, so a blob that ends early stops here
+	// ONE HOP = id (std::uint32_t) + type (std::uint64_t). Ask before reading each, so a blob that ends early stops here
 	// with the hops it really had rather than fabricating the rest.
-	const int kHopBytes = static_cast<int>(sizeof(u32) + sizeof(u64));
+	const int kHopBytes = static_cast<int>(sizeof(std::uint32_t) + sizeof(std::uint64_t));
 	for (unsigned int i = 0; i < count; i++) {
 		if (reader.elapsed() < kHopBytes)
 			break;
@@ -99,7 +99,7 @@ bool ibSourceDescriptionMemory::ReadNode(const ibDataValue& value, ibSourceDescr
 		if (!entry)
 			continue;
 
-		const ibSourceId id = (ibSourceId)entry->GetValue<s32>(kHopId);
+		const ibSourceId id = (ibSourceId)entry->GetValue<std::int32_t>(kHopId);
 
 		// An absent type is the ABSENCE OF A CONSTRAINT, which is why it is not
 		// written and why reading it back as undefined is right.
@@ -121,12 +121,12 @@ bool ibSourceDescriptionMemory::WriteNode(ibDataValue& value, const ibSourceDesc
 	for (const ibSourceHop& hop : srcDesc.GetPath()) {
 
 		std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
-		entry->AddField(kHopId, ibDataValue::Int((s64)hop.m_id));
+		entry->AddField(kHopId, ibDataValue::Int((std::int64_t)hop.m_id));
 
 		// Only where the hop imposes one — an undefined type is the absence of a
 		// constraint, and writing it would put a number where there is no fact.
 		if (hop.m_type != g_valueUndefinedCLSID)
-			entry->AddField(kHopType, ibDataValue::UInt((u64)hop.m_type));
+			entry->AddField(kHopType, ibDataValue::UInt((std::uint64_t)hop.m_type));
 
 		hops.push_back(ibDataValue::Child(entry));
 	}

@@ -102,8 +102,8 @@ public:
 	virtual wxString GetModuleText() const = 0;
 
 	//set form data 
-	virtual void SetFormData(const wxMemoryBuffer& formData) const = 0;   // const: only mutates *m_propertyForm, not `this`
-	virtual wxMemoryBuffer GetFormData() const = 0;
+	virtual void SetFormData(const ibMemoryBuffer& formData) const = 0;   // const: only mutates *m_propertyForm, not `this`
+	virtual ibMemoryBuffer GetFormData() const = 0;
 
 	// copy form data — the LIVE form's control tree AS a transparent node (Child), not a
 	// blob: pull the live form, save it to a node directly (no base64 round-trip).
@@ -114,8 +114,8 @@ public:
 	// node format, so the adapter is ONE provider round-trip. This lets the runtime stay
 	// blob-based (SaveForm / LoadForm, the property cell, the prop-grid variant) while the
 	// metadata serializes a transparent node tree — no base64 lump on disk / in JSON.
-	static ibDataValue   FormBlobToNode(const wxMemoryBuffer& blob);
-	static wxMemoryBuffer FormNodeToBlob(const ibDataValue& formNode);
+	static ibDataValue   FormBlobToNode(const ibMemoryBuffer& blob);
+	static ibMemoryBuffer FormNodeToBlob(const ibDataValue& formNode);
 
 	/**
 	* Get type form
@@ -205,8 +205,8 @@ public:
 	virtual wxString GetModuleText() const { return m_propertyForm->GetValueAsString(); }
 
 	//set form data 
-	virtual void SetFormData(const wxMemoryBuffer& formData) const { m_propertyForm->SetValue(formData); }
-	virtual wxMemoryBuffer GetFormData() const { return m_propertyForm->GetValueAsMemoryBuffer(); }
+	virtual void SetFormData(const ibMemoryBuffer& formData) const { m_propertyForm->SetValue(formData); }
+	virtual ibMemoryBuffer GetFormData() const { return m_propertyForm->GetValueAsMemoryBuffer(); }
 
 	/**
 	* Get type form
@@ -291,8 +291,8 @@ class BACKEND_API ibValueMetaObjectCommonForm :
 	virtual wxString GetModuleText() const { return m_propertyForm->GetValueAsString(); }
 
 	//set form data 
-	virtual void SetFormData(const wxMemoryBuffer& formData) const { m_propertyForm->SetValue(formData); }
-	virtual wxMemoryBuffer GetFormData() const { return m_propertyForm->GetValueAsMemoryBuffer(); }
+	virtual void SetFormData(const ibMemoryBuffer& formData) const { m_propertyForm->SetValue(formData); }
+	virtual ibMemoryBuffer GetFormData() const { return m_propertyForm->GetValueAsMemoryBuffer(); }
 
 	/**
 	* Get type form

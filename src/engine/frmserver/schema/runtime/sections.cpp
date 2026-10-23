@@ -144,7 +144,7 @@ void ibSchemaSections::Build(const ibSession& session, const ibDataNode& WXUNUSE
 		ibDataNode& blocks = node.Child(ibProtocol::ibSchema::ibSections::Blocks);
 		for (const ibSectionBlock& block : PageOf(section)) {
 			ibDataNode& blockNode = blocks.AddChild(0, 0);
-			blockNode.SetValue(ibProtocol::ibSchema::ibSections::Column, static_cast<s32>(block.column));
+			blockNode.SetValue(ibProtocol::ibSchema::ibSections::Column, static_cast<std::int32_t>(block.column));
 			if (!block.title.IsEmpty())
 				blockNode.SetValue(ibProtocol::ibSchema::ibSections::Title, block.title);
 			if (block.group != nullptr) {
@@ -156,16 +156,16 @@ void ibSchemaSections::Build(const ibSession& session, const ibDataNode& WXUNUSE
 			}
 			for (const ibValueMetaObject* object : block.items) {
 				ibDataNode& item = blockNode.AddChild(0, 0);
-				item.SetValue(ibProtocol::ibSchema::ibSections::Item, static_cast<s32>(object->GetMetaID()));
+				item.SetValue(ibProtocol::ibSchema::ibSections::Item, static_cast<std::int32_t>(object->GetMetaID()));
 				item.SetValue(ibProtocol::ibSchema::ibSections::Title, object->GetSynonym());
-				item.SetValue(ibProtocol::ibSchema::ibSections::Type, static_cast<s32>(TypeOf(block.area)));
+				item.SetValue(ibProtocol::ibSchema::ibSections::Type, static_cast<std::int32_t>(TypeOf(block.area)));
 				item.SetValue(ibProtocol::ibSchema::ibSections::Icon, ibBackendPicture::SendPicture(object->GetClassType()));
 			}
 		}
 	}
 }
 
-std::function<void()> ibSchemaSections::Command(const ibSession& session, s32 command,
+std::function<void()> ibSchemaSections::Command(const ibSession& session, std::int32_t command,
 	const ibDataNode& args, ibProtocol::ibRefusal& refusal, wxString& error) const
 {
 	if (static_cast<ibSchemaSectionsCommand>(command) != ibSchemaSectionsCommand::Open) {
@@ -181,14 +181,14 @@ std::function<void()> ibSchemaSections::Command(const ibSession& session, s32 co
 		return nullptr;
 	}
 
-	const ibMetaID itemId = args.GetValue<s32>(ibProtocol::ibSchema::ibSections::Item);
-	s32 type = ibInterfaceCommandType_Default;
+	const ibMetaID itemId = args.GetValue<std::int32_t>(ibProtocol::ibSchema::ibSections::Item);
+	std::int32_t type = ibInterfaceCommandType_Default;
 	args.GetValue(ibProtocol::ibSchema::ibSections::Type, type);
 
 	// Only what a page offers this person, as that page offers it: the same sections, the same right, the same blocks.
 	for (const ibValueMetaObjectSection* section : UsedSections(metaData)) {
 		for (const ibSectionBlock& block : PageOf(section)) {
-			if (static_cast<s32>(TypeOf(block.area)) != type)
+			if (static_cast<std::int32_t>(TypeOf(block.area)) != type)
 				continue;
 			for (const ibValueMetaObject* object : block.items) {
 				if (object->GetMetaID() != itemId)

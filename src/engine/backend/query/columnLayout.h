@@ -22,8 +22,8 @@
 
 class ibMetaData;
 class ibValue;             // codec currency — named only by reference in the codec signatures below
-class ibReaderMemory;      // binary-wire reader (fileSystem/fs.h) — dump/restore path
-class ibWriterMemory;      // binary-wire writer (fileSystem/fs.h)
+class ibReaderMemory;      // binary-wire reader (core/memory/memoryStream.h) — dump/restore path
+class ibWriterMemory;      // binary-wire writer (core/memory/memoryStream.h)
 // ibQueryStatement / ibQueryResult are full types from databaseQueryBuilder.h (included above) — the
 // binary codec binds/reads through the L2 statement/cursor, not raw L1 (ibPreparedStatement/-ResultSet).
 
@@ -169,7 +169,7 @@ BACKEND_API ibColumnSlot FirstValueSlot(const ibBackendQueryColumn* col);
 // reference needs the reference class, and a query provider that included it would be reaching a
 // floor up into the metadata partials for one read.
 BACKEND_API ibValue ReadSingleTargetReference(const ibMetaData* metaData, const ibClassID& target,
-                                              const wxMemoryBuffer& keyBytes);
+                                              const ibMemoryBuffer& keyBytes);
 
 // The persisted _TYPE discriminator value a layout role stores (the ibFieldTypes tag — the wire
 // format, kept here in the tier, not on the attribute). Used to clear rows whose stored type was

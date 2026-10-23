@@ -40,7 +40,7 @@ static ibClientFrame* ClientOf(const ibView* view)
 	return view->GetDocChildFrame() != nullptr ? view->GetDocChildFrame()->GetFrame() : nullptr;
 }
 
-// A time on the wire — ms since the epoch, past what an s32 keeps.
+// A time on the wire — ms since the epoch, past what an std::int32_t keeps.
 static wxLongLong_t MsOf(const ibDataNode& node, const wxString& name)
 {
 	long long ms = 0;
@@ -66,13 +66,13 @@ bool ibAuditLogView::Fetch(const ibDataNode& request, ibDataNode& response)
 	filter.event_type = request.GetValue<wxString>(ibProtocol::ibEvent::Event);
 	filter.ref_guid = request.GetValue<wxString>(ibProtocol::ibView::ibAuditLog::Ref);
 	filter.search = request.GetValue<wxString>(ibProtocol::ibView::ibAuditLog::Search);
-	filter.offset = static_cast<std::size_t>(request.GetValue<s32>(ibProtocol::ibView::ibAuditLog::Offset));
-	filter.limit = static_cast<std::size_t>(request.GetValue<s32>(ibProtocol::ibView::ibAuditLog::Count));
+	filter.offset = static_cast<std::size_t>(request.GetValue<std::int32_t>(ibProtocol::ibView::ibAuditLog::Offset));
+	filter.limit = static_cast<std::size_t>(request.GetValue<std::int32_t>(ibProtocol::ibView::ibAuditLog::Count));
 
 	for (const ibLogRow& entry : reader->Query(filter)) {
 		ibDataNode& row = response.AddChild(0, 0);
 		row.SetValue(ibProtocol::ibView::ibAuditLog::Time, ibNumber(static_cast<long long>(entry.ts_ms)));
-		row.SetValue(ibProtocol::ibView::ibAuditLog::Level, static_cast<s32>(entry.level));
+		row.SetValue(ibProtocol::ibView::ibAuditLog::Level, static_cast<std::int32_t>(entry.level));
 		row.SetValue(ibProtocol::ibView::ibAuditLog::Session, entry.session_id);
 		row.SetValue(ibProtocol::ibView::ibAuditLog::User, entry.user_name);
 		row.SetValue(ibProtocol::ibView::ibAuditLog::Host, entry.host);
@@ -80,7 +80,7 @@ bool ibAuditLogView::Fetch(const ibDataNode& request, ibDataNode& response)
 		row.SetValue(ibProtocol::ibEvent::Event, entry.event_type);
 		row.SetValue(ibProtocol::ibView::ibAuditLog::Message, entry.message);
 		row.SetValue(ibProtocol::ibView::ibAuditLog::Ref, entry.ref_guid);
-		row.SetValue(ibProtocol::ibView::ibAuditLog::RefMeta, static_cast<s32>(entry.ref_meta_id));
+		row.SetValue(ibProtocol::ibView::ibAuditLog::RefMeta, static_cast<std::int32_t>(entry.ref_meta_id));
 	}
 	return true;
 }
@@ -93,7 +93,7 @@ bool ibAuditLogView::OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDa
 		return false;
 
 	const ibGuid guid(ref);
-	const ibMetaID metaId = args.GetValue<s32>(ibProtocol::ibView::ibAuditLog::RefMeta);
+	const ibMetaID metaId = args.GetValue<std::int32_t>(ibProtocol::ibView::ibAuditLog::RefMeta);
 	if (metaId == 0) {
 		// Convention from Phase 2g — system-table sys_user row. The desktop opened the User Admin dialog keyed by
 		// guid (sys_user is not a metaobject); that dialog is not the server's yet — the person is told so.

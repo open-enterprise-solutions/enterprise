@@ -85,9 +85,9 @@ class BACKEND_API ibByteBinder;
 // layer. SerializeAOT writes a compiled ibByteCode to a memory
 // stream (intended for sys_bytecode_cache.blob); DeserializeAOT
 // reads it back. Keeping these out-of-line in byteCodeAOT.cpp so
-// byteCode.h stays free of fileSystem/fs.h.
-class ibWriterMemory; // backend/fileSystem/fs.h
-class ibReaderMemory; // backend/fileSystem/fs.h
+// byteCode.h stays free of core/memory/memoryStream.h.
+class ibWriterMemory; // core/memory/memoryStream.h
+class ibReaderMemory; // core/memory/memoryStream.h
 
 struct ibParamRunUnit {
 	wxLongLong_t m_numArray = 0;
@@ -144,7 +144,7 @@ struct ibByteCode {
 		// Parameters are by reference by default, so this bit is set only by the
 		// keyword. It was called `m_bByRef` and meant the exact opposite of its
 		// name: the compiler wrote it at `Val` and the runtime copied on 1.
-		// Wire format is unchanged (one u8), so no AOT version moves.
+		// Wire format is unchanged (one std::uint8_t), so no AOT version moves.
 		bool        m_bByValue     = false;
 		ibClassID   m_clsid        = 0;        // 0 = dynamic; for CHECK_TYPE
 		// The default-value DESCRIPTOR — slot coordinates only. It used to be an

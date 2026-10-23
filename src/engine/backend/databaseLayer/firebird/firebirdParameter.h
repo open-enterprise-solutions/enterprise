@@ -89,7 +89,7 @@ private:
 
 	ISC_TIMESTAMP m_Date;
 	bool m_bValue;
-	wxMemoryBuffer m_BufferValue;
+	ibMemoryBuffer m_BufferValue;
 	long unsigned int m_nBufferLength;
 	short m_nNullFlag;
 	ISC_QUAD m_BlobId;

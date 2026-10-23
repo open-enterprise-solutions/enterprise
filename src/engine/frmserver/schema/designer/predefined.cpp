@@ -126,7 +126,7 @@ void ibSchemaPredefined::Build(const ibSession& session, const ibDataNode& args,
 	}
 }
 
-std::function<void()> ibSchemaPredefined::Command(const ibSession& session, s32 command,
+std::function<void()> ibSchemaPredefined::Command(const ibSession& session, std::int32_t command,
 	const ibDataNode& args, ibProtocol::ibRefusal& refusal, wxString& error) const
 {
 	ibPredefinedOwner* const owner = FindOwner(session, args, refusal, error);

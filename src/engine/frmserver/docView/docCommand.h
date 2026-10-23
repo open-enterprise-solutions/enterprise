@@ -13,9 +13,9 @@
 
 #include <wx/string.h>
 
-#include "core/fileSystem/types.h"   // s32
+#include <cstdint>   // std::int32_t
 
-enum class ibDocCommand : s32 {
+enum class ibDocCommand : std::int32_t {
 	Undo      = 1,    // the document's last command undone (its command processor)
 	Redo      = 2,    // …and done again
 	Save      = 3,    // the document saved — a form's object written
@@ -36,7 +36,7 @@ enum class ibDocCommand : s32 {
 // THE PICTURE A COMMAND IS SHOWN WITH — one of the client's own stock pictures (the desktop's wxArtProvider ids, which
 // its art provider draws), named: a client draws its platform's, as it maps a key to its platform's. One command,
 // one picture, wherever it is pressed from — the menu and the toolbar alike. A number on the wire, never renumbered.
-enum class ibClientStockPicture : s32 {
+enum class ibClientStockPicture : std::int32_t {
 	None   = 0,    // shown by its title alone
 	New    = 1,    // wxART_NEW
 	Open   = 2,    // wxART_FILE_OPEN

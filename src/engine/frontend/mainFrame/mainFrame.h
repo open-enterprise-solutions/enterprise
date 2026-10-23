@@ -96,7 +96,7 @@ public:
 	// so it is written where they meet rather than twice (Max, 2026-09-04: *"I say my list displays
 	// wrongly — I send you screenshots all the time"*). Asks the person first; see the base.
 	bool CaptureWindow(const wxString& reason, const wxString& area, const wxString& format,
-		wxMemoryBuffer& bytes, wxString& focus) override;
+		ibMemoryBuffer& bytes, wxString& focus) override;
 
 
 	virtual wxAuiToolBar* GetMainFrameToolbar() const { return m_mainFrameToolbar; }

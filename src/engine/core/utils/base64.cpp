@@ -69,14 +69,14 @@ void ibBase64::Append(std::string& out, const void* data, size_t size)
 	AppendEncoded<char>(out, data, size);
 }
 
-bool ibBase64::Read(const wchar_t* text, size_t length, wxMemoryBuffer& out)
+bool ibBase64::Read(const wchar_t* text, size_t length, ibMemoryBuffer& out)
 {
 	if (length % 4 != 0)
 		return false;
 
 	// Quartet by quartet, into a buffer of its own — `out` is given only what decoded whole. The padding may close
 	// only the last quartet: "xx==" a byte, "xxx=" two.
-	wxMemoryBuffer bytes(length / 4 * 3 + 1);
+	ibMemoryBuffer bytes(length / 4 * 3 + 1);
 	unsigned char* const begin = static_cast<unsigned char*>(bytes.GetData());
 	unsigned char* at = begin;
 	for (size_t i = 0; i != length; i += 4) {
@@ -107,7 +107,7 @@ bool ibBase64::Read(const wchar_t* text, size_t length, wxMemoryBuffer& out)
 	return true;
 }
 
-bool ibBase64::Read(const ibString& text, wxMemoryBuffer& out)
+bool ibBase64::Read(const ibString& text, ibMemoryBuffer& out)
 {
 	return Read(text.wc_str(), text.length(), out);
 }

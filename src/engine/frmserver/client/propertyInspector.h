@@ -10,7 +10,7 @@
 
 #include "backend/propertyManager/propertyObject.h"
 
-#include "core/fileSystem/types.h"   // s32
+#include <cstdint>   // std::int32_t
 
 #include "frmserver/frmserver.h"
 #include "protocol/protocol.h"   // ibProtocol::ibForm::ibType — the rows
@@ -35,9 +35,9 @@ public:
 	// THE OBJECT SHOWN — the desktop's verb, which took any property object: registered on it, and asked which of its
 	// properties it hides. `id` — what the edit names it by (a metaobject's id, a form control's); `tabId` — the tab it
 	// is in (0: the configuration's tree), said on the rows.
-	void SelectObject(ibPropertyObject* object, ibMetaID id, s32 tabId);
+	void SelectObject(ibPropertyObject* object, ibMetaID id, std::int32_t tabId);
 	// …a metaobject of a tree, by its own id.
-	void SelectObject(ibValueMetaObject* object, s32 tabId);
+	void SelectObject(ibValueMetaObject* object, std::int32_t tabId);
 	// …alive, or none: the object's death clears the owner (ibPropertyObjectNotifier).
 	ibPropertyObject* GetSelectedObject() const;
 
@@ -50,7 +50,7 @@ private:
 
 	ibPropertyObject* m_currentSel = nullptr;
 	ibMetaID m_currentId = 0;
-	s32 m_tabId = 0;
+	std::int32_t m_tabId = 0;
 	std::set<const ibProperty*> m_hidden;
 };
 

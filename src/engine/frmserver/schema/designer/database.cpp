@@ -18,7 +18,7 @@ namespace {
 bool RequestFile(ibBackendDocFrame* frame, const wxString& caption, wxString& file)
 {
 	ibDataNode request;
-	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<s32>(ibProtocol::ibRequest::ibKind::File));
+	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<std::int32_t>(ibProtocol::ibRequest::ibKind::File));
 	request.SetValue(ibProtocol::ibRequest::ibFile::Caption, caption);
 	if (!file.IsEmpty())
 		request.SetValue(ibProtocol::ibRequest::ibFile::File, file);
@@ -48,7 +48,7 @@ void ibSchemaDatabase::Build(const ibSession& WXUNUSED(session), const ibDataNod
 {
 }
 
-std::function<void()> ibSchemaDatabase::Command(const ibSession& session, s32 command,
+std::function<void()> ibSchemaDatabase::Command(const ibSession& session, std::int32_t command,
 	const ibDataNode& WXUNUSED(args), ibProtocol::ibRefusal& refusal, wxString& error) const
 {
 	ibApplicationInstance* const applicationInstance = session.GetApplicationInstance();

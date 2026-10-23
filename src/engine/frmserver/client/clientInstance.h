@@ -18,7 +18,6 @@
 
 #include <wx/string.h>
 
-#include "core/fileSystem/types.h"   // s32
 #include "core/fstring.h"            // ibString — the address the client called from, as the call carried it
 #include "backend/session/sessionHolder.h"
 #include "frmserver/frmserver.h"

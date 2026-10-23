@@ -18,8 +18,8 @@ bool ibFirebirdBlobCompression::HasMagic(const void* data, size_t size) {
 	    && (p[5] == kFlagRaw || p[5] == kFlagZlib);
 }
 
-wxMemoryBuffer ibFirebirdBlobCompression::Wrap(const void* data, size_t size) {
-	wxMemoryBuffer out;
+ibMemoryBuffer ibFirebirdBlobCompression::Wrap(const void* data, size_t size) {
+	ibMemoryBuffer out;
 
 	// Header (6 bytes).
 	out.AppendByte(kMagic0);
@@ -60,7 +60,7 @@ wxMemoryBuffer ibFirebirdBlobCompression::Wrap(const void* data, size_t size) {
 		    < static_cast<double>(size) * kAcceptableRatio) {
 			// Worth keeping. Header flag = zlib, then deflated body.
 			// Append directly into `out` via GetAppendBuf — skips the
-			// intermediate copy through a temp wxMemoryBuffer.
+			// intermediate copy through a temp ibMemoryBuffer.
 			out.AppendByte(kFlagZlib);
 			void* dst = out.GetAppendBuf(compressedSize);
 			const size_t copied = zStream.CopyTo(dst, compressedSize);
@@ -89,12 +89,12 @@ wxMemoryBuffer ibFirebirdBlobCompression::Wrap(const void* data, size_t size) {
 	return out;
 }
 
-wxMemoryBuffer ibFirebirdBlobCompression::Unwrap(const void* data, size_t size) {
+ibMemoryBuffer ibFirebirdBlobCompression::Unwrap(const void* data, size_t size) {
 	// Legacy payload — no magic header. Return the original bytes
 	// untouched. This lets the driver read existing databases that
 	// pre-date the compression feature without rewriting them.
 	if (!HasMagic(data, size)) {
-		wxMemoryBuffer raw(size);
+		ibMemoryBuffer raw(size);
 		if (size > 0 && data != nullptr) {
 			void* dst = raw.GetWriteBuf(size);
 			std::memcpy(dst, data, size);
@@ -110,7 +110,7 @@ wxMemoryBuffer ibFirebirdBlobCompression::Unwrap(const void* data, size_t size) 
 	const size_t         bodyN = size - kHeaderLen;
 
 	if (flag == kFlagRaw) {
-		wxMemoryBuffer out(bodyN);
+		ibMemoryBuffer out(bodyN);
 		if (bodyN > 0) {
 			void* dst = out.GetWriteBuf(bodyN);
 			std::memcpy(dst, body, bodyN);
@@ -124,11 +124,11 @@ wxMemoryBuffer ibFirebirdBlobCompression::Unwrap(const void* data, size_t size) 
 	wxMemoryInputStream inStream(body, bodyN);
 	wxZlibInputStream zIn(inStream, wxZLIB_ZLIB);
 
-	wxMemoryBuffer out;
+	ibMemoryBuffer out;
 	// Read in 64 KB chunks until EOF. Inflated size is unknown ahead of
 	// time; AppendData grows the buffer geometrically.
 	constexpr size_t kChunk = 64 * 1024;
-	wxMemoryBuffer chunk(kChunk);
+	ibMemoryBuffer chunk(kChunk);
 	while (true) {
 		zIn.Read(chunk.GetWriteBuf(kChunk), kChunk);
 		chunk.UngetWriteBuf(kChunk);

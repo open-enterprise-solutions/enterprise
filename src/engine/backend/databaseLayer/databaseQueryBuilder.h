@@ -127,7 +127,7 @@ struct ibQueryExpr
 	// Const (blob form): raw bytes bound via SetParamBlob — OPAQUE to L2-1. The
 	// metadata layer encodes a reference (ibReference) / binary key here; L2-1
 	// never interprets it, so it stays metadata-blind. Empty = not a blob.
-	wxMemoryBuffer m_blob;
+	ibMemoryBuffer m_blob;
 
 	// Param: index into the externally-supplied bind values (>= 0).
 	int m_paramIndex = -1;
@@ -1041,7 +1041,7 @@ struct ibQueryParam
 	ibValue m_value;                  // valid when !m_external && !m_isBlob (Const literal)
 
 	bool           m_isBlob = false;  // true = bind m_blob via SetParamBlob (opaque bytes)
-	wxMemoryBuffer m_blob;            // valid when m_isBlob
+	ibMemoryBuffer m_blob;            // valid when m_isBlob
 };
 
 struct ibRenderedQuery
@@ -1249,7 +1249,7 @@ public:
 	ibDateTime  GetResultDate(const wxString& name);   // the reading (fdatetime.h); NULL is the empty date
 	double      GetResultDouble(const wxString& name);
 	ibNumber    GetResultNumber(const wxString& name);
-	void*       GetResultBlob(const wxString& name, wxMemoryBuffer& buffer);
+	void*       GetResultBlob(const wxString& name, ibMemoryBuffer& buffer);
 
 	// ⭐⭐ IS THIS FIELD NULL — the one question the typed reads above cannot answer.
 	//
@@ -1279,7 +1279,7 @@ public:
 	bool        GetResultBool(int field);
 	ibDateTime  GetResultDate(int field);
 	ibNumber    GetResultNumber(int field);
-	void*       GetResultBlob(int field, wxMemoryBuffer& buffer);
+	void*       GetResultBlob(int field, ibMemoryBuffer& buffer);
 	bool        IsResultNull(int field);
 
 	int      ColumnCount();

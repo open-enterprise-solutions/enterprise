@@ -9656,7 +9656,7 @@ public:
 				return false;
 			}
 
-			result.AddField(wxT("found"), ibDataValue::Int((s64)hits.size()));
+			result.AddField(wxT("found"), ibDataValue::Int((std::int64_t)hits.size()));
 			result.AddField(wxT("hits"), ibDataValue::Array(hits));
 			result.SetValue(wxT("note"), hits.size() >= 24
 				? ibMcpText("Read one with {name, topic} - quoting the topic line above. This many "
@@ -9686,7 +9686,7 @@ public:
 			// a trade can never reach. Naming them here, above the list, is what turns a first
 			// contact into a path — and the count is what tells the reader this is a body of work
 			// rather than a handful of notes.
-			result.AddField(wxT("count"), ibDataValue::Int((s64)out.size()));
+			result.AddField(wxT("count"), ibDataValue::Int((std::int64_t)out.size()));
 			{
 				static const wxChar* const s_start[] = {
 					wxT("intake"), wxT("combining"), wxT("same-shape-elsewhere"),
@@ -9806,7 +9806,7 @@ public:
 			// avoid. The weight makes the next call a decision rather than a probe.
 			std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
 			entry->SetValue(wxT("topic"), TopicLabel(topic.m_title));
-			entry->AddField(wxT("lines"), ibDataValue::Int((s64)LinesIn(topic.m_body)));
+			entry->AddField(wxT("lines"), ibDataValue::Int((std::int64_t)LinesIn(topic.m_body)));
 
 			contents.push_back(ibDataValue::Child(entry));
 		}

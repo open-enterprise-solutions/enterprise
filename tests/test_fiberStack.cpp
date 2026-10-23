@@ -11,7 +11,7 @@
 #include "backend/session/session.h"
 #include "core/exception.h"
 #include "core/fiber/fiber.h"
-#include "core/fileSystem/fs.h"
+#include "core/memory/memoryStream.h"
 #include "core/serialize/dataBuilder.h"
 #include "core/serialize/jsonProvider.h"
 
@@ -215,7 +215,7 @@ TEST(FiberStack, ABinaryValueNestedPastTheStack_Raises)
 		cursor = &cursor->AddChild(1, i);
 	ibWriterMemory writer;
 	ASSERT_TRUE(ibBinaryProvider().Write(root, writer));
-	const wxMemoryBuffer blob = writer.buffer();
+	const ibMemoryBuffer blob = writer.buffer();
 
 	// The same bytes on the ordinary reserve. The refusal below is the
 	// reserve, not a document the reader cannot read.

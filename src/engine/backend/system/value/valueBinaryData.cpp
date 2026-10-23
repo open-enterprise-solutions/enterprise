@@ -13,6 +13,7 @@
 #include <wx/log.h>
 
 #include <cstring>
+#include <new>       // std::bad_alloc — a file the heap has no room for
 
 
 // Order MUST match ibValueBinaryData::Func - the method number is the index into this table.
@@ -28,7 +29,7 @@ void ibValueBinaryData_BindNames(ibValue::ibMemberTable& helper, const ibValue* 
 
 ibValueBinaryData::ibValueBinaryData() : ibValueStaticMembers(ibValueTypes::TYPE_VALUE, true), m_data() {}
 
-ibValueBinaryData::ibValueBinaryData(const wxMemoryBuffer& data) : ibValueStaticMembers(ibValueTypes::TYPE_VALUE, true), m_data(data) {}
+ibValueBinaryData::ibValueBinaryData(const ibMemoryBuffer& data) : ibValueStaticMembers(ibValueTypes::TYPE_VALUE, true), m_data(data) {}
 
 ibValueBinaryData::ibValueBinaryData(const void* data, size_t length) : ibValueStaticMembers(ibValueTypes::TYPE_VALUE, true), m_data()
 {
@@ -63,7 +64,7 @@ bool ibValueBinaryData::Init(ibValue** paParams, const long lSizeArray)
 	return false;
 }
 
-void ibValueBinaryData::ReadWholeFile(const wxString& fileName, const wxString& who, wxMemoryBuffer& bytes)
+void ibValueBinaryData::ReadWholeFile(const wxString& fileName, const wxString& who, ibMemoryBuffer& bytes)
 {
 	wxFFile file;
 	{
@@ -75,28 +76,35 @@ void ibValueBinaryData::ReadWholeFile(const wxString& fileName, const wxString& 
 
 	const wxFileOffset length = file.Length();
 	if (length <= 0) {
-		bytes = wxMemoryBuffer(0);
+		bytes = ibMemoryBuffer(0);
 		return;
 	}
 
-	// ⚠ A FILE THAT DOES NOT FIT IS A REFUSAL, NOT A CRASH AND NOT A PART OF IT. The buffer's constructor does
-	// not say when it got no memory - it hands back a null block, and reading into that is an access violation;
-	// and a length past size_t (a file over 4 GB in a 32-bit build) would wrap, and the head of the file be
-	// handed over as the whole of it.
+	// ⚠ A FILE THAT DOES NOT FIT IS A REFUSAL, NOT A CRASH AND NOT A PART OF IT. A length past size_t (a file
+	// over 4 GB in a 32-bit build) would wrap, and the head of the file be handed over as the whole of it; and
+	// room the heap does not have is std::bad_alloc from the buffer, said here in the platform's words.
 	const size_t size = static_cast<size_t>(length);
-	wxMemoryBuffer whole(static_cast<wxFileOffset>(size) == length ? size : 0);
-	if (static_cast<wxFileOffset>(size) != length || whole.GetData() == nullptr)
+	if (static_cast<wxFileOffset>(size) != length)
 		ibBackendCoreException::Error(_("%s: the file '%s' is too large to be read whole"), who, fileName);
 
-	if (file.Read(whole.GetData(), size) != size)
+	ibMemoryBuffer whole;
+	void* place = nullptr;
+	try {
+		place = whole.GetWriteBuf(size);
+	}
+	catch (const std::bad_alloc&) {
+		ibBackendCoreException::Error(_("%s: the file '%s' is too large to be read whole"), who, fileName);
+	}
+
+	if (file.Read(place, size) != size)
 		ibBackendCoreException::Error(_("%s: reading the file '%s' failed"), who, fileName);
-	whole.SetDataLen(size);
+	whole.UngetWriteBuf(size);
 	bytes = whole;
 }
 
 void ibValueBinaryData::ReadFile(const wxString& fileName)
 {
-	wxMemoryBuffer bytes;
+	ibMemoryBuffer bytes;
 	ReadWholeFile(fileName, wxT("BinaryData"), bytes);
 	m_data = bytes;
 }

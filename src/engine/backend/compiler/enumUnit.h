@@ -40,11 +40,11 @@ class ibValueEnumerationVariantBase : public ibValue {
 	// empty (the copy is made by packing, and a refusal left the buffer cleared), and so did every
 	// other setting that happened to hold one. It read as "the filter will not display".
 	virtual bool DoSerialize(class ibDataNode& node) const override {
-		node.SetValue(kValueFieldData, (s32)GetEnumValue());
+		node.SetValue(kValueFieldData, (std::int32_t)GetEnumValue());
 		return true;
 	}
 	virtual bool DoDeserialize(const class ibDataNode& node) override {
-		SetEnumValue(static_cast<valT>(node.GetValue<s32>(kValueFieldData)));
+		SetEnumValue(static_cast<valT>(node.GetValue<std::int32_t>(kValueFieldData)));
 		return true;
 	}
 };
@@ -298,12 +298,12 @@ public:
 	// emptyEnum is the member number that means "none" — the same one the enum column binds when the
 	// cell carries no value, so the packed form and the stored column agree.
 	virtual bool DoSerialize(class ibDataNode& node) const override {
-		node.SetValue(kValueFieldData, m_value != nullptr ? (s32)m_value->GetEnumValue() : (s32)emptyEnum);
+		node.SetValue(kValueFieldData, m_value != nullptr ? (std::int32_t)m_value->GetEnumValue() : (std::int32_t)emptyEnum);
 		return true;
 	}
 
 	virtual bool DoDeserialize(const class ibDataNode& node) override {
-		const s32 member = node.GetValue<s32>(kValueFieldData);
+		const std::int32_t member = node.GetValue<std::int32_t>(kValueFieldData);
 		if (member <= emptyEnum) {
 			m_value = decltype(m_value)();   // read back as written: an enumeration with no member
 			return true;

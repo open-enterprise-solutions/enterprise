@@ -790,7 +790,7 @@ public:
 		for (size_t i = 0; i < description.m_variants.size(); ++i) {
 			const ibVariantDescription& v = description.m_variants[i];
 			std::shared_ptr<ibDataNode> node = std::make_shared<ibDataNode>();
-			node->SetValue(wxT("index"), (s32)i);   // what compose_run takes
+			node->SetValue(wxT("index"), (std::int32_t)i);   // what compose_run takes
 			node->SetValue(wxT("name"), v.m_name);
 			// What a PICKER shows, when the author gave it different words from the name. That is the
 			// wording a person will quote back, so it is the one to match their complaint against.

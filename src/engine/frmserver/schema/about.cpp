@@ -12,7 +12,7 @@ void ibSchemaAbout::Build(const ibSession& session, const ibDataNode& WXUNUSED(a
 {
 	const ibApplicationInstance* const applicationInstance = session.GetApplicationInstance();
 
-	result.SetValue(ibProtocol::ibSchema::ibAbout::Build, static_cast<s32>(GetBuildId()));
+	result.SetValue(ibProtocol::ibSchema::ibAbout::Build, static_cast<std::int32_t>(GetBuildId()));
 	result.SetValue(ibProtocol::ibSchema::ibAbout::Picture, ibBackendPicture::SendPicture(g_metaCommonMetadataCLSID));
 	result.SetValue(ibProtocol::ibSchema::ibAbout::User, session.GetUserInfo().m_strUserName);
 	if (applicationInstance == nullptr)

@@ -436,8 +436,8 @@ private:
 	// Buffer-level user-table export / import. Per-record serialization
 	// lives on ibUserInfo (Serialize / Deserialize); these methods just
 	// drive the iteration over the sys_user table.
-	bool LoadUserInfoFromBuffer(wxMemoryBuffer& buffer);
-	bool SaveUserInfoToBuffer(wxMemoryBuffer& buffer) const;
+	bool LoadUserInfoFromBuffer(ibMemoryBuffer& buffer);
+	bool SaveUserInfoToBuffer(ibMemoryBuffer& buffer) const;
 
 	wxString ComputeMd5() const;
 	wxString ComputeMd5(const wxString& userPassword) const;

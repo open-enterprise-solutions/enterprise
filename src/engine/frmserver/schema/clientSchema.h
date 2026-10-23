@@ -15,7 +15,7 @@
 
 #include <wx/string.h>
 
-#include "core/fileSystem/types.h"   // s32
+#include <cstdint>   // std::int32_t
 
 #include "frmserver/frmserver.h"
 #include "protocol/protocol.h"   // ibProtocol::ibSchema::ibKind, ibProtocol::ibRefusal
@@ -47,7 +47,7 @@ public:
 	// the WORK that does it, which the client's work then runs: what it opens the frame shows, and what it asks the
 	// person waits for the response. Empty with a refusal — why, and its text: the schema takes no such command, or
 	// not with these arguments — a schema acts only on what it offered; nothing is done then.
-	virtual std::function<void()> Command(const ibSession& session, s32 command,
+	virtual std::function<void()> Command(const ibSession& session, std::int32_t command,
 		const ibDataNode& args, ibProtocol::ibRefusal& refusal, wxString& error) const;
 
 protected:

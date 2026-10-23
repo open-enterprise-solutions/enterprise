@@ -27,7 +27,7 @@ template <class T> class ibValuePtr;
 
 ///////////////////////////////////////////////////////////////////////////////
 
-#include "core/fileSystem/fs.h"
+#include "core/memory/memoryStream.h"
 #include "frmclient/backend/backend_exception.h"   // ibBackendCoreException — a cell that is not what it is asked for raises
 #include "core/propertyChoiceMode.h"               // ibPropertyChoiceMode — how many of the choices are held
 
@@ -139,7 +139,7 @@ class FRMCLIENT_API ibPropertyChoiceList {
 	//   name     — what it is called in code. This is what a script writes and what a caller names.
 	//   synonym  — what it is called to a person. Empty when there is nothing better than the name.
 	//   value    — WHAT THE PROPERTY BECOMES if this one is chosen.
-	//   data     — a u64 beside the id, for what a long does not hold: a metaobject's class, the kind a window groups
+	//   data     — a std::uint64_t beside the id, for what a long does not hold: a metaobject's class, the kind a window groups
 	//              it under. 0: none.
 	//
 	// ⭐⭐ THE ID IS A NUMBER AND THE VALUE IS A VARIANT, and they are not the same fact. The number
@@ -153,14 +153,14 @@ class FRMCLIENT_API ibPropertyChoiceList {
 	// just been shown, or showing a person an identifier.
 	struct ibPropertyChoiceItem {
 		ibPropertyChoiceItem(long id, const wxString& name, const wxString& synonym,
-			const wxVariant& value, const wxBitmap& bmp, u64 data)
+			const wxVariant& value, const wxBitmap& bmp, std::uint64_t data)
 			: m_id(id), m_name(name), m_synonym(synonym), m_value(value), m_bmp(bmp), m_data(data) {}
 		long      m_id;
 		wxString  m_name;
 		wxString  m_synonym;
 		wxVariant m_value;
 		wxBitmap  m_bmp;
-		u64       m_data;
+		std::uint64_t       m_data;
 	};
 
 	std::vector<ibPropertyChoiceItem> m_items;
@@ -174,7 +174,7 @@ public:
 
 	// The full form — the number says which, the variant is what to place.
 	void Add(long id, const wxString& name, const wxString& synonym,
-		const wxVariant& value, const wxBitmap& bmp = wxNullBitmap, u64 data = 0) {
+		const wxVariant& value, const wxBitmap& bmp = wxNullBitmap, std::uint64_t data = 0) {
 		m_items.emplace_back(id, name, synonym, value, bmp, data);
 	}
 
@@ -184,7 +184,7 @@ public:
 	wxString GetSynonym(unsigned int idx) const { return m_items[idx].m_synonym; }
 	const wxVariant& GetValue(unsigned int idx) const { return m_items[idx].m_value; }
 	const wxBitmap& GetBitmap(unsigned int idx) const { return m_items[idx].m_bmp; }
-	u64 GetData(unsigned int idx) const { return m_items[idx].m_data; }
+	std::uint64_t GetData(unsigned int idx) const { return m_items[idx].m_data; }
 
 
 	// The label a person reads: the synonym when there is one, the name otherwise. One place, so

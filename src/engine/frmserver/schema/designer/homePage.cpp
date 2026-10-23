@@ -62,7 +62,7 @@ void ibSchemaHomePage::Build(const ibSession& session, const ibDataNode& args, i
 			continue;
 
 		ibDataNode& row = forms.AddChild(0, metaForm->GetMetaID());
-		row.SetValue(ibProtocol::ibSchema::ibHomePage::Id, static_cast<s32>(metaForm->GetMetaID()));
+		row.SetValue(ibProtocol::ibSchema::ibHomePage::Id, static_cast<std::int32_t>(metaForm->GetMetaID()));
 		row.SetValue(ibProtocol::ibSchema::ibHomePage::Name, metaForm->GetName());
 		row.SetValue(ibProtocol::ibSchema::ibHomePage::FullName, metaForm->GetFullName());
 		row.SetValue(ibProtocol::ibSchema::ibHomePage::Picture, ibBackendPicture::SendPicture(metaForm->GetClassType()));
@@ -71,14 +71,14 @@ void ibSchemaHomePage::Build(const ibSession& session, const ibDataNode& args, i
 			continue;
 		}
 		if (const ibValueMetaObject* const owner = metaForm->GetParent()) {
-			row.SetValue(ibProtocol::ibSchema::ibHomePage::Owner, static_cast<s32>(owner->GetMetaID()));
+			row.SetValue(ibProtocol::ibSchema::ibHomePage::Owner, static_cast<std::int32_t>(owner->GetMetaID()));
 			row.SetValue(ibProtocol::ibSchema::ibHomePage::OwnerName, owner->GetFullName());
 			row.SetValue(ibProtocol::ibSchema::ibHomePage::OwnerPicture, ibBackendPicture::SendPicture(owner->GetClassType()));
 		}
 	}
 }
 
-std::function<void()> ibSchemaHomePage::Command(const ibSession& session, s32 command,
+std::function<void()> ibSchemaHomePage::Command(const ibSession& session, std::int32_t command,
 	const ibDataNode& args, ibProtocol::ibRefusal& refusal, wxString& error) const
 {
 	if (static_cast<ibProtocol::ibSchema::ibCommand>(command) != ibProtocol::ibSchema::ibCommand::Save) {

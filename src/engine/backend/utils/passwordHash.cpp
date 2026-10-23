@@ -231,7 +231,7 @@ bool ibPasswordHash::Verify(const wxString& password, const wxString& storedHash
 	if (!iterStr.ToULong(&iterations) || iterations == 0 || iterations > 10000000u)
 		return false;
 
-	wxMemoryBuffer salt, stored;
+	ibMemoryBuffer salt, stored;
 	if (!ibBase64::Read(saltB64.wc_str(), saltB64.length(), salt) || !ibBase64::Read(hashB64.wc_str(), hashB64.length(), stored)
 		|| salt.GetDataLen() == 0 || stored.GetDataLen() == 0)
 		return false;

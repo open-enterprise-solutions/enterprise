@@ -233,13 +233,13 @@ ibString ibRpcWriteError(const ibDataValue& id, ibRpcError code, const wxString&
 }
 
 // The error answer, whoever numbers the code — JSON-RPC's own, or the application's.
-static ibString WriteError(const ibDataValue& id, s64 code, const wxString& message, const ibDataNode* data)
+static ibString WriteError(const ibDataValue& id, std::int64_t code, const wxString& message, const ibDataNode* data)
 {
 	ibDataNode root = Envelope(id);
 
 	ibDataNode& error = root.Child(wxT("error"));
 	// Built as a VALUE, not through SetValue<T>: the node's codecs cover a fixed
-	// set (wxString / bool / s32 / buffer / guid / ibNumber / date) and a 64-bit
+	// set (wxString / bool / std::int32_t / buffer / guid / ibNumber / date) and a 64-bit
 	// integer is not one of them.
 	error.AddField(wxT("code"), ibDataValue::Int(code));
 	error.SetValue(wxT("message"), message);
@@ -258,10 +258,10 @@ static ibString WriteError(const ibDataValue& id, s64 code, const wxString& mess
 ibString ibRpcWriteError(const ibDataValue& id, ibRpcError code, const wxString& message,
 	const ibDataNode* data)
 {
-	return WriteError(id, static_cast<s64>(code), message, data);
+	return WriteError(id, static_cast<std::int64_t>(code), message, data);
 }
 
-ibString ibRpcWriteError(const ibDataValue& id, s32 code, const wxString& message)
+ibString ibRpcWriteError(const ibDataValue& id, std::int32_t code, const wxString& message)
 {
 	return WriteError(id, code, message, nullptr);
 }

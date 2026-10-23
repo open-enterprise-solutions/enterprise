@@ -60,7 +60,7 @@ private:
 	wxString m_strValue;
 	
 	wxString m_strDateValue;
-	wxMemoryBuffer m_BufferValue;
+	ibMemoryBuffer m_BufferValue;
 	wxCharBuffer m_CharBufferValue;
 	
 	long m_nBufferLength;

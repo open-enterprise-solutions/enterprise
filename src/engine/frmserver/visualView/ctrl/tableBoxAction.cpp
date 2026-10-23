@@ -344,7 +344,7 @@ void ibValueModelTableBox::Command_OutputList()
 		if (column == nullptr || !column->GetVisibleColumn() || column->GetSourceFieldName().IsEmpty())
 			continue;   // a hidden column is not on the screen; a column bound to nothing has no field to print
 		ibChoiceItem item;
-		item.id = static_cast<s32>(offered.size());
+		item.id = static_cast<std::int32_t>(offered.size());
 		item.caption = column->GetCaption().IsEmpty() ? column->GetSourceFieldName() : column->GetCaption();
 		item.selected = true;   // everything shown, ticked — the answer most people want is the default
 		names.push_back(item);
@@ -353,12 +353,12 @@ void ibValueModelTableBox::Command_OutputList()
 	if (offered.empty())
 		return;
 
-	std::vector<s32> chosen;
+	std::vector<std::int32_t> chosen;
 	if (!ibRequestChoice(_("Which columns do you want to see?"), names, chosen))
 		return;
 
 	std::vector<ibValueModelTableBoxColumn*> printed;
-	for (const s32 index : chosen)
+	for (const std::int32_t index : chosen)
 		printed.push_back(offered[static_cast<std::size_t>(index)]);
 
 	// The settings in force, with the chosen columns as the fields to print.
@@ -541,15 +541,15 @@ void ibValueModelTableBox::Command_ShowViewMode()
 		return;
 
 	ibDataNode request;
-	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<s32>(ibProtocol::ibRequest::ibKind::ViewMode));
+	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<std::int32_t>(ibProtocol::ibRequest::ibKind::ViewMode));
 	request.SetValue(ibProtocol::ibRequest::ibViewMode::Picture, ibBackendPicture::SendPicture(g_picHierarchyCLSID));
-	request.SetValue(ibProtocol::ibRequest::ibViewMode::Mode, static_cast<s32>(m_propertyViewMode->GetValueAsEnum()));
+	request.SetValue(ibProtocol::ibRequest::ibViewMode::Mode, static_cast<std::int32_t>(m_propertyViewMode->GetValueAsEnum()));
 
 	ibDataNode response;
 	if (!frame->Request(request, response) || response.FindField(ibProtocol::ibRequest::ibViewMode::Mode) == nullptr)
 		return;   // cancelled
 
-	const s32 chosen = response.GetValue<s32>(ibProtocol::ibRequest::ibViewMode::Mode);
+	const std::int32_t chosen = response.GetValue<std::int32_t>(ibProtocol::ibRequest::ibViewMode::Mode);
 	if (chosen >= ibDataViewTree && chosen <= ibDataViewList)
 		OnViewModeChanged(static_cast<ibDataViewViewMode>(chosen));
 }

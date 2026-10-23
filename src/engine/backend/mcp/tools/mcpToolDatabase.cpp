@@ -316,7 +316,7 @@ public:
 				sawErrors = true;
 		}
 
-		result.AddField(wxT("changes"), ibDataValue::Int((s64)ledger.size()));
+		result.AddField(wxT("changes"), ibDataValue::Int((std::int64_t)ledger.size()));
 		result.AddField(wxT("ledger"), ibDataValue::Array(ledger));
 		result.AddField(wxT("applied"), ibDataValue::Bool(applied));
 
@@ -497,7 +497,7 @@ public:
 
 		const bool withProperties = ArgProperties().Flag(params);
 
-		s32 limit = (s32)ArgLimit().Whole(params);
+		std::int32_t limit = (std::int32_t)ArgLimit().Whole(params);
 		if (limit <= 0)
 			limit = 200;
 
@@ -545,12 +545,12 @@ public:
 				ibMcpSayObject(object, *entry);
 			}
 
-			entry->AddField(wxT("depth"), ibDataValue::Int((s64)record.m_depth));
+			entry->AddField(wxT("depth"), ibDataValue::Int((std::int64_t)record.m_depth));
 
 			entries.push_back(ibDataValue::Child(entry));
 		}
 
-		result.AddField(wxT("differences"), ibDataValue::Int((s64)differing));
+		result.AddField(wxT("differences"), ibDataValue::Int((std::int64_t)differing));
 
 		// ⭐ WOULD IT TOUCH THE DATABASE AT ALL — the question that decides everything else, and
 		// the platform already answers it: IsDynamicUpdateAvailable is what the apply flow asks
@@ -571,7 +571,7 @@ public:
 		result.AddField(wxT("entries"), ibDataValue::Array(entries));
 
 		if ((int)entries.size() < differing) {
-			result.AddField(wxT("shown"), ibDataValue::Int((s64)entries.size()));
+			result.AddField(wxT("shown"), ibDataValue::Int((std::int64_t)entries.size()));
 			result.SetValue(wxT("note"),
 				ibMcpText("More than the limit. Raise `limit` to see the rest."));
 		}
@@ -680,7 +680,7 @@ public:
 				audit->Check(metaData, complain);
 		}
 
-		result.AddField(wxT("checks"), ibDataValue::Int((s64)ibMcpAudits().size()));
+		result.AddField(wxT("checks"), ibDataValue::Int((std::int64_t)ibMcpAudits().size()));
 		result.AddField(wxT("problems"), ibDataValue::Array(problems));
 
 		result.SetValue(wxT("note"), problems.empty()
@@ -857,7 +857,7 @@ public:
 			std::vector<ibDataValue> diagnostics;
 			for (const ibDiagnostic& diagnostic : answer.m_diagnostics) {
 				std::shared_ptr<ibDataNode> line = std::make_shared<ibDataNode>();
-				line->AddField(wxT("line"), ibDataValue::Int(static_cast<s64>(diagnostic.m_line)));
+				line->AddField(wxT("line"), ibDataValue::Int(static_cast<std::int64_t>(diagnostic.m_line)));
 				line->SetValue(wxT("message"), diagnostic.m_message);
 				if (!diagnostic.m_codeLine.IsEmpty())
 					line->SetValue(wxT("codeLine"), diagnostic.m_codeLine);

@@ -28,7 +28,7 @@ bool ibDialogSelectTypeForm::ShowModal(int& chosen)
 	// The window as the desktop's fills it — its title, the form's texts, and a radio button per kind; the name the
 	// window wrote on picking one (OnFormTypeChanged) goes with each, the metadata being the server's.
 	ibDataNode request;
-	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<s32>(ibProtocol::ibRequest::ibKind::FormType));
+	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<std::int32_t>(ibProtocol::ibRequest::ibKind::FormType));
 	request.SetValue(ibProtocol::ibRequest::ibFormType::Caption, m_metaValue->GetSynonym() + _(" form wizard"));
 	request.SetValue(ibProtocol::ibRequest::ibFormType::Name, m_metaObject->GetName());
 	request.SetValue(ibProtocol::ibRequest::ibFormType::Synonym, m_metaObject->GetSynonym());
@@ -39,7 +39,7 @@ bool ibDialogSelectTypeForm::ShowModal(int& chosen)
 	nameRequest.m_forConstructor = true;
 	for (const choiceData_t& choice : m_listChoice) {
 		ibDataNode& item = request.AddChild(0, 0);
-		item.SetValue(ibProtocol::ibRequest::ibFormType::Id, static_cast<s32>(choice.m_value));
+		item.SetValue(ibProtocol::ibRequest::ibFormType::Id, static_cast<std::int32_t>(choice.m_value));
 		item.SetValue(ibProtocol::ibRequest::ibFormType::Caption, choice.m_label);
 		nameRequest.m_prefix = choice.m_name;
 		item.SetValue(ibProtocol::ibRequest::ibFormType::Name,
@@ -52,7 +52,7 @@ bool ibDialogSelectTypeForm::ShowModal(int& chosen)
 		return false;
 
 	// Only what was offered can come back.
-	chosen = response.GetValue<s32>(ibProtocol::ibRequest::ibFormType::Id);
+	chosen = response.GetValue<std::int32_t>(ibProtocol::ibRequest::ibFormType::Id);
 	const auto offered = std::find_if(m_listChoice.begin(), m_listChoice.end(),
 		[chosen](const choiceData_t& choice) { return choice.m_value == chosen; });
 	if (offered == m_listChoice.end())

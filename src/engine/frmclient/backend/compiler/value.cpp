@@ -154,7 +154,7 @@ bool ibValue::DoSerialize(ibDataNode& node) const
 	case ibValueTypes::TYPE_NUMBER:  node.SetValue(kValueFieldData, m_numeric); return true;
 	case ibValueTypes::TYPE_DATE:    node.SetValue(kValueFieldData, m_date); return true;
 	case ibValueTypes::TYPE_STRING:  node.SetValue(kValueFieldData, m_text); return true;
-	case ibValueTypes::TYPE_ENUM:    node.SetValue(kValueFieldData, (s32)m_number); return true;   // the member, by its number
+	case ibValueTypes::TYPE_ENUM:    node.SetValue(kValueFieldData, (std::int32_t)m_number); return true;   // the member, by its number
 	default:                         return false;
 	}
 }

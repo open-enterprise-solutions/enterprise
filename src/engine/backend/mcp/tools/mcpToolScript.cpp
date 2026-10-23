@@ -29,7 +29,7 @@ ibDataValue DiagnosticsOf(const std::vector<ibDiagnostic>& diagnostics)
 
 		// THE FAILURE AS DATA — an address, not a sentence. The line and the
 		// module are what a caller navigates by; the message is what it reads.
-		entry->AddField(wxT("line"), ibDataValue::Int((s64)diagnostic.m_line));
+		entry->AddField(wxT("line"), ibDataValue::Int((std::int64_t)diagnostic.m_line));
 		entry->SetValue(wxT("module"), diagnostic.m_moduleName);
 		entry->SetValue(wxT("message"), diagnostic.m_message);
 
@@ -38,7 +38,7 @@ ibDataValue DiagnosticsOf(const std::vector<ibDiagnostic>& diagnostics)
 
 		// The engine's own code for this failure: a translated message changes,
 		// this does not.
-		entry->AddField(wxT("code"), ibDataValue::Int((s64)diagnostic.m_code));
+		entry->AddField(wxT("code"), ibDataValue::Int((std::int64_t)diagnostic.m_code));
 
 		list.push_back(ibDataValue::Child(entry));
 	}
@@ -251,7 +251,7 @@ public:
 				std::shared_ptr<ibDataNode> one = std::make_shared<ibDataNode>();
 				one->SetValue(wxT("name"), binding.m_name);
 				one->SetValue(wxT("from"), binding.m_origin);
-				one->AddField(wxT("cell"), ibDataValue::Int((s64)binding.m_rowCell));
+				one->AddField(wxT("cell"), ibDataValue::Int((std::int64_t)binding.m_rowCell));
 
 				// What this name OFFERS — the row's own fields, so a query can be written against
 				// what is really there. Absent rather than empty when the source did not resolve
@@ -287,14 +287,14 @@ public:
 			// replaces exactly what it read rather than looking for it again.
 			if (!outline.m_text.IsEmpty()) {
 				entry->SetValue(wxT("text"), outline.m_text);
-				entry->AddField(wxT("at"), ibDataValue::Int((s64)outline.m_textFrom));
-				entry->AddField(wxT("to"), ibDataValue::Int((s64)outline.m_textTo));
+				entry->AddField(wxT("at"), ibDataValue::Int((std::int64_t)outline.m_textFrom));
+				entry->AddField(wxT("to"), ibDataValue::Int((std::int64_t)outline.m_textTo));
 			}
 
 			queries.push_back(ibDataValue::Child(entry));
 		}
 
-		result.AddField(wxT("count"), ibDataValue::Int((s64)queries.size()));
+		result.AddField(wxT("count"), ibDataValue::Int((std::int64_t)queries.size()));
 		result.AddField(wxT("queries"), ibDataValue::Array(queries));
 		result.SetValue(wxT("scope"), wxString(context != nullptr
 			? ibMcpText("this configuration's context") : wxT("text-only")));

@@ -110,7 +110,7 @@ bool ibValueFrame::SaveControl(const ibValueMetaObjectFormBase* metaForm, ibWrit
 // the form is one transparent node tree (the provider frames each child in kChildBlock).
 bool ibValueFrame::LoadNode(const ibDataNode& node)
 {
-	m_controlId = (ibFormID)node.GetValue<s32>(wxT("ControlId"));
+	m_controlId = (ibFormID)node.GetValue<std::int32_t>(wxT("ControlId"));
 	SetControlName(node.GetValue<wxString>(wxT("Name")));
 	m_expanded = node.GetValue<bool>(wxT("Expanded"));
 	if (!ReadData(node))
@@ -141,7 +141,7 @@ bool ibValueFrame::LoadNode(const ibDataNode& node)
 
 bool ibValueFrame::SaveNode(ibDataNode& node) const
 {
-	node.SetValue(wxT("ControlId"), (s32)m_controlId);
+	node.SetValue(wxT("ControlId"), (std::int32_t)m_controlId);
 	node.SetValue(wxT("Name"),      GetControlName());
 	node.SetValue(wxT("Expanded"),  m_expanded);
 	if (!WriteData(node))
@@ -165,7 +165,7 @@ bool ibValueFrame::SaveNode(ibDataNode& node) const
 // source property rides its hops on guids and re-homes them onto the pasted object. Children recurse the same pair.
 bool ibValueFrame::CopyNode(ibDataNode& node) const
 {
-	node.SetValue(wxT("ControlId"), (s32)m_controlId);
+	node.SetValue(wxT("ControlId"), (std::int32_t)m_controlId);
 	node.SetValue(wxT("Name"),      GetControlName());
 	node.SetValue(wxT("Expanded"),  m_expanded);
 
@@ -200,7 +200,7 @@ bool ibValueFrame::CopyNode(ibDataNode& node) const
 
 bool ibValueFrame::PasteNode(const ibDataNode& node)
 {
-	m_controlId = (ibFormID)node.GetValue<s32>(wxT("ControlId"));
+	m_controlId = (ibFormID)node.GetValue<std::int32_t>(wxT("ControlId"));
 	SetControlName(node.GetValue<wxString>(wxT("Name")));
 	m_expanded = node.GetValue<bool>(wxT("Expanded"));
 

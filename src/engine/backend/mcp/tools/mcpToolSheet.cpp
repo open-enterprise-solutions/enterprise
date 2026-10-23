@@ -132,14 +132,14 @@ const ibArg& ArgCol()
 // ⭐ ONE TRANSLATION, AT THE BOUNDARY. Everything a caller sends comes through Line(); everything
 // answered goes back out through LineOut(). Not twelve subtractions at twelve call sites - the
 // thirteenth is what this defect is made of.
-s32 Line(const ibArg& argument, const ibDataNode& params)
+std::int32_t Line(const ibArg& argument, const ibDataNode& params)
 {
-	return (s32)argument.Whole(params) - 1;
+	return (std::int32_t)argument.Whole(params) - 1;
 }
 
-s64 LineOut(int stored)
+std::int64_t LineOut(int stored)
 {
-	return (s64)stored + 1;
+	return (std::int64_t)stored + 1;
 }
 
 const ibArg& ArgValue()
@@ -563,8 +563,8 @@ public:
 		// a form being laid out from paper needs to know whether it still fits on
 		// the page. Both are readings the sheet already keeps and nothing was
 		// handing over: the extent it occupies, and the page breaks that cut it.
-		result.AddField(wxT("rows"), ibDataValue::Int((s64)desc.GetNumberRows()));
-		result.AddField(wxT("cols"), ibDataValue::Int((s64)desc.GetNumberCols()));
+		result.AddField(wxT("rows"), ibDataValue::Int((std::int64_t)desc.GetNumberRows()));
+		result.AddField(wxT("cols"), ibDataValue::Int((std::int64_t)desc.GetNumberCols()));
 
 		// PAGES, counted the only way a sheet can count them: by the breaks it
 		// declares. A break says where the paper ends deliberately; without one
@@ -572,8 +572,8 @@ public:
 		// really ends is the printer's business.
 		const int rowBreaks = desc.GetBrakeNumberRows();
 		const int colBreaks = desc.GetBrakeNumberCols();
-		result.AddField(wxT("pagesDown"), ibDataValue::Int((s64)(rowBreaks + 1)));
-		result.AddField(wxT("pagesAcross"), ibDataValue::Int((s64)(colBreaks + 1)));
+		result.AddField(wxT("pagesDown"), ibDataValue::Int((std::int64_t)(rowBreaks + 1)));
+		result.AddField(wxT("pagesAcross"), ibDataValue::Int((std::int64_t)(colBreaks + 1)));
 
 		// ⭐ AND WHERE THEY ARE, not only how many. A count says a break exists and leaves the one
 		// question a caller actually has — which row, so it can be moved or taken off — answerable
@@ -585,9 +585,9 @@ public:
 
 			std::vector<ibDataValue> down, across;
 			for (int idx = 0; idx < rowBreaks; ++idx)
-				down.push_back(ibDataValue::Int((s64)desc.GetRowBrakeByIdx(idx)));
+				down.push_back(ibDataValue::Int((std::int64_t)desc.GetRowBrakeByIdx(idx)));
 			for (int idx = 0; idx < colBreaks; ++idx)
-				across.push_back(ibDataValue::Int((s64)desc.GetColBrakeByIdx(idx)));
+				across.push_back(ibDataValue::Int((std::int64_t)desc.GetColBrakeByIdx(idx)));
 
 			breaks.AddField(wxT("rows"), ibDataValue::Array(down));
 			breaks.AddField(wxT("cols"), ibDataValue::Array(across));
@@ -595,8 +595,8 @@ public:
 
 		if (desc.GetRowFreeze() > 0 || desc.GetColFreeze() > 0) {
 			ibDataNode& freeze = result.Child(wxT("freeze"));
-			freeze.AddField(wxT("rows"), ibDataValue::Int((s64)desc.GetRowFreeze()));
-			freeze.AddField(wxT("cols"), ibDataValue::Int((s64)desc.GetColFreeze()));
+			freeze.AddField(wxT("rows"), ibDataValue::Int((std::int64_t)desc.GetRowFreeze()));
+			freeze.AddField(wxT("cols"), ibDataValue::Int((std::int64_t)desc.GetColFreeze()));
 		}
 
 		// THE AREAS FIRST, because they are what a module names. A template with no
@@ -620,7 +620,7 @@ public:
 			// module repeating a one-row band and a module repeating a five-row one
 			// have very different answers to "how many go on a page".
 			node->AddField(wxT("height"),
-				ibDataValue::Int((s64)(area->m_end - area->m_start + 1)));
+				ibDataValue::Int((std::int64_t)(area->m_end - area->m_start + 1)));
 
 			areas.push_back(ibDataValue::Child(node));
 
@@ -648,7 +648,7 @@ public:
 			node->AddField(wxT("start"), ibDataValue::Int(LineOut(area->m_start)));
 			node->AddField(wxT("end"), ibDataValue::Int(LineOut(area->m_end)));
 			node->AddField(wxT("width"),
-				ibDataValue::Int((s64)(area->m_end - area->m_start + 1)));
+				ibDataValue::Int((std::int64_t)(area->m_end - area->m_start + 1)));
 
 			areas.push_back(ibDataValue::Child(node));
 		}
@@ -691,11 +691,11 @@ public:
 		{
 			std::vector<ibDataValue> bands;
 
-			const auto band = [&bands](const wxChar* what, s64 at, int size) {
+			const auto band = [&bands](const wxChar* what, std::int64_t at, int size) {
 				std::shared_ptr<ibDataNode> node = std::make_shared<ibDataNode>();
 				node->SetValue(wxT("band"), wxString(what));
 				node->AddField(wxT("at"), ibDataValue::Int(at));
-				node->AddField(wxT("size"), ibDataValue::Int((s64)size));
+				node->AddField(wxT("size"), ibDataValue::Int((std::int64_t)size));
 				if (size == 0)
 					node->AddField(wxT("hidden"), ibDataValue::Bool(true));
 				bands.push_back(ibDataValue::Child(node));
@@ -872,7 +872,7 @@ public:
 				written.push_back(ibDataValue::Child(std::make_shared<ibDataNode>(said)));
 			}
 
-			result.AddField(wxT("written"), ibDataValue::Int((s64)written.size()));
+			result.AddField(wxT("written"), ibDataValue::Int((std::int64_t)written.size()));
 			result.AddField(wxT("cells"), ibDataValue::Array(written));
 			return true;
 		}
@@ -881,8 +881,8 @@ public:
 		if (sheet == nullptr)
 			return false;
 
-		const s32 row = Line(ArgRow(), params);
-		const s32 col = Line(ArgCol(), params);
+		const std::int32_t row = Line(ArgRow(), params);
+		const std::int32_t col = Line(ArgCol(), params);
 
 		if (row < 0 || col < 0) {
 			refusal = ibMcpText("A cell is addressed by row and column, both 1 or more - or a whole "
@@ -996,8 +996,8 @@ public:
 		// the offset back to its owner. Writing m_col_size straight left those
 		// cells believing they were their own — which draws right and behaves
 		// wrongly the moment anything walks the sheet.
-		const s32 colSpan = (s32)ArgColSpan().Whole(params);
-		const s32 rowSpan = (s32)ArgRowSpan().Whole(params);
+		const std::int32_t colSpan = (std::int32_t)ArgColSpan().Whole(params);
+		const std::int32_t rowSpan = (std::int32_t)ArgRowSpan().Whole(params);
 
 		if (colSpan > 1 || rowSpan > 1)
 			desc.SetCellSize(row, col, rowSpan > 1 ? rowSpan : 1, colSpan > 1 ? colSpan : 1);
@@ -1021,7 +1021,7 @@ public:
 				font.m_weight = ArgBold().Flag(params)
 					? ibFONTWEIGHT_BOLD : ibFONTWEIGHT_NORMAL;
 
-			const s32 points = (s32)ArgFontSize().Whole(params);
+			const std::int32_t points = (std::int32_t)ArgFontSize().Whole(params);
 			if (points > 0)
 				font.m_pointSize = points;
 
@@ -1213,8 +1213,8 @@ public:
 			return false;
 
 		const wxString name = ArgName().Text(params);
-		const s32 start = Line(ArgStart(), params);
-		const s32 end = Line(ArgEnd(), params);
+		const std::int32_t start = Line(ArgStart(), params);
+		const std::int32_t end = Line(ArgEnd(), params);
 
 		if (name.IsEmpty()) {
 			refusal = ibMcpText("An area needs a name - that is what the module puts out.");
@@ -1390,8 +1390,8 @@ public:
 
 		result.AddField(wxT("imported"), ibDataValue::Bool(true));
 		result.SetValue(wxT("format"), format->GetName());
-		result.AddField(wxT("cells"), ibDataValue::Int((s64)desc.GetCellCount()));
-		result.AddField(wxT("areas"), ibDataValue::Int((s64)desc.GetAreaNumberRows()));
+		result.AddField(wxT("cells"), ibDataValue::Int((std::int64_t)desc.GetCellCount()));
+		result.AddField(wxT("areas"), ibDataValue::Int((std::int64_t)desc.GetAreaNumberRows()));
 
 		// ⚠ WHAT CAME IN IS A PICTURE UNTIL IT IS CUT UP. A foreign file has no
 		// areas and no parameters — it is one flat sheet — so the next two steps
@@ -1457,8 +1457,8 @@ public:
 		// ⚠ ASKED IN THE CALLER'S OWN NUMBERS FIRST, because here a zero means "not said" rather
 		// than a band: the choice between a row and a column is made on what ARRIVED, and only
 		// then is the one that was named translated into the sheet's own numbering.
-		const s32 rowSaid = (s32)ArgRow().Whole(params);
-		const s32 colSaid = (s32)ArgCol().Whole(params);
+		const std::int32_t rowSaid = (std::int32_t)ArgRow().Whole(params);
+		const std::int32_t colSaid = (std::int32_t)ArgCol().Whole(params);
 
 		// ONE BAND AT A TIME. Accepting both would leave a caller unsure which
 		// measurement the number was, and one of the two silently ignored.
@@ -1467,10 +1467,10 @@ public:
 			return false;
 		}
 
-		const s32 row = rowSaid - 1;
-		const s32 col = colSaid - 1;
+		const std::int32_t row = rowSaid - 1;
+		const std::int32_t col = colSaid - 1;
 
-		s32 size = (s32)ArgSize().Whole(params);
+		std::int32_t size = (std::int32_t)ArgSize().Whole(params);
 		if (ArgHide().Flag(params))
 			size = 1;   // the smallest a band can be and still be a band
 
@@ -1500,11 +1500,11 @@ public:
 		activeMetaData->Modify(true);
 
 		result.SetValue(wxT("band"), wxString(rowSaid > 0 ? wxT("row") : wxT("column")));
-		result.AddField(wxT("at"), ibDataValue::Int((s64)(rowSaid > 0 ? rowSaid : colSaid)));
+		result.AddField(wxT("at"), ibDataValue::Int((std::int64_t)(rowSaid > 0 ? rowSaid : colSaid)));
 		if (putBack)
 			result.AddField(rowSaid > 0 ? wxT("automatic") : wxT("default"), ibDataValue::Bool(true));
 		else
-			result.AddField(wxT("size"), ibDataValue::Int((s64)size));
+			result.AddField(wxT("size"), ibDataValue::Int((std::int64_t)size));
 		return true;
 	}
 };
@@ -1584,7 +1584,7 @@ public:
 
 		if (what.IsSameAs(wxT("break"), false)) {
 
-			const s32 at = Line(ArgAt(), params);
+			const std::int32_t at = Line(ArgAt(), params);
 			if (at < 0) {
 				refusal = ibMcpText("A page break is placed at a row or column, 1 or more.");
 				return false;
@@ -1599,7 +1599,7 @@ public:
 			// the first one a caller asks for BECAME that end: it printed as nothing, and the verb read
 			// as broken (a blank whose table was to start a page of its own, 2026-09-22). The end is
 			// stamped at the sheet's last line first, so what is added after it is a break and is taken.
-			const s32 last = (columns ? desc.GetNumberCols() : desc.GetNumberRows()) - 1;
+			const std::int32_t last = (columns ? desc.GetNumberCols() : desc.GetNumberRows()) - 1;
 
 			if (remove) {
 				if (columns) desc.DeleteColBrake(at);
@@ -1633,7 +1633,7 @@ public:
 			// ⚠ AND IT IS A COUNT, NOT AN ADDRESS — "how many bands stay put", which is why it is
 			// NOT translated the way a break or a group is: freezing 2 rows freezes rows 1 and 2,
 			// and subtracting one here would freeze the wrong number of them.
-			const s32 at = remove ? 0 : (s32)ArgAt().Whole(params);
+			const std::int32_t at = remove ? 0 : (std::int32_t)ArgAt().Whole(params);
 			if (at < 0) {
 				refusal = ibMcpText("A freeze runs up to a row or column, or 0 for none.");
 				return false;
@@ -1643,12 +1643,12 @@ public:
 			else         desc.SetRowFreeze(at);
 
 			result.SetValue(wxT("what"), wxString(wxT("freeze")));
-			result.AddField(wxT("at"), ibDataValue::Int((s64)at));
+			result.AddField(wxT("at"), ibDataValue::Int((std::int64_t)at));
 		}
 		else if (what.IsSameAs(wxT("group"), false)) {
 
-			const s32 start = Line(ArgStart(), params);
-			const s32 end = Line(ArgEnd(), params);
+			const std::int32_t start = Line(ArgStart(), params);
+			const std::int32_t end = Line(ArgEnd(), params);
 
 			// A GROUP THAT ENDS BEFORE IT BEGINS folds nothing while looking
 			// declared — the same mistake an area can make, refused the same way.
@@ -1657,7 +1657,7 @@ public:
 				return false;
 			}
 
-			s32 level = (s32)ArgLevel().Whole(params);
+			std::int32_t level = (std::int32_t)ArgLevel().Whole(params);
 			if (level <= 0)
 				level = 1;
 
@@ -1679,7 +1679,7 @@ public:
 			result.AddField(wxT("start"), ibDataValue::Int(LineOut(start)));
 			result.AddField(wxT("end"), ibDataValue::Int(LineOut(end)));
 			if (!remove)
-				result.AddField(wxT("level"), ibDataValue::Int((s64)level));
+				result.AddField(wxT("level"), ibDataValue::Int((std::int64_t)level));
 		}
 		else {
 			// An unknown word must not fall through to a default: a misspelling
@@ -1749,10 +1749,10 @@ public:
 		if (sheet == nullptr)
 			return false;
 
-		const s32 top = Line(ArgTop(), params);
-		const s32 left = Line(ArgLeft(), params);
-		const s32 bottom = Line(ArgBottom(), params);
-		const s32 right = Line(ArgRight(), params);
+		const std::int32_t top = Line(ArgTop(), params);
+		const std::int32_t left = Line(ArgLeft(), params);
+		const std::int32_t bottom = Line(ArgBottom(), params);
+		const std::int32_t right = Line(ArgRight(), params);
 
 		// A RECTANGLE THAT ENDS BEFORE IT BEGINS copies nothing while looking
 		// asked-for — refused the same way an area and a group are.
@@ -1766,8 +1766,8 @@ public:
 
 		std::vector<ibDataValue> cells;
 
-		for (s32 row = top; row <= bottom; row++) {
-			for (s32 col = left; col <= right; col++) {
+		for (std::int32_t row = top; row <= bottom; row++) {
+			for (std::int32_t col = left; col <= right; col++) {
 
 				const ibSpreadsheetCellDescription* cell = desc.GetCell(row, col);
 
@@ -1781,11 +1781,11 @@ public:
 
 				std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
 
-				// ⚠ s32, NOT s64. SetValue dispatches through ibDataCodec<T> and
-				// only s32 has a specialization — an s64 fails to compile inside
+				// ⚠ std::int32_t, NOT std::int64_t. SetValue dispatches through ibDataCodec<T> and
+				// only std::int32_t has a specialization — an std::int64_t fails to compile inside
 				// dataBuilder.h, nowhere near the line that asked for it.
-				entry->SetValue(wxT("row"), (s32)(row - top));
-				entry->SetValue(wxT("col"), (s32)(col - left));
+				entry->SetValue(wxT("row"), (std::int32_t)(row - top));
+				entry->SetValue(wxT("col"), (std::int32_t)(col - left));
 
 				ibDataValue body;
 				if (!ibSpreadsheetCellDescriptionMemory::WriteNode(body, *cell))
@@ -1806,13 +1806,13 @@ public:
 		slot.m_what = wxString::Format(ibMcpText("%d x %d"), bottom - top + 1, right - left + 1);
 
 		slot.m_payload = ibDataNode();
-		slot.m_payload.SetValue(wxT("rows"), (s32)(bottom - top + 1));
-		slot.m_payload.SetValue(wxT("cols"), (s32)(right - left + 1));
+		slot.m_payload.SetValue(wxT("rows"), (std::int32_t)(bottom - top + 1));
+		slot.m_payload.SetValue(wxT("cols"), (std::int32_t)(right - left + 1));
 		slot.m_payload.AddField(wxT("cells"), ibDataValue::Array(cells));
 
 		result.SetValue(wxT("slot"), slotName.IsEmpty() ? wxString(wxT("default")) : slotName);
 		result.SetValue(wxT("shape"), slot.m_what);
-		result.AddField(wxT("cells"), ibDataValue::Int((s64)cells.size()));
+		result.AddField(wxT("cells"), ibDataValue::Int((std::int64_t)cells.size()));
 
 		return true;
 	}
@@ -1848,8 +1848,8 @@ public:
 		if (sheet == nullptr)
 			return false;
 
-		const s32 row = Line(ArgRow(), params);
-		const s32 col = Line(ArgCol(), params);
+		const std::int32_t row = Line(ArgRow(), params);
+		const std::int32_t col = Line(ArgCol(), params);
 
 		if (row < 0 || col < 0) {
 			refusal = ibMcpText("Cells land at a row and column, both 1 or more.");
@@ -1871,11 +1871,11 @@ public:
 			return false;
 		}
 
-		s32 times = (s32)ArgTimes().Whole(params);
+		std::int32_t times = (std::int32_t)ArgTimes().Whole(params);
 		if (times <= 0)
 			times = 1;
 
-		const s32 height = slot.m_payload.GetValue<s32>(wxT("rows"));
+		const std::int32_t height = slot.m_payload.GetValue<std::int32_t>(wxT("rows"));
 
 		const ibDataValue* cells = slot.m_payload.FindField(wxT("cells"));
 		if (cells == nullptr || cells->Kind() != ibDataKind::Array) {
@@ -1887,9 +1887,9 @@ public:
 
 		int written = 0;
 
-		for (s32 pass = 0; pass < times; pass++) {
+		for (std::int32_t pass = 0; pass < times; pass++) {
 
-			const s32 offset = pass * height;
+			const std::int32_t offset = pass * height;
 
 			for (const ibDataValue& item : cells->AsArray()) {
 
@@ -1900,8 +1900,8 @@ public:
 				if (entry == nullptr)
 					continue;
 
-				const s32 atRow = row + offset + entry->GetValue<s32>(wxT("row"));
-				const s32 atCol = col + entry->GetValue<s32>(wxT("col"));
+				const std::int32_t atRow = row + offset + entry->GetValue<std::int32_t>(wxT("row"));
+				const std::int32_t atCol = col + entry->GetValue<std::int32_t>(wxT("col"));
 
 				const ibDataValue* body = entry->FindField(wxT("cell"));
 				if (body == nullptr)
@@ -1939,8 +1939,8 @@ public:
 
 		result.SetValue(wxT("row"), row);
 		result.SetValue(wxT("col"), col);
-		result.AddField(wxT("cells"), ibDataValue::Int((s64)written));
-		result.AddField(wxT("times"), ibDataValue::Int((s64)times));
+		result.AddField(wxT("cells"), ibDataValue::Int((std::int64_t)written));
+		result.AddField(wxT("times"), ibDataValue::Int((std::int64_t)times));
 
 		return true;
 	}

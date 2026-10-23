@@ -183,7 +183,7 @@ public:
 	// removal, a form editor's own: written now, as the inspector's read writes them (ibSchemaProperties::Build), and told
 	// with the next answer (Properties) — the client shows them without reading them again. `tabId` — the tab whose tree
 	// the client holds the object of (0: the configuration's).
-	void                        ShowProperties(ibValueMetaObject* object, s32 tabId);
+	void                        ShowProperties(ibValueMetaObject* object, std::int32_t tabId);
 	std::vector<ibDataNode>     TakeShownProperties();
 
 	struct PendingRequest {
@@ -203,7 +203,7 @@ public:
 	ibClientChildFrame* Tab(std::size_t i) const { return i < m_tabs.size() ? m_tabs[i].get() : nullptr; }
 
 	// Where the tab of that id stands — TabCount() when the frame has none (a client names a tab by its id).
-	std::size_t FindTab(s32 id) const;
+	std::size_t FindTab(std::int32_t id) const;
 
 	void SetActiveTab(std::size_t i);
 
@@ -285,7 +285,7 @@ private:
 	// document), never before.
 	std::vector<std::unique_ptr<ibClientChildFrame>> m_tabs;
 	std::size_t                                      m_activeTab = 0;
-	s32                                              m_lastTabId = 0;   // the last id a tab was given; never reused
+	std::int32_t                                              m_lastTabId = 0;   // the last id a tab was given; never reused
 
 	std::vector<const ibClientChildFrame*> m_pendingCloses;
 

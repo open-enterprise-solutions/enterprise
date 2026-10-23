@@ -262,7 +262,7 @@ public:
 		std::vector<ibDataValue> entries;
 		Collect(from, /*wantNotes*/ true, wantHelp, entries);
 
-		result.AddField(wxT("recorded"), ibDataValue::Int((s64)entries.size()));
+		result.AddField(wxT("recorded"), ibDataValue::Int((std::int64_t)entries.size()));
 		result.AddField(wxT("objects"), ibDataValue::Array(entries));
 
 		// ⭐ SAID PLAINLY, because an empty list is also what a broken read looks like — and

@@ -52,7 +52,7 @@ void ibAssistantTranscriptView::OnDraw(ibDataNode& frame)
 	// client says "waiting for an assistant" then, and "processing" once it is taken (the desktop's RefreshWaiting).
 	ibDataNode& state = frame.Child(ibProtocol::ibView::State);
 	state.SetValue(ibProtocol::ibView::ibAssistant::Waiting, m_waiting);
-	state.SetValue(ibProtocol::ibView::ibAssistant::Pending, static_cast<s32>(server != nullptr ? server->PendingCount() : 0));
+	state.SetValue(ibProtocol::ibView::ibAssistant::Pending, static_cast<std::int32_t>(server != nullptr ? server->PendingCount() : 0));
 
 	// An entry a row, named by its place: the transcript only grows, so what reaches a client is the new entries.
 	ibDataNode& rows = frame.Child(ibProtocol::ibView::ibAssistant::Rows);

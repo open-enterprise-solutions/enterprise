@@ -114,7 +114,7 @@ void ibRestoreFormSettings(ibValueForm* form)
 
 		stored_count++;
 
-		const ibFormID controlId = (ibFormID)stored.GetValue<s32>(s_fieldControl);
+		const ibFormID controlId = (ibFormID)stored.GetValue<std::int32_t>(s_fieldControl);
 		if (controlId == 0)
 			continue;
 
@@ -155,7 +155,7 @@ void ibRestoreFormSettings(ibValueForm* form)
 
 		// …and where it sits among its siblings. Clamped rather than refused: the author may have
 		// removed the very controls this one was pushed past.
-		const int position = stored.GetValue<s32>(s_fieldPosition);
+		const int position = stored.GetValue<std::int32_t>(s_fieldPosition);
 		ibValueFrame* parent = control->GetParent();
 		if (position != wxNOT_FOUND && parent != nullptr && parent->GetChildCount() > 0) {
 			const int last = (int)parent->GetChildCount() - 1;
@@ -197,7 +197,7 @@ ibFormSettingsResult ibSaveFormSettings(const ibValueForm* form)
 		written++;
 
 		ibDataNode& child = root.AddChild(0, (ibMetaID)controlId);
-		child.SetValue(s_fieldControl, (s32)controlId);
+		child.SetValue(s_fieldControl, (std::int32_t)controlId);
 
 		for (const wxString& name : ibValueFrame::GetAllowedUserProperty()) {
 			ibProperty* property = control->GetProperty(name);
@@ -212,7 +212,7 @@ ibFormSettingsResult ibSaveFormSettings(const ibValueForm* form)
 
 		ibValueFrame* parent = control->GetParent();
 		child.SetValue(s_fieldPosition,
-			parent != nullptr ? (s32)parent->GetChildPosition(control) : (s32)wxNOT_FOUND);
+			parent != nullptr ? (std::int32_t)parent->GetChildPosition(control) : (std::int32_t)wxNOT_FOUND);
 	});
 
 	const bool saved = storage->Save(key, root);

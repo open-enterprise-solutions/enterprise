@@ -534,8 +534,8 @@ bool ibValueModelTable::ibValueModelTableColumnCollection::ibValueModelTableColu
 	// Serialize through the UNIFIED property mechanism (each property writes itself via GetNodeValue —
 	// the same path ibFormAttribute uses, so the Type round-trips through ibPropertyType, not a hand-rolled
 	// ibTypeDescriptionMemory), plus the non-property id / width.
-	node.SetValue<s32>(wxT("id"), (s32)m_columnID);
-	node.SetValue<s32>(wxT("width"), m_columnWidth);
+	node.SetValue<std::int32_t>(wxT("id"), (std::int32_t)m_columnID);
+	node.SetValue<std::int32_t>(wxT("width"), m_columnWidth);
 	node.SetProperty(m_propertyName->GetName(), m_propertyName->GetNodeValue());
 	node.SetProperty(m_propertyCaption->GetName(), m_propertyCaption->GetNodeValue());
 	node.SetProperty(m_propertyType->GetName(), m_propertyType->GetNodeValue());
@@ -545,8 +545,8 @@ bool ibValueModelTable::ibValueModelTableColumnCollection::ibValueModelTableColu
 
 bool ibValueModelTable::ibValueModelTableColumnCollection::ibValueModelTableColumnInfo::ReadProperty(const ibDataNode& node)
 {
-	m_columnID = (unsigned int)node.GetValue<s32>(wxT("id"));
-	m_columnWidth = node.GetValue<s32>(wxT("width"));
+	m_columnID = (unsigned int)node.GetValue<std::int32_t>(wxT("id"));
+	m_columnWidth = node.GetValue<std::int32_t>(wxT("width"));
 	m_propertyName->SetNodeValue(node.GetProperty(m_propertyName->GetName()));
 	m_propertyCaption->SetNodeValue(node.GetProperty(m_propertyCaption->GetName()));
 	m_propertyType->SetNodeValue(node.GetProperty(m_propertyType->GetName()));

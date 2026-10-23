@@ -4,7 +4,7 @@
 #include "frmclient/backend/compiler/value.h"
 #include "core/spreadsheet/spreadsheetObject.h"
 #include "frmclient/backend/backend_localization.h"   // …and the reading of a sheet's texts, as the engine's brought it
-#include "core/fileSystem/fs.h"          // …and the sheet's byte form (the clipboard's)
+#include "core/memory/memoryStream.h"          // …and the sheet's byte form (the clipboard's)
 
 // THE SHEET'S ENUMERATIONS — the engine's (backend/system/value/valueSpreadsheet.h), as the editor's properties offer
 // their members. The document as a script's value is the server's.

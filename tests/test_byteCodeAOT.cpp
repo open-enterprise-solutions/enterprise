@@ -22,7 +22,7 @@
 
 #include "backend/compiler/byteCode.h"
 #include "backend/compiler/value.h"
-#include "core/fileSystem/fs.h"
+#include "core/memory/memoryStream.h"
 #include "core/guid.h"
 
 namespace {
@@ -33,7 +33,7 @@ namespace {
 bool RoundTrip(const ibByteCode& src, ibByteCode& dst) {
 	ibWriterMemory w;
 	if (!src.SerializeAOT(w)) return false;
-	wxMemoryBuffer blob = w.buffer();
+	ibMemoryBuffer blob = w.buffer();
 	ibReaderMemory r(blob);
 	return dst.DeserializeAOT(r);
 }
@@ -487,7 +487,7 @@ TEST(ByteCodeAOT, DependencyIdsAndVersions) {
 
 TEST(ByteCodeAOT, RejectBadMagic) {
 	// Garbage that doesn't start with our magic.
-	wxMemoryBuffer buf;
+	ibMemoryBuffer buf;
 	uint32_t junk[8] = { 0xDEADBEEF, 1, 2, 3, 4, 5, 6, 7 };
 	buf.AppendData(junk, sizeof(junk));
 
@@ -499,7 +499,7 @@ TEST(ByteCodeAOT, RejectBadMagic) {
 TEST(ByteCodeAOT, RejectShortBuffer) {
 	// Only 2 bytes — not even enough for the magic. Reader must fail
 	// without reading past end.
-	wxMemoryBuffer buf;
+	ibMemoryBuffer buf;
 	uint8_t two[2] = { 0xFF, 0xFF };
 	buf.AppendData(two, 2);
 
@@ -509,7 +509,7 @@ TEST(ByteCodeAOT, RejectShortBuffer) {
 }
 
 TEST(ByteCodeAOT, EmptyBufferRejected) {
-	wxMemoryBuffer buf;
+	ibMemoryBuffer buf;
 	ibReaderMemory r(buf);
 	ibByteCode dst;
 	EXPECT_FALSE(dst.DeserializeAOT(r));

@@ -19,7 +19,7 @@ public:
 	// Start {Enabled, Address, Port, Token} — configured with those and started in the name of this session, done in
 	// the asking: a refusal names why (switched off, the port taken), in words the page shows beside the setting that
 	// fixes it. Stop. Save {…} — configured with those and kept as the person's.
-	virtual std::function<void()> Command(const ibSession& session, s32 command,
+	virtual std::function<void()> Command(const ibSession& session, std::int32_t command,
 		const ibDataNode& args, ibProtocol::ibRefusal& refusal, wxString& error) const override;
 
 	// THE MCP SERVER THE PERSON MAY SWITCH — their base's, where the process is theirs (a file base, opened in their own

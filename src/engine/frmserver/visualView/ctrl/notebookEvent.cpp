@@ -6,8 +6,8 @@
 bool ibValueNotebook::OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args)
 {
 	switch (event) {
-	case ibProtocol::ibEvent::ibKind::Page: OnPageChanged((ibFormID)args.GetValue<s32>(ibProtocol::ibEvent::Page)); return true;
-	case ibProtocol::ibEvent::ibKind::Move: OnEndDrag((unsigned int)args.GetValue<s32>(ibProtocol::ibEvent::Position)); return true;
+	case ibProtocol::ibEvent::ibKind::Page: OnPageChanged((ibFormID)args.GetValue<std::int32_t>(ibProtocol::ibEvent::Page)); return true;
+	case ibProtocol::ibEvent::ibKind::Move: OnEndDrag((unsigned int)args.GetValue<std::int32_t>(ibProtocol::ibEvent::Position)); return true;
 	default:                  return ibValueWindow::OnClientEvent(event, args);
 	}
 }

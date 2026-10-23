@@ -1,7 +1,7 @@
 #include "docViewConfigCompare.h"
 
 #include "backend/backend_exception.h"
-#include "core/fileSystem/fs.h"
+#include "core/memory/memoryStream.h"
 #include "backend/metaCollection/metaDiff.h"
 #include "backend/metaCollection/metaObject.h"
 #include "backend/metaData.h"

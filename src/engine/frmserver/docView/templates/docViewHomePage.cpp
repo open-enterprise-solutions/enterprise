@@ -191,7 +191,7 @@ ibHomePageView::ibHomePageCell ibHomePageView::OpenCell(const ibHomePageItem& it
 
 void ibHomePageView::DrawCell(const ibHomePageCell& cell, ibDataNode& node) const
 {
-	node.SetValue(ibProtocol::ibView::ibHomePage::Height, static_cast<s32>(ItemWeight(cell.m_item)));
+	node.SetValue(ibProtocol::ibView::ibHomePage::Height, static_cast<std::int32_t>(ItemWeight(cell.m_item)));
 
 	// The header — the icon of the OWNER (a catalog's form reads as that catalog, a document's as that document),
 	// falling back to the form's own, and to the page's glyph when the form is gone. An embedded form has no tab

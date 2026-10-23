@@ -620,7 +620,7 @@ void ibMetaTreeBase::CopyItem()
 	if (local.IsEmpty())
 		return;
 
-	wxMemoryBuffer bytes;
+	ibMemoryBuffer bytes;
 	wxString file;
 	ibProtocolNode args;
 	args.SetValue(ibProtocol::ibSchema::ibMetaData::Id, id);

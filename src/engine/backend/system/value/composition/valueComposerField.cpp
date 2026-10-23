@@ -84,7 +84,7 @@ bool ibValueCompositionField::CompareValueNE(const ibValue& cParam) const {
 bool ibValueCompositionField::DoSerialize(ibDataNode& node) const {
 	node.SetValue(wxT("p"), m_path);
 	node.SetValue(wxT("n"), m_presentation);
-	node.SetValue(wxT("l"), (s32)m_leafId);
+	node.SetValue(wxT("l"), (std::int32_t)m_leafId);
 	// The TYPE is deliberately NOT packed. It is derived from the source the
 	// field is bound to, and a saved setting outlives the schema it was saved
 	// against — restoring a stale type would be worse than re-deriving the
@@ -95,7 +95,7 @@ bool ibValueCompositionField::DoSerialize(ibDataNode& node) const {
 bool ibValueCompositionField::DoDeserialize(const ibDataNode& node) {
 	m_path = node.GetValue<wxString>(wxT("p"));
 	m_presentation = node.GetValue<wxString>(wxT("n"));
-	m_leafId = (ibMetaID)node.GetValue<s32>(wxT("l"));
+	m_leafId = (ibMetaID)node.GetValue<std::int32_t>(wxT("l"));
 	m_typeDescription = ibTypeDescription();
 	return true;
 }
@@ -112,7 +112,7 @@ const wxString kPredefinedText   = wxT("t");
 
 bool ibValueCompositionPredefined::DoSerialize(ibDataNode& node) const
 {
-	node.SetValue(kPredefinedMetaId, (s32)m_metaId);
+	node.SetValue(kPredefinedMetaId, (std::int32_t)m_metaId);
 	node.SetValue(kPredefinedGuid, m_guid.str());
 	node.SetValue(kPredefinedText, m_written);
 	return true;
@@ -120,7 +120,7 @@ bool ibValueCompositionPredefined::DoSerialize(ibDataNode& node) const
 
 bool ibValueCompositionPredefined::DoDeserialize(const ibDataNode& node)
 {
-	m_metaId  = (ibMetaID)node.GetValue<s32>(kPredefinedMetaId);
+	m_metaId  = (ibMetaID)node.GetValue<std::int32_t>(kPredefinedMetaId);
 	m_guid    = ibGuid(node.GetValue<wxString>(kPredefinedGuid));
 	m_written = node.GetValue<wxString>(kPredefinedText);
 	return true;

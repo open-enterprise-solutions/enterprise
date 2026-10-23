@@ -107,7 +107,7 @@ bool ibTypeControlFactory::SimpleChoice(ibControlFrame* ownerValue, const ibClas
 	ownerValue->GetControlValue(current);
 
 	ibDataNode request;
-	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<s32>(ibProtocol::ibRequest::ibKind::SimpleChoice));
+	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<std::int32_t>(ibProtocol::ibRequest::ibKind::SimpleChoice));
 	current.Serialize(request.Child(ibProtocol::ibRequest::ibSimpleChoice::Value));
 
 	ibDataNode response;
@@ -138,9 +138,9 @@ bool ibTypeControlFactory::QuickChoice(ibControlFrame* ownerValue, const ibClass
 
 	std::vector<ibChoiceItem> items;
 	for (size_t idx = 0; idx < values.size(); idx++)
-		items.push_back(ibChoiceItem{ static_cast<s32>(idx), values[idx].GetString(), ibPictureDescription(), values[idx] == current });
+		items.push_back(ibChoiceItem{ static_cast<std::int32_t>(idx), values[idx].GetString(), ibPictureDescription(), values[idx] == current });
 
-	s32 chosen = 0;
+	std::int32_t chosen = 0;
 	if (ibRequestChoice(wxString(), items, chosen))
 		ownerValue->ChoiceProcessing(values[static_cast<size_t>(chosen)]);
 	return true;   // the type has a quick choice — offered, whatever the person did with it
@@ -167,7 +167,7 @@ void ibTypeControlFactory::QuickChoice(ibControlFrame* controlValue, ibValue& ne
 
 	std::vector<ibChoiceItem> items;
 	for (size_t idx = 0; idx < values.size(); idx++)
-		items.push_back(ibChoiceItem{ static_cast<s32>(idx), values[idx].GetString(), ibPictureDescription(), values[idx] == newValue });
+		items.push_back(ibChoiceItem{ static_cast<std::int32_t>(idx), values[idx].GetString(), ibPictureDescription(), values[idx] == newValue });
 
 	ibBackendDocFrame* const frame = ibSession::CurrentFrame();
 	if (frame == nullptr)
@@ -176,7 +176,7 @@ void ibTypeControlFactory::QuickChoice(ibControlFrame* controlValue, ibValue& ne
 	// Several match what was typed: the person picks one — or, closing the list, is asked whether to give the
 	// typed text up (the field goes back to what it held) or to pick after all.
 	for (;;) {
-		s32 chosen = 0;
+		std::int32_t chosen = 0;
 		if (ibRequestChoice(wxString(), items, chosen)) {
 			controlValue->ChoiceProcessing(values[static_cast<size_t>(chosen)]);
 			return;
@@ -245,11 +245,11 @@ ibClassID ibTypeControlFactory::ShowSelectType(const ibMetaData* metaData, const
 	std::vector<ibChoiceItem> items;
 	for (size_t idx = 0; idx < offered.size(); idx++) {
 		const ibCtorAbstractType* ctor = metaData != nullptr ? metaData->GetAvailableCtor(offered[idx]) : nullptr;
-		items.push_back(ibChoiceItem{ static_cast<s32>(idx),
+		items.push_back(ibChoiceItem{ static_cast<std::int32_t>(idx),
 			ctor != nullptr ? ctor->GetClassName() : wxString(),
 			ctor != nullptr ? ibPictureDescription(offered[idx]) : ibPictureDescription() });
 	}
 
-	s32 chosen = 0;
+	std::int32_t chosen = 0;
 	return ibRequestChoice(_("Select data type"), items, chosen) ? offered[static_cast<size_t>(chosen)] : 0;
 }

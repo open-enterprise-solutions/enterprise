@@ -73,7 +73,7 @@ public:
 			ibDataNode row;
 			if (property->GetProtocolValue(row)) {
 				if (row.FindField(ibProtocol::ibSchema::ibProperties::SourceDataType) != nullptr)
-					filter = static_cast<ibSourceDataType>(row.GetValue<s32>(ibProtocol::ibSchema::ibProperties::SourceDataType));
+					filter = static_cast<ibSourceDataType>(row.GetValue<std::int32_t>(ibProtocol::ibSchema::ibProperties::SourceDataType));
 				// …the classes its Type row offers, in the server's order (Classes);
 				if (const ibDataNode* const classes = row.FindChild(ibProtocol::ibSchema::ibProperties::Classes)) {
 					for (const ibDataNode& entry : classes->Children()) {

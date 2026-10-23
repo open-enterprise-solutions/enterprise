@@ -147,7 +147,7 @@ TEST(RpcMessage,ParseRequest_NestingAtTheLimit_IsRead)
 	ASSERT_TRUE(ibRpcParseRequest(LoginWithArrays(ibJsonProvider::kMaxNesting - 1), request, error))
 		<< error.ToStdString();
 	EXPECT_EQ(request.m_method, wxT("login"));
-	EXPECT_EQ(request.m_id.AsInt(), (s64)1);
+	EXPECT_EQ(request.m_id.AsInt(), (std::int64_t)1);
 }
 
 // ibClientHost::Call parses before it authenticates, and on a refusal writes a

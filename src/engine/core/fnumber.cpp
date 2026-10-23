@@ -1,7 +1,7 @@
 #include <limits>
 #include "core/fnumber.h"
 
-#include "core/fileSystem/fs.h" // ibReaderMemory / ibWriterMemory
+#include "core/memory/memoryStream.h" // ibReaderMemory / ibWriterMemory
 #include "core/fstring.h"       // ibString — ToString into the engine's string
 
 #include <algorithm>
@@ -1988,7 +1988,7 @@ bool ibNumber::FromString(const ibString& s)
 //   [4*N bytes] limbs uint32_t LE, LSB first
 // Min size = 9 bytes (zero — limb_count == 0). Round-trip exact.
 
-void ibNumber::GetBuffer(wxMemoryBuffer& out) const
+void ibNumber::GetBuffer(ibMemoryBuffer& out) const
 {
 	// Zero is the most common runtime value (cleared records, default-init
 	// fields). Encode it as an empty buffer — no header bytes, no allocation,
@@ -2027,9 +2027,9 @@ void ibNumber::GetBuffer(wxMemoryBuffer& out) const
 	out.UngetWriteBuf(bytes);
 }
 
-wxMemoryBuffer ibNumber::GetBuffer() const
+ibMemoryBuffer ibNumber::GetBuffer() const
 {
-	wxMemoryBuffer out;
+	ibMemoryBuffer out;
 	GetBuffer(out);
 	return out;
 }
@@ -2082,7 +2082,7 @@ bool ibNumber::SetBuffer(const void* data, size_t len)
 	return true;
 }
 
-bool ibNumber::SetBuffer(const wxMemoryBuffer& in)
+bool ibNumber::SetBuffer(const ibMemoryBuffer& in)
 {
 	return SetBuffer(in.GetData(), in.GetDataLen());
 }
@@ -2094,7 +2094,7 @@ namespace { constexpr uint64_t kIbNumberChunk = 0x023456555ULL; }
 
 // ⭐⭐ ZERO WRITES NOTHING, AND READS BACK AS ZERO — which is a fact about the STREAM, not a preference.
 //
-// GetBuffer(wxMemoryBuffer&) encodes zero as no bytes at all. Writing that as an EMPTY chunk does not
+// GetBuffer(ibMemoryBuffer&) encodes zero as no bytes at all. Writing that as an EMPTY chunk does not
 // help a reader: ibReaderMemory::r_chunk answers "not found" for a chunk of size zero, so an empty one
 // is indistinguishable from an absent one — it only puts bytes on the wire that nobody will ever read
 // back. So zero stays unwritten, and the READER is the half that was wrong: it answered false, which
@@ -2102,7 +2102,7 @@ namespace { constexpr uint64_t kIbNumberChunk = 0x023456555ULL; }
 // that was perfectly fine.
 bool ibNumber::GetBuffer(ibWriterMemory& writer) const
 {
-	wxMemoryBuffer buf;
+	ibMemoryBuffer buf;
 	GetBuffer(buf);
 	if (buf.GetDataLen() == 0) return false;   // zero — nothing to write, and nothing is what it means
 	writer.w_chunk(kIbNumberChunk, buf);
@@ -2111,7 +2111,7 @@ bool ibNumber::GetBuffer(ibWriterMemory& writer) const
 
 bool ibNumber::SetBuffer(const ibReaderMemory& reader)
 {
-	wxMemoryBuffer buf;
+	ibMemoryBuffer buf;
 	if (!reader.r_chunk(kIbNumberChunk, buf)) {
 		SetZero();     // no chunk IS the zero (see GetBuffer above) — an answer, not a failure
 		return true;

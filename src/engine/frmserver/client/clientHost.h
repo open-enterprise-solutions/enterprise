@@ -121,12 +121,12 @@ private:
 		std::condition_variable           replyWait;
 		// The last frame answered — its number and itself, as sent: a call naming that number (Since) is answered
 		// with the patch from it.
-		s32                               frame = 0;
+		std::int32_t                               frame = 0;
 		ibDataNode                        sent;
 		// The version of the protocol it speaks (the older of its and ours) — and, from 2, the view it was last sent
 		// for each tab: a tab's view is patched from its own (Run).
-		s32                                           protocol = 1;
-		std::map<s32, std::shared_ptr<ibDataNode>>   views;
+		std::int32_t                                           protocol = 1;
+		std::map<std::int32_t, std::shared_ptr<ibDataNode>>   views;
 		// SHA-256 of the bearer token. The token itself is not kept. Under m_mutex, with hasToken.
 		bool                              hasToken = false;
 		unsigned char                     tokenDigest[32] = {};
@@ -157,7 +157,7 @@ private:
 
 	// The work on the client's session worker, waited for until it settles; then the frame drawn into `result` —
 	// numbered, and the patch from the frame of number `since` when that is the last one the client was answered.
-	bool Run(Client& client, std::function<void(ibClientFrame*)> work, s32 since, ibDataNode& result,
+	bool Run(Client& client, std::function<void(ibClientFrame*)> work, std::int32_t since, ibDataNode& result,
 		ibProtocol::ibRefusal& refusal, wxString& error);
 	void Settle(Client& client);
 	// The frame: what it is (`state`, what a patch is made of) and what happened since the last answer (`events`:

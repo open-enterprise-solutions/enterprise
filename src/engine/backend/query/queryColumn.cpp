@@ -238,7 +238,7 @@ bool ibBackendColumnRawDB::ReadValue(const wxString& fieldName, const ibMetaData
 		// ⭐⭐ THE WRITE SIDE'S TWIN — sixteen bytes back into A GUID, and handed on AS ONE. The text
 		// spelling is a PROJECTION: handing it out meant every caller that wanted the identity parsed
 		// it back, and nobody downstream could tell a key from any other string.
-		wxMemoryBuffer bytes;
+		ibMemoryBuffer bytes;
 		result.GetResultBlob(fieldName, bytes);
 		if (bytes.GetDataLen() < sizeof(ibReference))
 			return false;
@@ -251,7 +251,7 @@ bool ibBackendColumnRawDB::ReadValue(const wxString& fieldName, const ibMetaData
 		// only the row key — which KIND of row it points at is a property of the table, not of the row
 		// (a tabular section's owner reference is the case). The column knows its target and hands
 		// both to the assembly.
-		wxMemoryBuffer bytes;
+		ibMemoryBuffer bytes;
 		result.GetResultBlob(fieldName, bytes);
 		retValue = ReadSingleTargetReference(metaData, GetRawTarget(), bytes);
 		return true;

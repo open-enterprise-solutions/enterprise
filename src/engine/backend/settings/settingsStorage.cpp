@@ -91,7 +91,7 @@ bool ibSettingsStorage::Restore(const ibSettingsKey& key, ibDataNode& node) cons
 	if (!key.IsOk())
 		return false;
 
-	wxMemoryBuffer blob;
+	ibMemoryBuffer blob;
 	try {
 		ibDatabaseQueryBuilder q;
 		ibQueryResult rs = q.From(settings_table)

@@ -1637,7 +1637,7 @@ bool ibFrontendMainFrame::DownloadFile(const wxString& file, const wxString& pat
 			return false;
 		}
 		parts = answer.GetInt(ibProtocol::ibFile::Parts);
-		wxMemoryBuffer data;
+		ibMemoryBuffer data;
 		if (!ibBase64::Read(answer.GetString(ibProtocol::ibFile::Data), data))
 			return false;
 		if (data.GetDataLen() != 0 && target.Write(data.GetData(), data.GetDataLen()) != data.GetDataLen())

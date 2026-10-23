@@ -12,10 +12,10 @@
 
 #include "frmserver/frmserver.h"
 #include "core/description/pictureDescription.h"   // ibPictureDescription — the item's picture, sent by its id
-#include "core/fileSystem/types.h"   // s32
+#include <cstdint>   // std::int32_t
 
 struct ibChoiceItem {
-	s32                   id = 0;
+	std::int32_t                   id = 0;
 	wxString              caption;
 	ibPictureDescription  icon;
 	bool                  selected = false;
@@ -23,16 +23,16 @@ struct ibChoiceItem {
 
 // False: nothing chosen — cancelled, or nobody to ask. Only what was offered can come back: a response naming
 // an Id that is not among `items` is no choice at all.
-FRMSERVER_API bool ibRequestChoice(const wxString& caption, const std::vector<ibChoiceItem>& items, s32& chosen);
+FRMSERVER_API bool ibRequestChoice(const wxString& caption, const std::vector<ibChoiceItem>& items, std::int32_t& chosen);
 // …and SEVERAL of a list (Multiple → Ids), those `selected` ticked to begin with. False: none chosen — cancelled, none
 // ticked, or nobody to ask.
-FRMSERVER_API bool ibRequestChoice(const wxString& caption, const std::vector<ibChoiceItem>& items, std::vector<s32>& chosen);
+FRMSERVER_API bool ibRequestChoice(const wxString& caption, const std::vector<ibChoiceItem>& items, std::vector<std::int32_t>& chosen);
 
 // A POPUP MENU AT THE CURSOR — the desktop's wxMenu shown by GetPopupMenuSelectionFromUser, put to the person through
 // the session's frame (ibProtocol::ibRequest::ibKind::Menu): an item's id and caption, its tick, greyed out, and its own items — a
 // submenu. A plain structure, not a wxMenu: a menu is a window's, and the server's code runs on a worker.
 struct ibMenuItem {
-	s32                     id = 0;
+	std::int32_t                     id = 0;
 	wxString                caption;
 	bool                    checked = false;
 	bool                    enabled = true;
@@ -40,6 +40,6 @@ struct ibMenuItem {
 };
 
 // The id of the item picked. False: dismissed, or nobody to ask; only an id offered and enabled can come back.
-FRMSERVER_API bool ibRequestMenu(const std::vector<ibMenuItem>& items, s32& chosen);
+FRMSERVER_API bool ibRequestMenu(const std::vector<ibMenuItem>& items, std::int32_t& chosen);
 
 #endif

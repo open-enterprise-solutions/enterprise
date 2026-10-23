@@ -67,7 +67,7 @@ bool ibValueMetaObjectFormBase::LoadFormData(ibBackendValueForm* valueForm) cons
 }
 
 bool ibValueMetaObjectFormBase::SaveFormData(ibBackendValueForm* valueForm) {
-	wxMemoryBuffer memoryBuffer;
+	ibMemoryBuffer memoryBuffer;
 	if (valueForm->SaveForm(memoryBuffer)) {
 		SetFormData(memoryBuffer);
 		// Designer's form-edit commit — invalidate this form's compile-cache
@@ -169,7 +169,7 @@ ibFormPtr<ibBackendValueForm> ibValueMetaObjectFormBase::CreateAndBuildForm(cons
 
 // node <-> runtime-blob shim. The form blob IS the binary-provider node format (each
 // control's SaveNode subtree), so the adapter is a straight provider round-trip.
-ibDataValue ibValueMetaObjectFormBase::FormBlobToNode(const wxMemoryBuffer& blob)
+ibDataValue ibValueMetaObjectFormBase::FormBlobToNode(const ibMemoryBuffer& blob)
 {
 	if (blob.GetDataLen() == 0)
 		return ibDataValue();
@@ -179,13 +179,13 @@ ibDataValue ibValueMetaObjectFormBase::FormBlobToNode(const wxMemoryBuffer& blob
 	return ibDataValue::Child(node);
 }
 
-wxMemoryBuffer ibValueMetaObjectFormBase::FormNodeToBlob(const ibDataValue& formNode)
+ibMemoryBuffer ibValueMetaObjectFormBase::FormNodeToBlob(const ibDataValue& formNode)
 {
 	if (formNode.Kind() != ibDataKind::Child)
-		return wxMemoryBuffer();
+		return ibMemoryBuffer();
 	const std::shared_ptr<ibDataNode>& node = formNode.AsChild();
 	if (!node)
-		return wxMemoryBuffer();
+		return ibMemoryBuffer();
 	ibWriterMemory writer;
 	ibBinaryProvider().Write(*node, writer);
 	return writer.buffer();
@@ -199,7 +199,7 @@ ibDataValue ibValueMetaObjectFormBase::CopyFormData() const
 	ibBackendValueForm* valueForm = nullptr;
 	auto* cc = m_metaData->GetCompileCache();
 	if (cc && cc->FindCompileModule(this, valueForm)) {
-		wxMemoryBuffer blob;
+		ibMemoryBuffer blob;
 		if (valueForm->SaveForm(blob))
 			return FormBlobToNode(blob);
 	}

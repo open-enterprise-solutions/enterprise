@@ -407,7 +407,7 @@ bool ibApplicationInstance::ClearTableUser()
 
 ///////////////////////////////////////////////////////////////////////////////
 
-#include "core/fileSystem/fs.h"
+#include "core/memory/memoryStream.h"
 
 // User-record DB I/O moved onto ibUserInfo as static factories; see
 // backend/userInfo.{h,cpp}. ibApplicationInstance no longer mediates the
@@ -416,11 +416,11 @@ bool ibApplicationInstance::ClearTableUser()
 
 ///////////////////////////////////////////////////////////////////////////////
 
-bool ibApplicationInstance::LoadUserInfoFromBuffer(wxMemoryBuffer& buffer)
+bool ibApplicationInstance::LoadUserInfoFromBuffer(ibMemoryBuffer& buffer)
 {
 	ibReaderMemory reader = buffer;
 
-	ibReaderMemory* prevReaderMemory = nullptr; u64 meta_id = 0;
+	ibReaderMemory* prevReaderMemory = nullptr; std::uint64_t meta_id = 0;
 
 	while (!reader.eof()) {
 
@@ -436,7 +436,7 @@ bool ibApplicationInstance::LoadUserInfoFromBuffer(wxMemoryBuffer& buffer)
 	return true;
 }
 
-bool ibApplicationInstance::SaveUserInfoToBuffer(wxMemoryBuffer& buffer) const
+bool ibApplicationInstance::SaveUserInfoToBuffer(ibMemoryBuffer& buffer) const
 {
 	// SELECT guid FROM sys_user
 	try {

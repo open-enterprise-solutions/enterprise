@@ -1,183 +1,29 @@
 // =============================================================================
 // ibString — the module: the text behind the facade (fstring.h).
 //
-// How a text is MADE, written into and freed lives here and nowhere else: the per-thread
-// pool the blocks come from, and Impl — one block holding the count of the ibStrings that
-// share it, the length, the room and the characters. The header shows one pointer and the
-// block's header (Shared), so copying and reading need no call into this module.
+// How a text is MADE, written into and freed lives here and nowhere else: Impl — one block
+// holding the count of the ibStrings that share it, the length, the room and the characters,
+// taken from the per-thread pool (core/memory/memoryPool.h). The header shows one pointer and
+// the block's header (Shared), so copying and reading need no call into this module.
 // =============================================================================
 
 #include "core/fstring.h"
+#include "core/memory/memoryPool.h"   // the blocks a text is made in
 
 #include <atomic>
 #include <cerrno>        // ToLong & co read ERANGE, as wx does
 #include <climits>       // ToInt's range
 #include <cstdarg>       // Print — the arguments Format hands on
-#include <cstdlib>       // std::atexit — the last drain
 #include <cwchar>        // vswprintf; wmemcpy / wmemmove / wmemset — the characters in their block
 #include <functional>    // std::less — is an appended piece inside this very text
 #include <locale>
 #if defined(__APPLE__)
 #include <xlocale.h>     // newlocale / uselocale — Print's own UTF-8 locale
 #endif
-#if defined(_MSC_VER)
-#include <intrin.h>      // _BitScanReverse — the pool's class, counted
-#endif
 #include <new>
 #include <sstream>       // ToCDouble — the classic locale, whatever the process has set
 #include <stdexcept>     // std::out_of_range — insert past the end, as basic_string refused it
 #include <wx/wxcrt.h>    // wxTolower / wxToupper (per-char case primitives)
-
-// --- fast pooled allocator ----------------------------------------------------
-
-namespace ibFStringPool {
-namespace detail {
-
-	constexpr std::size_t kClasses[] = { 16, 32, 64, 128, 256, 512, 1024, 2048, 4096 };
-	constexpr int         kNum       = static_cast<int>(sizeof(kClasses) / sizeof(kClasses[0]));
-	constexpr std::size_t kCap       = 128;   // max cached blocks per class per thread
-
-	static_assert(kClasses[0] == 16, "ClassOf counts classes as powers of two from 16");
-
-	// The width of a number in bits — std::bit_width, which this C++17 tree does not have.
-	inline int BitWidth(std::size_t x) noexcept {
-		if (x == 0) return 0;
-#if defined(_MSC_VER)
-		unsigned long top;
-#  if defined(_WIN64)
-		_BitScanReverse64(&top, x);
-#  else
-		_BitScanReverse(&top, x);
-#  endif
-		return static_cast<int>(top) + 1;
-#else
-		return static_cast<int>(sizeof(unsigned long long) * 8) - __builtin_clzll(static_cast<unsigned long long>(x));
-#endif
-	}
-
-	// The class a block of this many bytes comes from (16 << class holds it), counted rather than searched:
-	// a string's making and its going both ask.
-	inline int ClassOf(std::size_t bytes) noexcept {
-		if (bytes <= kClasses[0]) return 0;
-		if (bytes > kClasses[kNum - 1]) return -1;   // larger than the biggest class → straight to ::operator new
-		return BitWidth(bytes - 1) - 4;               // 17..32 → 1, 33..64 → 2, … 2049..4096 → 8
-	}
-
-	struct Node { Node* next; };
-
-	struct ThreadPool {
-		// ⚠ NO INITIALIZERS: a thread_local of a trivial type is zeroed STATICALLY. `= {}` here gave the pool a
-		// constructor, and MSVC then asked a lazy-init guard at EVERY access — four of them in one free, seen in
-		// the disassembly (`cmp byte ptr [tls+0A0h],0 … call __dyn_tls_on_demand_init`, 2026-09-28).
-		Node*         head[kNum];
-		std::size_t   count[kNum];
-
-		// Hand every cached block back to the CRT. Shared by Drain() and, off Windows, by the
-		// destructor below.
-		void Release() noexcept {
-			for (int c = 0; c < kNum; ++c) {
-				Node* node = head[c];
-				while (node != nullptr) {
-					Node* const next = node->next;
-					::operator delete(node);
-					node = next;
-				}
-				head[c] = nullptr;
-				count[c] = 0;
-			}
-		}
-
-#ifndef __WXMSW__
-		// POSIX has no DLL_THREAD_DETACH, so the drain that covers worker threads on Windows has
-		// no place to live here — and without it every thread that ends keeps its cache forever,
-		// which on a long-running server (wenterprise-server spawns per session) accumulates
-		// thread after thread. So off Windows the pool destroys itself on thread exit, which is
-		// exactly what thread_local destructors are for.
-		//
-		// NOT done on Windows, deliberately: there a thread_local with a destructor is built by
-		// __dyn_tls_init for EVERY thread and costs an 8-byte registration node that is lost when
-		// a thread is killed at process exit — the trade is measured in
-		// docs/private/engineering-playbook/25-memory-leaks.md. DllMain covers those threads for free, so
-		// the pool stays trivially destructible there.
-		~ThreadPool() noexcept { Release(); }
-#endif
-	};
-
-	// One per thread — and, the text living in this module only, one pool for every string.
-	//
-	// ⚠ ON LINUX, AT A FIXED OFFSET (initial-exec). The pool is read at every string's making and going, and from
-	// inside a shared library the default model reaches a thread_local through a __tls_get_addr call each time —
-	// the likeliest part of making a string going from 20 to 104 ns on the CI's Linux when the pool moved in here
-	// (IbStringBench, 2026-09-27), while it costs 46 on Windows, whose DLL thread storage is a fixed slot anyway.
-	// The library is loaded with the process, never opened later, which is what the model asks.
-#if defined(__linux__)
-	thread_local ThreadPool t_pool __attribute__((tls_model("initial-exec")));
-#else
-	thread_local ThreadPool t_pool;
-#endif
-
-} // namespace detail
-
-// A block of class `c`: a cached one, or a fresh one of the class's full size. The caller has counted the class
-// already — the string's block asks it once, and knows then how much room it gets.
-inline void* AllocateClass(int c) {
-	detail::ThreadPool& pool = detail::t_pool;       // the thread's pool reached once
-	if (detail::Node* n = pool.head[c]) {            // reuse a cached block
-		pool.head[c] = n->next;
-		--pool.count[c];
-		return n;
-	}
-	return ::operator new(detail::kClasses[c]);       // fresh block, full class size
-}
-
-inline void Deallocate(void* p, std::size_t bytes) noexcept {
-	if (p == nullptr) return;
-	const int c = detail::ClassOf(bytes == 0 ? 1 : bytes);
-	if (c < 0) { ::operator delete(p); return; }      // oversized → return to the OS
-	detail::ThreadPool& pool = detail::t_pool;
-	if (pool.count[c] >= detail::kCap) { ::operator delete(p); return; }   // cache full
-	detail::Node* n = static_cast<detail::Node*>(p);   // cache for reuse
-	n->next = pool.head[c];
-	pool.head[c] = n;
-	++pool.count[c];
-}
-
-// Hands this thread's cached blocks back to the CRT. The cache exists to make string churn
-// cheap, not to outlive the process: at exit the free list is indistinguishable from a leak in
-// the CRT dump — the block still holds its old contents with only the first word overwritten by
-// `next`, which is why the dump used to show fragments of metadata names. 279 blocks of that
-// hide the next real leak.
-//
-// An explicit call at a chosen point, because the one thread that needs it most cannot be reached
-// any other way: the thread that calls exit() detaches the PROCESS, never itself, so no
-// thread-exit hook fires for it on any platform. Worker threads are covered without this — by
-// DLL_THREAD_DETACH on Windows, by ~ThreadPool elsewhere (see the note there).
-void Drain() noexcept { detail::t_pool.Release(); }
-
-} // namespace ibFStringPool
-
-// ⚠ AND ONCE MORE, LAST OF ALL. A store of strings as long-lived as the process — the pictures a server sends, made
-// once and kept in statics (ibPicture) — hands its blocks back during static destruction, after every Drain
-// above; there they would sit in the pool past the end and read as leaks. So a drain is registered before every
-// ordinary static of this module and runs after all of them: the runtime keeps static destructors and atexit
-// handlers in one LIFO list (docs/private/engineering-playbook/25-memory-leaks.md, "Ordering: running a cleanup last").
-#if defined(_MSC_VER)
-#pragma warning(push)
-#pragma warning(disable: 4073)   // init_seg(lib) is reserved for library code — this IS the library
-#pragma init_seg(lib)            // construct before every ordinary static in this DLL
-#pragma warning(pop)
-#endif
-
-namespace {
-struct ibStringPoolDrainAtExit {
-	ibStringPoolDrainAtExit() { std::atexit([] { ibFStringPool::Drain(); }); }
-};
-#if defined(__GNUC__)
-ibStringPoolDrainAtExit s_stringPoolDrainAtExit __attribute__((init_priority(101)));
-#else
-ibStringPoolDrainAtExit s_stringPoolDrainAtExit;
-#endif
-} // namespace
 
 // --- the text and its owners ------------------------------------------------------
 //
@@ -197,9 +43,9 @@ struct ibString::Impl : ibString::Shared
 	// counted once: it says which block and how big it is.
 	static Impl* Make(size_t cap) {
 		const size_t asked = BytesFor(cap);
-		const int c = ibFStringPool::detail::ClassOf(asked);
-		const size_t bytes = c < 0 ? asked : ibFStringPool::detail::kClasses[c];
-		void* const place = c < 0 ? ::operator new(bytes) : ibFStringPool::AllocateClass(c);
+		const int c = ibMemoryPool::detail::ClassOf(asked);
+		const size_t bytes = c < 0 ? asked : ibMemoryPool::detail::kClasses[c];
+		void* const place = c < 0 ? ::operator new(bytes) : ibMemoryPool::AllocateClass(c);
 		return new (place) Impl((bytes - sizeof(Shared)) / sizeof(wchar_t) - 1);
 	}
 	static Impl* Copy(const wchar_t* text, size_t len, size_t cap) {
@@ -219,7 +65,7 @@ void ibString::Free(Shared* shared) noexcept
 	Impl* const impl = Impl::Of(shared);
 	const size_t bytes = Impl::BytesFor(impl->m_cap);
 	impl->~Impl();
-	ibFStringPool::Deallocate(impl, bytes);
+	ibMemoryPool::Deallocate(impl, bytes);
 }
 
 // A text somebody else holds is copied first, with exactly the room asked for — which is what a concatenation
@@ -384,7 +230,7 @@ void ibString::SetUtf8(const char* p, size_t n)
 	// size class at most and the block goes back to be reused, while the move is a second allocation and a
 	// copy on every decode - "Privet" x4 on a 4-byte wchar_t asks 256 bytes by its bytes and 128 by its
 	// characters, and moving it cost the decode about 30% (2026-09-29). An ASCII text never moves either.
-	if (len < n && Impl::BytesFor(Impl::Of(m_impl)->m_cap) > ibFStringPool::detail::kClasses[ibFStringPool::detail::kNum - 1])
+	if (len < n && Impl::BytesFor(Impl::Of(m_impl)->m_cap) > ibMemoryPool::detail::kClasses[ibMemoryPool::detail::kNum - 1])
 		*this = ibString(chars, len);
 }
 

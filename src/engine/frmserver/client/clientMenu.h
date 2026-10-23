@@ -19,7 +19,7 @@
 #include "frmserver/frmserver.h"
 
 // What a menu item is — wx's item kinds, those a server menu has, each with what it does.
-enum class ibClientMenuItemKind : s32 {
+enum class ibClientMenuItemKind : std::int32_t {
 	Separator = 0,   // a line between groups
 	Command   = 1,   // one of the documents' commands — done by the server (`command`)
 	Schema    = 2,   // a schema — asked for and shown by the client (`schema`)

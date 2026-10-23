@@ -2,7 +2,7 @@
 #define __INTERFACE_HELPER_H__
 
 #include "backend_core.h"
-#include "core/fileSystem/fs.h"
+#include "core/memory/memoryStream.h"
 #include "core/description/commandDescription.h"   // ibInterfaceCommandType — kept with the description that stores it
 
 #include <set>   // m_interfaces — arrived transitively while propgrid was in backend_core's chain

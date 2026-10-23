@@ -101,7 +101,7 @@ bool ibValue::Serialize(ibDataNode& node) const
 	if (!IsTransferable())
 		return false;
 
-	// THE TYPE AS TEXT. The node has codecs for wxString / bool / s32 / ibNumber /
+	// THE TYPE AS TEXT. The node has codecs for wxString / bool / std::int32_t / ibNumber /
 	// wxDateTime / guid / blob — and none for a 64-bit id. Text costs a few bytes
 	// in the binary provider and makes the JSON dump readable, which is half the
 	// reason the JSON provider exists.

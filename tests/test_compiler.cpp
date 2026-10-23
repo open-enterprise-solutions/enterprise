@@ -327,7 +327,7 @@ TEST(CompilerTest, SyntaxErrorReturnsFalse) {
 // Compile + AOT round-trip — checks the AOT layer with real compiler output
 // ===========================================================================
 
-#include "core/fileSystem/fs.h"
+#include "core/memory/memoryStream.h"
 
 TEST(CompilerAOT, RealCompileOutputRoundTrips) {
 	ibCompileCode cc(wxT("test"), wxT("memory"), false);
@@ -346,7 +346,7 @@ TEST(CompilerAOT, RealCompileOutputRoundTrips) {
 
 	ibWriterMemory w;
 	ASSERT_TRUE(src_bc.SerializeAOT(w));
-	wxMemoryBuffer blob = w.buffer();
+	ibMemoryBuffer blob = w.buffer();
 	EXPECT_GT(blob.GetDataLen(), 0u);
 
 	ibReaderMemory r(blob);
@@ -1141,10 +1141,7 @@ TEST(MetaDataSerialize, TheTreeIS_WhatTravels) {
 	ibWriterMemory writer;
 	ASSERT_TRUE(ibBinaryProvider().Write(written, writer));
 
-	// HELD, NOT BORROWED FROM A TEMPORARY. buffer() hands back a copy by value and
-	// the reader keeps only its pointer, so passing the call directly would leave
-	// the reader on freed bytes (fs.h deletes that overload for this reason).
-	const wxMemoryBuffer blob = writer.buffer();
+	const ibMemoryBuffer blob = writer.buffer();
 	ASSERT_GT(blob.GetDataLen(), 0u);
 
 	ibDataNode read;

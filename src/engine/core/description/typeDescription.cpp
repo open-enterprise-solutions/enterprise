@@ -1,5 +1,5 @@
 #include "core/description/typeDescription.h"
-#include "core/fileSystem/fs.h"
+#include "core/memory/memoryBuffer.h"
 #include "core/serialize/dataBuilder.h"   // ibDataNode / ibDataValue (Child + Array)
 
 ////////////////////////////////////////////////////////////////////////
@@ -79,12 +79,12 @@ bool ibTypeDescriptionMemory::ReadNode(const ibDataValue& value, ibTypeDescripti
 
 	// restore the shared qualifier block (overwrites the per-type defaults set above)
 	ibTypeDescription::ibTypeData data;
-	data.SetNumber((unsigned char)root->GetValue<s32>(wxT("Precision")),
-		(unsigned char)root->GetValue<s32>(wxT("Scale")),
+	data.SetNumber((unsigned char)root->GetValue<std::int32_t>(wxT("Precision")),
+		(unsigned char)root->GetValue<std::int32_t>(wxT("Scale")),
 		root->GetValue<bool>(wxT("NonNegative")));
-	data.SetDate((ibDateFractions)root->GetValue<s32>(wxT("DateFraction")));
-	data.SetString((unsigned short)root->GetValue<s32>(wxT("Length")),
-		(ibAllowedLength)root->GetValue<s32>(wxT("AllowedLength")));
+	data.SetDate((ibDateFractions)root->GetValue<std::int32_t>(wxT("DateFraction")));
+	data.SetString((unsigned short)root->GetValue<std::int32_t>(wxT("Length")),
+		(ibAllowedLength)root->GetValue<std::int32_t>(wxT("AllowedLength")));
 	typeDesc.SetTypeData(data);
 	return true;
 }
@@ -119,12 +119,12 @@ bool ibTypeDescriptionMemory::WriteNode(ibDataValue& value, const ibTypeDescript
 
 	// the qualifier — ONE shared block (ibTypeData holds all three), no per-type branching
 	const ibTypeDescription::ibTypeData& data = typeDesc.GetTypeData();
-	root->SetValue(wxT("Precision"),    (s32)data.GetPrecision());
-	root->SetValue(wxT("Scale"),        (s32)data.GetScale());
+	root->SetValue(wxT("Precision"),    (std::int32_t)data.GetPrecision());
+	root->SetValue(wxT("Scale"),        (std::int32_t)data.GetScale());
 	root->SetValue(wxT("NonNegative"),  data.IsNonNegative());
-	root->SetValue(wxT("DateFraction"), (s32)data.GetDateFraction());
-	root->SetValue(wxT("Length"),       (s32)data.GetLength());
-	root->SetValue(wxT("AllowedLength"),(s32)data.GetAllowedLength());
+	root->SetValue(wxT("DateFraction"), (std::int32_t)data.GetDateFraction());
+	root->SetValue(wxT("Length"),       (std::int32_t)data.GetLength());
+	root->SetValue(wxT("AllowedLength"),(std::int32_t)data.GetAllowedLength());
 
 	value = ibDataValue::Child(root);
 	return true;
@@ -160,7 +160,7 @@ namespace {
 
 constexpr unsigned char kTypeDescBufferVersion = 1;
 
-void PutU32(wxMemoryBuffer& out, std::uint32_t v)
+void PutU32(ibMemoryBuffer& out, std::uint32_t v)
 {
 	out.AppendByte(static_cast<char>( v        & 0xFF));
 	out.AppendByte(static_cast<char>((v >>  8) & 0xFF));
@@ -168,7 +168,7 @@ void PutU32(wxMemoryBuffer& out, std::uint32_t v)
 	out.AppendByte(static_cast<char>((v >> 24) & 0xFF));
 }
 
-void PutU64(wxMemoryBuffer& out, std::uint64_t v)
+void PutU64(ibMemoryBuffer& out, std::uint64_t v)
 {
 	PutU32(out, static_cast<std::uint32_t>(v & 0xFFFFFFFFu));
 	PutU32(out, static_cast<std::uint32_t>(v >> 32));
@@ -199,7 +199,7 @@ struct ibTypeDescReader {
 
 } // namespace
 
-void ibTypeDescriptionMemory::WriteBuffer(wxMemoryBuffer& out, const ibTypeDescription& typeDesc)
+void ibTypeDescriptionMemory::WriteBuffer(ibMemoryBuffer& out, const ibTypeDescription& typeDesc)
 {
 	out.SetDataLen(0);
 	out.AppendByte(static_cast<char>(kTypeDescBufferVersion));

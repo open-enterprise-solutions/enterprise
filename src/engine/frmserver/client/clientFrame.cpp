@@ -155,12 +155,12 @@ void ibClientFrame::BackendError(const wxString& strFileName,
 	// THE DESKTOP'S ERROR WINDOW (ibFrontendMainFrameEnterprise::BackendError), asked of the client: the person chooses
 	// what becomes of the failure. Closed without a choice — as Close window.
 	ibDataNode request;
-	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<s32>(ibProtocol::ibRequest::ibKind::Error));
+	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<std::int32_t>(ibProtocol::ibRequest::ibKind::Error));
 	request.SetValue(ibProtocol::ibRequest::ibError::Picture, ibBackendPicture::SendPicture(g_picErrorCLSID));
 	request.SetValue(ibProtocol::ibRequest::ibError::Text, strErrorMessage);
 
 	ibDataNode response;
-	const s32 act = DoRequest(request, response) ? response.GetValue<s32>(ibProtocol::ibRequest::ibError::Act) : 0;   // 0 — closed: Close window
+	const std::int32_t act = DoRequest(request, response) ? response.GetValue<std::int32_t>(ibProtocol::ibRequest::ibError::Act) : 0;   // 0 — closed: Close window
 
 	// ⭐ THE ANSWERS ARE CUMULATIVE, as the desktop's: the error stays in the messages whatever was chosen; Go to designer
 	// also sends it to the designer debugging this base; Close program does both, and the client goes.
@@ -169,12 +169,12 @@ void ibClientFrame::BackendError(const wxString& strFileName,
 		m_pendingMessages.push_back({ ibStatusMessage_Error, strErrorMessage });
 	}
 
-	if (act == static_cast<s32>(ibProtocol::ibRequest::ibError::ibAct::GotoDesigner) || act == static_cast<s32>(ibProtocol::ibRequest::ibError::ibAct::CloseProgram)) {
+	if (act == static_cast<std::int32_t>(ibProtocol::ibRequest::ibError::ibAct::GotoDesigner) || act == static_cast<std::int32_t>(ibProtocol::ibRequest::ibError::ibAct::CloseProgram)) {
 		if (ibDebuggerServer* const server = debugServer)
 			server->SendErrorToClient(strFileName, strDocPath, line, strErrorMessage);
 	}
 
-	if (act == static_cast<s32>(ibProtocol::ibRequest::ibError::ibAct::CloseProgram))
+	if (act == static_cast<std::int32_t>(ibProtocol::ibRequest::ibError::ibAct::CloseProgram))
 		ExitClient(true);
 }
 
@@ -210,7 +210,7 @@ bool ibClientFrame::TakeRaisePending()
 	return was;
 }
 
-void ibClientFrame::ShowProperties(ibValueMetaObject* object, s32 tabId)
+void ibClientFrame::ShowProperties(ibValueMetaObject* object, std::int32_t tabId)
 {
 	ibPropertyInspector inspector;
 	inspector.SelectObject(object, tabId);
@@ -265,13 +265,13 @@ bool ibClientFrame::DoRequest(const ibDataNode& request, ibDataNode& response)
 int ibClientFrame::DoShowModalMessage(const wxString& message, const wxString& caption, int style)
 {
 	ibDataNode request;
-	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<s32>(ibProtocol::ibRequest::ibKind::Message));
+	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<std::int32_t>(ibProtocol::ibRequest::ibKind::Message));
 	request.SetValue(ibProtocol::ibRequest::ibMessage::Text, message);
 	request.SetValue(ibProtocol::ibRequest::ibMessage::Caption, caption);
 	request.SetValue(ibProtocol::ibRequest::ibMessage::Style, style);
 
 	ibDataNode response;
-	return DoRequest(request, response) ? response.GetValue<s32>(ibProtocol::ibRequest::ibMessage::Button) : 0;   // 0 — no button: cancelled
+	return DoRequest(request, response) ? response.GetValue<std::int32_t>(ibProtocol::ibRequest::ibMessage::Button) : 0;   // 0 — no button: cancelled
 }
 
 bool ibClientFrame::HasPendingRequest() const
@@ -422,7 +422,7 @@ bool ibClientFrame::PrintSpreadsheetDocument(const std::shared_ptr<ibSpreadsheet
 	// THE SHEET AS A SPREADSHEET'S FETCH WRITES IT (ibFetchSpreadsheet) — its texts as shown: the client's sheet holds no
 	// parameters, and prints it as the desktop's printed its own.
 	ibDataNode request;
-	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<s32>(ibProtocol::ibRequest::ibKind::Print));
+	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<std::int32_t>(ibProtocol::ibRequest::ibKind::Print));
 	if (!doc || !ibFetchSpreadsheet(*doc, request))
 		return false;
 
@@ -437,7 +437,7 @@ bool ibClientFrame::ShowScheduleEditor(ibJobScheduleDescription& schedule)
 		return false;
 
 	ibDataNode request;
-	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<s32>(ibProtocol::ibRequest::ibKind::Schedule));
+	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<std::int32_t>(ibProtocol::ibRequest::ibKind::Schedule));
 	request.SetField(ibProtocol::ibRequest::ibSchedule::Schedule, stored);
 
 	// CANCEL IS THE ONLY "NOTHING HAPPENED" — answered with no Schedule.
@@ -533,7 +533,7 @@ void ibClientFrame::SetActiveTab(std::size_t i)
 		m_activeTab = i;
 }
 
-std::size_t ibClientFrame::FindTab(s32 id) const
+std::size_t ibClientFrame::FindTab(std::int32_t id) const
 {
 	for (std::size_t i = 0; i < m_tabs.size(); ++i) {
 		if (m_tabs[i]->GetId() == id)
@@ -736,8 +736,8 @@ bool ibClientFrame::EditFocused(ibDocCommand command)
 	// The field under the focus is the client's, and what it holds selected: the client does it there. Nothing comes
 	// back — a field changed sends its Change as it does when typed into.
 	ibDataNode request;
-	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<s32>(ibProtocol::ibRequest::ibKind::Edit));
-	request.SetValue(ibProtocol::ibRequest::ibEdit::Command, static_cast<s32>(command));
+	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<std::int32_t>(ibProtocol::ibRequest::ibKind::Edit));
+	request.SetValue(ibProtocol::ibRequest::ibEdit::Command, static_cast<std::int32_t>(command));
 
 	ibDataNode response;
 	return Request(request, response);
@@ -748,7 +748,7 @@ bool ibClientFrame::OpenChosenFile()
 	// What may be chosen — the templates a person picks (the desktop's File → Open filter), as the frame's Templates
 	// list them.
 	ibDataNode request;
-	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<s32>(ibProtocol::ibRequest::ibKind::File));
+	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<std::int32_t>(ibProtocol::ibRequest::ibKind::File));
 	request.SetValue(ibProtocol::ibRequest::ibFile::Caption, _("Open"));
 	for (const ibDocTemplate* const temp : m_docManager->GetTemplatesVector()) {
 		if (!temp->IsVisible())

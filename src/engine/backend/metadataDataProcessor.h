@@ -94,7 +94,7 @@ protected:
 private:
 
 	// The file's content in hand, loaded — the one load both roads come to, whatever the bytes were read from.
-	bool LoadFromBuffer(const wxMemoryBuffer& buffer, const wxString& fullPath);
+	bool LoadFromBuffer(const ibMemoryBuffer& buffer, const wxString& fullPath);
 	// …and the content written, the one write both roads take, whatever the bytes go to.
 	bool SaveToBuffer(ibWriterMemory& writerData, const wxString& fullPath);
 

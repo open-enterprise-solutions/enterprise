@@ -3,6 +3,8 @@
 
 #include <wx/wx.h>
 
+#include "core/memory/memoryBuffer.h"   // OnScreenshot / OnComposed — the bytes the engine sent
+
 #include "debugDefs.h"
 
 // THE ENGINE'S (backend/debugger/debugClientBridge.h) whole — a listener of the thin designer's debugger (debugClient.h).
@@ -76,7 +78,7 @@ public:
 
 	// A picture of the running application's window, sent because its user allowed it. Empty bytes
 	// mean they declined — the one outcome a listener must not mistake for a broken transfer.
-	virtual void OnScreenshot(const wxMemoryBuffer& png, const wxString& focus) {}
+	virtual void OnScreenshot(const ibMemoryBuffer& png, const wxString& focus) {}
 
 	// The state of a filling run over there: one shape for start, status and cancel alike, since all
 	// three ask about the same run. `which` is the CommandId being answered, so a waiter can tell an
@@ -91,7 +93,7 @@ public:
 	// What a composition answered: `answered` true and the tables in `result`, or false and the
 	// reason in `refusal`. One or the other, and never silence — a read that produced nothing
 	// because a parameter was not set is a sentence, not an empty table.
-	virtual void OnComposed(bool answered, const wxString& refusal, const wxMemoryBuffer& result) {}
+	virtual void OnComposed(bool answered, const wxString& refusal, const ibMemoryBuffer& result) {}
 
 private:
 	// Its own, from birth — see the constructor. Nothing hands it in, so two bridges cannot be given

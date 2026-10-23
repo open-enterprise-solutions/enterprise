@@ -63,7 +63,7 @@ void ibFormDesignView::OnDraw(ibDataNode& frame)
 		return;
 	m_openingDrawn = true;
 	ibDataNode request;
-	request.SetValue(ibProtocol::ibView::ibFormDesigner::Kind, static_cast<s32>(ibProtocol::ibView::ibModule::ibRequest::Text));
+	request.SetValue(ibProtocol::ibView::ibFormDesigner::Kind, static_cast<std::int32_t>(ibProtocol::ibView::ibModule::ibRequest::Text));
 	Fetch(request, state->Child(ibProtocol::ibView::ibFormDesigner::Opening));
 
 	// …and the form's object's rows, which its Code page shows in the inspector (the tree's row it was opened from): the
@@ -102,7 +102,7 @@ bool ibFormDesignView::Fetch(const ibDataNode& request, ibDataNode& response)
 		ibJournalInfo(wxT("client"), wxT("      the form handed back loaded %lld ms"), loading.Ms());
 	}
 
-	const s32 kind = request.GetValue<s32>(ibProtocol::ibView::ibFormDesigner::Kind);
+	const std::int32_t kind = request.GetValue<std::int32_t>(ibProtocol::ibView::ibFormDesigner::Kind);
 	switch (static_cast<ibProtocol::ibView::ibFormDesigner::ibRequest>(kind)) {
 	case ibProtocol::ibView::ibFormDesigner::ibRequest::Control:        return written(FetchControl(request, response));
 	case ibProtocol::ibView::ibFormDesigner::ibRequest::BoundControl:   return written(FetchBoundControl(request, response));
@@ -146,10 +146,10 @@ bool ibFormDesignView::Fetch(const ibDataNode& request, ibDataNode& response)
 bool ibFormDesignView::FetchProperties(const ibDataNode& request, ibDataNode& response)
 {
 	// The rows of an attribute, of a form command, as the inspector writes them — the client's holder of it shows them.
-	const ibMetaID attributeId = request.GetValue<s32>(ibProtocol::ibView::ibFormDesigner::Attribute);
-	const ibMetaID commandId = request.GetValue<s32>(ibProtocol::ibView::ibFormDesigner::FormCommand);
+	const ibMetaID attributeId = request.GetValue<std::int32_t>(ibProtocol::ibView::ibFormDesigner::Attribute);
+	const ibMetaID commandId = request.GetValue<std::int32_t>(ibProtocol::ibView::ibFormDesigner::FormCommand);
 	// …and of a value table's column of an attribute (Column): the column is the property object.
-	const ibMetaID columnId = request.GetValue<s32>(ibProtocol::ibView::ibFormDesigner::Column);
+	const ibMetaID columnId = request.GetValue<std::int32_t>(ibProtocol::ibView::ibFormDesigner::Column);
 	ibPropertyObject* object = nullptr;
 	if (attributeId != 0 && columnId != 0)
 		object = FindColumnById(m_valueForm->FindAttributeById(attributeId), columnId);
@@ -164,13 +164,13 @@ bool ibFormDesignView::FetchProperties(const ibDataNode& request, ibDataNode& re
 	inspector.SelectObject(object, attributeId != 0 ? attributeId : commandId, 0);
 	inspector.OnDraw(response);
 	if (columnId != 0)
-		response.SetValue(ibProtocol::ibView::ibFormDesigner::Column, static_cast<s32>(columnId));
+		response.SetValue(ibProtocol::ibView::ibFormDesigner::Column, static_cast<std::int32_t>(columnId));
 	return true;
 }
 
 bool ibFormDesignView::FetchRows(const ibDataNode& request, ibDataNode& response)
 {
-	ibValueFrame* const control = m_valueForm->FindControlByID(request.GetValue<s32>(ibProtocol::ibView::ibFormDesigner::Control));
+	ibValueFrame* const control = m_valueForm->FindControlByID(request.GetValue<std::int32_t>(ibProtocol::ibView::ibFormDesigner::Control));
 	if (control == nullptr)
 		return false;
 	// …and the control as the form so edited draws it — its State is the server's (enabled with its form, shown where
@@ -192,7 +192,7 @@ bool ibFormDesignView::FetchEditor(const ibDataNode& request, ibDataNode& respon
 {
 	// What a control's property's editor reads beside its row, as the editor opens — the property's to write, its editor
 	// the reader (GetProtocolValue); the row carries what the cell shows.
-	ibValueFrame* const control = m_valueForm->FindControlByID(request.GetValue<s32>(ibProtocol::ibView::ibFormDesigner::Control));
+	ibValueFrame* const control = m_valueForm->FindControlByID(request.GetValue<std::int32_t>(ibProtocol::ibView::ibFormDesigner::Control));
 	ibProperty* const property = control != nullptr
 		? control->GetProperty(request.GetValue<wxString>(ibProtocol::ibView::ibFormDesigner::Name)) : nullptr;
 	return property != nullptr && property->GetProtocolValue(response, ibProperty::ibReader::Editor);
@@ -397,7 +397,7 @@ void ibFormDesignView::WriteRows(ibValueFrame* control, ibDataNode& controls)
 {
 	// What its state hides not sent (OnRefresh); no Tab: an edit of them is the client's.
 	ibDataNode& described = controls.AddChild(0, 0);
-	described.SetValue(ibProtocol::ibView::ibFormDesigner::Control, static_cast<s32>(control->GetControlID()));
+	described.SetValue(ibProtocol::ibView::ibFormDesigner::Control, static_cast<std::int32_t>(control->GetControlID()));
 	{
 		ibPropertyInspector inspector;
 		inspector.SelectObject(control, control->GetControlID(), 0);
@@ -447,7 +447,7 @@ bool ibFormDesignView::OnClientEvent(ibProtocol::ibEvent::ibKind event, const ib
 
 	// The form tested — as it stands on the client, shown as the runtime shows it (the desktop's TestForm).
 	if (event == ibProtocol::ibEvent::ibKind::Command &&
-		static_cast<ibProtocol::ibView::ibModule::ibCommand>(args.GetValue<s32>(ibProtocol::ibView::ibModule::Id)) == ibProtocol::ibView::ibModule::ibCommand::TestForm) {
+		static_cast<ibProtocol::ibView::ibModule::ibCommand>(args.GetValue<std::int32_t>(ibProtocol::ibView::ibModule::Id)) == ibProtocol::ibView::ibModule::ibCommand::TestForm) {
 		if (!LoadForm(*form))
 			return false;
 		// Down to the doc/view side explicitly: ibMetaDocument IS-A ibBackendMetaDocument AND an ibDocument, so both

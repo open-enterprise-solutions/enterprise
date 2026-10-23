@@ -45,7 +45,7 @@ void ibSchemaUserList::Build(const ibSession& session, const ibDataNode& args, i
 			row.SetValue(ibProtocol::ibSchema::ibUserList::Guid, object->GetDocPath());
 			row.SetValue(ibProtocol::ibSchema::ibUserList::Name, object->GetName());
 			row.SetValue(ibProtocol::ibSchema::ibUserList::Title, object->GetSynonym());
-			row.SetValue(ibProtocol::ibSchema::ibUserList::Mode, static_cast<s32>(object->GetRoleCompositionMode()));
+			row.SetValue(ibProtocol::ibSchema::ibUserList::Mode, static_cast<std::int32_t>(object->GetRoleCompositionMode()));
 		}
 		return;
 	}
@@ -69,7 +69,7 @@ void ibSchemaUserList::Build(const ibSession& session, const ibDataNode& args, i
 	user.AddField(ibProtocol::ibSchema::ibUserList::Roles, ibDataValue::Array(std::move(roles)));
 }
 
-std::function<void()> ibSchemaUserList::Command(const ibSession& session, s32 command,
+std::function<void()> ibSchemaUserList::Command(const ibSession& session, std::int32_t command,
 	const ibDataNode& args, ibProtocol::ibRefusal& refusal, wxString& error) const
 {
 	const ibMetaDataConfigurationBase* const metaData = session.GetMetaData();

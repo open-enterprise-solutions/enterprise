@@ -293,7 +293,7 @@ public:
 					std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
 					entry->SetValue(wxT("object"), here);
 					entry->SetValue(wxT("kind"), object->GetClassName());
-					entry->AddField(wxT("id"), ibDataValue::Int((s64)object->GetMetaID()));
+					entry->AddField(wxT("id"), ibDataValue::Int((std::int64_t)object->GetMetaID()));
 
 					if (anyDiffering)
 						entry->AddField(wxT("differs"), ibDataValue::Bool(true));
@@ -351,7 +351,7 @@ public:
 		}
 
 		result.AddField(wxT("roles"), ibDataValue::Array(who));
-		result.AddField(wxT("count"), ibDataValue::Int((s64)objects.size()));
+		result.AddField(wxT("count"), ibDataValue::Int((std::int64_t)objects.size()));
 		result.AddField(wxT("objects"), ibDataValue::Array(objects));
 
 		if (anyRestricting)
@@ -472,7 +472,7 @@ public:
 					std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
 					entry->SetValue(wxT("object"), here);
 					entry->SetValue(wxT("kind"), object->GetClassName());
-					entry->AddField(wxT("id"), ibDataValue::Int((s64)object->GetMetaID()));
+					entry->AddField(wxT("id"), ibDataValue::Int((std::int64_t)object->GetMetaID()));
 
 					// ROW OR TABLE — the object's own answer, and it changes what a right MEANS:
 					// a register controls its whole table, a catalog element controls itself.
@@ -508,7 +508,7 @@ public:
 			return false;
 		}
 
-		result.AddField(wxT("count"), ibDataValue::Int((s64)objects.size()));
+		result.AddField(wxT("count"), ibDataValue::Int((std::int64_t)objects.size()));
 		result.AddField(wxT("objects"), ibDataValue::Array(objects));
 
 		if (objects.empty())
@@ -700,8 +700,8 @@ public:
 
 		result.SetValue(wxT("role"), roleObject->GetName());
 		result.AddField(wxT("value"), ibDataValue::Bool(value));
-		result.AddField(wxT("objects"), ibDataValue::Int((s64)touchedObjects));
-		result.AddField(wxT("rights"), ibDataValue::Int((s64)touchedRights));
+		result.AddField(wxT("objects"), ibDataValue::Int((std::int64_t)touchedObjects));
+		result.AddField(wxT("rights"), ibDataValue::Int((std::int64_t)touchedRights));
 
 		if (touchedRights == 0)
 			result.SetValue(wxT("note"), only.IsEmpty()
@@ -880,7 +880,7 @@ public:
 		result.SetValue(wxT("text"), text);
 		if (roleObject != nullptr) {
 			result.SetValue(wxT("role"), roleObject->GetName());
-			result.AddField(wxT("roleId"), ibDataValue::Int((s64)roleObject->GetMetaID()));
+			result.AddField(wxT("roleId"), ibDataValue::Int((std::int64_t)roleObject->GetMetaID()));
 		}
 
 		// The names the restriction binds, as the compiler read them — the half that says the
@@ -901,7 +901,7 @@ public:
 			// consequences of it. `script_check` is the door for a full report.
 			std::shared_ptr<ibDataNode> why = std::make_shared<ibDataNode>();
 			why->SetValue(wxT("message"), found.front().m_message);
-			why->AddField(wxT("line"), ibDataValue::Int((s64)found.front().m_line));
+			why->AddField(wxT("line"), ibDataValue::Int((std::int64_t)found.front().m_line));
 			if (!found.front().m_codeLine.IsEmpty())
 				why->SetValue(wxT("at"), found.front().m_codeLine);
 			result.AddField(wxT("refused"), ibDataValue::Child(why));

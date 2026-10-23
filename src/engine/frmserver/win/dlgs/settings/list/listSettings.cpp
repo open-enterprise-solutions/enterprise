@@ -16,7 +16,7 @@ namespace {
 ibDataNode SettingsRequest(ibValueModel* model, const ibMetaData* metaData)
 {
 	ibDataNode request;
-	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<s32>(ibProtocol::ibRequest::ibKind::ListSettings));
+	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<std::int32_t>(ibProtocol::ibRequest::ibKind::ListSettings));
 
 	// 🛑 AND THE COLUMNS ARE DESCRIBED FOR EVERY MODEL, not only for the ones with no description — the desktop's: a
 	// list whose source is a METAOBJECT carries no query text to parse fields out of; its fields are its columns.

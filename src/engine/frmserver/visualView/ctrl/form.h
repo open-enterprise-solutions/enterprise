@@ -436,8 +436,8 @@ public:
 
 public:
 
-	virtual bool LoadForm(const wxMemoryBuffer& data);
-	virtual bool SaveForm(wxMemoryBuffer &data) const;
+	virtual bool LoadForm(const ibMemoryBuffer& data);
+	virtual bool SaveForm(ibMemoryBuffer &data) const;
 
 	//notify
 	virtual void NotifyCreate(const ibValue& vCreated);

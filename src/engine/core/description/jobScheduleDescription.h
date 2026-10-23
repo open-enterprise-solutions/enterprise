@@ -43,7 +43,7 @@
 
 #include <cstdint>
 
-#include <wx/buffer.h>
+#include "core/memory/memoryBuffer.h"
 
 class ibDataValue;   // storage door — see ibJobScheduleDescriptionMemory at the bottom
 
@@ -164,9 +164,9 @@ struct CORE_API ibJobScheduleDescription {
 // comparable, usable in a form's state — while the node shape evolves on its own.
 //
 // NODE SHAPE — one child node, fields addressed BY NAME:
-//   IntervalSeconds, StartMinute, EndMinute, StopAfterMinute : s32 (minutes from midnight; -1 = unset)
-//   DaysOfWeek, DaysOfMonth, DaysOfMonthFromEnd, Months      : s32 bit masks (0 = any)
-//   WeekdayOrdinal, EveryNWeeks, EveryNMonths                : s32 (0 = unused)
+//   IntervalSeconds, StartMinute, EndMinute, StopAfterMinute : std::int32_t (minutes from midnight; -1 = unset)
+//   DaysOfWeek, DaysOfMonth, DaysOfMonthFromEnd, Months      : std::int32_t bit masks (0 = any)
+//   WeekdayOrdinal, EveryNWeeks, EveryNMonths                : std::int32_t (0 = unused)
 //   PeriodAnchor, ActiveFrom, ActiveTo                       : Date (the empty date = unbounded)
 //
 // Names rather than positions, so adding or dropping a field keeps old data readable: an absent
@@ -183,14 +183,14 @@ public:
 	// which binds a blob, not a node tree. Same door, second spelling: the node form stays the
 	// metadata format, this is the data one, and both are here so neither can be written twice.
 	//
-	// Layout: version u8, then the fields in declaration order (ints as s32, dates as s64: the
+	// Layout: version std::uint8_t, then the fields in declaration order (ints as std::int32_t, dates as std::int64_t: the
 	// ibDateTime's count - the wall-clock reading (fdatetime.h) - since version 3; that reading
 	// counted from 1970 in version 2 and ms since the wxDateTime epoch - an instant - in version 1,
 	// both still read; 0 = the empty date / unbounded). VERSIONED
 	// because a row outlives a release:
 	// a reader older than the blob stops at the fields it knows, and every field it did not read
 	// keeps its default — which here always means "not restricted".
-	static void WriteBuffer(wxMemoryBuffer& out, const ibJobScheduleDescription& schedule);
+	static void WriteBuffer(ibMemoryBuffer& out, const ibJobScheduleDescription& schedule);
 	static bool ReadBuffer(const void* data, size_t length, ibJobScheduleDescription& schedule);
 };
 

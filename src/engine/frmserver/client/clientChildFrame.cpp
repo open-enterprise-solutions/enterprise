@@ -1,7 +1,7 @@
 #include "clientChildFrame.h"
 #include "clientFrame.h"
 
-ibClientChildFrame::ibClientChildFrame(ibClientFrame* frame, s32 id, ibDocument* doc, ibView* view, const wxString& title)
+ibClientChildFrame::ibClientChildFrame(ibClientFrame* frame, std::int32_t id, ibDocument* doc, ibView* view, const wxString& title)
 	: ibDocChildFrameAnyBase(doc, view), m_frame(frame), m_id(id), m_title(title)
 {
 }

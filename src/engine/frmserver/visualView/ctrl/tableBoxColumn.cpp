@@ -163,7 +163,7 @@ void ibValueModelTableBoxColumn::OnUpdate(ibDataNode& state, ibVisualHost* host)
 
 	state.SetValue(ibProtocol::ibForm::ibState::Caption, GetControlTitle());
 	state.SetValue(ibProtocol::ibForm::ibTable::FooterText, m_propertyFooterText->GetValueAsTranslateString());
-	state.SetValue(ibProtocol::ibForm::ibState::Representation, static_cast<s32>(rep));
+	state.SetValue(ibProtocol::ibForm::ibState::Representation, static_cast<std::int32_t>(rep));
 	if (rep != ibRepresentation::ibRepresentation_Text) {
 		const ibString header = ibBackendPicture::SendPicture(m_propertyHeaderPicture->GetValueAsPictureDesc(), GetMetaData());
 		if (!header.IsEmpty())
@@ -194,7 +194,7 @@ void ibValueModelTableBoxColumn::OnUpdate(ibDataNode& state, ibVisualHost* host)
 		for (size_t i = 0; i < composer.SortCount(); ++i) {
 			wxString sortField; bool asc = true;
 			if (composer.GetSortAt(i, sortField, asc) && sortField == field) {
-				const s32 sort = asc ? 1 : -1;
+				const std::int32_t sort = asc ? 1 : -1;
 				state.SetValue(ibProtocol::ibForm::ibTable::Sort, sort);
 				break;
 			}
@@ -245,7 +245,7 @@ void ibValueModelTableBoxColumn::UpdateCell(const ibDataViewItem& item, ibDataNo
 		if (attr.GetUnderlined())
 			cell.SetValue(ibProtocol::ibForm::ibTable::Underlined, true);
 		if (attr.GetPointSize() > 0)
-			cell.SetValue(ibProtocol::ibForm::ibTable::Size, static_cast<s32>(attr.GetPointSize()));
+			cell.SetValue(ibProtocol::ibForm::ibTable::Size, static_cast<std::int32_t>(attr.GetPointSize()));
 		if (!attr.GetFaceName().IsEmpty())
 			cell.SetValue(ibProtocol::ibForm::ibTable::Face, attr.GetFaceName());
 		if (attr.HasAlignment()) {

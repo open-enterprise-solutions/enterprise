@@ -323,7 +323,7 @@ public:
 			metaData->Modify(true);
 
 		result.SetValue(wxT("section"), section->GetName());
-		result.AddField(wxT("id"), ibDataValue::Int((s64)section->GetMetaID()));
+		result.AddField(wxT("id"), ibDataValue::Int((std::int64_t)section->GetMetaID()));
 		result.AddField(remove ? wxT("removed") : wxT("included"), ibDataValue::Array(done));
 
 		if (!failed.empty())
@@ -447,7 +447,7 @@ public:
 						std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
 						entry->SetValue(wxT("name"), object->GetName());
 						entry->SetValue(wxT("kind"), object->GetClassName());
-						entry->AddField(wxT("id"), ibDataValue::Int((s64)object->GetMetaID()));
+						entry->AddField(wxT("id"), ibDataValue::Int((std::int64_t)object->GetMetaID()));
 
 						const auto where = shownIn.find(object);
 						if (where != shownIn.end())
@@ -460,8 +460,8 @@ public:
 
 				std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
 				entry->SetValue(wxT("section"), here);
-				entry->AddField(wxT("id"), ibDataValue::Int((s64)section->GetMetaID()));
-				entry->AddField(wxT("count"), ibDataValue::Int((s64)items.size()));
+				entry->AddField(wxT("id"), ibDataValue::Int((std::int64_t)section->GetMetaID()));
+				entry->AddField(wxT("count"), ibDataValue::Int((std::int64_t)items.size()));
 				entry->AddField(wxT("items"), ibDataValue::Array(items));
 
 				sections.push_back(ibDataValue::Child(entry));
@@ -536,7 +536,7 @@ public:
 					std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
 					entry->SetValue(wxT("name"), object->GetName());
 					entry->SetValue(wxT("kind"), object->GetClassName());
-					entry->AddField(wxT("id"), ibDataValue::Int((s64)object->GetMetaID()));
+					entry->AddField(wxT("id"), ibDataValue::Int((std::int64_t)object->GetMetaID()));
 					homeless.push_back(ibDataValue::Child(entry));
 				}
 			}

@@ -373,13 +373,6 @@ struct wxArgNormalizerUtf8<ibString> : public wxArgNormalizerUtf8<const ibString
 };
 #endif // wxUSE_UNICODE_UTF8
 
-// --- the string pool (fstring.cpp) --------------------------------------------
-
-namespace ibFStringPool {
-// Hands this thread's cached blocks back to the CRT — see the note at the definition.
-CORE_API void Drain() noexcept;
-} // namespace ibFStringPool
-
 // --- ibString::Format -------------------------------------------------------
 
 namespace ibFStringFormat {

@@ -67,6 +67,6 @@ bool ibPropertySpreadsheet::GetProtocolValue(ibDataNode& row, ibReader reader)
 {
 	if (!ibProperty::GetProtocolValue(row, reader))
 		return false;
-	row.SetValue(ibProtocol::ibSchema::ibProperties::Object, static_cast<s32>(static_cast<const ibValueMetaObject*>(m_owner)->GetMetaID()));
+	row.SetValue(ibProtocol::ibSchema::ibProperties::Object, static_cast<std::int32_t>(static_cast<const ibValueMetaObject*>(m_owner)->GetMetaID()));
 	return true;
 }

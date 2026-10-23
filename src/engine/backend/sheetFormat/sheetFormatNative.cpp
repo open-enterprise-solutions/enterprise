@@ -1,7 +1,7 @@
 #include "backend/sheetFormat/sheetFormatNative.h"
 
 #include "core/fileKind.h"           // the one table that names our files
-#include "core/fileSystem/fs.h"      // ibReaderMemory / ibWriterMemory
+#include "core/memory/memoryStream.h"      // ibReaderMemory / ibWriterMemory
 
 #include <wx/mstream.h>
 
@@ -24,7 +24,7 @@ bool ibSheetFormatNative::Read(wxInputStream& input, ibSpreadsheetDescription& s
 	wxMemoryOutputStream whole;
 	input.Read(whole);
 
-	wxMemoryBuffer buffer(whole.GetLength());
+	ibMemoryBuffer buffer(whole.GetLength());
 	whole.CopyTo(buffer.GetWriteBuf(whole.GetLength()), whole.GetLength());
 	buffer.UngetWriteBuf(whole.GetLength());
 

@@ -12,8 +12,8 @@ namespace {
 ibDataNode ShelfRequest(ibDialogSavedSettings::Mode mode, ibSettingsCategory category, const ibGuid& objectKey)
 {
 	ibDataNode request;
-	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<s32>(ibProtocol::ibRequest::ibKind::SavedSettings));
-	request.SetValue(ibProtocol::ibRequest::ibSavedSettings::Mode, static_cast<s32>(mode == ibDialogSavedSettings::Mode::Save
+	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<std::int32_t>(ibProtocol::ibRequest::ibKind::SavedSettings));
+	request.SetValue(ibProtocol::ibRequest::ibSavedSettings::Mode, static_cast<std::int32_t>(mode == ibDialogSavedSettings::Mode::Save
 		? ibProtocol::ibRequest::ibSavedSettings::ibMode::Save : ibProtocol::ibRequest::ibSavedSettings::ibMode::Restore));
 	request.SetValue(ibProtocol::ibRequest::ibSavedSettings::Key, objectKey.str());
 	const ibGuid defaultId = ibGetDefaultComposerSettings(objectKey);
@@ -53,7 +53,7 @@ bool ibDialogSavedSettings::Show(ibDataComposer& composer, Mode mode, ibSettings
 		const wxString name = response.GetValue<wxString>(ibProtocol::ibRequest::ibSavedSettings::Name);
 
 		bool done = false;
-		switch (static_cast<ibProtocol::ibRequest::ibSavedSettings::ibAct>(response.GetValue<s32>(ibProtocol::ibRequest::ibSavedSettings::Act))) {
+		switch (static_cast<ibProtocol::ibRequest::ibSavedSettings::ibAct>(response.GetValue<std::int32_t>(ibProtocol::ibRequest::ibSavedSettings::Act))) {
 		case ibProtocol::ibRequest::ibSavedSettings::ibAct::Save:
 			done = ibSaveComposerSettings(category, objectKey, id, name, composer).isValid();
 			break;

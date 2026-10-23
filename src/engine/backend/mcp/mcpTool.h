@@ -114,7 +114,7 @@ public:
 		// Out of what the caller sent, by the same name it was declared under.
 		bool     Given(const ibDataNode& params) const;
 		wxString Text(const ibDataNode& params) const;
-		s64      Whole(const ibDataNode& params) const;
+		std::int64_t      Whole(const ibDataNode& params) const;
 		bool     Flag(const ibDataNode& params) const;
 
 	private:

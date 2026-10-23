@@ -75,7 +75,7 @@ public:
 	const std::vector<ibCommandHop>& GetPath() const { return m_listCommand; }
 };
 
-// A DUMB serializer for a command id path — writes / reads the ids VERBATIM ([count : u32][ id : u32 ] per hop),
+// A DUMB serializer for a command id path — writes / reads the ids VERBATIM ([count : std::uint32_t][ id : std::uint32_t ] per hop),
 // no metadata, no copy awareness (the OWNER's contract, exactly like ibSourceDescriptionMemory).
 class CORE_API ibCommandDescriptionMemory {
 public:

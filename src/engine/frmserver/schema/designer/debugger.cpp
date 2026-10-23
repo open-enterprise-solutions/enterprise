@@ -16,7 +16,7 @@ void WriteBreakpoints(const wxString& module, ibDataNode& node)
 	ibDataNode& breakpoints = node.Child(ibProtocol::ibSchema::ibDebugger::Breakpoints);
 	for (const auto& breakpoint : debugClient->GetDebugList(module)) {
 		ibDataNode& row = breakpoints.AddChild(0, 0);
-		row.SetValue(ibProtocol::ibSchema::ibDebugger::Line, static_cast<s32>(breakpoint.first));
+		row.SetValue(ibProtocol::ibSchema::ibDebugger::Line, static_cast<std::int32_t>(breakpoint.first));
 		row.SetValue(ibProtocol::ibSchema::ibDebugger::Condition, breakpoint.second);
 	}
 }
@@ -52,12 +52,12 @@ void ibSchemaDebugger::Build(const ibSession& session, const ibDataNode& args, i
 		const wxString& text = moduleObject->GetModuleText();
 		ibDataNode& row = modules.AddChild(0, 0);
 		row.SetValue(ibProtocol::ibSchema::ibDebugger::Module, moduleObject->GetDocPath());
-		row.SetValue(ibProtocol::ibSchema::ibDebugger::Count, static_cast<s32>(1 + std::count(text.begin(), text.end(), wxT('\n'))));
+		row.SetValue(ibProtocol::ibSchema::ibDebugger::Count, static_cast<std::int32_t>(1 + std::count(text.begin(), text.end(), wxT('\n'))));
 		WriteBreakpoints(moduleObject->GetDocPath(), row);
 	}
 }
 
-std::function<void()> ibSchemaDebugger::Command(const ibSession& WXUNUSED(session), s32 command,
+std::function<void()> ibSchemaDebugger::Command(const ibSession& WXUNUSED(session), std::int32_t command,
 	const ibDataNode& args, ibProtocol::ibRefusal& refusal, wxString& error) const
 {
 	if (debugClient == nullptr) {
@@ -69,7 +69,7 @@ std::function<void()> ibSchemaDebugger::Command(const ibSession& WXUNUSED(sessio
 	// The lines are the committed ones — the client resolved its editor's (ResolveOriginalLine); here nothing is edited,
 	// so the session's client takes them as they are and keeps its rows the same as the base's.
 	const wxString module = args.GetValue<wxString>(ibProtocol::ibSchema::ibDebugger::Module);
-	const unsigned int line = static_cast<unsigned int>(args.GetValue<s32>(ibProtocol::ibSchema::ibDebugger::Line));
+	const unsigned int line = static_cast<unsigned int>(args.GetValue<std::int32_t>(ibProtocol::ibSchema::ibDebugger::Line));
 
 	wxString said;
 	switch (static_cast<ibProtocol::ibSchema::ibDebugger::ibCommand>(command)) {

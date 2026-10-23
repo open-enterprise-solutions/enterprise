@@ -26,7 +26,7 @@
 #include "core/fdatetime.h"              // ibDateTime — the Date scalar
 #include "core/fstring.h"                // ibString — the String scalar and every entry's name
 #include "core/guid.h"                   // ibGuid — codec specialization
-#include "core/fileSystem/fs.h"          // ibWriter / ibReader, u32/u64, wxMemoryBuffer
+#include "core/memory/memoryStream.h"          // ibWriterMemory / ibReaderMemory, std::uint32_t/std::uint64_t, ibMemoryBuffer
 #include "core/fnumber.h"                // ibNumber — codec specialization
 
 class CORE_API ibDataNode;   // a value can BE a child node (composite) — see ibDataKind::Child
@@ -47,7 +47,7 @@ class CORE_API ibDataNode;   // a value can BE a child node (composite) — see 
 // bool as a byte, string as text, blob as bytes) and the provider writes the
 // signature + the value. The signature preserves the type end-to-end, so a JSON
 // view can render `42` / `true`, not `"42"`. C++<->value conversion is in ibDataCodec.
-enum class ibDataKind : u8 {
+enum class ibDataKind : std::uint8_t {
 	Empty = 0,
 	Bool,
 	Number,    // exact decimal later; integer scalars for now
@@ -62,9 +62,9 @@ enum class ibDataKind : u8 {
 class CORE_API ibDataValue {
 public:
 	ibDataValue() = default;
-	// ⭐ MOVED WITHOUT A THROW — said, since the payload's buffer (wxMemoryBuffer) has no move of its own and its copy is
-	// not marked so: std::vector moves only what cannot throw, and a node's fields grew by COPYING each one (2026-10-22,
-	// _Uninitialized_copy under AddField). What moves is a count taken, never an allocation.
+	// ⭐ MOVED WITHOUT A THROW — said: std::vector moves only what cannot throw, and a node's fields grew by COPYING each
+	// one (2026-10-22, _Uninitialized_copy under AddField) while the payload's buffer was wxMemoryBuffer, which had no
+	// move of its own. What moves is a pointer taken, never an allocation.
 	ibDataValue(const ibDataValue&) = default;
 	ibDataValue(ibDataValue&&) noexcept = default;
 	ibDataValue& operator=(const ibDataValue&) = default;
@@ -76,10 +76,10 @@ public:
 	static ibDataValue String(const ibString& text);
 	static ibDataValue Bool(bool value);
 	static ibDataValue Number(const ibNumber& value); // exact decimal (the full numeric payload)
-	static ibDataValue Int(s64 value);    // small-int convenience over Number
-	static ibDataValue UInt(u64 value);   // unsigned-int convenience over Number
+	static ibDataValue Int(std::int64_t value);    // small-int convenience over Number
+	static ibDataValue UInt(std::uint64_t value);   // unsigned-int convenience over Number
 	static ibDataValue Date(const ibDateTime& date);   // date/time scalar (the wall-clock reading, fdatetime.h)
-	static ibDataValue Binary(const wxMemoryBuffer& data);
+	static ibDataValue Binary(const ibMemoryBuffer& data);
 	static ibDataValue Child(const std::shared_ptr<ibDataNode>& child);
 	static ibDataValue Array(const std::vector<ibDataValue>& items);
 	static ibDataValue Array(std::vector<ibDataValue>&& items);   // a parser hands its list over instead of copying it
@@ -91,10 +91,10 @@ public:
 	const ibString&                  AsString() const;
 	bool                             AsBool()   const;
 	const ibNumber&                  AsNumber() const;
-	s64                              AsInt()    const { s64 out = 0; AsNumber().ToInt(out); return out; }
-	u64                              AsUInt()   const { u64 out = 0; AsNumber().ToInt(out); return out; }
+	std::int64_t                              AsInt()    const { std::int64_t out = 0; AsNumber().ToInt(out); return out; }
+	std::uint64_t                              AsUInt()   const { std::uint64_t out = 0; AsNumber().ToInt(out); return out; }
 	ibDateTime                       AsDate()   const;
-	const wxMemoryBuffer&            AsBinary() const;
+	const ibMemoryBuffer&            AsBinary() const;
 	const std::shared_ptr<ibDataNode>& AsChild() const;
 	const std::vector<ibDataValue>&  AsArray()  const;
 
@@ -123,7 +123,7 @@ private:
 		ibNumber,                                 // Number (exact decimal, huge-capable)
 		ibDateTime,                               // Date (the wall-clock reading, fdatetime.h) — never mixed with Number
 		ibString,                                 // String
-		wxMemoryBuffer,                           // Binary
+		ibMemoryBuffer,                           // Binary
 		std::shared_ptr<ibDataNode>,              // Child (composite sub-node)
 		std::vector<ibDataValue>> m_payload;      // Array (ordered list of values)
 };
@@ -148,13 +148,13 @@ template<> struct ibDataCodec<bool> {
 	static ibDataValue To(bool v) { return ibDataValue::Bool(v); }
 	static bool        From(const ibDataValue& v) { return v.AsBool(); }
 };
-template<> struct ibDataCodec<s32> {
-	static ibDataValue To(s32 v) { return ibDataValue::Int(v); }
-	static s32         From(const ibDataValue& v) { return (s32)v.AsInt(); }
+template<> struct ibDataCodec<std::int32_t> {
+	static ibDataValue To(std::int32_t v) { return ibDataValue::Int(v); }
+	static std::int32_t         From(const ibDataValue& v) { return (std::int32_t)v.AsInt(); }
 };
-template<> struct ibDataCodec<wxMemoryBuffer> {
-	static ibDataValue To(const wxMemoryBuffer& v) { return ibDataValue::Binary(v); }
-	static wxMemoryBuffer From(const ibDataValue& v) { return v.AsBinary(); }
+template<> struct ibDataCodec<ibMemoryBuffer> {
+	static ibDataValue To(const ibMemoryBuffer& v) { return ibDataValue::Binary(v); }
+	static ibMemoryBuffer From(const ibDataValue& v) { return v.AsBinary(); }
 };
 template<> struct ibDataCodec<ibGuid> {           // a guid serializes as its string form
 	static ibDataValue To(const ibGuid& v) { return ibDataValue::String(v.str()); }
@@ -185,8 +185,8 @@ class CORE_API ibDataNode {
 public:
 	ibDataNode() = default;
 	ibDataNode(ibClassID clsid, ibMetaID metaId) : m_clsid(clsid), m_metaId(metaId) {}
-	// ⭐ MOVED WITHOUT A THROW — said, as ibDataValue says it: the raw block (wxMemoryBuffer) has no move of its own, and
-	// a vector of children grew by COPYING each child with all of its subtree (2026-10-22, the form editor's rows).
+	// ⭐ MOVED WITHOUT A THROW — said, as ibDataValue says it: a vector of children grew by COPYING each child with all of
+	// its subtree (2026-10-22, the form editor's rows).
 	ibDataNode(const ibDataNode&) = default;
 	ibDataNode(ibDataNode&&) noexcept = default;
 	ibDataNode& operator=(const ibDataNode&) = default;
@@ -204,7 +204,7 @@ public:
 	// so on load the node is genuinely const. Get*<T> RETURNS the value (inline);
 	// Get*(name, out) deduces T. One pair for the FIELD area, one for PROPERTIES:
 	//   save: node.SetValue("id", m_metaId);          node.SetProp("Name", GetName());
-	//   load: m_metaId = node.GetValue<s32>("id");     SetName(node.GetProp<wxString>("Name"));
+	//   load: m_metaId = node.GetValue<std::int32_t>("id");     SetName(node.GetProp<wxString>("Name"));
 	// An absent name yields a default-constructed T — forward-compatible with
 	// add / drop / reorder.
 	template<class T> void SetValue(const ibString& name, const T& value) { AddField(name, ibDataCodec<T>::To(value)); }
@@ -302,8 +302,8 @@ public:
 	// The not-yet-decomposed remainder of this node (today: the eDataBlock
 	// blob = SaveMeta output). Empty once a node is fully Described into
 	// named fields. Kept separate so byte-identity holds during migration.
-	const wxMemoryBuffer& RawData() const { return m_rawData; }
-	void  SetRawData(const wxMemoryBuffer& data) { m_rawData = data; }
+	const ibMemoryBuffer& RawData() const { return m_rawData; }
+	void  SetRawData(const ibMemoryBuffer& data) { m_rawData = data; }
 	bool  HasRawData() const { return m_rawData.GetDataLen() != 0; }
 
 	// --- composite value as a named CHILD sub-node (Type / interface / form …) -
@@ -365,7 +365,7 @@ private:
 
 	std::vector<std::pair<ibString, ibDataValue>> m_fields;   // plain / hidden / intrinsic fields
 	std::vector<std::pair<ibString, ibDataValue>> m_props;    // the property bag (separate area)
-	wxMemoryBuffer                                m_rawData{ 0 };   // transitional un-decomposed block — empty: a default wxMemoryBuffer allocates a kilobyte
+	ibMemoryBuffer                                m_rawData;        // transitional un-decomposed block
 	std::vector<ibDataNode>                       m_children; // metaobject sub-nodes
 
 	mutable size_t m_cursor = 0;          // optimistic read cursor over m_fields
@@ -382,8 +382,8 @@ class CORE_API ibFormatProvider {
 public:
 	virtual ~ibFormatProvider() = default;
 
-	virtual bool Write(const ibDataNode& root, ibWriter& writer) const = 0;
-	virtual bool Read(ibReader& reader, ibDataNode& root) const = 0;
+	virtual bool Write(const ibDataNode& root, ibWriterMemory& writer) const = 0;
+	virtual bool Read(ibReaderMemory& reader, ibDataNode& root) const = 0;
 };
 
 ////////////////////////////////////////////////////////////////////////////
@@ -405,22 +405,22 @@ public:
 ////////////////////////////////////////////////////////////////////////////
 class CORE_API ibBinaryProvider : public ibFormatProvider {
 public:
-	bool Write(const ibDataNode& root, ibWriter& writer) const override;
-	bool Read(ibReader& reader, ibDataNode& root) const override;
+	bool Write(const ibDataNode& root, ibWriterMemory& writer) const override;
+	bool Read(ibReaderMemory& reader, ibDataNode& root) const override;
 
 private:
-	void WriteInner(const ibDataNode& node, ibWriter& writer) const; // node CONTENT only (no identity frame); ROOT path
-	void WriteNode(const ibDataNode& node, ibWriter& writer) const;  // identity-framed node; CHILD path
-	void ReadNode(ibReader& reader, ibDataNode& node) const; // reads the inner; node.clsid/metaId pre-set by caller
-	void WriteFields(const ibDataNode& node, ibWriter& writer) const;
-	void ReadFields(ibReader& reader, ibDataNode& node, u32 version) const;   // version = the node's format stamp (kFormatVersion when written)
-	void WriteProps(const ibDataNode& node, ibWriter& writer) const;   // the property bag, separate area
-	void ReadProps(ibReader& reader, ibDataNode& node, u32 version) const;
-	void WriteChildren(const ibDataNode& node, ibWriter& writer) const; // a Child value's subtree (form control tree)
-	void ReadChildren(ibReader& reader, ibDataNode& node, u32 version) const;   // a Child value's subtree has no stamp of its own: the enclosing node's
-	void WriteEntry(ibWriter& writer, const ibString& name, const ibDataValue& value) const; // name + value payload
-	void WriteValue(ibWriter& writer, const ibDataValue& value) const;                        // kind + value (recurses on Child / Array)
-	ibDataValue ReadEntry(ibReader& reader, u32 version) const;                               // kind + value (name read by the caller)
+	void WriteInner(const ibDataNode& node, ibWriterMemory& writer) const; // node CONTENT only (no identity frame); ROOT path
+	void WriteNode(const ibDataNode& node, ibWriterMemory& writer) const;  // identity-framed node; CHILD path
+	void ReadNode(ibReaderMemory& reader, ibDataNode& node) const; // reads the inner; node.clsid/metaId pre-set by caller
+	void WriteFields(const ibDataNode& node, ibWriterMemory& writer) const;
+	void ReadFields(ibReaderMemory& reader, ibDataNode& node, std::uint32_t version) const;   // version = the node's format stamp (kFormatVersion when written)
+	void WriteProps(const ibDataNode& node, ibWriterMemory& writer) const;   // the property bag, separate area
+	void ReadProps(ibReaderMemory& reader, ibDataNode& node, std::uint32_t version) const;
+	void WriteChildren(const ibDataNode& node, ibWriterMemory& writer) const; // a Child value's subtree (form control tree)
+	void ReadChildren(ibReaderMemory& reader, ibDataNode& node, std::uint32_t version) const;   // a Child value's subtree has no stamp of its own: the enclosing node's
+	void WriteEntry(ibWriterMemory& writer, const ibString& name, const ibDataValue& value) const; // name + value payload
+	void WriteValue(ibWriterMemory& writer, const ibDataValue& value) const;                        // kind + value (recurses on Child / Array)
+	ibDataValue ReadEntry(ibReaderMemory& reader, std::uint32_t version) const;                               // kind + value (name read by the caller)
 };
 
 ////////////////////////////////////////////////////////////////////////////
@@ -437,10 +437,10 @@ public:
 	const ibDataNode& Root() const { return m_root; }
 	void Reset() { m_root = ibDataNode(); }
 
-	bool Save(const ibFormatProvider& provider, ibWriter& writer) const {
+	bool Save(const ibFormatProvider& provider, ibWriterMemory& writer) const {
 		return provider.Write(m_root, writer);
 	}
-	bool Load(const ibFormatProvider& provider, ibReader& reader) {
+	bool Load(const ibFormatProvider& provider, ibReaderMemory& reader) {
 		Reset();
 		return provider.Read(reader, m_root);
 	}

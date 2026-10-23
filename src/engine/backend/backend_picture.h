@@ -38,7 +38,7 @@ public:
 	// picture itself the client loads apart, by the id (ibProtocol::ibMethod::Picture), and keeps with its version; one
 	// held as a file's bytes has no id of its own and goes as itself. Empty: no picture.
 	static ibString SendPicture(const ibPictureDescription& pictureDesc, const class ibMetaData* metaData);
-	// …a backend picture by its number alone — no configuration names it: a decimal (a u64 is past what a JSON number
+	// …a backend picture by its number alone — no configuration names it: a decimal (a std::uint64_t is past what a JSON number
 	// keeps). 0: no picture.
 	static ibString SendPicture(const ibPictureID& id);
 

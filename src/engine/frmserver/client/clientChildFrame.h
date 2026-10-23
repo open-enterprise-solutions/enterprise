@@ -18,12 +18,12 @@ class ibClientFrame;
 class FRMSERVER_API ibClientChildFrame : public ibDocChildFrameAnyBase {
 public:
 
-	ibClientChildFrame(ibClientFrame* frame, s32 id, ibDocument* doc, ibView* view, const wxString& title);
+	ibClientChildFrame(ibClientFrame* frame, std::int32_t id, ibDocument* doc, ibView* view, const wxString& title);
 	virtual ~ibClientChildFrame() override;
 
 	// Its id in the frame — what a client names it by (the wire's NodeId of the tab): given when it opens, never
 	// another tab's, so a tab closing shifts no other.
-	s32 GetId() const { return m_id; }
+	std::int32_t GetId() const { return m_id; }
 
 	// Shown = the client's ACTIVE tab: the frame switches to it. A tab is never hidden on its own — it is
 	// closed instead — so `false` changes nothing.
@@ -52,7 +52,7 @@ public:
 private:
 
 	ibClientFrame*        m_frame;
-	s32                   m_id;
+	std::int32_t                   m_id;
 	wxString              m_title;
 	ibPictureDescription  m_icon;
 	bool                  m_locked = false;

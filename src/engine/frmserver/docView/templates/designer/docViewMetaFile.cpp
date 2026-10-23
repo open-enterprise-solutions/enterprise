@@ -80,8 +80,8 @@ bool ibMetadataFileDocument::DoOpenDocument(const wxString& filename)
 	const ibTempFile temp(filename);
 	if (!temp.IsOpened())
 		return false;
-	wxMemoryBuffer bytes;
-	wxMemoryBuffer part;
+	ibMemoryBuffer bytes;
+	ibMemoryBuffer part;
 	for (int index = 0; temp.ReadPart(index, part); ++index)
 		bytes.AppendData(part.GetData(), part.GetDataLen());
 	if (!m_metaData->LoadConfigFromBuffer(bytes))

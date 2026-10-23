@@ -45,7 +45,7 @@ bool ibMetaDataConfigurationBase::LoadConfigFromFile(const wxString& strFileName
 	//go to beginning
 	in.seekg(0, in.beg);
 
-	wxMemoryBuffer buffer(fsize);
+	ibMemoryBuffer buffer(fsize);
 
 	in.read((char*)buffer.GetWriteBuf(fsize), fsize);
 	buffer.UngetWriteBuf(fsize);
@@ -57,7 +57,7 @@ bool ibMetaDataConfigurationBase::LoadConfigFromFile(const wxString& strFileName
 bool ibMetaDataConfigurationBase::SaveConfigToFile(const wxString& strFileName)
 {
 	//common data
-	wxMemoryBuffer buffer;
+	ibMemoryBuffer buffer;
 
 	if (!SaveConfigToBuffer(buffer))
 		return false;
@@ -77,7 +77,7 @@ bool ibMetaDataConfigurationBase::SaveConfigToFile(const wxString& strFileName)
 		if (!datafile.is_open())
 			return false;
 
-		datafile.write(reinterpret_cast<char*>(buffer.GetData()), buffer.GetBufSize());
+		datafile.write(reinterpret_cast<char*>(buffer.GetData()), buffer.GetDataLen());
 		datafile.flush();
 
 		const bool ok = datafile.good();
@@ -316,7 +316,7 @@ bool ibMetaDataConfigurationFile::ClearDatabase()
 	return true;
 }
 
-bool ibMetaDataConfigurationFile::LoadConfigFromBuffer(const wxMemoryBuffer& buffer)
+bool ibMetaDataConfigurationFile::LoadConfigFromBuffer(const ibMemoryBuffer& buffer)
 {
 	// Close the old tree's run-state first (unregisters its ctors). For the
 	// storage subclass this is virtual and also closes the saved baseline, which
@@ -331,7 +331,7 @@ bool ibMetaDataConfigurationFile::LoadConfigFromBuffer(const wxMemoryBuffer& buf
 		}
 	}
 
-	ibReaderMemory readerData(buffer.GetData(), buffer.GetBufSize());
+	ibReaderMemory readerData(buffer);
 
 	if (readerData.eof())
 		return false;
@@ -376,7 +376,7 @@ bool ibMetaDataConfigurationFile::LoadCommonTree(const ibClassID& clsid, ibReade
 	};
 	{
 		std::shared_ptr<ibReaderMemory> headerReader(readerData.open_chunk(eHeaderBlock));
-		if (!headerReader || headerReader->elapsed() < (int)sizeof(u64) || headerReader->r_u64() != sign_metadata)
+		if (!headerReader || headerReader->elapsed() < (int)sizeof(std::uint64_t) || headerReader->r_u64() != sign_metadata)
 			unreadable();
 		wxString metaGuid;
 		headerReader->r_stringZ(metaGuid);
@@ -389,7 +389,7 @@ bool ibMetaDataConfigurationFile::LoadCommonTree(const ibClassID& clsid, ibReade
 	if (!readerMemory)
 		unreadable();
 
-	u64 meta_id = 0;
+	std::uint64_t meta_id = 0;
 	std::shared_ptr <ibReaderMemory> readerMetaMemory(readerMemory->open_chunk_iterator(meta_id));
 
 	if (!readerMetaMemory)
@@ -606,7 +606,7 @@ bool ibMetaDataConfigurationStorage::LoadDatabase(int flags)
 	return false;
 }
 
-bool ibMetaDataConfigurationStorage::RestoreDataFromBuffer(const wxMemoryBuffer& buffer)
+bool ibMetaDataConfigurationStorage::RestoreDataFromBuffer(const ibMemoryBuffer& buffer)
 {
 	ibReaderMemory reader(buffer);
 
@@ -614,17 +614,17 @@ bool ibMetaDataConfigurationStorage::RestoreDataFromBuffer(const wxMemoryBuffer&
 	// no such chunk and carried instants of the dumping machine's clock; the mover reads each form
 	// as the date it is (ibDataMover::DateOfWire). A form this build does not know is a newer one.
 	ibDataMover::DateForm dates = ibDataMover::DateForm::Instant;
-	wxMemoryBuffer bufferForm;
+	ibMemoryBuffer bufferForm;
 	if (reader.r_chunk(3, bufferForm)) {
 		ibReaderMemory readerForm(bufferForm);
-		const u32 form = readerForm.r_u32();
-		if (form > static_cast<u32>(ibDataMover::DateForm::DateTime))
+		const std::uint32_t form = readerForm.r_u32();
+		if (form > static_cast<std::uint32_t>(ibDataMover::DateForm::DateTime))
 			ibBackendCoreException::Error(_("The data was saved by a newer build (date form %u) that this build cannot read. Nothing was loaded."), form);
 		dates = static_cast<ibDataMover::DateForm>(form);
 	}
 
 	//common data
-	wxMemoryBuffer bufferData;
+	ibMemoryBuffer bufferData;
 
 	if (reader.r_chunk(1, bufferData)) {
 
@@ -636,7 +636,7 @@ bool ibMetaDataConfigurationStorage::RestoreDataFromBuffer(const wxMemoryBuffer&
 		for (const ibSchemaTable& table : snapshot.Tables()) {
 			if (table.m_columns.empty())   // a pure scaffold / seed table (an enum) — no data to move
 				continue;
-			wxMemoryBuffer tableBuffer;
+			ibMemoryBuffer tableBuffer;
 			if (readerData.r_chunk(table.m_id, tableBuffer)) {
 				ibReaderMemory rows(tableBuffer);
 				if (!ibDataMover::Restore(table, rows, dates))
@@ -646,7 +646,7 @@ bool ibMetaDataConfigurationStorage::RestoreDataFromBuffer(const wxMemoryBuffer&
 	}
 
 	//sequence
-	wxMemoryBuffer bufferSequence;
+	ibMemoryBuffer bufferSequence;
 
 	if (reader.r_chunk(2, bufferSequence)) {
 		ibReaderMemory readerSequence(bufferSequence);
@@ -656,7 +656,7 @@ bool ibMetaDataConfigurationStorage::RestoreDataFromBuffer(const wxMemoryBuffer&
 	return true;
 }
 
-bool ibMetaDataConfigurationFile::SaveConfigToBuffer(wxMemoryBuffer& buffer)
+bool ibMetaDataConfigurationFile::SaveConfigToBuffer(ibMemoryBuffer& buffer)
 {
 	//common data
 	ibWriterMemory writer;
@@ -669,7 +669,7 @@ bool ibMetaDataConfigurationFile::SaveConfigToBuffer(wxMemoryBuffer& buffer)
 	return true;
 }
 
-bool ibMetaDataConfigurationStorage::DumpDataToBuffer(wxMemoryBuffer& buffer)
+bool ibMetaDataConfigurationStorage::DumpDataToBuffer(ibMemoryBuffer& buffer)
 {
 	ibWriterMemory writer;
 
@@ -699,7 +699,7 @@ bool ibMetaDataConfigurationStorage::DumpDataToBuffer(wxMemoryBuffer& buffer)
 	// The form of the dates in chunk 1 (ibDataMover::DateForm): an ibDateTime's count. A dump without
 	// this chunk carried instants, and RestoreDataFromBuffer reads it as one.
 	ibWriterMemory writerForm;
-	writerForm.w_u32(static_cast<u32>(ibDataMover::DateForm::DateTime));
+	writerForm.w_u32(static_cast<std::uint32_t>(ibDataMover::DateForm::DateTime));
 	writer.w_chunk(3, writerForm.buffer());
 
 	buffer = writer.buffer();
@@ -734,8 +734,8 @@ bool ibMetaDataConfigurationFile::SaveCommonTree(const ibClassID& clsid, ibWrite
 		return false;
 
 	ibWriterMemory metaWriter;
-	metaWriter.w_chunk((u64)builder.Root().GetMetaId(), innerWriter.pointer(), innerWriter.size());
-	writerData.w_chunk((u64)builder.Root().GetClsid(), metaWriter.pointer(), metaWriter.size());
+	metaWriter.w_chunk((std::uint64_t)builder.Root().GetMetaId(), innerWriter.pointer(), innerWriter.size());
+	writerData.w_chunk((std::uint64_t)builder.Root().GetClsid(), metaWriter.pointer(), metaWriter.size());
 
 	// ⭐ …and that it has been written out. A watcher shows this as "no longer modified"; nothing
 	// in the tree changed, which is why this is a stage of its own and not MetaDataChanged.

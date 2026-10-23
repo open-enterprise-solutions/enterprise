@@ -34,7 +34,7 @@
 #include <streambuf>
 #include <vector>
 
-#include <wx/buffer.h>
+#include "core/memory/memoryBuffer.h"
 #include <wx/convauto.h>
 #include <wx/stream.h>
 #include <wx/string.h>
@@ -58,7 +58,7 @@ public:
 	// False: the part is over kPartSize, or is there already, or the write failed (journalled).
 	bool WritePart(const ibGuid& session, const wxString& id, int index, const void* data, std::size_t size);
 	// The content part `index`, into `data`. False: past the last one, or no such file.
-	bool ReadPart(const ibGuid& session, const wxString& id, int index, wxMemoryBuffer& data) const;
+	bool ReadPart(const ibGuid& session, const wxString& id, int index, ibMemoryBuffer& data) const;
 	// How many content parts the session's file has.
 	int PartCount(const ibGuid& session, const wxString& id) const;
 	// The content gone, the file kept — before it is written anew.
@@ -103,7 +103,7 @@ public:
 	// The whole content, through `conv` — for a document that holds its text whole anyway.
 	bool ReadAll(wxString* str, const wxMBConv& conv = wxConvAuto());
 	// The content part `index`, from 0. False past the last.
-	bool ReadPart(int index, wxMemoryBuffer& data) const;
+	bool ReadPart(int index, ibMemoryBuffer& data) const;
 
 	// `str` through `conv`, as the next content parts.
 	bool Write(const wxString& str, const wxMBConv& conv = wxConvAuto());
@@ -142,7 +142,7 @@ private:
 
 	const ibTempFile& m_file;
 	int               m_index = 0;
-	wxMemoryBuffer    m_part;
+	ibMemoryBuffer    m_part;
 };
 
 // A TEMPORARY FILE WRITTEN AS A STREAM — a part goes down every kPartSize bytes, and Finish() writes the rest.
@@ -212,7 +212,7 @@ private:
 
 	const ibTempFile& m_file;
 	int               m_index = 0;
-	wxMemoryBuffer    m_part;
+	ibMemoryBuffer    m_part;
 	size_t            m_offset = 0;
 };
 
@@ -253,7 +253,7 @@ private:
 	}
 
 	ibTempFile&    m_file;
-	wxMemoryBuffer m_part;
+	ibMemoryBuffer m_part;
 };
 
 #endif

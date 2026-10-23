@@ -26,7 +26,7 @@ void ibSchemaObjectText::Build(const ibSession& session, const ibDataNode& args,
 	result.SetValue(ibProtocol::ibSchema::ibObjectText::Note, object->GetNoteContent());
 }
 
-std::function<void()> ibSchemaObjectText::Command(const ibSession& session, s32 command,
+std::function<void()> ibSchemaObjectText::Command(const ibSession& session, std::int32_t command,
 	const ibDataNode& args, ibProtocol::ibRefusal& refusal, wxString& error) const
 {
 	if (static_cast<ibProtocol::ibSchema::ibCommand>(command) != ibProtocol::ibSchema::ibCommand::Save) {

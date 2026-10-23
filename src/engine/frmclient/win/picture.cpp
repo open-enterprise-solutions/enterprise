@@ -42,7 +42,7 @@ void Keep(const wxString& id, const wxBitmap& bitmap)
 	Pictures()[id.BeforeFirst(wxT('#'))] = { id, bitmap };
 }
 
-// A backend picture's number as the server writes it — a decimal: a u64 is past what a JSON number keeps.
+// A backend picture's number as the server writes it — a decimal: a std::uint64_t is past what a JSON number keeps.
 wxString IdOf(ibPictureID id)
 {
 	return wxString::Format(wxT("%llu"), static_cast<unsigned long long>(id));
@@ -159,7 +159,7 @@ wxImage ibProtocolImage(const wxString& base64)
 	if (base64.IsEmpty())
 		return wxImage();
 	// A PNG or nothing — data that is not one reads as no picture, not as a damaged file said to the person.
-	wxMemoryBuffer png;
+	ibMemoryBuffer png;
 	static const char s_signature[] = "\x89PNG\r\n\x1a\n";
 	if (!ibBase64::Read(base64.wc_str(), base64.length(), png) || png.GetDataLen() < sizeof(s_signature) - 1 || std::memcmp(png.GetData(), s_signature, sizeof(s_signature) - 1) != 0)
 		return wxImage();

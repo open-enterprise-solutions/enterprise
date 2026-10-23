@@ -22,7 +22,7 @@ public:
 
 	// The store's verbs (ibProtocol::ibSchema::ibDebugger::ibCommand). Refused: no debugger, a breakpoint on a line the configuration does
 	// not have (its reason).
-	virtual std::function<void()> Command(const ibSession& session, s32 command,
+	virtual std::function<void()> Command(const ibSession& session, std::int32_t command,
 		const ibDataNode& args, ibProtocol::ibRefusal& refusal, wxString& error) const override;
 };
 

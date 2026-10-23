@@ -32,9 +32,9 @@ ibCommandDescription ReadCommand(const ibDataNode& row)
 		return desc;
 	for (const ibDataValue& hop : hops->AsArray()) {
 		if (hop.Kind() == ibDataKind::Child && hop.AsChild() != nullptr)
-			desc.AppendCommand(static_cast<ibMetaID>(hop.AsChild()->GetValue<s32>(ibProtocol::ibSchema::ibProperties::Id)));
+			desc.AppendCommand(static_cast<ibMetaID>(hop.AsChild()->GetValue<std::int32_t>(ibProtocol::ibSchema::ibProperties::Id)));
 	}
-	const s32 kind = row.GetValue<s32>(ibProtocol::ibSchema::ibProperties::Kind);
+	const std::int32_t kind = row.GetValue<std::int32_t>(ibProtocol::ibSchema::ibProperties::Kind);
 	desc.SetCommandType(kind != 0 ? static_cast<ibInterfaceCommandType>(kind) : ibInterfaceCommandType_Default);
 	return desc;
 }

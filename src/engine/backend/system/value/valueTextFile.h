@@ -4,7 +4,7 @@
 #include "backend/compiler/value.h"
 #include "backend/system/systemEnum.h"
 
-#include <wx/buffer.h>
+#include "core/memory/memoryBuffer.h"
 
 #include <memory>
 #include <vector>

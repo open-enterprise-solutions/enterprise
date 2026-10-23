@@ -222,7 +222,7 @@ public:
 		ibMcpRememberStartedApplication(pid);
 
 		result.SetValue(wxT("started"), application);
-		result.AddField(wxT("pid"), ibDataValue::Int((s64)pid));
+		result.AddField(wxT("pid"), ibDataValue::Int((std::int64_t)pid));
 		result.AddField(wxT("debug"), ibDataValue::Bool(withDebug));
 
 		if (ended)

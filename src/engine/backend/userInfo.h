@@ -17,7 +17,7 @@
 #include <vector>
 
 #include <wx/string.h>
-#include <wx/buffer.h>
+#include "core/memory/memoryBuffer.h"
 
 class ibGuid;
 class ibReaderMemory;

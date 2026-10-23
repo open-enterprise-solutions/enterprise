@@ -752,7 +752,7 @@ void ibFormAttributeValue::ibFormAttribute::FillMembers(ibMemberTable& helper) c
 
 bool ibFormAttributeValue::ibFormAttribute::ReadProperty(const ibDataNode& node)
 {
-	m_attributeId = (ibMetaID)node.GetValue<s32>(wxT("AttributeId"));
+	m_attributeId = (ibMetaID)node.GetValue<std::int32_t>(wxT("AttributeId"));
 	m_isMain = node.GetValue<bool>(wxT("Main"));
 	m_propertyName->SetNodeValue(node.GetProperty(m_propertyName->GetName()));
 	m_propertyCaption->SetNodeValue(node.GetProperty(m_propertyCaption->GetName()));
@@ -765,7 +765,7 @@ bool ibFormAttributeValue::ibFormAttribute::ReadProperty(const ibDataNode& node)
 
 bool ibFormAttributeValue::ibFormAttribute::WriteProperty(ibDataNode& node) const
 {
-	node.SetValue(wxT("AttributeId"), (s32)m_attributeId);
+	node.SetValue(wxT("AttributeId"), (std::int32_t)m_attributeId);
 	node.SetValue(wxT("Main"), m_isMain);
 	node.SetProperty(m_propertyName->GetName(), m_propertyName->GetNodeValue());
 	node.SetProperty(m_propertyCaption->GetName(), m_propertyCaption->GetNodeValue());

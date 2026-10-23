@@ -928,7 +928,7 @@ void ibCalcReadBase(const ibValueMetaObjectCalculationRegister* reg, const ibCal
 			q.Project(proj);
 			ibQueryResult rs = q.Execute();
 			while (rs.Next()) {
-				wxMemoryBuffer bytes;
+				ibMemoryBuffer bytes;
 				rs.GetResultBlob(ibOwnerRefField(), bytes);
 				if (bytes.GetDataLen() < sizeof(ibReference))
 					continue;

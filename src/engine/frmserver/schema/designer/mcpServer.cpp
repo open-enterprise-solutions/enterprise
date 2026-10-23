@@ -13,7 +13,7 @@ ibMcpSettings SettingsOf(const ibDataNode& args)
 	ibMcpSettings settings;
 	settings.m_enabled = args.GetValue<bool>(ibProtocol::ibSchema::ibMcpServer::Enabled);
 	settings.m_address = args.GetValue<wxString>(ibProtocol::ibSchema::ibMcpServer::Address);
-	settings.m_port = static_cast<unsigned short>(args.GetValue<s32>(ibProtocol::ibSchema::ibMcpServer::Port));
+	settings.m_port = static_cast<unsigned short>(args.GetValue<std::int32_t>(ibProtocol::ibSchema::ibMcpServer::Port));
 	settings.m_token = args.GetValue<wxString>(ibProtocol::ibSchema::ibMcpServer::Token);
 	return settings;
 }
@@ -27,13 +27,13 @@ void ibSchemaMcpServer::Build(const ibSession& session, const ibDataNode& WXUNUS
 	const ibMcpSettings settings = server != nullptr ? server->GetSettings() : ibMcpSettings();
 	result.SetValue(ibProtocol::ibSchema::ibMcpServer::Enabled, settings.m_enabled);
 	result.SetValue(ibProtocol::ibSchema::ibMcpServer::Address, settings.m_address);
-	result.SetValue(ibProtocol::ibSchema::ibMcpServer::Port, static_cast<s32>(settings.m_port));
+	result.SetValue(ibProtocol::ibSchema::ibMcpServer::Port, static_cast<std::int32_t>(settings.m_port));
 	result.SetValue(ibProtocol::ibSchema::ibMcpServer::Token, settings.m_token);
 	result.SetValue(ibProtocol::ibSchema::ibMcpServer::Running, server != nullptr && server->IsRunning());
 	result.SetValue(ibProtocol::ibSchema::ibMcpServer::Endpoint, server != nullptr ? server->GetEndpoint() : wxString());
 }
 
-std::function<void()> ibSchemaMcpServer::Command(const ibSession& session, s32 command,
+std::function<void()> ibSchemaMcpServer::Command(const ibSession& session, std::int32_t command,
 	const ibDataNode& args, ibProtocol::ibRefusal& refusal, wxString& error) const
 {
 	ibMcpServer* const server = SwitchableServer(session);

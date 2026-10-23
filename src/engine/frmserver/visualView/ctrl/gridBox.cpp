@@ -112,7 +112,7 @@ void ibValueGridBox::OnUpdate(ibDataNode& state, ibVisualHost* host)
 	else if (m_composedSettings.has_value() && m_spreadsheetModel != nullptr
 		&& !(*m_composedSettings == m_spreadsheetModel->GetModelComposer().GetCurrentSettingsDesc()))
 		composeState = ibProtocol::ibForm::ibSpreadsheet::ibComposeState::Outdated;
-	state.SetValue(ibProtocol::ibForm::ibSpreadsheet::ComposeState, static_cast<s32>(composeState));
+	state.SetValue(ibProtocol::ibForm::ibSpreadsheet::ComposeState, static_cast<std::int32_t>(composeState));
 
 	// A COMPOSED SHEET RIDES THE FRAME THAT NAMES ITS VERSION — once. The client that reads Sheet here skips Fetch;
 	// one that does not still asks. While composing, or after the Version was already sent with its Sheet, State stays
@@ -223,14 +223,14 @@ bool ibFetchSpreadsheet(const ibSpreadsheetObject& document, ibDataNode& respons
 	if (const ibDataValue* cells = sheet.AsChild()->FindField(wxT("cells"))) {
 		for (const ibDataValue& entry : cells->AsArray()) {
 			ibDataNode& node = *entry.AsChild();
-			const ibSpreadsheetCellDescription* const cell = desc.GetCell(node.GetValue<s32>(wxT("row")), node.GetValue<s32>(wxT("col")));
+			const ibSpreadsheetCellDescription* const cell = desc.GetCell(node.GetValue<std::int32_t>(wxT("row")), node.GetValue<std::int32_t>(wxT("col")));
 			if (cell == nullptr)
 				continue;
 			const wxString text = document.ComputeStringValueFromParameters(cell->m_value, cell->m_fillSetType);
 			if (text == cell->m_value && cell->m_fillSetType == ibSpreadsheetFillType::ibSpreadsheetFillType_StrText)
 				continue;
 			node.SetField(wxT("value"), ibDataValue::String(text));
-			node.SetField(wxT("fill"), ibDataValue::Int(static_cast<s64>(ibSpreadsheetFillType::ibSpreadsheetFillType_StrText)));
+			node.SetField(wxT("fill"), ibDataValue::Int(static_cast<std::int64_t>(ibSpreadsheetFillType::ibSpreadsheetFillType_StrText)));
 		}
 	}
 

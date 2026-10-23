@@ -40,7 +40,7 @@ bool ibValueMetaObject::SaveNode(ibDataNode& node) const
 {
 	// intrinsics → fields
 	node.SetValue(kTagGuid, m_metaGuid.GetGuid());
-	node.SetValue(kTagId, (s32)m_metaId);
+	node.SetValue(kTagId, (std::int32_t)m_metaId);
 	node.SetValue(kTagDeleted, IsDeleted());
 	node.SetValue(kTagHelp, m_strHelpContent);
 	node.SetValue(kTagNote, m_strNoteContent);
@@ -87,7 +87,7 @@ bool ibValueMetaObject::LoadNode(const ibDataNode& node)
 {
 	// intrinsics ← fields
 	m_metaGuid = node.GetValue<ibGuid>(kTagGuid);
-	m_metaId = (ibMetaID)node.GetValue<s32>(kTagId);
+	m_metaId = (ibMetaID)node.GetValue<std::int32_t>(kTagId);
 	if (node.GetValue<bool>(kTagDeleted))
 		MarkAsDeleted();
 	m_strHelpContent = node.GetValue<wxString>(kTagHelp);
@@ -99,25 +99,25 @@ bool ibValueMetaObject::LoadNode(const ibDataNode& node)
 	m_propertyComment->SetNodeValue(node.GetProperty(m_propertyComment->GetName()));
 
 	// interface / roles ← fields
-	wxMemoryBuffer interfaceBuf = node.GetValue<wxMemoryBuffer>(kTagInterface);
+	ibMemoryBuffer interfaceBuf = node.GetValue<ibMemoryBuffer>(kTagInterface);
 	if (interfaceBuf.GetDataLen()) {
 		ibReaderMemory reader(interfaceBuf);
 		if (!LoadInterface(reader))
 			return false;
 	}
-	wxMemoryBuffer roleBuf = node.GetValue<wxMemoryBuffer>(kTagRoles);
+	ibMemoryBuffer roleBuf = node.GetValue<ibMemoryBuffer>(kTagRoles);
 	if (roleBuf.GetDataLen()) {
 		ibReaderMemory reader(roleBuf);
 		if (!LoadRole(reader))
 			return false;
 	}
-	wxMemoryBuffer compositionBuf = node.GetValue<wxMemoryBuffer>(kTagComposition);
+	ibMemoryBuffer compositionBuf = node.GetValue<ibMemoryBuffer>(kTagComposition);
 	if (compositionBuf.GetDataLen()) {
 		ibReaderMemory reader(compositionBuf);
 		if (!LoadComposition(reader))
 			return false;
 	}
-	wxMemoryBuffer functionalOptionBuf = node.GetValue<wxMemoryBuffer>(kTagFunctionalOptions);
+	ibMemoryBuffer functionalOptionBuf = node.GetValue<ibMemoryBuffer>(kTagFunctionalOptions);
 	if (functionalOptionBuf.GetDataLen()) {
 		ibReaderMemory reader(functionalOptionBuf);
 		if (!LoadFunctionalOptions(reader))

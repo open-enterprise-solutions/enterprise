@@ -619,7 +619,7 @@ bool ibValueStructure::Property(const ibValue& varKeyValue, ibValue& cValueFound
 
 bool ibValueContainer::DoSerialize(ibDataNode& node) const
 {
-	node.SetValue(wxT("n"), (s32)m_entries.size());
+	node.SetValue(wxT("n"), (std::int32_t)m_entries.size());
 
 	for (const auto& entry : m_entries) {
 		ibDataNode& keyNode = node.AddChild(entry.key.GetClassType(), 0);
@@ -649,7 +649,7 @@ bool ibValueContainer::DoDeserialize(const ibDataNode& node)
 		Insert(key, value);
 	}
 
-	return (s32)m_entries.size() == node.GetValue<s32>(wxT("n"));
+	return (std::int32_t)m_entries.size() == node.GetValue<std::int32_t>(wxT("n"));
 }
 
 //**********************************************************************

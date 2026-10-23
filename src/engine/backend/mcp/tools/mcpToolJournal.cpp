@@ -424,7 +424,7 @@ public:
 
 		ibLogFilter filter;
 
-		const s32 sinceMinutes = (s32)ArgSinceMinutes().Whole(params);
+		const std::int32_t sinceMinutes = (std::int32_t)ArgSinceMinutes().Whole(params);
 		if (sinceMinutes > 0) {
 			const wxLongLong_t now = wxDateTime::UNow().GetValue().GetValue();
 			filter.from_ms = now - (wxLongLong_t)sinceMinutes * 60000;
@@ -448,7 +448,7 @@ public:
 		filter.event_type = ArgEvent().Text(params);
 		filter.search     = ArgContains().Text(params);
 
-		const s32 limit = (s32)ArgLimit().Whole(params);
+		const std::int32_t limit = (std::int32_t)ArgLimit().Whole(params);
 		filter.limit = (limit > 0) ? (std::size_t)limit : 50;
 
 		ibLoggerReader reader(appData->GetLogger()->GetLogDir());
@@ -524,13 +524,13 @@ public:
 			// the journal navigable rather than merely readable.
 			if (!row.ref_guid.IsEmpty()) {
 				entry->SetValue(wxT("refGuid"), row.ref_guid);
-				entry->AddField(wxT("refMetaId"), ibDataValue::Int((s64)row.ref_meta_id));
+				entry->AddField(wxT("refMetaId"), ibDataValue::Int((std::int64_t)row.ref_meta_id));
 			}
 
 			rows.push_back(ibDataValue::Child(entry));
 		}
 
-		result.AddField(wxT("count"), ibDataValue::Int((s64)rows.size()));
+		result.AddField(wxT("count"), ibDataValue::Int((std::int64_t)rows.size()));
 		result.AddField(wxT("rows"), ibDataValue::Array(rows));
 
 		// "Nothing matched" and "nothing happened" are different answers, and only
@@ -639,7 +639,7 @@ public:
 
 		const wxString wantSource   = ArgTraceSource().Text(params).Lower();
 		const wxString wantContains = ArgContains().Text(params);
-		const s32 sinceMinutes      = (s32)ArgSinceMinutes().Whole(params);
+		const std::int32_t sinceMinutes      = (std::int32_t)ArgSinceMinutes().Whole(params);
 
 		wxDateTime from = wxDefaultDateTime;
 		if (sinceMinutes > 0)
@@ -665,7 +665,7 @@ public:
 			std::shared_ptr<ibDataNode> node = std::make_shared<ibDataNode>();
 			node->SetValue(wxT("app"), entry.first);
 			node->SetValue(wxT("file"), entry.second.GetFullName());
-			node->AddField(wxT("lines"), ibDataValue::Int((s64)(rows.size() - before)));
+			node->AddField(wxT("lines"), ibDataValue::Int((std::int64_t)(rows.size() - before)));
 
 			// Which of these is the process answering right now. Everything else is another run,
 			// and that distinction is the point of reading both.
@@ -687,7 +687,7 @@ public:
 		std::stable_sort(rows.begin(), rows.end(),
 			[](const ibTraceRow& l, const ibTraceRow& r) { return r.m_when.IsEarlierThan(l.m_when); });
 
-		const s32 limitArg = (s32)ArgLimit().Whole(params);
+		const std::int32_t limitArg = (std::int32_t)ArgLimit().Whole(params);
 		const size_t limit = (limitArg > 0) ? (size_t)limitArg : 50;
 
 		std::vector<ibDataValue> out;
@@ -723,8 +723,8 @@ public:
 			out.push_back(ibDataValue::Child(entry));
 		}
 
-		result.AddField(wxT("count"), ibDataValue::Int((s64)out.size()));
-		result.AddField(wxT("matched"), ibDataValue::Int((s64)matched));
+		result.AddField(wxT("count"), ibDataValue::Int((std::int64_t)out.size()));
+		result.AddField(wxT("matched"), ibDataValue::Int((std::int64_t)matched));
 		result.AddField(wxT("rows"), ibDataValue::Array(out));
 		result.AddField(wxT("files"), ibDataValue::Array(read));
 

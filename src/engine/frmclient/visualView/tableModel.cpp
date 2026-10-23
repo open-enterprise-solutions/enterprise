@@ -14,7 +14,7 @@ namespace {
 // (a tree's children, count 0) asks for as many.
 constexpr int kMaxFetchCount = 500;
 
-// A picture's id as the wire writes it — a decimal string: a u64 is past what a JSON number keeps.
+// A picture's id as the wire writes it — a decimal string: a std::uint64_t is past what a JSON number keeps.
 ibPictureID PictureIdOf(const wxString& text)
 {
 	unsigned long long id = 0;

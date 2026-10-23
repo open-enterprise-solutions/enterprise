@@ -17,7 +17,7 @@ namespace {
 ibDataNode SettingsRequest(const ibCompositionDescription& composition, const ibMetaData* metaData)
 {
 	ibDataNode request;
-	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<s32>(ibProtocol::ibRequest::ibKind::ComposerSettings));
+	request.SetValue(ibProtocol::ibRequest::Kind, static_cast<std::int32_t>(ibProtocol::ibRequest::ibKind::ComposerSettings));
 	ibCompositionDescriptionMemory::WriteNode(request.Child(ibProtocol::ibRequest::ibComposerSettings::Composition), composition);
 
 	ibDataNode& fields = request.Child(ibProtocol::ibRequest::ibListSettings::Fields);

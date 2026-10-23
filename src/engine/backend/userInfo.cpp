@@ -3,7 +3,7 @@
 #include "appData.h"   // user_table macro
 #include "databaseLayer/databaseQueryBuilder.h"   // L2 door — the whole sys_user DAO rides this (no raw ibDatabaseLayer / result set)
 #include "databaseLayer/databaseErrorCodes.h"
-#include "core/fileSystem/fs.h"
+#include "core/memory/memoryStream.h"
 
 namespace {
 
@@ -14,7 +14,7 @@ constexpr unsigned int eBlockPswd = 0x0234530;
 constexpr unsigned int eBlockRole = 0x0234540;
 constexpr unsigned int eBlockLang = 0x0234550;
 
-void ReadPasswordChunk(const wxMemoryBuffer& buffer, ibUserInfo& info)
+void ReadPasswordChunk(const ibMemoryBuffer& buffer, ibUserInfo& info)
 {
 	ibReaderMemory reader(buffer);
 	// Atomic-on-success: a malformed chunk (length header corrupt past
@@ -34,7 +34,7 @@ void ReadPasswordChunk(const wxMemoryBuffer& buffer, ibUserInfo& info)
 	info.m_strUserPassword = std::move(p);
 }
 
-void ReadRoleChunk(const wxMemoryBuffer& buffer, ibUserInfo& info)
+void ReadRoleChunk(const ibMemoryBuffer& buffer, ibUserInfo& info)
 {
 	ibReaderMemory reader(buffer);
 	const unsigned int count = reader.r_u32();
@@ -66,7 +66,7 @@ void ReadRoleChunk(const wxMemoryBuffer& buffer, ibUserInfo& info)
 	}
 }
 
-void ReadLanguageChunk(const wxMemoryBuffer& buffer, ibUserInfo& info)
+void ReadLanguageChunk(const ibMemoryBuffer& buffer, ibUserInfo& info)
 {
 	ibReaderMemory reader(buffer);
 	wxString g = reader.r_stringZ();
@@ -75,7 +75,7 @@ void ReadLanguageChunk(const wxMemoryBuffer& buffer, ibUserInfo& info)
 	info.m_strLanguageCode = std::move(c);
 }
 
-wxMemoryBuffer WritePasswordChunk(const ibUserInfo& info)
+ibMemoryBuffer WritePasswordChunk(const ibUserInfo& info)
 {
 	ibWriterMemory writer;
 	writer.w_stringZ(info.m_strUserGuid);
@@ -85,7 +85,7 @@ wxMemoryBuffer WritePasswordChunk(const ibUserInfo& info)
 	return writer.buffer();
 }
 
-wxMemoryBuffer WriteRoleChunk(const ibUserInfo& info)
+ibMemoryBuffer WriteRoleChunk(const ibUserInfo& info)
 {
 	ibWriterMemory writer;
 	writer.w_u32(info.m_roleArray.size());
@@ -97,7 +97,7 @@ wxMemoryBuffer WriteRoleChunk(const ibUserInfo& info)
 	return writer.buffer();
 }
 
-wxMemoryBuffer WriteLanguageChunk(const ibUserInfo& info)
+ibMemoryBuffer WriteLanguageChunk(const ibUserInfo& info)
 {
 	ibWriterMemory writer;
 	writer.w_stringZ(info.m_strLanguageGuid);
@@ -114,11 +114,11 @@ void FillFromRow(ibQueryResult& row, ibUserInfo& info)
 	info.m_strUserName     = row.GetResultString(wxT("name"));
 	info.m_strUserFullName = row.GetResultString(wxT("fullName"));
 
-	wxMemoryBuffer buffer;
+	ibMemoryBuffer buffer;
 	row.GetResultBlob(wxT("binaryData"), buffer);
 	ibReaderMemory reader(buffer);
 
-	wxMemoryBuffer chunkPswd, chunkRole, chunkLang;
+	ibMemoryBuffer chunkPswd, chunkRole, chunkLang;
 	
 	// Each chunk reader is wrapped so a malformed / version-mismatched
 	// section (e.g. role chunk for a metadata version that has moved on)
@@ -268,7 +268,7 @@ ibUserInfo ibUserInfo::Deserialize(ibReaderMemory& reader)
 	info.m_strUserName     = reader.r_stringZ();
 	info.m_strUserFullName = reader.r_stringZ();
 
-	wxMemoryBuffer chunk;
+	ibMemoryBuffer chunk;
 	// r_chunk APPENDS into the buffer — reset before each read so chunk N is not prefixed with N-1.
 	chunk.SetDataLen(0); if (reader.r_chunk(eBlockPswd, chunk)) ReadPasswordChunk(chunk, info);
 	chunk.SetDataLen(0); if (reader.r_chunk(eBlockRole, chunk)) ReadRoleChunk    (chunk, info);

@@ -17,7 +17,7 @@
 #include "backend/query/queryable.h"                      // ibBackendQueryable::GetMetaData
 #include "core/description/typeDescription.h"                       // ibTypeDescription::ContainType (the wire codec gates on it)
 #include "core/fnumber.h"                               // ibNumber (the wire codec round-trips it)
-#include "core/fileSystem/fs.h"                        // ibReaderMemory / ibWriterMemory (the binary wire)
+#include "core/memory/memoryStream.h"                        // ibReaderMemory / ibWriterMemory (the binary wire)
 
 #include <map>
 
@@ -29,16 +29,16 @@ const wxString& kOwnerRef = ibOwnerRefField();
 
 // The reference-blob wire chunk id — the _RTRef/_RRRef pair's payload tag in the dump stream. A
 // FORMAT constant (was the rt_ref_chunk macro in metaObject.h): must stay 0x800060 for dump compat.
-const u64 rt_ref_chunk = 0x800060;
+const std::uint64_t rt_ref_chunk = 0x800060;
 
 // The schedule-blob wire chunk id — the _SCH field's payload tag in the dump stream. A new id
 // beside the reference one; a dump written before schedules existed simply never carries it.
-const u64 schedule_chunk = 0x800061;
+const std::uint64_t schedule_chunk = 0x800061;
 
 // The type-description-blob wire chunk id — the _TD field's payload tag, next in the same series.
 // The mover is what carries data ACROSS a restructuring: a role the layout emits and the wire codec
 // skips is not merely unwritten, it desynchronises every cell after it in the dump.
-const u64 type_desc_chunk = 0x800062;
+const std::uint64_t type_desc_chunk = 0x800062;
 
 // --- structure -> mover parameters ---------------------------------------------------------------
 
@@ -192,14 +192,14 @@ bool RunRestore(const wxString& tableName, const ibMetaData* metaData,
 
 		ibReaderMemory* colReaderPrev = nullptr;
 
-		u64 row = 0;
+		std::uint64_t row = 0;
 		ibReaderMemory* rowReader = rows.open_chunk_iterator(row, rowReaderPrev);
 		if (rowReader == nullptr)
 			break;
 
 		while (!rowReader->eof()) {
 
-			u64 col = 0;
+			std::uint64_t col = 0;
 			ibReaderMemory* colReader = rowReader->open_chunk_iterator(col, colReaderPrev);
 			if (colReader == nullptr)
 				break;
@@ -310,10 +310,10 @@ static bool RawFromResult(const ibBackendQueryColumn* col, ibWriterMemory& write
 		n.GetBuffer(writer);
 		break;
 	}
-	case ibBackendColumnRawDB::RawType::Date:    writer.w_u64(static_cast<u64>(result.GetResultDate(f).GetValue())); break;
+	case ibBackendColumnRawDB::RawType::Date:    writer.w_u64(static_cast<std::uint64_t>(result.GetResultDate(f).GetValue())); break;
 	case ibBackendColumnRawDB::RawType::String:  writer.w_stringZ(result.GetResultString(f)); break;
 	default: {   // Guid / Reference / Blob — bytes, as they are stored
-		wxMemoryBuffer buffer;
+		ibMemoryBuffer buffer;
 		result.GetResultBlob(f, buffer);
 		writer.w_chunk(rt_ref_chunk, buffer);
 		break;
@@ -357,7 +357,7 @@ static bool RawToStatement(const ibBackendQueryColumn* col, const ibReaderMemory
 	case ibBackendColumnRawDB::RawType::Date:    statement->SetParamDate(position++, ibDataMover::DateOfWire(static_cast<long long>(reader.r_u64()), dates)); break;
 	case ibBackendColumnRawDB::RawType::String:  statement->SetParamString(position++, reader.r_stringZ()); break;
 	default: {
-		wxMemoryBuffer buffer;
+		ibMemoryBuffer buffer;
 		reader.r_chunk(rt_ref_chunk, buffer);
 		statement->SetParamBlob(position++, buffer.GetData(), buffer.GetDataLen());
 		break;
@@ -393,7 +393,7 @@ void ibDataMover::BinaryToStatement(const ibBackendQueryColumn* col, const ibMet
 				// The schedule travels as its own blob chunk, the same shape the reference pair
 				// uses below — one chunk, one cell, so a truncated stream is caught by the reader
 				// rather than by the column that happens to be bound next.
-				wxMemoryBuffer scheduleBuffer;
+				ibMemoryBuffer scheduleBuffer;
 				reader.r_chunk(schedule_chunk, scheduleBuffer);
 				statement->SetParamBlob(p++, scheduleBuffer.GetData(), scheduleBuffer.GetDataLen());
 				break;
@@ -401,7 +401,7 @@ void ibDataMover::BinaryToStatement(const ibBackendQueryColumn* col, const ibMet
 			case ibColumnRole::TypeDescription: {
 				// Same shape as the schedule one line up — its own chunk, so a truncated stream is
 				// caught here rather than by whichever column binds next.
-				wxMemoryBuffer typeDescBuffer;
+				ibMemoryBuffer typeDescBuffer;
 				reader.r_chunk(type_desc_chunk, typeDescBuffer);
 				statement->SetParamBlob(p++, typeDescBuffer.GetData(), typeDescBuffer.GetDataLen());
 				break;
@@ -414,7 +414,7 @@ void ibDataMover::BinaryToStatement(const ibBackendQueryColumn* col, const ibMet
 				if (role == ibColumnRole::ReferenceType) {
 					statement->SetParamNumber(p++, reader.r_u64());
 				} else {
-					wxMemoryBuffer typeRRBuffer;
+					ibMemoryBuffer typeRRBuffer;
 					reader.r_chunk(rt_ref_chunk, typeRRBuffer);
 					statement->SetParamBlob(p++, typeRRBuffer.GetData(), typeRRBuffer.GetDataLen());
 				}
@@ -461,9 +461,9 @@ void ibDataMover::BinaryFromResult(const ibBackendQueryColumn* col, const ibMeta
 	}
 	case ibFieldTypes_Date:
 		if (td.ContainType(ibValueTypes::TYPE_DATE))
-			writer.w_u64(static_cast<u64>(result.GetResultDate(f + ibFieldSuffix(ibColumnRole::Date)).GetValue()));
+			writer.w_u64(static_cast<std::uint64_t>(result.GetResultDate(f + ibFieldSuffix(ibColumnRole::Date)).GetValue()));
 		else
-			writer.w_u64(static_cast<u64>(ibDateTime().GetValue()));
+			writer.w_u64(static_cast<std::uint64_t>(ibDateTime().GetValue()));
 		break;
 	case ibFieldTypes_String:
 		writer.w_stringZ(td.ContainType(ibValueTypes::TYPE_STRING)
@@ -474,14 +474,14 @@ void ibDataMover::BinaryFromResult(const ibBackendQueryColumn* col, const ibMeta
 		             ? result.GetResultInt(f + ibFieldSuffix(ibColumnRole::Enum)) : wxNOT_FOUND);
 		break;
 	case ibFieldTypes_Schedule: {
-		wxMemoryBuffer scheduleBuffer;
+		ibMemoryBuffer scheduleBuffer;
 		if (td.ContainType(g_valueScheduleCLSID))
 			result.GetResultBlob(f + ibFieldSuffix(ibColumnRole::Schedule), scheduleBuffer);
 		writer.w_chunk(schedule_chunk, scheduleBuffer);
 		break;
 	}
 	case ibFieldTypes_TypeDescription: {
-		wxMemoryBuffer typeDescBuffer;
+		ibMemoryBuffer typeDescBuffer;
 		if (td.ContainType(g_valueTypeDescriptionCLSID))
 			result.GetResultBlob(f + ibFieldSuffix(ibColumnRole::TypeDescription), typeDescBuffer);
 		writer.w_chunk(type_desc_chunk, typeDescBuffer);
@@ -489,13 +489,13 @@ void ibDataMover::BinaryFromResult(const ibBackendQueryColumn* col, const ibMeta
 	}
 	case ibFieldTypes_Reference:
 		if (ibColumnCodec::HasReference(col)) {
-			wxMemoryBuffer bufferData;
+			ibMemoryBuffer bufferData;
 			result.GetResultBlob(f + ibFieldSuffix(ibColumnRole::ReferenceId), bufferData);
 			writer.w_u64(result.GetResultLong(f + ibFieldSuffix(ibColumnRole::ReferenceType)));
 			writer.w_chunk(rt_ref_chunk, bufferData);
 		} else {
 			writer.w_u64(0);
-			writer.w_chunk(rt_ref_chunk, wxMemoryBuffer());
+			writer.w_chunk(rt_ref_chunk, ibMemoryBuffer());
 		}
 		break;
 	default:

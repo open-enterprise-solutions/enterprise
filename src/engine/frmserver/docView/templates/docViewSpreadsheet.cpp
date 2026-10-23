@@ -41,7 +41,7 @@ bool ibSheetView::OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataN
 		// the sheet, opened by the runtime; on a sheet being edited the click is the edit's. The cell as Fetch wrote it —
 		// from 1.
 		const ibSpreadsheetObject& spreadsheet = document->GetSpreadsheet();
-		const int row = args.GetValue<s32>(ibProtocol::ibEvent::Row) - 1, col = args.GetValue<s32>(ibProtocol::ibEvent::Col) - 1;
+		const int row = args.GetValue<std::int32_t>(ibProtocol::ibEvent::Row) - 1, col = args.GetValue<std::int32_t>(ibProtocol::ibEvent::Col) - 1;
 		if (spreadsheet.IsEditable() || row < 0 || col < 0)
 			return true;
 		ibString bound;

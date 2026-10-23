@@ -211,9 +211,9 @@ private:
 
 	// …and its VERSION — moved each time the sheet on show is replaced (the model installed, a compose
 	// delivered). The model keeps no such number, so the box counts what it shows.
-	s32 m_documentVersion = 0;
+	std::int32_t m_documentVersion = 0;
 	// The Version whose Sheet was last written into State — so a composed sheet rides one frame, not every later one.
-	s32 m_sheetSentVersion = -1;
+	std::int32_t m_sheetSentVersion = -1;
 
 	// Composes handed to the background and not yet delivered — the client's progress indicator. A count
 	// rather than a flag: a second Compose cancels the first, and the first is still delivered after it.
@@ -285,7 +285,7 @@ private:
 	// …and WHICH fields this cell can be broken down by: appends a "Detail by" submenu, one item per
 	// field, ids running from `firstId`, and returns the paths index-aligned with them. Empty = nothing
 	// worth offering, and then nothing is appended.
-	std::vector<wxString> AppendDetailByMenu(std::vector<ibMenuItem>& menu, s32 firstId, int row, int col) const;
+	std::vector<wxString> AppendDetailByMenu(std::vector<ibMenuItem>& menu, std::int32_t firstId, int row, int col) const;
 };
 
 // A SHEET AS A CLIENT DRAWS IT — the box's, and a spreadsheet document's in a tab of its own (ibSheetView):

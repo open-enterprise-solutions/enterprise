@@ -12,7 +12,7 @@
 namespace {
 
 // The row's lists (`Schedule`): what each kind of sub-row chooses from.
-enum : s32 {
+enum : std::int32_t {
 	kListValue = 1,   // a resource of the register — the value
 	kListDate = 2,    // a dimension of the register — the date
 	kListLink = 3,    // a dimension to link; its children the fields that may answer for it
@@ -61,15 +61,15 @@ wxPGChoices ibPGCalcScheduleProperty::GetChoices(const std::vector<const ibDataN
 	wxPGChoices choices;
 	choices.Add(_("<not set>"), 0);
 	for (const ibDataNode* item : items)
-		choices.Add(item->GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Title), item->GetValue<s32>(ibProtocol::ibSchema::ibProperties::Id));   // names, as the type row names its types
+		choices.Add(item->GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Title), item->GetValue<std::int32_t>(ibProtocol::ibSchema::ibProperties::Id));   // names, as the type row names its types
 	return choices;
 }
 
-std::vector<const ibDataNode*> ibPGCalcScheduleProperty::GetItems(s32 kind) const
+std::vector<const ibDataNode*> ibPGCalcScheduleProperty::GetItems(std::int32_t kind) const
 {
 	std::vector<const ibDataNode*> items;
 	for (const ibDataNode& item : m_lists.Children()) {
-		if (item.GetValue<s32>(ibProtocol::ibSchema::ibProperties::Kind) == kind)
+		if (item.GetValue<std::int32_t>(ibProtocol::ibSchema::ibProperties::Kind) == kind)
 			items.push_back(&item);
 	}
 	return items;
@@ -109,7 +109,7 @@ ibPGCalcScheduleProperty::ibPGCalcScheduleProperty(ibBackendProperty* property, 
 	const std::vector<const ibDataNode*> links = GetItems(kListLink);
 	for (size_t idx = 0; idx < links.size(); idx++) {
 		const ibDataNode& link = *links[idx];
-		const ibMetaID dimension = link.GetValue<s32>(ibProtocol::ibSchema::ibProperties::Id);
+		const ibMetaID dimension = link.GetValue<std::int32_t>(ibProtocol::ibSchema::ibProperties::Id);
 		std::vector<const ibDataNode*> fields;
 		for (const ibDataNode& field : link.Children())
 			fields.push_back(&field);

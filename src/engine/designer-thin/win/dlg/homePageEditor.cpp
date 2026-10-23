@@ -176,7 +176,7 @@ const ibDataNode* ibDialogHomePageEditor::FindItemForm(const ibHomePageItem& ite
 	// Resolved on every read — a form deleted since it was attached reads as missing
 	// instead of quietly disappearing from the list.
 	for (const ibDataNode& form : m_metaObject->GetFormArray()) {
-		if (form.GetValue<s32>(ibProtocol::ibSchema::ibHomePage::Id) == item.m_formId)
+		if (form.GetValue<std::int32_t>(ibProtocol::ibSchema::ibHomePage::Id) == item.m_formId)
 			return &form;
 	}
 	return nullptr;
@@ -440,7 +440,7 @@ void ibDialogHomePageFormSelect::FillTree()
 	// Every form the configuration allows (the server listed them), grouped under its owner — a
 	// common form has none, so it files under its own group. Grouping is by owner identity, so
 	// the tree follows the metadata tree without duplicating its walk.
-	std::map<s32, wxTreeItemId> groups;
+	std::map<std::int32_t, wxTreeItemId> groups;
 	wxTreeItemId commonGroup;
 
 	// Every form's picture and its owner's asked for at once — not a call per form.
@@ -463,7 +463,7 @@ void ibDialogHomePageFormSelect::FillTree()
 			parentNode = commonGroup;
 		}
 		else {
-			const s32 owner = metaForm.GetValue<s32>(ibProtocol::ibSchema::ibHomePage::Owner);
+			const std::int32_t owner = metaForm.GetValue<std::int32_t>(ibProtocol::ibSchema::ibHomePage::Owner);
 			if (owner == 0)
 				continue;
 			auto founded = groups.find(owner);
@@ -477,7 +477,7 @@ void ibDialogHomePageFormSelect::FillTree()
 
 		const int formIcon = AppendIcon(FormIcon(metaForm, ibProtocol::ibSchema::ibHomePage::Picture));
 		m_treeCtrl->AppendItem(parentNode, metaForm.GetValue<wxString>(ibProtocol::ibSchema::ibHomePage::Name),
-			formIcon, formIcon, new ibHomePageFormItemData(metaForm.GetValue<s32>(ibProtocol::ibSchema::ibHomePage::Id)));
+			formIcon, formIcon, new ibHomePageFormItemData(metaForm.GetValue<std::int32_t>(ibProtocol::ibSchema::ibHomePage::Id)));
 	}
 
 	m_treeCtrl->ExpandAll();

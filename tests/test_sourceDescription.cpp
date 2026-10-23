@@ -16,7 +16,7 @@
 #include <vector>
 #include "core/description/sourceDescription.h"          // ibSourceHop / ibSourceDescription / ibSourceDescriptionMemory
 #include "core/clsid.h"                       // reference_to_clsid (a pinned reference branch)
-#include "core/fileSystem/fs.h"               // ibReaderMemory / ibWriterMemory (serialize round-trip)
+#include "core/memory/memoryStream.h"               // ibReaderMemory / ibWriterMemory (serialize round-trip)
 #include "core/serialize/dataBuilder.h"       // ibDataValue (node-form round-trip)
 
 // ---------------------------------------------------------------------------
@@ -125,7 +125,7 @@ TEST(SourceDescription, SerializeRoundTripPreservesIdAndType) {
     ibWriterMemory w;
     ASSERT_TRUE(ibSourceDescriptionMemory::SaveData(w, desc));
 
-    const wxMemoryBuffer buf = w.buffer();   // outlives the reader (holds a pointer in)
+    const ibMemoryBuffer buf = w.buffer();
     ibReaderMemory r(buf);
 
     ibSourceDescription loaded;
@@ -146,7 +146,7 @@ TEST(SourceDescription, EmptySerializeRoundTrips) {
 
     ibWriterMemory w;
     ASSERT_TRUE(ibSourceDescriptionMemory::SaveData(w, desc));
-    const wxMemoryBuffer buf = w.buffer();
+    const ibMemoryBuffer buf = w.buffer();
     ibReaderMemory r(buf);
 
     ibSourceDescription loaded(std::vector<ibSourceId>{ 1, 2 });   // seeded, must be cleared by load

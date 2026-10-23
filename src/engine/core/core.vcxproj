@@ -188,8 +188,6 @@
     <ClCompile Include="fdatetime.cpp" />
     <ClCompile Include="fiber\fiber.cpp" />
     <ClCompile Include="fiber\fiberLocals.cpp" />
-    <ClCompile Include="fileSystem\fs.cpp" />
-    <ClCompile Include="fileSystem\lz\lzhuf.cpp" />
     <ClCompile Include="fileKind.cpp" />
     <ClCompile Include="fnumber.cpp" />
     <ClCompile Include="formatString.cpp" />
@@ -201,6 +199,10 @@
     <ClCompile Include="guid.cpp" />
     <ClCompile Include="job\jobScheduleRules.cpp" />
     <ClCompile Include="localization.cpp" />
+    <ClCompile Include="memory\lz\lzhuf.cpp" />
+    <ClCompile Include="memory\memoryBuffer.cpp" />
+    <ClCompile Include="memory\memoryPool.cpp" />
+    <ClCompile Include="memory\memoryStream.cpp" />
     <ClCompile Include="net\asio.cpp">
       <PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
@@ -285,9 +287,6 @@
     <ClInclude Include="fdatetime.h" />
     <ClInclude Include="fiber\fiber.h" />
     <ClInclude Include="fiber\fiberLocals.h" />
-    <ClInclude Include="fileSystem\fs.h" />
-    <ClInclude Include="fileSystem\lz\lzhuf.h" />
-    <ClInclude Include="fileSystem\types.h" />
     <ClInclude Include="fileKind.h" />
     <ClInclude Include="fnumber.h" />
     <ClInclude Include="formatString.h" />
@@ -302,6 +301,10 @@
     <ClInclude Include="localization.h" />
     <ClInclude Include="logger\loggerQuery.h" />
     <ClInclude Include="mcp\mcpSettings.h" />
+    <ClInclude Include="memory\lz\lzhuf.h" />
+    <ClInclude Include="memory\memoryBuffer.h" />
+    <ClInclude Include="memory\memoryPool.h" />
+    <ClInclude Include="memory\memoryStream.h" />
     <ClInclude Include="net\httpClient.h" />
     <ClInclude Include="net\httpServer.h" />
     <ClInclude Include="net\httpStream.h" />

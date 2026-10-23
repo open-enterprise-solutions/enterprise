@@ -632,19 +632,19 @@ ibDateTime ibDatabaseLayer::GetSingleResultDate(const wxString& strSQL, const wx
 	return value;
 }
 
-void* ibDatabaseLayer::GetSingleResultBlob(const wxString& strSQL, int nField, wxMemoryBuffer& buffer, bool bRequireUniqueResult /*= true*/)
+void* ibDatabaseLayer::GetSingleResultBlob(const wxString& strSQL, int nField, ibMemoryBuffer& buffer, bool bRequireUniqueResult /*= true*/)
 {
 	wxVariant variant((long)nField);
 	return GetSingleResultBlob(strSQL, &variant, buffer, bRequireUniqueResult);
 }
 
-void* ibDatabaseLayer::GetSingleResultBlob(const wxString& strSQL, const wxString& strField, wxMemoryBuffer& buffer, bool bRequireUniqueResult /*= true*/)
+void* ibDatabaseLayer::GetSingleResultBlob(const wxString& strSQL, const wxString& strField, ibMemoryBuffer& buffer, bool bRequireUniqueResult /*= true*/)
 {
 	wxVariant variant(strField);
 	return GetSingleResultBlob(strSQL, &variant, buffer, bRequireUniqueResult);
 }
 
-void* ibDatabaseLayer::GetSingleResultBlob(const wxString& strSQL, const wxVariant* field, wxMemoryBuffer& buffer, bool bRequireUniqueResult /*= true*/)
+void* ibDatabaseLayer::GetSingleResultBlob(const wxString& strSQL, const wxVariant* field, ibMemoryBuffer& buffer, bool bRequireUniqueResult /*= true*/)
 {
 	bool valueRetrievedFlag = false;
 	void* value = nullptr;

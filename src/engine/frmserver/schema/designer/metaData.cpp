@@ -7,7 +7,7 @@
 #include "backend/metaCollection/metaIntrospect.h"   // ibFindMetaObjectById — an object by its id, anywhere in the tree
 #include "backend/session/session.h"
 #include "backend/temp/tempStorage.h"
-#include "core/fileSystem/fs.h"   // ibWriterMemory / ibReaderMemory — a copy's payload
+#include "core/memory/memoryStream.h"   // ibWriterMemory / ibReaderMemory — a copy's payload
 #include "core/serialize/dataBuilder.h"
 
 #include "frmserver/docView/docView.h"   // docManager — the client's, where its editors open
@@ -23,7 +23,7 @@ namespace {
 bool FindPlace(ibMetaData* metaData, const ibDataNode& args, ibValueMetaObject*& parent,
 	ibClassID& clsid, ibProtocol::ibRefusal& refusal, wxString& error)
 {
-	parent = args.GetValue<s32>(ibProtocol::ibSchema::ibMetaData::Parent) != 0
+	parent = args.GetValue<std::int32_t>(ibProtocol::ibSchema::ibMetaData::Parent) != 0
 		? ibSchemaMetaData::FindObject(metaData, args, ibProtocol::ibSchema::ibMetaData::Parent, refusal, error)
 		: metaData->GetCommonMetaObject();
 	if (parent == nullptr) {
@@ -111,7 +111,7 @@ void ibSchemaMetaData::Build(const ibSession& WXUNUSED(session), const ibDataNod
 {
 }
 
-std::function<void()> ibSchemaMetaData::Command(const ibSession& session, s32 command,
+std::function<void()> ibSchemaMetaData::Command(const ibSession& session, std::int32_t command,
 	const ibDataNode& args, ibProtocol::ibRefusal& refusal, wxString& error) const
 {
 	ibMetaData* const metaData = FindMetaData(session, args, refusal, error);
@@ -144,7 +144,7 @@ std::function<void()> ibSchemaMetaData::Command(const ibSession& session, s32 co
 		// Made, and its rows shown with the answer: the tree selects its row without reading them, then opens its editor
 		// (the client's CreateItem, the desktop's ibConfigurationTree::CreateItem — NewItem, then OpenObjectForm) — made
 		// while the row is shown, the editor shows its own.
-		const s32 tabId = args.GetValue<s32>(ibProtocol::ibSchema::ibMetaData::Tab);
+		const std::int32_t tabId = args.GetValue<std::int32_t>(ibProtocol::ibSchema::ibMetaData::Tab);
 		return [metaData, clsid, parent, tabId]() {
 			ibValueMetaObject* const created = metaData->CreateMetaObject(clsid, parent);
 			ibClientFrame* const frame = ibClientFrame::GetFrame();
@@ -158,8 +158,8 @@ std::function<void()> ibSchemaMetaData::Command(const ibSession& session, s32 co
 			return nullptr;
 		// …and the rows of the object the tree goes to after it (Select — the next row, else the one before, else the
 		// parent: the client's RemoveItem), shown with the answer.
-		const s32 tabId = args.GetValue<s32>(ibProtocol::ibSchema::ibMetaData::Tab);
-		const ibMetaID select = args.GetValue<s32>(ibProtocol::ibSchema::ibMetaData::Select);
+		const std::int32_t tabId = args.GetValue<std::int32_t>(ibProtocol::ibSchema::ibMetaData::Tab);
+		const ibMetaID select = args.GetValue<std::int32_t>(ibProtocol::ibSchema::ibMetaData::Select);
 		return [metaData, object, tabId, select]() {
 			metaData->RemoveMetaObject(object);
 			ibValueMetaObject* const selected = select > 0 ? ibFindMetaObjectById(metaData, select) : nullptr;
@@ -173,7 +173,7 @@ std::function<void()> ibSchemaMetaData::Command(const ibSession& session, s32 co
 		if (object == nullptr)
 			return nullptr;
 		ibValueMetaObject* const parent = object->GetParent();
-		const s32 position = args.GetValue<s32>(ibProtocol::ibSchema::ibMetaData::Position);
+		const std::int32_t position = args.GetValue<std::int32_t>(ibProtocol::ibSchema::ibMetaData::Position);
 		if (parent == nullptr || position < 0 || static_cast<unsigned int>(position) >= parent->GetChildCount()) {
 			refusal = ibProtocol::ibRefusal::BadParameter;
 			error = wxString::Format(wxT("'%s' has no place %d"), object->GetName(), position);
@@ -198,7 +198,7 @@ std::function<void()> ibSchemaMetaData::Command(const ibSession& session, s32 co
 			error = wxT("no such file");
 			return nullptr;
 		}
-		const wxMemoryBuffer bytes = writer.buffer();
+		const ibMemoryBuffer bytes = writer.buffer();
 		if (!file.Write(bytes.GetData(), bytes.GetDataLen())) {
 			refusal = ibProtocol::ibRefusal::Failed;
 			error = wxT("the copy was not written");
@@ -218,8 +218,8 @@ std::function<void()> ibSchemaMetaData::Command(const ibSession& session, s32 co
 			error = wxT("no such file");
 			return nullptr;
 		}
-		wxMemoryBuffer bytes;
-		wxMemoryBuffer part;
+		ibMemoryBuffer bytes;
+		ibMemoryBuffer part;
 		for (int index = 0; file.ReadPart(index, part); ++index)
 			bytes.AppendData(part.GetData(), part.GetDataLen());
 		// The shell, the read, the announcement and the cleanup of a bad payload are all the door's.
@@ -311,7 +311,7 @@ std::function<void()> ibSchemaMetaData::Command(const ibSession& session, s32 co
 	case ibProtocol::ibSchema::ibMetaData::ibCommand::Load: {
 		// …or a data processor or a report, from the file it is kept in apart (the desktop's tree's Replace and Insert):
 		// that one replaced by the one read (Id), or one read in under that object (Type, Parent).
-		if (args.GetValue<s32>(ibProtocol::ibSchema::ibMetaData::Id) != 0
+		if (args.GetValue<std::int32_t>(ibProtocol::ibSchema::ibMetaData::Id) != 0
 			|| !args.GetValue<wxString>(ibProtocol::ibSchema::ibMetaData::Type).IsEmpty()) {
 			// The reader puts its object in before it reads — so the configuration's word is asked here, not at its door.
 			if (!metaData->IsEditable()) {
@@ -321,7 +321,7 @@ std::function<void()> ibSchemaMetaData::Command(const ibSession& session, s32 co
 			}
 			ibValueMetaObject* replaced = nullptr;
 			ibClassID clsid = 0;
-			if (args.GetValue<s32>(ibProtocol::ibSchema::ibMetaData::Id) != 0) {
+			if (args.GetValue<std::int32_t>(ibProtocol::ibSchema::ibMetaData::Id) != 0) {
 				replaced = FindObject(metaData, args, ibProtocol::ibSchema::ibMetaData::Id, refusal, error);
 				if (replaced == nullptr)
 					return nullptr;
@@ -359,8 +359,8 @@ std::function<void()> ibSchemaMetaData::Command(const ibSession& session, s32 co
 			error = wxT("no such file");
 			return nullptr;
 		}
-		wxMemoryBuffer bytes;
-		wxMemoryBuffer part;
+		ibMemoryBuffer bytes;
+		ibMemoryBuffer part;
 		for (int index = 0; file.ReadPart(index, part); ++index)
 			bytes.AppendData(part.GetData(), part.GetDataLen());
 		// Read as the desktop's LoadConfigFromFile reads its file (LoadConfigFromBuffer); a file that is no configuration
@@ -375,7 +375,7 @@ std::function<void()> ibSchemaMetaData::Command(const ibSession& session, s32 co
 	}
 	case ibProtocol::ibSchema::ibMetaData::ibCommand::Unload: {
 		// …or a data processor or a report, written as the file it is kept in apart (Id — the desktop's tree's Save).
-		if (args.GetValue<s32>(ibProtocol::ibSchema::ibMetaData::Id) != 0) {
+		if (args.GetValue<std::int32_t>(ibProtocol::ibSchema::ibMetaData::Id) != 0) {
 			ibValueMetaObject* const object = FindObject(metaData, args, ibProtocol::ibSchema::ibMetaData::Id, refusal, error);
 			if (object == nullptr)
 				return nullptr;
@@ -395,7 +395,7 @@ std::function<void()> ibSchemaMetaData::Command(const ibSession& session, s32 co
 		ibMetaDataConfigurationBase* const configuration = FindConfiguration(session, metaData, refusal, error);
 		if (configuration == nullptr)
 			return nullptr;
-		wxMemoryBuffer bytes;
+		ibMemoryBuffer bytes;
 		if (!configuration->SaveConfigToBuffer(bytes)) {
 			refusal = ibProtocol::ibRefusal::Failed;
 			error = BackendErrorChain(wxT("the configuration could not be written"));
@@ -427,7 +427,7 @@ std::function<void()> ibSchemaMetaData::Command(const ibSession& session, s32 co
 ibMetaData* ibSchemaMetaData::FindMetaData(const ibSession& session, const ibDataNode& args, ibProtocol::ibRefusal& refusal,
 	wxString& error)
 {
-	const s32 tabId = args.GetValue<s32>(ibProtocol::ibSchema::ibMetaData::Tab);
+	const std::int32_t tabId = args.GetValue<std::int32_t>(ibProtocol::ibSchema::ibMetaData::Tab);
 	if (tabId == 0) {
 		ibMetaData* const metaData = session.GetMetaData();
 		if (metaData == nullptr) {
@@ -456,7 +456,7 @@ ibMetaData* ibSchemaMetaData::FindMetaData(const ibSession& session, const ibDat
 ibValueMetaObject* ibSchemaMetaData::FindObject(ibMetaData* metaData, const ibDataNode& args, const wxString& name,
 	ibProtocol::ibRefusal& refusal, wxString& error)
 {
-	const ibMetaID id = args.GetValue<s32>(name);
+	const ibMetaID id = args.GetValue<std::int32_t>(name);
 	ibValueMetaObject* const object = id > 0 ? ibFindMetaObjectById(metaData, id) : nullptr;
 	if (object == nullptr || object->IsDeleted()) {
 		refusal = ibProtocol::ibRefusal::NotFound;

@@ -11,7 +11,7 @@
 #include "backend/session/session.h"
 #include "backend/system/systemManager.h"   // Message — the standard door to whoever is watching
 
-#include "core/fileSystem/fs.h"
+#include "core/memory/memoryStream.h"
 #include "backend/job/jobRunByteCode.h"      // the request and the state that cross this wire whole
 #include "backend/backend_exception.h"       // a frame that cannot be read is caught, not escaped
 #if _USE_NET_COMPRESSOR == 1
@@ -597,13 +597,13 @@ void ibDebuggerClient::CancelJob(const wxString& token)
 // designer does not work with data. What is sent is a SCHEMA — which is why the caller may send one
 // that exists nowhere — and no breakpoint is needed, because what happens over there is a rented
 // read on a connection of its own.
-void ibDebuggerClient::RequestCompose(const wxMemoryBuffer& request)
+void ibDebuggerClient::RequestCompose(const ibMemoryBuffer& request)
 {
 	ibWriterMemory commandChannel;
 	commandChannel.w_u16(CommandId_Compose);
 	commandChannel.w_u32((unsigned int)request.GetDataLen());
 	if (request.GetDataLen() > 0)
-		commandChannel.w(request.GetData(), (u32)request.GetDataLen());
+		commandChannel.w(request.GetData(), (std::uint32_t)request.GetDataLen());
 	SendCommand(commandChannel.pointer(), commandChannel.size());
 }
 
@@ -843,7 +843,7 @@ void ibDebuggerClient::ibDebuggerClientConnection::EntryClient()
 						const unsigned int length = static_cast<unsigned int>(command.size());
 						if (m_connectionType == ConnectionType::ConnectionType_Debugger && length > 0) {
 							// 🛑 A FRAME THIS END CANNOT READ ENDS THE CONNECTION, NOT THE PROCESS. The reader
-							// refuses a chunk whose declared size is larger than what arrived (fileSystem/fs.cpp),
+							// refuses a chunk whose declared size is larger than what arrived (core/memory/memoryStream.cpp),
 							// and that refusal travels up here - on a worker thread, where an escaping exception
 							// takes the whole designer down with it. It did, on 2026-09-23, while the designer
 							// was debugging: two asserts in the journal and an access violation inside memcpy a
@@ -925,7 +925,7 @@ void ibDebuggerClient::ibDebuggerClientConnection::RecvCommand(void* pointer, un
 {
 	ibReaderMemory commandReader(pointer, length);
 	wxASSERT(ms_debugClient != nullptr);
-	u16 commandFromServer = commandReader.r_u16();
+	std::uint16_t commandFromServer = commandReader.r_u16();
 
 	// 🔎 WHAT ARRIVED, IN ORDER — the last frames before a detach are the ones worth seeing, and the
 	// chain of `if`s below drops a command it does not know without a word.
@@ -1090,7 +1090,7 @@ void ibDebuggerClient::ibDebuggerClientConnection::RecvCommand(void* pointer, un
 
 		const unsigned int length = commandReader.r_u32();
 
-		wxMemoryBuffer png;
+		ibMemoryBuffer png;
 		if (length > 0) {
 			png.SetBufSize(length);
 			commandReader.r(png.GetWriteBuf(length), length);
@@ -1153,7 +1153,7 @@ void ibDebuggerClient::ibDebuggerClientConnection::RecvCommand(void* pointer, un
 		// `length` parameter: a shadow here would be read as the packet's length by anybody skimming.)
 		const unsigned int payloadLength = commandReader.r_u32();
 
-		wxMemoryBuffer answer;
+		ibMemoryBuffer answer;
 		if (payloadLength > 0) {
 			answer.SetBufSize(payloadLength);
 			commandReader.r(answer.GetWriteBuf(payloadLength), payloadLength);
@@ -1340,7 +1340,7 @@ void ibDebuggerClient::ibDebuggerClientConnection::SendCommand(void* pointer, un
 	// the connection had no socket leaves the person pressing a key that does nothing — which is what "the
 	// debugger fell off" looks like from the outside, before anything is closed.
 	ibJournalIf {
-		const u16 command = length >= sizeof(u16) ? *static_cast<const u16*>(pointer) : 0;
+		const std::uint16_t command = length >= sizeof(std::uint16_t) ? *static_cast<const std::uint16_t*>(pointer) : 0;
 		ibJournalInfo(wxT("debugger.wire"),
 			wxT("debug client -> command %d of %u bytes %s"),
 			static_cast<int>(command), length,

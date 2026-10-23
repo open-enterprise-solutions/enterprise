@@ -10,7 +10,7 @@
 
 #include "frmclient/backend/backend_core.h"   // …as the engine's value.h brings it to those who include it
 #include "core/compiler/literal.h"   // ibLiteral — the primitive a value of the client's is, and holds
-#include "core/fileSystem/types.h"
+#include <cstdint>
 #include "core/core.h"    // kValueFieldClsid / kValueFieldData — the fields a value is written into a node by
 
 template <class T> class ibValuePtr;

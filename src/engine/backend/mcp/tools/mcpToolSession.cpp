@@ -132,7 +132,7 @@ public:
 				users.push_back(ibDataValue::Child(entry));
 			}
 
-			result.AddField(wxT("count"), ibDataValue::Int((s64)users.size()));
+			result.AddField(wxT("count"), ibDataValue::Int((std::int64_t)users.size()));
 			result.AddField(wxT("users"), ibDataValue::Array(users));
 
 			// AN EMPTY TABLE IS A MODE, NOT AN ABSENCE. With no accounts at all the
@@ -265,7 +265,7 @@ public:
 			sessions.push_back(ibDataValue::Child(entry));
 		}
 
-		result.AddField(wxT("count"), ibDataValue::Int((s64)sessions.size()));
+		result.AddField(wxT("count"), ibDataValue::Int((std::int64_t)sessions.size()));
 		result.AddField(wxT("sessions"), ibDataValue::Array(sessions));
 
 		// The snapshot is refreshed on a timer rather than read live, so a session

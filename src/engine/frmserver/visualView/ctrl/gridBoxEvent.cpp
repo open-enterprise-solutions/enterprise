@@ -18,7 +18,7 @@ bool ibValueGridBox::OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDa
 {
 	switch (event) {
 	case ibProtocol::ibEvent::ibKind::Cell: {
-		const int row = args.GetValue<s32>(ibProtocol::ibEvent::Row) - 1, col = args.GetValue<s32>(ibProtocol::ibEvent::Col) - 1;
+		const int row = args.GetValue<std::int32_t>(ibProtocol::ibEvent::Row) - 1, col = args.GetValue<std::int32_t>(ibProtocol::ibEvent::Col) - 1;
 		if (row >= 0 && col >= 0)
 			OnCellLeftClick(row, col);
 		return true;
@@ -83,7 +83,7 @@ void ibValueGridBox::OnCellLeftClick(int row, int col)
 	// and nothing to re-compose, so the entry would be a command that cannot mean anything.
 	const bool composed = ResolveComposition() != nullptr;
 
-	enum : s32 { idOpenValue = 1, idShowDetail, idDetailByFirst };
+	enum : std::int32_t { idOpenValue = 1, idShowDetail, idDetailByFirst };
 	std::vector<ibMenuItem> menu;
 	menu.push_back(ibMenuItem{ idOpenValue, _("Open value") });
 	ibMenuItem detail{ idShowDetail, _("Detail...") };
@@ -93,11 +93,11 @@ void ibValueGridBox::OnCellLeftClick(int row, int col)
 	// including whether there is anything to offer (gridBoxDetail.cpp).
 	const std::vector<wxString> byPath = AppendDetailByMenu(menu, idDetailByFirst, row, col);
 
-	s32 chosen = 0;
+	std::int32_t chosen = 0;
 	if (!ibRequestMenu(menu, chosen))
 		return;   // closed without choosing — the click meant nothing after all
 
-	if (chosen >= idDetailByFirst && chosen - idDetailByFirst < static_cast<s32>(byPath.size())) {
+	if (chosen >= idDetailByFirst && chosen - idDetailByFirst < static_cast<std::int32_t>(byPath.size())) {
 		ShowCellDetail(row, col, byPath[static_cast<size_t>(chosen - idDetailByFirst)]);
 		return;
 	}

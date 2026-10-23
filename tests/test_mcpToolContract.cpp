@@ -901,7 +901,7 @@ TEST(MetadataBind, ASharedNameResolvesAmongTheBindingsCandidates) {
 	const auto bind = [&](auto setTarget, bool remove, wxString& refusal) {
 		ibDataNode params;
 		ibDataNode result;
-		params.SetValue(wxT("id"), (s32)document->GetMetaID());
+		params.SetValue(wxT("id"), (std::int32_t)document->GetMetaID());
 		params.SetValue(wxT("property"), wxString(wxT("ListRegisterRecord")));
 		setTarget(params);
 		if (remove)
@@ -948,7 +948,7 @@ TEST(MetadataBind, ASharedNameResolvesAmongTheBindingsCandidates) {
 
 	refusal.clear();
 	ASSERT_TRUE(bind([&](ibDataNode& params) {
-		params.SetValue(wxT("target"), (s32)registerTwo->GetMetaID());
+		params.SetValue(wxT("target"), (std::int32_t)registerTwo->GetMetaID());
 	}, true, refusal)) << refusal.ToStdString();
 	EXPECT_FALSE(second->GetRegisterRecorder()->GetTypeDesc().ContainType(documentRef));
 }

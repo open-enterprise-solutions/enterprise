@@ -21,7 +21,7 @@ public:
 	// Save {Id, Tab, Name, Value} — that metaobject's property or event of that name given that value, as its node holds
 	// it, and its rows as they are after it shown with the answer (ibClientFrame::ShowProperties): the inspector draws
 	// them without a read. Refused, nothing done: no such object, no such property, no value.
-	virtual std::function<void()> Command(const ibSession& session, s32 command,
+	virtual std::function<void()> Command(const ibSession& session, std::int32_t command,
 		const ibDataNode& args, ibProtocol::ibRefusal& refusal, wxString& error) const override;
 };
 

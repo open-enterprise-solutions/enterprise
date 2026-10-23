@@ -597,7 +597,7 @@ void ibFrontendMainFrame::OnCloseWindow(wxCloseEvent& event)
 #include <wx/dcscreen.h>
 
 bool ibFrontendMainFrame::CaptureWindow(const wxString& reason, const wxString& area,
-	const wxString& format, wxMemoryBuffer& bytes, wxString& focus)
+	const wxString& format, ibMemoryBuffer& bytes, wxString& focus)
 {
 	bytes.SetDataLen(0);
 	focus.Clear();

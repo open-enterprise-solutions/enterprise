@@ -270,7 +270,7 @@ void ibOpenReportOver(const ibCompositionDescription& desc, const ibValueMetaObj
 // ⭐ AND IT IS READ BY A PERSON, so the items say the TITLE — the same words that stand over the
 // column in the report. The technical name travels into the query and is not something a reader
 // should ever be shown.
-std::vector<wxString> ibValueGridBox::AppendDetailByMenu(std::vector<ibMenuItem>& menu, s32 firstId, int row, int col) const
+std::vector<wxString> ibValueGridBox::AppendDetailByMenu(std::vector<ibMenuItem>& menu, std::int32_t firstId, int row, int col) const
 {
 	std::vector<wxString> paths;
 
@@ -298,7 +298,7 @@ std::vector<wxString> ibValueGridBox::AppendDetailByMenu(std::vector<ibMenuItem>
 		wxString title = ibLocalization::GetTranslateGetRawLocText(ibBackendLocalization::GetUserLanguage(), desc.TitleForPath(field.m_name));
 		if (title.IsEmpty())
 			title = ibTitleFromName(field.m_name);
-		byMenu.items.push_back(ibMenuItem{ firstId + static_cast<s32>(paths.size()), title });
+		byMenu.items.push_back(ibMenuItem{ firstId + static_cast<std::int32_t>(paths.size()), title });
 		paths.push_back(field.m_name);
 	}
 

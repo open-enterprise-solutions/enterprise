@@ -7,7 +7,7 @@
 #include "backend/appData.h"
 #include "backend/debugger/debugClient.h"
 #include "backend/mcp/mcpServer.h"
-#include "core/fileSystem/fs.h"   // ibWriterMemory / ibReaderMemory - the node on the wire
+#include "core/memory/memoryStream.h"   // ibWriterMemory / ibReaderMemory - the node on the wire
 
 #include <chrono>
 
@@ -193,7 +193,7 @@ bool ibMcpDebugBridge::Sandbox(const wxString& code, bool& ran, wxString& answer
 }
 
 bool ibMcpDebugBridge::Screenshot(const wxString& reason, const wxString& area, const wxString& format,
-	bool& allowed, wxMemoryBuffer& png, wxString& focus, int timeoutMs)
+	bool& allowed, ibMemoryBuffer& png, wxString& focus, int timeoutMs)
 {
 	const std::lock_guard<std::mutex> one(m_oneQuestion);
 	allowed = false;
@@ -239,7 +239,7 @@ bool ibMcpDebugBridge::Screenshot(const wxString& reason, const wxString& area, 
 	return arrived;
 }
 
-void ibMcpDebugBridge::OnScreenshot(const wxMemoryBuffer& png, const wxString& focus)
+void ibMcpDebugBridge::OnScreenshot(const ibMemoryBuffer& png, const wxString& focus)
 {
 	{
 		std::lock_guard<std::mutex> lock(m_mutex);
@@ -383,8 +383,6 @@ bool ibMcpDebugBridge::Compose(const ibDataNode& request, ibDataNode& result, bo
 		answered = m_composeAnswered;
 		refusal  = m_composeRefusal;
 		if (answered && m_composed.GetDataLen() > 0) {
-			// ⚠ A NAMED LOCAL, because a reader BORROWS its bytes: handing it a temporary leaves it
-			// reading freed memory, which is why fs.h deletes that overload outright.
 			ibReaderMemory reader(m_composed);
 			ibBinaryProvider().Read(reader, result);
 		}
@@ -394,7 +392,7 @@ bool ibMcpDebugBridge::Compose(const ibDataNode& request, ibDataNode& result, bo
 	return arrived;
 }
 
-void ibMcpDebugBridge::OnComposed(bool answered, const wxString& refusal, const wxMemoryBuffer& result)
+void ibMcpDebugBridge::OnComposed(bool answered, const wxString& refusal, const ibMemoryBuffer& result)
 {
 	{
 		std::lock_guard<std::mutex> lock(m_mutex);

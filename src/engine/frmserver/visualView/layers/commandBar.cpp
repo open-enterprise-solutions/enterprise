@@ -704,12 +704,12 @@ void ibValueCommandBar::Update(ibDataNode& state)
 		entry.SetValue(ibProtocol::ibForm::ibCommandBar::Picture, c.representation == ibRepresentation_Text ? ibString() : ibBackendPicture::SendPicture(c.picture, GetMetaData()));
 		entry.SetValue(ibProtocol::ibForm::ibCommandBar::Tooltip, c.tooltip.IsEmpty() ? c.caption : c.tooltip);
 		entry.SetValue(ibProtocol::ibForm::ibCommandBar::Enabled, c.enabled);
-		entry.SetValue(ibProtocol::ibForm::ibCommandBar::Kind, static_cast<s32>(c.kind));
+		entry.SetValue(ibProtocol::ibForm::ibCommandBar::Kind, static_cast<std::int32_t>(c.kind));
 
 		// An item of the bar's own — its place among them, as its node is written (WriteData): what the designer selects
 		// it by when its tool is pressed (the desktop's FindItemByCommandId).
 		if (c.item != nullptr) {
-			s32 position = 0;
+			std::int32_t position = 0;
 			for (const auto& item : m_items) {
 				if (item == c.item)
 					break;
@@ -862,10 +862,10 @@ void WriteCommandTree(ibDataNode& node, ibValueForm* form)
 		std::vector<ibDataValue> hops;
 		for (const ibCommandHop& hop : entry.desc.GetPath()) {
 			std::shared_ptr<ibDataNode> hopNode = std::make_shared<ibDataNode>();
-			hopNode->SetValue(ibProtocol::ibSchema::ibProperties::Id, static_cast<s32>(hop.m_id));
+			hopNode->SetValue(ibProtocol::ibSchema::ibProperties::Id, static_cast<std::int32_t>(hop.m_id));
 			hops.push_back(ibDataValue::Child(hopNode));
 		}
 		row.AddField(ibProtocol::ibSchema::ibProperties::CommandPath, ibDataValue::Array(std::move(hops)));
-		row.SetValue(ibProtocol::ibSchema::ibProperties::Kind, static_cast<s32>(entry.desc.GetCommandType()));
+		row.SetValue(ibProtocol::ibSchema::ibProperties::Kind, static_cast<std::int32_t>(entry.desc.GetCommandType()));
 	}
 }

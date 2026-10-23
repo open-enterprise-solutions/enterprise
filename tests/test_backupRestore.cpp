@@ -26,18 +26,18 @@
 #include "backend/metaCollection/metaObject.h"
 #include "backend/metadataConfiguration.h"
 #include "backend/userInfo.h"
-#include "core/fileSystem/fs.h"
+#include "core/memory/memoryStream.h"
 
 namespace {
 
-wxMemoryBuffer Bytes(const char* text)
+ibMemoryBuffer Bytes(const char* text)
 {
-	wxMemoryBuffer buffer;
+	ibMemoryBuffer buffer;
 	buffer.AppendData(text, std::strlen(text));
 	return buffer;
 }
 
-wxMemoryBuffer ConfigBlob(u64 sign, bool withBody)
+ibMemoryBuffer ConfigBlob(std::uint64_t sign, bool withBody)
 {
 	ibWriterMemory header;
 	header.w_u64(sign);
@@ -63,7 +63,7 @@ struct TempFile {
 	}
 };
 
-bool WriteArchive(const wxString& path, const std::vector<std::pair<wxString, wxMemoryBuffer>>& entries)
+bool WriteArchive(const wxString& path, const std::vector<std::pair<wxString, ibMemoryBuffer>>& entries)
 {
 	wxFFileOutputStream out(path);
 	if (!out.IsOk())
@@ -181,8 +181,8 @@ TEST_F(BackupRestore, UnreadableConfigLeavesTheUser)
 	TempFile file;
 	ASSERT_TRUE(WriteArchive(file.path, {
 		{ wxT("config"), Bytes("not-a-config") },
-		{ wxT("user"), wxMemoryBuffer() },
-		{ wxT("data"), wxMemoryBuffer() },
+		{ wxT("user"), ibMemoryBuffer() },
+		{ wxT("data"), ibMemoryBuffer() },
 	}));
 	EXPECT_FALSE(appData->LoadDatabase(file.path));
 	ExpectUserKept();
@@ -194,9 +194,9 @@ TEST_F(BackupRestore, DataBeforeConfigLeavesTheUser)
 	KeepUser();
 	TempFile file;
 	ASSERT_TRUE(WriteArchive(file.path, {
-		{ wxT("data"), wxMemoryBuffer() },
+		{ wxT("data"), ibMemoryBuffer() },
 		{ wxT("config"), ConfigBlob(sign_metadata, true) },
-		{ wxT("user"), wxMemoryBuffer() },
+		{ wxT("user"), ibMemoryBuffer() },
 	}));
 	EXPECT_FALSE(appData->LoadDatabase(file.path));
 	ExpectUserKept();
@@ -210,8 +210,8 @@ TEST_F(BackupRestore, RepeatedConfigLeavesTheUser)
 	ASSERT_TRUE(WriteArchive(file.path, {
 		{ wxT("config"), ConfigBlob(sign_metadata, true) },
 		{ wxT("config"), ConfigBlob(sign_metadata, true) },
-		{ wxT("user"), wxMemoryBuffer() },
-		{ wxT("data"), wxMemoryBuffer() },
+		{ wxT("user"), ibMemoryBuffer() },
+		{ wxT("data"), ibMemoryBuffer() },
 	}));
 	EXPECT_FALSE(appData->LoadDatabase(file.path));
 	ExpectUserKept();
@@ -224,8 +224,8 @@ TEST_F(BackupRestore, ReadableArchiveWithoutMetadataLeavesTheUser)
 	TempFile file;
 	ASSERT_TRUE(WriteArchive(file.path, {
 		{ wxT("config"), ConfigBlob(sign_metadata, true) },
-		{ wxT("user"), wxMemoryBuffer() },
-		{ wxT("data"), wxMemoryBuffer() },
+		{ wxT("user"), ibMemoryBuffer() },
+		{ wxT("data"), ibMemoryBuffer() },
 	}));
 	EXPECT_FALSE(appData->LoadDatabase(file.path));
 	ExpectUserKept();

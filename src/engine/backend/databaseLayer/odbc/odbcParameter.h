@@ -90,7 +90,7 @@ private:
 	ibNumber m_numValue;
 	wxString m_strDateValue;
 	bool m_bValue;
-	wxMemoryBuffer m_BufferValue;
+	ibMemoryBuffer m_BufferValue;
 	wxCharBuffer m_CharBufferValue;
 #ifdef _WIN64
 	SQLLEN m_nBufferLength;

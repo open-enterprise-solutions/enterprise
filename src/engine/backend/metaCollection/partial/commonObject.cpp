@@ -132,7 +132,6 @@ ibValueSpreadsheetDocument* ibValueMetaObjectGenericData::GetTemplate(const wxSt
 //*                           ibValueMetaObjectRecordData				*
 //***********************************************************************
 
-#include "core/fileSystem/fs.h"
 
 //***********************************************************************
 //*                           read & save events                        *

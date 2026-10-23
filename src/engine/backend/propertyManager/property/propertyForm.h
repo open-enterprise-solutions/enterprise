@@ -9,9 +9,9 @@ class BACKEND_API ibPropertyForm : public ibProperty {
 public:
 
 	wxString GetValueAsString() const;
-	wxMemoryBuffer& GetValueAsMemoryBuffer() const;
+	ibMemoryBuffer& GetValueAsMemoryBuffer() const;
 	void SetValue(const wxString& val);
-	void SetValue(const wxMemoryBuffer& val);
+	void SetValue(const ibMemoryBuffer& val);
 
 	ibPropertyForm(ibPropertyCategory* cat, const wxString& name)
 		: ibProperty(cat, name, CreateVariantData())

@@ -64,7 +64,7 @@ bool ibMcpWriteModule(ibValueMetaObjectModuleBase* module, const wxString& text,
 	// argument. "Checked and clean" is true of an EMPTY module too, so on its own it cannot tell a
 	// caller whether their text arrived — this is the field that can, and it costs a getter.
 	result.AddField(wxT("characters"),
-		ibDataValue::Int((s64)module->GetModuleText().Length()));
+		ibDataValue::Int((std::int64_t)module->GetModuleText().Length()));
 
 	result.AddField(wxT("checked"),
 		ibDataValue::Bool(checked.m_outcome == ibScriptCheckOutcome::Checked));
@@ -90,7 +90,7 @@ bool ibMcpWriteModule(ibValueMetaObjectModuleBase* module, const wxString& text,
 	for (const ibDiagnostic& diagnostic : checked.m_diagnostics) {
 
 		std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
-		entry->AddField(wxT("line"), ibDataValue::Int((s64)diagnostic.m_line));
+		entry->AddField(wxT("line"), ibDataValue::Int((std::int64_t)diagnostic.m_line));
 		entry->SetValue(wxT("message"), diagnostic.m_message);
 		if (!diagnostic.m_codeLine.IsEmpty())
 			entry->SetValue(wxT("codeLine"), diagnostic.m_codeLine);
@@ -316,7 +316,7 @@ public:
 		ibMcpSayObject(object, result);
 		result.SetValue(wxT("text"), text);
 		result.AddField(wxT("lines"), ibDataValue::Int(
-			(s64)(text.IsEmpty() ? 0 : text.Freq('\n') + 1)));
+			(std::int64_t)(text.IsEmpty() ? 0 : text.Freq('\n') + 1)));
 
 		// 🛑⭐ WHAT THE PLATFORM WILL CALL IN HERE, which it has always known and never said. A
 		// module is not a free-form file: the platform calls handlers in it BY NAME, with a fixed

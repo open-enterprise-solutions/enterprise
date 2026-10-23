@@ -282,7 +282,7 @@ bool ibMetaDataDataProcessor::LoadFromFile(const wxString& strFileName)
 	in.seekg(0, in.end);
 	std::streamsize fsize = in.tellg();
 	in.seekg(0, in.beg);
-	wxMemoryBuffer tempBuffer(fsize);
+	ibMemoryBuffer tempBuffer(fsize);
 	in.read((char*)tempBuffer.GetWriteBuf(fsize), fsize);
 	tempBuffer.UngetWriteBuf(fsize);
 	in.close();
@@ -297,15 +297,15 @@ bool ibMetaDataDataProcessor::LoadFromTempFile(const wxString& id)
 	if (!file.IsOpened())
 		return false;
 
-	wxMemoryBuffer tempBuffer;
-	wxMemoryBuffer part;
+	ibMemoryBuffer tempBuffer;
+	ibMemoryBuffer part;
 	for (int index = 0; file.ReadPart(index, part); ++index)
 		tempBuffer.AppendData(part.GetData(), part.GetDataLen());
 
 	return LoadFromBuffer(tempBuffer, file.GetName());
 }
 
-bool ibMetaDataDataProcessor::LoadFromBuffer(const wxMemoryBuffer& buffer, const wxString& fullPath)
+bool ibMetaDataDataProcessor::LoadFromBuffer(const ibMemoryBuffer& buffer, const wxString& fullPath)
 {
 	ibReaderMemory readerData(buffer.GetData(), buffer.GetDataLen());
 	if (readerData.eof())
@@ -463,7 +463,7 @@ bool ibMetaDataDataProcessor::LoadCommonTree(ibValueMetaObjectDataProcessor* roo
 	if (!readerMemory)
 		return false;
 
-	u64 meta_id = 0;
+	std::uint64_t meta_id = 0;
 	std::shared_ptr<ibReaderMemory> readerMetaMemory(readerMemory->open_chunk_iterator(meta_id));
 
 	if (!readerMetaMemory)
@@ -524,8 +524,8 @@ bool ibMetaDataDataProcessor::SaveCommonTree(const ibClassID& clsid, ibWriterMem
 		return false;
 
 	ibWriterMemory metaWriter;
-	metaWriter.w_chunk((u64)builder.Root().GetMetaId(), innerWriter.pointer(), innerWriter.size());
-	writerData.w_chunk((u64)clsid, metaWriter.pointer(), metaWriter.size());
+	metaWriter.w_chunk((std::uint64_t)builder.Root().GetMetaId(), innerWriter.pointer(), innerWriter.size());
+	writerData.w_chunk((std::uint64_t)clsid, metaWriter.pointer(), metaWriter.size());
 
 	// ⭐ …and that it has been written out. A watcher shows this as "no longer modified"; nothing
 	// in the tree changed, which is why this is a stage of its own and not MetaDataChanged.

@@ -627,12 +627,12 @@ void ibValueModelTableBox::OnRowDeleted(const ibDataViewItem& item)
 	// …and the client may no longer name it. THE CURSOR STAYS IN ITS PLACE — on the row after it, the last row gone on the
 	// one before: what the desktop's data view did with its selection, the current line does here, since the client's
 	// cursor is the current line.
-	if (const s32 handle = FindRowHandle(item)) {
+	if (const std::int32_t handle = FindRowHandle(item)) {
 		if (m_tableModel != nullptr && m_tableCurrentLine != nullptr && m_tableCurrentLine->GetLineItem() == item) {
 			const auto place = std::find(m_topRows.begin(), m_topRows.end(), handle);
 			if (place != m_topRows.end()) {
 				const auto next = std::next(place);
-				const s32 neighbour = next != m_topRows.end() ? *next : place != m_topRows.begin() ? *std::prev(place) : 0;
+				const std::int32_t neighbour = next != m_topRows.end() ? *next : place != m_topRows.begin() ? *std::prev(place) : 0;
 				const ibDataViewItem neighbourItem = FindRow(neighbour);
 				if (neighbourItem.IsOk())
 					ApplyCurrentLine(m_tableModel->GetRowAt(neighbourItem));
@@ -651,7 +651,7 @@ void ibValueModelTableBox::OnUpdate(ibDataNode& state, ibVisualHost* host)
 	ibValueWindowComposite::OnUpdate(state, host);
 
 	state.SetValue(ibProtocol::ibForm::ibTable::ChoiceMode, IsChoiceMode());
-	state.SetValue(ibProtocol::ibForm::ibTable::ViewMode, static_cast<s32>(m_propertyViewMode->GetValueAsEnum()));
+	state.SetValue(ibProtocol::ibForm::ibTable::ViewMode, static_cast<std::int32_t>(m_propertyViewMode->GetValueAsEnum()));
 
 	// The designer's picture of the form must not attach the runtime data model (a read would issue SQL
 	// against a metadata table that doesn't exist yet, or that the designer session has no runtime to query
@@ -700,12 +700,12 @@ void ibValueModelTableBox::OnUpdate(ibDataNode& state, ibVisualHost* host)
 	// answers its own read anew from it, whatever row it reads around; any other read it fetches. The first Version is
 	// read from the top, as the client's opening read asks for it; so is a later one whose current row has no handle yet.
 	if (m_rowsSentVersion != m_rowsVersion) {
-		s32 anchor = 0;
+		std::int32_t anchor = 0;
 		if (m_rowsSentVersion != -1 && m_tableCurrentLine != nullptr)
 			anchor = FindRowHandle(m_tableCurrentLine->GetLineItem());
-		const s32 count = 105;   // 100 + kBufferSlack — the client's first page when the viewport is unset
+		const std::int32_t count = 105;   // 100 + kBufferSlack — the client's first page when the viewport is unset
 		ibDataNode request, fetched;
-		request.SetValue(ibProtocol::ibForm::ibTable::Direction, static_cast<s32>(ibProtocol::ibForm::ibTable::ibDirection::Reset));
+		request.SetValue(ibProtocol::ibForm::ibTable::Direction, static_cast<std::int32_t>(ibProtocol::ibForm::ibTable::ibDirection::Reset));
 		request.SetValue(ibProtocol::ibForm::ibTable::Anchor, anchor);
 		request.SetValue(ibProtocol::ibForm::ibTable::Parent, 0);
 		request.SetValue(ibProtocol::ibForm::ibTable::Count, count);
@@ -733,7 +733,7 @@ void ibValueModelTableBox::OnUpdate(ibDataNode& state, ibVisualHost* host)
 	// The current row as the handle the client was given — HANDED OUT HERE when it was not yet (a choice form opened on
 	// a value, a created row not read yet): the client reads around the row it names, the rows above it too. A client
 	// that knew no row read "around the current one" as the top of the table, and never read above it.
-	s32 currentRow = 0;
+	std::int32_t currentRow = 0;
 	if (m_tableCurrentLine != nullptr) {
 		const ibDataViewItem item = m_tableCurrentLine->GetLineItem();
 		currentRow = FindRowHandle(item);
@@ -751,13 +751,13 @@ void ibValueModelTableBox::OnUpdate(ibDataNode& state, ibVisualHost* host)
 		m_clientRow = currentRow;
 	}
 	if (m_currentColumn != 0)
-		state.SetValue(ibProtocol::ibForm::ibTable::CurrentColumn, static_cast<s32>(m_currentColumn));
+		state.SetValue(ibProtocol::ibForm::ibTable::CurrentColumn, static_cast<std::int32_t>(m_currentColumn));
 
 	// The cell whose editor is open — while its row is still one the client was given.
 	if (m_editRow != 0 && m_fetchedRows.find(m_editRow) != m_fetchedRows.end()) {
 		ibDataNode& edit = state.Child(ibProtocol::ibForm::ibTable::Edit);
 		edit.SetValue(ibProtocol::ibForm::ibTable::Row, m_editRow);
-		edit.SetValue(ibProtocol::ibForm::ibTable::Column, static_cast<s32>(m_editColumn));
+		edit.SetValue(ibProtocol::ibForm::ibTable::Column, static_cast<std::int32_t>(m_editColumn));
 	}
 
 	// THE CONTEXT MENU — the desktop's OnContextMenu: the table's standard commands, picked back as Action {Id}; a
@@ -771,7 +771,7 @@ void ibValueModelTableBox::OnUpdate(ibDataNode& state, ibVisualHost* host)
 			if (id == wxNOT_FOUND)
 				continue;
 			ibDataNode& entry = menu.AddChild(0, 0);
-			entry.SetValue(ibProtocol::ibForm::ibCommandBar::Id, static_cast<s32>(id));
+			entry.SetValue(ibProtocol::ibForm::ibCommandBar::Id, static_cast<std::int32_t>(id));
 			entry.SetValue(ibProtocol::ibForm::ibCommandBar::Caption, actions.GetCaptionByID(id));
 			entry.SetValue(ibProtocol::ibForm::ibCommandBar::Picture, ibBackendPicture::SendPicture(actions.GetPictureByID(id), GetMetaData()));
 			entry.SetValue(ibProtocol::ibForm::ibCommandBar::Enabled, !(viewOnly && actions.GetModifiesDataByID(id)));
@@ -783,8 +783,8 @@ void ibValueModelTableBox::OnUpdate(ibDataNode& state, ibVisualHost* host)
 //*                              The rows handed out                                *
 //***********************************************************************************
 
-s32 ibValueModelTableBox::HandRow(const ibDataViewItem& item, s32 parentHandle, bool& added,
-	const std::map<const ibDataViewObject*, s32>* handedBefore)
+std::int32_t ibValueModelTableBox::HandRow(const ibDataViewItem& item, std::int32_t parentHandle, bool& added,
+	const std::map<const ibDataViewObject*, std::int32_t>* handedBefore)
 {
 	// A row already handed out keeps its handle — the client may hold it.
 	const auto known = m_fetchedHandles.find(item.GetID());
@@ -794,7 +794,7 @@ s32 ibValueModelTableBox::HandRow(const ibDataViewItem& item, s32 parentHandle, 
 	}
 
 	// …and one handed out before a read anew, read again as the same object, the handle it had (Fetch).
-	s32 handle = 0;
+	std::int32_t handle = 0;
 	if (handedBefore != nullptr) {
 		const auto before = handedBefore->find(item.GetID());
 		if (before != handedBefore->end())
@@ -815,13 +815,13 @@ s32 ibValueModelTableBox::HandRow(const ibDataViewItem& item, s32 parentHandle, 
 	return handle;
 }
 
-ibDataViewItem ibValueModelTableBox::FindRow(s32 handle) const
+ibDataViewItem ibValueModelTableBox::FindRow(std::int32_t handle) const
 {
 	const auto found = handle != 0 ? m_fetchedRows.find(handle) : m_fetchedRows.end();
 	return found != m_fetchedRows.end() ? found->second.m_item : ibDataViewItem();
 }
 
-s32 ibValueModelTableBox::FindRowHandle(const ibDataViewItem& item) const
+std::int32_t ibValueModelTableBox::FindRowHandle(const ibDataViewItem& item) const
 {
 	if (!item.IsOk())
 		return 0;
@@ -839,7 +839,7 @@ s32 ibValueModelTableBox::FindRowHandle(const ibDataViewItem& item) const
 	return 0;
 }
 
-void ibValueModelTableBox::ForgetRow(s32 handle)
+void ibValueModelTableBox::ForgetRow(std::int32_t handle)
 {
 	const auto found = m_fetchedRows.find(handle);
 	if (found == m_fetchedRows.end())
@@ -847,7 +847,7 @@ void ibValueModelTableBox::ForgetRow(s32 handle)
 
 	ForgetChildRows(handle);
 
-	const s32 parentHandle = found->second.m_parent;
+	const std::int32_t parentHandle = found->second.m_parent;
 	if (parentHandle == 0) {
 		const auto top = std::find(m_topRows.begin(), m_topRows.end(), handle);
 		if (top != m_topRows.end())
@@ -856,7 +856,7 @@ void ibValueModelTableBox::ForgetRow(s32 handle)
 	else {
 		const auto parent = m_fetchedRows.find(parentHandle);
 		if (parent != m_fetchedRows.end()) {
-			std::vector<s32>& siblings = parent->second.m_children;
+			std::vector<std::int32_t>& siblings = parent->second.m_children;
 			siblings.erase(std::remove(siblings.begin(), siblings.end(), handle), siblings.end());
 		}
 	}
@@ -865,16 +865,16 @@ void ibValueModelTableBox::ForgetRow(s32 handle)
 	m_fetchedRows.erase(found);
 }
 
-void ibValueModelTableBox::ForgetChildRows(s32 handle)
+void ibValueModelTableBox::ForgetChildRows(std::int32_t handle)
 {
 	const auto found = m_fetchedRows.find(handle);
 	if (found == m_fetchedRows.end())
 		return;
 
 	// Taken off first: each child, forgotten, would take itself off this list while it is walked.
-	const std::vector<s32> children = std::move(found->second.m_children);
+	const std::vector<std::int32_t> children = std::move(found->second.m_children);
 	found->second.m_children.clear();
-	for (const s32 child : children)
+	for (const std::int32_t child : children)
 		ForgetRow(child);
 }
 
@@ -885,10 +885,10 @@ void ibValueModelTableBox::ForgetAllRows()
 	m_topRows.clear();
 }
 
-void ibValueModelTableBox::TrimRows(bool fromBack, s32 keep)
+void ibValueModelTableBox::TrimRows(bool fromBack, std::int32_t keep)
 {
 	while (m_fetchedRows.size() > s_maxFetchedRows && !m_topRows.empty()) {
-		const s32 handle = fromBack ? m_topRows.back() : m_topRows.front();
+		const std::int32_t handle = fromBack ? m_topRows.back() : m_topRows.front();
 		if (handle == keep)
 			break;
 		ForgetRow(handle);
@@ -911,10 +911,10 @@ bool ibValueModelTableBox::Fetch(const ibDataNode& request, ibDataNode& response
 	m_fetching = true;
 	wxON_BLOCK_EXIT_SET(m_fetching, false);
 
-	const s32 direction = request.GetValue<s32>(ibProtocol::ibForm::ibTable::Direction);
-	const s32 anchorHandle = request.GetValue<s32>(ibProtocol::ibForm::ibTable::Anchor);
-	const s32 parentHandle = request.GetValue<s32>(ibProtocol::ibForm::ibTable::Parent);
-	const int count = std::clamp<int>(request.GetValue<s32>(ibProtocol::ibForm::ibTable::Count), 1, s_maxFetchCount);
+	const std::int32_t direction = request.GetValue<std::int32_t>(ibProtocol::ibForm::ibTable::Direction);
+	const std::int32_t anchorHandle = request.GetValue<std::int32_t>(ibProtocol::ibForm::ibTable::Anchor);
+	const std::int32_t parentHandle = request.GetValue<std::int32_t>(ibProtocol::ibForm::ibTable::Parent);
+	const int count = std::clamp<int>(request.GetValue<std::int32_t>(ibProtocol::ibForm::ibTable::Count), 1, s_maxFetchCount);
 
 	// THE LEVEL — the container the client opened (a tree's expanded row, the folder drilled into), else
 	// the top. A FLAT List view passes the ignore-parent SENTINEL, so the model walks the WHOLE table in one
@@ -949,8 +949,8 @@ bool ibValueModelTableBox::Fetch(const ibDataNode& request, ibDataNode& response
 	// THE ROWS HANDED OUT BEFORE A READ ANEW — kept alive through it, so no object freed meanwhile comes back at the
 	// same address as another row: one read again as the SAME object (a table in memory hands out its own rows) keeps
 	// its handle, and the client's cursor stays on it through the re-read instead of going off and on with every change.
-	std::map<s32, ibFetchedRow> rowsBefore;
-	std::map<const ibDataViewObject*, s32> handlesBefore;
+	std::map<std::int32_t, ibFetchedRow> rowsBefore;
+	std::map<const ibDataViewObject*, std::int32_t> handlesBefore;
 	switch (dir) {
 	case ibFetchDirection::Forward:
 		fetched = m_tableModel->GetNextFetch(scope, anchorItem, count, items);
@@ -991,7 +991,7 @@ bool ibValueModelTableBox::Fetch(const ibDataNode& request, ibDataNode& response
 		}
 		// (protocol 4) …AND THE ROWS AHEAD OF THE PAGE, when the client asks for them (Before) — in the same answer, first,
 		// so a row kept mid-view costs no second fetch.
-		const int before = std::clamp<int>(request.GetValue<s32>(ibProtocol::ibForm::ibTable::Before), 0, s_maxFetchCount);
+		const int before = std::clamp<int>(request.GetValue<std::int32_t>(ibProtocol::ibForm::ibTable::Before), 0, s_maxFetchCount);
 		if (before > 0) {
 			unsigned int above = 0;
 			if (fetched > 0) {
@@ -1002,7 +1002,7 @@ bool ibValueModelTableBox::Fetch(const ibDataNode& request, ibDataNode& response
 				items = rows;
 				ahead = above;
 			}
-			response.SetValue(ibProtocol::ibForm::ibTable::Before, static_cast<s32>(above));
+			response.SetValue(ibProtocol::ibForm::ibTable::Before, static_cast<std::int32_t>(above));
 		}
 		break;
 	}
@@ -1028,8 +1028,8 @@ bool ibValueModelTableBox::Fetch(const ibDataNode& request, ibDataNode& response
 
 	const ibDataViewItem current = m_tableCurrentLine != nullptr
 		? m_tableCurrentLine->GetLineItem() : ibDataViewItem();
-	s32 currentHandle = 0, firstHandle = 0;
-	std::vector<s32> newTopRows;
+	std::int32_t currentHandle = 0, firstHandle = 0;
+	std::vector<std::int32_t> newTopRows;
 
 	for (size_t idx = 0; idx < items.GetCount(); idx++) {
 
@@ -1038,7 +1038,7 @@ bool ibValueModelTableBox::Fetch(const ibDataNode& request, ibDataNode& response
 			continue;
 
 		bool added = false;
-		const s32 handle = HandRow(item, parentHandle, added, &handlesBefore);
+		const std::int32_t handle = HandRow(item, parentHandle, added, &handlesBefore);
 		if (added && parentHandle == 0)
 			newTopRows.push_back(handle);
 		if (firstHandle == 0 && idx >= ahead)
@@ -1098,7 +1098,7 @@ bool ibValueModelTableBox::Fetch(const ibDataNode& request, ibDataNode& response
 
 	// Over the limit, the rows furthest from where the client reads go — never the top-level row this
 	// portion was read under.
-	s32 keep = parentHandle;
+	std::int32_t keep = parentHandle;
 	for (auto up = m_fetchedRows.find(keep); up != m_fetchedRows.end() && up->second.m_parent != 0;
 		up = m_fetchedRows.find(keep))
 		keep = up->second.m_parent;
@@ -1124,8 +1124,8 @@ bool ibValueModelTableBox::OnClientEvent(ibProtocol::ibEvent::ibKind event, cons
 
 	switch (event) {
 	case ibProtocol::ibEvent::ibKind::Row: {
-		const s32 rowHandle = args.GetValue<s32>(ibProtocol::ibEvent::Row);
-		const ibFormID columnId = onCell ? args.GetValue<s32>(ibProtocol::ibEvent::Column) : m_currentColumn;
+		const std::int32_t rowHandle = args.GetValue<std::int32_t>(ibProtocol::ibEvent::Row);
+		const ibFormID columnId = onCell ? args.GetValue<std::int32_t>(ibProtocol::ibEvent::Column) : m_currentColumn;
 		// The cursor moved off the cell being edited: its editor is closed, and what was typed and not
 		// committed (Change) is dropped.
 		if (rowHandle != m_editRow || columnId != m_editColumn)
@@ -1138,7 +1138,7 @@ bool ibValueModelTableBox::OnClientEvent(ibProtocol::ibEvent::ibKind event, cons
 	case ibProtocol::ibEvent::ibKind::Open:
 		if (onCell)
 			return OnCellEvent(event, args);
-		OnRowActivated(args.GetValue<s32>(ibProtocol::ibEvent::Row));
+		OnRowActivated(args.GetValue<std::int32_t>(ibProtocol::ibEvent::Row));
 		return true;
 	case ibProtocol::ibEvent::ibKind::Input:
 	case ibProtocol::ibEvent::ibKind::Change:
@@ -1146,20 +1146,20 @@ bool ibValueModelTableBox::OnClientEvent(ibProtocol::ibEvent::ibKind event, cons
 	case ibProtocol::ibEvent::ibKind::Clear:
 		return OnCellEvent(event, args);
 	case ibProtocol::ibEvent::ibKind::Sort:
-		OnColumnClick(args.GetValue<s32>(ibProtocol::ibEvent::Column));
+		OnColumnClick(args.GetValue<std::int32_t>(ibProtocol::ibEvent::Column));
 		return true;
 	case ibProtocol::ibEvent::ibKind::Move:
-		return OnColumnMoved(args.GetValue<s32>(ibProtocol::ibEvent::Column), args.GetValue<s32>(ibProtocol::ibEvent::Holder),
-			static_cast<unsigned int>(args.GetValue<s32>(ibProtocol::ibEvent::Position)));
+		return OnColumnMoved(args.GetValue<std::int32_t>(ibProtocol::ibEvent::Column), args.GetValue<std::int32_t>(ibProtocol::ibEvent::Holder),
+			static_cast<unsigned int>(args.GetValue<std::int32_t>(ibProtocol::ibEvent::Position)));
 	case ibProtocol::ibEvent::ibKind::Resize:
-		OnColumnResized(args.GetValue<s32>(ibProtocol::ibEvent::Column), args.GetValue<s32>(ibProtocol::ibEvent::Width));
+		OnColumnResized(args.GetValue<std::int32_t>(ibProtocol::ibEvent::Column), args.GetValue<std::int32_t>(ibProtocol::ibEvent::Width));
 		return true;
 	case ibProtocol::ibEvent::ibKind::Action: {
 		// One of the commands its context menu offered — the desktop's OnCommandMenu; one it did not offer, or greyed
 		// there, is not done.
 		if (m_formOwner == nullptr)
 			return false;
-		const ibActionID id = args.GetValue<s32>(ibProtocol::ibEvent::Id);
+		const ibActionID id = args.GetValue<std::int32_t>(ibProtocol::ibEvent::Id);
 		const ibStandardCommandSet actions = GetStandardCommands(m_formOwner->GetTypeForm());
 		bool offered = false;
 		for (unsigned int idx = 0; idx < actions.GetCount() && !offered; idx++)
@@ -1187,8 +1187,8 @@ bool ibValueModelTableBox::IsSubscribed(ibProtocol::ibEvent::ibKind event) const
 
 bool ibValueModelTableBox::OnCellEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args)
 {
-	const s32 rowHandle = args.GetValue<s32>(ibProtocol::ibEvent::Row);
-	ibValueModelTableBoxColumn* const column = FindColumn(args.GetValue<s32>(ibProtocol::ibEvent::Column));
+	const std::int32_t rowHandle = args.GetValue<std::int32_t>(ibProtocol::ibEvent::Row);
+	ibValueModelTableBoxColumn* const column = FindColumn(args.GetValue<std::int32_t>(ibProtocol::ibEvent::Column));
 	if (column == nullptr || !OnCurrentRowChanged(rowHandle))
 		return false;
 	OnCurrentColumnChanged(column->GetControlID());
@@ -1220,7 +1220,7 @@ bool ibValueModelTableBox::OnCellEvent(ibProtocol::ibEvent::ibKind event, const 
 	}
 }
 
-bool ibValueModelTableBox::OnCurrentRowChanged(s32 rowHandle)
+bool ibValueModelTableBox::OnCurrentRowChanged(std::int32_t rowHandle)
 {
 	// The client's cursor stands there now, whatever the script answers below.
 	m_clientRow = rowHandle;
@@ -1345,7 +1345,7 @@ void ibValueModelTableBox::OnViewModeChanged(ibDataViewViewMode viewMode)
 	m_drillItem = ibDataViewItem();
 }
 
-void ibValueModelTableBox::OnRowActivated(s32 rowHandle)
+void ibValueModelTableBox::OnRowActivated(std::int32_t rowHandle)
 {
 	// The row activated is the one the cursor stands on — a choice returns the current line.
 	if (!OnCurrentRowChanged(rowHandle))
@@ -1382,7 +1382,7 @@ ibFormID ibValueModelTableBox::ActivateRow(const ibDataViewItem& item)
 	return 0;
 }
 
-bool ibValueModelTableBox::OnCellEditStarting(s32 rowHandle, const ibFormID& columnId) const
+bool ibValueModelTableBox::OnCellEditStarting(std::int32_t rowHandle, const ibFormID& columnId) const
 {
 	// A cell whose column is read-only (a dot-path / header column, a view-only form) or whose row the model
 	// does not let edit (a group heading, a list row) takes no editor — the window's veto, said before it opens.

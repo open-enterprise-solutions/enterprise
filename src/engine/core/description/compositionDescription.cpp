@@ -131,7 +131,7 @@ void WriteSelectedList(ibDataNode& node, const wxString& name,
 		// ⚠ `kKindName` is spelled on a node of ANOTHER class above (a filter group's); a field node
 		// has no kind of its own, so the word is free here and means what it says.
 		if (list[i].m_kind != ibSelectedFieldKind_Field)
-			row.SetValue<s32>(kKindName, static_cast<s32>(list[i].m_kind));
+			row.SetValue<std::int32_t>(kKindName, static_cast<std::int32_t>(list[i].m_kind));
 	}
 }
 
@@ -148,7 +148,7 @@ void ReadSelectedList(const ibDataNode& node, const wxString& name,
 		ibSelectedFieldDescription row;
 		// A record that predates the kind has none — and it is a FIELD, which is what every one of
 		// them was. (ibDataNode answers a missing value with the type's default, and 0 IS Field.)
-		row.m_kind = static_cast<ibSelectedFieldKind>(child.GetValue<s32>(kKindName));
+		row.m_kind = static_cast<ibSelectedFieldKind>(child.GetValue<std::int32_t>(kKindName));
 		row.m_path = child.GetValue<wxString>(kPathName);
 		list.push_back(std::move(row));
 	}
@@ -166,7 +166,7 @@ void ReadSelectedList(const ibDataNode& node, const wxString& name,
 // ===========================================================================
 bool ibLevelDescriptionMemory::WriteNode(ibDataNode& node, const ibLevelDescription& level)
 {
-	node.SetValue<s32>(kLevelKindName, static_cast<s32>(level.m_kind));
+	node.SetValue<std::int32_t>(kLevelKindName, static_cast<std::int32_t>(level.m_kind));
 	WriteSelectedList(node, kSelectedNode, level.m_selected);
 
 	// ⭐ ITS SETTINGS LIVE WHERE THE LEVEL DOES (Max), so they are written INSIDE it — through the ONE
@@ -189,7 +189,7 @@ bool ibLevelDescriptionMemory::WriteNode(ibDataNode& node, const ibLevelDescript
 
 bool ibLevelDescriptionMemory::ReadNode(const ibDataNode& node, ibLevelDescription& level)
 {
-	level.m_kind = static_cast<ibCompositionLevelKind>(node.GetValue<s32>(kLevelKindName));
+	level.m_kind = static_cast<ibCompositionLevelKind>(node.GetValue<std::int32_t>(kLevelKindName));
 	ReadSelectedList(node, kSelectedNode, level.m_selected);
 
 	// ITS SETTINGS, back the way they were written — through the one pair. The filter comes back as
@@ -241,7 +241,7 @@ bool ibOutputDescriptionMemory::WriteNode(ibDataNode& node, const ibOutputDescri
 	// ⭐ AND WHAT IT IS. Stored because it is a DECISION — "add grouping" or "add table" — and a
 	// table that has not been filled in yet is empty on both axes: read back off the content, it
 	// would come up a grouping and the person's second axis would have nowhere to go.
-	node.SetValue<s32>(kOutputKindName, static_cast<s32>(output.m_kind));
+	node.SetValue<std::int32_t>(kOutputKindName, static_cast<std::int32_t>(output.m_kind));
 	WriteSelectedList(node, kSelectedNode, output.m_selected);
 	// ITS SETTINGS, written the way a level writes them — one storey up, same shape, same pair.
 	ibSettingsDescriptionMemory::WriteNode(node, output.m_settings);
@@ -263,7 +263,7 @@ bool ibOutputDescriptionMemory::ReadNode(const ibDataNode& node, ibOutputDescrip
 	// ⚠ A RECORD WRITTEN BEFORE THE KIND EXISTED reads back 0 — Grouping — and that is right for
 	// every one of them except a table, which could not be authored then. So the content answers
 	// where the record is silent: a stored column axis means a table, whatever the number says.
-	output.m_kind = static_cast<ibCompositionOutputKind>(node.GetValue<s32>(kOutputKindName));
+	output.m_kind = static_cast<ibCompositionOutputKind>(node.GetValue<std::int32_t>(kOutputKindName));
 	if (output.m_kind == ibCompositionOutputKind::Grouping && !output.m_columnGroups.empty())
 		output.m_kind = ibCompositionOutputKind::Table;
 	return true;
@@ -373,7 +373,7 @@ void ibWriteOperand(ibDataNode& node, const wxString& prefix, const ibFilterOper
 {
 	node.SetValue<wxString>(prefix + wxT("Path"), side.m_path);
 	node.SetValue<wxString>(prefix + wxT("Text"), side.m_presentation);
-	node.SetValue<s32>(prefix + wxT("Leaf"), static_cast<s32>(side.m_leafId));
+	node.SetValue<std::int32_t>(prefix + wxT("Leaf"), static_cast<std::int32_t>(side.m_leafId));
 	// The TYPE is deliberately NOT packed — it is derived from the source the field is bound to, and
 	// a saved setting outlives the schema it was saved against. The value goes back as it was packed;
 	// nothing stored (Undefined) writes nothing.
@@ -385,7 +385,7 @@ void ibReadOperand(const ibDataNode& node, const wxString& prefix, ibFilterOpera
 {
 	side.m_path         = node.GetValue<wxString>(prefix + wxT("Path"));
 	side.m_presentation = node.GetValue<wxString>(prefix + wxT("Text"));
-	side.m_leafId       = static_cast<ibMetaID>(node.GetValue<s32>(prefix + wxT("Leaf")));
+	side.m_leafId       = static_cast<ibMetaID>(node.GetValue<std::int32_t>(prefix + wxT("Leaf")));
 	side.m_type         = ibTypeDescription();
 	side.m_value        = ibDataNode();
 	if (const ibDataNode* value = node.FindChild(prefix + wxT("Value")))
@@ -402,16 +402,16 @@ void ibWriteFilterNodes(ibDataNode& into, const std::vector<ibFilterNodeDescript
 	for (size_t i = 0; i < nodes.size(); ++i) {
 		const ibFilterNodeDescription& item = nodes[i];
 		ibDataNode& line = into.AddChild(g_filterNodeClsid, static_cast<ibMetaID>(i));
-		line.SetValue<s32>(kNodeKindName, static_cast<s32>(item.m_kind));
-		line.SetValue<s32>(kUseName, item.m_use ? 1 : 0);
-		line.SetValue<s32>(kDisplayName, static_cast<s32>(item.m_display));
+		line.SetValue<std::int32_t>(kNodeKindName, static_cast<std::int32_t>(item.m_kind));
+		line.SetValue<std::int32_t>(kUseName, item.m_use ? 1 : 0);
+		line.SetValue<std::int32_t>(kDisplayName, static_cast<std::int32_t>(item.m_display));
 		line.SetValue<wxString>(kTextName, item.m_presentation);
 		if (item.m_kind == ibFilterNodeKind_Group) {
-			line.SetValue<s32>(kGroupKindName, static_cast<s32>(item.m_groupKind));
+			line.SetValue<std::int32_t>(kGroupKindName, static_cast<std::int32_t>(item.m_groupKind));
 			ibWriteFilterNodes(line, item.m_children);
 		}
 		else {
-			line.SetValue<s32>(kGroupKindName, static_cast<s32>(item.m_comparison));
+			line.SetValue<std::int32_t>(kGroupKindName, static_cast<std::int32_t>(item.m_comparison));
 			ibWriteOperand(line, wxT("L"), item.m_left);
 			ibWriteOperand(line, wxT("R"), item.m_right);
 		}
@@ -422,16 +422,16 @@ void ibReadFilterNodes(const ibDataNode& from, std::vector<ibFilterNodeDescripti
 {
 	for (const ibDataNode& line : from.Children()) {
 		ibFilterNodeDescription item;
-		item.m_kind    = static_cast<ibFilterNodeKind>(line.GetValue<s32>(kNodeKindName));
-		item.m_use     = line.GetValue<s32>(kUseName) != 0;
-		item.m_display = static_cast<ibFilterDisplayMode>(line.GetValue<s32>(kDisplayName));
+		item.m_kind    = static_cast<ibFilterNodeKind>(line.GetValue<std::int32_t>(kNodeKindName));
+		item.m_use     = line.GetValue<std::int32_t>(kUseName) != 0;
+		item.m_display = static_cast<ibFilterDisplayMode>(line.GetValue<std::int32_t>(kDisplayName));
 		item.m_presentation = line.GetValue<wxString>(kTextName);
 		if (item.m_kind == ibFilterNodeKind_Group) {
-			item.m_groupKind = static_cast<ibFilterGroupKind>(line.GetValue<s32>(kGroupKindName));
+			item.m_groupKind = static_cast<ibFilterGroupKind>(line.GetValue<std::int32_t>(kGroupKindName));
 			ibReadFilterNodes(line, item.m_children);
 		}
 		else {
-			item.m_comparison = static_cast<ibComparisonKind>(line.GetValue<s32>(kGroupKindName));
+			item.m_comparison = static_cast<ibComparisonKind>(line.GetValue<std::int32_t>(kGroupKindName));
 			ibReadOperand(line, wxT("L"), item.m_left);
 			ibReadOperand(line, wxT("R"), item.m_right);
 		}
@@ -447,7 +447,7 @@ bool ibFilterDescriptionMemory::ReadNode(const ibDataNode& node, ibFilterDescrip
 	if (sub == nullptr)
 		return true;   // no filter written is not a failure — it is a composition without one
 
-	filter.m_rootKind = static_cast<ibFilterGroupKind>(sub->GetValue<s32>(kKindName));
+	filter.m_rootKind = static_cast<ibFilterGroupKind>(sub->GetValue<std::int32_t>(kKindName));
 	ibReadFilterNodes(*sub, filter.m_nodes);
 	return true;
 }
@@ -458,7 +458,7 @@ bool ibFilterDescriptionMemory::WriteNode(ibDataNode& node, const ibFilterDescri
 		return true;   // nothing to write, and absence reads back as absence
 
 	ibDataNode& sub = node.Child(kFilterNode);
-	sub.SetValue<s32>(kKindName, static_cast<s32>(filter.m_rootKind));
+	sub.SetValue<std::int32_t>(kKindName, static_cast<std::int32_t>(filter.m_rootKind));
 	ibWriteFilterNodes(sub, filter.m_nodes);
 	return true;
 }
@@ -476,7 +476,7 @@ bool ibSortDescriptionMemory::ReadNode(const ibDataNode& node, ibSortDescription
 		const wxString field = line.GetValue<wxString>(kFieldName);
 		if (field.IsEmpty())
 			continue;
-		sort.Append(field, line.GetValue<s32>(kDirName) != 0);
+		sort.Append(field, line.GetValue<std::int32_t>(kDirName) != 0);
 	}
 	return true;
 }
@@ -491,7 +491,7 @@ bool ibSortDescriptionMemory::WriteNode(ibDataNode& node, const ibSortDescriptio
 			continue;
 		ibDataNode& line = sub.AddChild(g_orderNodeClsid, static_cast<ibMetaID>(i));
 		line.SetValue<wxString>(kFieldName, sort.m_lines[i].m_path);
-		line.SetValue<s32>(kDirName, sort.m_lines[i].m_ascending ? 1 : 0);
+		line.SetValue<std::int32_t>(kDirName, sort.m_lines[i].m_ascending ? 1 : 0);
 	}
 	return true;
 }
@@ -512,7 +512,7 @@ bool ibGroupDescriptionMemory::ReadNode(const ibDataNode& node, ibGroupDescripti
 		const wxString field = line.GetValue<wxString>(kFieldName);
 		if (field.IsEmpty())
 			continue;
-		group.Append(field, static_cast<ibQueryDimUnfold>(line.GetValue<s32>(kGroupKindName)));
+		group.Append(field, static_cast<ibQueryDimUnfold>(line.GetValue<std::int32_t>(kGroupKindName)));
 		// AND ITS PERIODICITY, when it has one. A record written before this existed has no unit,
 		// which reads back as "not by periods" — the same answer the member's own IsOk gives.
 		ibGroupPeriodsDescription& periods = group.m_lines.back().m_periods;
@@ -533,7 +533,7 @@ bool ibGroupDescriptionMemory::WriteNode(ibDataNode& node, const ibGroupDescript
 			continue;
 		ibDataNode& line = sub.AddChild(g_groupNodeClsid, static_cast<ibMetaID>(i));
 		line.SetValue<wxString>(kFieldName, group.m_lines[i].m_path);
-		line.SetValue<s32>(kGroupKindName, static_cast<s32>(group.m_lines[i].m_kind));
+		line.SetValue<std::int32_t>(kGroupKindName, static_cast<std::int32_t>(group.m_lines[i].m_kind));
 		// ⭐ THE PERIODICITY, WRITTEN ONLY WHEN THERE IS ONE — three empty properties on every
 		// ordinary grouping line would be three ways for a file to look different without meaning
 		// anything different, and equality is what "modified" is decided by.
@@ -609,7 +609,7 @@ bool ibCompositionDescriptionMemory::ReadNode(const ibDataNode& node, ibComposit
 	// by a list before one was picked) simply has no such property, and wxNOT_FOUND is what "nothing
 	// picked" IS. Nothing is resolved here — that is the whole reason the id is stored at all.
 	composition.m_mainTable = wxNOT_FOUND;
-	node.GetValue<s32>(kMainTableName, composition.m_mainTable);   // …left as it is when the name is absent
+	node.GetValue<std::int32_t>(kMainTableName, composition.m_mainTable);   // …left as it is when the name is absent
 	composition.m_query     = node.GetValue<wxString>(kQueryName);
 
 	// ⭐ THE VARIANTS ARE THE SETTINGS. A record written before they existed carries ONE set and no
@@ -642,7 +642,7 @@ bool ibCompositionDescriptionMemory::WriteNode(ibDataNode& node, const ibComposi
 	// source IS the query"). So the table is written only when there is one, and its absence is a
 	// legitimate, complete record rather than a missing field.
 	if (composition.HasMainTable())
-		node.SetValue<s32>(kMainTableName, static_cast<s32>(composition.m_mainTable));
+		node.SetValue<std::int32_t>(kMainTableName, static_cast<std::int32_t>(composition.m_mainTable));
 	node.SetValue<wxString>(kQueryName, composition.m_query);
 
 	// …and there is always at least one variant to write, so there is no second road out of here.
@@ -722,7 +722,7 @@ void ReadParameterValues(const ibDataNode& node, ibClassID clsid, const std::vec
 	for (const ibDataNode& child : node.Children()) {
 		if (child.GetClsid() != clsid)
 			continue;
-		const Parameter parameter = static_cast<Parameter>(child.GetValue<s32>(kAppearanceParameter));
+		const Parameter parameter = static_cast<Parameter>(child.GetValue<std::int32_t>(kAppearanceParameter));
 		if (std::find(known.begin(), known.end(), parameter) == known.end())
 			continue;
 		ibParameterValueDescription<Parameter> value;
@@ -740,7 +740,7 @@ void WriteParameterValues(ibDataNode& node, ibClassID clsid, const ibParameterVa
 	for (size_t i = 0; i < values.m_values.size(); ++i) {
 		const ibParameterValueDescription<Parameter>& value = values.m_values[i];
 		ibDataNode& sub = node.AddChild(clsid, static_cast<ibMetaID>(i));
-		sub.SetValue<s32>(kAppearanceParameter, static_cast<s32>(value.m_parameter));
+		sub.SetValue<std::int32_t>(kAppearanceParameter, static_cast<std::int32_t>(value.m_parameter));
 		sub.SetValue<bool>(kAppearanceUse, value.m_use);
 		sub.Child(kAppearanceValue) = value.m_value;
 	}
@@ -840,8 +840,8 @@ bool ibParameterDescriptionMemory::ReadNode(const ibDataNode& node,
 		if (parameter.m_name.IsEmpty())
 			continue;   // a nameless parameter answers nothing
 		parameter.m_expression   = child.GetValue<wxString>(kParamExpression);
-		parameter.m_userSettable = child.GetValue<s32>(kParamUser) != 0;
-		parameter.m_fromQuery    = child.GetValue<s32>(kParamFromQuery) != 0;
+		parameter.m_userSettable = child.GetValue<std::int32_t>(kParamUser) != 0;
+		parameter.m_fromQuery    = child.GetValue<std::int32_t>(kParamFromQuery) != 0;
 		// ⭐⭐ THE NODE IS TAKEN AS IT IS. Nothing is built here: a parameter's value is a BLOB in this
 		// tier, and it is read into a runtime value by whoever runs the composition, against the
 		// configuration it runs in. Building one here made a reference — a runtime object — in the
@@ -871,8 +871,8 @@ bool ibParameterDescriptionMemory::WriteNode(ibDataNode& node,
 		sub.Child(kParamValue) = parameter.m_value;
 		if (!full)
 			continue;   // a VARIANT keeps only what it owns — see the header
-		sub.SetValue<s32>(kParamUser, parameter.m_userSettable ? 1 : 0);
-		sub.SetValue<s32>(kParamFromQuery, parameter.m_fromQuery ? 1 : 0);
+		sub.SetValue<std::int32_t>(kParamUser, parameter.m_userSettable ? 1 : 0);
+		sub.SetValue<std::int32_t>(kParamFromQuery, parameter.m_fromQuery ? 1 : 0);
 		ibDataValue declared;
 		ibTypeDescriptionMemory::WriteNode(declared, parameter.m_type);
 		sub.SetProperty(kParamType, declared);
@@ -1110,12 +1110,12 @@ void ReadSelectFields(const ibDataNode& node, std::vector<ibFieldDescription>& f
 		// THE ROLE IS WRITTEN ONLY WHEN A PERSON SAID ONE — its presence is what `m_useRole` means, so an
 		// entry written before roles existed reads as "the source's", which is what it always was.
 		if (child.FindField(kFieldInfoRole) != nullptr) {
-			const s32 role = child.GetValue<s32>(kFieldInfoRole);
-			if (role >= static_cast<s32>(ibBalanceRole::None) && role <= static_cast<s32>(ibBalanceRole::Closing)) {
+			const std::int32_t role = child.GetValue<std::int32_t>(kFieldInfoRole);
+			if (role >= static_cast<std::int32_t>(ibBalanceRole::None) && role <= static_cast<std::int32_t>(ibBalanceRole::Closing)) {
 				field.m_useRole = true;
 				field.m_role    = static_cast<ibBalanceRole>(role);
 				if (field.m_role == ibBalanceRole::Moment)
-					field.m_periodRank = child.GetValue<s32>(kFieldInfoPeriodRank);   // absent reads as 0: in order
+					field.m_periodRank = child.GetValue<std::int32_t>(kFieldInfoPeriodRank);   // absent reads as 0: in order
 			}
 		}
 		if (const ibDataNode* appearance = child.FindChild(kFieldInfoAppearance))
@@ -1155,9 +1155,9 @@ void WriteSelectFields(ibDataNode& node, const std::vector<ibFieldDescription>& 
 			sub.SetValue<wxString>(kFieldInfoTitle, fields[i].m_title);
 		}
 		if (fields[i].m_useRole)
-			sub.SetValue<s32>(kFieldInfoRole, static_cast<s32>(fields[i].m_role));
+			sub.SetValue<std::int32_t>(kFieldInfoRole, static_cast<std::int32_t>(fields[i].m_role));
 		if (fields[i].m_useRole && fields[i].m_periodRank > 0)
-			sub.SetValue<s32>(kFieldInfoPeriodRank, fields[i].m_periodRank);
+			sub.SetValue<std::int32_t>(kFieldInfoPeriodRank, fields[i].m_periodRank);
 		if (!fields[i].m_appearance.IsEmpty())
 			WriteAppearance(sub.Child(kFieldInfoAppearance), fields[i].m_appearance);
 	}

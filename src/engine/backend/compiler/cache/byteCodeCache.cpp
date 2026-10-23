@@ -15,7 +15,7 @@
 #include "backend/databaseLayer/databaseLayer.h"
 #include "backend/databaseLayer/databaseResultSet.h"
 #include "backend/databaseLayer/databaseQueryBuilder.h"   // L2 door: descriptor pilot
-#include "core/fileSystem/fs.h"
+#include "core/memory/memoryStream.h"
 #include "core/utils/md5.hpp"      // the key is digested to the width its column declares
 #include "backend/compiler/byteCodeFormat.h"   // kAOTFormatVersion — one half of the engine key
 #include "engineFingerprintBuild.h"            // kEngineFingerprint — the other, generated at build
@@ -79,7 +79,7 @@ bool ibByteCodeCache::Save(const ibByteCode& bc, const wxString& configDigest)
 	// want to leave the previous row deleted.
 	ibWriterMemory writer;
 	if (!bc.SerializeAOT(writer)) return false;
-	const wxMemoryBuffer blob = writer.buffer();
+	const ibMemoryBuffer blob = writer.buffer();
 
 	const wxString descIdStr = bc.m_id;
 	const wxString bcVerStr  = bc.m_version;
@@ -240,7 +240,7 @@ bool ibByteCodeCache::Load(ibByteCode& outBc, const ibGuid& descId, const wxStri
 			// caller of it, so the hatch is gone with this line. By name rather than by position for
 			// the ordinary reason: the projection above is what decides which column that is, and a
 			// number here would go on compiling after somebody adds a second one.
-			wxMemoryBuffer blob;
+			ibMemoryBuffer blob;
 			res.GetResultBlob(wxT("bc_blob"), blob);
 			if (blob.GetDataLen() > 0) {
 				ibReaderMemory reader(blob);

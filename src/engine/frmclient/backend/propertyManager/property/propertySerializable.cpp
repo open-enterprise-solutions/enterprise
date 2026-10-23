@@ -6,8 +6,8 @@
 
 namespace {
 
-// A u64 as the wire carries it — a decimal (past what a JSON number keeps); none: 0.
-u64 ReceiveU64(const ibDataNode& node, const char* name)
+// A std::uint64_t as the wire carries it — a decimal (past what a JSON number keeps); none: 0.
+std::uint64_t ReceiveU64(const ibDataNode& node, const char* name)
 {
 	unsigned long long value = 0;
 	node.GetValue<wxString>(name).ToULongLong(&value);
@@ -72,7 +72,7 @@ ibPropertySerializable::ibPropertySerializable(ibPropertyCategory* cat, ibDataNo
 		}
 		if (choice.FindField(ibProtocol::ibSchema::ibProperties::Id) == nullptr)
 			continue;
-		const long id = choice.GetValue<s32>(ibProtocol::ibSchema::ibProperties::Id);
+		const long id = choice.GetValue<std::int32_t>(ibProtocol::ibSchema::ibProperties::Id);
 		m_choices.Add(id, choice.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Title), wxEmptyString, wxVariant(id),
 			ibProtocolPicture(choice.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Picture)), ReceiveU64(choice, ibProtocol::ibSchema::ibProperties::Data));
 	}

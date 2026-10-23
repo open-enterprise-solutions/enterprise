@@ -1123,7 +1123,7 @@ namespace ibProtocol {
 			inline constexpr const char* ReadOnly     = "ReadOnly";
 			inline constexpr const char* Picture      = "Picture";
 			inline constexpr const char* Data         = "Data";           // a choice's data (ibPropertyChoiceList::GetData),
-			                                                              // a u64 as a decimal
+			                                                              // a std::uint64_t as a decimal
 			inline constexpr const char* Multiple     = "Multiple";
 			inline constexpr const char* Classes      = "Classes";        // the classes its choices' Data names (Type, Name,
 			                                                              // Picture) — a source's, the type it holds

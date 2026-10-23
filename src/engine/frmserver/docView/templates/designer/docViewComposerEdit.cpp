@@ -147,7 +147,7 @@ wxIMPLEMENT_DYNAMIC_CLASS(ibComposerCompositionDocument, ibMetaDocument);
 
 bool ibFetchComposerRequest(const ibDataNode& request, ibDataNode& response, const ibMetaData* metaData)
 {
-	switch (static_cast<ibProtocol::ibView::ibComposer::ibRequest>(request.GetValue<s32>(ibProtocol::ibView::ibComposer::Kind))) {
+	switch (static_cast<ibProtocol::ibView::ibComposer::ibRequest>(request.GetValue<std::int32_t>(ibProtocol::ibView::ibComposer::Kind))) {
 	case ibProtocol::ibView::ibComposer::ibRequest::Fields:
 		WriteQueryFields(response, request.GetValue<wxString>(ibProtocol::ibView::ibComposer::Text), metaData);
 		return true;
@@ -164,7 +164,7 @@ bool ibFetchComposerRequest(const ibDataNode& request, ibDataNode& response, con
 	}
 	case ibProtocol::ibView::ibComposer::ibRequest::Source:
 		WriteListSourceFields(response, request.FindField(ibProtocol::ibView::ibComposer::Id) != nullptr
-			? static_cast<ibMetaID>(request.GetValue<s32>(ibProtocol::ibView::ibComposer::Id)) : static_cast<ibMetaID>(wxNOT_FOUND),
+			? static_cast<ibMetaID>(request.GetValue<std::int32_t>(ibProtocol::ibView::ibComposer::Id)) : static_cast<ibMetaID>(wxNOT_FOUND),
 			request.GetValue<wxString>(ibProtocol::ibView::ibComposer::Text), metaData);
 		return true;
 	default:

@@ -23,7 +23,7 @@ public:
 	// Save {Guid, Name, FullName, Language, Roles[, Password]} — the item's OK: the language and the roles found in the
 	// configuration by their guids, the password hashed (absent: the stored one kept), and refused when no user would
 	// keep a role with the administration rights; Remove {Guid} — the list's Delete. Done in the asking.
-	virtual std::function<void()> Command(const ibSession& session, s32 command,
+	virtual std::function<void()> Command(const ibSession& session, std::int32_t command,
 		const ibDataNode& args, ibProtocol::ibRefusal& refusal, wxString& error) const override;
 };
 

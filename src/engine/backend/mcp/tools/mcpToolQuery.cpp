@@ -387,8 +387,8 @@ public:
 
 		wxString complaint;
 		wxString stage;
-		s32      line = 0;
-		s32      column = 0;
+		std::int32_t      line = 0;
+		std::int32_t      column = 0;
 
 		// Kept beyond the try: the composer verdict below is read off the AST that was just
 		// parsed, rather than off the text — a JOIN inside a string literal is not a join.
@@ -428,14 +428,14 @@ public:
 		catch (const ibBackendQueryNameException& e) {
 			stage = wxT("names");
 			complaint = e.GetErrorDescription();
-			line = (s32)e.GetLine();
-			column = (s32)e.GetColumn();
+			line = (std::int32_t)e.GetLine();
+			column = (std::int32_t)e.GetColumn();
 		}
 		catch (const ibBackendQuerySourceException& e) {
 			stage = wxT("syntax");
 			complaint = e.GetErrorDescription();
-			line = (s32)e.GetLine();
-			column = (s32)e.GetColumn();
+			line = (std::int32_t)e.GetLine();
+			column = (std::int32_t)e.GetColumn();
 		}
 		catch (const ibBackendQueryException& e) {
 			// Parsed, but names something that is not there. query_sources and
@@ -498,8 +498,8 @@ public:
 		// Only when there is one: 0:0 means the engine had nowhere to point, and
 		// reporting it as a position sends a reader to the first character.
 		if (line > 0 || column > 0) {
-			result.AddField(wxT("line"), ibDataValue::Int((s64)line));
-			result.AddField(wxT("column"), ibDataValue::Int((s64)column));
+			result.AddField(wxT("line"), ibDataValue::Int((std::int64_t)line));
+			result.AddField(wxT("column"), ibDataValue::Int((std::int64_t)column));
 		}
 
 		// WHICH QUESTION TO ASK NEXT, said rather than left to be guessed. The two

@@ -69,7 +69,7 @@ public:
 	virtual bool GetProtocolValue(ibDataNode& row, ibReader reader) override {
 		if (!ibProperty::GetProtocolValue(row, reader))
 			return false;
-		row.SetValue(ibProtocol::ibSchema::ibProperties::Object, static_cast<s32>(m_metaObject->GetMetaID()));
+		row.SetValue(ibProtocol::ibSchema::ibProperties::Object, static_cast<std::int32_t>(m_metaObject->GetMetaID()));
 		return true;
 	}
 

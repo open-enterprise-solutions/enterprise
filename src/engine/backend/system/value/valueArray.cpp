@@ -359,7 +359,7 @@ bool ibValueArray::SetAt(const ibValue& varKeyValue, const ibValue& varValue)//a
 
 bool ibValueArray::DoSerialize(ibDataNode& node) const
 {
-	node.SetValue(wxT("n"), (s32)m_listValue.size());
+	node.SetValue(wxT("n"), (std::int32_t)m_listValue.size());
 
 	for (const ibValue& element : m_listValue) {
 		ibDataNode& child = node.AddChild(element.GetClassType(), 0);
@@ -380,12 +380,12 @@ bool ibValueArray::DoDeserialize(const ibDataNode& node)
 	// The declared count is a CROSS-CHECK, not the loop bound: the children are
 	// what actually exist, and trusting a number over the structure is how a
 	// truncated blob turns into a silently shorter array.
-	const s32 declared = node.GetValue<s32>(wxT("n"));
+	const std::int32_t declared = node.GetValue<std::int32_t>(wxT("n"));
 
 	for (const ibDataNode& child : node.Children())
 		m_listValue.push_back(ibValue::FromNode(child));
 
-	return (s32)m_listValue.size() == declared;
+	return (std::int32_t)m_listValue.size() == declared;
 }
 
 //**********************************************************************

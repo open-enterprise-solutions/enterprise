@@ -780,7 +780,7 @@ long long  ibQueryResult::GetResultLong(int field)                     { return 
 bool       ibQueryResult::GetResultBool(int field)                     { return m_rs == nullptr || field == 0 ? false       : field < 0 ? false             : m_rs->GetResultBool(field); }
 ibDateTime ibQueryResult::GetResultDate(int field)                     { return m_rs == nullptr || field <= 0 ? ibDateTime() : m_rs->GetResultDate(field); }
 ibNumber   ibQueryResult::GetResultNumber(int field)                   { return m_rs == nullptr || field == 0 ? ibNumber()  : field < 0 ? ibNumber(-1)      : m_rs->GetResultNumber(field); }
-void*      ibQueryResult::GetResultBlob(int field, wxMemoryBuffer& b)  { return m_rs == nullptr || field <= 0 ? nullptr : m_rs->GetResultBlob(field, b); }
+void*      ibQueryResult::GetResultBlob(int field, ibMemoryBuffer& b)  { return m_rs == nullptr || field <= 0 ? nullptr : m_rs->GetResultBlob(field, b); }
 bool       ibQueryResult::IsResultNull(int field)                      { return m_rs == nullptr || field <= 0 || m_rs->IsFieldNull(field); }
 
 // Typed field reads by name — delegate to the borrowed driver cursor (the dialect-normalised
@@ -792,7 +792,7 @@ bool       ibQueryResult::GetResultBool(const wxString& name)                   
 ibDateTime ibQueryResult::GetResultDate(const wxString& name)                    { return m_rs != nullptr ? m_rs->GetResultDate(name)          : ibDateTime(); }
 double     ibQueryResult::GetResultDouble(const wxString& name)                  { return m_rs != nullptr ? m_rs->GetResultDouble(name)        : 0.0; }
 ibNumber   ibQueryResult::GetResultNumber(const wxString& name)                  { return m_rs != nullptr ? m_rs->GetResultNumber(name)        : ibNumber(); }
-void*      ibQueryResult::GetResultBlob(const wxString& name, wxMemoryBuffer& b) { return m_rs != nullptr ? m_rs->GetResultBlob(name, b)       : nullptr; }
+void*      ibQueryResult::GetResultBlob(const wxString& name, ibMemoryBuffer& b) { return m_rs != nullptr ? m_rs->GetResultBlob(name, b)       : nullptr; }
 // No cursor is not "not null" — there is nothing there at all, which is the same answer.
 bool       ibQueryResult::IsResultNull(const wxString& name)                     { return m_rs == nullptr || m_rs->IsFieldNull(name); }
 

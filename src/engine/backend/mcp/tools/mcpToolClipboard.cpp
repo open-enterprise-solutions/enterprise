@@ -31,7 +31,7 @@
 #include "backend/mcp/mcpTool.h"
 #include "backend/mcp/mcpClipboard.h"
 
-#include "core/fileSystem/fs.h"
+#include "core/memory/memoryStream.h"
 #include "backend/metaCollection/metaIntrospect.h"
 #include "backend/metaCollection/metaObject.h"
 #include "backend/metadataConfiguration.h"
@@ -184,7 +184,7 @@ public:
 		slot.m_payload.SetValue(wxT("bytes"), writer.buffer());
 
 		DescribeSlot(result, slotName.IsEmpty() ? wxString(wxT("default")) : slotName, slot);
-		result.AddField(wxT("bytes"), ibDataValue::Int((s64)writer.size()));
+		result.AddField(wxT("bytes"), ibDataValue::Int((std::int64_t)writer.size()));
 
 		return true;
 	}
@@ -293,13 +293,7 @@ public:
 			return false;
 		}
 
-		// ⚠ NAMED LOCAL, NOT THE EXPRESSION. The getter returns the buffer by
-		// value and ibReaderMemory borrows what it is handed — reading straight
-		// out of the call would leave it pointing at memory freed at the
-		// semicolon. fs.h deletes the rvalue overload for exactly this, so the
-		// mistake would not compile; the local is the way to write it, not a
-		// precaution around it.
-		wxMemoryBuffer bytes = slot.m_payload.GetValue<wxMemoryBuffer>(wxT("bytes"));
+		ibMemoryBuffer bytes = slot.m_payload.GetValue<ibMemoryBuffer>(wxT("bytes"));
 
 		ibReaderMemory reader(bytes);
 
@@ -326,11 +320,11 @@ public:
 
 		// ⚠ AddField WITH AN EXPLICIT Int, NOT SetValue. The node's SetValue
 		// dispatches through ibDataCodec<T>, and there is a specialization for
-		// s32 and none for s64 — on purpose, the undefined primary template is
-		// the guard. A `SetValue(name, (s64)x)` therefore fails to compile inside
+		// std::int32_t and none for std::int64_t — on purpose, the undefined primary template is
+		// the guard. A `SetValue(name, (std::int64_t)x)` therefore fails to compile inside
 		// dataBuilder.h, far from the line that wrote it. Same trap as a bare
 		// string literal, which has no codec either.
-		result.AddField(wxT("id"), ibDataValue::Int((s64)created->GetMetaID()));
+		result.AddField(wxT("id"), ibDataValue::Int((std::int64_t)created->GetMetaID()));
 		result.SetValue(wxT("name"), created->GetName());
 		result.SetValue(wxT("kind"), created->GetClassName());
 		result.SetValue(wxT("parent"), parent->GetName());

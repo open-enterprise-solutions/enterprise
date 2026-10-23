@@ -133,8 +133,8 @@ constexpr int kLargestSide = 1024;
 // THE SIZE ASKED FOR, 64 on whichever side was not said.
 bool AskedSide(const ibDataNode& params, wxSize& side, wxString& refusal)
 {
-	const s64 width  = ArgWidth().Given(params)  ? ArgWidth().Whole(params)  : kDrawnSide;
-	const s64 height = ArgHeight().Given(params) ? ArgHeight().Whole(params) : kDrawnSide;
+	const std::int64_t width  = ArgWidth().Given(params)  ? ArgWidth().Whole(params)  : kDrawnSide;
+	const std::int64_t height = ArgHeight().Given(params) ? ArgHeight().Whole(params) : kDrawnSide;
 
 	if (width < 1 || height < 1 || width > kLargestSide || height > kLargestSide) {
 		refusal = wxString::Format(
@@ -425,7 +425,7 @@ public:
 				// shape a picture property reads back in, and takes back through `value`, names it by that.
 				if (ibValueMetaObject* object =
 					ibFindMetaObject(activeMetaData, kPictureKind, name)) {
-					line->AddField(wxT("id"), ibDataValue::Int((s64)object->GetMetaID()));
+					line->AddField(wxT("id"), ibDataValue::Int((std::int64_t)object->GetMetaID()));
 					line->SetValue(wxT("guid"), ibGuid(object->GetGuid()));
 
 					// ⭐ AND WHAT IT MEANS. A PNG cannot be read, and a common picture is chosen by the next thing
@@ -580,7 +580,7 @@ public:
 					return false;
 			}
 			else {
-				wxMemoryBuffer bytes;
+				ibMemoryBuffer bytes;
 
 				if (!ibBase64::Read(fromData.wc_str(), fromData.length(), bytes) || bytes.GetDataLen() == 0) {
 					refusal = ibMcpText("`data` did not decode as base64, or decoded to nothing. "

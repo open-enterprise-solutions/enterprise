@@ -63,7 +63,7 @@ public:
 	/// Set the parameter at the 1-based position to a Blob value.
 	///
 	/// ⭐⭐ IT FORWARDS. This was an empty body — a binder that silently bound NOTHING — and no driver
-	/// overrides it, so every caller that happened to hold a wxMemoryBuffer picked this overload and
+	/// overrides it, so every caller that happened to hold a buffer picked this overload and
 	/// lost its value with no error anywhere. The audit log did exactly that: `loggerSinkSqlite.cpp`
 	/// binds `ibLogEntry::details` here, so the details of every logged event were dropped at the
 	/// parameter and the row was written without them.
@@ -71,7 +71,7 @@ public:
 	/// An empty virtual is the worst shape for this: it is not abstract (nobody is forced to implement
 	/// it), and it is not correct (it does not do the thing its name promises), so the failure is a
 	/// silent wrong answer instead of a link error or an exception.
-	virtual void SetParamBlob(int nPosition, const wxMemoryBuffer& buffer) {
+	virtual void SetParamBlob(int nPosition, const ibMemoryBuffer& buffer) {
 		SetParamBlob(nPosition, buffer.GetData(), (long)buffer.GetDataLen());
 	}
 	/// Set the parameter at the 1-based position to a Blob value

@@ -77,14 +77,14 @@ void ibSchemaAllFunctions::Build(const ibSession& session, const ibDataNode& WXU
 
 		for (const ibValueMetaObjectGenericData* object : OfferedObjects(metaData, groups[i].clsid)) {
 			ibDataNode& item = group.AddChild(0, object->GetMetaID());
-			item.SetValue(ibProtocol::ibSchema::ibAllFunctions::Item, static_cast<s32>(object->GetMetaID()));
+			item.SetValue(ibProtocol::ibSchema::ibAllFunctions::Item, static_cast<std::int32_t>(object->GetMetaID()));
 			item.SetValue(ibProtocol::ibSchema::ibAllFunctions::Title, object->GetSynonym());
 			item.SetValue(ibProtocol::ibSchema::ibAllFunctions::Icon, ibBackendPicture::SendPicture(object->GetClassType()));
 		}
 	}
 }
 
-std::function<void()> ibSchemaAllFunctions::Command(const ibSession& session, s32 command,
+std::function<void()> ibSchemaAllFunctions::Command(const ibSession& session, std::int32_t command,
 	const ibDataNode& args, ibProtocol::ibRefusal& refusal, wxString& error) const
 {
 	if (static_cast<ibSchemaAllFunctionsCommand>(command) != ibSchemaAllFunctionsCommand::Open) {
@@ -100,8 +100,8 @@ std::function<void()> ibSchemaAllFunctions::Command(const ibSession& session, s3
 		return nullptr;
 	}
 
-	const ibMetaID itemId = args.GetValue<s32>(ibProtocol::ibSchema::ibAllFunctions::Item);
-	s32 type = ibInterfaceCommandType::ibInterfaceCommandType_Default;
+	const ibMetaID itemId = args.GetValue<std::int32_t>(ibProtocol::ibSchema::ibAllFunctions::Item);
+	std::int32_t type = ibInterfaceCommandType::ibInterfaceCommandType_Default;
 	args.GetValue(ibProtocol::ibSchema::ibAllFunctions::Type, type);
 	const ibInterfaceCommandType commandType = static_cast<ibInterfaceCommandType>(type);
 

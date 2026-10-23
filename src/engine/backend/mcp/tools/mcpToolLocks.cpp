@@ -118,7 +118,7 @@ public:
 			entries.push_back(ibDataValue::Child(entry));
 		}
 
-		result.AddField(wxT("held"), ibDataValue::Int((s64)entries.size()));
+		result.AddField(wxT("held"), ibDataValue::Int((std::int64_t)entries.size()));
 		result.AddField(wxT("locks"), ibDataValue::Array(entries));
 
 		if (entries.empty()) {

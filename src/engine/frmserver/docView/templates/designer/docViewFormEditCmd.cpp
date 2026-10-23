@@ -163,9 +163,9 @@ bool ibFormDesignView::FetchControl(const ibDataNode& request, ibDataNode& respo
 	// The desktop's palette (ibVisualEditor::CreateObject): made in the selected control — none selected: on the form —
 	// or, where that cannot hold it, in the first of its parents that can; its paste (Paste — the copy, Value) put so
 	// too. No control's rows: the client asks them of the one it shows (Rows).
-	ibValueFrame* const target = m_valueForm->FindControlByID(request.GetValue<s32>(ibProtocol::ibView::ibFormDesigner::Control));
+	ibValueFrame* const target = m_valueForm->FindControlByID(request.GetValue<std::int32_t>(ibProtocol::ibView::ibFormDesigner::Control));
 	ibValueFrame* made = nullptr;
-	if (static_cast<ibProtocol::ibView::ibFormDesigner::ibCommand>(request.GetValue<s32>(ibProtocol::ibView::ibFormDesigner::Command)) ==
+	if (static_cast<ibProtocol::ibView::ibFormDesigner::ibCommand>(request.GetValue<std::int32_t>(ibProtocol::ibView::ibFormDesigner::Command)) ==
 		ibProtocol::ibView::ibFormDesigner::ibCommand::Paste) {
 		const ibDataNode* const copied = request.FindChild(ibProtocol::ibView::ibFormDesigner::Value);
 		if (copied == nullptr)
@@ -179,21 +179,21 @@ bool ibFormDesignView::FetchControl(const ibDataNode& request, ibDataNode& respo
 	if (made == nullptr)
 		return false;
 	WriteForm(response);
-	response.SetValue(ibProtocol::ibView::ibFormDesigner::Selected, static_cast<s32>(made->GetControlID()));
+	response.SetValue(ibProtocol::ibView::ibFormDesigner::Selected, static_cast<std::int32_t>(made->GetControlID()));
 	return true;
 }
 
 bool ibFormDesignView::FetchBoundControl(const ibDataNode& request, ibDataNode& response)
 {
 	// Dropped on a control — none named: on the form.
-	ibValueFrame* const target = m_valueForm->FindControlByID(request.GetValue<s32>(ibProtocol::ibView::ibFormDesigner::Control));
+	ibValueFrame* const target = m_valueForm->FindControlByID(request.GetValue<std::int32_t>(ibProtocol::ibView::ibFormDesigner::Control));
 	ibSourceDescription desc;
 	ReadPath(request, desc);
 	ibValueFrame* const made = CreateBoundControl(target != nullptr ? target : GetValueForm(), desc);
 	if (made == nullptr)
 		return false;
 	WriteForm(response);
-	response.SetValue(ibProtocol::ibView::ibFormDesigner::Selected, static_cast<s32>(made->GetControlID()));
+	response.SetValue(ibProtocol::ibView::ibFormDesigner::Selected, static_cast<std::int32_t>(made->GetControlID()));
 	return true;
 }
 
@@ -201,7 +201,7 @@ bool ibFormDesignView::FetchCommandControl(const ibDataNode& request, ibDataNode
 {
 	// The command as the command tree's row has it (CommandPath, Kind) — under Value: the request's own Kind is the
 	// request's.
-	ibValueFrame* const target = m_valueForm->FindControlByID(request.GetValue<s32>(ibProtocol::ibView::ibFormDesigner::Control));
+	ibValueFrame* const target = m_valueForm->FindControlByID(request.GetValue<std::int32_t>(ibProtocol::ibView::ibFormDesigner::Control));
 	const ibDataNode* const command = request.FindChild(ibProtocol::ibView::ibFormDesigner::Value);
 	if (command == nullptr)
 		return false;
@@ -215,7 +215,7 @@ bool ibFormDesignView::FetchCommandControl(const ibDataNode& request, ibDataNode
 	if (made == nullptr)
 		return false;
 	WriteForm(response);
-	response.SetValue(ibProtocol::ibView::ibFormDesigner::Selected, static_cast<s32>(made->GetControlID()));
+	response.SetValue(ibProtocol::ibView::ibFormDesigner::Selected, static_cast<std::int32_t>(made->GetControlID()));
 	return true;
 }
 

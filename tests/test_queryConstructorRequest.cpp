@@ -27,7 +27,7 @@ namespace qc = ibProtocol::ibView::ibQueryConstructor;
 ibDataNode Request(qc::ibRequest kind, const wxString& source = wxString())
 {
 	ibDataNode request;
-	request.SetValue(qc::Kind, static_cast<s32>(kind));
+	request.SetValue(qc::Kind, static_cast<std::int32_t>(kind));
 	if (!source.IsEmpty())
 		request.SetValue(qc::Source, source);
 	return request;
@@ -36,12 +36,12 @@ ibDataNode Request(qc::ibRequest kind, const wxString& source = wxString())
 ibDataNode CheckRequest(const wxString& text)
 {
 	ibDataNode request;
-	request.SetValue(qc::Kind, static_cast<s32>(qc::ibRequest::Check));
+	request.SetValue(qc::Kind, static_cast<std::int32_t>(qc::ibRequest::Check));
 	request.SetValue(qc::Text, text);
 	return request;
 }
 
-ibDataNode UngroupedRequest(const wxString& text, s32 statement, s32 unionBranch)
+ibDataNode UngroupedRequest(const wxString& text, std::int32_t statement, std::int32_t unionBranch)
 {
 	ibDataNode request = CheckRequest(text);
 	request.SetValue(qc::Statement, statement);
@@ -116,7 +116,7 @@ std::vector<wxString> Strings(const ibDataValue* listed)
 TEST(QueryConstructorRequest, ARequestThatIsNotOneOfItsIsLeftToTheTab)
 {
 	ibDataNode request;
-	request.SetValue(qc::Kind, static_cast<s32>(ibProtocol::ibView::ibComposer::ibRequest::Expand));
+	request.SetValue(qc::Kind, static_cast<std::int32_t>(ibProtocol::ibView::ibComposer::ibRequest::Expand));
 	ibDataNode response;
 	EXPECT_FALSE(ibFetchQueryConstructorRequest(request, response, nullptr));
 }

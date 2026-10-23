@@ -782,7 +782,7 @@ void ibValueModelTableBox::OnHeaderEndResize(ibHeaderGenericCtrlEvent& event)
 			if (control == nullptr)
 				return;
 			ibPropertyGate::SetValue(control, control->GetProperty(ibProtocol::ibForm::ibTable::Width),
-				ibDataValue::UInt(static_cast<u64>(column->WXGetSpecifiedWidth())));
+				ibDataValue::UInt(static_cast<std::uint64_t>(column->WXGetSpecifiedWidth())));
 			GetVisualHost().SelectControl(control);
 			return;
 		}

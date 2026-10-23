@@ -69,7 +69,7 @@ ibDateTime ibDatabaseResultSet::GetResultDate(const wxString& strField)
 	return ibDateTime();
 }
 
-void* ibDatabaseResultSet::GetResultBlob(const wxString& strField, wxMemoryBuffer& buffer)
+void* ibDatabaseResultSet::GetResultBlob(const wxString& strField, ibMemoryBuffer& buffer)
 {
 	int nIndex = LookupField(strField);
 	if (nIndex != -1)

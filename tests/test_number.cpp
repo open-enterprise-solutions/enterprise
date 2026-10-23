@@ -592,12 +592,12 @@ TEST(NumberMath, AbsAndSign) {
 TEST(NumberBuffer, ZeroEncodesEmpty) {
     // Zero is encoded as an EMPTY buffer (compact zero-encoding, fnumber.cpp
     // GetBuffer) — no 9-byte header; SetBuffer recovers zero from len == 0.
-    wxMemoryBuffer blob = ibNumber().GetBuffer();
+    ibMemoryBuffer blob = ibNumber().GetBuffer();
     EXPECT_EQ(blob.GetDataLen(), 0u);
 }
 
 TEST(NumberBuffer, RoundTripZero) {
-    wxMemoryBuffer blob = ibNumber().GetBuffer();
+    ibMemoryBuffer blob = ibNumber().GetBuffer();
     ibNumber b(7);
     EXPECT_TRUE(b.SetBuffer(blob));
     EXPECT_TRUE(b.IsZero());
@@ -605,7 +605,7 @@ TEST(NumberBuffer, RoundTripZero) {
 
 TEST(NumberBuffer, RoundTripFractional) {
     ibNumber a(wxString(wxT("-7654321.0987654321")));
-    wxMemoryBuffer blob = a.GetBuffer();
+    ibMemoryBuffer blob = a.GetBuffer();
     ibNumber b;
     EXPECT_TRUE(b.SetBuffer(blob));
     EXPECT_EQ(b, a);
@@ -614,7 +614,7 @@ TEST(NumberBuffer, RoundTripFractional) {
 TEST(NumberBuffer, RoundTripFiftyDigits) {
     const wxString s = wxT("12345678901234567890123456789012345678901234567890");
     ibNumber a(s);
-    wxMemoryBuffer blob = a.GetBuffer();
+    ibMemoryBuffer blob = a.GetBuffer();
     ibNumber b;
     b.SetBuffer(blob);
     EXPECT_EQ(b, a);
@@ -630,7 +630,7 @@ TEST(NumberBuffer, NullPointerRejected) {
 }
 
 TEST(NumberBuffer, OutParamReuseOverwrites) {
-    wxMemoryBuffer mb;
+    ibMemoryBuffer mb;
     ibNumber(42).GetBuffer(mb);
     const size_t firstLen = mb.GetDataLen();
 

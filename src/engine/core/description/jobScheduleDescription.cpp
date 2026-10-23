@@ -35,17 +35,17 @@ bool ibJobScheduleDescription::operator==(const ibJobScheduleDescription& o) con
 bool ibJobScheduleDescriptionMemory::WriteNode(ibDataValue& value, const ibJobScheduleDescription& s)
 {
 	auto root = std::make_shared<ibDataNode>();
-	root->SetValue(wxT("IntervalSeconds"),    (s32)s.m_intervalSeconds);
-	root->SetValue(wxT("StartMinute"),        (s32)s.m_startMinute);
-	root->SetValue(wxT("EndMinute"),          (s32)s.m_endMinute);
-	root->SetValue(wxT("StopAfterMinute"),    (s32)s.m_stopAfterMinute);
-	root->SetValue(wxT("DaysOfWeek"),         (s32)s.m_daysOfWeek);
-	root->SetValue(wxT("DaysOfMonth"),        (s32)s.m_daysOfMonth);
-	root->SetValue(wxT("DaysOfMonthFromEnd"), (s32)s.m_daysOfMonthFromEnd);
-	root->SetValue(wxT("Months"),             (s32)s.m_months);
-	root->SetValue(wxT("WeekdayOrdinal"),     (s32)s.m_weekdayOrdinal);
-	root->SetValue(wxT("EveryNWeeks"),        (s32)s.m_everyNWeeks);
-	root->SetValue(wxT("EveryNMonths"),       (s32)s.m_everyNMonths);
+	root->SetValue(wxT("IntervalSeconds"),    (std::int32_t)s.m_intervalSeconds);
+	root->SetValue(wxT("StartMinute"),        (std::int32_t)s.m_startMinute);
+	root->SetValue(wxT("EndMinute"),          (std::int32_t)s.m_endMinute);
+	root->SetValue(wxT("StopAfterMinute"),    (std::int32_t)s.m_stopAfterMinute);
+	root->SetValue(wxT("DaysOfWeek"),         (std::int32_t)s.m_daysOfWeek);
+	root->SetValue(wxT("DaysOfMonth"),        (std::int32_t)s.m_daysOfMonth);
+	root->SetValue(wxT("DaysOfMonthFromEnd"), (std::int32_t)s.m_daysOfMonthFromEnd);
+	root->SetValue(wxT("Months"),             (std::int32_t)s.m_months);
+	root->SetValue(wxT("WeekdayOrdinal"),     (std::int32_t)s.m_weekdayOrdinal);
+	root->SetValue(wxT("EveryNWeeks"),        (std::int32_t)s.m_everyNWeeks);
+	root->SetValue(wxT("EveryNMonths"),       (std::int32_t)s.m_everyNMonths);
 	root->SetValue(wxT("PeriodAnchor"),       s.m_periodAnchor);
 	root->SetValue(wxT("ActiveFrom"),         s.m_activeFrom);
 	root->SetValue(wxT("ActiveTo"),           s.m_activeTo);
@@ -64,7 +64,7 @@ bool ibJobScheduleDescriptionMemory::ReadNode(const ibDataValue& value, ibJobSch
 	// restricted", never as "restricted to nothing".
 	const auto readInt = [&root](const wxString& name, auto& target) {
 		if (root->FindField(name) != nullptr)
-			target = static_cast<typename std::remove_reference<decltype(target)>::type>(root->GetValue<s32>(name));
+			target = static_cast<typename std::remove_reference<decltype(target)>::type>(root->GetValue<std::int32_t>(name));
 	};
 
 	readInt(wxT("IntervalSeconds"),    s.m_intervalSeconds);
@@ -127,7 +127,7 @@ constexpr std::uint8_t kScheduleBufferVersion = 3;
 constexpr std::uint8_t kScheduleBufferWallFrom1970 = 2;
 constexpr std::uint8_t kScheduleBufferInstants = 1;
 
-void PutU32(wxMemoryBuffer& out, std::uint32_t value)
+void PutU32(ibMemoryBuffer& out, std::uint32_t value)
 {
 	const std::uint8_t bytes[4] = {
 		static_cast<std::uint8_t>(value & 0xFF),
@@ -138,7 +138,7 @@ void PutU32(wxMemoryBuffer& out, std::uint32_t value)
 	out.AppendData(bytes, sizeof(bytes));
 }
 
-void PutS64(wxMemoryBuffer& out, std::int64_t value)
+void PutS64(ibMemoryBuffer& out, std::int64_t value)
 {
 	PutU32(out, static_cast<std::uint32_t>(static_cast<std::uint64_t>(value) & 0xFFFFFFFFull));
 	PutU32(out, static_cast<std::uint32_t>((static_cast<std::uint64_t>(value) >> 32) & 0xFFFFFFFFull));
@@ -171,7 +171,7 @@ struct BufferCursor {
 
 } // namespace
 
-void ibJobScheduleDescriptionMemory::WriteBuffer(wxMemoryBuffer& out, const ibJobScheduleDescription& s)
+void ibJobScheduleDescriptionMemory::WriteBuffer(ibMemoryBuffer& out, const ibJobScheduleDescription& s)
 {
 	out.SetDataLen(0);
 	out.AppendByte(static_cast<char>(kScheduleBufferVersion));

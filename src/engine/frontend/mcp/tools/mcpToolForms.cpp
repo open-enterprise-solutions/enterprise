@@ -151,7 +151,7 @@ ibValueForm* OpenForm(const ibDataNode& params, wxString& refusal,
 		return nullptr;
 	}
 
-	const s32 id = (s32)ArgForm().Whole(params);
+	const std::int32_t id = (std::int32_t)ArgForm().Whole(params);
 	if (id <= 0) {
 		refusal = ibMcpText("Pass the form's NodeId - metadata_get on the owning object lists its forms.");
 		return nullptr;
@@ -228,7 +228,7 @@ ibValueForm* OpenObjectForm(const ibDataNode& params, wxString& refusal, bool& g
 	if (activeMetaData == nullptr || !activeMetaData->IsConfigOpen())
 		return nullptr;
 
-	const s32 id = (s32)ArgFormOrObject().Whole(params);
+	const std::int32_t id = (std::int32_t)ArgFormOrObject().Whole(params);
 	ibValueMetaObject* object = id > 0 ? ibFindMetaObjectById(activeMetaData, (ibMetaID)id) : nullptr;
 	const ibValueMetaObjectRecordData* record =
 		object != nullptr ? object->ConvertToType<ibValueMetaObjectRecordData>() : nullptr;
@@ -261,7 +261,7 @@ void SayControl(ibValueFrame* control, ibDataNode& node)
 	if (control == nullptr)
 		return;
 
-	node.AddField(wxT("controlId"), ibDataValue::Int((s64)control->GetControlID()));
+	node.AddField(wxT("controlId"), ibDataValue::Int((std::int64_t)control->GetControlID()));
 	node.SetValue(wxT("class"), control->GetClassName());
 
 	// Only when it says something the class has not. An unnamed control answers with its class,
@@ -387,7 +387,7 @@ public:
 				continue;
 
 			std::shared_ptr<ibDataNode> node = std::make_shared<ibDataNode>();
-			node->AddField(wxT("id"), ibDataValue::Int((s64)attribute->GetId()));
+			node->AddField(wxT("id"), ibDataValue::Int((std::int64_t)attribute->GetId()));
 			node->SetValue(wxT("name"), attribute->GetName());
 
 			// THE MAIN ONE IS NOT ONE OF THE OTHERS. It is the head of every
@@ -408,7 +408,7 @@ public:
 				continue;
 
 			std::shared_ptr<ibDataNode> node = std::make_shared<ibDataNode>();
-			node->AddField(wxT("id"), ibDataValue::Int((s64)command->GetId()));
+			node->AddField(wxT("id"), ibDataValue::Int((std::int64_t)command->GetId()));
 			node->SetValue(wxT("name"), command->GetName());
 
 			// What it RUNS. A command with no procedure is a button that does
@@ -507,7 +507,7 @@ public:
 
 		ibValueFrame* control = form;
 
-		const s32 wanted = (s32)ArgControl().Whole(params);
+		const std::int32_t wanted = (std::int32_t)ArgControl().Whole(params);
 		if (wanted > 0) {
 			control = FindControl(form, (ibFormID)wanted);
 			if (control == nullptr) {
@@ -612,7 +612,7 @@ public:
 			return false;
 
 		ibValueFrame* parent = form;
-		const s32 into = (s32)ArgParent().Whole(params);
+		const std::int32_t into = (std::int32_t)ArgParent().Whole(params);
 		if (into > 0) {
 			parent = FindControl(form, (ibFormID)into);
 			if (parent == nullptr) {
@@ -736,7 +736,7 @@ public:
 			return false;
 
 		ibValueFrame* control = form;
-		const s32 wanted = (s32)ArgControl().Whole(params);
+		const std::int32_t wanted = (std::int32_t)ArgControl().Whole(params);
 		if (wanted > 0) {
 			control = FindControl(form, (ibFormID)wanted);
 			if (control == nullptr) {
@@ -852,7 +852,7 @@ public:
 		if (form == nullptr)
 			return false;
 
-		const s32 wanted = (s32)ArgControl().Whole(params);
+		const std::int32_t wanted = (std::int32_t)ArgControl().Whole(params);
 		ibValueFrame* control = FindControl(form, (ibFormID)wanted);
 		if (control == nullptr) {
 			refusal = wxString::Format(ibMcpText("This form has no control with id %i."), (int)wanted);
@@ -931,7 +931,7 @@ public:
 		if (form == nullptr)
 			return false;
 
-		const s32 wanted = (s32)ArgControl().Whole(params);
+		const std::int32_t wanted = (std::int32_t)ArgControl().Whole(params);
 		ibValueFrame* control = FindControl(form, (ibFormID)wanted);
 		if (control == nullptr) {
 			refusal = wxString::Format(ibMcpText("This form has no control with id %i."), (int)wanted);
@@ -946,8 +946,8 @@ public:
 			item = item->GetParent();
 		ibValueFrame* const group = item->GetParent();
 
-		const s32 position = (s32)ArgPosition().Whole(params);
-		if (group == nullptr || position < 0 || position >= (s32)group->GetChildCount()) {
+		const std::int32_t position = (std::int32_t)ArgPosition().Whole(params);
+		if (group == nullptr || position < 0 || position >= (std::int32_t)group->GetChildCount()) {
 			refusal = wxString::Format(
 				ibMcpText("Position %i is past the controls of this group. Nothing was moved."), (int)position);
 			form->DecrRef();
@@ -1256,7 +1256,7 @@ private:
 
 			std::shared_ptr<ibDataNode> node = std::make_shared<ibDataNode>();
 			node->SetValue(wxT("name"), child->GetName());
-			node->AddField(wxT("id"), ibDataValue::Int((s64)child->GetMetaID()));
+			node->AddField(wxT("id"), ibDataValue::Int((std::int64_t)child->GetMetaID()));
 
 			const wxString synonym = child->GetSynonym();
 			if (!synonym.IsEmpty() && synonym != child->GetName())
@@ -1289,7 +1289,7 @@ private:
 
 			// The id is what the BINDING is made of — a path is a chain of these,
 			// and a name is how a person writes one down.
-			node->AddField(wxT("id"), ibDataValue::Int((s64)field->GetSourceId()));
+			node->AddField(wxT("id"), ibDataValue::Int((std::int64_t)field->GetSourceId()));
 
 			const wxString synonym = field->GetSourceSynonym();
 			if (!synonym.IsEmpty() && synonym != field->GetSourceName())
@@ -1389,7 +1389,7 @@ public:
 		// ⚠ "NO CONTROL WITH THAT ID" IS THE WRONG SENTENCE WHEN NO ID CAME. It says the form was
 		// searched and answers about a control the caller never named — so the caller goes looking
 		// for a control that is missing, when what is missing is their own argument (2026-09-01).
-		const s32 wanted = (s32)ArgControl().Whole(params);
+		const std::int32_t wanted = (std::int32_t)ArgControl().Whole(params);
 
 		if (!ArgControl().Given(params)) {
 			refusal = ibMcpText("Which control? form_bind needs the control's id - form_get lists them.");
@@ -1439,7 +1439,7 @@ public:
 			// …then the ones the OBJECT declares, which every form of it inherits.
 			if (!command.IsOk()) {
 				if (ibValueMetaObject* owner = ibFindMetaObjectById(activeMetaData,
-						(ibMetaID)(s32)ArgForm().Whole(params))) {
+						(ibMetaID)(std::int32_t)ArgForm().Whole(params))) {
 
 					if (ibValueMetaObject* holder = owner->GetParent()) {
 						for (unsigned int index = 0; index < holder->GetChildCount(); ++index) {
@@ -1748,7 +1748,7 @@ public:
 		if (form == nullptr)
 			return false;
 
-		const s32 wanted = (s32)ArgControl().Whole(params);
+		const std::int32_t wanted = (std::int32_t)ArgControl().Whole(params);
 
 		ibValueFrame* control = FindControl(form, (ibFormID)wanted);
 		if (control == nullptr) {
@@ -1789,7 +1789,7 @@ public:
 		result.SetValue(wxT("slot"), slotName.IsEmpty() ? wxString(wxT("default")) : slotName);
 		result.SetValue(wxT("name"), slot.m_name);
 		result.SetValue(wxT("class"), slot.m_what);
-		result.AddField(wxT("bytes"), ibDataValue::Int((s64)writer.size()));
+		result.AddField(wxT("bytes"), ibDataValue::Int((std::int64_t)writer.size()));
 
 		form->DecrRef();
 		return true;
@@ -1844,7 +1844,7 @@ public:
 			return false;
 
 		ibValueFrame* parent = form;
-		const s32 into = (s32)ArgParent().Whole(params);
+		const std::int32_t into = (std::int32_t)ArgParent().Whole(params);
 		if (into > 0) {
 			parent = FindControl(form, (ibFormID)into);
 			if (parent == nullptr) {
@@ -1855,12 +1855,7 @@ public:
 			}
 		}
 
-		// ⚠ A NAMED LOCAL, NOT THE EXPRESSION. ibReaderMemory borrows the bytes
-		// it is handed and never copies them; the getter returns by value, so
-		// reading straight out of the call would leave it pointing at memory
-		// freed at the semicolon (fs.h deletes the rvalue overload for exactly
-		// this).
-		wxMemoryBuffer bytes = slot.m_payload.GetValue<wxMemoryBuffer>(wxT("bytes"));
+		ibMemoryBuffer bytes = slot.m_payload.GetValue<ibMemoryBuffer>(wxT("bytes"));
 
 		ibReaderMemory reader(bytes);
 
@@ -1904,7 +1899,7 @@ public:
 
 		activeMetaData->Modify(true);
 
-		result.AddField(wxT("controlId"), ibDataValue::Int((s64)created->GetControlID()));
+		result.AddField(wxT("controlId"), ibDataValue::Int((std::int64_t)created->GetControlID()));
 		result.SetValue(wxT("class"), created->GetClassName());
 		result.SetValue(wxT("name"), created->GetControlName());
 		result.SetValue(wxT("copiedFrom"), slot.m_name);
@@ -1962,7 +1957,7 @@ public:
 			return false;
 
 		ibValueFrame* parent = form;
-		const s32 into = (s32)ArgParent().Whole(params);
+		const std::int32_t into = (std::int32_t)ArgParent().Whole(params);
 
 		if (into > 0) {
 			parent = FindControl(form, (ibFormID)into);
@@ -2140,7 +2135,7 @@ public:
 			// AN EMPTY BLOB IS A GENERATED FORM — the platform lays it out when it is opened, and
 			// there is nothing stored to find fault with. Not a complaint: it is how most forms in
 			// a young configuration legitimately are.
-			const wxMemoryBuffer data = creator->GetFormData();
+			const ibMemoryBuffer data = creator->GetFormData();
 			if (data.GetDataLen() == 0)
 				continue;
 

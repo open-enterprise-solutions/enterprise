@@ -235,7 +235,7 @@ void BuildSchema(ibClientInstance& instance, const ibDataNode& params, ibDataNod
 	for (const ibDataValue& read : reads->AsArray()) {
 		if (read.Kind() != ibDataKind::Child || read.AsChild() == nullptr)
 			continue;
-		const s32 kind = read.AsChild()->GetValue<s32>(ibProtocol::ibLogin::Schema);
+		const std::int32_t kind = read.AsChild()->GetValue<std::int32_t>(ibProtocol::ibLogin::Schema);
 		const ibClientSchema* const schema = frame->GetDocumentManager()->FindSchema(static_cast<ibProtocol::ibSchema::ibKind>(kind));
 		if (schema == nullptr)
 			continue;
@@ -265,20 +265,20 @@ void DrawMenu(ibClientFrame* frame, const std::vector<ibClientMenu::Item>& items
 		bool enabled = true;
 		if (item.kind == ibClientMenuItemKind::Command) {
 			const auto found = manager->GetCommands().find(item.command);
-			child.SetValue(ibProtocol::ibFrame::ibMenu::Command, static_cast<s32>(item.command));
+			child.SetValue(ibProtocol::ibFrame::ibMenu::Command, static_cast<std::int32_t>(item.command));
 			if (found != manager->GetCommands().end()) {
 				child.SetValue(ibProtocol::ibFrame::ibMenu::Title, found->second.title);
 				if (!found->second.shortcut.IsEmpty())
 					child.SetValue(ibProtocol::ibFrame::ibMenu::Shortcut, found->second.shortcut);
 				if (found->second.picture != ibClientStockPicture::None)
-					child.SetValue(ibProtocol::ibFrame::ibMenu::StockPicture, static_cast<s32>(found->second.picture));
+					child.SetValue(ibProtocol::ibFrame::ibMenu::StockPicture, static_cast<std::int32_t>(found->second.picture));
 			}
 			enabled = found != manager->GetCommands().end() && frame->IsCommandEnabled(item.command);
 		}
 		else if (item.kind == ibClientMenuItemKind::Schema) {
-			child.SetValue(ibProtocol::ibFrame::ibMenu::Schema, static_cast<s32>(item.schema));
+			child.SetValue(ibProtocol::ibFrame::ibMenu::Schema, static_cast<std::int32_t>(item.schema));
 			if (item.schemaCommand != ibProtocol::ibSchema::ibCommand{})
-				child.SetValue(ibProtocol::ibFrame::ibMenu::Command, static_cast<s32>(item.schemaCommand));
+				child.SetValue(ibProtocol::ibFrame::ibMenu::Command, static_cast<std::int32_t>(item.schemaCommand));
 			child.SetValue(ibProtocol::ibFrame::ibMenu::Title, item.title);
 			enabled = frame->IsSchemaAllowed(item.schema);
 		}
@@ -304,13 +304,13 @@ ibValueForm* FormOfCall(const ibClientFrame* frame, const wxString& key)
 // carries (Pending): to the control of the form it names, or to a tab's own view.
 void DispatchEvent(ibClientFrame* frame, const ibDataNode& call)
 {
-	const ibProtocol::ibEvent::ibKind event = static_cast<ibProtocol::ibEvent::ibKind>(call.GetValue<s32>(ibProtocol::ibEvent::Event));
+	const ibProtocol::ibEvent::ibKind event = static_cast<ibProtocol::ibEvent::ibKind>(call.GetValue<std::int32_t>(ibProtocol::ibEvent::Event));
 	const ibDataNode none;
 	const ibDataNode* const found = call.FindChild(ibProtocol::ibEvent::Args);
 	const ibDataNode& args = found != nullptr ? *found : none;
 	// A TAB'S OWN VIEW, named by the tab — what the person did in a text, not in a control of a form; by the tab, not the
 	// active one, as it may be handed over when the tab is being closed.
-	const s32 tabId = call.GetValue<s32>(ibProtocol::ibEvent::Tab);
+	const std::int32_t tabId = call.GetValue<std::int32_t>(ibProtocol::ibEvent::Tab);
 	if (tabId != 0) {
 		if (ibClientChildFrame* const tab = frame->Tab(frame->FindTab(tabId))) {
 			if (ibView* const view = tab->GetView())
@@ -318,7 +318,7 @@ void DispatchEvent(ibClientFrame* frame, const ibDataNode& call)
 		}
 	}
 	else if (ibValueForm* const form = FormOfCall(frame, call.GetValue<wxString>(ibProtocol::ibEvent::Form)))
-		form->DispatchEvent(call.GetValue<s32>(ibProtocol::ibEvent::Control), event, args);
+		form->DispatchEvent(call.GetValue<std::int32_t>(ibProtocol::ibEvent::Control), event, args);
 }
 
 } // namespace
@@ -712,7 +712,7 @@ ibString ibClientHost::Call(const ibString& text, const void* connection, const 
 				slot.client->resumeDeadlineMs.load(std::memory_order_acquire), connection)) {
 				lock.unlock();
 				slot.client.reset();
-				return ibRpcWriteError(request.m_id, static_cast<s32>(ibProtocol::ibRefusal::NoSession), wxT("the client is not connected"));
+				return ibRpcWriteError(request.m_id, static_cast<std::int32_t>(ibProtocol::ibRefusal::NoSession), wxT("the client is not connected"));
 			}
 			if (slot.client->dedupe) {
 				CallDigest(request.m_method, request.m_params, callDigest);
@@ -724,7 +724,7 @@ ibString ibClientHost::Call(const ibString& text, const void* connection, const 
 					if (slot.client->hasReply && IdLess(request.m_id, slot.client->replyId)) {
 						lock.unlock();
 						slot.client.reset();
-						return ibRpcWriteError(request.m_id, static_cast<s32>(ibProtocol::ibRefusal::BadParameter),
+						return ibRpcWriteError(request.m_id, static_cast<std::int32_t>(ibProtocol::ibRefusal::BadParameter),
 							wxT("the call id is older than the last one answered"));
 					}
 					if (slot.client->hasReply && slot.client->replyId == request.m_id) {
@@ -736,7 +736,7 @@ ibString ibClientHost::Call(const ibString& text, const void* connection, const 
 						}
 						lock.unlock();
 						slot.client.reset();
-						return ibRpcWriteError(request.m_id, static_cast<s32>(ibProtocol::ibRefusal::BadParameter),
+						return ibRpcWriteError(request.m_id, static_cast<std::int32_t>(ibProtocol::ibRefusal::BadParameter),
 							wxT("the call id was already answered for another call"));
 					}
 					slot.client->replyPending = true;
@@ -776,7 +776,7 @@ ibString ibClientHost::Call(const ibString& text, const void* connection, const 
 	// …and the answer written — its text, the part of a call that grows with the frame. The result goes into the
 	// envelope as it is (it is not read again), and the text saved for a repeated call is one more owner of it.
 	const std::int64_t writing = NowMs();
-	const ibString answer = done ? ibRpcWriteResult(request.m_id, std::move(result)) : ibRpcWriteError(request.m_id, static_cast<s32>(refusal), error);
+	const ibString answer = done ? ibRpcWriteResult(request.m_id, std::move(result)) : ibRpcWriteError(request.m_id, static_cast<std::int32_t>(refusal), error);
 	ibJournalInfo(wxT("client"), wxT("  answer written %lld ms, %zu chars"), NowMs() - writing, answer.length());
 	// A detached NoSession was not accepted, so it is not the call's answer. Anything else, including a refusal, is.
 	// Only the call that owns the slot writes it: a lookup that returned the saved text never did.
@@ -812,11 +812,11 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 		else {
 		// The instance is made and logged in; the start runs as work of its own, so a start that asks the person
 		// something returns here with the request — and the client's id, without which it could not respond.
-		s32 protocol = 1;
+		std::int32_t protocol = 1;
 		params.GetValue(ibProtocol::ibLogin::Protocol, protocol);
 		auto client = std::make_shared<Client>();
 		const wxString id = ibGuid(ibGuid::newGuid()).str();
-		s32 mode = static_cast<s32>(ibProtocol::ibLogin::ibMode::Runtime);
+		std::int32_t mode = static_cast<std::int32_t>(ibProtocol::ibLogin::ibMode::Runtime);
 		params.GetValue(ibProtocol::ibLogin::Mode, mode);
 		client->instance = std::make_shared<ibClientInstance>(m_applicationInstance, id, address, static_cast<ibProtocol::ibLogin::ibMode>(mode));
 		client->connectionless = connection == nullptr;
@@ -964,7 +964,7 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 				}
 			}
 			// The frame the client holds — the number it was last answered with; 0 or absent: none, the frame whole.
-			const s32 since = params.GetValue<s32>(ibProtocol::ibLogin::Since);
+			const std::int32_t since = params.GetValue<std::int32_t>(ibProtocol::ibLogin::Since);
 
 			if (method == ibProtocol::ibMethod::Frame) {
 				done = Run(*client, nullptr, since, result, refusal, error);
@@ -972,7 +972,7 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 			else if (method == ibProtocol::ibMethod::Schema) {
 				// Asked of the doc manager of the client's frame — what its application offers — and asked on the
 				// client's session: what a schema lists, and what it acts on, may depend on the person's rights.
-				const ibProtocol::ibSchema::ibKind kind = static_cast<ibProtocol::ibSchema::ibKind>(params.GetValue<s32>(ibProtocol::ibSchema::Schema));
+				const ibProtocol::ibSchema::ibKind kind = static_cast<ibProtocol::ibSchema::ibKind>(params.GetValue<std::int32_t>(ibProtocol::ibSchema::Schema));
 				ibClientFrame* const frame = client->instance->GetFrame();
 				std::shared_ptr<ibSession> session = client->instance->ShareSession();
 				const ibClientSchema* const schema = frame != nullptr ? frame->GetDocumentManager()->FindSchema(kind) : nullptr;
@@ -990,7 +990,7 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 				else {
 					// What a person did in it: refused before anything is done, or the work that does it — run as the
 					// client's work, so the answer is the frame, with what it opened.
-					const s32 command = params.GetValue<s32>(ibProtocol::ibSchema::Command);
+					const std::int32_t command = params.GetValue<std::int32_t>(ibProtocol::ibSchema::Command);
 					std::function<void()> work;
 					session->Submit([schema, &session, command, &args, &work, &refuse, &refusal, &error]() {
 						if (!schema->AccessRight(*session))
@@ -1005,8 +1005,8 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 			else if (method == ibProtocol::ibMethod::Execute) {
 				// What the configuration does not have is refused here, to the client: an empty frame would say
 				// nothing happened.
-				const ibMetaID metaId = params.GetValue<s32>(ibProtocol::ibExecute::Command);
-				s32 type = ibInterfaceCommandType::ibInterfaceCommandType_Default;
+				const ibMetaID metaId = params.GetValue<std::int32_t>(ibProtocol::ibExecute::Command);
+				std::int32_t type = ibInterfaceCommandType::ibInterfaceCommandType_Default;
 				params.GetValue(ibProtocol::ibExecute::Type, type);
 				const std::shared_ptr<ibSession> session = client->instance->ShareSession();
 				const ibBackendCommandItem* const command = session != nullptr ? FindCommand(*session, metaId) : nullptr;
@@ -1029,7 +1029,7 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 			else if (method == ibProtocol::ibMethod::Activate || method == ibProtocol::ibMethod::Close) {
 				// A TAB BY ITS ID — a position shifts the moment a tab closes. One the frame does not have is refused
 				// before anything is done (asked on the session, where the tabs are).
-				const s32 tabId = params.GetValue<s32>(ibProtocol::ibFrame::Tab);
+				const std::int32_t tabId = params.GetValue<std::int32_t>(ibProtocol::ibFrame::Tab);
 				const bool activate = method == ibProtocol::ibMethod::Activate;
 				ibClientFrame* const frame = client->instance->GetFrame();
 				std::shared_ptr<ibSession> session = client->instance->ShareSession();
@@ -1069,12 +1069,12 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 			else if (method == ibProtocol::ibMethod::Fetch) {
 				ibClientFrame* const frame = client->instance->GetFrame();
 				std::shared_ptr<ibSession> session = client->instance->ShareSession();
-				const ibFormID controlId = params.GetValue<s32>(ibProtocol::ibFetch::Control);
+				const ibFormID controlId = params.GetValue<std::int32_t>(ibProtocol::ibFetch::Control);
 				const ibDataNode* found = params.FindChild(ibProtocol::ibFetch::Request);
 				const ibDataNode fetchRequest = found != nullptr ? *found : ibDataNode();
 				const wxString formKey = params.GetValue<wxString>(ibProtocol::ibFetch::Form);
 				// A TAB'S OWN VIEW, named by the tab — a spreadsheet document's cells, not a control's of a form.
-				const s32 tabId = params.GetValue<s32>(ibProtocol::ibFetch::Tab);
+				const std::int32_t tabId = params.GetValue<std::int32_t>(ibProtocol::ibFetch::Tab);
 				if (frame != nullptr && session != nullptr) {
 					session->Submit([frame, controlId, &fetchRequest, &formKey, tabId, &result, &done]() {
 						if (tabId != 0) {
@@ -1160,7 +1160,7 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 				// and is answered with its id, the rest name the id. Into the client's own temporary storage.
 				std::shared_ptr<ibSession> session = client->instance->ShareSession();
 				ibTempStorage* const storage = ibApplicationInstance::GetTempStorage(m_applicationInstance);
-				wxMemoryBuffer data;
+				ibMemoryBuffer data;
 				const bool decoded = ibBase64::Read(params.GetValue<ibString>(ibProtocol::ibFile::Data), data);
 				wxString id = params.GetValue<wxString>(ibProtocol::ibFile::File);
 				if (session == nullptr || storage == nullptr) {
@@ -1199,8 +1199,8 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 				std::shared_ptr<ibSession> session = client->instance->ShareSession();
 				const ibTempStorage* const storage = ibApplicationInstance::GetTempStorage(m_applicationInstance);
 				const wxString id = params.GetValue<wxString>(ibProtocol::ibFile::File);
-				const s32 part = params.GetValue<s32>(ibProtocol::ibFile::Part);
-				wxMemoryBuffer data;
+				const std::int32_t part = params.GetValue<std::int32_t>(ibProtocol::ibFile::Part);
+				ibMemoryBuffer data;
 				if (session == nullptr || storage == nullptr) {
 					refuse(ibProtocol::ibRefusal::NoSession, wxT("the client has no session"));
 				}
@@ -1216,7 +1216,7 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 					else {
 						result.SetValue(ibProtocol::ibFile::Name, name);
 						result.SetValue(ibProtocol::ibFile::Part, part);
-						result.SetValue(ibProtocol::ibFile::Parts, static_cast<s32>(parts));
+						result.SetValue(ibProtocol::ibFile::Parts, static_cast<std::int32_t>(parts));
 						ibString text;
 						ibBase64::Append(text, data.GetData(), data.GetDataLen());
 						result.SetValue(ibProtocol::ibFile::Data, text);
@@ -1279,7 +1279,7 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 				// One of the commands the client's application offers, on the active tab's document — refused before
 				// anything is done when it offers no such command, or the document does not take it now (asked on
 				// the session, where the document is).
-				const ibDocCommand command = static_cast<ibDocCommand>(params.GetValue<s32>(ibProtocol::ibFrame::Command));
+				const ibDocCommand command = static_cast<ibDocCommand>(params.GetValue<std::int32_t>(ibProtocol::ibFrame::Command));
 				const wxString name = params.GetValue<wxString>(ibProtocol::ibFrame::Name);   // Save as's: the file's
 				ibClientFrame* const frame = client->instance->GetFrame();
 				std::shared_ptr<ibSession> session = client->instance->ShareSession();
@@ -1313,7 +1313,7 @@ bool ibClientHost::Debug(Client& client, const ibDataNode& params, ibDataNode& r
 	wxString& error, const void* connection)
 {
 	const auto refuse = [&refusal, &error](ibProtocol::ibRefusal why, const wxString& text) { refusal = why; error = text; };
-	const ibProtocol::ibDebug::ibCommand command = static_cast<ibProtocol::ibDebug::ibCommand>(params.GetValue<s32>(ibProtocol::ibDebug::Command));
+	const ibProtocol::ibDebug::ibCommand command = static_cast<ibProtocol::ibDebug::ibCommand>(params.GetValue<std::int32_t>(ibProtocol::ibDebug::Command));
 
 	// The frame's debugger, the designer's — a client of another mode has none, and nothing of this is its.
 	ibClientFrame* const frame = client.instance->GetFrame();
@@ -1384,7 +1384,7 @@ bool ibClientHost::Debug(Client& client, const ibDataNode& params, ibDataNode& r
 //*                                Running the client's work                                *
 //*******************************************************************************************
 
-bool ibClientHost::Run(Client& client, std::function<void(ibClientFrame*)> work, s32 since, ibDataNode& result,
+bool ibClientHost::Run(Client& client, std::function<void(ibClientFrame*)> work, std::int32_t since, ibDataNode& result,
 	ibProtocol::ibRefusal& refusal, wxString& error)
 {
 	std::shared_ptr<ibSession> session = client.instance->ShareSession();
@@ -1447,7 +1447,7 @@ bool ibClientHost::Run(Client& client, std::function<void(ibClientFrame*)> work,
 	// is patched from the last frame's, as in 1 — forms are alike, and the difference of two is a part of either
 	// (25 KB for a list, not its 47). The frame the patch is taken from is the last one sent with that view in its
 	// place; the client puts its own copy in place the same way.
-	const s32 active = drawn.GetValue<s32>(ibProtocol::ibFrame::ActiveTab);
+	const std::int32_t active = drawn.GetValue<std::int32_t>(ibProtocol::ibFrame::ActiveTab);
 	ibDataNode base;
 	const bool fromLast = since != 0 && since == client.frame;
 	if (fromLast && client.protocol >= 2) {
@@ -1490,10 +1490,10 @@ bool ibClientHost::Run(Client& client, std::function<void(ibClientFrame*)> work,
 			client.views[active] = view->AsChild();
 		else
 			client.views.erase(active);
-		std::set<s32> open;
+		std::set<std::int32_t> open;
 		if (const ibDataNode* const tabs = drawn.FindChild(ibProtocol::ibFrame::Tabs))
 			for (const ibDataNode& tab : tabs->Children())
-				open.insert(static_cast<s32>(tab.GetMetaId()));
+				open.insert(static_cast<std::int32_t>(tab.GetMetaId()));
 		for (auto it = client.views.begin(); it != client.views.end();)
 			it = open.count(it->first) != 0 ? std::next(it) : client.views.erase(it);
 	}
@@ -1551,7 +1551,7 @@ void ibClientHost::DrawFrame(ibClientFrame* frame, ibDataNode& state, ibDataNode
 	// What the client's application offers besides its tabs — the schemas its doc manager registered.
 	std::vector<ibDataValue> schemas;
 	for (const ibProtocol::ibSchema::ibKind kind : frame->GetDocumentManager()->GetSchemaKinds())
-		schemas.push_back(ibDataValue::Int(static_cast<s64>(kind)));
+		schemas.push_back(ibDataValue::Int(static_cast<std::int64_t>(kind)));
 	state.AddField(ibProtocol::ibFrame::Schemas, ibDataValue::Array(schemas));
 
 	// …and the documents it opens from a file — the templates its doc manager registered that a person picks
@@ -1604,7 +1604,7 @@ void ibClientHost::DrawFrame(ibClientFrame* frame, ibDataNode& state, ibDataNode
 		// What its view shows, when it is no form — the client draws it with the view of its own it has for that.
 		if (const ibView* const view = tab->GetView()) {
 			if (view->GetViewKind() != ibProtocol::ibView::ibKind::Form)
-				node.SetValue(ibProtocol::ibFrame::ibTab::Kind, static_cast<s32>(view->GetViewKind()));
+				node.SetValue(ibProtocol::ibFrame::ibTab::Kind, static_cast<std::int32_t>(view->GetViewKind()));
 		}
 		// What its document saves as — the named lines of a file dialog, Title and Mask each, as Templates are — and its
 		// file, once it has one: a file of the session's temporary storage the client takes down to where the person keeps
@@ -1633,7 +1633,7 @@ void ibClientHost::DrawFrame(ibClientFrame* frame, ibDataNode& state, ibDataNode
 		std::vector<ibDataValue> commands;
 		for (const auto& command : frame->GetDocumentManager()->GetCommands()) {
 			if (frame->IsCommandEnabled(command.first, i))
-				commands.push_back(ibDataValue::Int(static_cast<s64>(command.first)));
+				commands.push_back(ibDataValue::Int(static_cast<std::int64_t>(command.first)));
 		}
 		node.AddField(ibProtocol::ibFrame::ibTab::Commands, ibDataValue::Array(commands));
 	}
@@ -1644,7 +1644,7 @@ void ibClientHost::DrawFrame(ibClientFrame* frame, ibDataNode& state, ibDataNode
 	ibDataNode& messages = events.Child(ibProtocol::ibFrame::Messages);
 	for (const ibClientFrame::PendingMessage& message : frame->DrainPendingMessages()) {
 		ibDataNode& node = messages.AddChild(0, 0);
-		node.SetValue(ibProtocol::ibFrame::ibMessage::Level, static_cast<s32>(message.level));
+		node.SetValue(ibProtocol::ibFrame::ibMessage::Level, static_cast<std::int32_t>(message.level));
 		node.SetValue(ibProtocol::ibFrame::ibMessage::Text, message.text);
 	}
 	if (frame->TakeClearPending())

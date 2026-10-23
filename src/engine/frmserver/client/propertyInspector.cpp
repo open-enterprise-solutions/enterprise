@@ -29,16 +29,16 @@ void ibPropertyInspector::AppendProperty(ibDataNode& parent, ibBackendProperty* 
 	ibPropertyChoiceList choices;
 	if (property->GetValueList(choices) == ibPropertyChoiceMode::Mult)
 		row.SetValue(ibProtocol::ibSchema::ibProperties::Multiple, true);
-	std::vector<u64> classes;   // the classes the choices' data names, each once, in the order they first appear
+	std::vector<std::uint64_t> classes;   // the classes the choices' data names, each once, in the order they first appear
 	for (unsigned int index = 0; index < choices.GetCount(); ++index) {
 		ibDataNode& choice = row.AddChild(0, static_cast<ibMetaID>(row.Children().size() + 1));
-		choice.SetValue(ibProtocol::ibSchema::ibProperties::Id, static_cast<s32>(choices.GetId(index)));
+		choice.SetValue(ibProtocol::ibSchema::ibProperties::Id, static_cast<std::int32_t>(choices.GetId(index)));
 		choice.SetValue(ibProtocol::ibSchema::ibProperties::Title, choices.GetName(index));
 		const ibPictureDescription& picture = choices.GetPicture(index);
 		if (!picture.IsEmptyPicture())
 			choice.SetValue(ibProtocol::ibSchema::ibProperties::Picture, ibBackendPicture::SendPicture(picture, metaData));
-		// Its data, a u64 — past what a JSON number keeps, so as a decimal.
-		if (const u64 data = choices.GetData(index)) {
+		// Its data, a std::uint64_t — past what a JSON number keeps, so as a decimal.
+		if (const std::uint64_t data = choices.GetData(index)) {
 			choice.SetValue(ibProtocol::ibSchema::ibProperties::Data, ibString::Format(wxT("%llu"), static_cast<unsigned long long>(data)));
 			if (std::find(classes.begin(), classes.end(), data) == classes.end())
 				classes.push_back(data);
@@ -49,7 +49,7 @@ void ibPropertyInspector::AppendProperty(ibDataNode& parent, ibBackendProperty* 
 	// configuration to name a kind by, and a window groups the choices under them, as the desktop's did.
 	if (!classes.empty()) {
 		ibDataNode& named = row.Child(ibProtocol::ibSchema::ibProperties::Classes);
-		for (const u64 clsid : classes) {
+		for (const std::uint64_t clsid : classes) {
 			const ibCtorAbstractType* const ctor = ibValue::GetAvailableCtor(clsid);
 			if (ctor == nullptr)
 				continue;
@@ -114,7 +114,7 @@ bool ibPropertyInspector::PropertyHidden(const ibProperty* property, bool hide)
 	return true;
 }
 
-void ibPropertyInspector::SelectObject(ibPropertyObject* object, ibMetaID id, s32 tabId)
+void ibPropertyInspector::SelectObject(ibPropertyObject* object, ibMetaID id, std::int32_t tabId)
 {
 	if (ibPropertyObject* const shown = GetSelectedObject())
 		shown->RemoveNotifier(this);
@@ -131,7 +131,7 @@ void ibPropertyInspector::SelectObject(ibPropertyObject* object, ibMetaID id, s3
 	}
 }
 
-void ibPropertyInspector::SelectObject(ibValueMetaObject* object, s32 tabId)
+void ibPropertyInspector::SelectObject(ibValueMetaObject* object, std::int32_t tabId)
 {
 	SelectObject(object, object != nullptr ? object->GetMetaID() : 0, tabId);
 }

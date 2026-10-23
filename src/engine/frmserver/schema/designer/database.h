@@ -21,7 +21,7 @@ public:
 	// Load — restored from a file the person is asked for, every session of the base closed after; Save — dumped into a
 	// file of the session's, taken down where the person chooses; Clear — asked first. Each the desktop handler's work,
 	// said to the person as it said it.
-	virtual std::function<void()> Command(const ibSession& session, s32 command,
+	virtual std::function<void()> Command(const ibSession& session, std::int32_t command,
 		const ibDataNode& args, ibProtocol::ibRefusal& refusal, wxString& error) const override;
 };
 

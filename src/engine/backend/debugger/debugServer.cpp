@@ -18,7 +18,7 @@
 #include "backend/session/sessionRegistry.h"
 #include "backend/session/workerPool.h"
 
-#include "core/fileSystem/fs.h"
+#include "core/memory/memoryStream.h"
 #include "backend/system/systemManager.h"     // Message — the person is told before code runs
 #include "backend/databaseLayer/databaseLayer.h"   // …and the transaction that undoes it
 #include "backend/job/jobRunByteCode.h"       // sent code is a background job, and it lives with them
@@ -1141,7 +1141,7 @@ void ibDebuggerServer::ibDebuggerServerConnection::EntryClient()
 		}
 
 		// 🛑 A FRAME THIS END CANNOT READ ENDS THE CONNECTION, NOT THE PROCESS. The reader refuses a short block and a
-		// string with no terminator (fileSystem/fs.cpp), and that refusal travels up here — on the connection thread,
+		// string with no terminator (core/memory/memoryStream.cpp), and that refusal travels up here — on the connection thread,
 		// where an escaping exception takes the debuggee down with it. The client's loop already stops the same way
 		// (debugClient.cpp). A bad frame means the two ends no longer agree about the wire; the honest thing left is
 		// to stop reading it.
@@ -1199,7 +1199,7 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 {
 	ibReaderMemory commandReader(pointer, length);
 	wxASSERT(ms_debugServer != nullptr);
-	u16 commandFromClient = commandReader.r_u16();
+	std::uint16_t commandFromClient = commandReader.r_u16();
 
 	// 🔎 WHAT ARRIVED, IN ORDER. A command id this end does not know is the fingerprint of a frame
 	// assembled from two writers' bytes, and it is otherwise invisible: every branch below is an
@@ -1773,7 +1773,7 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 		commandReader.r_stringZ(strExpression);
 		commandReader.r_stringZ(strKeyWord);
 
-		s32 currPos = commandReader.r_s32();
+		std::int32_t currPos = commandReader.r_s32();
 		if (IsSessionParked(sid)) {
 			ibValue vResult;
 			if (EvalInParkedSession(sid, strExpression, vResult, false)) {
@@ -1857,7 +1857,7 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 		commandReader.r_stringZ(area);
 		commandReader.r_stringZ(format);
 
-		wxMemoryBuffer png;
+		ibMemoryBuffer png;
 		wxString focus;
 
 		// 🛑⭐⭐ NOT WHILE THE RUNTIME IS PARKED, and this is the whole nature of the thing. Every other
@@ -1938,7 +1938,7 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 		commandChannel.w_stringZ(focus);   // …and what they were pointing at, which is half the answer
 		commandChannel.w_u32((unsigned int)png.GetDataLen());
 		if (png.GetDataLen() > 0)
-			commandChannel.w(png.GetData(), (u32)png.GetDataLen());
+			commandChannel.w(png.GetData(), (std::uint32_t)png.GetDataLen());
 
 		SendCommand(commandChannel.pointer(), commandChannel.size());
 	}
@@ -1994,18 +1994,14 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 	// out of what came and runs it, on a rented connection so nobody's window waits for it.
 	else if (commandFromClient == CommandId_Compose) {
 
-		const u32 given = commandReader.r_u32();
+		const std::uint32_t given = commandReader.r_u32();
 
 		ibDataNode request;
 		if (given > 0) {
 			// ⚠ THE NODE TRAVELS IN THE INTERNAL BINARY FORMAT, not as JSON. A report's whole point
 			// here is EXACT figures, and a decimal that goes out through a double comes back as
 			// nearly itself — which is the one failure this pair of tools must not have.
-			//
-			// ⚠ And the buffer is a NAMED LOCAL: a reader borrows its bytes, so handing it a
-			// temporary leaves it reading freed memory (fs.h spells this out and deletes the
-			// rvalue overload for it).
-			wxMemoryBuffer blob;
+			ibMemoryBuffer blob;
 			blob.SetBufSize(given);
 			commandReader.r(blob.GetWriteBuf(given), given);
 			blob.SetDataLen(given);
@@ -2028,7 +2024,7 @@ void ibDebuggerServer::ibDebuggerServerConnection::RecvCommand(void* pointer, un
 		commandChannel.w_stringZ(refusal);
 		commandChannel.w_u32((unsigned int)payload.size());
 		if (payload.size() > 0)
-			commandChannel.w(payload.pointer(), (u32)payload.size());
+			commandChannel.w(payload.pointer(), (std::uint32_t)payload.size());
 
 		SendCommand(commandChannel.pointer(), commandChannel.size());
 	}
@@ -2111,7 +2107,7 @@ void ibDebuggerServer::ibDebuggerServerConnection::SendCommand(void* pointer, un
 	// frames, the stack, the locals, the watches) emit one after another, and until now nothing said how
 	// many, how big, or in what order. Which thread each was is the journal's own column.
 	ibJournalIf {
-		const u16 command = length >= sizeof(u16) ? *static_cast<const u16*>(pointer) : 0;
+		const std::uint16_t command = length >= sizeof(std::uint16_t) ? *static_cast<const std::uint16_t*>(pointer) : 0;
 		ibJournalInfo(wxT("debugger.wire"),
 			wxT("debug server -> command %d of %u bytes (socket %s)"),
 			static_cast<int>(command), length,

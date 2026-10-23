@@ -205,7 +205,7 @@ std::vector<wxString> ColumnSortFields(const ibBackendQueryColumn* col)
 // ==========================================================================
 
 ibValue ReadSingleTargetReference(const ibMetaData* metaData, const ibClassID& target,
-                                  const wxMemoryBuffer& keyBytes)
+                                  const ibMemoryBuffer& keyBytes)
 {
 	if (metaData == nullptr || target == 0 || keyBytes.GetDataLen() < sizeof(ibReference))
 		return ibValue();
@@ -236,7 +236,7 @@ void ibColumnCodec::WriteValue(const ibBackendQueryColumn* col, const ibMetaData
 	// Schedule payload — serialised once, bound at the _SCH slot. Read off the value itself, like
 	// the reference blob below: no metadata, no session. The buffer exists only for a schedule: made for
 	// every value, it was a kilobyte allocated and freed per cell written (wxMemoryBuffer's default size).
-	std::optional<wxMemoryBuffer> scheduleBlob;
+	std::optional<ibMemoryBuffer> scheduleBlob;
 	if (tag == ibFieldTypes_Schedule) {
 		scheduleBlob.emplace();
 		ibValueSchedule* schedule = nullptr;
@@ -246,7 +246,7 @@ void ibColumnCodec::WriteValue(const ibBackendQueryColumn* col, const ibMetaData
 
 	// Type-description payload — the same arrangement one line up: serialised once here, bound at
 	// the _TD slot below. The value knows its own description; the codec only moves bytes.
-	std::optional<wxMemoryBuffer> typeDescBlob;
+	std::optional<ibMemoryBuffer> typeDescBlob;
 	if (tag == ibFieldTypes_TypeDescription) {
 		typeDescBlob.emplace();
 		ibValueTypeDescription* typeValue = nullptr;
@@ -378,7 +378,7 @@ bool ReadFieldOf(ibCellFields& cell, ibColumnRole valueRole, int fieldType,
 		// The blob IS the value. An empty or unreadable one yields a DEFAULT schedule rather than
 		// an empty value: a row whose cell was never written must still answer "when am I due",
 		// and the description's own defaults are that answer (every one of them = "not restricted").
-		wxMemoryBuffer bufferData;
+		ibMemoryBuffer bufferData;
 		result.GetResultBlob(cell.Field(valueRole), bufferData);
 
 		ibJobScheduleDescription schedule;
@@ -394,7 +394,7 @@ bool ReadFieldOf(ibCellFields& cell, ibColumnRole valueRole, int fieldType,
 		// description rather than the column's own type: a characteristic that names no type is a
 		// defect the write refuses, so reading one back must not manufacture a plausible answer —
 		// it would look like the narrowing worked while admitting everything.
-		wxMemoryBuffer bufferData;
+		ibMemoryBuffer bufferData;
 		result.GetResultBlob(cell.Field(valueRole), bufferData);
 
 		ibTypeDescription typeDesc;
@@ -442,7 +442,7 @@ bool ReadFieldOf(ibCellFields& cell, ibColumnRole valueRole, int fieldType,
 
 		// EMPTY, NOT DEFAULT: the driver hands its bytes over by assignment, and a default buffer
 		// allocates a kilobyte first only to drop it — once per reference cell of every row read.
-		wxMemoryBuffer bufferData(0);
+		ibMemoryBuffer bufferData(0);
 		result.GetResultBlob(cell.Field(ibColumnRole::ReferenceId), bufferData);
 		if (!bufferData.IsEmpty()) {
 

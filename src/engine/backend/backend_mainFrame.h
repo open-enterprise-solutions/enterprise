@@ -106,7 +106,7 @@ public:
 	// landed — then you know exactly which area he wants to show you"*). It comes back as text: the
 	// control, the form the platform has open (ActiveWindow), and where the pointer is.
 	virtual bool CaptureWindow(const wxString& reason, const wxString& area, const wxString& format,
-		wxMemoryBuffer& bytes, wxString& focus) { return false; }
+		ibMemoryBuffer& bytes, wxString& focus) { return false; }
 
 #pragma endregion
 
