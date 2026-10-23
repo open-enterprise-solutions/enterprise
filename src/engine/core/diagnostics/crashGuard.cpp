@@ -359,9 +359,8 @@ void Install(const wxString& exeName)
 	// write one at all yet — turning it on there is a decision about disk, privacy and support
 	// workflow, and it will be made when there is a Release story to make it for. The API stays
 	// either way, so a `ibJournalInfo(...)` callsite compiles in both and simply writes nowhere.
-#ifndef NDEBUG
+	// Opened in both all the same: Open decides the file, and the program's name is the console's too.
 	ibTechJournal::Open(exeName);
-#endif
 
 	if (s_prevTerminate == nullptr)
 		s_prevTerminate = std::set_terminate(&OesTerminateHandler);

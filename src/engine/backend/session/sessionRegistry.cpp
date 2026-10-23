@@ -1621,6 +1621,28 @@ void ibSessionRegistry::ProcessSetActivity(ibRegistryRequest& req)
 	} catch (...) { /* swallowed: SetActivity is a UI-state hint, not a correctness signal — a failed UPDATE just means peer dialogs show a stale label until the next tick */ }
 }
 
+void ibSessionRegistry::ProcessSetTokenHash(ibRegistryRequest& req)
+{
+	// ⭐ HERE, ON THE ROW'S ONE WRITER. The session's worker wrote it on its own connection while this thread beat the
+	// same rows, and the second of the two was refused — "update conflicts with concurrent update": a login of 1000
+	// at once answered 500 seven times (2026-10-23). Between this thread's own statements there is nobody to meet.
+	bool written = true;   // a session with no row of this registry's has nothing to store
+	if (req.session && m_ownsSysSession && m_writeConn && req.session->Inserted()) {
+		try {
+			ibRegistryNoWait tx(m_writeHolder);
+			tx.Query().Execute(ibUpdate(session_table,
+				{ { wxT("tokenHash"), ibConst(ibValue(req.tokenHash)) } },
+				ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("session")), ibConst(ibValue(req.session->GetId())))));
+			tx.Commit();
+		}
+		catch (...) {
+			written = false;   // the row held by somebody else (an apply, an administrator's signal)
+		}
+	}
+	if (req.written)
+		req.written->set_value(written);
+}
+
 // --- Periodic jobs --------------------------------------------------------
 
 void ibSessionRegistry::JobSweepStale()
@@ -2309,11 +2331,12 @@ void ibSessionRegistry::ThreadBody() noexcept
 					case ibRegistryRequestKind::Detach:       ProcessDetach(req);       break;
 					case ibRegistryRequestKind::Remove:       ProcessRemove(req);       break;
 					case ibRegistryRequestKind::SetActivity:  ProcessSetActivity(req);  break;
+					case ibRegistryRequestKind::SetTokenHash: ProcessSetTokenHash(req); break;
 					case ibRegistryRequestKind::SetExclusive: ProcessSetExclusive(req); break;
 				}
-				// Every request but an activity label may add, sign in, take out or mark a row the snapshot
-				// shows; the label is not in it.
-				if (req.kind != ibRegistryRequestKind::SetActivity)
+				// Every request but an activity label and a token's digest may add, sign in, take out or mark a row
+				// the snapshot shows; those two are not in it.
+				if (req.kind != ibRegistryRequestKind::SetActivity && req.kind != ibRegistryRequestKind::SetTokenHash)
 					rowsWritten = true;
 			}
 

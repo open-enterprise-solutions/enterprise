@@ -826,6 +826,31 @@ void ibSession::SetActivity(const wxString& activity)
 	reg.Submit(std::move(req), ibPriority::Low);
 }
 
+bool ibSession::SetTokenHash(const wxString& tokenHash)
+{
+	ibSessionRegistry* const regPtr = RegistryOf(*this);
+	if (regPtr == nullptr || regPtr->IsFatal())
+		return false;
+
+	ibRegistryRequest req;
+	req.kind      = ibRegistryRequestKind::SetTokenHash;
+	req.session   = shared_from_this();
+	req.tokenHash = tokenHash;
+	req.written   = std::make_shared<std::promise<bool>>();
+	std::future<bool> written = req.written->get_future();
+	regPtr->Submit(std::move(req), ibPriority::Normal);
+
+	// As long as Add and Attach are waited for: a registry that has not answered by then is a busy server.
+	if (written.wait_for(std::chrono::seconds(20)) != std::future_status::ready)
+		return false;
+	try {
+		return written.get();
+	}
+	catch (const std::future_error&) {
+		return false;   // the registry stopped with the request still queued
+	}
+}
+
 void ibSession::SetExclusive(bool on)
 {
 	// Registry runs the queue handshake + wait and gives us back the

@@ -36,6 +36,7 @@
 #include <condition_variable>
 #include <deque>
 #include <functional>
+#include <future>
 #include <memory>
 #include <mutex>
 #include <shared_mutex>
@@ -69,6 +70,7 @@ enum class ibRegistryRequestKind {
 	Detach,        // drop user identity, session stays Anonymous
 	Remove,        // teardown — DELETE row, release lock, drop from m_own
 	SetActivity,   // update currentActivity column (scripts / handlers)
+	SetTokenHash,  // update tokenHash column — a thin client's resume token, its digest (ibSession::SetTokenHash)
 	SetExclusive,  // acquire/release process-wide exclusive (monopoly) mode
 };
 
@@ -83,6 +85,10 @@ struct BACKEND_API ibRegistryRequest {
 
 	// SetActivity payload.
 	wxString activity;
+
+	// SetTokenHash payload — the digest, and the caller's wait for the verdict: true — written, or no row to write.
+	wxString                            tokenHash;
+	std::shared_ptr<std::promise<bool>> written;
 
 	// SetExclusive payload — true acquires, false releases.
 	bool     exclusiveOn = false;
@@ -529,6 +535,7 @@ private:
 	void ProcessDetach(ibRegistryRequest& req);
 	void ProcessRemove(ibRegistryRequest& req);
 	void ProcessSetActivity(ibRegistryRequest& req);
+	void ProcessSetTokenHash(ibRegistryRequest& req);
 	void ProcessSetExclusive(ibRegistryRequest& req);
 
 	// Drains m_pendingExclusive — called from ProcessSetExclusive(off)

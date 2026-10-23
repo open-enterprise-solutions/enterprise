@@ -396,6 +396,10 @@ public:
 	// `sys_session.currentActivity`; admin UI sees it on the next snapshot.
 	void SetActivity(const wxString& activity);
 
+	// A thin client's resume token, its digest, into `sys_session.tokenHash` — written by the registry, the row's one
+	// writer (ProcessSetTokenHash). Waits for its verdict: false — refused, or not answered in time.
+	bool SetTokenHash(const wxString& tokenHash);
+
 	// Server session — back-link from a server-spawned client to the
 	// session that hosts it. Set by the holder right after the client is
 	// registered in the registry (e.g. wes's WebClient session points to

@@ -86,7 +86,8 @@ public:
 	// process's first line and needs no database, no session and no configuration.
 	//
 	// Failures are silent by design: a machine with no writable directory beside the binary must
-	// still run. IsOpen() then answers false and every write is a no-op.
+	// still run. IsOpen() then answers false and every write is a no-op — but for the console's echo
+	// (EchoToStderr), which a Release build, keeping no file, has as well.
 	static void Open(const wxString& exeName);
 
 	// Flush and close. Not required — the process may simply end — but a caller that wants the file

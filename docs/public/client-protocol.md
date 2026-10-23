@@ -507,7 +507,7 @@ are HTTP's by meaning; where two reasons share one, the method tells them apart.
 | 401 | `login`: the user, the password, or a token that is unknown, expired, or presented while the client is still attached. Any other call: no such client, a session that is gone, a detached client, or a connection that is not the one logged in — log in anew |
 | 403 | no right to it; `login`: the application refused to start |
 | 404 | no such schema, command, item, tab, file, part or request |
-| 409 | not now: the active document does not take the command |
+| 409 | not now: the active document does not take the command; `login`: the server could not take the session in yet — log in again |
 | 500 | the server could not do it |
 
 An HTTP status answers only what comes before the protocol: no base at the address (404), a notification (204).

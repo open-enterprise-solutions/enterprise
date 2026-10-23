@@ -18,7 +18,6 @@
 #include "backend/backend_picture.h"   // ibBackendPicture::GetServerPicture — a picture asked for by its id
 #include "core/exception.h"
 #include "core/formatString.h"        // ibFormatString — a value presented through Format()'s codes
-#include "backend/databaseLayer/databaseQueryBuilder.h"
 #include "backend/mcp/mcpServer.h"      // the base's assistant access — where it listens, with the frame
 #include "backend/metadataConfiguration.h"
 #include "backend/metaCollection/metaFormObject.h"   // ibBackendCommandItem::Execute
@@ -479,26 +478,11 @@ bool ibClientHost::RememberToken(Client& client, ibDataNode& result, ibProtocol:
 		return false;
 	}
 	const wxString hash = ibSessionToken::Hex(digest, ibSessionToken::kDigest);
-	bool wrote = false;
-	try {
-		if (std::shared_ptr<ibSession> session = client.instance->ShareSession()) {
-			session->Submit([&]() {
-				ibDatabaseQueryBuilder q;
-				q.Execute(ibUpdate(session_table, {
-					{ wxT("tokenHash"), ibConst(ibValue(hash)) },
-				}, ibBinOp(ibQueryBinOp::Eq, ibCol(wxT("session")), ibConst(ibValue(client.instance->Id())))));
-				wrote = true;
-			}).get();
-		}
-	}
-	catch (const ibCoreException&) {
-		wrote = false;
-	}
-	catch (...) {
-		wrote = false;
-	}
-	if (!wrote) {
-		refusal = ibProtocol::ibRefusal::Failed;
+	// Into the session's row by the registry, which writes the row's every other column too. A row held, or a
+	// registry busy past its wait, is a login to repeat, not a server that failed.
+	const std::shared_ptr<ibSession> session = client.instance->ShareSession();
+	if (!session || !session->SetTokenHash(hash)) {
+		refusal = ibProtocol::ibRefusal::NotNow;
 		error = wxT("the token could not be stored");
 		return false;
 	}

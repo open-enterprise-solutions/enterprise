@@ -121,6 +121,16 @@ ibTechJournal& ibTechJournal::Instance()
 
 void ibTechJournal::Open(const wxString& exeName)
 {
+	{
+		wxCriticalSectionLocker lock(s_lock);
+		s_program = exeName;
+	}
+#ifdef NDEBUG
+	// ⭐ A DEBUG BUILD IS THE CONSENT to the file (ibCrashGuard::Install has why): a Release build opens none. The
+	// program's name is kept all the same — a program that narrates in its console says there what it says (Write).
+	return;
+#endif
+
 	// BESIDE THE DUMPS. `journal/` next to `crashdumps/`, so the two halves of one incident live in
 	// one place: the dump says where it stopped, the journal says what it was doing. Inside an
 	// installed bundle that place is ~/Library/Logs/OES — /Applications is not writable — and
@@ -133,7 +143,6 @@ void ibTechJournal::Open(const wxString& exeName)
 	const wxString stamp = wxDateTime::Now().Format(wxT("%Y%m%dT%H%M%S"));
 	{
 		wxCriticalSectionLocker lock(s_lock);
-		s_program = exeName;
 		s_path = dir + wxFILE_SEP_PATH
 			+ wxString::Format(wxT("%s_%s_%u.log"), exeName, stamp,
 				static_cast<unsigned>(wxGetProcessId()));
@@ -265,11 +274,20 @@ void ibTechJournal::Write(ibJournalMark mark, const wxString& source, const wxSt
 	const ContextFn context = s_context.load(std::memory_order_acquire);
 	const wxString about = context != nullptr ? context() : wxString();
 
+	static const bool s_toStderr = ibDebugTraceEnabled("OES_JOURNAL_STDERR");   // see the console's echo below
+
 	wxString line;
 	bool forConsole = false;   // what a program that narrates (EchoToStderr) shows in its console — see below
+	bool kept = false;         // the file has it — and only then the debugger's echo and the error's dump, below
 	{
 		wxCriticalSectionLocker lock(s_lock);
-		if (!s_file.IsOpened())
+		kept = s_file.IsOpened();
+		forConsole = s_toStderr
+			|| ((mark != ibJournalMark::Info || source == s_program) && s_echoToStderr.load(std::memory_order_relaxed));
+		// ⭐ NO FILE IS NOT NO CONSOLE. A Release build keeps no file (Open), and the console went with it: a Release
+		// application server refused at its start said nothing and left with code 1 (2026-10-23). A line nobody
+		// keeps and nobody watches goes nowhere.
+		if (!kept && !forConsole)
 			return;
 
 		// THE LINE: kind, time, thread, event source, detail.
@@ -296,9 +314,10 @@ void ibTechJournal::Write(ibJournalMark mark, const wxString& source, const wxSt
 			about.IsEmpty() ? source : wxT("(") + about + wxT(") ") + source,
 			message);
 
-		s_file.Write(line);
-		s_file.Flush();               // a crash must not cost the lines that explain it
-		forConsole = mark != ibJournalMark::Info || source == s_program;
+		if (kept) {
+			s_file.Write(line);
+			s_file.Flush();           // a crash must not cost the lines that explain it
+		}
 	}
 
 	// ⭐ AND TO STANDARD ERROR, ON REQUEST — for a machine with no debugger to attach to: a console
@@ -320,8 +339,7 @@ void ibTechJournal::Write(ibJournalMark mark, const wxString& source, const wxSt
 	// lock: four sessions of an application server stood in a queue to the console window, 43 of 45 threads caught
 	// in the journal were in this echo (2026-10-06, crawlers ×4: 130 s with the window, 99 s with stderr in a file).
 	// Max chose: the console only what matters. Hundreds of lines a second are not read there anyway.
-	static const bool s_toStderr = ibDebugTraceEnabled("OES_JOURNAL_STDERR");
-	if (s_toStderr || (forConsole && s_echoToStderr.load(std::memory_order_relaxed))) {
+	if (forConsole) {
 #ifdef __WXMSW__
 		// ⚠ A WINDOWS CONSOLE IS TOLD IN ITS OWN CHARACTERS. Bytes reach it read in its code page (866, 1251), so
 		// UTF-8 came out as `????N'N?N` for every Cyrillic word (the application server's console, 2026-10-06); a
@@ -354,7 +372,7 @@ void ibTechJournal::Write(ibJournalMark mark, const wxString& source, const wxSt
 	// the echo reaches only our own target, which lets it pass — nobody. And from any thread but the main one wx does
 	// not deliver it: it keeps the record in a buffer, under a lock of its own, until the main thread flushes — which
 	// an application server's never does, so every line of every session was held in memory until exit (2026-10-06).
-	if (!s_echoToStderr.load(std::memory_order_relaxed)) {
+	if (kept && !s_echoToStderr.load(std::memory_order_relaxed)) {
 		// ⭐⭐ THE ECHO SPEAKS IN THE SEVERITY IT WAS GIVEN — and this is what makes migrating a
 		// `wxLogError` callsite to `ibJournalError` safe. wx's verbs are not interchangeable: in a
 		// GUI application wxLogError puts a dialog in front of the user, wxLogMessage shows a
@@ -414,7 +432,7 @@ void ibTechJournal::Write(ibJournalMark mark, const wxString& source, const wxSt
 	// ⚠ AND IT DOES NOT END THE PROCESS. A log verb that can terminate is a trap — someone will put
 	// it inside a loop, or on a path that recovers perfectly well. Deliberate abort stays a
 	// deliberate call (ibCrashGuard::TerminateProcessFast), written where the decision is made.
-	if (mark == ibJournalMark::Error) {
+	if (kept && mark == ibJournalMark::Error) {
 		if (!s_errorDumped.exchange(true, std::memory_order_acq_rel)) {
 			ibCrashGuard::WriteDumpNow(wxT("_error"));
 			Write(ibJournalMark::Info, wxT("journal"),
@@ -457,11 +475,19 @@ void ibTechJournal::SkipErrorDump()
 }
 
 // The vararg door. The GATE IS TESTED FIRST, before FormatV runs: with the journal off the call is a
-// load, a branch and a return, and the string is never built.
+// load, a branch and a return, and the string is never built. A program that narrates in its console
+// is listened to without the file too (Write).
+namespace {
+bool Listened()
+{
+	return ibTechJournal::IsOpen() || s_echoToStderr.load(std::memory_order_relaxed);
+}
+} // namespace
+
 #if !wxUSE_UTF8_LOCALE_ONLY
 void ibTechJournal::DoPrintWchar(ibJournalMark mark, const wxString& source, const wxChar* format, ...)
 {
-	if (!IsOpen())
+	if (!Listened())
 		return;
 	va_list args;
 	va_start(args, format);
@@ -474,7 +500,7 @@ void ibTechJournal::DoPrintWchar(ibJournalMark mark, const wxString& source, con
 #if wxUSE_UNICODE_UTF8
 void ibTechJournal::DoPrintUtf8(ibJournalMark mark, const wxString& source, const char* format, ...)
 {
-	if (!IsOpen())
+	if (!Listened())
 		return;
 	va_list args;
 	va_start(args, format);
