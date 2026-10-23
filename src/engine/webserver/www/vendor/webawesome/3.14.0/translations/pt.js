@@ -1,0 +1,191 @@
+/*! Copyright 2026 Fonticons, Inc. - https://webawesome.com/license */
+import "../chunks/chunk.DL7HG4WM.js";
+import "../chunks/chunk.D5HA4OFX.js";
+import {
+  registerTranslation
+} from "../chunks/chunk.HOKYDFUG.js";
+import "../chunks/chunk.JHZRD2LV.js";
+
+// src/translations/pt.ts
+var translation = {
+  $code: "pt",
+  $name: "Portugu\xEAs",
+  $dir: "ltr",
+  allTagsRemoved: "Todas as etiquetas foram removidas",
+  am: "AM",
+  autosizeColumn: "Ajustar largura da coluna",
+  captions: "Legendas",
+  carousel: "Carrossel",
+  chooseDate: "Escolher data",
+  chooseDecade: "Escolher d\xE9cada",
+  chooseMonth: "Escolher m\xEAs",
+  chooseTime: "Escolher hora",
+  chooseYear: "Escolher ano",
+  clearEntry: "Limpar entrada",
+  clearFilter: "Limpar filtro",
+  clearSort: "Limpar ordena\xE7\xE3o",
+  close: "Fechar",
+  closeCalendar: "Fechar calend\xE1rio",
+  closeTimeInput: "Fechar seletor de hora",
+  collapseRow: "Recolher linha",
+  columnMenu: "Op\xE7\xF5es da coluna",
+  columnMovedToPosition: (label, position, total) => `${label} movida para a posi\xE7\xE3o ${position} de ${total}`,
+  columns: "Colunas",
+  compactPageXOfY: (page, total) => `${page} de ${total}`,
+  completed: "Conclu\xEDdo",
+  copied: "Copiado",
+  copy: "Copiar",
+  createOption: (value) => `Criar "${value}"`,
+  currentlyPlaying: "a reproduzir",
+  currentValue: "Valor atual",
+  date: "Data",
+  datePickerKeyboardHelp: "Use as teclas de seta para alterar os valores; pressione Alt+Seta para baixo para abrir o calend\xE1rio.",
+  day: "Dia",
+  dayPeriod: "AM/PM",
+  decrement: "Diminuir",
+  deselectAllRows: "Desmarcar todas as linhas",
+  disabled: "Desativado",
+  dropFileHere: "Drop file here or click to browse",
+  dropFilesHere: "Drop files here or click to browse",
+  empty: "Vazio",
+  endDate: "Data de fim",
+  enterFullscreen: "Entrar em ecr\xE3 inteiro",
+  error: "Erro",
+  exitFullscreen: "Sair do ecr\xE3 inteiro",
+  expandRow: "Expandir linha",
+  filterByColumn: (label) => `Filtrar por ${label}`,
+  filterFrom: "De",
+  filterMax: "M\xE1x.",
+  filterMin: "M\xEDn.",
+  filterTo: "At\xE9",
+  firstPage: "Primeira p\xE1gina",
+  goToSlide: (slide, count) => `V\xE1 para o slide ${slide} de ${count}`,
+  hideColumn: "Ocultar coluna",
+  hidePassword: "Esconder a senha",
+  hour: "Hora",
+  incompleteDate: "Introduza uma data v\xE1lida.",
+  increment: "Aumentar",
+  jumpBackwardX: (count) => `Recuar ${count} p\xE1ginas`,
+  jumpForwardX: (count) => `Avan\xE7ar ${count} p\xE1ginas`,
+  lastPage: "\xDAltima p\xE1gina",
+  loading: "Carregando",
+  locked: "Bloqueado",
+  minute: "Minuto",
+  month: "M\xEAs",
+  moreOptions: "Mais op\xE7\xF5es",
+  mute: "Sem som",
+  nextDecade: "Pr\xF3xima d\xE9cada",
+  nextMonth: "Pr\xF3ximo m\xEAs",
+  nextPage: "Pr\xF3xima p\xE1gina",
+  nextSlide: "Pr\xF3ximo slide",
+  nextVideo: "Pr\xF3ximo v\xEDdeo",
+  nextYear: "Pr\xF3ximo ano",
+  noData: "Sem dados",
+  noOptions: "Sem op\xE7\xF5es",
+  noResults: "Sem resultados correspondentes",
+  notCompleted: "N\xE3o conclu\xEDdo",
+  now: "Agora",
+  numCharacters: (num) => {
+    if (num === 1) return "1 caractere";
+    return `${num} caracteres`;
+  },
+  numCharactersRemaining: (num) => {
+    if (num === 1) return "1 caractere restante";
+    return `${num} caracteres restantes`;
+  },
+  numOptionsAvailable: (num) => {
+    if (num === 0) return "Nenhuma op\xE7\xE3o dispon\xEDvel";
+    if (num === 1) return "1 op\xE7\xE3o dispon\xEDvel";
+    return `${num} op\xE7\xF5es dispon\xEDveis`;
+  },
+  numOptionsSelected: (num) => {
+    if (num === 0) return "Nenhuma op\xE7\xE3o selecionada";
+    if (num === 1) return "1 op\xE7\xE3o selecionada";
+    return `${num} op\xE7\xF5es selecionadas`;
+  },
+  numRowsCopied: (num) => num === 1 ? "1 linha copiada" : `${num} linhas copiadas`,
+  numRowsSelected: (num) => num === 1 ? "1 linha selecionada" : `${num} linhas selecionadas`,
+  optionPosition: (label, position, total) => `${label}, ${position} de ${total}`,
+  optionsLoadError: "N\xE3o foi poss\xEDvel carregar as op\xE7\xF5es",
+  pageXOfY: (page, total) => `P\xE1gina ${page} de ${total}`,
+  pagination: "Pagina\xE7\xE3o",
+  pause: "Pausar",
+  pauseAnimation: "Pausar anima\xE7\xE3o",
+  pictureInPicture: "Imagem em imagem",
+  pinLeft: "Fixar \xE0 esquerda",
+  pinRight: "Fixar \xE0 direita",
+  play: "Reproduzir",
+  playAnimation: "Reproduzir anima\xE7\xE3o",
+  playbackSpeed: "Velocidade de reprodu\xE7\xE3o",
+  playlist: "Lista de reprodu\xE7\xE3o",
+  pm: "PM",
+  previousDecade: "D\xE9cada anterior",
+  previousMonth: "M\xEAs anterior",
+  previousPage: "P\xE1gina anterior",
+  previousSlide: "Slide anterior",
+  previousVideo: "V\xEDdeo anterior",
+  previousYear: "Ano anterior",
+  progress: "Progresso",
+  rangeTooLong: (max) => {
+    if (max === 1) return "Selecione um intervalo n\xE3o superior a 1 dia";
+    return `Selecione um intervalo n\xE3o superior a ${max} dias`;
+  },
+  rangeTooShort: (min) => {
+    if (min === 1) return "Selecione um intervalo de pelo menos 1 dia";
+    return `Selecione um intervalo de pelo menos ${min} dias`;
+  },
+  readonly: "Somente leitura",
+  remove: "Remover",
+  resetColumns: "Repor colunas",
+  resize: "Mudar o tamanho",
+  resizeColumn: "Redimensionar coluna",
+  rowsPerPage: "Linhas por p\xE1gina",
+  scrollableRegion: "Regi\xE3o rol\xE1vel",
+  scrollToEnd: "Rolar at\xE9 o final",
+  scrollToStart: "Rolar at\xE9 o in\xEDcio",
+  search: "Pesquisar",
+  second: "Segundo",
+  seek: "Procurar",
+  seekProgress: (current, duration) => `${current} de ${duration}`,
+  selectAColorFromTheScreen: "Selecionar uma cor da tela",
+  selectAllRows: "Selecionar todas as linhas",
+  selected: "Selecionado",
+  selectedDateLabel: (date) => `Selecionado: ${date}`,
+  selectedRangeLabel: (range) => `Intervalo selecionado: ${range}`,
+  selectGroup: "Selecionar grupo",
+  selectionCleared: "Sele\xE7\xE3o limpa",
+  selectRow: "Selecionar linha",
+  showingNofMRows: (shown, total) => `A mostrar ${shown} de ${total} linhas`,
+  showingXtoYofZ: (start, end, total) => `${start}\u2013${end} de ${total}`,
+  showPassword: "Mostrar senha",
+  slideNum: (slide) => `Slide ${slide}`,
+  sortAscending: "Ordenar ascendente",
+  sortColumn: "Ordenar coluna",
+  sortDescending: "Ordenar descendente",
+  startDate: "Data de in\xEDcio",
+  steps: "Etapas",
+  stepXOfY: (step, total) => `Etapa ${step} de ${total}`,
+  tagAdded: (tag) => `${tag} adicionado`,
+  tagAlreadyAdded: (tag) => `${tag} j\xE1 existe`,
+  tagInputKeyboardHelp: "Pressione Backspace ou Delete para remover esta etiqueta.",
+  tagRemoved: (tag) => `${tag} removido`,
+  time: "Hora",
+  timeInputKeyboardHelp: "Use as teclas de seta para alterar os valores; pressione Alt+Seta para baixo para abrir o seletor de hora.",
+  today: "Hoje",
+  toggleColorFormat: "Trocar o formato de cor",
+  tooFewTags: (min) => min === 1 ? "Adicione pelo menos 1 etiqueta" : `Adicione pelo menos ${min} etiquetas`,
+  tooManyTags: (max) => max === 1 ? "Adicione no m\xE1ximo 1 etiqueta" : `Adicione no m\xE1ximo ${max} etiquetas`,
+  unmute: "Ativar som",
+  unpin: "Desafixar",
+  unpinColumn: "Desafixar coluna",
+  videoPlayer: "Leitor de v\xEDdeo",
+  volume: "Volume",
+  year: "Ano",
+  zoomIn: "Aumentar zoom",
+  zoomOut: "Diminuir zoom"
+};
+registerTranslation(translation);
+var pt_default = translation;
+export {
+  pt_default as default
+};

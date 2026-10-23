@@ -31,7 +31,8 @@ protocol between them; neither half is called a frontend.
 Chain: core → backend → frmserver ⇄ protocol ⇄ frmclient → enterprise-thin; `fileserver` = backend + frmserver in the
 client's process. `protocol` does not link `core` — `protocol.h` stays dependency-free.
 
-A web server will link `protocol` as `frmclient` does, and tell a browser the same names and numbers.
+The web server links `protocol` as `frmclient` does; [the browser client](browser-client.md) draws the same frame
+the same way.
 
 `frmclient/backend/` is a reduced copy of what the engine's `backend` keeps above `core`: the same names and classes, only
 what the client's windows use. Its `backend_core.h`, `backend.h`, `backend_exception.h` just include `core`.

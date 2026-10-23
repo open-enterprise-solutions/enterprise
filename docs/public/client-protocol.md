@@ -5,7 +5,8 @@ assistant. The server holds the session, its forms, its documents and all the co
 answered and sends what the person did.
 
 **Why.** One platform, many clients. The code runs on the server only, so no client keeps a model of its own in step
-with the platform — what differs between clients is how they draw. The desktop one is [the thin client](thin-client.md).
+with the platform — what differs between clients is how they draw. The desktop one is [the thin client](thin-client.md),
+the browser one [the browser client](browser-client.md).
 
 **Where it is written.** Every name and number below is written once, in `src/engine/protocol/protocol.h` — a header
 that depends on nothing, included by the server (`frmserver`), the thin client and the web server alike. A number there

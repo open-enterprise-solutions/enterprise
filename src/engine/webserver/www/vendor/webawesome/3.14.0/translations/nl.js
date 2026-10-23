@@ -1,0 +1,191 @@
+/*! Copyright 2026 Fonticons, Inc. - https://webawesome.com/license */
+import "../chunks/chunk.DL7HG4WM.js";
+import "../chunks/chunk.D5HA4OFX.js";
+import {
+  registerTranslation
+} from "../chunks/chunk.HOKYDFUG.js";
+import "../chunks/chunk.JHZRD2LV.js";
+
+// src/translations/nl.ts
+var translation = {
+  $code: "nl",
+  $name: "Nederlands",
+  $dir: "ltr",
+  allTagsRemoved: "Alle tags verwijderd",
+  am: "AM",
+  autosizeColumn: "Kolom automatisch passend maken",
+  captions: "Ondertiteling",
+  carousel: "Carrousel",
+  chooseDate: "Datum kiezen",
+  chooseDecade: "Decennium kiezen",
+  chooseMonth: "Maand kiezen",
+  chooseTime: "Tijd kiezen",
+  chooseYear: "Jaar kiezen",
+  clearEntry: "Invoer wissen",
+  clearFilter: "Filter wissen",
+  clearSort: "Sortering wissen",
+  close: "Sluiten",
+  closeCalendar: "Kalender sluiten",
+  closeTimeInput: "Tijdkiezer sluiten",
+  collapseRow: "Rij samenvouwen",
+  columnMenu: "Kolomopties",
+  columnMovedToPosition: (label, position, total) => `${label} verplaatst naar positie ${position} van ${total}`,
+  columns: "Kolommen",
+  compactPageXOfY: (page, total) => `${page} van ${total}`,
+  completed: "Voltooid",
+  copied: "Gekopieerd",
+  copy: "Kopi\xEBren",
+  createOption: (value) => `"${value}" aanmaken`,
+  currentlyPlaying: "wordt nu afgespeeld",
+  currentValue: "Huidige waarde",
+  date: "Datum",
+  datePickerKeyboardHelp: "Gebruik de pijltjestoetsen om waarden te wijzigen; druk op Alt+Pijl omlaag om de kalender te openen.",
+  day: "Dag",
+  dayPeriod: "AM/PM",
+  decrement: "Verlagen",
+  deselectAllRows: "Alle rijen deselecteren",
+  disabled: "Uitgeschakeld",
+  dropFileHere: "Drop file here or click to browse",
+  dropFilesHere: "Drop files here or click to browse",
+  empty: "Leeg",
+  endDate: "Einddatum",
+  enterFullscreen: "Volledig scherm openen",
+  error: "Fout",
+  exitFullscreen: "Volledig scherm sluiten",
+  expandRow: "Rij uitvouwen",
+  filterByColumn: (label) => `Filteren op ${label}`,
+  filterFrom: "Van",
+  filterMax: "Max",
+  filterMin: "Min",
+  filterTo: "Tot",
+  firstPage: "Eerste pagina",
+  goToSlide: (slide, count) => `Ga naar slide ${slide} van ${count}`,
+  hideColumn: "Kolom verbergen",
+  hidePassword: "Verberg wachtwoord",
+  hour: "Uur",
+  incompleteDate: "Voer een geldige datum in.",
+  increment: "Verhogen",
+  jumpBackwardX: (count) => `${count} pagina's terug`,
+  jumpForwardX: (count) => `${count} pagina's vooruit`,
+  lastPage: "Laatste pagina",
+  loading: "Bezig met laden",
+  locked: "Vergrendeld",
+  minute: "Minuut",
+  month: "Maand",
+  moreOptions: "Meer opties",
+  mute: "Dempen",
+  nextDecade: "Volgend decennium",
+  nextMonth: "Volgende maand",
+  nextPage: "Volgende pagina",
+  nextSlide: "Volgende dia",
+  nextVideo: "Volgende video",
+  nextYear: "Volgend jaar",
+  noData: "Geen gegevens",
+  noOptions: "Geen opties",
+  noResults: "Geen overeenkomende resultaten",
+  notCompleted: "Niet voltooid",
+  now: "Nu",
+  numCharacters: (num) => {
+    if (num === 1) return "1 teken";
+    return `${num} tekens`;
+  },
+  numCharactersRemaining: (num) => {
+    if (num === 1) return "1 teken resterend";
+    return `${num} tekens resterend`;
+  },
+  numOptionsAvailable: (num) => {
+    if (num === 0) return "Geen opties beschikbaar";
+    if (num === 1) return "1 optie beschikbaar";
+    return `${num} opties beschikbaar`;
+  },
+  numOptionsSelected: (num) => {
+    if (num === 0) return "Geen optie geselecteerd";
+    if (num === 1) return "1 optie geselecteerd";
+    return `${num} opties geselecteerd`;
+  },
+  numRowsCopied: (num) => num === 1 ? "1 rij gekopieerd" : `${num} rijen gekopieerd`,
+  numRowsSelected: (num) => num === 1 ? "1 rij geselecteerd" : `${num} rijen geselecteerd`,
+  optionPosition: (label, position, total) => `${label}, ${position} van ${total}`,
+  optionsLoadError: "De opties konden niet worden geladen",
+  pageXOfY: (page, total) => `Pagina ${page} van ${total}`,
+  pagination: "Paginering",
+  pause: "Pauzeren",
+  pauseAnimation: "Animatie pauzeren",
+  pictureInPicture: "Beeld in beeld",
+  pinLeft: "Links vastzetten",
+  pinRight: "Rechts vastzetten",
+  play: "Afspelen",
+  playAnimation: "Animatie afspelen",
+  playbackSpeed: "Afspeelsnelheid",
+  playlist: "Afspeellijst",
+  pm: "PM",
+  previousDecade: "Vorig decennium",
+  previousMonth: "Vorige maand",
+  previousPage: "Vorige pagina",
+  previousSlide: "Vorige dia",
+  previousVideo: "Vorige video",
+  previousYear: "Vorig jaar",
+  progress: "Voortgang",
+  rangeTooLong: (max) => {
+    if (max === 1) return "Selecteer een bereik van niet meer dan 1 dag";
+    return `Selecteer een bereik van niet meer dan ${max} dagen`;
+  },
+  rangeTooShort: (min) => {
+    if (min === 1) return "Selecteer een bereik van minimaal 1 dag";
+    return `Selecteer een bereik van minimaal ${min} dagen`;
+  },
+  readonly: "Alleen-lezen",
+  remove: "Verwijderen",
+  resetColumns: "Kolommen herstellen",
+  resize: "Formaat wijzigen",
+  resizeColumn: "Kolombreedte wijzigen",
+  rowsPerPage: "Rijen per pagina",
+  scrollableRegion: "Scrollbaar gebied",
+  scrollToEnd: "Scroll naar einde",
+  scrollToStart: "Scroll naar begin",
+  search: "Zoeken",
+  second: "Seconde",
+  seek: "Zoeken",
+  seekProgress: (current, duration) => `${current} van ${duration}`,
+  selectAColorFromTheScreen: "Selecteer een kleur van het scherm",
+  selectAllRows: "Alle rijen selecteren",
+  selected: "Geselecteerd",
+  selectedDateLabel: (date) => `Geselecteerd: ${date}`,
+  selectedRangeLabel: (range) => `Geselecteerd bereik: ${range}`,
+  selectGroup: "Groep selecteren",
+  selectionCleared: "Selectie gewist",
+  selectRow: "Rij selecteren",
+  showingNofMRows: (shown, total) => `${shown} van ${total} rijen weergegeven`,
+  showingXtoYofZ: (start, end, total) => `${start}\u2013${end} van ${total}`,
+  showPassword: "Laat wachtwoord zien",
+  slideNum: (slide) => `Schuif ${slide}`,
+  sortAscending: "Oplopend sorteren",
+  sortColumn: "Kolom sorteren",
+  sortDescending: "Aflopend sorteren",
+  startDate: "Begindatum",
+  steps: "Stappen",
+  stepXOfY: (step, total) => `Stap ${step} van ${total}`,
+  tagAdded: (tag) => `${tag} toegevoegd`,
+  tagAlreadyAdded: (tag) => `${tag} is al toegevoegd`,
+  tagInputKeyboardHelp: "Druk op Backspace of Delete om deze tag te verwijderen.",
+  tagRemoved: (tag) => `${tag} verwijderd`,
+  time: "Tijd",
+  timeInputKeyboardHelp: "Gebruik de pijltjestoetsen om waarden te wijzigen; druk op Alt+Pijl omlaag om de tijdkiezer te openen.",
+  today: "Vandaag",
+  toggleColorFormat: "Wissel kleurnotatie",
+  tooFewTags: (min) => min === 1 ? "Voeg minimaal 1 tag toe" : `Voeg minimaal ${min} tags toe`,
+  tooManyTags: (max) => max === 1 ? "Voeg maximaal 1 tag toe" : `Voeg maximaal ${max} tags toe`,
+  unmute: "Dempen opheffen",
+  unpin: "Losmaken",
+  unpinColumn: "Kolom losmaken",
+  videoPlayer: "Videospeler",
+  volume: "Volume",
+  year: "Jaar",
+  zoomIn: "Inzoomen",
+  zoomOut: "Uitzoomen"
+};
+registerTranslation(translation);
+var nl_default = translation;
+export {
+  nl_default as default
+};

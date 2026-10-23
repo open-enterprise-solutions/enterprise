@@ -298,9 +298,10 @@ A transport between browsers and bases: it holds no forms and runs no code of it
 
 - **Publications** — `web.conf` in the web folder (`--dir`, by default `web` beside the program), or one named on the command line (`--file` / `--server`). One group per publication: `Kind=firebird` + `Directory` — a file base opened in this process through `fileserver` and held as a server holds its bases (a connection per browser); `Kind=server` + `Address=oes://host:port/base` — a base of an application server, relayed (`oess://` over TLS, trusting the system's store or `Trusted=`'s PEM file, made once per publication).
 - **Routes:** `WS /<publication>/client` — a connection, each text message one JSON-RPC request of the [client protocol](public/client-protocol.md), the base's notifications pushed; `POST /<publication>/client` — one request; the site's files from `Root` (`www`) at `/`, with ETag/304.
+- **The site** is [the browser client](public/browser-client.md) (`webserver/www/`): native ES modules with no build, the form drawn from the frame as the thin client draws it; a release serves it from its pack `web/www.wpk`.
 - **Transport:** the core's (`core/net`) — Asio (standalone) + llhttp, TLS by Mbed TLS. HTTP serves loopback only; on any other interface plain HTTP only sends the browser on to HTTPS. Answers of 1 KB and more are deflated on `?compress=deflate`; a page of another site (`Origin` not in `Origins`) is refused.
 - **Stop:** Ctrl+C, Ctrl+Break or the console closing — the listeners stop, then every base it opened closes.
-- **Not yet:** the browser client (a scaffold), web services, running as a service.
+- **Not yet:** web services, running as a service.
 
 ### Entry-point helpers
 
