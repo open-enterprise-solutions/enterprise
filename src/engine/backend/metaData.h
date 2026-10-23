@@ -390,6 +390,26 @@ private:
 
 ///////////////////////////////////////////////////////////////////////////////
 
+// What ibMetaData::GetNewName is asked with, held by value — the parent it is asked under goes beside it,
+// as it does to CreateMetaObject and PasteMetaObject.
+struct ibNameRequest {
+
+	// The kind whose names are compared.
+	ibClassID m_clsid = 0;
+
+	// The name's stem; empty = "newItem".
+	wxString m_prefix;
+
+	// The bare prefix is the first candidate; otherwise numbering starts at 1.
+	bool m_forConstructor = false;
+
+	// Whom the name is for: its own entry under the parent is no collision (BuildNewName keeps an
+	// object's name through a paste or a merge while nobody else carries it). 0 — nobody.
+	ibMetaID m_metaId = 0;
+};
+
+///////////////////////////////////////////////////////////////////////////////
+
 // ⭐ EVERY METADATA IS HELD BY A shared_ptr (Max, 2026-10-06: *"implement shared_from_this in the metadata, and hold
 // the reference properly, as a shared_ptr — all the metadata"*): a configuration, an external report or data
 // processor, a configuration file, both sides of a comparison. It is handed around as a plain pointer; whoever
@@ -872,9 +892,7 @@ public:
 	ibMetaID GenerateNewID() const;
 
 	//generate new name
-	wxString GetNewName(const ibClassID& clsid,
-		ibValueMetaObject* parent, const wxString& strPrefix = wxEmptyString, bool forConstructor = false,
-		const ibValueMetaObject* self = nullptr);
+	wxString GetNewName(ibValueMetaObject* parent, const ibNameRequest& request);
 
 #pragma region serialization
 

@@ -33,12 +33,17 @@ bool ibDialogSelectTypeForm::ShowModal(int& chosen)
 	request.SetValue(ibProtocol::ibRequest::ibFormType::Name, m_metaObject->GetName());
 	request.SetValue(ibProtocol::ibRequest::ibFormType::Synonym, m_metaObject->GetSynonym());
 	request.SetValue(ibProtocol::ibRequest::ibFormType::Comment, m_metaObject->GetComment());
+	// The names offered and the one put on the form are asked alike — only the stem changes.
+	ibNameRequest nameRequest;
+	nameRequest.m_clsid = m_metaObject->GetClassType();
+	nameRequest.m_forConstructor = true;
 	for (const choiceData_t& choice : m_listChoice) {
 		ibDataNode& item = request.AddChild(0, 0);
 		item.SetValue(ibProtocol::ibRequest::ibFormType::Id, static_cast<s32>(choice.m_value));
 		item.SetValue(ibProtocol::ibRequest::ibFormType::Caption, choice.m_label);
-		item.SetValue(ibProtocol::ibRequest::ibFormType::Name, m_metaObject->GetMetaData()->GetNewName(m_metaObject->GetClassType(),
-			m_metaObject->GetParent(), choice.m_name, true));
+		nameRequest.m_prefix = choice.m_name;
+		item.SetValue(ibProtocol::ibRequest::ibFormType::Name,
+			m_metaObject->GetMetaData()->GetNewName(m_metaObject->GetParent(), nameRequest));
 	}
 
 	// Cancelled — answered with no Id: a generic form's kind is wxNOT_FOUND, so no kind is the only word for it.
@@ -56,9 +61,10 @@ bool ibDialogSelectTypeForm::ShowModal(int& chosen)
 	// …and the texts put on the form, as the desktop's OK put them — a name the window would not have let through
 	// (OnTextEnter cut it) is the kind's.
 	wxString name = response.GetValue<wxString>(ibProtocol::ibRequest::ibFormType::Name);
-	if (name.IsEmpty() || stringUtils::CheckCorrectName(name) != wxNOT_FOUND)
-		name = m_metaObject->GetMetaData()->GetNewName(m_metaObject->GetClassType(), m_metaObject->GetParent(),
-			offered->m_name, true);
+	if (name.IsEmpty() || stringUtils::CheckCorrectName(name) != wxNOT_FOUND) {
+		nameRequest.m_prefix = offered->m_name;
+		name = m_metaObject->GetMetaData()->GetNewName(m_metaObject->GetParent(), nameRequest);
+	}
 	m_metaObject->SetName(name);
 	m_metaObject->SetSynonym(response.GetValue<wxString>(ibProtocol::ibRequest::ibFormType::Synonym));
 	m_metaObject->SetComment(response.GetValue<wxString>(ibProtocol::ibRequest::ibFormType::Comment));

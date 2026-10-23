@@ -341,9 +341,10 @@ ibValueMetaObject* ibMetaData::CreateMetaObject(const ibClassID& clsidIn, ibValu
 
 	if (newMetaObject != nullptr) {
 
-		newMetaObject->SetName(
-			GetNewName(clsid, parent, newMetaObject->GetClassName())
-		);
+		ibNameRequest request;
+		request.m_clsid = clsid;
+		request.m_prefix = newMetaObject->GetClassName();
+		newMetaObject->SetName(GetNewName(parent, request));
 
 		//always create meta object
 		bool success = newMetaObject->OnCreateMetaObject(this, runObject ? newObjectFlag : pasteObjectFlag);
@@ -395,11 +396,10 @@ ibValueMetaObject* ibMetaData::CreateMetaObject(const ibClassID& clsidIn, ibValu
 	return newMetaObject;
 }
 
-wxString ibMetaData::GetNewName(const ibClassID& clsid, ibValueMetaObject* parent, const wxString& strPrefix, bool forConstructor,
-	const ibValueMetaObject* self)
+wxString ibMetaData::GetNewName(ibValueMetaObject* parent, const ibNameRequest& request)
 {
-	const wxString currPrefix = strPrefix.Length() > 0 ?
-		strPrefix : wxT("newItem");
+	const wxString currPrefix = request.m_prefix.Length() > 0 ?
+		request.m_prefix : wxT("newItem");
 
 	// Normalise to upper case, matching stringUtils::CompareString's
 	// case-insensitive semantics, so set lookups are exact comparisons.
@@ -413,23 +413,17 @@ wxString ibMetaData::GetNewName(const ibClassID& clsid, ibValueMetaObject* paren
 	// once, so each candidate is probed in O(1). The old loop rescanned
 	// every child for each candidate suffix — O(children * candidates)
 	// per call. FilterChild(clsid) is invariant here (every surviving
-	// child has class == clsid), so it is hoisted out of the scan.
-	//
-	// `self` is skipped: a caller that already holds its own name as a
-	// child of `parent` (BuildNewName, keeping an object's own name
-	// through a reparent/attach) and asks GetNewName to confirm that same
-	// name is otherwise free must not see its own entry as the collision
-	// — otherwise the bare name always "collides" with itself and comes
-	// back numbered even when nothing else holds it.
+	// child has class == clsid), so it is hoisted out of the scan. The
+	// object the name is for is skipped: its own entry is no collision.
 	std::unordered_set<std::wstring> takenNames;
-	if (parent != nullptr && parent->FilterChild(clsid)) {
+	if (parent != nullptr && parent->FilterChild(request.m_clsid)) {
 
 		for (unsigned int idx = 0; idx < parent->GetChildCount(); idx++) {
 
 			auto child = parent->GetChild(idx);
-			if (child == self)
+			if (request.m_metaId != 0 && child->GetMetaID() == request.m_metaId)
 				continue;
-			if (clsid != child->GetClassType())
+			if (request.m_clsid != child->GetClassType())
 				continue;
 			if (child->IsDeleted())
 				continue;
@@ -440,8 +434,8 @@ wxString ibMetaData::GetNewName(const ibClassID& clsid, ibValueMetaObject* paren
 
 	// forConstructor allows the bare prefix as the first candidate;
 	// otherwise numbering starts at 1.
-	unsigned int countRec = forConstructor ? 0 : 1;
-	wxString newName = forConstructor ?
+	unsigned int countRec = request.m_forConstructor ? 0 : 1;
+	wxString newName = request.m_forConstructor ?
 		currPrefix : wxString::Format(wxT("%s%d"), currPrefix, countRec);
 
 	while (takenNames.count(toKey(newName)) > 0)

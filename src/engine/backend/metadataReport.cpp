@@ -17,9 +17,10 @@ m_version(version_oes_last)
 
 	//create main metaObject
 	m_commonObject = new ibValueMetaObjectExternalReport();
-	m_commonObject->SetName(
-		ibMetaData::GetNewName(g_metaExternalReportCLSID, nullptr, m_commonObject->GetClassName())
-	);
+	ibNameRequest request;
+	request.m_clsid = g_metaExternalReportCLSID;
+	request.m_prefix = m_commonObject->GetClassName();
+	m_commonObject->SetName(ibMetaData::GetNewName(nullptr, request));
 
 	if (m_commonObject->OnCreateMetaObject(this, newObjectFlag)) {
 		if (!m_commonObject->OnLoadMetaObject(this)) {
@@ -49,9 +50,10 @@ m_version(version_oes_last)
 		wxASSERT(commonMetaObject);
 		//create main metaObject
 		m_commonObject = new ibValueMetaObjectReport();
-		m_commonObject->SetName(
-			ibMetaData::GetNewName(g_metaReportCLSID, nullptr, m_commonObject->GetClassName())
-		);
+		ibNameRequest request;
+		request.m_clsid = g_metaReportCLSID;
+		request.m_prefix = m_commonObject->GetClassName();
+		m_commonObject->SetName(ibMetaData::GetNewName(nullptr, request));
 		if (commonMetaObject != nullptr) {
 			m_commonObject->SetParent(commonMetaObject);
 			commonMetaObject->AddChild(m_commonObject);
@@ -256,7 +258,10 @@ ibValueMetaObjectReport* ibMetaDataReport::BuildFreshRoot()
 	// (CreateObjectExtValue / CreateMainModule), not touched by LoadSubtree, built by
 	// the run after the swap. Returned at refcount 0 — the caller's ibValuePtr adopts it.
 	auto* root = new ibValueMetaObjectExternalReport();
-	root->SetName(ibMetaData::GetNewName(g_metaExternalReportCLSID, nullptr, root->GetClassName()));
+	ibNameRequest request;
+	request.m_clsid = g_metaExternalReportCLSID;
+	request.m_prefix = root->GetClassName();
+	root->SetName(ibMetaData::GetNewName(nullptr, request));
 	if (!root->OnCreateMetaObject(this, newObjectFlag)) {
 		// ⚠ RELEASED BY THE RUNTIME, not by `delete`. It IS at refcount 0 and nobody adopted it —
 		// but a runtime value is destroyed THROUGH the count that owns it, never past it, and that

@@ -19,9 +19,10 @@ m_version(version_oes_last)
 
 	//create main metaObject
 	m_commonObject = new ibValueMetaObjectExternalDataProcessor;
-	m_commonObject->SetName(
-		ibMetaData::GetNewName(g_metaExternalDataProcessorCLSID, nullptr, m_commonObject->GetClassName())
-	);
+	ibNameRequest request;
+	request.m_clsid = g_metaExternalDataProcessorCLSID;
+	request.m_prefix = m_commonObject->GetClassName();
+	m_commonObject->SetName(ibMetaData::GetNewName(nullptr, request));
 
 	if (m_commonObject->OnCreateMetaObject(this, newObjectFlag)) {
 		if (!m_commonObject->OnLoadMetaObject(this)) {
@@ -51,9 +52,10 @@ m_version(version_oes_last)
 		wxASSERT(commonMetaObject);
 		//create main metaObject
 		m_commonObject = new ibValueMetaObjectDataProcessor();
-		m_commonObject->SetName(
-			ibMetaData::GetNewName(g_metaDataProcessorCLSID, nullptr, m_commonObject->GetClassName())
-		);
+		ibNameRequest request;
+		request.m_clsid = g_metaDataProcessorCLSID;
+		request.m_prefix = m_commonObject->GetClassName();
+		m_commonObject->SetName(ibMetaData::GetNewName(nullptr, request));
 		if (commonMetaObject != nullptr) {
 			m_commonObject->SetParent(commonMetaObject);
 			commonMetaObject->AddChild(m_commonObject);
@@ -253,7 +255,10 @@ ibValueMetaObjectDataProcessor* ibMetaDataDataProcessor::BuildFreshRoot()
 	// (CreateObjectExtValue / CreateMainModule), not touched by LoadSubtree, built by
 	// the run after the swap. Returned at refcount 0 — the caller's ibValuePtr adopts it.
 	auto* root = new ibValueMetaObjectExternalDataProcessor;
-	root->SetName(ibMetaData::GetNewName(g_metaExternalDataProcessorCLSID, nullptr, root->GetClassName()));
+	ibNameRequest request;
+	request.m_clsid = g_metaExternalDataProcessorCLSID;
+	request.m_prefix = root->GetClassName();
+	root->SetName(ibMetaData::GetNewName(nullptr, request));
 	if (!root->OnCreateMetaObject(this, newObjectFlag)) {
 		// Released by the RUNTIME, not by `delete` — see the twin of this in metadataReport.cpp
 		// and ibBackendRuntimeOwned (compiler/value.h) for why that is now a compile-time matter.

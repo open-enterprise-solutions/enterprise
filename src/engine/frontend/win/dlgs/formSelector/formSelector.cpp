@@ -133,30 +133,16 @@ void ibDialogSelectTypeForm::OnFormTypeChanged(wxCommandEvent& event)
 
 	m_choice = choice;
 
-	if (founded_choice != m_listChoice.end()) {
-		const wxString& newName = metaData->GetNewName(
-			m_metaObject->GetClassType(),
-			m_metaObject->GetParent(),
-			founded_choice->m_name,
-			true
-		);
-		m_textCtrlName->SetValue(newName);
-		m_textCtrlSynonym->SetValue(
-			stringUtils::GenerateSynonym(newName)
-		);
-	}
-	else {
-		const wxString& newName = metaData->GetNewName(
-			m_metaObject->GetClassType(),
-			m_metaObject->GetParent(),
-			formDefaultName,
-			true
-		);
-		m_textCtrlName->SetValue(newName);
-		m_textCtrlSynonym->SetValue(
-			stringUtils::GenerateSynonym(newName)
-		);
-	}
+	ibNameRequest request;
+	request.m_clsid = m_metaObject->GetClassType();
+	request.m_prefix = founded_choice != m_listChoice.end() ? founded_choice->m_name : wxString(formDefaultName);
+	request.m_forConstructor = true;
+
+	const wxString newName = metaData->GetNewName(m_metaObject->GetParent(), request);
+	m_textCtrlName->SetValue(newName);
+	m_textCtrlSynonym->SetValue(
+		stringUtils::GenerateSynonym(newName)
+	);
 
 	event.Skip();
 }
