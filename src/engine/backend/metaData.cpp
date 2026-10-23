@@ -395,7 +395,8 @@ ibValueMetaObject* ibMetaData::CreateMetaObject(const ibClassID& clsidIn, ibValu
 	return newMetaObject;
 }
 
-wxString ibMetaData::GetNewName(const ibClassID& clsid, ibValueMetaObject* parent, const wxString& strPrefix, bool forConstructor)
+wxString ibMetaData::GetNewName(const ibClassID& clsid, ibValueMetaObject* parent, const wxString& strPrefix, bool forConstructor,
+	const ibValueMetaObject* self)
 {
 	const wxString currPrefix = strPrefix.Length() > 0 ?
 		strPrefix : wxT("newItem");
@@ -413,12 +414,21 @@ wxString ibMetaData::GetNewName(const ibClassID& clsid, ibValueMetaObject* paren
 	// every child for each candidate suffix — O(children * candidates)
 	// per call. FilterChild(clsid) is invariant here (every surviving
 	// child has class == clsid), so it is hoisted out of the scan.
+	//
+	// `self` is skipped: a caller that already holds its own name as a
+	// child of `parent` (BuildNewName, keeping an object's own name
+	// through a reparent/attach) and asks GetNewName to confirm that same
+	// name is otherwise free must not see its own entry as the collision
+	// — otherwise the bare name always "collides" with itself and comes
+	// back numbered even when nothing else holds it.
 	std::unordered_set<std::wstring> takenNames;
 	if (parent != nullptr && parent->FilterChild(clsid)) {
 
 		for (unsigned int idx = 0; idx < parent->GetChildCount(); idx++) {
 
 			auto child = parent->GetChild(idx);
+			if (child == self)
+				continue;
 			if (clsid != child->GetClassType())
 				continue;
 			if (child->IsDeleted())

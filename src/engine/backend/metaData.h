@@ -873,7 +873,8 @@ public:
 
 	//generate new name
 	wxString GetNewName(const ibClassID& clsid,
-		ibValueMetaObject* parent, const wxString& strPrefix = wxEmptyString, bool forConstructor = false);
+		ibValueMetaObject* parent, const wxString& strPrefix = wxEmptyString, bool forConstructor = false,
+		const ibValueMetaObject* self = nullptr);
 
 #pragma region serialization
 
