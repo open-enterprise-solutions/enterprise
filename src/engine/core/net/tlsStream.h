@@ -88,7 +88,7 @@ private:
 	// What Mbed TLS has written, handed to the socket; `done` once all of it is there. Pump — one write on the socket,
 	// and the next when more has been written meanwhile.
 	void Flush(std::function<void(const std::error_code& error)> done);
-	void Pump();
+	void Pump(std::shared_ptr<std::vector<std::function<void(const std::error_code& error)>>> waiting);
 	// More from the socket for Mbed TLS to read.
 	void Fill(std::function<void(const std::error_code& error)> done);
 
@@ -103,8 +103,10 @@ private:
 	std::size_t m_cipherInAt = 0;
 	std::string m_cipherOut;
 	std::string m_sending;      // on the socket now
-	bool        m_flushing = false;
-	std::vector<std::function<void(const std::error_code& error)>> m_flushed;   // waiting for the socket to take it
+	// Waiting for the socket to take it, while a write is on it — HELD BY THAT WRITE, the stream only finds it. A waiter
+	// holds the stream's owner: held here, it would hold the stream itself, and a context stopped with a write on the
+	// socket (its handler destroyed, never run) would leave the owner and the stream holding each other for good.
+	std::weak_ptr<std::vector<std::function<void(const std::error_code& error)>>> m_flushed;
 	char        m_raw[16 * 1024];
 };
 

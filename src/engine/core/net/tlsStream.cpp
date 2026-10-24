@@ -308,33 +308,38 @@ int ibTlsStream::Receive(void* stream, unsigned char* data, std::size_t size)
 
 void ibTlsStream::Flush(std::function<void(const std::error_code& error)> done)
 {
-	if (!m_flushing && m_cipherOut.empty()) {
+	// A write on the socket: told with the others waiting for it.
+	if (const auto waiting = m_flushed.lock()) {
+		waiting->push_back(std::move(done));
+		return;
+	}
+	if (m_cipherOut.empty()) {
 		asio::post(m_socket.get_executor(), [done = std::move(done)]() { done(std::error_code()); });
 		return;
 	}
-	m_flushed.push_back(std::move(done));
-	if (!m_flushing)
-		Pump();
+	const auto waiting = std::make_shared<std::vector<std::function<void(const std::error_code& error)>>>();
+	waiting->push_back(std::move(done));
+	m_flushed = waiting;
+	Pump(waiting);
 }
 
-void ibTlsStream::Pump()
+void ibTlsStream::Pump(std::shared_ptr<std::vector<std::function<void(const std::error_code& error)>>> waiting)
 {
-	// `this` lives while a waiter does: every waiter holds the connection, which holds the stream.
-	m_flushing = true;
+	// `this` lives while a waiter does: every waiter holds the connection, which holds the stream. The waiters live in
+	// the handler, so a context stopped before it runs destroys them with it, and the connection goes.
 	m_sending.swap(m_cipherOut);
 	m_cipherOut.clear();
-	asio::async_write(m_socket, asio::buffer(m_sending), [this](const std::error_code& error, std::size_t) {
-		m_sending.clear();
-		if (!error && !m_cipherOut.empty()) {
-			Pump();
-			return;
-		}
-		m_flushing = false;
-		std::vector<std::function<void(const std::error_code& error)>> waiting;
-		waiting.swap(m_flushed);
-		for (const auto& done : waiting)
-			done(error);
-	});
+	asio::async_write(m_socket, asio::buffer(m_sending),
+		[this, waiting = std::move(waiting)](const std::error_code& error, std::size_t) {
+			m_sending.clear();
+			if (!error && !m_cipherOut.empty()) {
+				Pump(waiting);
+				return;
+			}
+			m_flushed.reset();
+			for (const auto& done : *waiting)
+				done(error);
+		});
 }
 
 void ibTlsStream::Fill(std::function<void(const std::error_code& error)> done)
