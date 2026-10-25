@@ -27,8 +27,44 @@
 #include "backend/backend_exception.h"   // catch ibBackendException at the LoadCommonTree boundary
 #include "backend/query/schemaSnapshot.h"   // ibSchemaSnapshot / ibSchemaTable — ContributeTables drives data dump
 #include "backend/query/dataMover.h"         // ibDataMover::Dump / Restore (L3-3 row mover)
+#include "core/serialize/fileProvider.h"
 #include "core/serialize/dataBuilder.h"      // ibDataBuilder / ibBinaryProvider — top-level structure builder
 #include "backend/objCtor.h"                       // ibCtorMetaValueType::GetClassName — clsid -> type name
+
+bool ibMetaDataConfigurationBase::SaveConfigToFiles(const wxString& directory)
+{
+	ibDataNode root;
+	if (!GetCommonMetaObject()->BuildDataNode(root, saveToFileFlag))
+		return false;
+	return ibFileProvider(directory).Write(root);
+}
+
+bool ibMetaDataConfigurationBase::LoadConfigFromFiles(const wxString& directory)
+{
+	if (!IsEditable())
+		ibBackendCoreException::Error(_("This configuration is open for reading only."));
+	ibDataNode root;
+	if (!ibFileProvider(directory).Read(root))
+		return false;
+	if (root.GetClsid() != g_metaCommonMetadataCLSID)
+		ibBackendCoreException::Error(_("The directory does not contain a configuration."));
+
+	// Enter through the same detached-root load as a configuration file. Parsing all
+	// files finishes before that door closes editors or replaces any live metadata.
+	ibWriterMemory inner;
+	ibBinaryProvider provider;
+	if (!provider.Write(root, inner))
+		return false;
+	ibWriterMemory header;
+	header.w_u64(sign_metadata);
+	header.w_stringZ(root.GetValue<wxString>("Guid"));
+	ibWriterMemory metadata;
+	metadata.w_chunk(static_cast<std::uint64_t>(root.GetMetaId()), inner.buffer());
+	ibWriterMemory configuration;
+	configuration.w_chunk(eHeaderBlock, header.buffer());
+	configuration.w_chunk(root.GetClsid(), metadata.buffer());
+	return LoadConfigFromBuffer(configuration.buffer());
+}
 
 bool ibMetaDataConfigurationBase::LoadConfigFromFile(const wxString& strFileName)
 {

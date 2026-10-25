@@ -9,6 +9,9 @@
 #include <gtest/gtest.h>
 
 #include <memory>
+#include <filesystem>
+#include "core/fileSystem.h"
+#include "backend/metaCollection/metaDiff.h"
 
 #include <wx/init.h>
 
@@ -27,6 +30,8 @@ namespace {
 struct CommonModuleCheck : ::testing::Test {
 	wxInitializer m_wxInit;
 	std::shared_ptr<ibDatabaseLayerSQLite> m_db;
+	std::filesystem::path m_databasePath = std::filesystem::temp_directory_path()
+		/ ("oes-module-check-" + ibGuid(ibGuid::newGuid()).str().ToStdString() + ".db");
 	bool m_ownsApp = false;
 
 	void SetUp() override {
@@ -43,9 +48,11 @@ struct CommonModuleCheck : ::testing::Test {
 		if (pool == nullptr)
 			GTEST_SKIP() << "no connection pool after CreateAppDataEnv";
 		m_db = std::make_shared<ibDatabaseLayerSQLite>();
-		if (!m_db->Open(wxT(":memory:")))
-			GTEST_SKIP() << "in-memory SQLite open failed";
-		pool->Init(m_db, /*maxSize=*/1, /*minIdle=*/0);
+		if (!m_db->Open(wxString::FromUTF8(m_databasePath.u8string())))
+			GTEST_SKIP() << "SQLite open failed";
+		// A designer holds one connection while login reads MCP settings through
+		// another holder. Clones must see the same configuration tables.
+		pool->Init(m_db, /*maxSize=*/4, /*minIdle=*/0);
 		// …and the configuration's tables, which a base's opening makes (ibApplicationInstance::Open) and this base
 		// never went through.
 		ibMetaDataConfigurationStorage::CreateConfigTable();
@@ -56,6 +63,11 @@ struct CommonModuleCheck : ::testing::Test {
 	void TearDown() override {
 		if (m_ownsApp && ibApplicationInstance::Get() != nullptr)
 			ibApplicationInstance::DestroyAppDataEnv();
+		else if (ibApplicationInstance::Get() != nullptr)
+			ibApplicationInstance::GetConnectionPool()->Shutdown();
+		m_db.reset();
+		std::error_code error;
+		std::filesystem::remove(m_databasePath, error);
 	}
 };
 
@@ -165,4 +177,72 @@ TEST_F(CommonModuleCheck, ConfigCheckReportsABrokenModuleAndOneThatWasNeverCompi
 	const ibDataValue* empty = neverProblem->AsChild()->FindField(wxT("diagnostics"));
 	ASSERT_NE(empty, nullptr);
 	EXPECT_TRUE(empty->Kind() == ibDataKind::Array && empty->AsArray().empty());
+}
+
+TEST_F(CommonModuleCheck, ConfigFiles_ImportIntoFreshDatabase_PassesCheckAndDiff)
+{
+	CodeStyleRestore style;
+	ibSessionRegistry* registry = ibApplicationInstance::GetSessionRegistry();
+	ASSERT_NE(registry, nullptr);
+	ibSessionHolder holder = registry->MintUnlisted(
+		std::make_shared<ibSession>(wxT("configuration-files"), ibSessionKind::Designer));
+	ibSession* session = holder.Get();
+	ASSERT_NE(session, nullptr);
+	ibSessionScope scope(session);
+	registry->NotifyAuthenticated(session);
+	struct Leave {
+		ibSessionRegistry* m_registry;
+		ibSession* m_session;
+		~Leave() { m_registry->NotifyDisconnect(m_session); }
+	} leave{registry, session};
+	ibMetaDataConfigurationBase* configuration = session->GetMetaData();
+	ASSERT_NE(configuration, nullptr);
+
+	struct Directory {
+		std::filesystem::path m_path = std::filesystem::temp_directory_path()
+			/ ibGuid(ibGuid::newGuid()).str().ToStdString();
+		~Directory() { std::error_code error; std::filesystem::remove_all(m_path, error); }
+	} directory;
+	const wxString source = wxString::FromUTF8((directory.m_path / "source").u8string());
+	const wxString exported = wxString::FromUTF8((directory.m_path / "exported").u8string());
+	ibMetaDataConfigurationFile original;
+	auto* module = static_cast<ibValueMetaObjectCommonModule*>(
+		original.CreateMetaObject(g_metaCommonModuleCLSID, original.GetCommonMetaObject(), false));
+	ASSERT_NE(module, nullptr);
+	module->SetModuleText(wxT("Function Answer() {\nReturn 42;\n}\n"));
+	ASSERT_TRUE(original.SaveConfigToFiles(source));
+
+	const ibMcpTool* importTool = ibFindMcpTool(wxT("config_import_files"));
+	ASSERT_NE(importTool, nullptr);
+	ibDataNode params, result;
+	wxString refusal;
+	params.SetValue("directory", source);
+	params.SetValue("confirm", false);
+	EXPECT_FALSE(importTool->Call(params, result, refusal));
+	params.SetField("confirm", ibDataValue::Bool(true));
+	refusal.clear();
+	ASSERT_TRUE(importTool->Call(params, result, refusal)) << refusal.ToStdString();
+	EXPECT_TRUE(configuration->IsConfigOpen());
+	for (const ibMetaDiffRecord& difference : ibMetaDiffWalker::Walk(
+		original.GetCommonMetaObject(), configuration->GetCommonMetaObject()))
+		EXPECT_EQ(difference.m_status, ibMetaDiffStatus::Same);
+
+	const ibMcpTool* check = ibFindMcpTool(wxT("config_check"));
+	ASSERT_NE(check, nullptr);
+	ibDataNode checkParams, checkResult;
+	ASSERT_TRUE(check->Call(checkParams, checkResult, refusal)) << refusal.ToStdString();
+	const ibDataValue* problems = checkResult.FindField("problems");
+	ASSERT_NE(problems, nullptr);
+	EXPECT_TRUE(problems->AsArray().empty());
+
+	const ibMcpTool* exportTool = ibFindMcpTool(wxT("config_export_files"));
+	ASSERT_NE(exportTool, nullptr);
+	ibDataNode exportParams, exportResult;
+	exportParams.SetValue("directory", exported);
+	ASSERT_TRUE(exportTool->Call(exportParams, exportResult, refusal)) << refusal.ToStdString();
+	ibMetaDataConfigurationFile imported;
+	ASSERT_TRUE(imported.LoadConfigFromFiles(exported));
+	for (const ibMetaDiffRecord& difference : ibMetaDiffWalker::Walk(
+		original.GetCommonMetaObject(), imported.GetCommonMetaObject()))
+		EXPECT_EQ(difference.m_status, ibMetaDiffStatus::Same);
 }

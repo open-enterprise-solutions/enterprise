@@ -14,6 +14,7 @@
 #include "docManager/templates/docViewConfigCompare.h"
 
 #include <wx/filename.h>
+#include <wx/dirdlg.h>
 
 #include "backend/session/session.h"           // ibSession::Current — whose row to skip when counting peers
 #include "backend/session/sessionRegistry.h"   // GetClusterSnapshot — who else is connected right now
@@ -526,6 +527,31 @@ void ibFrontendMainFrameDesigner::OnClearDatabase(wxCommandEvent& event)
 
 void ibFrontendMainFrameDesigner::OnConfiguration(wxCommandEvent& event)
 {
+	if (event.GetId() == wxID_DESIGNER_CONFIGURATION_EXPORT_FILES
+		|| event.GetId() == wxID_DESIGNER_CONFIGURATION_IMPORT_FILES) {
+		const bool importing = event.GetId() == wxID_DESIGNER_CONFIGURATION_IMPORT_FILES;
+		wxDirDialog dialog(this, importing ? _("Import configuration from files") : _("Export configuration to files"),
+			wxEmptyString, importing ? wxDD_DIR_MUST_EXIST : wxDD_DEFAULT_STYLE);
+		if (dialog.ShowModal() != wxID_OK) return;
+		if (importing && wxMessageBox(_("Replace the edited configuration with the selected files?"),
+			wxTheApp->GetAppDisplayName(), wxYES_NO | wxNO_DEFAULT | wxICON_QUESTION, this) != wxYES) return;
+		try {
+			if (importing) {
+				objectInspector->SelectObject(nullptr);
+				if (!m_docManager->CloseDocuments()) return;
+				if (!activeMetaData->LoadConfigFromFiles(dialog.GetPath()) || !m_metaWindow->Load())
+					wxMessageBox(_("The configuration files could not be imported."));
+				else objectInspector->SelectObject(activeMetaData->GetCommonMetaObject());
+			}
+			else if (activeMetaData->SaveConfigToFiles(dialog.GetPath()))
+				wxMessageBox(_("Configuration files exported successfully."));
+		}
+		catch (const ibCoreException& error) {
+			ShowBackendErrorChain(this, wxTheApp->GetAppDisplayName(),
+				_("The configuration files could not be processed."), error.GetErrorDescription());
+		}
+		return;
+	}
 	if (wxID_DESIGNER_CONFIGURATION_LOAD_FROM_FILE == event.GetId())
 	{
 		wxFileDialog openFileDialog(this, _("Open configuration file"), "", "",

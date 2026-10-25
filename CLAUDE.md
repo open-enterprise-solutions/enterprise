@@ -541,6 +541,13 @@ that tree to bytes (and reads it back).
   A type is named only by the injected `SetTypeResolver` (no built-in fallback — the
   engine's resolvers, e.g. `ibMetaTypeResolver`, name built-in types from the static
   registry); `SetTypeLookup` supplies the name→clsid inverse. Tests: `tests/test_jsonProvider.cpp`.
+- **`ibFileProvider`** (`serialize/fileProvider.{h,cpp}`) — lossless configuration
+  directories: GUID paths for metadata, separate fields and properties, typed exact
+  decimals and dates, binary sidecars and multiline text files. Entry points:
+  `SaveConfigToFiles(directory)` / `LoadConfigFromFiles(directory)`, desktop Designer
+  menu commands, and MCP `config_export_files` / `config_import_files`. Records and
+  user accounts are excluded. See [configuration-files.md](docs/public/configuration-files.md)
+  for the layout, import workflow and publication/recovery rules.
 - The old XML/JSON config layer is **gone**: `metadataConfigurationXML.cpp` /
   `metadataConfigurationJSON.cpp` and the `SaveConfigToXML` / `LoadConfigFromXML`
   / `SaveConfigToJSON` / `LoadConfigFromJSON` methods no longer exist.

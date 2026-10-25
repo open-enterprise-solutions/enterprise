@@ -176,6 +176,9 @@ public:
 	bool LoadConfigFromFile(const wxString& strFileName);
 	bool SaveConfigToFile(const wxString& strFileName);
 
+	bool LoadConfigFromFiles(const wxString& directory);
+	bool SaveConfigToFiles(const wxString& directory);
+
 public:
 
 	// Called by the appData fabric right after construction (OnInitialize)

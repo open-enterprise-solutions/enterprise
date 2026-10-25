@@ -174,6 +174,11 @@ void ibFrontendMainFrameDesigner::InitializeDefaultMenu()
 	menuItem = m_menuConfiguration->Append(wxID_DESIGNER_CONFIGURATION_SAVE_TO_FILE, _("Save configuration"));
 	menuItem->Enable(activeMetaData->AccessRight_DataAdministration());
 
+	menuItem = m_menuConfiguration->Append(wxID_DESIGNER_CONFIGURATION_EXPORT_FILES, _("Export configuration to files..."));
+	menuItem->Enable(activeMetaData->AccessRight_DataAdministration());
+	menuItem = m_menuConfiguration->Append(wxID_DESIGNER_CONFIGURATION_IMPORT_FILES, _("Import configuration from files..."));
+	menuItem->Enable(activeMetaData->AccessRight_DataAdministration());
+
 	m_menuConfiguration->AppendSeparator();
 
 	// "Compare configurations" submenu — three entry points (file / DB
@@ -253,6 +258,7 @@ void ibFrontendMainFrameDesigner::InitializeDefaultMenu()
 	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnUpdateConfiguration, this, wxID_DESIGNER_CONFIGURATION_UPDATE_DATABASE);
 
 	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnConfiguration, this, wxID_DESIGNER_CONFIGURATION_LOAD_FROM_FILE, wxID_DESIGNER_CONFIGURATION_COMPARE_TWO_FILES);
+	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnConfiguration, this, wxID_DESIGNER_CONFIGURATION_EXPORT_FILES, wxID_DESIGNER_CONFIGURATION_IMPORT_FILES);
 
 	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnStartDebug, this, wxID_DESIGNER_DEBUG_START);
 	Bind(wxEVT_MENU, &ibFrontendMainFrameDesigner::OnStartDebugWithoutDebug, this, wxID_DESIGNER_DEBUG_START_WITHOUT_DEBUGGING);
