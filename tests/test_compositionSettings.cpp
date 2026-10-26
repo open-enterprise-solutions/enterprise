@@ -1138,14 +1138,14 @@ TEST(CompositionConditionalAppearance, AFontIsSaidPartByPart)
 	EXPECT_TRUE(line.IsDefault());
 
 	ibCompositionAttr italic, bold;
-	italic.m_font.m_style = wxFONTSTYLE_ITALIC;
-	bold.m_font.m_weight = wxFONTWEIGHT_BOLD;
+	italic.m_font.m_style = ibFONTSTYLE_ITALIC;
+	bold.m_font.m_weight = ibFONTWEIGHT_BOLD;
 	EXPECT_FALSE(italic.IsDefault());
 
 	line.Say(italic);
 	line.Say(bold);
-	EXPECT_EQ(wxFONTSTYLE_ITALIC, line.m_font.m_style);
-	EXPECT_EQ(static_cast<int>(wxFONTWEIGHT_BOLD), line.m_font.m_weight);
+	EXPECT_EQ(ibFONTSTYLE_ITALIC, line.m_font.m_style);
+	EXPECT_EQ(static_cast<int>(ibFONTWEIGHT_BOLD), line.m_font.m_weight);
 	EXPECT_EQ(0, line.m_font.m_pointSize);     // not said — the cell's own size
 	EXPECT_TRUE(line.m_font.m_face.IsEmpty()); // …and its own face
 }
