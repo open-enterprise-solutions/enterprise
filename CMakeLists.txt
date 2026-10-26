@@ -326,6 +326,9 @@ if(WIN32)
         _CRT_SECURE_NO_DEPRECATE=1
         _CRT_NON_CONFORMING_SWPRINTFS=1
         _SCL_SECURE_NO_WARNINGS=1
+        # C++20 deprecates atomic_load/store over shared_ptr for std::atomic<std::shared_ptr>, which Apple
+        # Clang's libc++ does not have yet: the free functions stay the one spelling all three compile.
+        _SILENCE_CXX20_OLD_SHARED_PTR_ATOMIC_SUPPORT_DEPRECATION_WARNING
     )
 elseif(APPLE)
     add_compile_definitions(

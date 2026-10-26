@@ -93,8 +93,8 @@ std::shared_ptr<const ibHelpCorpus> ibHelpService::GetCorpus() const
 	// fallback corpus is published in the ctor (via Rebuild), so this
 	// load returns non-null in the normal lifecycle.
 	//
-	// When the project moves to C++20, switch m_corpus to
-	// std::atomic<std::shared_ptr<const ibHelpCorpus>> — the public
+	// When Apple Clang's libc++ has std::atomic<std::shared_ptr>
+	// (portability.md § 1.11), switch m_corpus to it — the public
 	// ABI of GetCorpus / Reload does not change.
 	return std::atomic_load_explicit(&m_corpus,
 	                                  std::memory_order_acquire);

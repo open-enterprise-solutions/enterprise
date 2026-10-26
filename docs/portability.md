@@ -343,6 +343,11 @@ same pass as `src/`. It is the same class as the two build systems seeing differ
 
 The right column waits for the images to move (ubuntu-24.04, macOS 15).
 
+- `std::atomic_load` / `std::atomic_store` over a `shared_ptr` (`value.h`'s find index, the help
+  corpus) are deprecated in C++20 for `std::atomic<std::shared_ptr>` — in the right column. They stay;
+  MSVC's warning STL4029 is silenced by `_SILENCE_CXX20_OLD_SHARED_PTR_ATOMIC_SUPPORT_DEPRECATION_WARNING`
+  on both roads (`Common.props`, the top `CMakeLists.txt`) until libc++ has the replacement.
+
 ---
 
 ## 2. Platform status
