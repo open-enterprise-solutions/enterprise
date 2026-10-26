@@ -40,6 +40,11 @@ ibMemoryBuffer::ibMemoryBuffer(size_t size)
 	if (size != 0) m_impl = Impl::Make(size);
 }
 
+ibMemoryBuffer::ibMemoryBuffer(const void* data, size_t len)
+{
+	AppendData(data, len);
+}
+
 void ibMemoryBuffer::Free(Shared* shared) noexcept
 {
 	Impl* const impl = Impl::Of(shared);

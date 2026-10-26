@@ -275,8 +275,8 @@ public:
 
 		// BY ID: turned into the name this tool already works in, so there is ONE road below and
 		// the two addresses cannot answer differently.
-		if (const ibDataValue* asked = params.FindField(ArgTypeId().Name());
-			asked != nullptr && asked->Kind() == ibDataKind::Number) {
+		if (auto asked = params.FindField(ArgTypeId().Name());
+			asked && asked->Kind() == ibDataKind::Number) {
 
 			const ibClassID clsid = (ibClassID)asked->AsUInt();
 

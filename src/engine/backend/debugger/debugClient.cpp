@@ -75,7 +75,7 @@ static void ShiftLineMap(std::map<unsigned int, Entry>& lines, unsigned int line
 
 ibDebuggerClient::ibDebuggerClient(ibMetaDataConfigurationBase* metaData) :
 	m_metaData(metaData),
-	m_adapter(new ibDebuggerClientAdapter),
+	m_adapter(std::make_shared<ibDebuggerClientAdapter>()),
 	m_enterLoop(false), m_connectionSuccess(false), m_numberOfConnectionAttempts(numberOfConnectionAttempts)
 {
 	// Always: it creates the table when it is missing and adds the condition column to one from before it.
@@ -93,8 +93,8 @@ ibDebuggerClient::~ibDebuggerClient()
 			connection->m_stop = true;
 		m_connectionsCv.wait(lock, [this] { return m_listConnection.empty(); });
 	}
-	delete m_adapter;
-	m_adapter = nullptr;
+	// …and the adapter let go: a reply still queued for it finds it gone (CallAfter).
+	m_adapter.reset();
 
 	if (ms_debugClient == this)
 		ms_debugClient = nullptr;
@@ -1301,10 +1301,10 @@ void ibDebuggerClient::ibDebuggerClientConnection::SendCommand(void* pointer, un
 #if _USE_NET_COMPRESSOR == 1
 		BYTE* dest = nullptr; unsigned int dest_sz = 0;
 		_compressLZ(&dest, &dest_sz, pointer, length);
-		m_socketClient->SendBinary(std::string(reinterpret_cast<const char*>(dest), dest_sz));
+		m_socketClient->Send(dest, dest_sz);
 		free(dest);
 #else
-		m_socketClient->SendBinary(std::string(static_cast<const char*>(pointer), length));
+		m_socketClient->Send(pointer, length);
 #endif
 	}
 

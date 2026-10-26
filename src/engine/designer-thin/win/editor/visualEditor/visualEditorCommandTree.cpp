@@ -60,15 +60,6 @@ void ShapeOf(const ibProtocolNode& rows, wxString& shape)
 	}
 }
 
-// The rows' pictures, by their ids, nested as they are — asked of the server at once, not a call per row drawn.
-void PicturesOf(const ibProtocolNode& rows, std::vector<wxString>& pictures)
-{
-	for (const ibProtocolNode& row : rows.Children()) {
-		pictures.push_back(row.GetString(ibProtocol::ibView::ibFormDesigner::Picture));
-		PicturesOf(row, pictures);
-	}
-}
-
 } // namespace
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -222,9 +213,8 @@ void ibCommandTree::Draw(const ibProtocolNode& rows)
 
 	const wxTreeItemId root = m_tcCommands->AddRoot(wxT("Commands"));
 
-	std::vector<wxString> pictures;
-	PicturesOf(rows, pictures);
-	ibProtocolPictureReceive(pictures);
+	// The rows' pictures asked of the server at once — not a call per row drawn.
+	ibProtocolPictureReceive(rows);
 
 	// ALL three sections (form / standard / global) come, in order, even EMPTY — the server's. The FORM COMMANDS one is
 	// remembered: the context menu (Add / Copy / Paste / Delete) works ONLY there.
@@ -273,7 +263,7 @@ void ibCommandTree::AppendRows(const wxTreeItemId& parent, const ibProtocolNode&
 				keepNode);
 			continue;
 		}
-		const wxBitmap picture = ibProtocolPicture(row.GetString(ibProtocol::ibView::ibFormDesigner::Picture));
+		const wxBitmap picture = ibProtocolPicture(row, ibProtocol::ibView::ibFormDesigner::Picture);
 		const int icon = picture.IsOk() ? images->Add(picture) : 0;   // the command's own picture, else default
 		const wxTreeItemId node = m_tcCommands->AppendItem(parent, row.GetString(ibProtocol::ibView::ibFormDesigner::Name), icon, icon,
 			new ibAttributeTreeItemData(desc));

@@ -72,7 +72,7 @@ bool ibEventControl::GetDataValue(ibValue& pvarPropVal) const
 // client's edit that carries the handler alone, must not rename it.
 bool ibEventControl::ReadNodeValue(const ibDataValue& value)
 {
-	const std::shared_ptr<ibDataNode>& node = value.AsChild();
+	const auto node = value.AsChild();
 	if (node)
 		m_propValue = node->GetValue<wxString>(wxT("Value"));
 	return true;

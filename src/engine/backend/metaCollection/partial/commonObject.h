@@ -1173,7 +1173,7 @@ private:
 // by the posting handler, written when the posting ends and cleared with it. So the machinery is ONE
 // and the only thing that varies is WHICH — which every caller now says out loud
 // (`ibRecorderWrites::Sequences`) instead of a bare `true` that only a comment explained
-// (Max, 2026-09-18: "не сделал энум красиво в регистраторе").
+// (Max, 2026-09-18: "the recorder's enum was not done nicely").
 enum class ibRecorderWrites {
 	Movements,   // the registers it posts MOVEMENTS to — what the document DID
 	Sequences,   // the sequences it REGISTERS IN — that the document STANDS in an order

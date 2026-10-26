@@ -92,9 +92,9 @@ std::function<void()> ibSchemaHomePage::Command(const ibSession& session, std::i
 		return nullptr;
 
 	// …as the root reads it from its file (ReadData): what travelled as a node of its own.
-	const ibDataNode* const node = args.FindChild(ibProtocol::ibSchema::ibHomePage::HomePage);
+	const auto node = args.FindChild(ibProtocol::ibSchema::ibHomePage::HomePage);
 	ibHomePageDescription homePage;
-	if (node == nullptr || !homePage.ReadNode(ibDataValue::Child(std::make_shared<ibDataNode>(*node)))) {
+	if (!node || !homePage.ReadNode(ibDataValue::Child(std::make_shared<ibDataNode>(*node)))) {
 		refusal = ibProtocol::ibRefusal::BadParameter;
 		error = wxT("which home page: HomePage");
 		return nullptr;

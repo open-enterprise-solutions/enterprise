@@ -752,17 +752,17 @@ public:
 	{
 		// A node may arrive either way — as a child, or as a value carrying one.
 		ibDataValue given;
-		if (const ibDataNode* child = params.FindChild(ArgPicture().Name()))
+		if (auto child = params.FindChild(ArgPicture().Name()))
 			given = ibDataValue::Child(std::make_shared<ibDataNode>(*child));
-		else if (const ibDataValue* field = params.FindField(ArgPicture().Name()))
+		else if (auto field = params.FindField(ArgPicture().Name()))
 			given = *field;
 
 		// ⭐ EITHER SHAPE A PICTURE IS READ IN: a picture property's {Type, ...}, or the bare image a
 		// configuration's Picture object holds - which has no Type, because it can only ever be an image.
 		ibPictureDescription description;
-		bool read = given.Kind() == ibDataKind::Child && given.AsChild() != nullptr;
+		bool read = given.Kind() == ibDataKind::Child;
 
-		if (read && given.AsChild()->FindField(wxT("Type")) == nullptr) {
+		if (read && !given.AsChild()->FindField(wxT("Type"))) {
 			ibExternalPictureDescription held;
 			read = ibExternalPictureDescriptionMemory::ReadNode(given, held);
 			description = ibPictureDescription(held);

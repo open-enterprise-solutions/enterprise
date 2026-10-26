@@ -42,7 +42,7 @@ public:
 // number property holds. Above it are the verbs; this is the thing they act on, so a caller that has
 // translations carries THEM and not a raw string plus the knowledge of how to take it apart.
 //
-// 🛑 THE FORMAT WAS STANDING IN FOR THE VALUE. `en = 'Goods'; ru = 'Товары';` is how a translated
+// 🛑 THE FORMAT WAS STANDING IN FOR THE VALUE. `en = 'Goods'; de = 'Waren';` is how a translated
 // text is WRITTEN DOWN, and every reader parsed it, every writer reassembled it, and every question
 // began with "is this text in the format at all?" — so a text nobody had translated yet answered no,
 // and its first translation could not be written (measured over MCP, 2026-09-03).

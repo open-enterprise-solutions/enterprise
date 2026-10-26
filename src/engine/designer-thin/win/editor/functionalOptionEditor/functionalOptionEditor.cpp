@@ -6,18 +6,6 @@
 
 #define ICON_SIZE 16
 
-namespace {
-
-// The pictures of `row` and the rows under it — asked of the server at once, not a call per row drawn.
-void PicturesOf(const ibProtocolNode& row, std::vector<wxString>& pictures)
-{
-	pictures.push_back(row.GetString(ibProtocol::ibView::ibCheckTree::Picture));
-	for (const ibProtocolNode& child : row.Children())
-		PicturesOf(child, pictures);
-}
-
-}
-
 ibFunctionalOptionEditor::ibFunctionalOptionEditor(wxWindow* parent,
 	wxWindowID winid, const ibTabDocument* document) :
 	wxWindow(parent, winid, wxDefaultPosition, wxDefaultSize),
@@ -127,7 +115,7 @@ wxTreeItemId ibFunctionalOptionEditor::GroupFor(const ibProtocolNode& row)
 	// the role editor and the section editor show.
 	wxImageList* imageList = m_membersCtrl->GetImageList();
 	wxASSERT(imageList);
-	const wxBitmap picture = ibProtocolPicture(row.GetString(ibProtocol::ibView::ibCheckTree::Picture));
+	const wxBitmap picture = ibProtocolPicture(row, ibProtocol::ibView::ibCheckTree::Picture);
 	const int imageIndex = picture.IsOk() ? imageList->Add(picture) : wxNOT_FOUND;
 
 	const wxTreeItemId group = m_membersCtrl->AppendItem(m_treeMETADATA,
@@ -143,7 +131,7 @@ wxTreeItemId ibFunctionalOptionEditor::AppendItem(const wxTreeItemId& parent, co
 {
 	wxImageList* imageList = m_membersCtrl->GetImageList();
 	wxASSERT(imageList);
-	const wxBitmap picture = ibProtocolPicture(row.GetString(ibProtocol::ibView::ibCheckTree::Picture));
+	const wxBitmap picture = ibProtocolPicture(row, ibProtocol::ibView::ibCheckTree::Picture);
 	const int imageIndex = picture.IsOk() ? imageList->Add(picture) : wxNOT_FOUND;
 
 	const wxTreeItemId createItem = m_membersCtrl->AppendItem(
@@ -180,12 +168,11 @@ void ibFunctionalOptionEditor::FillData(const ibProtocolNode& view)
 {
 	const ibProtocolNode root = view.FindChild(ibProtocol::ibView::ibCheckTree::Rows);
 
-	std::vector<wxString> pictures;
-	PicturesOf(root, pictures);
-	ibProtocolPictureReceive(pictures);
+	// The rows' pictures asked of the server at once — not a call per row drawn.
+	ibProtocolPictureReceive(root);
 
 	wxImageList* imageList = m_membersCtrl->GetImageList();
-	const wxBitmap picture = ibProtocolPicture(root.GetString(ibProtocol::ibView::ibCheckTree::Picture));
+	const wxBitmap picture = ibProtocolPicture(root, ibProtocol::ibView::ibCheckTree::Picture);
 	if (picture.IsOk()) {
 		const int imageIndex = imageList->Add(picture);
 		m_membersCtrl->SetItemImage(m_treeMETADATA, imageIndex);

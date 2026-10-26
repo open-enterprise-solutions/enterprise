@@ -1120,7 +1120,7 @@ bool ibValueModelTableBox::Fetch(const ibDataNode& request, ibDataNode& response
 
 bool ibValueModelTableBox::OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args)
 {
-	const bool onCell = args.FindField(ibProtocol::ibEvent::Column) != nullptr;
+	const bool onCell = args.Has(ibProtocol::ibEvent::Column);
 
 	switch (event) {
 	case ibProtocol::ibEvent::ibKind::Row: {
@@ -1207,7 +1207,7 @@ bool ibValueModelTableBox::OnCellEvent(ibProtocol::ibEvent::ibKind event, const 
 		// The value committed into the current line's cell — with its type when the client has one (Value), else the
 		// text it typed — and the edit is over.
 		m_editRow = 0;
-		if (const ibDataNode* const value = args.FindChild(ibProtocol::ibEvent::Value))
+		if (const auto value = args.FindChild(ibProtocol::ibEvent::Value))
 			column->ValueProcessing(*value);
 		else
 			column->OnTextEnter(args.GetValue<wxString>(ibProtocol::ibEvent::Text));

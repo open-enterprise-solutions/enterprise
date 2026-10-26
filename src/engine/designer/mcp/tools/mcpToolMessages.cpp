@@ -164,7 +164,7 @@ public:
 		EnsureRegistered();
 
 		bool problemsOnly = true;
-		if (params.FindField(ArgProblemsOnly().Name()) != nullptr)
+		if (params.Has(ArgProblemsOnly().Name()))
 			problemsOnly = ArgProblemsOnly().Flag(params);
 
 		const std::int32_t asked = (std::int32_t)ArgLimit().Whole(params);

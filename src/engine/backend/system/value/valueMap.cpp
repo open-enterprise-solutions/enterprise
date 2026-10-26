@@ -637,15 +637,15 @@ bool ibValueContainer::DoDeserialize(const ibDataNode& node)
 {
 	Clear();
 
-	const std::vector<ibDataNode>& children = node.Children();
+	const ibDataRange<ibDataNode> children = node.Children();
 	// Pairs, so an ODD number of children means the blob was cut between a key
 	// and its value — refuse rather than drop the dangling one.
 	if ((children.size() % 2) != 0)
 		return false;
 
-	for (std::size_t i = 0; i + 1 < children.size(); i += 2) {
-		const ibValue key = ibValue::FromNode(children[i]);
-		const ibValue value = ibValue::FromNode(children[i + 1]);
+	for (auto at = children.begin(); at != children.end(); ) {
+		const ibValue key = ibValue::FromNode(*at++);
+		const ibValue value = ibValue::FromNode(*at++);
 		Insert(key, value);
 	}
 

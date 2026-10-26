@@ -7,8 +7,8 @@
 //
 // The door is Call — the method, its parameters, the answer; no transport in it. A client in this same process (a
 // file base's program, the assistant's MCP tool) calls it as it is, the nodes passing as they are; a transport (the
-// port's JSON-RPC, the same envelope MCP speaks: backend/rpc) reads them off its wire and writes the answer back
-// on it, the second Call. The work a request asks for is the client's session's, so it goes to that session's worker (ibSession::Submit)
+// port's packets — OES-RPC, the JSON-RPC envelope as a node: backend/rpc) hands them over as they are and is handed the
+// answer back, the second Call. The work a request asks for is the client's session's, so it goes to that session's worker (ibSession::Submit)
 // and the caller waits for it to SETTLE — done, or the person asked something (a request to the client is
 // pending: the work goes on waiting for the response, which comes in by another call). Whatever the call, the
 // response carries the client's frame as it stands after it.
@@ -24,6 +24,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <thread>
 
 #include <wx/string.h>
@@ -37,6 +38,7 @@
 class ibApplicationInstance;
 class ibClientInstance;
 class ibClientFrame;
+struct ibRpcRequest;
 
 class FRMSERVER_API ibClientHost {
 public:
@@ -59,10 +61,12 @@ public:
 	bool Call(ibProtocol::ibMethod method, const ibDataNode& params, ibDataNode& result, ibProtocol::ibRefusal& refusal,
 		wxString& error, const void* connection = nullptr, const ibString& address = ibString());
 
-	// THE PORT'S CALL — one JSON-RPC request as text in, its response as text out (empty for a notification,
-	// which wants none): the envelope read and written around the call above.
-	// The text is the engine's both ways: read where it lies, and the answer handed back as it was written — a client in
-	// this process takes it as it is; a socket makes its bytes once.
+	// THE PORT'S CALL — one request as a packet in (OES-RPC 1.0, serialize/dataBuilder.h), its answer as a packet out
+	// (empty for a notification, which wants none): the envelope read and written around the call above. Nothing is
+	// parsed or encoded — the request is read where its bytes lie, the answer is the bytes it was written into, and a
+	// client in this process takes them as they are (one more owner of them).
+	ibMemoryBuffer Call(const ibMemoryBuffer& request, const void* connection = nullptr, const ibString& address = ibString());
+	// …and as JSON-RPC text — an HTTP POST's: the same call, the envelope read from the text and written back as one.
 	ibString Call(const ibString& request, const void* connection = nullptr, const ibString& address = ibString());
 
 	// The connection closed: the clients logged in through it are logged out.
@@ -73,9 +77,9 @@ public:
 	bool LoggedIn(const void* connection) const;
 
 	// HOW A CONNECTION IS TOLD SOMETHING — a transport that keeps its connection open (a WebSocket, a file base's
-	// program) hands the host the way it sends a text to it; Disconnect forgets it. A connection without one (an
+	// program) hands the host the way it sends a packet to it; Disconnect forgets it. A connection without one (an
 	// HTTP request) is never told anything: it asks.
-	void SetNotifier(const void* connection, std::function<void(const ibString& text)> notify);
+	void SetNotifier(const void* connection, std::function<void(const ibMemoryBuffer& packet)> notify);
 
 	// THE CLIENT'S FRAME CHANGED BY ITSELF — work it did not call settled (a report composed in the background, a
 	// debugger stopping): its connection is sent a notification, `changed {Client}`, and the client asks for its frame.
@@ -110,14 +114,14 @@ private:
 		// then, so the call carrying the response gets in.
 		std::mutex                        lock;
 		// The last call this client answered, and only when it opted in (`dedupe`). The id, a digest of the
-		// method and the params, and the text written back, including a refusal. One slot for this client.
+		// method and the params, and the answer written back, including a refusal. One slot for this client.
 		// A login by token does not replace it. Under `lock`. `replyPending` is set by the call that owns the
 		// slot and cleared only by that call; `pendingId` is that call's id.
 		bool                              dedupe = false;
 		bool                              hasReply = false;
 		ibDataValue                       replyId;
 		unsigned char                     replyDigest[32] = {};
-		ibString                          reply;
+		ibDataNode                        reply;
 		bool                              replyPending = false;
 		ibDataValue                       pendingId;
 		std::condition_variable           replyWait;
@@ -127,8 +131,8 @@ private:
 		ibDataNode                        sent;
 		// The version of the protocol it speaks (the older of its and ours) — and, from 2, the view it was last sent
 		// for each tab: a tab's view is patched from its own (Run).
-		std::int32_t                                           protocol = 1;
-		std::map<std::int32_t, std::shared_ptr<ibDataNode>>   views;
+		std::int32_t                         protocol = 1;
+		std::map<std::int32_t, ibDataValue>  views;
 		// SHA-256 of the bearer token. The token itself is not kept. Under m_mutex, with hasToken.
 		bool                              hasToken = false;
 		unsigned char                     tokenDigest[32] = {};
@@ -143,6 +147,11 @@ private:
 		// `connection` is cleared, so a call never observes a null connection together with a zero deadline.
 		std::atomic<std::int64_t>         resumeDeadlineMs{ 0 };
 	};
+
+	// THE CALL IN ITS ENVELOPE — what both of the port's doors read their request into and write their answer from: the
+	// answer as a node, its result filled where it lies; none for a notification. `size` — how long the request was.
+	std::optional<ibDataNode> Call(const ibRpcRequest& request, const void* connection, const ibString& address,
+		std::int64_t read, std::size_t size);
 
 	std::shared_ptr<Client> FindClient(const ibString& id) const;
 	std::shared_ptr<Client> FindByDigest(const unsigned char* digest) const;
@@ -174,7 +183,7 @@ private:
 	mutable std::mutex                             m_mutex;
 	std::map<ibString, std::shared_ptr<Client>>    m_clients;
 	// How each connection is told something (SetNotifier), under m_mutex.
-	std::map<const void*, std::function<void(const ibString& text)>> m_notifiers;
+	std::map<const void*, std::function<void(const ibMemoryBuffer& packet)>> m_notifiers;
 
 	std::mutex              m_roundMutex;
 	std::condition_variable m_roundSignal;

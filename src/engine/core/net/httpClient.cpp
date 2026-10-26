@@ -511,9 +511,9 @@ void ibWebSocketClient::Send(const ibString& text)
 	m_state->Send(ibWebSocketOpcode::Text, text.ToUtf8());
 }
 
-void ibWebSocketClient::SendBinary(std::string data)
+void ibWebSocketClient::Send(const void* data, std::size_t len)
 {
-	m_state->Send(ibWebSocketOpcode::Binary, std::move(data));
+	m_state->Send(ibWebSocketOpcode::Binary, std::string(static_cast<const char*>(data), len));
 }
 
 void ibWebSocketClient::Close()

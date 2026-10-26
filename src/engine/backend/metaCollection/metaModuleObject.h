@@ -54,7 +54,7 @@ public:
 
 	//per-type node value — the held metaobject's whole node (a Child sub-node)
 	virtual bool ReadNodeValue(const ibDataValue& value) override {
-		const std::shared_ptr<ibDataNode>& child = value.AsChild();
+		const auto child = value.AsChild();
 		if (child) m_metaObject->LoadNode(*child);
 		return true;
 	}
@@ -92,7 +92,7 @@ public:
 	// guid so it must adopt the source's, while a module has no re-homed hops and nothing addresses
 	// it by either identity — the module storage holds pointers, not keys.
 	virtual bool PasteNodeValue(const ibDataValue& value) override {
-		const std::shared_ptr<ibDataNode>& child = value.AsChild();
+		const auto child = value.AsChild();
 		if (child) m_metaObject->LoadNode(*child);
 		m_metaObject->ResetAll();
 		return true;

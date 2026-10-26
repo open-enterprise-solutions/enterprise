@@ -112,7 +112,7 @@ bool ibTypeControlFactory::SimpleChoice(ibControlFrame* ownerValue, const ibClas
 
 	ibDataNode response;
 	if (frame->Request(request, response)) {
-		if (const ibDataNode* const chosen = response.FindChild(ibProtocol::ibRequest::ibSimpleChoice::Value)) {
+		if (const auto chosen = response.FindChild(ibProtocol::ibRequest::ibSimpleChoice::Value)) {
 			ibValue value = ibValue::FromNode(*chosen);
 			ownerValue->ChoiceProcessing(value);
 		}

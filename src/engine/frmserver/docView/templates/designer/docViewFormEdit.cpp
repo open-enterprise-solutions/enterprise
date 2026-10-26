@@ -52,9 +52,9 @@ void ibFormDesignView::OnDraw(ibDataNode& frame)
 		else if (metaFormObject != nullptr)
 			caption = metaFormObject->GetSynonym();
 	}
-	ibDataNode* const state = frame.FindChild(ibProtocol::ibView::State);
-	if (state == nullptr)
+	if (!frame.FindChild(ibProtocol::ibView::State))
 		return;
+	ibDataNode* const state = &frame.Child(ibProtocol::ibView::State);   // the one there
 	state->SetValue(ibProtocol::ibView::ibFormDesigner::Caption, caption);
 
 	// ⭐ WHAT THE TAB IS OPENED WITH RIDES THE FRAME THAT OPENS IT — once (Opening): the form, the classes and the module's
@@ -93,7 +93,7 @@ bool ibFormDesignView::Fetch(const ibDataNode& request, ibDataNode& response)
 
 	// Asked about a form the client edited and has not handed (a control's state over its edit, a layer's edit) — it is
 	// loaded first. One about the form as it stands carries none: the client handed it as it drew it (Change).
-	if (const ibDataNode* const form = request.FindChild(ibProtocol::ibView::ibFormDesigner::Form)) {
+	if (const auto form = request.FindChild(ibProtocol::ibView::ibFormDesigner::Form)) {
 		ibJournalStopwatch loading;
 		loading.Resume();
 		if (!written(LoadForm(*form)))
@@ -201,10 +201,10 @@ bool ibFormDesignView::FetchEditor(const ibDataNode& request, ibDataNode& respon
 bool ibFormDesignView::SetProperty(ibPropertyObject* object, const ibDataNode& request)
 {
 	const wxString name = request.GetValue<wxString>(ibProtocol::ibView::ibFormDesigner::Name);
-	const ibDataValue* value = request.FindProperty(ibProtocol::ibView::ibFormDesigner::Value);
-	if (value == nullptr)
+	auto value = request.FindProperty(ibProtocol::ibView::ibFormDesigner::Value);
+	if (!value)
 		value = request.FindField(ibProtocol::ibView::ibFormDesigner::Value);
-	if (object == nullptr || value == nullptr)
+	if (object == nullptr || !value)
 		return false;
 
 	// An event — the handler a form command runs (Action): its owner asked and told by the event's pair.
@@ -289,7 +289,6 @@ bool ibFormDesignView::LoadForm(const ibDataNode& node)
 	// The desktop's LoadForm over the node: the controls held go first, the form reads its own (its attributes and its
 	// commands with it) and builds its children anew (LoadNode), its names made again.
 	ibDataNode handed = node;
-	RestoreProperties(handed);
 	ClearVisualHost();
 	for (unsigned int idx = m_valueForm->GetChildCount(); idx > 0; idx--) {
 		if (ibValueFrame* const child = m_valueForm->GetChild(idx - 1))
@@ -324,8 +323,9 @@ void ibFormDesignView::WriteForm(ibDataNode& response)
 	if (m_valueForm == nullptr)
 		return;
 
-	// The form whole — the client holds it from here on, so nothing is left to draw in part.
-	UpdateControl(m_valueForm);
+	// The form as it stands — drawn anew where it changed since it was last written: a control added (CreateControl) or
+	// updated; the whole of it when the door that changed it marked the form (FetchAttribute, FetchFormCommand), and when
+	// it was loaded (LoadForm). Marked whole here, every control's state was read again at every control dropped.
 	UpdateVisualHost(response.Child(ibProtocol::ibView::ibFormDesigner::Form));
 
 	// …and the trees beside it — its attributes, its commands.
@@ -441,8 +441,8 @@ void ibFormDesignView::WriteRows(ibValueFrame* control, ibDataNode& controls)
 
 bool ibFormDesignView::OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataNode& args)
 {
-	const ibDataNode* const form = args.FindChild(ibProtocol::ibView::ibFormDesigner::Form);
-	if (form == nullptr)
+	const auto form = args.FindChild(ibProtocol::ibView::ibFormDesigner::Form);
+	if (!form)
 		return ibModuleTextView::OnClientEvent(event, args);
 
 	// The form tested — as it stands on the client, shown as the runtime shows it (the desktop's TestForm).
@@ -468,25 +468,6 @@ bool ibFormDesignView::OnClientEvent(ibProtocol::ibEvent::ibKind event, const ib
 	SaveForm();
 	document->Modify(true);
 	return true;
-}
-
-void ibFormDesignView::RestoreProperties(ibDataNode& node)
-{
-	// The wire does not say which area a key came from (ibJsonProvider — a scalar comes back a field): every field is
-	// put back as a property too, so a property's reader finds it where WriteData put it; the header's fields stay.
-	const std::vector<std::pair<ibString, ibDataValue>> fields = node.Fields();
-	for (const std::pair<ibString, ibDataValue>& field : fields) {
-		if (node.FindProperty(field.first) == nullptr)
-			node.SetProperty(field.first, field.second);
-	}
-	for (ibDataNode& child : node.Children())
-		RestoreProperties(child);
-	// …and a node held in a property too: the form's Attributes, its FormCommands — an entry's Name read back a field
-	// was no Name to its reader, the attribute renamed to nothing on the next load (2026-10-15).
-	for (const std::pair<ibString, ibDataValue>& property : node.Properties()) {
-		if (property.second.Kind() == ibDataKind::Child && property.second.AsChild() != nullptr)
-			RestoreProperties(*property.second.AsChild());
-	}
 }
 
 // ----------------------------------------------------------------------------

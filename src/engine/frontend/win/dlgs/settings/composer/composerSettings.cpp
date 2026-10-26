@@ -3947,7 +3947,7 @@ bool ibComposerSettingsPanel::CheckExpression(const wxString& expression, wxStri
 		// ⭐⭐ COMPILING IS NOT ENOUGH — A NAME NOBODY DECLARES COMPILES FINE. The language resolves an
 		// unknown identifier to a LOCAL SLOT (compileCode.cpp: "regular var / not found → GetVariable's
 		// frame-slot emission"), which is right for a script that goes on to assign it and wrong for a
-		// one-line expression: `венгшщ` compiled, said nothing, and produced an empty value at read
+		// one-line expression: `asdfgh` compiled, said nothing, and produced an empty value at read
 		// time (Max, 2026-08-28: "the expression is not checked here").
 		//
 		// This wrapper declares nothing and takes no parameters, so EVERY named local in it is a name

@@ -166,7 +166,7 @@ bool ibValueFrame::OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibData
 	if (visualDoc != nullptr && visualDoc->IsVisualDemonstrationDoc())
 		return true;
 	const ibActionID id = args.GetValue<std::int32_t>(ibProtocol::ibEvent::Id);
-	if (args.FindField(ibProtocol::ibEvent::Member) != nullptr)
+	if (args.Has(ibProtocol::ibEvent::Member))
 		GetCommandBar()->ExecuteCommand(id, static_cast<size_t>(args.GetValue<std::int32_t>(ibProtocol::ibEvent::Member)));
 	else
 		GetCommandBar()->ExecuteCommand(id, GetOwnerForm());

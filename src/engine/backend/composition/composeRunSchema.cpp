@@ -195,8 +195,8 @@ bool ibComposeRunSchema::Run(const ibDataNode& request, ibDataNode& result, wxSt
 	// side may be a reference or an enum member, and those live in a configuration's registry rather
 	// than in the node. The read keeps them packed; the composer restores them against the
 	// configuration it is given below.
-	const ibDataNode* schemaNode = request.FindChild(kComposeSchema);
-	if (schemaNode == nullptr) {
+	auto schemaNode = request.FindChild(kComposeSchema);
+	if (!schemaNode) {
 		refusal = ibComposeText("No schema came with the request. Nothing was composed.");
 		return false;
 	}
@@ -241,7 +241,7 @@ bool ibComposeRunSchema::Run(const ibDataNode& request, ibDataNode& result, wxSt
 	// ⭐ THE SETTINGS SECTION AS IT WAS CHOSEN. The designer folded the author's variant and whoever's
 	// saved setting into one section before sending it, so there is one thing to apply and no order
 	// to get wrong on this side.
-	if (const ibDataNode* settingsNode = request.FindChild(kComposeSettings)) {
+	if (auto settingsNode = request.FindChild(kComposeSettings)) {
 		ibSettingsDescription settings;
 		if (!ibSettingsDescriptionMemory::ReadNode(*settingsNode, settings)) {
 			refusal = ibComposeText("The settings that arrived could not be read.");
@@ -266,7 +266,7 @@ bool ibComposeRunSchema::Run(const ibDataNode& request, ibDataNode& result, wxSt
 	// obliged to agree and nothing enforces it. Converging them is a change to the composition
 	// value's own setup and is not made from here.
 	{
-		const ibDataNode* given = request.FindChild(kComposeParameters);
+		auto given = request.FindChild(kComposeParameters);
 
 		for (const ibParameterDescription& parameter : description.m_parameters) {
 			if (parameter.m_name.IsEmpty())
@@ -274,16 +274,16 @@ bool ibComposeRunSchema::Run(const ibDataNode& request, ibDataNode& result, wxSt
 
 			// WHAT THE CALLER SAID ABOUT THIS ONE, asked BY NAME rather than section-wide: somebody
 			// who stated a period said nothing about any other parameter.
-			const ibDataValue* stated     = given != nullptr ? given->FindField(parameter.m_name) : nullptr;
-			const ibDataNode*  statedNode = given != nullptr ? given->FindChild(parameter.m_name) : nullptr;
+			auto stated     = given ? given->FindField(parameter.m_name) : std::nullopt;
+			auto statedNode = given ? given->FindChild(parameter.m_name) : std::nullopt;
 
 			wxString expression = parameter.m_expression;
 			ibValue  value;
 			bool     haveValue = false;
 
-			if (statedNode != nullptr) {
-				const ibDataValue* written = statedNode->FindField(wxT("expression"));
-				if (written != nullptr && written->Kind() == ibDataKind::String) {
+			if (statedNode) {
+				auto written = statedNode->FindField(wxT("expression"));
+				if (written && written->Kind() == ibDataKind::String) {
 					expression = written->AsString();   // …the caller's, over whatever was declared
 				}
 				else {
@@ -298,7 +298,7 @@ bool ibComposeRunSchema::Run(const ibDataNode& request, ibDataNode& result, wxSt
 					expression.Clear();
 				}
 			}
-			else if (stated != nullptr) {
+			else if (stated) {
 				value     = ValueFrom(*stated);
 				haveValue = true;
 				// ⚠⚠ AND THIS IS A DELIBERATE DIVERGENCE FROM THE ENGINE, named rather than left to be
@@ -413,11 +413,9 @@ bool ibComposeRunSchema::Run(const ibDataNode& request, ibDataNode& result, wxSt
 		// which reads as a defect in the report rather than a typo in the call.
 		// 🛑 BOTH AREAS OF THE NODE. A scalar is a FIELD, while a packed value and an `expression` are
 		// CHILDREN, which live among the properties — and only the fields were asked, so an undeclared
-		// name sent the second way was neither applied nor refused (2026-09-10).
-		if (given != nullptr) {
-			std::vector<std::pair<ibString, ibDataValue>> stated = given->Fields();
-			stated.insert(stated.end(), given->Properties().begin(), given->Properties().end());
-			for (const std::pair<ibString, ibDataValue>& field : stated) {
+		// name sent the second way was neither applied nor refused (2026-09-10). One set since 2026-10-26.
+		if (given) {
+			for (const std::pair<ibString, ibDataValue>& field : given->Fields()) {
 				const bool declared = std::any_of(
 					description.m_parameters.begin(), description.m_parameters.end(),
 					// ⚠ CompareString, like every other name lookup here. `==` on wxString is

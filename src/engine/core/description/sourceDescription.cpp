@@ -85,17 +85,17 @@ const ibChar* const kHopType   = wxT("type");
 
 bool ibSourceDescriptionMemory::ReadNode(const ibDataValue& value, ibSourceDescription& srcDesc)
 {
-	const std::shared_ptr<ibDataNode>& node = value.AsChild();
+	const auto node = value.AsChild();
 	if (!node)
 		return true;   // nothing bound — an ordinary state, not a failure
 
-	const ibDataValue* hops = node->FindField(kHopsField);
-	if (hops == nullptr)
+	auto hops = node->FindField(kHopsField);
+	if (!hops)
 		return true;
 
 	for (const ibDataValue& hop : hops->AsArray()) {
 
-		const std::shared_ptr<ibDataNode>& entry = hop.AsChild();
+		const auto entry = hop.AsChild();
 		if (!entry)
 			continue;
 
@@ -104,7 +104,7 @@ bool ibSourceDescriptionMemory::ReadNode(const ibDataValue& value, ibSourceDescr
 		// An absent type is the ABSENCE OF A CONSTRAINT, which is why it is not
 		// written and why reading it back as undefined is right.
 		ibClassID type = g_valueUndefinedCLSID;
-		if (const ibDataValue* stored = entry->FindField(kHopType))
+		if (auto stored = entry->FindField(kHopType))
 			type = (ibClassID)stored->AsUInt();
 
 		srcDesc.AppendSource(id, type);

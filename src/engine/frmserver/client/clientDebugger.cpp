@@ -66,8 +66,8 @@ bool ibClientDebugger::Command(ibProtocol::ibDebug::ibCommand command, const ibD
 	const unsigned short port = static_cast<unsigned short>(params.GetValue<std::int32_t>(ibProtocol::ibDebug::Port));
 	const bool kill = params.GetValue<bool>(ibProtocol::ibDebug::Kill);
 	const wxString expression = params.GetValue<wxString>(ibProtocol::ibDebug::Expression);
-	const ibDataValue* const item = params.FindField(ibProtocol::ibDebug::Item);
-	const unsigned long long itemId = item != nullptr ? item->AsUInt() : 0;
+	const auto item = params.FindField(ibProtocol::ibDebug::Item);
+	const unsigned long long itemId = item ? item->AsUInt() : 0;
 
 	switch (command) {
 	case ibProtocol::ibDebug::ibCommand::Search:

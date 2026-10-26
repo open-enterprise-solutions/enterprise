@@ -140,7 +140,7 @@ public:
 
 		// READING - no `into` given. What this object already carries, by declaration, with the
 		// names beside the ids: an id alone would send the caller back for a second call.
-		if (params.FindField(ArgInto().Name()) == nullptr) {
+		if (!params.FindField(ArgInto().Name())) {
 			std::vector<ibDataValue> in;
 			for (const ibMetaID& id : composition->GetCompositions()) {
 				ibValueMetaObject* const declaration = ibFindMetaObjectById(metaData, id);

@@ -15,11 +15,10 @@
 // property of its own. A property with no row is not sent.
 void ibPropertyInspector::AppendProperty(ibDataNode& parent, ibBackendProperty* property)
 {
-	ibDataNode& row = parent.AddChild(0, static_cast<ibMetaID>(parent.Children().size() + 1));
-	if (!property->GetProtocolValue(row, ibBackendProperty::ibReader::Cell)) {
-		parent.Children().pop_back();
+	// Filled apart and put in whole — a property with no row leaves its parent as it was.
+	ibDataNode row(0, static_cast<ibMetaID>(parent.Children().size() + 1));
+	if (!property->GetProtocolValue(row, ibBackendProperty::ibReader::Cell))
 		return;
-	}
 
 	// The pictures of the configuration of the object the property is of — an inspected object is one of a configuration
 	// (a metaobject, a form's control, attribute or command).
@@ -59,6 +58,7 @@ void ibPropertyInspector::AppendProperty(ibDataNode& parent, ibBackendProperty* 
 			entry.SetValue(ibProtocol::ibSchema::ibProperties::Picture, ibBackendPicture::SendPicture(clsid));
 		}
 	}
+	parent.AddChild(row);
 }
 
 namespace {
@@ -88,12 +88,13 @@ void AppendCategory(ibDataNode& parent, ibPropertyObject* object, const ibProper
 		const ibPropertyCategory* const nextCategory = category->GetCategory(index);
 		if (nextCategory == nullptr)
 			continue;
-		ibDataNode& row = parent.AddChild(0, static_cast<ibMetaID>(parent.Children().size() + 1));
+		// …put in only when it holds something.
+		ibDataNode row(0, static_cast<ibMetaID>(parent.Children().size() + 1));
 		row.SetValue(ibProtocol::ibSchema::ibProperties::Name, nextCategory->GetName());
 		row.SetValue(ibProtocol::ibSchema::ibProperties::Title, nextCategory->GetLabel());
 		AppendCategory(row, object, nextCategory, hidden, met);
-		if (row.Children().empty())
-			parent.Children().pop_back();
+		if (!row.Children().empty())
+			parent.AddChild(row);
 	}
 }
 

@@ -25,7 +25,7 @@ bool ibValueButton::OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDat
 {
 	if (event != ibProtocol::ibEvent::ibKind::Press)
 		return ibValueWindow::OnClientEvent(event, args);
-	if (args.FindField(ibProtocol::ibEvent::Member) != nullptr)
+	if (args.Has(ibProtocol::ibEvent::Member))
 		OnButtonPressed(static_cast<size_t>(args.GetValue<std::int32_t>(ibProtocol::ibEvent::Member)));
 	else
 		OnButtonPressed();

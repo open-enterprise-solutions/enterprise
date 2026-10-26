@@ -111,7 +111,7 @@ void WriteCheck(ibDataNode& response, const ibDataNode& request)
 	ibQueryPackage package;
 	try {
 		package = ibQueryParser().ParsePackage(request.GetValue<ibString>(qc::Text));
-		if (request.FindField(qc::Statement) == nullptr) {
+		if (!request.FindField(qc::Statement)) {
 			ibQueryLowering::CheckNames(package, std::map<wxString, ibValue>());
 			return;
 		}
@@ -166,7 +166,7 @@ bool ibFetchQueryConstructorRequest(const ibDataNode& request, ibDataNode& respo
 			return true;
 		if (kind == qc::ibRequest::SourceParameters)
 			WriteParameters(response, model.GetSourceParameters(*source));
-		else if (request.FindField(qc::Slot) != nullptr)
+		else if (request.Has(qc::Slot))
 			WriteFields(response, model.GetConditionFields(*source, request.GetValue<ibString>(qc::Slot)), metaData);
 		else
 			WriteFields(response, model.GetFields(*source, package, 0), metaData);

@@ -6,18 +6,6 @@
 
 #define ICON_SIZE 16
 
-namespace {
-
-// The pictures of `row` and the rows under it — asked of the server at once, not a call per row drawn.
-void PicturesOf(const ibProtocolNode& row, std::vector<wxString>& pictures)
-{
-	pictures.push_back(row.GetString(ibProtocol::ibView::ibCheckTree::Picture));
-	for (const ibProtocolNode& child : row.Children())
-		PicturesOf(child, pictures);
-}
-
-}
-
 ibInterfaceEditor::ibInterfaceEditor(wxWindow* parent,
 	wxWindowID winid, const ibTabDocument* document) :
 	wxWindow(parent, winid, wxDefaultPosition, wxDefaultSize), m_document(document)
@@ -113,7 +101,7 @@ wxTreeItemId ibInterfaceEditor::GroupFor(const ibProtocolNode& row)
 	// (ibMetaGroupCaption), the same the configuration tree shows.
 	wxImageList* imageList = m_interfaceCtrl->GetImageList();
 	wxASSERT(imageList);
-	const wxBitmap picture = ibProtocolPicture(row.GetString(ibProtocol::ibView::ibCheckTree::Picture));
+	const wxBitmap picture = ibProtocolPicture(row, ibProtocol::ibView::ibCheckTree::Picture);
 	const int imageIndex = picture.IsOk() ? imageList->Add(picture) : wxNOT_FOUND;
 
 	const wxTreeItemId group = m_interfaceCtrl->AppendItem(m_treeMETADATA,
@@ -127,7 +115,7 @@ wxTreeItemId ibInterfaceEditor::AppendItem(const wxTreeItemId& parent, const ibP
 {
 	wxImageList* imageList = m_interfaceCtrl->GetImageList();
 	wxASSERT(imageList);
-	const wxBitmap picture = ibProtocolPicture(row.GetString(ibProtocol::ibView::ibCheckTree::Picture));
+	const wxBitmap picture = ibProtocolPicture(row, ibProtocol::ibView::ibCheckTree::Picture);
 	const int imageIndex = picture.IsOk() ? imageList->Add(picture) : wxNOT_FOUND;
 	// Bare NAME — the item already sits UNDER its type group, as on the desktop's.
 	wxTreeItemId createItem = m_interfaceCtrl->AppendItem(parent, row.GetString(ibProtocol::ibView::ibCheckTree::Title), imageIndex, imageIndex, new ibTreeItemObject(row.GetId()));
@@ -149,13 +137,12 @@ void ibInterfaceEditor::FillData(const ibProtocolNode& view)
 {
 	const ibProtocolNode root = view.FindChild(ibProtocol::ibView::ibCheckTree::Rows);
 
-	std::vector<wxString> pictures;
-	PicturesOf(root, pictures);
-	ibProtocolPictureReceive(pictures);
+	// The rows' pictures asked of the server at once — not a call per row drawn.
+	ibProtocolPictureReceive(root);
 
 	// The configuration's row — its name and its picture, as the server's row has them.
 	wxImageList* imageList = m_interfaceCtrl->GetImageList();
-	const wxBitmap picture = ibProtocolPicture(root.GetString(ibProtocol::ibView::ibCheckTree::Picture));
+	const wxBitmap picture = ibProtocolPicture(root, ibProtocol::ibView::ibCheckTree::Picture);
 	if (picture.IsOk()) {
 		const int imageIndex = imageList->Add(picture);
 		m_interfaceCtrl->SetItemImage(m_treeMETADATA, imageIndex);

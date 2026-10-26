@@ -105,8 +105,8 @@ void WriteFieldList(ibDataNode& node, const wxString& name, const std::vector<wx
 void ReadFieldList(const ibDataNode& node, const wxString& name, std::vector<wxString>& list)
 {
 	list.clear();
-	const ibDataNode* sub = node.FindChild(name);
-	if (sub == nullptr)
+	auto sub = node.FindChild(name);
+	if (!sub)
 		return;
 	for (const ibDataNode& child : sub->Children())
 		if (child.GetClsid() == g_fieldNodeClsid)
@@ -139,8 +139,8 @@ void ReadSelectedList(const ibDataNode& node, const wxString& name,
                       std::vector<ibSelectedFieldDescription>& list)
 {
 	list.clear();
-	const ibDataNode* sub = node.FindChild(name);
-	if (sub == nullptr)
+	auto sub = node.FindChild(name);
+	if (!sub)
 		return;
 	for (const ibDataNode& child : sub->Children()) {
 		if (child.GetClsid() != g_fieldNodeClsid)
@@ -218,8 +218,8 @@ void WriteLevels(ibDataNode& parent, const wxString& name, const std::vector<ibL
 void ReadLevels(const ibDataNode& parent, const wxString& name, std::vector<ibLevelDescription>& levels)
 {
 	levels.clear();
-	const ibDataNode* axis = parent.FindChild(name);
-	if (axis == nullptr)
+	auto axis = parent.FindChild(name);
+	if (!axis)
 		return;
 	for (const ibDataNode& node : axis->Children()) {
 		if (node.GetClsid() != g_levelNodeClsid)
@@ -287,8 +287,8 @@ bool ibStructureDescriptionMemory::WriteNode(ibDataNode& node, const std::vector
 
 bool ibStructureDescriptionMemory::ReadNode(const ibDataNode& node, std::vector<ibOutputDescription>& outputs)
 {
-	const ibDataNode* structure = node.FindChild(kStructureNode);
-	if (structure == nullptr)
+	auto structure = node.FindChild(kStructureNode);
+	if (!structure)
 		return false;   // written before there was a structure — the caller keeps what it had
 
 	std::vector<ibOutputDescription> read;
@@ -388,7 +388,7 @@ void ibReadOperand(const ibDataNode& node, const wxString& prefix, ibFilterOpera
 	side.m_leafId       = static_cast<ibMetaID>(node.GetValue<std::int32_t>(prefix + wxT("Leaf")));
 	side.m_type         = ibTypeDescription();
 	side.m_value        = ibDataNode();
-	if (const ibDataNode* value = node.FindChild(prefix + wxT("Value")))
+	if (auto value = node.FindChild(prefix + wxT("Value")))
 		side.m_value = *value;
 }
 } // namespace
@@ -443,8 +443,8 @@ void ibReadFilterNodes(const ibDataNode& from, std::vector<ibFilterNodeDescripti
 bool ibFilterDescriptionMemory::ReadNode(const ibDataNode& node, ibFilterDescription& filter)
 {
 	filter.Clear();
-	const ibDataNode* sub = node.FindChild(kFilterNode);
-	if (sub == nullptr)
+	auto sub = node.FindChild(kFilterNode);
+	if (!sub)
 		return true;   // no filter written is not a failure — it is a composition without one
 
 	filter.m_rootKind = static_cast<ibFilterGroupKind>(sub->GetValue<std::int32_t>(kKindName));
@@ -469,8 +469,8 @@ bool ibFilterDescriptionMemory::WriteNode(ibDataNode& node, const ibFilterDescri
 bool ibSortDescriptionMemory::ReadNode(const ibDataNode& node, ibSortDescription& sort)
 {
 	sort.Clear();
-	const ibDataNode* order = node.FindChild(kOrderNode);
-	if (order == nullptr)
+	auto order = node.FindChild(kOrderNode);
+	if (!order)
 		return true;
 	for (const ibDataNode& line : order->Children()) {
 		const wxString field = line.GetValue<wxString>(kFieldName);
@@ -505,8 +505,8 @@ bool ibSortDescriptionMemory::WriteNode(ibDataNode& node, const ibSortDescriptio
 bool ibGroupDescriptionMemory::ReadNode(const ibDataNode& node, ibGroupDescription& group)
 {
 	group.Clear();
-	const ibDataNode* sub = node.FindChild(kGroupNode);
-	if (sub == nullptr)
+	auto sub = node.FindChild(kGroupNode);
+	if (!sub)
 		return true;
 	for (const ibDataNode& line : sub->Children()) {
 		const wxString field = line.GetValue<wxString>(kFieldName);
@@ -728,7 +728,7 @@ void ReadParameterValues(const ibDataNode& node, ibClassID clsid, const std::vec
 		ibParameterValueDescription<Parameter> value;
 		value.m_parameter = parameter;
 		value.m_use       = child.GetValue<bool>(kAppearanceUse);
-		if (const ibDataNode* stored = child.FindChild(kAppearanceValue))
+		if (auto stored = child.FindChild(kAppearanceValue))
 			value.m_value = *stored;
 		values.m_values.push_back(std::move(value));
 	}
@@ -773,7 +773,7 @@ const std::vector<ibOutputParameter>& EveryOutputParameter()
 void ReadOutputParameters(const ibDataNode& node, ibOutputParametersDescription& parameters)
 {
 	parameters.Clear();
-	if (const ibDataNode* sub = node.FindChild(kOutputParametersNode))
+	if (auto sub = node.FindChild(kOutputParametersNode))
 		ReadParameterValues(*sub, g_outputParameterNodeClsid, EveryOutputParameter(), parameters);
 }
 
@@ -795,8 +795,8 @@ const wxString  kRuleAppearance = wxT("Appearance");
 void ReadConditionalAppearance(const ibDataNode& node, ibConditionalAppearanceDescription& appearance)
 {
 	appearance.Clear();
-	const ibDataNode* sub = node.FindChild(kConditionalAppearanceNode);
-	if (sub == nullptr)
+	auto sub = node.FindChild(kConditionalAppearanceNode);
+	if (!sub)
 		return;   // a setting written before 2026-09-30, or one that highlights nothing
 	for (const ibDataNode& child : sub->Children()) {
 		if (child.GetClsid() != g_appearanceRuleNodeClsid)
@@ -805,7 +805,7 @@ void ReadConditionalAppearance(const ibDataNode& node, ibConditionalAppearanceDe
 		rule.m_use = child.GetValue<bool>(kRuleUse);
 		ibFilterDescriptionMemory::ReadNode(child, rule.m_condition);
 		ReadFieldList(child, kRuleFields, rule.m_fields);
-		if (const ibDataNode* ruleAppearance = child.FindChild(kRuleAppearance))
+		if (auto ruleAppearance = child.FindChild(kRuleAppearance))
 			ReadAppearance(*ruleAppearance, rule.m_appearance);
 		appearance.m_rules.push_back(std::move(rule));
 	}
@@ -848,7 +848,7 @@ bool ibParameterDescriptionMemory::ReadNode(const ibDataNode& node,
 		// middle of a configuration load, where the type it names may still be three branches away
 		// (Max, 2026-08-29: "the schema keeps the serialised node, and the runtime reads it and
 		// writes it back itself").
-		if (const ibDataNode* value = child.FindChild(kParamValue))
+		if (auto value = child.FindChild(kParamValue))
 			parameter.m_value = *value;
 		ibTypeDescriptionMemory::ReadNode(child.GetProperty(kParamType), parameter.m_type);
 		read.push_back(parameter);
@@ -1109,7 +1109,7 @@ void ReadSelectFields(const ibDataNode& node, std::vector<ibFieldDescription>& f
 		field.m_title    = child.GetValue<wxString>(kFieldInfoTitle);
 		// THE ROLE IS WRITTEN ONLY WHEN A PERSON SAID ONE — its presence is what `m_useRole` means, so an
 		// entry written before roles existed reads as "the source's", which is what it always was.
-		if (child.FindField(kFieldInfoRole) != nullptr) {
+		if (child.Has(kFieldInfoRole)) {
 			const std::int32_t role = child.GetValue<std::int32_t>(kFieldInfoRole);
 			if (role >= static_cast<std::int32_t>(ibBalanceRole::None) && role <= static_cast<std::int32_t>(ibBalanceRole::Closing)) {
 				field.m_useRole = true;
@@ -1118,7 +1118,7 @@ void ReadSelectFields(const ibDataNode& node, std::vector<ibFieldDescription>& f
 					field.m_periodRank = child.GetValue<std::int32_t>(kFieldInfoPeriodRank);   // absent reads as 0: in order
 			}
 		}
-		if (const ibDataNode* appearance = child.FindChild(kFieldInfoAppearance))
+		if (auto appearance = child.FindChild(kFieldInfoAppearance))
 			ReadAppearance(*appearance, field.m_appearance);
 		fields.push_back(std::move(field));
 	}
@@ -1242,8 +1242,7 @@ bool ibCompositionDescriptionMemory::ReadNode(const ibDataValue& value, ibCompos
 {
 	if (value.Kind() != ibDataKind::Child)
 		return false;
-	const std::shared_ptr<ibDataNode>& packed = value.AsChild();
-	return packed != nullptr && ReadNode(*packed, composition);
+	return ReadNode(*value.AsChild(), composition);
 }
 
 bool ibCompositionDescriptionMemory::WriteNode(ibDataValue& value, const ibCompositionDescription& composition)

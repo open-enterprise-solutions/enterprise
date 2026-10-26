@@ -16,11 +16,11 @@ namespace {
 // a composite (a type description) a node of its own. False: none.
 bool ReadValue(const ibDataNode& args, ibDataValue& value)
 {
-	if (const ibDataValue* const scalar = args.FindField(ibProtocol::ibSchema::ibProperties::Value)) {
+	if (const auto scalar = args.FindField(ibProtocol::ibSchema::ibProperties::Value)) {
 		value = *scalar;
 		return true;
 	}
-	if (const ibDataNode* const composite = args.FindChild(ibProtocol::ibSchema::ibProperties::Value)) {
+	if (const auto composite = args.FindChild(ibProtocol::ibSchema::ibProperties::Value)) {
 		value = ibDataValue::Child(std::make_shared<ibDataNode>(*composite));
 		return true;
 	}

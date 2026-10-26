@@ -763,8 +763,7 @@ ibValue ibValueSystemFunction::DeserializeValue(const wxString& strJson)
 
 	const wxScopedCharBuffer utf8 = strJson.utf8_str();
 
-	ibMemoryBuffer bytes;
-	bytes.AppendData(utf8.data(), utf8.length());
+	const ibMemoryBuffer bytes(utf8.data(), utf8.length());
 
 	ibReaderMemory reader(bytes);
 

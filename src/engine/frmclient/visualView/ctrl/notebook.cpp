@@ -169,7 +169,7 @@ void ibValueNotebookPage::Update(const ibProtocolNode& node)
 
 	// The server has resolved what the tab carries: no title on a picture-only tab, no picture on a text-only one.
 	const wxString title = state.GetString(ibProtocol::ibForm::ibState::Title);
-	const wxBitmap picture = ibProtocolPicture(state.GetString(ibProtocol::ibForm::ibState::Picture));
+	const wxBitmap picture = ibProtocolPicture(state, ibProtocol::ibForm::ibState::Picture);
 	if (was != pos)
 		notebook->InsertPage(pos, m_page, title, false, picture);
 	notebook->SetPageText(pos, title);

@@ -6,6 +6,7 @@
 #include "commandBar.h"
 
 #include <functional>
+#include <string_view>
 
 #include "protocol/protocol.h"
 #include "frmclient/win/picture.h"
@@ -23,6 +24,16 @@ constexpr int kFirstMemberId = wxID_HIGHEST + 1;
 
 constexpr long long kSeparatorId = -1;
 
+// An entry's picture as its field names it — its id, or a file's PNG — hashed.
+std::size_t PictureHash(const ibProtocolNode& entry)
+{
+	const ibProtocolNode picture = entry.FindChild(ibProtocol::ibForm::ibCommandBar::Picture);
+	if (!picture.IsBinary())
+		return std::hash<ibString>()(picture.AsString());
+	const ibMemoryBuffer png = picture.AsBinary();
+	return std::hash<std::string_view>()(std::string_view(png, png.GetDataLen()));
+}
+
 // The entries as a list of what they are made of — the ids, captions, pictures, kinds, a group's commands — less
 // whether they are enabled: two bars of one shape differ only in what may be pressed, and that is set, not built.
 ibString ShapeOf(const ibProtocolNode& commandBar)
@@ -31,7 +42,7 @@ ibString ShapeOf(const ibProtocolNode& commandBar)
 	for (const ibProtocolNode& entry : commandBar.Children()) {
 		shape << entry.GetInt(ibProtocol::ibForm::ibCommandBar::Id) << wxT('|')
 			<< entry.GetString(ibProtocol::ibForm::ibCommandBar::Caption) << wxT('|')
-			<< static_cast<unsigned long long>(std::hash<ibString>()(entry.GetString(ibProtocol::ibForm::ibCommandBar::Picture)))
+			<< static_cast<unsigned long long>(PictureHash(entry))
 			<< wxT('|') << entry.GetInt(ibProtocol::ibForm::ibCommandBar::Kind) << wxT('|')
 			<< static_cast<unsigned long long>(entry.Children().size()) << wxT(';');
 	}
@@ -93,13 +104,7 @@ void ibViewCommandBar::Update(const ibProtocolNode& commandBar)
 	m_shape = shape;
 	m_entries = commandBar.IsNode() ? commandBar.Clone() : ibProtocolNode();
 	// The pictures of the bar and of its groups' members asked for at once — not a call per tool.
-	std::vector<wxString> pictures;
-	for (const ibProtocolNode& entry : entries) {
-		pictures.push_back(entry.GetString(ibProtocol::ibForm::ibCommandBar::Picture));
-		for (const ibProtocolNode& member : entry.Children())
-			pictures.push_back(member.GetString(ibProtocol::ibForm::ibCommandBar::Picture));
-	}
-	ibProtocolPictureReceive(pictures);
+	ibProtocolPictureReceive(commandBar);
 	m_bar->ClearTools();
 
 	bool anyTool = false;
@@ -115,7 +120,7 @@ void ibViewCommandBar::Update(const ibProtocolNode& commandBar)
 		// caption alone.
 		const int toolId = kFirstToolId + static_cast<int>(idx);
 		const wxString caption = entry.GetString(ibProtocol::ibForm::ibCommandBar::Caption);
-		m_bar->AddTool(toolId, caption, ibProtocolPicture(entry.GetString(ibProtocol::ibForm::ibCommandBar::Picture)), wxNullBitmap,
+		m_bar->AddTool(toolId, caption, ibProtocolPicture(entry, ibProtocol::ibForm::ibCommandBar::Picture), wxNullBitmap,
 			wxITEM_NORMAL, entry.GetString(ibProtocol::ibForm::ibCommandBar::Tooltip, caption), wxEmptyString, nullptr);
 		if (entry.GetInt(ibProtocol::ibForm::ibCommandBar::Kind) == static_cast<int>(ibProtocol::ibForm::ibCommandBar::ibKind::Group))
 			m_bar->SetToolDropDown(toolId, true);
@@ -146,7 +151,7 @@ bool ibViewCommandBar::PopupGroup(int toolId)
 	wxMenu menu;
 	for (std::size_t member = 0; member < members.size(); ++member) {
 		wxMenuItem* const item = menu.Append(kFirstMemberId + static_cast<int>(member), members[member].GetString(ibProtocol::ibForm::ibCommandBar::Caption));
-		const wxBitmap picture = ibProtocolPicture(members[member].GetString(ibProtocol::ibForm::ibCommandBar::Picture));
+		const wxBitmap picture = ibProtocolPicture(members[member], ibProtocol::ibForm::ibCommandBar::Picture);
 		if (picture.IsOk())
 			item->SetBitmap(picture);
 		item->Enable(members[member].GetBool(ibProtocol::ibForm::ibCommandBar::Enabled, true));

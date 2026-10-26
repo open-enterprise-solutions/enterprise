@@ -1,6 +1,6 @@
 #include "value.h"
 
-#include "frmclient/win/picture.h"   // ibProtocolPicture — a PNG in base64, as the engine keeps its own
+#include "frmclient/backend/backend_picture.h"   // ibBackendPicture::GetImageFromBase64 — a master in the source
 
 // THE ENGINE'S OWN PICTURE OF A VALUE — backend/compiler/value_res.cpp, the same PNG: a field of a settings window wears it.
 /* PNG */
@@ -8,13 +8,12 @@ static const wxString s_value_16_png = wxT("iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYA
 
 wxIcon ibValue::GetIconGroup()
 {
-	// …at 16 by 16, as the engine reads it (ibBackendPicture::GetImageFromBase64(png, wxSize(16, 16))).
+	// …at 16 by 16, as the engine reads it.
 	static const wxIcon icon = [] {
-		wxImage image = ibProtocolPicture(s_value_16_png).ConvertToImage();
-		if (image.IsOk())
-			image.Rescale(16, 16, wxIMAGE_QUALITY_HIGH);
+		const wxImage image = ibBackendPicture::GetImageFromBase64(s_value_16_png, wxSize(16, 16));
 		wxIcon made;
-		made.CopyFromBitmap(wxBitmap(image));
+		if (image.IsOk())
+			made.CopyFromBitmap(wxBitmap(image));
 		return made;
 	}();
 	return icon;

@@ -89,8 +89,8 @@ ibPGCalcScheduleProperty::ibPGCalcScheduleProperty(ibBackendProperty* property, 
 	// THE ROW'S LISTS — the server's property's answers for the register bound now (its GetProtocolValue).
 	ibDataNode row;
 	if (m_property != nullptr && m_property->GetProtocolValue(row)) {
-		if (const ibDataValue* const node = row.FindProperty(ibProtocol::ibSchema::ibProperties::Schedule)) {
-			if (node->Kind() == ibDataKind::Child && node->AsChild() != nullptr) {
+		if (const auto node = row.FindProperty(ibProtocol::ibSchema::ibProperties::Schedule)) {
+			if (node->Kind() == ibDataKind::Child) {
 				m_lists = *node->AsChild();
 				m_hasLists = true;
 			}

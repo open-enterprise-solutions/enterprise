@@ -9,6 +9,11 @@
 
 #include <gtest/gtest.h>
 
+#include <cstring>
+
+#include <wx/image.h>
+#include <wx/mstream.h>
+
 #include "backend/backend_picture.h"
 #include "backend/metadataConfiguration.h"
 #include "backend/metaCollection/metaObject.h"
@@ -99,7 +104,7 @@ TEST(ibBackendPicture, SendPicture_ConfigurationPicture_GuidAndVersion)
 	PictureFixture f;
 	ASSERT_NE(f.first, nullptr);
 	ASSERT_TRUE(PictureFixture::Set(f.first, Image("\x89PNG one", 16, 16)));
-	const wxString sent = ibBackendPicture::SendPicture(ibPictureDescription(PictureFixture::Guid(f.first)), &f.cfg);
+	const wxString sent = ibBackendPicture::SendPicture(ibPictureDescription(PictureFixture::Guid(f.first)), &f.cfg).AsString();
 	EXPECT_EQ(sent, PictureFixture::Guid(f.first).str() + wxT("#") + f.first->GetValueAsVersion().str());
 	// The Picture method reads the guid before the '#'.
 	EXPECT_EQ(ibGuid(sent.BeforeFirst(wxT('#'))), PictureFixture::Guid(f.first));
@@ -111,10 +116,10 @@ TEST(ibBackendPicture, SendPicture_PictureChanged_AnotherIdOfTheSameGuid)
 	ASSERT_NE(f.first, nullptr);
 	const ibPictureDescription desc(PictureFixture::Guid(f.first));
 	ASSERT_TRUE(PictureFixture::Set(f.first, Image("\x89PNG one", 16, 16)));
-	const wxString before = ibBackendPicture::SendPicture(desc, &f.cfg);
-	EXPECT_EQ(ibBackendPicture::SendPicture(desc, &f.cfg), before);
+	const wxString before = ibBackendPicture::SendPicture(desc, &f.cfg).AsString();
+	EXPECT_EQ(ibBackendPicture::SendPicture(desc, &f.cfg).AsString(), before);
 	ASSERT_TRUE(PictureFixture::Set(f.first, Image("\x89PNG two", 16, 16)));
-	const wxString after = ibBackendPicture::SendPicture(desc, &f.cfg);
+	const wxString after = ibBackendPicture::SendPicture(desc, &f.cfg).AsString();
 	EXPECT_NE(after, before);
 	EXPECT_EQ(after.BeforeFirst(wxT('#')), before.BeforeFirst(wxT('#')));
 }
@@ -131,8 +136,7 @@ TEST(ibBackendPicture, SendPicture_NoConfiguration_ConfigurationPictureEmpty)
 TEST(ibBackendPicture, SendPicture_GuidOfNoPicture_Empty)
 {
 	PictureFixture f;
-	const wxString sent = ibBackendPicture::SendPicture(ibPictureDescription(ibGuid(ibGuid::newGuid())), &f.cfg);
-	EXPECT_TRUE(sent.IsEmpty());
+	EXPECT_TRUE(ibBackendPicture::SendPicture(ibPictureDescription(ibGuid(ibGuid::newGuid())), &f.cfg).IsEmpty());
 }
 
 TEST(ibBackendPicture, SendPicture_BackendPicture_NumberAlone)
@@ -141,7 +145,23 @@ TEST(ibBackendPicture, SendPicture_BackendPicture_NumberAlone)
 	const wxString number = wxString::Format(wxT("%llu"), static_cast<unsigned long long>(g_picErrorCLSID));
 	PictureFixture f;
 	EXPECT_EQ(ibBackendPicture::SendPicture(g_picErrorCLSID), number);
-	EXPECT_EQ(ibBackendPicture::SendPicture(ibPictureDescription(g_picErrorCLSID), &f.cfg), number);
-	EXPECT_EQ(ibBackendPicture::SendPicture(ibPictureDescription(g_picErrorCLSID), nullptr), number);
+	EXPECT_EQ(ibBackendPicture::SendPicture(ibPictureDescription(g_picErrorCLSID), &f.cfg).AsString(), number);
+	EXPECT_EQ(ibBackendPicture::SendPicture(ibPictureDescription(g_picErrorCLSID), nullptr).AsString(), number);
 	EXPECT_TRUE(ibBackendPicture::SendPicture(static_cast<ibPictureID>(0)).IsEmpty());
+}
+
+TEST(ibBackendPicture, SendPicture_FilePicture_ItsPngBytes)
+{
+	// A picture held as a file's bytes has no id of its own: it goes as its PNG — the bytes themselves, no text of them.
+	wxImage drawn(16, 16);
+	wxMemoryOutputStream file;
+	ASSERT_TRUE(drawn.SaveFile(file, wxBITMAP_TYPE_PNG));
+	std::string bytes(file.GetLength(), '\0');
+	file.CopyTo(bytes.data(), bytes.size());
+
+	const ibDataValue sent = ibBackendPicture::SendPicture(ibPictureDescription(Image(bytes, 16, 16)), nullptr);
+	ASSERT_EQ(sent.Kind(), ibDataKind::Binary);
+	const ibMemoryBuffer png = sent.AsBinary();
+	ASSERT_GE(png.GetDataLen(), 8u);
+	EXPECT_EQ(std::memcmp(png.GetData(), "\x89PNG\r\n\x1a\n", 8), 0);
 }

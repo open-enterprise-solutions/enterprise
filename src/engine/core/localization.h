@@ -15,7 +15,7 @@ struct ibLocalizationEntry {
 
 typedef std::vector<ibLocalizationEntry> ibLocalizationEntryArray;
 
-// THE TRANSLATION ENGINE — a text in its stored form (`en = 'Goods'; ru = 'Товары';`) and a language in, that
+// THE TRANSLATION ENGINE — a text in its stored form (`en = 'Goods'; de = 'Waren';`) and a language in, that
 // language's text out; and the form read and written. Which language is asked is always the caller's to say: the
 // server's session knows its person's, the client its own (ibBackendLocalization::GetUserLanguage).
 class CORE_API ibLocalization {

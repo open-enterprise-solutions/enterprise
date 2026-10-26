@@ -10,6 +10,9 @@
 #include "backend/objCtor.h"                   // ibCtorAbstractType::GetClassName
 #include "core/description/compositionDescription.h"   // ibCompositionNodeName / …Clsid — a composition's parts, both ways
 #include "backend/metadataConfiguration.h"    // activeMetaData — the registered types, for the lookup
+#include "protocol/protocol.h"                 // ibProtocol::ibRpc::Types — where an answer names its types
+
+#include <set>
 
 // ⭐⭐ THE MIRROR OF THE RESOLVER BELOW, and the pair is what makes a schema READ, EDITED AND SENT
 // BACK possible. An answer renders a node's type as a WORD; a request carrying that word back was
@@ -64,41 +67,86 @@ void ibRpcInstallTypeLookup(ibJsonProvider& provider)
 	provider.SetTypeLookup([](const ibString& name) -> ibClassID { return LookupType(name, activeMetaData); });
 }
 
+namespace {
+
+// ⭐ A NODE SAYS WHAT IT IS, IN WORDS — even when its type is a synthetic id nothing constructs.
+// The provider already names every REGISTERED type; what it could not name were the ids a
+// description makes for its own parts, and a caller then read `"NodeType": 67799176431653306`
+// where every other line of the same answer says a word (report_get, measured 2026-09-02).
+//
+// The caller's own resolver still wins where there is one — this is the FLOOR, and a floor goes
+// UNDER. 🛑 The first version chose between the two instead of chaining them, so it never fired
+// at all: every tool answer is rendered with the metadata resolver (mcpServer), which knows
+// registered types and says nothing about a composition's parts — the exact ids this exists for.
+// Written as "the caller's own resolver still wins" in the comment and as `? :` in the code.
+ibString TypeName(ibClassID clsid, const std::function<ibString(ibClassID)>& typeResolver)
+{
+	if (typeResolver) {
+		const ibString named = typeResolver(clsid);
+		if (!named.IsEmpty())
+			return named;
+	}
+	const wxString part = ibCompositionNodeName(clsid);
+	if (!part.IsEmpty())
+		return part;
+	// …and under it the static registry — a built-in's name (Number, String), which the provider itself gave
+	// before it moved into the core.
+	const ibCtorAbstractType* const ctor = ibValue::GetAvailableCtor(clsid);
+	return ctor != nullptr ? ctor->GetClassName() : wxString();
+}
+
+// The types a node's tree is of — its own, its values' nodes, its children's — once each.
+void TypesOf(const ibDataNode& node, std::set<ibClassID>& types);
+
+void TypesOf(const ibDataValue& value, std::set<ibClassID>& types)
+{
+	if (value.Kind() == ibDataKind::Child) {
+		if (const auto child = value.AsChild())
+			TypesOf(*child, types);
+	}
+	else if (value.Kind() == ibDataKind::Array) {
+		for (const ibDataValue& item : value.AsArray())
+			TypesOf(item, types);
+	}
+}
+
+void TypesOf(const ibDataNode& node, std::set<ibClassID>& types)
+{
+	if (node.GetClsid() != ibClassID(0))
+		types.insert(node.GetClsid());
+	for (const auto& field : node.Fields())
+		TypesOf(field.second, types);
+	for (const ibDataNode& child : node.Children())
+		TypesOf(child, types);
+}
+
+} // namespace
+
 ibString ibRpcRenderNode(const ibDataNode& node, const std::function<ibString(ibClassID)>& typeResolver)
 {
 	ibJsonProvider provider;
 	// A message on the wire is one line: a program reads it, and the readable view's breaks and indents were bytes.
 	provider.SetCompact(true);
-
-	// ⭐ A NODE SAYS WHAT IT IS, IN WORDS — even when its type is a synthetic id nothing constructs.
-	// The provider already names every REGISTERED type; what it could not name were the ids a
-	// description makes for its own parts, and a caller then read `"NodeType": 67799176431653306`
-	// where every other line of the same answer says a word (report_get, measured 2026-09-02).
-	//
-	// The caller's own resolver still wins where there is one — this is the FLOOR, and a floor goes
-	// UNDER. 🛑 The first version chose between the two instead of chaining them, so it never fired
-	// at all: every tool answer is rendered with the metadata resolver (mcpServer), which knows
-	// registered types and says nothing about a composition's parts — the exact ids this exists for.
-	// Written as "the caller's own resolver still wins" in the comment and as `? :` in the code.
-	provider.SetTypeResolver([typeResolver](ibClassID clsid) -> ibString {
-		if (typeResolver) {
-			const ibString named = typeResolver(clsid);
-			if (!named.IsEmpty())
-				return named;
-		}
-		const wxString part = ibCompositionNodeName(clsid);
-		if (!part.IsEmpty())
-			return part;
-		// …and under it the static registry — a built-in's name (Number, String), which the provider itself gave
-		// before it moved into the core.
-		const ibCtorAbstractType* const ctor = ibValue::GetAvailableCtor(clsid);
-		return ctor != nullptr ? ctor->GetClassName() : wxString();
-	});
+	provider.SetTypeResolver([typeResolver](ibClassID clsid) { return TypeName(clsid, typeResolver); });
 
 	ibString text;
 	if (!provider.Write(node, text))
 		return ibString();
 	return text;
+}
+
+void ibRpcNameTypes(ibDataNode& answer)
+{
+	std::set<ibClassID> types;
+	TypesOf(answer, types);
+	if (types.empty())
+		return;
+	ibDataNode& named = answer.Child(ibProtocol::ibRpc::Types);
+	for (const ibClassID clsid : types) {
+		const ibString name = TypeName(clsid, {});
+		if (!name.IsEmpty())
+			named.SetValue(ibString(wxString::Format(wxT("%llu"), static_cast<unsigned long long>(clsid))), name);
+	}
 }
 
 namespace {
@@ -116,6 +164,25 @@ ibDataNode Envelope(const ibDataValue& id)
 	// thing the protocol uses to pair an answer with its call.
 	root.AddField(wxT("id"), id);
 	return root;
+}
+
+// The request in its envelope — the method, the id, the params: the node's values where they lie, nothing copied.
+bool TakeRequest(const ibDataNode& root, ibRpcRequest& request, wxString& error)
+{
+	request.m_method = root.GetValue<ibString>(wxT("method"));
+	if (request.m_method.IsEmpty()) {
+		error = wxT("no method named");
+		return false;
+	}
+
+	if (auto id = root.FindField(wxT("id")))
+		request.m_id = *id;
+
+	// The params node is the request's bytes where they lie: one more owner of them, nothing copied.
+	if (auto params = root.FindChild(wxT("params")))
+		request.m_params = std::move(*params);
+
+	return true;
 }
 
 // One request read by a provider whose type lookup is installed already — whose types it knows is the caller's.
@@ -139,23 +206,7 @@ bool ReadRequest(const ibString& text, ibJsonProvider& provider, ibRpcRequest& r
 		error = wxT("the request could not be read as JSON");
 		return false;
 	}
-
-	// A scalar key lands in the FIELD area; `params`, being an object, lands in
-	// the properties area as a Child.
-	request.m_method = root.GetValue<ibString>(wxT("method"));
-	if (request.m_method.IsEmpty()) {
-		error = wxT("no method named");
-		return false;
-	}
-
-	if (const ibDataValue* id = root.FindField(wxT("id")))
-		request.m_id = *id;
-
-	// The params node is the request's to give up: it is moved out of the tree just read, not copied.
-	if (ibDataNode* params = root.FindChild(wxT("params")))
-		request.m_params = std::move(*params);
-
-	return true;
+	return TakeRequest(root, request, error);
 }
 
 } // namespace
@@ -179,6 +230,19 @@ bool ibRpcParseRequest(const ibString& text, ibRpcRequest& request, wxString& er
 		return clsid;
 	});
 	return ReadRequest(text, provider, request, error);
+}
+
+bool ibRpcParseRequest(const ibMemoryBuffer& packet, ibRpcRequest& request, wxString& error)
+{
+	ibDataNode root;
+	try {
+		ibBinaryProvider().Read(packet, root);
+	}
+	catch (const ibCoreException& e) {
+		error = e.what();   // why the bytes are no packet, and where
+		return false;
+	}
+	return TakeRequest(root, request, error);
 }
 
 void ibRpcLookupTypes(ibDataNode& node, const ibMetaData* metaData)
@@ -206,16 +270,16 @@ bool ibRpcParseResponse(const ibString& text, ibDataValue& id, ibString& payload
 	if (!root.GetValue<ibString>(wxT("method")).IsEmpty())
 		return false;
 
-	const ibDataNode* result = root.FindChild(wxT("result"));
-	const ibDataNode* failed = root.FindChild(wxT("error"));
+	auto result = root.FindChild(wxT("result"));
+	auto failed = root.FindChild(wxT("error"));
 
-	if (result == nullptr && failed == nullptr)
+	if (!result && !failed)
 		return false;   // neither a call nor an answer — not ours to read
 
-	if (const ibDataValue* found = root.FindField(wxT("id")))
+	if (auto found = root.FindField(wxT("id")))
 		id = *found;
 
-	isError = (failed != nullptr);
+	isError = (failed.has_value());
 	payload = ibRpcRenderNode(isError ? *failed : *result);
 	return true;
 }

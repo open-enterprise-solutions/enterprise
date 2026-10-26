@@ -462,9 +462,9 @@ public:
 		//
 		// Emptiness itself stays legal — clearing a module is a real thing to ask for. The KIND is
 		// what is checked, which is the same rule ibMcpSetProperty already applies to properties.
-		const ibDataValue* incoming = params.FindField(ArgText().Name());
+		auto incoming = params.FindField(ArgText().Name());
 
-		if (incoming == nullptr || incoming->Kind() != ibDataKind::String) {
+		if (!incoming || incoming->Kind() != ibDataKind::String) {
 			refusal = ibMcpText("'text' must be a string holding the module's source. Nothing was written.");
 			return false;
 		}

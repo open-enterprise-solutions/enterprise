@@ -762,7 +762,7 @@ public:
 				return false;
 			}
 
-			std::shared_ptr<ibDataNode> node = described.AsChild();
+			std::shared_ptr<ibDataNode> node = std::make_shared<ibDataNode>(*described.AsChild());
 
 			// The ADDRESS is the container's to say — the cell knows what it holds, not where it
 			// sits, which is exactly the division WriteNode draws.
@@ -830,14 +830,14 @@ public:
 		// rather than as a second implementation: every rule about parameters, fill types, borders
 		// and spans stays in one place, so a cell written in a set is written by exactly the code
 		// that writes one on its own. The template is named once, on the outside, and carried in.
-		if (const ibDataValue* many = params.FindField(ArgCells().Name())) {
+		if (auto many = params.FindField(ArgCells().Name())) {
 
 			if (many->Kind() != ibDataKind::Array) {
 				refusal = ibMcpText("`cells` is a LIST of cells - [{row, col, value}, ...].");
 				return false;
 			}
 
-			const ibDataValue* named = params.FindField(ArgId().Name());
+			auto named = params.FindField(ArgId().Name());
 
 			std::vector<ibDataValue> written;
 			int at = 0;
@@ -846,7 +846,7 @@ public:
 
 				++at;
 
-				if (each.Kind() != ibDataKind::Child || each.AsChild() == nullptr) {
+				if (each.Kind() != ibDataKind::Child || !each.AsChild()) {
 					refusal = wxString::Format(
 						ibMcpText("Entry %i of `cells` is not a cell - each one is an object, "
 							  "{row, col, ...}."), at);
@@ -855,7 +855,7 @@ public:
 
 				ibDataNode one = *each.AsChild();
 
-				if (named != nullptr && one.FindField(ArgId().Name()) == nullptr)
+				if (named && !one.Has(ArgId().Name()))
 					one.AddField(ArgId().Name(), *named);
 
 				ibDataNode said;
@@ -901,8 +901,8 @@ public:
 		// (A set of cells arrives through `cells` and comes back through here one entry at a time —
 		//  see the branch at the top of this method.)
 
-		const bool gaveValue     = params.FindField(ArgValue().Name())     != nullptr;
-		const bool gaveParameter = params.FindField(ArgParameter().Name()) != nullptr;
+		const bool gaveValue     = params.Has(ArgValue().Name());
+		const bool gaveParameter = params.Has(ArgParameter().Name());
 
 		// ⭐ A CELL'S TEXT IS A CAPTION, and it goes in every language the configuration declares — the
 		// rule every caption follows (ibMcpCaptionInEveryLanguage). A Russian word sent bare was stored
@@ -941,7 +941,7 @@ public:
 			cell->SetValue(ArgParameter().Text(params));
 
 		// The decipher parameter, when one is asked for — the field SetParameter actually fills.
-		if (params.FindField(ArgDetails().Name()) != nullptr)
+		if (params.Has(ArgDetails().Name()))
 			cell->SetParameter(ArgDetails().Text(params));
 
 		// ⭐⭐ AND THE FILL TYPE WITH IT — see the note on ArgFill. Writing the parameter name
@@ -1006,19 +1006,19 @@ public:
 		// THE FONT IS ONE OBJECT, so every question about it is answered on one
 		// copy and written back once — three separate reads would each start from
 		// the stored font and the last would win.
-		if (params.FindField(ArgItalic().Name()) != nullptr
-			|| params.FindField(ArgBold().Name()) != nullptr
-			|| params.FindField(ArgFontSize().Name()) != nullptr) {
+		if (params.Has(ArgItalic().Name())
+			|| params.Has(ArgBold().Name())
+			|| params.Has(ArgFontSize().Name())) {
 
 			// A cell that carries no font of its own is shown in the sheet's default
 			// one, so that is what "make it bold" starts from.
 			ibFont font = cell->m_font.IsOk() ? cell->m_font : ibDefaultSpreadsheetFont();
 
-			if (params.FindField(ArgItalic().Name()) != nullptr)
+			if (params.Has(ArgItalic().Name()))
 				font.m_style = ArgItalic().Flag(params)
 					? ibFONTSTYLE_ITALIC : ibFONTSTYLE_NORMAL;
 
-			if (params.FindField(ArgBold().Name()) != nullptr)
+			if (params.Has(ArgBold().Name()))
 				font.m_weight = ArgBold().Flag(params)
 					? ibFONTWEIGHT_BOLD : ibFONTWEIGHT_NORMAL;
 
@@ -1043,7 +1043,7 @@ public:
 			}
 		}
 
-		if (params.FindField(ArgVertical().Name()) != nullptr)
+		if (params.Has(ArgVertical().Name()))
 			cell->m_textOrient = ArgVertical().Flag(params)
 				? wxVERTICAL : wxHORIZONTAL;
 
@@ -1084,7 +1084,7 @@ public:
 			// The weight, if one was named — see ArgBorderWidth for why the heavy line is the case
 			// this door could not draw. Zero rubs the rule out, which is how a form takes a line
 			// AWAY from one side of a framed block.
-			const int weight = params.FindField(ArgBorderWidth().Name()) != nullptr
+			const int weight = params.Has(ArgBorderWidth().Name())
 				? (int)ArgBorderWidth().Whole(params) : 1;
 
 			if (weight < 0) {
@@ -1122,7 +1122,7 @@ public:
 			}
 		}
 
-		if (params.FindField(ArgReadOnly().Name()) != nullptr)
+		if (params.Has(ArgReadOnly().Name()))
 			cell->m_isReadOnly = ArgReadOnly().Flag(params);
 
 		sheet->SetSpreadsheetDesc(desc);
@@ -1878,8 +1878,8 @@ public:
 
 		const std::int32_t height = slot.m_payload.GetValue<std::int32_t>(wxT("rows"));
 
-		const ibDataValue* cells = slot.m_payload.FindField(wxT("cells"));
-		if (cells == nullptr || cells->Kind() != ibDataKind::Array) {
+		auto cells = slot.m_payload.FindField(wxT("cells"));
+		if (!cells || cells->Kind() != ibDataKind::Array) {
 			refusal = ibMcpText("The buffer holds no cells.");
 			return false;
 		}
@@ -1897,15 +1897,15 @@ public:
 				if (item.Kind() != ibDataKind::Child)
 					continue;
 
-				const std::shared_ptr<ibDataNode>& entry = item.AsChild();
-				if (entry == nullptr)
+				const auto entry = item.AsChild();
+				if (!entry)
 					continue;
 
 				const std::int32_t atRow = row + offset + entry->GetValue<std::int32_t>(wxT("row"));
 				const std::int32_t atCol = col + entry->GetValue<std::int32_t>(wxT("col"));
 
-				const ibDataValue* body = entry->FindField(wxT("cell"));
-				if (body == nullptr)
+				auto body = entry->FindField(wxT("cell"));
+				if (!body)
 					continue;
 
 				ibSpreadsheetCellDescription* target = desc.GetOrCreateCell(atRow, atCol);

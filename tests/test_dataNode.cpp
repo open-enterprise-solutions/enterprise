@@ -13,9 +13,7 @@
 namespace {
 
 ibMemoryBuffer Blob(const char* s) {
-	ibMemoryBuffer b;
-	b.AppendData(s, (size_t)strlen(s));
-	return b;
+	return ibMemoryBuffer(s, strlen(s));
 }
 
 // Root with a data blob + two same-clsid sibling children, one of which has a
@@ -26,12 +24,11 @@ ibDataNode MakeTree() {
 	root.AddField(wxT("id"), ibDataValue::Int(99));
 	root.AddField(wxT("flag"), ibDataValue::Bool(true));
 	root.SetRawData(Blob("ROOT-DATA"));
-	// Add both children first (each AddChild may grow root's vector), then reach
-	// the first child by index to attach a grandchild — never hold a child ref
-	// across a sibling AddChild.
+	// Both children first, then the first one, read out, filled where it lies (Handle) — a child read out is its bytes,
+	// and a write to it alone would make a node of its own.
 	root.AddChild(2002, 2).SetRawData(Blob("child-A"));
 	root.AddChild(2002, 3).SetRawData(Blob("child-B"));
-	root.Children()[0].AddChild(3003, 4).SetRawData(Blob("grandchild"));
+	root.Handle(root.Children()[0]).AddChild(3003, 4).SetRawData(Blob("grandchild"));
 	return root;
 }
 
@@ -105,15 +102,37 @@ TEST(DataNode, BinaryProvider_RoundTrip_StructurePreserved) {
 	EXPECT_EQ(0, memcmp(rd.GetData(), "child-B", rd.GetDataLen()));
 
 	// named fields survive the binary provider round-trip
-	const ibDataValue* fName = t2.FindField(wxT("name"));
-	ASSERT_TRUE(fName != nullptr);
+	auto fName = t2.FindField(wxT("name"));
+	ASSERT_TRUE(fName);
 	EXPECT_EQ(fName->AsString(), wxT("RootName"));
-	const ibDataValue* fId = t2.FindField(wxT("id"));
-	ASSERT_TRUE(fId != nullptr);
+	auto fId = t2.FindField(wxT("id"));
+	ASSERT_TRUE(fId);
 	EXPECT_EQ(fId->AsInt(), (std::int64_t)99);
-	const ibDataValue* fFlag = t2.FindField(wxT("flag"));
-	ASSERT_TRUE(fFlag != nullptr);
+	auto fFlag = t2.FindField(wxT("flag"));
+	ASSERT_TRUE(fFlag);
 	EXPECT_TRUE(fFlag->AsBool());
+}
+
+// ⭐ A NEW NODE KEEPS THE IDENTITY IT IS GIVEN — a builder's root (ibDataBuilder::Root) has no bytes until its first
+// write, and BuildDataNode's first is SetClsid: the clsid went over the node's counts, the root framed itself as
+// chunk(0), and a new base refused its own configuration as "another format".
+TEST(DataNode, ANewNodeKeepsTheIdentityItIsGiven) {
+	ibDataNode root;
+	root.SetClsid(1001);
+	root.SetMetaId(1);
+	root.AddField(wxT("name"), ibDataValue::String(wxT("RootName")));
+	root.AddChild(2002, 2);
+	EXPECT_EQ(root.GetClsid(), (ibClassID)1001);
+	EXPECT_EQ(root.GetMetaId(), (ibMetaID)1);
+
+	ibClassID clsid = 0;
+	ibMetaID metaId = 0;
+	const ibDataNode read = ReadFull(WriteFull(root), clsid, metaId);
+	EXPECT_EQ(clsid, (ibClassID)1001);
+	EXPECT_EQ(metaId, (ibMetaID)1);
+	ASSERT_EQ(read.Children().size(), (size_t)1);
+	ASSERT_TRUE(read.Has(wxT("name")));
+	EXPECT_EQ(read.FindField(wxT("name"))->AsString(), wxT("RootName"));
 }
 
 // Typed values: SetValue<T> writes, GetValue<T> reads back (round-trip).
@@ -137,7 +156,7 @@ TEST(DataNode, ADateIsStoredAsItself) {
 
 	ibClassID clsid = 0; ibMetaID metaId = 0;
 	const ibDataNode read = ReadFull(WriteFull(written), clsid, metaId);
-	ASSERT_TRUE(read.FindField(wxT("is_empty")) != nullptr);
+	ASSERT_TRUE(read.Has(wxT("is_empty")));
 	EXPECT_TRUE(read.FindField(wxT("is_empty"))->AsDate().IsEmpty());
 	EXPECT_EQ(ibDateTime(2026, 3, 29, 2, 30), read.FindField(wxT("a_date"))->AsDate());
 
@@ -208,13 +227,13 @@ TEST(DataNode, AFormatOneNodeReadsItsDatesAsInstants) {
 	EXPECT_EQ(ibDateTime::OfWxDateTime(instant), read.FindField(wxT("stamp"))->AsDate());
 	EXPECT_TRUE(read.FindField(wxT("was_empty"))->AsDate().IsEmpty());
 	EXPECT_TRUE(read.FindField(wxT("no_date"))->AsDate().IsEmpty());
-	ASSERT_TRUE(read.FindProperty(wxT("prop")) != nullptr);
+	ASSERT_TRUE(read.Has(wxT("prop")));
 	EXPECT_EQ(crossed, read.FindProperty(wxT("prop"))->AsDate());
-	ASSERT_TRUE(read.FindField(wxT("list")) != nullptr);
+	ASSERT_TRUE(read.Has(wxT("list")));
 	ASSERT_EQ(2u, read.FindField(wxT("list"))->AsArray().size());
 	EXPECT_EQ(crossed, read.FindField(wxT("list"))->AsArray()[0].AsDate());
 	EXPECT_TRUE(read.FindField(wxT("list"))->AsArray()[1].AsDate().IsEmpty());
-	ASSERT_TRUE(read.FindField(wxT("child")) != nullptr);
+	ASSERT_TRUE(read.Has(wxT("child")));
 	EXPECT_EQ(crossed, read.FindField(wxT("child"))->AsChild()->FindField(wxT("when"))->AsDate());
 }
 

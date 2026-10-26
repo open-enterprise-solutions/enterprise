@@ -27,6 +27,7 @@
 
 #include "frmclient/backend/system/value/composition/valueComposerSettings.h"   // ibValueCompositionField — a field IS a value
 #include "core/description/typeDescription.h"                // ibTypeDescription
+#include "core/serialize/dataBuilder.h"                      // ibDataValue — a field's picture, as the wire said it
 
 class ibSourceDataObject;
 class ibMetaData;
@@ -44,9 +45,9 @@ struct ibSettingsPlainField {
 	// WHAT A PERSON READS — the title the host gives the field (a composition: its title in force, the
 	// one printed over its column). Empty reads as the name. What a pick STORES stays the name above.
 	wxString          m_presentation;
-	// HOW IT IS DRAWN — the column's picture as the server names it (ibBackendPicture::SendPicture), where the desktop's tree
-	// walks a source's explorer; empty on a flat list, drawn with the attribute picture.
-	wxString          m_picture;
+	// HOW IT IS DRAWN — the column's picture as the server names it (ibBackendPicture::SendPicture: its id, or a file's
+	// PNG), where the desktop's tree walks a source's explorer; none on a flat list, drawn with the attribute picture.
+	ibDataValue       m_picture;
 };
 
 // THE FIELDS AS THE SERVER DESCRIBES THEM — children Name, Presentation, Id, Type, Available, Picture (ibDialogListSettings

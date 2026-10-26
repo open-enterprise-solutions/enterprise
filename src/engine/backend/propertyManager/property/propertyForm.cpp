@@ -54,7 +54,7 @@ bool ibPropertyForm::GetDataValue(ibValue& pvarPropVal) const
 // its runtime blob, the metadata sees a transparent control-tree subtree.
 bool ibPropertyForm::ReadNodeValue(const ibDataValue& value)
 {
-	const std::shared_ptr<ibDataNode>& root = value.AsChild();
+	const auto root = value.AsChild();
 	if (root) {
 		ibPropertyForm::SetValue(ibValueMetaObjectFormBase::FormNodeToBlob(root->GetProperty(wxT("Layout"))));
 		ibPropertyForm::SetValue(root->GetValue<wxString>(wxT("Module")));
@@ -90,7 +90,7 @@ bool ibPropertyForm::PasteNodeValue(const ibDataValue& value)
 {
 	ibValueMetaObjectFormBase* metaForm = dynamic_cast<ibValueMetaObjectFormBase*>(m_owner);
 	if (metaForm == nullptr) return false;
-	const std::shared_ptr<ibDataNode>& root = value.AsChild();
+	const auto root = value.AsChild();
 	if (root) {
 		ibPropertyForm::SetValue(ibValueMetaObjectFormBase::FormNodeToBlob(root->GetProperty(wxT("Layout"))));
 		ibPropertyForm::SetValue(root->GetValue<wxString>(wxT("Module")));

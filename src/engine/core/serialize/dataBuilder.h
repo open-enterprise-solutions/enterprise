@@ -11,16 +11,29 @@
 //	that tree to/from a concrete format (binary now, json later). A node
 //	never knows the on-disk format; a provider never knows the consumer.
 //
-//	This mirrors the L3 schema split one level up: the Describe-walk is the
-//	ContributeTables analogue, the ibDataNode tree is the ibSchemaSnapshot
-//	analogue, and the providers are the consumers (ibStructureBuilder /
-//	ibDataMover analogues). See docs/private/schema-first-metadata.md.
+//	⭐⭐ OES-RPC 1.0 — A NODE IS ITS BYTES (Max, 2026-10-26: "ibDataNode is in effect what OES-RPC 1.0 is"; "the
+//	storage format is like JSON, with no parsing needed"). A node is held as binary JSON in ONE buffer —
+//	written as it is filled, read where it lies: every container says how long it is (the jump past it) and how many
+//	it holds, so a reader goes by those marks and never looks for anything. The same buffer is the node in memory, in
+//	storage and on the wire: handing a node over is one more owner of its buffer.
+//
+//	   packet = "OES1" · version u16 · flags u16 · length u32 · 0 u32         — the root node at 16
+//	   node   = length u32 · fields' length u32 · fields u32 · children u32 · raw length u32 · metaId i32 · clsid u64
+//	            · raw (even) · fields · children
+//	   field  = kind u8 · 0 u8 · name (length u16, UTF-16LE) · value        — an even size
+//	   value  = Empty — · Bool u8 + 0 · Number (length u32, ibNumber's bytes, even) · a whole Number i64 · Date i64
+//	            · String (length u32, UTF-16LE) · Binary (length u32, bytes, even) · Child — a node
+//	            · Array (length u32 · count u32 · items — fields with no name)
+//
+//	Nothing in it is a place, only lengths: a node's bytes mean the same wherever they are copied (at an even offset).
 ////////////////////////////////////////////////////////////////////////////
 
-#include <vector>
-#include <utility>
+#include <deque>
+#include <iterator>
 #include <memory>
-#include <variant>
+#include <optional>
+#include <utility>
+#include <vector>
 
 #include "core/core.h"                   // ibMetaID, ibClassID
 #include "core/fdatetime.h"              // ibDateTime — the Date scalar
@@ -32,25 +45,80 @@
 class CORE_API ibDataNode;   // a value can BE a child node (composite) — see ibDataKind::Child
 
 ////////////////////////////////////////////////////////////////////////////
-// ibDataValue — a small tagged scalar for a node's named fields. This is the
-// VALUE LAYER the providers materialize per format: binary writes positional
-// bytes, json writes a typed key. A composite type (a TypeDescription) is NOT
-// a scalar — it expands into a child ibDataNode walked by the same recursion.
-//
-// Empty / opaque-binary is the transitional kind used while a node's data is
-// still carried as one un-decomposed block (the eDataBlock blob of the legacy
-// format). As each metaobject's Describe is filled out, those blobs are
-// replaced by real named scalars + child sub-nodes.
+// ibDataRange — WHAT A NODE HOLDS, WALKED WHERE IT LIES: a node's entries, its children, a list's items, each one
+// made as it is reached, the next one a jump past it. It holds the bytes it walks (one more owner of them), so a range
+// of a value read out and dropped at once — `node.GetProperty("x").AsArray()` — is still good.
 ////////////////////////////////////////////////////////////////////////////
-// Each value carries a TYPE SIGNATURE (Kind), so it is self-describing: the
-// internal store keeps the natural binary form per kind (number as an integer,
-// bool as a byte, string as text, blob as bytes) and the provider writes the
-// signature + the value. The signature preserves the type end-to-end, so a JSON
-// view can render `42` / `true`, not `"42"`. C++<->value conversion is in ibDataCodec.
+template<class Item>
+class ibDataRange {
+public:
+	using ibMake = Item(*)(const ibMemoryBuffer& bytes, std::uint32_t at);
+	using ibNext = std::uint32_t(*)(const unsigned char* base, std::uint32_t at);
+
+	ibDataRange() noexcept = default;
+	ibDataRange(const ibMemoryBuffer& bytes, std::uint32_t first, std::size_t count, ibMake make, ibNext next) noexcept
+		: m_bytes(bytes), m_first(first), m_count(count), m_make(make), m_next(next) {}
+
+	std::size_t size() const noexcept { return m_count; }
+	bool        empty() const noexcept { return m_count == 0; }
+
+	class iterator {
+	public:
+		using iterator_category = std::input_iterator_tag;
+		using value_type = Item;
+		using difference_type = std::ptrdiff_t;
+		using pointer = void;
+		using reference = Item;
+
+		iterator(const ibDataRange* range, std::uint32_t at, std::size_t left) noexcept : m_range(range), m_at(at), m_left(left) {}
+		Item      operator*() const { return m_range->m_make(m_range->m_bytes, m_at); }
+		iterator& operator++() noexcept { m_at = m_range->m_next(Base(), m_at); --m_left; return *this; }
+		iterator  operator++(int) noexcept { iterator was = *this; ++*this; return was; }
+		bool      operator==(const iterator& other) const noexcept { return m_left == other.m_left; }
+		bool      operator!=(const iterator& other) const noexcept { return m_left != other.m_left; }
+	private:
+		const unsigned char* Base() const noexcept { return static_cast<const unsigned char*>(m_range->m_bytes.GetData()); }
+		const ibDataRange* m_range;
+		std::uint32_t      m_at;
+		std::size_t        m_left;
+	};
+	iterator begin() const noexcept { return iterator(this, m_first, m_count); }
+	iterator end() const noexcept { return iterator(this, 0, 0); }
+
+	Item front() const { return *begin(); }
+	Item back() const { return (*this)[m_count - 1]; }
+	// The item at its place — the ones before it jumped past.
+	Item operator[](std::size_t index) const {
+		iterator at = begin();
+		while (index-- != 0)
+			++at;
+		return *at;
+	}
+
+private:
+	ibMemoryBuffer m_bytes;
+	std::uint32_t  m_first = 0;
+	std::size_t    m_count = 0;
+	ibMake         m_make = nullptr;
+	ibNext         m_next = nullptr;
+};
+
+////////////////////////////////////////////////////////////////////////////
+// ibDataValue — a small tagged scalar for a node's named fields. A composite type (a TypeDescription) is NOT a
+// scalar — it expands into a child ibDataNode walked by the same recursion.
+//
+// Each value carries a TYPE SIGNATURE (Kind), so it is self-describing: the bytes keep the natural binary form per
+// kind (number as an integer, bool as a byte, string as text, blob as bytes). The signature preserves the type
+// end-to-end, so a JSON view can render `42` / `true`, not `"42"`. C++<->value conversion is in ibDataCodec.
+//
+// ⭐ A VALUE IS A FIELD WHERE IT LIES — the bytes it is in (held: one more owner of them) and its place there: one read
+// out of a node is the node's own bytes, no copy; one made here (String, Number, …) is a field of its own, put into a
+// node as it is (AddField copies its bytes in).
+////////////////////////////////////////////////////////////////////////////
 enum class ibDataKind : std::uint8_t {
 	Empty = 0,
 	Bool,
-	Number,    // exact decimal later; integer scalars for now
+	Number,    // exact decimal
 	Date,      // a date/time scalar (an ibDateTime, fdatetime.h) — distinct from Number so it stays
 	           // self-describing: a JSON view renders it as a readable ISO string, not a raw int
 	String,
@@ -62,15 +130,12 @@ enum class ibDataKind : std::uint8_t {
 class CORE_API ibDataValue {
 public:
 	ibDataValue() = default;
-	// ⭐ MOVED WITHOUT A THROW — said: std::vector moves only what cannot throw, and a node's fields grew by COPYING each
-	// one (2026-10-22, _Uninitialized_copy under AddField) while the payload's buffer was wxMemoryBuffer, which had no
-	// move of its own. What moves is a pointer taken, never an allocation.
 	ibDataValue(const ibDataValue&) = default;
 	ibDataValue(ibDataValue&&) noexcept = default;
 	ibDataValue& operator=(const ibDataValue&) = default;
 	ibDataValue& operator=(ibDataValue&&) noexcept = default;
 
-	ibDataKind Kind() const { return static_cast<ibDataKind>(m_payload.index()); }
+	ibDataKind Kind() const;
 	bool IsEmpty() const { return Kind() == ibDataKind::Empty; }
 
 	static ibDataValue String(const ibString& text);
@@ -80,52 +145,44 @@ public:
 	static ibDataValue UInt(std::uint64_t value);   // unsigned-int convenience over Number
 	static ibDataValue Date(const ibDateTime& date);   // date/time scalar (the wall-clock reading, fdatetime.h)
 	static ibDataValue Binary(const ibMemoryBuffer& data);
-	static ibDataValue Child(const std::shared_ptr<ibDataNode>& child);
+	static ibDataValue Child(const std::shared_ptr<ibDataNode>& child);   // its bytes copied in; null — Empty
 	static ibDataValue Array(const std::vector<ibDataValue>& items);
-	static ibDataValue Array(std::vector<ibDataValue>&& items);   // a parser hands its list over instead of copying it
+	static ibDataValue Array(std::vector<ibDataValue>&& items);
 
-	// Typed accessors — each checks the signature and THROWS (ibBackendException) on
-	// a wrong kind, so a mis-read fails loud instead of returning garbage. Callers
-	// that may see another kind must gate on Kind() first (as ReadNodeValue does).
-	// An Empty value (an absent field) reads as the kind's default.
-	const ibString&                  AsString() const;
-	bool                             AsBool()   const;
-	const ibNumber&                  AsNumber() const;
-	std::int64_t                              AsInt()    const { std::int64_t out = 0; AsNumber().ToInt(out); return out; }
-	std::uint64_t                              AsUInt()   const { std::uint64_t out = 0; AsNumber().ToInt(out); return out; }
-	ibDateTime                       AsDate()   const;
-	const ibMemoryBuffer&            AsBinary() const;
-	const std::shared_ptr<ibDataNode>& AsChild() const;
-	const std::vector<ibDataValue>&  AsArray()  const;
+	// Typed accessors — each checks the signature and THROWS (ibBackendException) on a wrong kind, so a mis-read fails
+	// loud instead of returning garbage. An Empty value (an absent field) reads as the kind's default. By value: a
+	// text is made of the characters where they lie; a sub-node and a list are handles into the same bytes.
+	ibString                  AsString() const;
+	bool                      AsBool()   const;
+	ibNumber                  AsNumber() const;
+	std::int64_t              AsInt()    const;
+	std::uint64_t             AsUInt()   const;
+	ibDateTime                AsDate()   const;
+	ibMemoryBuffer            AsBinary() const;
+	std::optional<ibDataNode> AsChild()  const;   // none — not a sub-node
+	ibDataRange<ibDataValue>  AsArray()  const;
 
-	// ⭐ TWO PACKED VALUES ARE THE SAME VALUE WHEN THEIR NODES SAY THE SAME THING. A stored value is
-	// compared HERE rather than by building both back into runtime objects and asking them: what a
-	// store holds is bytes, and bytes are what "did this change" is about (Max, 2026-08-29: "you can
-	// compare the node — that is how you check the value for equality").
+	// ⭐ TWO PACKED VALUES ARE THE SAME VALUE WHEN THEIR BYTES ARE (Max, 2026-08-29: "you can compare the node — that
+	// is how you check the value for equality"). A value has one spelling of each kind (a whole number is always
+	// written whole), so the bytes compared are the answer.
 	bool operator==(const ibDataValue& other) const;
 	bool operator!=(const ibDataValue& other) const { return !(*this == other); }
 
-	// HOW MUCH IT SAYS — near enough to what it weighs written out: a text by its length, a list by its items, a
-	// node all the way down. For telling which of two answers is heavier, not for counting bytes.
+	// HOW MUCH IT SAYS — the bytes it takes.
 	std::size_t Weight() const;
 
 private:
-	void Expect(ibDataKind expected) const; // throws ibBackendException on kind mismatch
+	friend class ibDataNode;
+	friend class ibBinaryProvider;
 
-	// ⭐ ONE PAYLOAD, OF ITS OWN KIND — the alternatives in ibDataKind's order, so which one is held IS the signature
-	// (Kind). It held every kind's at once: a bool carried a text, a number, a date, a buffer (a kilobyte, by wx's
-	// default) and a list, each made, copied and freed with it — a dozen allocations a field written, ~70 µs a
-	// command entry of a frame in a Debug build.
-	// The text is the engine's string, as every name here: a node copied — into an answer's envelope, out of a
-	// value — is one more owner of each text, not a copy of its characters.
-	std::variant<std::monostate,                 // Empty
-		bool,                                     // Bool
-		ibNumber,                                 // Number (exact decimal, huge-capable)
-		ibDateTime,                               // Date (the wall-clock reading, fdatetime.h) — never mixed with Number
-		ibString,                                 // String
-		ibMemoryBuffer,                           // Binary
-		std::shared_ptr<ibDataNode>,              // Child (composite sub-node)
-		std::vector<ibDataValue>> m_payload;      // Array (ordered list of values)
+	ibDataValue(const ibMemoryBuffer& bytes, std::uint32_t at) : m_bytes(bytes), m_at(at) {}
+
+	void Expect(ibDataKind expected) const; // throws ibBackendException on kind mismatch
+	const unsigned char* Base() const { return static_cast<const unsigned char*>(m_bytes.GetData()); }
+	std::uint32_t ValueAt() const;          // past its name
+
+	ibMemoryBuffer m_bytes;   // none — Empty
+	std::uint32_t  m_at = 0;
 };
 
 ////////////////////////////////////////////////////////////////////////////
@@ -168,6 +225,25 @@ template<> struct ibDataCodec<ibDateTime> {       // the engine's own date — t
 	static ibDataValue To(const ibDateTime& v) { return ibDataValue::Date(v); }
 	static ibDateTime  From(const ibDataValue& v) { return v.AsDate(); }
 };
+template<> struct ibDataCodec<ibDataValue> {      // a value whose kind it says itself — a picture: an id or its PNG
+	static ibDataValue To(const ibDataValue& v) { return v; }
+	static ibDataValue From(const ibDataValue& v) { return v; }
+};
+
+////////////////////////////////////////////////////////////////////////////
+// ibDataKey — AN ENTRY'S NAME AS IT IS ASKED FOR — a protocol's word, a literal, either string — with no text made of
+// it: what a lookup compares a field's name with, where it lies.
+////////////////////////////////////////////////////////////////////////////
+struct CORE_API ibDataKey {
+	ibDataKey(const char* ascii) noexcept;
+	ibDataKey(const wchar_t* text) noexcept;
+	ibDataKey(const ibString& text) noexcept : m_wide(text.wc_str()), m_length(text.length()) {}
+	ibDataKey(const wxString& text) noexcept : m_wide(text.wc_str()), m_length(text.length()) {}
+
+	const char*    m_ascii = nullptr;   // one of the two
+	const wchar_t* m_wide = nullptr;
+	std::size_t    m_length = 0;
+};
 
 ////////////////////////////////////////////////////////////////////////////
 // ibDataNode — one uniform, self-similar node of the structure tree. Every
@@ -176,63 +252,55 @@ template<> struct ibDataCodec<ibDateTime> {       // the engine's own date — t
 // "is this a Catalog or an Attribute" — it recursively visits uniform nodes
 // and the node's type says how a consumer expands it.
 //
-// READ is BY NAME with an optimistic cursor: FindField tries the expected
-// position first (matches the write order — the common case), and only falls
-// back to a search when the order shifted. This is what gives forward-compat
-// (add / drop / reorder a field without breaking older blobs).
+// READ is BY NAME, by the marks: a field's name and its length, the next one a jump past it — nothing parsed.
+// Forward-compatible (add / drop / reorder a field without breaking older blobs). Fields and properties are ONE set,
+// as the JSON view has always had them; the two pairs of verbs are the names the two walks write and read by.
+//
+// ⭐ WRITTEN WHERE IT LIES, IN ANY ORDER. A field goes into its node's place in the buffer; what follows it moves on
+// (nothing when the node is the last one written — the common case: a builder fills a node and goes on). A sub-node
+// being filled (Child, AddChild) is a handle into its root's buffer, good while the root is; a node read out
+// (FindChild, Children, AsChild) is the bytes held and its place — a change to it makes it a node of its own.
 ////////////////////////////////////////////////////////////////////////////
 class CORE_API ibDataNode {
 public:
 	ibDataNode() = default;
-	ibDataNode(ibClassID clsid, ibMetaID metaId) : m_clsid(clsid), m_metaId(metaId) {}
-	// ⭐ MOVED WITHOUT A THROW — said, as ibDataValue says it: a vector of children grew by COPYING each child with all of
-	// its subtree (2026-10-22, the form editor's rows).
-	ibDataNode(const ibDataNode&) = default;
-	ibDataNode(ibDataNode&&) noexcept = default;
-	ibDataNode& operator=(const ibDataNode&) = default;
-	ibDataNode& operator=(ibDataNode&&) noexcept = default;
+	ibDataNode(ibClassID clsid, ibMetaID metaId);
+	// A copy is the same bytes, one more owner of them; a change to either makes its own.
+	ibDataNode(const ibDataNode& other);
+	ibDataNode(ibDataNode&& other) noexcept;
+	ibDataNode& operator=(const ibDataNode& other);
+	ibDataNode& operator=(ibDataNode&& other) noexcept;
+	~ibDataNode();
 
 	// --- identity ---------------------------------------------------------
-	ibClassID GetClsid()  const { return m_clsid; }
-	ibMetaID  GetMetaId() const { return m_metaId; }
-	void      SetClsid(ibClassID clsid) { m_clsid = clsid; }
-	void      SetMetaId(ibMetaID metaId) { m_metaId = metaId; }
+	ibClassID GetClsid()  const;
+	ibMetaID  GetMetaId() const;
+	void      SetClsid(ibClassID clsid);
+	void      SetMetaId(ibMetaID metaId);
 
 	// --- typed values, templated (explicit, readable) --------------------
 	// Save uses the non-const Set* (writes the node); Load uses the const Get*
 	// (reads it). No direction flag — the METHOD (SaveNode / LoadNode) decides,
 	// so on load the node is genuinely const. Get*<T> RETURNS the value (inline);
-	// Get*(name, out) deduces T. One pair for the FIELD area, one for PROPERTIES:
+	// Get*(name, out) deduces T. One pair for the FIELD walk, one for PROPERTIES:
 	//   save: node.SetValue("id", m_metaId);          node.SetProp("Name", GetName());
 	//   load: m_metaId = node.GetValue<std::int32_t>("id");     SetName(node.GetProp<wxString>("Name"));
 	// An absent name yields a default-constructed T — forward-compatible with
 	// add / drop / reorder.
 	template<class T> void SetValue(const ibString& name, const T& value) { AddField(name, ibDataCodec<T>::To(value)); }
-	// return form: explicit <T>, value inline; out form: T deduced, `out` left at
-	// its default when the name is absent. The name as it is handed (FindField).
-	template<class T, class Name> T    GetValue(const Name& name) const {
-		if (const ibDataValue* v = FindField(name)) return ibDataCodec<T>::From(*v);
+	template<class T> T    GetValue(const ibDataKey& name) const {
+		if (const auto v = FindField(name)) return ibDataCodec<T>::From(*v);
 		return T();
 	}
-	template<class T, class Name> void GetValue(const Name& name, T& out) const {
-		if (const ibDataValue* v = FindField(name)) out = ibDataCodec<T>::From(*v);
+	template<class T> void GetValue(const ibDataKey& name, T& out) const {
+		if (const auto v = FindField(name)) out = ibDataCodec<T>::From(*v);
 	}
-	template<class T> void SetProp(const ibString& name, const T& value) { SetProperty(name, ibDataCodec<T>::To(value)); }
-	template<class T, class Name> T    GetProp(const Name& name) const {
-		if (const ibDataValue* v = FindProperty(name)) return ibDataCodec<T>::From(*v);
-		return T();
-	}
-	template<class T, class Name> void GetProp(const Name& name, T& out) const {
-		if (const ibDataValue* v = FindProperty(name)) out = ibDataCodec<T>::From(*v);
-	}
+	template<class T> void SetProp(const ibString& name, const T& value) { AddField(name, ibDataCodec<T>::To(value)); }
+	template<class T> T    GetProp(const ibDataKey& name) const { return GetValue<T>(name); }
+	template<class T> void GetProp(const ibDataKey& name, T& out) const { GetValue(name, out); }
 
 	// --- named-field primitives (internals of Field) ----------------------
-	void AddField(const ibString& name, const ibDataValue& value) {
-		m_fields.emplace_back(name, value);
-	}
-	void AddField(const ibString& name, ibDataValue&& value) {
-		m_fields.emplace_back(name, std::move(value));
-	}
+	void AddField(const ibString& name, const ibDataValue& value);
 
 	// ⭐ REPLACE-OR-ADD, for a node that is a VIEW rather than a record. AddField appends, which is
 	// right for a blob written once in order — reading it back finds the first and nothing repeats a
@@ -243,133 +311,101 @@ public:
 	// "object"` and each appending to `required` — so a seven-argument tool published seven `type`
 	// keys and two `required` arrays, and a strict client would have taken the wrong one of them
 	// (found 2026-09-01, reading a schema back off the running server).
-	void SetField(const ibString& name, const ibDataValue& value) {
+	void SetField(const ibString& name, const ibDataValue& value);
+	// …and the field taken out — a word a reader kept for later, once it is answered (ibJsonProvider::LookupTypes).
+	void RemoveField(const ibDataKey& name);
+	// The field under the name — none when the name is absent: a new field against an old blob defaults, never errors.
+	// The name as it is handed, compared where the field's lies: a lookup makes no text.
+	std::optional<ibDataValue> FindField(const ibDataKey& name) const;
+	// …and whether there is one — a name given or not (the question ibProtocolNode::Has asks one storey up).
+	bool Has(const ibDataKey& name) const;
+	// The fields in the order they were written — each a name and its value.
+	ibDataRange<std::pair<ibString, ibDataValue>> Fields() const;
 
-		for (std::pair<ibString, ibDataValue>& field : m_fields) {
-			if (field.first == name) {
-				field.second = value;
-				return;
-			}
-		}
-
-		m_fields.emplace_back(name, value);
-	}
-	// …and the field taken out — a word a reader kept for later, once it is answered (ibJsonProvider::LookupTypes). The
-	// cursor stays on the field that followed it.
-	template<class Name> void RemoveField(const Name& name) {
-		for (size_t idx = 0; idx < m_fields.size(); idx++) {
-			if (m_fields[idx].first == name) {
-				m_fields.erase(m_fields.begin() + idx);
-				if (m_cursor > idx)
-					--m_cursor;
-				return;
-			}
-		}
-	}
-	// Optimistic-cursor lookup: try m_cursor first (write-order fast path),
-	// else search from it. Returns nullptr (cursor unmoved) when the name is
-	// absent — a new field against an old blob defaults, never errors.
-	// ⭐ THE NAME AS IT IS HANDED — a protocol's word, a literal, either string — compared where it lies (ibString's own
-	// comparisons): a lookup makes no text, where an ibString parameter made one of every literal it was asked by.
-	template<class Name> const ibDataValue* FindField(const Name& name) const { return FindIn(m_fields, m_cursor, name); }
-	const std::vector<std::pair<ibString, ibDataValue>>& Fields() const { return m_fields; }
-
-	// --- properties area (the property bag — DISTINCT from plain fields) ---
-	// Filled by the generic property walk (ibPropertyObject::DescribeProperties),
-	// kept separate from m_fields so the structure SHOWS what is a property vs a
-	// plain (hidden / intrinsic) class field. Stored faithfully (the property's
-	// own SaveData bytes); per-property value-decomposition is a later concern.
-	void SetProperty(const ibString& name, const ibDataValue& value) { m_props.emplace_back(name, value); }
-	void SetProperty(const ibString& name, ibDataValue&& value) { m_props.emplace_back(name, std::move(value)); }
-	template<class Name> const ibDataValue* FindProperty(const Name& name) const { return FindIn(m_props, m_propCursor, name); }
+	// --- the property walk's names for the same set ------------------------
+	// Filled by the generic property walk (ibPropertyObject::DescribeProperties).
+	void SetProperty(const ibString& name, const ibDataValue& value) { AddField(name, value); }
+	std::optional<ibDataValue> FindProperty(const ibDataKey& name) const { return FindField(name); }
 	// value by name (empty if absent) — pass straight into a property's ReadNodeValue
-	template<class Name> ibDataValue GetProperty(const Name& name) const {
-		if (const ibDataValue* v = FindProperty(name)) return *v;
-		return ibDataValue();
-	}
-	const std::vector<std::pair<ibString, ibDataValue>>& Properties() const { return m_props; }
+	ibDataValue GetProperty(const ibDataKey& name) const;
 
-	// …and the same question one storey up: two nodes are equal when their type, identity, fields,
-	// properties, raw block and children all are. The read cursors are not state — they are where the
-	// last optimistic lookup stopped — so they take no part in it.
+	// …and the same question one storey up: two nodes are equal when their bytes are — the type, the identity, the
+	// fields in their order, the raw block and the children.
 	bool operator==(const ibDataNode& other) const;
 	bool operator!=(const ibDataNode& other) const { return !(*this == other); }
 
-	// …and its weight: its entries' names and values, its raw block, its children (ibDataValue::Weight).
+	// …and its weight: the bytes it takes.
 	std::size_t Weight() const;
 
 	// --- transitional opaque data ----------------------------------------
 	// The not-yet-decomposed remainder of this node (today: the eDataBlock
 	// blob = SaveMeta output). Empty once a node is fully Described into
 	// named fields. Kept separate so byte-identity holds during migration.
-	const ibMemoryBuffer& RawData() const { return m_rawData; }
-	void  SetRawData(const ibMemoryBuffer& data) { m_rawData = data; }
-	bool  HasRawData() const { return m_rawData.GetDataLen() != 0; }
+	ibMemoryBuffer RawData() const;
+	void           SetRawData(const ibMemoryBuffer& data);
+	bool           HasRawData() const;
 
 	// --- composite value as a named CHILD sub-node (Type / interface / form …) -
 	// A composite fills its OWN values into this sub-node — that is how Type,
 	// interface/roles and (later) a whole form decompose into the tree instead of
 	// an opaque blob. Binary is reserved for genuine blobs (pictures, files).
-	//   save: ibDataNode& sub = node.Child("Type");      // creates the sub-node
-	//   load: if (const ibDataNode* sub = node.FindChild("Type")) ...   // reads it
-	// The Child value lives in the PROPERTIES area.
-	ibDataNode&       Child(const ibString& name);              // create (save)
-	template<class Name> const ibDataNode* FindChild(const Name& name) const { return ChildOf(FindProperty(name)); }   // read (load)
-
-	// ⚠ AND THE ONE THAT KEEPS ADDING TO A SUB-NODE THAT MAY ALREADY BE THERE. `Child` is the SAVE
-	// half and always makes a FRESH node, which is right when a writer fills a sub-node once and
-	// wrong the moment two writers contribute to the same one — the second silently threw away the
-	// first (the MCP schema published one argument per tool that way, 2026-09-01).
-	//
-	// Written as an overload rather than left to the caller, because the alternative is a
-	// const_cast at every such site: a non-const node handing back a const pointer to its own child
-	// is the accident, not the rule.
-	template<class Name> ibDataNode* FindChild(const Name& name) { return ChildOf(FindProperty(name)); }
+	//   save: ibDataNode& sub = node.Child("Type");      // the sub-node under the name — made when there is none —
+	//                                                     // filled where it lies
+	//   load: if (const auto sub = node.FindChild("Type")) ...   // reads it
+	ibDataNode&               Child(const ibString& name);
+	std::optional<ibDataNode> FindChild(const ibDataKey& name) const;
 
 	// --- metaobject children (recursion over the object tree) ------------
-	ibDataNode& AddChild(ibClassID clsid, ibMetaID metaId) {
-		m_children.emplace_back(clsid, metaId);
-		return m_children.back();
-	}
-	const std::vector<ibDataNode>& Children() const { return m_children; }
-	std::vector<ibDataNode>&       Children()       { return m_children; }
+	ibDataNode& AddChild(ibClassID clsid, ibMetaID metaId);
+	// …and one made already, its bytes copied in (a reader's, ParseNode's).
+	ibDataNode& AddChild(const ibDataNode& child);
+	ibDataRange<ibDataNode> Children() const;
+	// …and all of them taken out.
+	void RemoveChildren();
+
+	// --- a list under a name (Array), added to at its end ------------------
+	// A node at the end of the list — the list made when there is none — filled where it lies, as a Child is.
+	ibDataNode& AddItem(const ibString& name);
+	// …and a value at its end, its bytes copied in.
+	void        AddItem(const ibString& name, const ibDataValue& value);
+
+	// --- a part it holds already, to fill where it lies ---------------------
+	// A node read out of this one as it is now — a sub-node under a name (FindChild), a child (Children), a node in a
+	// list — as a handle, as Child, AddChild and AddItem give one. This one a root or a handle; a handle to a part a
+	// change took out is an empty node of its own.
+	ibDataNode& Handle(const ibDataNode& part);
 
 private:
-	// The optimistic cursor's walk, over either area.
-	template<class Name>
-	static const ibDataValue* FindIn(const std::vector<std::pair<ibString, ibDataValue>>& entries, size_t& cursor, const Name& name)
-	{
-		const size_t n = entries.size();
-		if (n == 0)
-			return nullptr;
-		// fast path: the expected (write-order) position
-		if (cursor < n && entries[cursor].first == name)
-			return &entries[cursor++].second;
-		// slow path: search from the cursor, wrapping once
-		for (size_t i = 0; i < n; i++) {
-			const size_t idx = (cursor + i) % n;
-			if (entries[idx].first == name) {
-				cursor = idx + 1;
-				return &entries[idx].second;
-			}
-		}
-		// absent: cursor unmoved -> the member keeps its default, never an error
-		return nullptr;
-	}
-	// The sub-node a found value holds — null when none was found or it holds no node. Not const: the value holds a
-	// shared_ptr to a node that was never const.
-	static ibDataNode* ChildOf(const ibDataValue* value);
+	friend class ibDataValue;
+	friend class ibBinaryProvider;
 
-	ibClassID m_clsid = 0;   // node type == chunk id in the binary layout
-	ibMetaID  m_metaId = 0;  // node identity within its type
+	// A node read out: the bytes held, and its place in them.
+	ibDataNode(const ibMemoryBuffer& bytes, std::uint32_t at) : m_bytes(bytes), m_at(at) {}
 
-	std::vector<std::pair<ibString, ibDataValue>> m_fields;   // plain / hidden / intrinsic fields
-	std::vector<std::pair<ibString, ibDataValue>> m_props;    // the property bag (separate area)
-	ibMemoryBuffer                                m_rawData;        // transitional un-decomposed block
-	std::vector<ibDataNode>                       m_children; // metaobject sub-nodes
+	// THE BUFFER IT IS IN — its own, or its root's for a sub-node being filled.
+	const ibMemoryBuffer& Bytes() const { return m_root != nullptr ? m_root->m_bytes : m_bytes; }
+	const unsigned char*  Base() const { return static_cast<const unsigned char*>(Bytes().GetData()); }
+	// …and to change it: a node read out becomes a root of its own first (its bytes copied out of the ones it was read
+	// from); a node with none yet gets its packet. The root that writes — this one, or the one a handle is into.
+	ibDataNode& Root();
+	// `size` bytes at `at` in this node's part `inFields` (its fields, else its children), what follows moved on, and
+	// the lengths of the node and of every node it is in grown: where they go, to be written.
+	unsigned char* Insert(std::uint32_t at, std::uint32_t size, bool inFields);
+	void           Erase(std::uint32_t at, std::uint32_t size, bool inFields);
+	// …and the lengths: of this node, and up through the nodes it is in.
+	void Grow(std::int64_t delta, bool inFields);
+	// A handle to a sub-node being filled — kept by the root, so a reference to it stays good while the root does.
+	ibDataNode& Handle(std::uint32_t at, bool inField);
+	// The list under the name — made empty when there is none — and the place past its last item, to add at.
+	std::uint32_t ListEnd(const ibString& name, std::uint32_t& list);
 
-	mutable size_t m_cursor = 0;          // optimistic read cursor over m_fields
-	mutable size_t m_propCursor = 0;      // optimistic read cursor over m_props
+	ibMemoryBuffer m_bytes;                      // a root's, or the bytes a node read out is in
+	std::uint32_t  m_at = 0;                     // its place there; 0 — no bytes yet (a new, empty node)
+	ibDataNode*    m_root = nullptr;             // a handle's: the root whose bytes it is filled in
+	ibDataNode*    m_parent = nullptr;           // …and the node it is in, whose length grows with it
+	bool           m_inField = false;            // …in its fields (a Child) or its children
+	std::uint32_t  m_list = 0;                   // …a list's item: the list's place, whose length grows with it
+	std::unique_ptr<std::deque<ibDataNode>> m_handles;   // a root's: the handles it gave out
 };
 
 ////////////////////////////////////////////////////////////////////////////
@@ -387,40 +423,28 @@ public:
 };
 
 ////////////////////////////////////////////////////////////////////////////
-// ibBinaryProvider — INTERNAL format, OWNED by us (not the legacy layout).
-// It serializes the builder's native structure directly: per node a
-// version-stamped block of NAMED fields + a transitional raw remainder, plus
-// the child sub-tree:
-//
-//    chunk(node.clsid) { chunk(node.metaId) {
-//        chunk(kMetaBlock) { version, <named fields: name+kind+value>, rawLen+raw }
-//        chunk(kChildBlock) { <each child, recursively> }
-//    } }
-//
-// Named fields are read BY NAME (optimistic cursor) on the consumer side, so
-// add / drop / reorder a field is forward-compatible. The raw remainder holds
-// per-node data not yet decomposed into named fields (interface / roles /
-// per-type Save) and shrinks as each type's Describe is filled out. Old legacy
-// blobs are NOT readable by this format — version-gated, recreate the config.
+// ibBinaryProvider — THE NODE'S OWN BYTES — storage and the wire alike (OES-RPC 1.0, the header). Nothing is
+// converted either way: Write hands the node's buffer over (one more owner of it; a sub-node's bytes copied out into
+// a packet of their own), Read takes bytes as the node they are — checked first, never parsed. Old blobs are NOT
+// readable — no compatibility (Max, 2026-10-26): recreate the config.
 ////////////////////////////////////////////////////////////////////////////
 class CORE_API ibBinaryProvider : public ibFormatProvider {
 public:
+	// A packet's first bytes — what tells one on a wire from anything else there: a message deflated (ibDeflate — raw
+	// deflate's first byte is never 'O'), a debugger's command.
+	static constexpr char kMagic[4] = { 'O', 'E', 'S', '1' };
+	// …and whether bytes begin with them.
+	static bool IsPacket(const void* bytes, std::size_t size);
+	// Nesting past this is refused — the JSON view's ceiling (ibJsonProvider::kMaxNesting).
+	static constexpr int kMaxNesting = 256;
+
 	bool Write(const ibDataNode& root, ibWriterMemory& writer) const override;
 	bool Read(ibReaderMemory& reader, ibDataNode& root) const override;
 
-private:
-	void WriteInner(const ibDataNode& node, ibWriterMemory& writer) const; // node CONTENT only (no identity frame); ROOT path
-	void WriteNode(const ibDataNode& node, ibWriterMemory& writer) const;  // identity-framed node; CHILD path
-	void ReadNode(ibReaderMemory& reader, ibDataNode& node) const; // reads the inner; node.clsid/metaId pre-set by caller
-	void WriteFields(const ibDataNode& node, ibWriterMemory& writer) const;
-	void ReadFields(ibReaderMemory& reader, ibDataNode& node, std::uint32_t version) const;   // version = the node's format stamp (kFormatVersion when written)
-	void WriteProps(const ibDataNode& node, ibWriterMemory& writer) const;   // the property bag, separate area
-	void ReadProps(ibReaderMemory& reader, ibDataNode& node, std::uint32_t version) const;
-	void WriteChildren(const ibDataNode& node, ibWriterMemory& writer) const; // a Child value's subtree (form control tree)
-	void ReadChildren(ibReaderMemory& reader, ibDataNode& node, std::uint32_t version) const;   // a Child value's subtree has no stamp of its own: the enclosing node's
-	void WriteEntry(ibWriterMemory& writer, const ibString& name, const ibDataValue& value) const; // name + value payload
-	void WriteValue(ibWriterMemory& writer, const ibDataValue& value) const;                        // kind + value (recurses on Child / Array)
-	ibDataValue ReadEntry(ibReaderMemory& reader, std::uint32_t version) const;                               // kind + value (name read by the caller)
+	// …and as the buffer itself. Read refuses — it throws, with why — bytes that are not a packet: a wrong header, a
+	// length past its container, a count its lengths do not hold, a kind unknown, nesting past kMaxNesting.
+	bool Write(const ibDataNode& root, ibMemoryBuffer& packet) const;
+	bool Read(const ibMemoryBuffer& packet, ibDataNode& root) const;
 };
 
 ////////////////////////////////////////////////////////////////////////////

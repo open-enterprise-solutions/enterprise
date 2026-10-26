@@ -121,9 +121,9 @@ void ibValueGridBox::OnUpdate(ibDataNode& state, ibVisualHost* host)
 		&& m_sheetSentVersion != m_documentVersion) {
 		ibDataNode fetched;
 		if (ibFetchSpreadsheet(m_gridDocument->GetSpreadsheet(), fetched)) {
-			if (const ibDataValue* sheet = fetched.FindField(ibProtocol::ibForm::ibSpreadsheet::Sheet))
+			if (auto sheet = fetched.FindField(ibProtocol::ibForm::ibSpreadsheet::Sheet))
 				state.SetField(ibProtocol::ibForm::ibSpreadsheet::Sheet, *sheet);
-			if (fetched.FindField(ibProtocol::ibForm::ibSpreadsheet::ReadOnly) != nullptr)
+			if (fetched.Has(ibProtocol::ibForm::ibSpreadsheet::ReadOnly))
 				state.SetValue(ibProtocol::ibForm::ibSpreadsheet::ReadOnly, fetched.GetValue<bool>(ibProtocol::ibForm::ibSpreadsheet::ReadOnly));
 			m_sheetSentVersion = m_documentVersion;
 		}
@@ -219,22 +219,25 @@ bool ibFetchSpreadsheet(const ibSpreadsheetObject& document, ibDataNode& respons
 
 	// …each cell's text AS SHOWN — a caption in the document's language, a parameter by its value, a template filled in:
 	// the document's to say, and the client's sheet holds no parameters.
+	// A value is its bytes, read: the cells are written anew, each as it is or with its text as shown.
 	const ibSpreadsheetDescription& desc = document.GetSpreadsheetDesc();
-	if (const ibDataValue* cells = sheet.AsChild()->FindField(wxT("cells"))) {
+	ibDataNode written = *sheet.AsChild();
+	if (const auto cells = written.FindField(wxT("cells"))) {
+		std::vector<ibDataValue> shown;
 		for (const ibDataValue& entry : cells->AsArray()) {
-			ibDataNode& node = *entry.AsChild();
+			ibDataNode node = *entry.AsChild();
 			const ibSpreadsheetCellDescription* const cell = desc.GetCell(node.GetValue<std::int32_t>(wxT("row")), node.GetValue<std::int32_t>(wxT("col")));
-			if (cell == nullptr)
-				continue;
-			const wxString text = document.ComputeStringValueFromParameters(cell->m_value, cell->m_fillSetType);
-			if (text == cell->m_value && cell->m_fillSetType == ibSpreadsheetFillType::ibSpreadsheetFillType_StrText)
-				continue;
-			node.SetField(wxT("value"), ibDataValue::String(text));
-			node.SetField(wxT("fill"), ibDataValue::Int(static_cast<std::int64_t>(ibSpreadsheetFillType::ibSpreadsheetFillType_StrText)));
+			const wxString text = cell != nullptr ? document.ComputeStringValueFromParameters(cell->m_value, cell->m_fillSetType) : wxString();
+			if (cell != nullptr && (text != cell->m_value || cell->m_fillSetType != ibSpreadsheetFillType::ibSpreadsheetFillType_StrText)) {
+				node.SetField(wxT("value"), ibDataValue::String(text));
+				node.SetField(wxT("fill"), ibDataValue::Int(static_cast<std::int64_t>(ibSpreadsheetFillType::ibSpreadsheetFillType_StrText)));
+			}
+			shown.push_back(ibDataValue::Child(std::make_shared<ibDataNode>(std::move(node))));
 		}
+		written.SetField(wxT("cells"), ibDataValue::Array(std::move(shown)));
 	}
 
-	response.SetField(ibProtocol::ibForm::ibSpreadsheet::Sheet, sheet);
+	response.SetField(ibProtocol::ibForm::ibSpreadsheet::Sheet, ibDataValue::Child(std::make_shared<ibDataNode>(std::move(written))));
 	// …and its edit mode, which is the document's as the sheet is.
 	if (!document.IsEditable())
 		response.SetValue(ibProtocol::ibForm::ibSpreadsheet::ReadOnly, true);

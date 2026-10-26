@@ -29,6 +29,8 @@ public:
 	ibMemoryBuffer() noexcept = default;
 	// Room for `size` bytes, none of them data yet.
 	explicit ibMemoryBuffer(size_t size);
+	// …and `len` bytes copied in — AppendData on a new buffer.
+	ibMemoryBuffer(const void* data, size_t len);
 
 	ibMemoryBuffer(const ibMemoryBuffer& o) noexcept : m_impl(o.m_impl) { Hold(m_impl); }
 	ibMemoryBuffer(ibMemoryBuffer&& o) noexcept : m_impl(o.m_impl) { o.m_impl = nullptr; }

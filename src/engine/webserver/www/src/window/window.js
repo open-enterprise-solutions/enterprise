@@ -308,7 +308,7 @@ export class ClientWindow {
 				.send({ Control: control, Event: kind, ...(args !== undefined ? { Args: args } : {}), Form: key }, subscribed)
 				.catch((error) => this.refused(error)),
 			fetch: (control, request) => this.session.call('fetch', { Control: control, Request: request, Form: key }),
-			picture: (id) => this.pictures.url(id),
+			picture: (picture) => this.pictures.url(picture),
 			fetchPictures: (node) => this.pictures.fetchFor(node).catch(() => {}),
 		};
 	}

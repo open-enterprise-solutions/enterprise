@@ -9,6 +9,7 @@
 #include <wx/zstream.h>
 
 #include "core/fstring.h"   // ibString — the text a deflated message is
+#include "core/memory/memoryBuffer.h"   // ibMemoryBuffer — …and the packet one is
 
 namespace {
 
@@ -253,21 +254,38 @@ bool ibDeflate(const std::string& bytes, std::string& packed)
 	return true;
 }
 
-bool ibInflate(const std::string& packed, ibString& text)
+namespace {
+
+// The bytes a deflated message holds, appended to `to` a chunk at a time — false when they do not inflate.
+template<class Bytes, class Append>
+bool Inflate(const std::string& packed, Bytes& to, Append append)
 {
 	wxMemoryInputStream in(packed.data(), packed.size());
 	wxZlibInputStream unzip(in, wxZLIB_NO_HEADER);
-	std::string bytes;
 	char chunk[16384];
 	for (;;) {
 		unzip.Read(chunk, sizeof(chunk));
 		const std::size_t got = unzip.LastRead();
 		if (got == 0)
 			break;
-		bytes.append(chunk, got);
+		append(to, chunk, got);
 	}
-	if (unzip.GetLastError() != wxSTREAM_NO_ERROR && unzip.GetLastError() != wxSTREAM_EOF)
+	return unzip.GetLastError() == wxSTREAM_NO_ERROR || unzip.GetLastError() == wxSTREAM_EOF;
+}
+
+} // namespace
+
+bool ibInflate(const std::string& packed, ibString& text)
+{
+	std::string bytes;
+	if (!Inflate(packed, bytes, [](std::string& to, const char* chunk, std::size_t got) { to.append(chunk, got); }))
 		return false;
 	text.SetUtf8(bytes.data(), bytes.size());
 	return true;
+}
+
+bool ibInflate(const std::string& packed, ibMemoryBuffer& bytes)
+{
+	bytes.SetDataLen(0);
+	return Inflate(packed, bytes, [](ibMemoryBuffer& to, const char* chunk, std::size_t got) { to.AppendData(chunk, got); });
 }

@@ -66,11 +66,11 @@ const ibChar* const kTypeField = wxT("commandType");
 
 bool ibCommandDescriptionMemory::ReadNode(const ibDataValue& value, ibCommandDescription& cmdDesc)
 {
-	const std::shared_ptr<ibDataNode>& node = value.AsChild();
+	const auto node = value.AsChild();
 	if (!node)
 		return true;   // wired to nothing — an ordinary state
 
-	if (const ibDataValue* hops = node->FindField(kHopsField)) {
+	if (auto hops = node->FindField(kHopsField)) {
 		for (const ibDataValue& hop : hops->AsArray())
 			cmdDesc.AppendCommand((ibMetaID)hop.AsInt());
 	}

@@ -202,7 +202,7 @@ bool ibValueMetaObjectSequence::ReadData(const ibDataNode& node)
 {
 	m_propertyAutomaticBorder->SetNodeValue(node.GetProperty(m_propertyAutomaticBorder->GetName()));
 	m_propertyAttributePointInTime->SetNodeValue(node.GetProperty(m_propertyAttributePointInTime->GetName()));
-	if (const ibDataNode* saved = node.FindChild(m_borders->GetName()))
+	if (auto saved = node.FindChild(m_borders->GetName()))
 		m_borders->LoadNode(*saved);
 
 	m_propertyObjectModule->SetNodeValue(node.GetProperty(m_propertyObjectModule->GetName()));

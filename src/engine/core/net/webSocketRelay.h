@@ -35,7 +35,7 @@ public:
 			},
 			[told](std::string packed) {
 				if (const std::shared_ptr<ibWebSocket> socket = told.lock())
-					socket->SendBinary(std::move(packed));
+					socket->Send(packed.data(), packed.size());
 			},
 			[told, lost](const std::string& reason) {
 				if (!reason.empty() && lost)
@@ -54,9 +54,10 @@ public:
 		m_upstream->Send(text);
 	}
 
-	virtual void OnBinary(std::string) override
+	// A packet (OES-RPC) — carried as it is.
+	virtual void OnBinary(std::string data) override
 	{
-		m_socket->Close(ibWebSocketClose::Unsupported, "the protocol speaks text");
+		m_upstream->Send(data.data(), data.size());
 	}
 
 	virtual void OnClose() override

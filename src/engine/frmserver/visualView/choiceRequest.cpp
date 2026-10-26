@@ -64,8 +64,8 @@ bool ibRequestChoice(const wxString& caption, const std::vector<ibChoiceItem>& i
 		return false;
 
 	// Only what was offered comes back, in the order it was offered.
-	const ibDataValue* const ids = response.FindField(ibProtocol::ibRequest::ibChoice::Ids);
-	if (ids == nullptr || ids->Kind() != ibDataKind::Array)
+	const auto ids = response.FindField(ibProtocol::ibRequest::ibChoice::Ids);
+	if (!ids || ids->Kind() != ibDataKind::Array)
 		return false;
 	chosen.clear();
 	for (const ibChoiceItem& item : items) {
@@ -119,7 +119,7 @@ bool ibRequestMenu(const std::vector<ibMenuItem>& items, std::int32_t& chosen)
 	WriteMenu(request, items);
 
 	ibDataNode response;
-	if (!frame->Request(request, response) || response.FindField(ibProtocol::ibRequest::ibMenu::Id) == nullptr)
+	if (!frame->Request(request, response) || !response.FindField(ibProtocol::ibRequest::ibMenu::Id))
 		return false;   // dismissed
 
 	const std::int32_t id = response.GetValue<std::int32_t>(ibProtocol::ibRequest::ibMenu::Id);

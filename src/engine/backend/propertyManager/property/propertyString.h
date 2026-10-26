@@ -137,7 +137,7 @@ public:
 	// itself, and it is the one question a label, a tooltip or a page header ever asks.
 	wxString GetValueAsTranslateString() const { return GetValueAsTranslate().GetString(); }
 
-	// …AND THE RAW TEMPLATE — `en = 'Goods'; ru = 'Товары';`, every language at once, as it is
+	// …AND THE RAW TEMPLATE — `en = 'Goods'; de = 'Waren';`, every language at once, as it is
 	// written down. What a template cell keeps, and what a file is written with.
 	//
 	// ⚠ NAMED "RAW", not "String". Called GetValueAsString it is indistinguishable from the reader

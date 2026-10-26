@@ -127,7 +127,7 @@ void ibVisualEditorNotebook::ModifyEvent(ibProperty* event, const wxVariant& old
 		// Its procedure's parameters — the event's row's Args (the server's ibEvent::GetProtocolValue).
 		ibDataNode row;
 		event->GetProtocolValue(row);
-		if (const ibDataValue* const args = row.FindField(ibProtocol::ibEvent::Args)) {
+		if (const auto args = row.FindField(ibProtocol::ibEvent::Args)) {
 			for (const ibDataValue& arg : args->AsArray()) {
 				if (!prcArgs.IsEmpty()) prcArgs += ", ";
 				prcArgs += arg.AsString();

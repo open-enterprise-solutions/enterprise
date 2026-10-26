@@ -1,11 +1,10 @@
 #ifndef _FRMCLIENT_DATA_PROTOCOL_H__
 #define _FRMCLIENT_DATA_PROTOCOL_H__
 
-// THE WIRE'S NODE AND THE ENGINE'S — the client's one seam between them. The server writes its nodes to the wire with
-// its JSON (ibJsonProvider), so the client reads them back by the same reader's rule (ibJsonProvider::ReadEntry): what is
-// a field, what a property and what a child is the engine's — a scalar is a field, a node is a property, NodeChildren are
-// the children, NodeType and NodeId the node's own. Read off the tree the answer already is, no text written for it and
-// read again. Written back the same way, the server reads what it wrote.
+// THE WIRE'S NODE AND THE ENGINE'S — the client's one seam between them. The wire's node IS the engine's (OES-RPC: a
+// packet is ibDataNode's bytes), so the client reads it as it lies — one more owner of the answer's bytes — a type kept
+// as a word looked up as the server looks it up. Written back entry by entry, by the JSON view's names (NodeType,
+// NodeId, NodeChildren the node's own), the server reads what it wrote.
 
 #include "frmclient/frmclient.h"
 #include "core/serialize/dataBuilder.h"

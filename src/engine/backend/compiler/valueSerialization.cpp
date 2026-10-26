@@ -188,8 +188,8 @@ bool ibValue::DoDeserialize(const ibDataNode& node)
 		// the reader: THIS value already knows it is a Date — m_typeClass says so, resolved by
 		// whoever created it from the type the node declares. Converting a stated type is an
 		// instruction; converting an unknown one is the table that never ends.
-		const ibDataValue* const stored = node.FindField(kFieldData);
-		if (stored != nullptr && stored->Kind() == ibDataKind::String) {
+		const auto stored = node.FindField(kFieldData);
+		if (stored && stored->Kind() == ibDataKind::String) {
 			ibValue text;
 			if (!text.SetDate(stored->AsString()))
 				return false;   // it says it is a date and the text is not one — that is a failure

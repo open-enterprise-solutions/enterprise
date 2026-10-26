@@ -30,7 +30,7 @@ void ibValueButton::Update(const ibProtocolNode& node)
 	// The server has resolved what is shown — the button's own caption and picture, or its command's — and which of
 	// the two; the caption names the button even when only the picture is shown.
 	const wxString caption = state.GetString(ibProtocol::ibForm::ibState::Caption);
-	const wxBitmap picture = ibProtocolPicture(state.GetString(ibProtocol::ibForm::ibState::Picture));
+	const wxBitmap picture = ibProtocolPicture(state, ibProtocol::ibForm::ibState::Picture);
 	const ibProtocol::ibForm::ibState::ibRepresentation representation = static_cast<ibProtocol::ibForm::ibState::ibRepresentation>(
 		state.GetInt(ibProtocol::ibForm::ibState::Representation, static_cast<long long>(ibProtocol::ibForm::ibState::ibRepresentation::PictureAndText)));
 
@@ -84,7 +84,7 @@ void ibValueButton::OnButtonPressed(wxCommandEvent& WXUNUSED(event))
 				continue;
 			}
 			wxMenuItem* const item = new wxMenuItem(into, next++, caption);
-			const wxBitmap picture = ibProtocolPicture(member.GetString(ibProtocol::ibForm::ibButton::Picture));
+			const wxBitmap picture = ibProtocolPicture(member, ibProtocol::ibForm::ibButton::Picture);
 			if (picture.IsOk())
 				item->SetBitmap(picture);
 			into->Append(item);

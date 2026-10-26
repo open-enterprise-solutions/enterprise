@@ -219,9 +219,9 @@ re-deploy. There is no `SetSynonym(...)` in script.
 
 A caption (a synonym, a template cell's text, a report variant's name) is written in
 **every language the configuration declares**, as one string:
-`en = 'Employee'; ru = 'Сотрудник'; uk = 'Працівник';` — an apostrophe inside a text is
+`en = 'Employee'; de = 'Mitarbeiter'; fr = 'Employé';` — an apostrophe inside a text is
 doubled (`en = 'the document''s date';`). A caption sent bare fills only the configuration's
-own language, and a Russian word sent that way is stored as the English caption; the MCP tools
+own language, and a word of another language sent that way is stored as the English caption; the MCP tools
 refuse it while more than one language is declared. What a module builds — a message, a sheet
 title, a month name — goes through `Tstr` with the same form (`Tstr(text)` reads the user's
 language). Data (a person's name, a predefined item's description) is data, not a caption.
@@ -242,7 +242,7 @@ The 13 metaobject types and their script-side namespace:
 | `AccumulationRegister` | `AccumulationRegisters.<Name>` | Quantitative balances (inventory, AR / AP) |
 | `AccountingRegister` | `AccountingRegisters.<Name>` | Double-entry bookkeeping (see `docs/register-totals-strategy.md`) |
 | `ChartOfAccounts` | `ChartsOfAccounts.<Name>` | Account hierarchy for AccountingRegister |
-| `ChartOfCharacteristicTypes` | `ChartsOfCharacteristicTypes.<Name>` | The KINDS an account dimension can be («Вид аналитики»), each narrowing what values it admits |
+| `ChartOfCharacteristicTypes` | `ChartsOfCharacteristicTypes.<Name>` | The KINDS an account dimension can be, each narrowing what values it admits |
 | `ChartOfCalculationTypes` | `ChartsOfCalculationTypes.<Name>` | The calculation TYPES a calculation register records (salary, bonus, sick leave, income tax) and how they interact — three relation sections on every type: `Displacing`, `Base`, `Leading` |
 | `CalculationRegister` | `CalculationRegisters.<Name>` | Calculation RESULTS (payroll accruals, deductions): records in force over days, cut by the types that displace them, computed on a base of other types, marked for recalculation when what they were computed from changes. Bound to exactly one chart of calculation types; always subordinate to a recorder |
 | `DataProcessor` | `DataProcessors.<Name>` | Interactive tooling (utilities, batch operations) |

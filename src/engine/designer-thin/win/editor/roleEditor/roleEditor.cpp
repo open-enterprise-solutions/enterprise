@@ -6,18 +6,6 @@
 
 #define ICON_SIZE 16
 
-namespace {
-
-// The pictures of `row` and the rows under it — asked of the server at once, not a call per row drawn.
-void PicturesOf(const ibProtocolNode& row, std::vector<wxString>& pictures)
-{
-	pictures.push_back(row.GetString(ibProtocol::ibView::ibCheckTree::Picture));
-	for (const ibProtocolNode& child : row.Children())
-		PicturesOf(child, pictures);
-}
-
-}
-
 ibRoleEditor::ibRoleEditor(wxWindow* parent,
 	wxWindowID winid, const ibTabDocument* document) :
 	wxSplitterWindow(parent, winid, wxDefaultPosition, wxDefaultSize, wxSP_3D | wxSP_LIVE_UPDATE), m_document(document)
@@ -166,7 +154,7 @@ wxTreeItemId ibRoleEditor::GroupFor(const ibProtocolNode& row)
 	// tree shows.
 	wxImageList* imageList = m_roleCtrl->GetImageList();
 	wxASSERT(imageList);
-	const wxBitmap picture = ibProtocolPicture(row.GetString(ibProtocol::ibView::ibCheckTree::Picture));
+	const wxBitmap picture = ibProtocolPicture(row, ibProtocol::ibView::ibCheckTree::Picture);
 	const int imageIndex = picture.IsOk() ? imageList->Add(picture) : wxNOT_FOUND;
 
 	const wxTreeItemId group = m_roleCtrl->AppendItem(m_treeMETADATA,
@@ -180,7 +168,7 @@ wxTreeItemId ibRoleEditor::AppendItem(const wxTreeItemId& parent, const ibProtoc
 {
 	wxImageList* imageList = m_roleCtrl->GetImageList();
 	wxASSERT(imageList);
-	const wxBitmap picture = ibProtocolPicture(row.GetString(ibProtocol::ibView::ibCheckTree::Picture));
+	const wxBitmap picture = ibProtocolPicture(row, ibProtocol::ibView::ibCheckTree::Picture);
 	const int imageIndex = picture.IsOk() ? imageList->Add(picture) : wxNOT_FOUND;
 	// Its rights kept with it — the rows go with the next answer, the check tree reads them when it is selected.
 	const wxTreeItemId item = m_roleCtrl->AppendItem(parent, row.GetString(ibProtocol::ibView::ibCheckTree::Title), imageIndex, imageIndex,
@@ -196,13 +184,12 @@ void ibRoleEditor::FillData(const ibProtocolNode& view)
 {
 	const ibProtocolNode root = view.FindChild(ibProtocol::ibView::ibCheckTree::Rows);
 
-	std::vector<wxString> pictures;
-	PicturesOf(root, pictures);
-	ibProtocolPictureReceive(pictures);
+	// The rows' pictures asked of the server at once — not a call per row drawn.
+	ibProtocolPictureReceive(root);
 
 	// The configuration's row — its rights are the configuration's own.
 	wxImageList* imageList = m_roleCtrl->GetImageList();
-	const wxBitmap picture = ibProtocolPicture(root.GetString(ibProtocol::ibView::ibCheckTree::Picture));
+	const wxBitmap picture = ibProtocolPicture(root, ibProtocol::ibView::ibCheckTree::Picture);
 	if (picture.IsOk()) {
 		const int imageIndex = imageList->Add(picture);
 		m_roleCtrl->SetItemImage(m_treeMETADATA, imageIndex);

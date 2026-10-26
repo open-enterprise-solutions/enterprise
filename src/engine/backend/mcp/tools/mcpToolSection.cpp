@@ -183,7 +183,7 @@ public:
 		// misleading. What a watcher needs is HOW MANY, and the names while they still fit.
 		wxString what;
 
-		if (const ibDataValue* many = params.FindField(ArgIds().Name())) {
+		if (auto many = params.FindField(ArgIds().Name())) {
 			if (many->Kind() == ibDataKind::Array) {
 
 				const size_t count = many->AsArray().size();
@@ -193,7 +193,7 @@ public:
 					: wxString::Format(ibMcpText("%u objects"), (unsigned)count);
 			}
 		}
-		else if (params.FindField(ArgId().Name()) != nullptr) {
+		else if (params.Has(ArgId().Name())) {
 			what = ibMcpNameOf(params);
 		}
 
@@ -253,7 +253,7 @@ public:
 		// ONE ID OR MANY, read into one list so the loop below is the only place that knows how.
 		std::vector<ibMetaID> wanted;
 
-		if (const ibDataValue* many = params.FindField(ArgIds().Name())) {
+		if (auto many = params.FindField(ArgIds().Name())) {
 			if (many->Kind() == ibDataKind::Array)
 				for (const ibDataValue& one : many->AsArray()) {
 					ibMetaID id = 0;
@@ -262,7 +262,7 @@ public:
 				}
 		}
 
-		if (const ibDataValue* one = params.FindField(ArgId().Name())) {
+		if (auto one = params.FindField(ArgId().Name())) {
 			ibMetaID id = 0;
 			if (ReadId(*one, id))
 				wanted.push_back(id);

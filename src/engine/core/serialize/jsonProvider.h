@@ -17,19 +17,16 @@
 //	thin client; ibBinaryProvider stays the round-trip format.
 //
 //	Why it is not a round trip. The VIEW is lossy by design — readability is its whole
-//	point — so three things do not survive Write -> Read, and no parser can undo them:
-//	  1. Fields and Properties are emitted as ONE flat key set, so which area a key came
-//	     from is gone (EmitNode: "areas don't collide in practice"). On the way back a
-//	     Child value goes to Properties (where ibDataNode::Child puts it by construction)
-//	     and every other key goes to Fields.
-//	  2. Date becomes an ISO STRING — indistinguishable from a String that happens to look
+//	point — so two things do not survive Write -> Read, and no parser can undo them
+//	(fields and properties were a third until a node held them as one set, 2026-10-26):
+//	  1. Date becomes an ISO STRING — indistinguishable from a String that happens to look
 //	     like a date, so it reads back as a String.
-//	  3. NodeType emits the resolved type NAME (numeric clsid only as a fallback), and
+//	  2. NodeType emits the resolved type NAME (numeric clsid only as a fallback), and
 //	     TypeDesc is injected beside typeId with no node entry behind it. TypeDesc is
 //	     parsed and dropped; a name-form NodeType needs SetTypeLookup (below) to become a
 //	     clsid again, and without one the node keeps clsid 0 rather than inventing a value —
 //	     and the word itself, as its field NodeType, for whoever can look it up (LookupTypes).
-//	Closing 1 and 2 means changing what WRITE emits — a separate lossless emitter, not more
+//	Closing 1 means changing what WRITE emits — a separate lossless emitter, not more
 //	parser. Malformed input throws with the byte offset rather than yielding a partial tree.
 //	Nesting past kMaxNesting is malformed too: the reader recurses, and a request is parsed
 //	before authentication, so an unbounded descent overflows the stack.

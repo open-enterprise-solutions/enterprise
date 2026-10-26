@@ -42,11 +42,11 @@ std::function<void()> ibSchemaObjectText::Command(const ibSession& session, std:
 		return nullptr;
 
 	// …the one given, and the configuration modified by it — the desktop's editor marked its tree (EditOneText).
-	if (args.FindField(ibProtocol::ibSchema::ibObjectText::Help) != nullptr) {
+	if (args.Has(ibProtocol::ibSchema::ibObjectText::Help)) {
 		const wxString text = args.GetValue<wxString>(ibProtocol::ibSchema::ibObjectText::Help);
 		return [metaData, object, text]() { object->SetHelpContent(text); metaData->Modify(true); };
 	}
-	if (args.FindField(ibProtocol::ibSchema::ibObjectText::Note) != nullptr) {
+	if (args.Has(ibProtocol::ibSchema::ibObjectText::Note)) {
 		const wxString text = args.GetValue<wxString>(ibProtocol::ibSchema::ibObjectText::Note);
 		return [metaData, object, text]() { object->SetNoteContent(text); metaData->Modify(true); };
 	}

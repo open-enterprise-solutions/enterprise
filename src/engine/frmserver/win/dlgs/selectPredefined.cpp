@@ -187,7 +187,7 @@ bool ibShowPredefinedSelector(ibControlFrame* ownerValue, const ibTypeDescriptio
 	ibFillDesignerRefTree(request, values, types);
 
 	ibDataNode response;
-	if (!frame->Request(request, response) || response.FindField(ibProtocol::ibRequest::ibPredefinedSelector::Id) == nullptr)
+	if (!frame->Request(request, response) || !response.FindField(ibProtocol::ibRequest::ibPredefinedSelector::Id))
 		return false;   // the window was closed
 	const std::int32_t id = response.GetValue<std::int32_t>(ibProtocol::ibRequest::ibPredefinedSelector::Id);
 	if (id < 0 || static_cast<size_t>(id) >= values.size())

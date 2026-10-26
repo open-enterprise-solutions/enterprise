@@ -238,7 +238,7 @@ public:
 
 		ibValueMetaObject* from = nullptr;
 
-		if (const ibDataValue* asked = params.FindField(ArgId().Name())) {
+		if (auto asked = params.FindField(ArgId().Name())) {
 			if (asked->Kind() == ibDataKind::Number) {
 				from = ibFindMetaObjectById(metaData, (ibMetaID)asked->AsInt());
 				if (from == nullptr) {
@@ -327,8 +327,8 @@ public:
 		if (metaData == nullptr)
 			return false;
 
-		const ibDataValue* asked = params.FindField(ArgId().Name());
-		if (asked == nullptr || asked->Kind() != ibDataKind::Number) {
+		auto asked = params.FindField(ArgId().Name());
+		if (!asked || asked->Kind() != ibDataKind::Number) {
 			refusal = ibMcpText("No id given.");
 			return false;
 		}
@@ -343,9 +343,9 @@ public:
 		// ⚠ THE KIND IS CHECKED. GetValue<wxString> answers empty for anything that is not a
 		// String, so an object sent here would CLEAR the notes and report success — the same trap
 		// that cost an evening on module_write.
-		const ibDataValue* incoming = params.FindField(ArgText().Name());
+		auto incoming = params.FindField(ArgText().Name());
 
-		if (incoming == nullptr || incoming->Kind() != ibDataKind::String) {
+		if (!incoming || incoming->Kind() != ibDataKind::String) {
 			refusal = ibMcpText("'text' must be a string. Nothing was written.");
 			return false;
 		}
@@ -386,7 +386,7 @@ public:
 			wxString says;
 			for (const ibDataValue& one : links) {
 
-				const std::shared_ptr<ibDataNode>& link = one.AsChild();
+				const auto link = one.AsChild();
 				if (!link)
 					continue;
 
@@ -394,15 +394,15 @@ public:
 
 				// The id is stored as a number, so it is read as one — GetValue<wxString> on an
 				// Int answers empty, and the refusal would name every bad link as `oes:`.
-				const ibDataValue* number = link->FindField(wxT("id"));
+				auto number = link->FindField(wxT("id"));
 				const wxString said = wxString::Format(wxT("[%s](oes:%d)"), label,
-					(number != nullptr) ? (int)number->AsInt() : 0);
+					number ? (int)number->AsInt() : 0);
 
-				if (link->FindField(wxT("broken")) != nullptr) {
+				if (link->Has(wxT("broken"))) {
 					says << wxT("\n  ") << said
 						 << wxT(" - nothing in this configuration carries that id");
 				}
-				else if (link->FindField(wxT("agrees")) != nullptr) {
+				else if (link->Has(wxT("agrees"))) {
 					says << wxT("\n  ") << said << wxT(" - that id is ")
 						 << link->GetValue<wxString>(wxT("resolves")) << wxT(", a ")
 						 << link->GetValue<wxString>(wxT("kind"));

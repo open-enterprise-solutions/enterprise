@@ -2112,9 +2112,9 @@ void ibDebuggerServer::ibDebuggerServerConnection::SendCommand(void* pointer, un
 #if _USE_NET_COMPRESSOR == 1
 	BYTE* dest = nullptr; unsigned int dest_sz = 0;
 	_compressLZ(&dest, &dest_sz, pointer, length);
-	m_socket->SendBinary(std::string(reinterpret_cast<const char*>(dest), dest_sz));
+	m_socket->Send(dest, dest_sz);
 	free(dest);
 #else
-	m_socket->SendBinary(std::string(static_cast<const char*>(pointer), length));
+	m_socket->Send(pointer, length);
 #endif
 }

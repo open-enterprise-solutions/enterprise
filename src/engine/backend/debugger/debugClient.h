@@ -4,7 +4,7 @@
 #include <atomic>   // the flags a connection's thread sets and any thread reads
 #include <condition_variable>   // the client's end waits for its connections to go
 #include <functional>   // std::function — the deferred call the pack below is wrapped in
-#include <memory>   // the adapter owns its bridges
+#include <memory>   // the adapter owns its bridges; the client's adapter, watched by what is queued for it
 #include <mutex>    // the connection's socket slot, the client's lists
 #include <system_error>   // std::system_error — a thread the system would not start
 #include <thread>   // each connection's thread
@@ -501,11 +501,18 @@ public:
 	// queue it as a wx event at the adapter; now the adapter hands it to the WORKER. Everything else
 	// is where it was — one hop here, the fan-out on the far side of it — because everything else
 	// was right: the shape was never the problem, the transport knowing about a GUI was.
+	//
+	// 🛑 THE CLOSURE WATCHES THE ADAPTER, IT DOES NOT POINT AT IT. A connection's thread ends with OnSessionEnd, queued as
+	// the client goes; it ran after the destructor had deleted the adapter and waited on its freed lock — the designer
+	// hung on exit (2026-10-26). An adapter gone tells nobody.
 	template <typename T, typename... TArgs, typename... PArgs>
 	void CallAfter(void (T::* method)(TArgs...), PArgs... args) {
 		if (m_adapter != nullptr) {
-			T* const target = static_cast<T*>(m_adapter);
-			m_adapter->Defer([target, method, args...]() { (target->*method)(args...); });
+			const std::weak_ptr<ibDebuggerClientAdapter> watched = m_adapter;
+			m_adapter->Defer([watched, method, args...]() {
+				if (const std::shared_ptr<ibDebuggerClientAdapter> target = watched.lock())
+					(static_cast<T*>(target.get())->*method)(args...);
+			});
 		}
 	}
 
@@ -588,7 +595,8 @@ private:
 
 	class ibMetaDataConfigurationBase* const m_metaData;
 
-	ibDebuggerClientAdapter* m_adapter = nullptr;
+	// Shared only to be watched: what is queued for it holds it weakly (CallAfter).
+	std::shared_ptr<ibDebuggerClientAdapter> m_adapter;
 
 	// THE THREAD EVERY CONNECTION'S SOCKET GOES BY — one, for the scanners of every port; a connection's own thread
 	// reads what arrived. Outlives them all: the destructor lets the connections go first.

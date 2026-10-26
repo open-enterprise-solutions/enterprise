@@ -179,15 +179,15 @@ bool ibValueMetaObjectChartOfAccounts::ReadData(const ibDataNode& node)
 	m_accountDimensionKindColumns.clear();
 	for (unsigned int no = 1; ; no++) {
 		const wxString columnName = wxString::Format(wxT("AccountDimensionKind%u"), no);
-		const ibDataValue* saved = node.FindProperty(columnName);
-		if (saved == nullptr)
+		auto saved = node.FindProperty(columnName);
+		if (!saved)
 			break;
 
 		ibValueMetaObjectAttributePredefined* column = CreateEmptyType(
 			columnName, wxString::Format(_("Account dimension kind %u"), no),
 			wxEmptyString, false, ibItemMode::ibItemMode_Item);
 
-		const std::shared_ptr<ibDataNode>& child = saved->AsChild();
+		const auto child = saved->AsChild();
 		if (child)
 			column->LoadNode(*child);
 

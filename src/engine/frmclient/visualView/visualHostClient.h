@@ -106,9 +106,11 @@ private:
 	// entries of its own.
 	void UpdateNode(const ibProtocolNode& node, const ibProtocolNode& patch);
 	// What is in a node, into what is drawn in its control — a control added, gone, moved or made otherwise laid in, each
-	// that stayed drawn (UpdateNode) and gone into; its children made in `parent`, sitting in `sizer`. False — what is in
-	// it cannot be laid in (a notebook's pages): it is made anew where it is, the form built anew.
-	bool UpdateChildren(const ibProtocolNode& node, ibValueFrame* control, wxWindow* parent, wxSizer* sizer);
+	// that stayed drawn (UpdateNode) and gone into; its children made in `parent`, sitting in `sizer`. By the node's
+	// `patch` when there is one (not IsNode: a frame sent whole, each compared with what was drawn). False — what is in it
+	// cannot be laid in (a notebook's pages): it is made anew where it is, the form built anew.
+	bool UpdateChildren(const ibProtocolNode& node, const ibProtocolNode& patch, ibValueFrame* control, wxWindow* parent,
+		wxSizer* sizer);
 	void Clear();
 
 	// The label columns lined up (the desktop's CalculateLabelSize).

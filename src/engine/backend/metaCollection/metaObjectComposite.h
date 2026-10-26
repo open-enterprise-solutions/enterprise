@@ -49,7 +49,7 @@ public:
 
 	//per-type node value — the held metaobject's whole node (a Child sub-node)
 	virtual bool ReadNodeValue(const ibDataValue& value) override {
-		const std::shared_ptr<ibDataNode>& child = value.AsChild();
+		const auto child = value.AsChild();
 		if (child) m_metaObject->LoadNode(*child);
 		return true;
 	}

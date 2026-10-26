@@ -27,7 +27,7 @@ ibDataValue ReadTypeList(const ibDataNode& root)
 	ibDataValue typesVal = root.GetProperty(wxT("Types"));
 
 	if (typesVal.Kind() != ibDataKind::Array) {
-		if (const ibDataValue* fromField = root.FindField(wxT("Types")))
+		if (auto fromField = root.FindField(wxT("Types")))
 			typesVal = *fromField;
 	}
 	return typesVal;
@@ -38,8 +38,8 @@ ibClassID ReadTypeId(const ibDataNode& entry)
 	// EITHER SPELLING OF THE ID. It is written as text now, so that it survives a trip
 	// through JSON (see WriteNode); a configuration written before that holds a number, and
 	// both mean the same thing.
-	const ibDataValue* tid = entry.FindField(wxT("TypeId"));
-	if (tid == nullptr)
+	auto tid = entry.FindField(wxT("TypeId"));
+	if (!tid)
 		return 0;
 
 	if (tid->Kind() == ibDataKind::String) {
@@ -59,7 +59,7 @@ ibClassID ReadTypeId(const ibDataNode& entry)
 // has none. One source of truth — ibPropertyType and predefined attributes both call.
 bool ibTypeDescriptionMemory::ReadNode(const ibDataValue& value, ibTypeDescription& typeDesc)
 {
-	const std::shared_ptr<ibDataNode>& root = value.AsChild(); // throws on wrong kind; null when absent
+	const auto root = value.AsChild(); // throws on wrong kind; null when absent
 	if (!root)
 		return false;
 
@@ -68,8 +68,8 @@ bool ibTypeDescriptionMemory::ReadNode(const ibDataValue& value, ibTypeDescripti
 	const ibDataValue typesVal = ReadTypeList(*root);
 	if (typesVal.Kind() == ibDataKind::Array) {
 		for (const ibDataValue& item : typesVal.AsArray()) {
-			const std::shared_ptr<ibDataNode>& entry = item.AsChild();
-			if (entry == nullptr)
+			const auto entry = item.AsChild();
+			if (!entry)
 				continue;
 			const ibClassID clsid = ReadTypeId(*entry);
 			if (clsid != 0)

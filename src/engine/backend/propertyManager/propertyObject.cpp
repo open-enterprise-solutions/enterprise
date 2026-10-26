@@ -581,23 +581,23 @@ bool ibPropertyObject::PasteProperty(ibReaderMemory& reader)
 	// being handed over as an empty ibDataValue — a property type that (rightly) refuses an empty
 	// value made the whole paste fail, so pasting a Document onto a Constant died instead of
 	// copying the properties the two do share. "Nothing arrived" is not "an empty value arrived".
-	if (const ibDataNode* propsNode = builder.Root().FindChild(wxT("props"))) {
+	if (auto propsNode = builder.Root().FindChild(wxT("props"))) {
 		for (unsigned int idx = 0; idx < GetPropertyCount(); idx++) {
 			ibProperty* prop = GetProperty(idx);
 			wxASSERT(prop);
-			const ibDataValue* incoming = propsNode->FindProperty(prop->GetName());
-			if (incoming == nullptr)
+			auto incoming = propsNode->FindProperty(prop->GetName());
+			if (!incoming)
 				continue;
 			if (!prop->PasteNodeValue(*incoming))
 				return false;
 		}
 	}
-	if (const ibDataNode* eventsNode = builder.Root().FindChild(wxT("events"))) {
+	if (auto eventsNode = builder.Root().FindChild(wxT("events"))) {
 		for (unsigned int idx = 0; idx < GetEventCount(); idx++) {
 			ibEvent* event = GetEvent(idx);
 			wxASSERT(event);
-			const ibDataValue* incoming = eventsNode->FindProperty(event->GetName());
-			if (incoming == nullptr)
+			auto incoming = eventsNode->FindProperty(event->GetName());
+			if (!incoming)
 				continue;
 			if (!event->PasteNodeValue(*incoming))
 				return false;

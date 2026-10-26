@@ -20,7 +20,7 @@ from its pack `web/www.wpk`.
 
 | Folder | Holds |
 |---|---|
-| `src/protocol/` | the socket (JSON-RPC, deflated answers), the session — login, one call at a time, the frame and its patches, coming back after a drop — and the pictures |
+| `src/protocol/` | the socket (OES-RPC packets — `packet.js` reads and writes them — deflated answers), the session — login, one call at a time, the frame and its patches, coming back after a drop — and the pictures |
 | `src/window/` | the window: login, the section panel, the tabs, the messages, the questions, All functions |
 | `src/controls/` | a form's controls, one file each, each its own element; the sizers; the label column |
 | `src/tablebox/` | the table: the grid fed with the server's pages |

@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <mutex>
 
+#include "core/utils/base64.h"   // ibBase64 — a master's text in the source, read into its bytes
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // Registered as the DLLs load and read from every thread after — the lock is for a DLL loaded later (a file base's
@@ -52,7 +54,8 @@ std::vector<ibPictureEntry> ibPictureRegistry::GetArrayPicture()
 
 bool RegisterPicture(const wxString name, const ibPictureID& id, const wxString& base64)
 {
-	if (ibPictureRegistry::RegisterPicture(name, id, ibPicture(base64)))
+	ibMemoryBuffer png;
+	if (ibBase64::Read(base64.wc_str(), base64.length(), png) && ibPictureRegistry::RegisterPicture(name, id, ibPicture(png)))
 		return true;
 
 	wxASSERT_MSG(false, "Picture is register");

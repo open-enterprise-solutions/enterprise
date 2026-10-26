@@ -45,11 +45,11 @@ bool ibDialogSavedSettings::Show(ibDataComposer& composer, Mode mode, ibSettings
 	ibDataNode request = ShelfRequest(mode, category, objectKey);
 	for (;;) {
 		ibDataNode response;
-		if (!frame->Request(request, response) || response.FindField(ibProtocol::ibRequest::ibSavedSettings::Act) == nullptr)
+		if (!frame->Request(request, response) || !response.FindField(ibProtocol::ibRequest::ibSavedSettings::Act))
 			return changed;   // closed
 
 		// No Id — a new entry with a new identity (save), or no mark at all (default).
-		const ibGuid id = response.FindField(ibProtocol::ibRequest::ibSavedSettings::Id) != nullptr ? response.GetValue<ibGuid>(ibProtocol::ibRequest::ibSavedSettings::Id) : wxNullGuid;
+		const ibGuid id = response.Has(ibProtocol::ibRequest::ibSavedSettings::Id) ? response.GetValue<ibGuid>(ibProtocol::ibRequest::ibSavedSettings::Id) : wxNullGuid;
 		const wxString name = response.GetValue<wxString>(ibProtocol::ibRequest::ibSavedSettings::Name);
 
 		bool done = false;

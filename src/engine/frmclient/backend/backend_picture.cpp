@@ -5,6 +5,7 @@
 #include <wx/mstream.h>
 
 #include "core/pictureRegistry.h"   // the engine's pictures, as the core registered them
+#include "core/utils/base64.h"      // ibBase64 — a master's PNG, read from its text in the source
 
 bool ibBackendPicture::LoadFromFile(const wxString& strFileName, ibExternalPictureDescription& pictureDesc)
 {
@@ -51,6 +52,13 @@ wxBitmap ibBackendPicture::CreatePicture(const ibExternalPictureDescription& pic
 	}
 
 	return wxNullBitmap;
+}
+
+wxImage ibBackendPicture::GetImageFromBase64(const wxString& src, const wxSize& size)
+{
+	ibMemoryBuffer png;
+	const wxImage image = ibBase64::Read(src.wc_str(), src.length(), png) ? ibProtocolImage(png) : wxImage();
+	return size != wxDefaultSize && image.IsOk() && size != image.GetSize() ? image.Scale(size.x, size.y, wxIMAGE_QUALITY_HIGH) : image;
 }
 
 std::vector<ibBackendPictureEntry> ibBackendPicture::GetArrayPicture()

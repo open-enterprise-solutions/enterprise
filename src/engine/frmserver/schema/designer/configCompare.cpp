@@ -276,7 +276,7 @@ std::function<void()> ibSchemaConfigCompare::Command(const ibSession& session, s
 	// No ops — the rows chosen were all of a kind the tab does not send (a reorder): nothing applied, and said so, as the
 	// desktop's "applied to 0".
 	std::vector<ibOpSpec> specs;
-	if (const ibDataNode* const opsNode = args.FindChild(ibProtocol::ibSchema::ibConfigCompare::Ops)) {
+	if (const auto opsNode = args.FindChild(ibProtocol::ibSchema::ibConfigCompare::Ops)) {
 		for (const ibDataNode& node : opsNode->Children()) {
 			ibOpSpec spec;
 			spec.op = static_cast<ibOp>(node.GetValue<std::int32_t>(ibProtocol::ibSchema::ibConfigCompare::Op));

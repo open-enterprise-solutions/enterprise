@@ -100,9 +100,9 @@ std::function<void()> ibSchemaUserList::Command(const ibSession& session, std::i
 
 			// The hash the item kept untouched is the stored one — read here, where it stays. A copy is a new guid: it
 			// has none stored, and starts without a password, as the desktop's copy did.
-			const ibDataValue* const password = args.FindField(ibProtocol::ibSchema::ibUserList::Password);
+			const auto password = args.FindField(ibProtocol::ibSchema::ibUserList::Password);
 			userInfo.m_strUserPassword = ibPasswordHash::PasswordToStore(ibUserInfo::Read(userGuid).m_strUserPassword,
-				password != nullptr, password != nullptr ? password->AsString().ToWxString() : wxString());
+				password.has_value(), password.has_value() ? password->AsString().ToWxString() : wxString());
 
 			const ibValueMetaObjectConfiguration* commonObject = metaData->GetCommonMetaObject();
 			wxASSERT(commonObject);
@@ -118,7 +118,7 @@ std::function<void()> ibSchemaUserList::Command(const ibSession& session, std::i
 			}
 
 			std::vector<wxString> checked;
-			if (const ibDataValue* const roles = args.FindField(ibProtocol::ibSchema::ibUserList::Roles)) {
+			if (const auto roles = args.FindField(ibProtocol::ibSchema::ibUserList::Roles)) {
 				for (const ibDataValue& role : roles->AsArray())
 					checked.push_back(role.AsString());
 			}

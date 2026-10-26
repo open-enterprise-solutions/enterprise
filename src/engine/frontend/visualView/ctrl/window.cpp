@@ -172,8 +172,8 @@ bool ibValueWindowComposite::WriteData(ibDataNode& node) const
 bool ibValueWindowComposite::ReadData(const ibDataNode& node)
 {
 	if (ibValueCommandBar* bar = GetCommandBar()) {
-		if (const ibDataNode* layers = node.FindChild(wxT("Layers"))) {
-			if (const ibDataNode* barNode = layers->FindChild(wxT("CommandBar")))
+		if (auto layers = node.FindChild(wxT("Layers"))) {
+			if (auto barNode = layers->FindChild(wxT("CommandBar")))
 				bar->ReadData(*barNode);
 		}
 	}

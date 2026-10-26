@@ -122,19 +122,19 @@ void ibJsonProvider::EmitValue(const ibDataValue& v, Text& out, int depth) const
 	case ibDataKind::String: Quote(out, v.AsString()); break;
 	case ibDataKind::Binary: PutBase64(out, v.AsBinary()); break;
 	case ibDataKind::Child: {
-		const std::shared_ptr<ibDataNode>& c = v.AsChild();
-		if (c) EmitNode(*c, out, depth);
-		else   Put(out, "null");
+		if (const auto c = v.AsChild()) EmitNode(*c, out, depth);
+		else                                                 Put(out, "null");
 		break;
 	}
 	case ibDataKind::Array: {
-		const std::vector<ibDataValue>& a = v.AsArray();
+		const ibDataRange<ibDataValue> a = v.AsArray();
 		if (a.empty()) { Put(out, "[]"); break; }
 		Put(out, m_compact ? "[" : "[\n");
-		for (size_t i = 0; i < a.size(); i++) {
+		size_t left = a.size();
+		for (const ibDataValue& item : a) {
 			Pad(out, depth + 1);
-			EmitValue(a[i], out, depth + 1);
-			Put(out, (i + 1 < a.size()) ? (m_compact ? "," : ",\n") : (m_compact ? "" : "\n"));
+			EmitValue(item, out, depth + 1);
+			Put(out, (--left != 0) ? (m_compact ? "," : ",\n") : (m_compact ? "" : "\n"));
 		}
 		Pad(out, depth);
 		Put(out, "]");
@@ -232,20 +232,20 @@ void ibJsonProvider::EmitNode(const ibDataNode& node, Text& out, int depth) cons
 		}
 	};
 	for (const auto& f : node.Fields())     emitEntry(f.first, f.second);
-	for (const auto& p : node.Properties())  emitEntry(p.first, p.second);
 
 	// transitional opaque remainder
 	if (node.HasRawData()) { key("NodeRaw"); PutBase64(out, node.RawData()); }
 
 	// metaobject children (recursion)
-	const std::vector<ibDataNode>& children = node.Children();
+	const ibDataRange<ibDataNode> children = node.Children();
 	if (!children.empty()) {
 		key("NodeChildren");
 		Put(out, m_compact ? "[" : "[\n");
-		for (size_t i = 0; i < children.size(); i++) {
+		size_t left = children.size();
+		for (const ibDataNode& child : children) {
 			Pad(out, inner + 1);
-			EmitNode(children[i], out, inner + 1);
-			Put(out, (i + 1 < children.size()) ? (m_compact ? "," : ",\n") : (m_compact ? "" : "\n"));
+			EmitNode(child, out, inner + 1);
+			Put(out, (--left != 0) ? (m_compact ? "," : ",\n") : (m_compact ? "" : "\n"));
 		}
 		Pad(out, inner);
 		Put(out, "]");
@@ -489,12 +489,8 @@ bool ibJsonReader<Char>::ParseNode(ibDataNode& node)
 			if (!Expect('[')) return false;
 			if (!Accept(']')) {
 				for (;;) {
-					// AddChild wants the identity up front, but it sits INSIDE the child object.
-					// Parse into a scratch node and move it onto the vector instead — same result,
-					// no throwaway default-constructed slot.
-					ibDataNode scratch;
-					if (!ParseNode(scratch)) return false;
-					node.Children().emplace_back(std::move(scratch));
+					// The identity sits INSIDE the child object: the child is added with none and filled where it lies.
+					if (!ParseNode(node.AddChild(0, 0))) return false;
 					if (Accept(',')) continue;
 					if (Accept(']')) break;
 					return false;
@@ -588,13 +584,8 @@ bool ibJsonProvider::ReadEntry(ibDataNode& node, const ibString& key, ibDataValu
 	if (key == kTypeDesc)
 		return true;
 
-	// --- ordinary data ------------------------------------------------------------
-	// Which AREA a key came from is not in the text (EmitNode flattens Fields and
-	// Properties into one key set). Child values are placed back into the property
-	// area because that is where ibDataNode::Child puts them by construction; every
-	// other key lands in Fields. See the header.
-	if (value.Kind() == ibDataKind::Child) node.SetProperty(key, std::move(value));
-	else                                   node.AddField(key, std::move(value));
+	// --- ordinary data — a node's one set of fields, as the text has it ----------------
+	node.AddField(key, value);
 	return true;
 }
 
@@ -617,46 +608,84 @@ namespace {
 
 using ibTypeLookup = std::function<ibClassID(const ibString&)>;
 
-void LookupKept(ibDataNode& node, const ibTypeLookup& lookupType);
+bool Kept(const ibDataNode& node);
 
 // A value's nodes: the one it is, or those of its list.
-void LookupKept(const ibDataValue& value, const ibTypeLookup& lookupType)
+bool Kept(const ibDataValue& value)
 {
 	if (value.Kind() == ibDataKind::Child) {
-		if (value.AsChild())
-			LookupKept(*value.AsChild(), lookupType);
+		const auto child = value.AsChild();
+		return child && Kept(*child);
+	}
+	if (value.Kind() == ibDataKind::Array) {
+		for (const ibDataValue& item : value.AsArray())
+			if (Kept(item)) return true;
+	}
+	return false;
+}
+
+// Whether a reading kept a word anywhere in the node — none (the common case) is nothing written again.
+bool Kept(const ibDataNode& node)
+{
+	if (node.GetClsid() == ibClassID(0)) {
+		const auto word = node.FindField("NodeType");
+		if (word && word->Kind() == ibDataKind::String)
+			return true;
+	}
+	for (const auto& field : node.Fields())
+		if (Kept(field.second)) return true;
+	for (const ibDataNode& child : node.Children())
+		if (Kept(child)) return true;
+	return false;
+}
+
+ibDataNode LookupKept(const ibDataNode& node, const ibTypeLookup& lookupType);
+
+ibDataValue LookupKept(const ibDataValue& value, const ibTypeLookup& lookupType)
+{
+	if (value.Kind() == ibDataKind::Child) {
+		if (const auto child = value.AsChild())
+			return ibDataValue::Child(std::make_shared<ibDataNode>(LookupKept(*child, lookupType)));
 	}
 	else if (value.Kind() == ibDataKind::Array) {
+		std::vector<ibDataValue> items;
 		for (const ibDataValue& item : value.AsArray())
-			LookupKept(item, lookupType);
+			items.push_back(LookupKept(item, lookupType));
+		return ibDataValue::Array(std::move(items));
 	}
+	return value;
 }
 
 // The word a reading kept, looked up — known: the node's type, the field gone; not known: kept on, written back as read.
-void LookupKept(ibDataNode& node, const ibTypeLookup& lookupType)
+// A node is its bytes, so the node is written again with the answers, its parts copied as they are.
+ibDataNode LookupKept(const ibDataNode& node, const ibTypeLookup& lookupType)
 {
-	if (node.GetClsid() == ibClassID(0)) {
-		const ibDataValue* const word = node.FindField(wxT("NodeType"));
-		if (word != nullptr && word->Kind() == ibDataKind::String) {
-			const ibClassID clsid = lookupType(word->AsString());
-			if (clsid != ibClassID(0)) {
-				node.SetClsid(clsid);
-				node.RemoveField(wxT("NodeType"));
-			}
+	ibClassID clsid = node.GetClsid();
+	bool known = false;
+	if (clsid == ibClassID(0)) {
+		const auto word = node.FindField("NodeType");
+		if (word && word->Kind() == ibDataKind::String) {
+			clsid = lookupType(word->AsString());
+			known = clsid != ibClassID(0);
 		}
 	}
-	for (const auto& field : node.Fields())
-		LookupKept(field.second, lookupType);
-	for (const auto& property : node.Properties())
-		LookupKept(property.second, lookupType);
-	for (ibDataNode& child : node.Children())
-		LookupKept(child, lookupType);
+	ibDataNode looked(clsid, node.GetMetaId());
+	if (node.HasRawData())
+		looked.SetRawData(node.RawData());
+	static const ibString kNodeType = wxT("NodeType");
+	for (const auto& field : node.Fields()) {
+		if (!(known && field.first == kNodeType))
+			looked.AddField(field.first, LookupKept(field.second, lookupType));
+	}
+	for (const ibDataNode& child : node.Children())
+		looked.AddChild(LookupKept(child, lookupType));
+	return looked;
 }
 
 } // namespace
 
 void ibJsonProvider::LookupTypes(ibDataNode& node) const
 {
-	if (m_lookupType)
-		LookupKept(node, m_lookupType);
+	if (m_lookupType && Kept(node))
+		node = LookupKept(node, m_lookupType);
 }

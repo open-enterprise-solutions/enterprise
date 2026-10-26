@@ -146,7 +146,7 @@ public:
 		// ⭐ THE PLATFORM MAKES IT. With something given, of that thing; with nothing, the type's own
 		// default - which is the empty form worth looking at.
 		ibValue made;
-		if (const ibDataValue* given = params.FindField(ArgValue().Name())) {
+		if (auto given = params.FindField(ArgValue().Name())) {
 			ibValue stated;
 			switch (given->Kind()) {
 			case ibDataKind::String: stated = ibValue(given->AsString()); break;
@@ -255,8 +255,8 @@ public:
 			return false;
 		}
 
-		const ibDataNode* packed = params.FindChild(ArgPacked().Name());
-		if (packed == nullptr) {
+		auto packed = params.FindChild(ArgPacked().Name());
+		if (!packed) {
 			refusal = ibMcpText("No `value` came with the call. It is the packed form - a sub-node, not a "
 				"scalar; a scalar needs no unpacking.");
 			return false;

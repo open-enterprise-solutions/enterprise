@@ -510,7 +510,7 @@ beside its forms and templates: what to read and how to fold it. The report name
 bound to that composer. Embedded and external reports both have them, being the same metaobject.
 See [docs/private/report-engine.md](docs/private/report-engine.md) §4f),
 `AccountDimensionKindsTable` (renamed from `SubcontoKindsTable` on 2026-08-12 —
-*subconto* was a calque; the concept is an **account dimension**, «аналитика», and its KIND is a
+*subconto* was a calque; the concept is an **account dimension**, and its KIND is a
 characteristic. The CLSID key `MD_SKTB` stayed, being an opaque body key rather than a name),
 `AccumulationRegisterTotals` (the totals table became a
 metaobject in its own right on 2026-07-29, rather than a bit on the register's id), and
@@ -529,12 +529,13 @@ that tree to bytes (and reads it back).
 
 - **Entry points:** `ibMetaDataConfigurationBase::LoadConfigFromFile(fileName)` /
   `SaveConfigToFile(fileName)` (`metadataConfiguration.h`).
-- **`ibBinaryProvider`** (`dataBuilder.{h,cpp}`) — the internal, owned binary
-  format. This is the round-trip path (Write + Read).
+- **`ibBinaryProvider`** (`dataBuilder.{h,cpp}`) — the packet, OES-RPC 1.0: the node's own
+  bytes, the same in memory, in storage and on the client protocol's WebSocket (its layout in
+  `dataBuilder.h`'s header). This is the round-trip path (Write + Read).
 - **`ibJsonProvider`** (`serialize/jsonProvider.{h,cpp}`) — JSON. `Write` emits JSON for
-  diff/inspection; `Read` is a full parser that reads MESSAGES, never a configuration: the
-  client protocol and MCP parse every JSON-RPC request through it (`rpc/rpcMessage.cpp`, before
-  any login), as does the thin client (`frmclient/backend/serialize/dataProtocol.cpp`), so it
+  diff/inspection; `Read` is a full parser that reads MESSAGES, never a configuration: MCP and
+  the client protocol's HTTP `POST` parse every JSON-RPC request through it (`rpc/rpcMessage.cpp`,
+  before any login), as does the thin client (`frmclient/backend/serialize/dataProtocol.cpp`), so it
   refuses nesting past `ibJsonProvider::kMaxNesting` (256). The view is lossy by design (Fields +
   Properties flatten into one key set, Date → ISO string, synthetic `TypeDesc`), so Write→Read is
   not a round trip — use `ibBinaryProvider` for that.

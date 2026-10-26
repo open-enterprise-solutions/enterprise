@@ -216,7 +216,7 @@ wxStaticText* ibHomePageView::BuildCellHeader(wxWindow* pane, wxSizer* paneSizer
 
 	// The icon the server named — the OWNER's (a catalog's form reads as that catalog, a document's as that document),
 	// the form's own, or the page's glyph when the form is gone.
-	const wxBitmap icon = ibProtocolPicture(cell.GetString(ibProtocol::ibView::ibHomePage::Icon));
+	const wxBitmap icon = ibProtocolPicture(cell, ibProtocol::ibView::ibHomePage::Icon);
 	if (icon.IsOk()) {
 		headerSizer->Add(new wxStaticBitmap(pane, wxID_ANY, icon), 0,
 			wxALIGN_CENTER_VERTICAL | wxRIGHT, pane->FromDIP(3));

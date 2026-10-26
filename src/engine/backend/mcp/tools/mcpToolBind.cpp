@@ -165,8 +165,8 @@ wxString CandidateLabel(ibMetaData* metaData, long id, const wxString& name)
 wxString ReadTarget(const ibDataNode& params, bool& rejected)
 {
 	rejected = false;
-	const ibDataValue* given = params.FindField(ArgTarget().Name());
-	if (given == nullptr)
+	auto given = params.FindField(ArgTarget().Name());
+	if (!given)
 		return wxString();
 	if (given->Kind() == ibDataKind::String)
 		return given->AsString();

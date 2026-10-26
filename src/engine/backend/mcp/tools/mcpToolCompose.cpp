@@ -478,14 +478,14 @@ public:
 		// against its key and would otherwise have to be looked up a second time further down.
 		ibValueMetaObject*       object = nullptr;
 
-		const ibDataNode* givenSchema = params.FindChild(ArgSchema().Name());
-		const bool        namedReport = params.FindField(ArgId(false).Name()) != nullptr;
+		auto givenSchema = params.FindChild(ArgSchema().Name());
+		const bool        namedReport = params.Has(ArgId(false).Name());
 		const wxString    bareQuery   = ArgQuery().Text(params);
 
 		// ⚠ THREE SOURCES FOR ONE FIELD, AND EXACTLY ONE MAY SPEAK. Two of them is two answers to
 		// "what is being run", and picking a winner silently is how a caller comes to believe they
 		// ran something they did not.
-		const int given = (givenSchema != nullptr ? 1 : 0) + (namedReport ? 1 : 0)
+		const int given = (givenSchema ? 1 : 0) + (namedReport ? 1 : 0)
 			+ (bareQuery.IsEmpty() ? 0 : 1);
 
 		if (given > 1) {
@@ -533,7 +533,7 @@ public:
 
 			subject = ibMcpText("the query given");
 		}
-		else if (givenSchema != nullptr) {
+		else if (givenSchema) {
 			if (!ibCompositionDescriptionMemory::ReadNode(*givenSchema, description)) {
 				refusal = ibMcpText("`schema` could not be read as a composition. report_get on any report "
 					"shows the shape one has.");
@@ -582,7 +582,7 @@ public:
 		// hand is the composition itself and has nothing to choose between — so an absent variant is
 		// not variant 0 of none, it is no question. Asking for one explicitly is still refused, and
 		// with the count, because that is a caller expecting something that is not there.
-		const bool askedVariant = params.FindField(ArgVariant().Name()) != nullptr;
+		const bool askedVariant = params.Has(ArgVariant().Name());
 		const long variant      = static_cast<long>(ArgVariant().Whole(params));
 
 		if (!description.m_variants.empty()) {
@@ -650,7 +650,7 @@ public:
 
 			// The parameters ride as they were given - a value the caller knows, or a child carrying
 			// an `expression` for anything that has to be worked out where the runtime is.
-			if (const ibDataNode* given = params.FindChild(ArgParameters().Name()))
+			if (auto given = params.FindChild(ArgParameters().Name()))
 				request.Child(kComposeParameters) = *given;
 		}
 

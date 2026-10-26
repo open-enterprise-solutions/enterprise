@@ -38,10 +38,9 @@ void ibModuleTextView::OnDraw(ibDataNode& frame)
 
 	// The syntax its words are coloured and completed in (the desktop's editor asked ibCompileCode::GetCodeStyle), and
 	// read-only where the configuration may not be edited (ibDOC_READONLY on the desktop's).
-	// Added to the State already there — a form editor's frame is its form's, the form's State in it (Child would make
-	// a fresh one, and the form's title and command bar went).
-	ibDataNode* const drawn = frame.FindChild(ibProtocol::ibView::State);
-	ibDataNode& state = drawn != nullptr ? *drawn : frame.Child(ibProtocol::ibView::State);
+	// Added to the State already there — a form editor's frame is its form's, the form's State in it (Child gives the
+	// one there; a fresh one lost the form's title and command bar).
+	ibDataNode& state = frame.Child(ibProtocol::ibView::State);
 	state.SetValue(ibProtocol::ibView::ibModule::Syntax, static_cast<std::int32_t>(ibCompileCode::GetCodeStyle()));
 	if (!creator->IsEditable())
 		state.SetValue(ibProtocol::ibView::ibModule::ReadOnly, true);
@@ -494,7 +493,7 @@ void WriteLinqProbes(ibDataNode& response, const ibDataNode& request, const wxSt
 {
 	const auto texts = [&request](const char* key) {
 		std::vector<wxString> out;
-		if (const ibDataValue* const listed = request.FindField(key)) {
+		if (const auto listed = request.FindField(key)) {
 			if (listed->Kind() == ibDataKind::Array)
 				for (const ibDataValue& one : listed->AsArray())
 					out.push_back(one.AsString());

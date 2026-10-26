@@ -20,18 +20,18 @@ namespace {
 // A row of the tree that is a command — it has its path; a section's, a sub-group's has none.
 bool IsCommandRow(const ibDataNode& row)
 {
-	return row.FindField(ibProtocol::ibSchema::ibProperties::CommandPath) != nullptr;
+	return row.Has(ibProtocol::ibSchema::ibProperties::CommandPath);
 }
 
 // The command a row names, as the form editor's tree reads it back (ibFormDesignView::ReadPath).
 ibCommandDescription ReadCommand(const ibDataNode& row)
 {
 	ibCommandDescription desc;
-	const ibDataValue* const hops = row.FindField(ibProtocol::ibSchema::ibProperties::CommandPath);
-	if (hops == nullptr || hops->Kind() != ibDataKind::Array)
+	const auto hops = row.FindField(ibProtocol::ibSchema::ibProperties::CommandPath);
+	if (!hops || hops->Kind() != ibDataKind::Array)
 		return desc;
 	for (const ibDataValue& hop : hops->AsArray()) {
-		if (hop.Kind() == ibDataKind::Child && hop.AsChild() != nullptr)
+		if (hop.Kind() == ibDataKind::Child)
 			desc.AppendCommand(static_cast<ibMetaID>(hop.AsChild()->GetValue<std::int32_t>(ibProtocol::ibSchema::ibProperties::Id)));
 	}
 	const std::int32_t kind = row.GetValue<std::int32_t>(ibProtocol::ibSchema::ibProperties::Kind);
@@ -80,9 +80,9 @@ public:
 	{
 		ibPropertyRegistry::Register(wxT("ibPropertyCommandSource"), [](ibBackendProperty* property) -> wxPGProperty* {
 			ibDataNode row;
-			const ibDataNode* const tree = property->GetProtocolValue(row) ? row.FindChild(ibProtocol::ibSchema::ibProperties::CommandTree) : nullptr;
+			const auto tree = property->GetProtocolValue(row) ? row.FindChild(ibProtocol::ibSchema::ibProperties::CommandTree) : std::nullopt;
 			return new ibPGCommandSourceProperty(property->GetPropertyObject(), property->GetLabel(), property->GetName(),
-				property->GetValue(), tree);
+				property->GetValue(), tree ? &*tree : nullptr);
 		});
 	}
 } g_commandSourceLoader;
@@ -116,7 +116,7 @@ void ibPGCommandSourceProperty::OnSetValue()
 	// owner's command door over the form's commands; here they are the server's, and the row's command tree already
 	// names each command's picture — the row of the bound command wears it. Left empty when the command has no picture
 	// or was deleted.
-	wxString pictureId;
+	wxBitmap icon;
 	std::function<bool(const ibDataNode&)> find = [&](const ibDataNode& node) {
 		for (const ibDataNode& row : node.Children()) {
 			if (!IsCommandRow(row)) {
@@ -125,16 +125,13 @@ void ibPGCommandSourceProperty::OnSetValue()
 				continue;
 			}
 			if (ReadCommand(row) == desc) {
-				pictureId = row.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Picture);
+				icon = ibProtocolPicture(row, ibProtocol::ibSchema::ibProperties::Picture);
 				return true;
 			}
 		}
 		return false;
 	};
-	if (!find(m_tree) || pictureId.IsEmpty())
-		return;
-	const wxBitmap icon = ibProtocolPicture(pictureId);
-	if (icon.IsOk())
+	if (find(m_tree) && icon.IsOk())
 		m_valueBitmapBundle = icon;
 }
 
@@ -154,7 +151,7 @@ wxPGEditorDialogAdapter* ibPGCommandSourceProperty::GetEditorDialog() const
 			wxCHECK_MSG(dlgProp, false, "Function called for incompatible property");
 
 			const ibDataNode* const tree = dlgProp->GetCommandTree();
-			if (tree == nullptr) {
+			if (!tree) {
 				// An older server's row: the command sources are gathered over its form, and it did not send them.
 				wxMessageBox(_("Choosing a command is not available in the thin designer yet."),
 					_("Choice command"), wxOK | wxICON_INFORMATION, pg);
@@ -191,7 +188,7 @@ wxPGEditorDialogAdapter* ibPGCommandSourceProperty::GetEditorDialog() const
 						continue;
 					}
 					int icon = 0;
-					const wxBitmap picture = ibProtocolPicture(row.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Picture));
+					const wxBitmap picture = ibProtocolPicture(row, ibProtocol::ibSchema::ibProperties::Picture);
 					if (picture.IsOk())
 						icon = images->Add(picture.ConvertToImage().Rescale(16, 16));
 					const ibCommandDescription desc = ReadCommand(row);

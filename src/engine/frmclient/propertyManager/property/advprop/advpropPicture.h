@@ -5,10 +5,11 @@
 #include <wx/propgrid/advprops.h>
 
 #include <map>
-#include <memory>   // shared_ptr — the configuration's pictures, as the row brings them
+#include <optional>   // the configuration's pictures, as the row brings them
 
 #include "frmclient/backend/backend_core.h"
 #include "core/description/pictureDescription.h"
+#include "core/serialize/dataBuilder.h"   // ibDataNode — the row's Pictures
 
 // -----------------------------------------------------------------------
 // ibPGExternalImageProperty
@@ -63,7 +64,7 @@ public:
 	wxPGPictureProperty(const wxString& label = wxPG_LABEL,
 		const wxString& name = wxPG_LABEL,
 		const wxVariant& value = wxVariant(),
-		const std::shared_ptr<class ibDataNode>& pictures = nullptr);
+		const std::optional<ibDataNode>& pictures = std::nullopt);
 
 	virtual ~wxPGPictureProperty() override {}
 

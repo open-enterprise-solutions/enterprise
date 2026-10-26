@@ -130,7 +130,7 @@ TEST_F(CommonModuleCheck, ConfigCheckReportsABrokenModuleAndOneThatWasNeverCompi
 
 	const ibDataValue* brokenProblem = nullptr;
 	const ibDataValue* neverProblem = nullptr;
-	const ibDataValue* problems = result.FindField(wxT("problems"));
+	auto problems = result.FindField(wxT("problems"));
 	ASSERT_NE(problems, nullptr);
 	ASSERT_EQ(problems->Kind(), ibDataKind::Array);
 	for (const ibDataValue& one : problems->AsArray()) {
@@ -138,8 +138,8 @@ TEST_F(CommonModuleCheck, ConfigCheckReportsABrokenModuleAndOneThatWasNeverCompi
 			continue;
 		const wxString text = one.AsChild()->GetValue<wxString>(wxT("name"))
 			+ one.AsChild()->GetValue<wxString>(wxT("says"));
-		const ibDataValue* diagnostics = one.AsChild()->FindField(wxT("diagnostics"));
-		if (diagnostics != nullptr && diagnostics->Kind() == ibDataKind::Array) {
+		auto diagnostics = one.AsChild()->FindField(wxT("diagnostics"));
+		if (diagnostics && diagnostics->Kind() == ibDataKind::Array) {
 			for (const ibDataValue& line : diagnostics->AsArray()) {
 				if (line.Kind() == ibDataKind::Child && line.AsChild()
 					&& line.AsChild()->GetValue<wxString>(wxT("message")).Contains(wxT("Nope")))
@@ -149,12 +149,12 @@ TEST_F(CommonModuleCheck, ConfigCheckReportsABrokenModuleAndOneThatWasNeverCompi
 		if (one.AsChild()->GetValue<wxString>(wxT("name")) == never->GetName()
 			|| text.Contains(never->GetName()))
 			neverProblem = &one;
-		EXPECT_FALSE(text.Contains(clean->GetName()) && one.AsChild()->FindField(wxT("diagnostics")) != nullptr
+		EXPECT_FALSE(text.Contains(clean->GetName()) && one.AsChild()->Has(wxT("diagnostics"))
 			&& one.AsChild()->GetValue<wxString>(wxT("says")).Contains(wxT("does not compile")));
 	}
 
 	ASSERT_NE(brokenProblem, nullptr);
-	const ibDataValue* diagnostics = brokenProblem->AsChild()->FindField(wxT("diagnostics"));
+	auto diagnostics = brokenProblem->AsChild()->FindField(wxT("diagnostics"));
 	ASSERT_NE(diagnostics, nullptr);
 	EXPECT_EQ(diagnostics->Kind(), ibDataKind::Array);
 	EXPECT_FALSE(diagnostics->AsArray().empty());
@@ -162,7 +162,7 @@ TEST_F(CommonModuleCheck, ConfigCheckReportsABrokenModuleAndOneThatWasNeverCompi
 
 	ASSERT_NE(neverProblem, nullptr);
 	EXPECT_FALSE(neverProblem->AsChild()->GetValue<bool>(wxT("checked")));
-	const ibDataValue* empty = neverProblem->AsChild()->FindField(wxT("diagnostics"));
+	auto empty = neverProblem->AsChild()->FindField(wxT("diagnostics"));
 	ASSERT_NE(empty, nullptr);
 	EXPECT_TRUE(empty->Kind() == ibDataKind::Array && empty->AsArray().empty());
 }

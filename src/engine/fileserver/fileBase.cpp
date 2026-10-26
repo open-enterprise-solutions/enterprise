@@ -98,8 +98,8 @@ ibFileBase* ibFileBaseOpen(const ibString& request, wxString& error)
 	return base.release();
 }
 
-bool ibFileBaseCall(ibFileBase* base, const ibString& request, const void* connection,
-	const ibString& address, ibString& answer, wxString& error)
+bool ibFileBaseCall(ibFileBase* base, const ibMemoryBuffer& request, const void* connection,
+	const ibString& address, ibMemoryBuffer& answer, wxString& error)
 {
 	if (base == nullptr || !base->host) {
 		error = wxT("no base is open");
@@ -110,7 +110,7 @@ bool ibFileBaseCall(ibFileBase* base, const ibString& request, const void* conne
 	return true;
 }
 
-void ibFileBaseListen(ibFileBase* base, const void* connection, std::function<void(const ibString& text)> notified)
+void ibFileBaseListen(ibFileBase* base, const void* connection, std::function<void(const ibMemoryBuffer& packet)> notified)
 {
 	if (base == nullptr || !base->host)
 		return;

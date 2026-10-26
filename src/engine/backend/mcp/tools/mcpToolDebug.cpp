@@ -854,11 +854,11 @@ public:
 		// for while the connection is somehow left attached.
 		const bool detach = stop || ArgDetach().Flag(params);
 
-		const ibDataValue* portGiven = params.FindField(ArgPort().Name());
+		auto portGiven = params.FindField(ArgPort().Name());
 
 		// ⚠ HALF AN ADDRESS IS NOT AN ADDRESS. A host with no port would silently match nothing,
 		// and the tool would report success over having done exactly nothing.
-		if (!host.IsEmpty() && (portGiven == nullptr || portGiven->Kind() != ibDataKind::Number)) {
+		if (!host.IsEmpty() && (!portGiven || portGiven->Kind() != ibDataKind::Number)) {
 			refusal = ibMcpText("A host needs its port too - debug_sessions reports both. Omit both to "
 				"take every ready runtime.");
 			return false;

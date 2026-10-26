@@ -55,15 +55,15 @@ bool ibJobScheduleDescriptionMemory::WriteNode(ibDataValue& value, const ibJobSc
 
 bool ibJobScheduleDescriptionMemory::ReadNode(const ibDataValue& value, ibJobScheduleDescription& s)
 {
-	const std::shared_ptr<ibDataNode>& root = value.AsChild();
+	const auto root = value.AsChild();
 	if (!root)
 		return false;
 
-	// FindField before reading, so an absent name leaves the member at its default. That is the
+	// Has before reading, so an absent name leaves the member at its default. That is the
 	// whole forward-compatibility story: a blob written before a field existed must load as "not
 	// restricted", never as "restricted to nothing".
 	const auto readInt = [&root](const wxString& name, auto& target) {
-		if (root->FindField(name) != nullptr)
+		if (root->Has(name))
 			target = static_cast<typename std::remove_reference<decltype(target)>::type>(root->GetValue<std::int32_t>(name));
 	};
 
@@ -83,8 +83,8 @@ bool ibJobScheduleDescriptionMemory::ReadNode(const ibDataValue& value, ibJobSch
 	// its ISO text (jsonProvider.h — a Date reads back as a String, "" the empty one). The thin designer's schedule
 	// cell reads the second and writes it back the same way, so both readers meet it.
 	const auto readDate = [&root](const wxString& name, ibDateTime& target) {
-		const ibDataValue* const v = root->FindField(name);
-		if (v == nullptr)
+		const auto v = root->FindField(name);
+		if (!v)
 			return;
 		if (v->Kind() == ibDataKind::Date) {
 			target = v->AsDate();

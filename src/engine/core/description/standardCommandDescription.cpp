@@ -9,7 +9,7 @@
 // node form: a Child { Action: <system id>, Name: <custom handler> }.
 bool ibActionDescriptionMemory::ReadNode(const ibDataValue& value, ibStandardCommandDescription& actionDesc)
 {
-	const std::shared_ptr<ibDataNode>& root = value.AsChild();
+	const auto root = value.AsChild();
 	if (!root)
 		return false;
 	actionDesc.m_lAction = root->GetValue<std::int32_t>(wxT("Action"));

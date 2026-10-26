@@ -127,9 +127,9 @@ bool ibValue::CompareValueEQ(const ibValue& rhs) const
 		return true;
 	if (m_stored == nullptr || rhs.m_stored == nullptr)
 		return false;
-	const ibDataValue* const left = m_stored->FindField(kValueFieldData);
-	const ibDataValue* const right = rhs.m_stored->FindField(kValueFieldData);
-	return (left != nullptr ? left->AsString() : ibString()) == (right != nullptr ? right->AsString() : ibString());
+	const auto left = m_stored->FindField(kValueFieldData);
+	const auto right = rhs.m_stored->FindField(kValueFieldData);
+	return (left ? left->AsString() : ibString()) == (right ? right->AsString() : ibString());
 }
 
 bool ibValue::Serialize(ibDataNode& node) const
@@ -164,7 +164,7 @@ ibValue ibValue::FromNode(const ibDataNode& node)
 	unsigned long long parsed = 0;
 	const ibClassID clsid = node.GetValue<wxString>(kValueFieldClsid).ToULongLong(&parsed) && parsed != 0
 		? static_cast<ibClassID>(parsed) : g_valueUndefinedCLSID;
-	const ibDataValue* const data = node.FindField(kValueFieldData);
+	const auto data = node.FindField(kValueFieldData);
 
 	switch (GetVTByID(clsid)) {
 	case ibValueTypes::TYPE_EMPTY:   return ibValue();
@@ -173,22 +173,22 @@ ibValue ibValue::FromNode(const ibDataNode& node)
 		made.m_typeClass = ibValueTypes::TYPE_NULL;
 		return made;
 	}
-	case ibValueTypes::TYPE_BOOLEAN: return ibValue(data != nullptr && data->AsBool());
+	case ibValueTypes::TYPE_BOOLEAN: return ibValue(data && data->AsBool());
 	case ibValueTypes::TYPE_NUMBER:
 		// JSON carries a number as one, and the engine's reader reads it so; text is taken as the number it spells.
-		if (data != nullptr && data->Kind() == ibDataKind::String)
+		if (data && data->Kind() == ibDataKind::String)
 			return ibValue(ibNumber(data->AsString()));
-		return ibValue(data != nullptr ? data->AsNumber() : ibNumber());
+		return ibValue(data ? data->AsNumber() : ibNumber());
 	case ibValueTypes::TYPE_DATE: {
 		// …and a date as text: it says it is a Date, so the text is read as one (the engine's DoDeserialize).
-		if (data != nullptr && data->Kind() == ibDataKind::String) {
+		if (data && data->Kind() == ibDataKind::String) {
 			ibDateTime date;
 			date.FromString(data->AsString());
 			return ibValue(date);
 		}
-		return ibValue(data != nullptr ? data->AsDate() : ibDateTime());
+		return ibValue(data ? data->AsDate() : ibDateTime());
 	}
-	case ibValueTypes::TYPE_STRING:  return ibValue(data != nullptr ? data->AsString().ToWxString() : wxString());
+	case ibValueTypes::TYPE_STRING:  return ibValue(data ? data->AsString().ToWxString() : wxString());
 	default:
 		break;
 	}
@@ -283,7 +283,7 @@ std::vector<ibCtorAbstractType*> ibValue::GetListCtorsByType(ibCtorObjectType ob
 
 	for (const ibProtocolNode& described : frame->GetRequest().FindChild(ibProtocol::ibRequest::ibFormEditor::Classes).Children()) {
 		wxIcon icon;
-		const wxBitmap picture = ibProtocolPicture(described.GetString(ibProtocol::ibRequest::ibFormEditor::Picture));
+		const wxBitmap picture = ibProtocolPicture(described, ibProtocol::ibRequest::ibFormEditor::Picture);
 		if (picture.IsOk())
 			icon.CopyFromBitmap(picture);
 		s_ctors.push_back(std::make_unique<ibCtorAbstractType>(described.GetString(ibProtocol::ibRequest::ibFormEditor::Name), icon));

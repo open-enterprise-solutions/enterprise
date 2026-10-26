@@ -149,6 +149,8 @@ public:
 	// A tab closed — by the server, which asks about what is unsaved; the tab goes when the frame says so. Whatever
 	// closes it comes here: its button, its window closed (Escape, the application's), the window menu, File → Close.
 	void CloseTab(long long tabId);
+	// …and true while the WINDOW takes its tabs down (AllowClose, Destroy), false when a person closes one (the desktop's).
+	bool IsClosingWindow() const { return m_closingWindow; }
 	// A fetch — a control's (Fetch: a table's rows, a spreadsheet's cells; `params` — the control, its request, the view
 	// it is of) or the pictures of their ids (Picture): the answer is no frame, nothing is drawn or asked, and a refusal is
 	// only false. It speaks to the communicator alone, so a control's own thread may make it.
@@ -368,7 +370,7 @@ private:
 	ibChoosing                            m_choosing;
 	long long                             m_choice = 0;              // the last number a choice was asked under
 	bool                                  m_drawing = false;         // a tab event the drawing raises is not the person's
-	bool                                  m_closingWindow = false;
+	bool                                  m_closingWindow = false;   // see IsClosingWindow()
 	bool                                  m_exitGranted = false;     // the server's Exit done: every tab closed, the client goes
 	bool                                  m_callUpdateFrameManager = false;
 	bool                                  m_callRaiseFrame = false;

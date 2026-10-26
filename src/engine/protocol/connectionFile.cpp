@@ -80,8 +80,8 @@ ibProtocolFileBase::~ibProtocolFileBase()
 	Close();
 }
 
-bool ibProtocolFileBase::Call(const ibString& request, const void* connection, const ibString& address,
-	ibString& answer, wxString& error) const
+bool ibProtocolFileBase::Call(const ibMemoryBuffer& request, const void* connection, const ibString& address,
+	ibMemoryBuffer& answer, wxString& error) const
 {
 	if (m_base == nullptr || m_call == nullptr) {
 		error = wxT("no base is open");
@@ -90,7 +90,7 @@ bool ibProtocolFileBase::Call(const ibString& request, const void* connection, c
 	return m_call(m_base, request, connection, address, answer, error);
 }
 
-void ibProtocolFileBase::Listen(const void* connection, std::function<void(const ibString& text)> notified) const
+void ibProtocolFileBase::Listen(const void* connection, std::function<void(const ibMemoryBuffer& packet)> notified) const
 {
 	if (m_base != nullptr && m_listen != nullptr)
 		m_listen(m_base, connection, std::move(notified));
@@ -104,17 +104,40 @@ void ibProtocolFileBase::Disconnect(const void* connection) const
 
 namespace {
 
-// A request to the base, by this connection — the one door both connections send through.
-bool ExchangeWith(const ibProtocolFileBase& base, const void* connection, const ibString& request, ibString& answer,
-	ibProtocol::ibRefusal& refusal, wxString& error)
+// A request to the base, by this connection — the one door both connections send through; the packet the base gave
+// checked once, here.
+bool ExchangeWith(const ibProtocolFileBase& base, const void* connection, const ibMemoryBuffer& request,
+	ibProtocolNode& answer, ibProtocol::ibRefusal& refusal, wxString& error)
 {
-	if (!base.Call(request, connection, ibString(), answer, error)) {
+	ibMemoryBuffer packet;
+	if (!base.Call(request, connection, ibString(), packet, error)) {
 		refusal = ibProtocol::ibRefusal::Failed;
 		if (error.IsEmpty())
 			error = wxT("no base is open");
 		return false;
 	}
+	if (!ibProtocolNode::Read(packet, answer)) {
+		refusal = ibProtocol::ibRefusal::Failed;
+		error = wxT("the base's answer is not a packet");
+		return false;
+	}
 	return true;
+}
+
+// …and what it says unasked, by this connection — the node each notification's packet is; one that is none is told
+// to nobody.
+void ListenWith(const ibProtocolFileBase& base, const void* connection,
+	std::function<void(const ibProtocolNode& said)> notified)
+{
+	if (!notified) {
+		base.Listen(connection, nullptr);
+		return;
+	}
+	base.Listen(connection, [notified = std::move(notified)](const ibMemoryBuffer& packet) {
+		ibProtocolNode said;
+		if (ibProtocolNode::Read(packet, said))
+			notified(said);
+	});
 }
 
 // THE SECOND CONNECTION to a base another connection opened — its own to the base's clients, the base not its to close.
@@ -124,14 +147,14 @@ public:
 	explicit ibProtocolConnectionFileChannel(std::shared_ptr<ibProtocolFileBase> base) : m_base(std::move(base)) {}
 	virtual ~ibProtocolConnectionFileChannel() { m_base->Disconnect(this); }
 
-	virtual bool Exchange(const ibString& request, ibString& answer,
+	virtual bool Exchange(const ibMemoryBuffer& request, ibProtocolNode& answer,
 		ibProtocol::ibRefusal& refusal, wxString& error) override
 	{
 		return ExchangeWith(*m_base, this, request, answer, refusal, error);
 	}
-	virtual void Listen(std::function<void(const ibString& text)> notified) override
+	virtual void Listen(std::function<void(const ibProtocolNode& said)> notified) override
 	{
-		m_base->Listen(this, std::move(notified));
+		ListenWith(*m_base, this, std::move(notified));
 	}
 
 private:
@@ -155,15 +178,15 @@ ibProtocolConnectionFile::~ibProtocolConnectionFile()
 	Close();
 }
 
-bool ibProtocolConnectionFile::Exchange(const ibString& request, ibString& answer,
+bool ibProtocolConnectionFile::Exchange(const ibMemoryBuffer& request, ibProtocolNode& answer,
 	ibProtocol::ibRefusal& refusal, wxString& error)
 {
 	return ExchangeWith(*m_base, this, request, answer, refusal, error);
 }
 
-void ibProtocolConnectionFile::Listen(std::function<void(const ibString& text)> notified)
+void ibProtocolConnectionFile::Listen(std::function<void(const ibProtocolNode& said)> notified)
 {
-	m_base->Listen(this, std::move(notified));
+	ListenWith(*m_base, this, std::move(notified));
 }
 
 std::unique_ptr<ibProtocolConnection> ibProtocolConnectionFile::OpenChannel(wxString& /*error*/)

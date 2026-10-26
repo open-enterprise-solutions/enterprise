@@ -78,9 +78,9 @@ public:
 	void Secure(std::shared_ptr<const ibTlsContext> context);
 	// `target` — the path and its query, as written on the request line.
 	void Open(const std::string& host, std::uint16_t port, const std::string& target);
-	// A message, queued and sent in order — as ibWebSocket's: the text's bytes made here, once.
+	// A message, queued and sent in order — as ibWebSocket's: the text's bytes made here, once; bytes as they are.
 	void Send(const ibString& text);
-	void SendBinary(std::string data);
+	void Send(const void* data, std::size_t len);
 	void Close();
 
 private:

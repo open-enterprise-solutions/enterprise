@@ -71,13 +71,13 @@ std::string ibWebSocketKey();
 // True when `text` is well-formed UTF-8 — what a text message must be (RFC 6455 § 8.1).
 bool ibIsUtf8(const std::string& text);
 
-class ibString;   // core/fstring.h
-
 // ⭐ THE ENGINE'S TEXT AS A DEFLATED MESSAGE — what a peer that asked for it as it connected (?compress=deflate) is sent
 // for a text of some size (ibWebSocket::Send): its bytes deflated, raw (RFC 1951 — what DecompressionStream
 // ("deflate-raw") reads), in a binary message. False — not packed: it goes as text.
 bool ibDeflate(const std::string& bytes, std::string& packed);
-// …and the text such a message is — false when it does not inflate.
-CORE_API bool ibInflate(const std::string& packed, ibString& text);
+
+// …and the text such a message is — false when it does not inflate; and the packet one is (OES-RPC), its bytes.
+CORE_API bool ibInflate(const std::string& packed, class ibString& text);
+CORE_API bool ibInflate(const std::string& packed, class ibMemoryBuffer& bytes);
 
 #endif

@@ -83,7 +83,7 @@ bool ibValueTextCtrl::OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibD
 	case ibProtocol::ibEvent::ibKind::Input:  OnTextUpdated(); return true;
 	case ibProtocol::ibEvent::ibKind::Change: {
 		// The value with its type when the client has one (Value), else the text it typed.
-		if (const ibDataNode* const value = args.FindChild(ibProtocol::ibEvent::Value))
+		if (const auto value = args.FindChild(ibProtocol::ibEvent::Value))
 			ValueProcessing(*value);
 		else
 			OnTextEnter(args.GetValue<wxString>(ibProtocol::ibEvent::Text));

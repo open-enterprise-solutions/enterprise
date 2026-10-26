@@ -29,8 +29,8 @@ constexpr std::chrono::seconds kLoginWithin(15);
 constexpr std::chrono::seconds kLoginRoundEvery(1);
 
 // A CLIENT'S CONNECTION TO A BASE THIS SERVER HOLDS — the connection its clients log in through, told what the base
-// says to them unasked, and they leave with it. The text is the engine's both ways: the socket reads it and writes it
-// (and deflates it, when the client asked).
+// says to them unasked, and they leave with it. Packets both ways (OES-RPC): the socket hands them over as they are
+// (and deflates one of some size, when the client asked).
 class ibHostRelay : public ibWebSocketHandler {
 public:
 
@@ -40,22 +40,23 @@ public:
 		// WHAT THE SERVER SAYS UNASKED goes out on it too — a notification from a session's thread (a client's frame
 		// changed by itself), between the answers. The socket queues both in order, and once it closed sends nothing.
 		const std::weak_ptr<ibWebSocket> told = m_socket;
-		m_host.SetNotifier(this, [told](const ibString& text) {
+		m_host.SetNotifier(this, [told](const ibMemoryBuffer& packet) {
 			if (const std::shared_ptr<ibWebSocket> socket = told.lock())
-				socket->Send(text);
+				socket->Send(packet.GetData(), packet.GetDataLen(), ibWebSocketSend::Deflate);
 		});
 	}
 
-	virtual void OnMessage(const ibString& text) override
+	virtual void OnMessage(const ibString&) override
 	{
-		const ibString response = m_host.Call(text, this, m_socket->GetRequest().m_address);
-		if (!response.IsEmpty())
-			m_socket->Send(response);
+		m_socket->Close(ibWebSocketClose::Unsupported, "the protocol speaks packets");
 	}
 
-	virtual void OnBinary(std::string) override
+	virtual void OnBinary(std::string data) override
 	{
-		m_socket->Close(ibWebSocketClose::Unsupported, "the protocol speaks text");
+		const ibMemoryBuffer packet(data.data(), data.size());
+		const ibMemoryBuffer answer = m_host.Call(packet, this, m_socket->GetRequest().m_address);
+		if (!answer.IsEmpty())
+			m_socket->Send(answer.GetData(), answer.GetDataLen(), ibWebSocketSend::Deflate);
 	}
 
 	// THE CLIENTS LOGGED IN THROUGH IT GO WITH IT — a closed tab is a client gone, not one idle for half an hour.

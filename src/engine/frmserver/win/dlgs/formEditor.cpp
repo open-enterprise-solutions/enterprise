@@ -65,12 +65,12 @@ int ibDialogFormEditor::ShowModal()
 		AppendControl(request.Child(ibProtocol::ibRequest::ibFormEditor::Controls), m_owner);
 
 		ibDataNode response;
-		if (!frame->Request(request, response) || response.FindField(ibProtocol::ibRequest::ibFormEditor::Act) == nullptr)
+		if (!frame->Request(request, response) || !response.FindField(ibProtocol::ibRequest::ibFormEditor::Act))
 			return wxID_OK;   // closed
 
 		switch (static_cast<ibProtocol::ibRequest::ibFormEditor::ibAct>(response.GetValue<std::int32_t>(ibProtocol::ibRequest::ibFormEditor::Act))) {
 		case ibProtocol::ibRequest::ibFormEditor::ibAct::Apply:
-			if (const ibDataNode* const controls = response.FindChild(ibProtocol::ibRequest::ibFormEditor::Controls))
+			if (const auto controls = response.FindChild(ibProtocol::ibRequest::ibFormEditor::Controls))
 				ibApplyFormSettings(m_owner, *controls);
 			m_owner->UpdateForm();
 			result = wxNOT_FOUND;

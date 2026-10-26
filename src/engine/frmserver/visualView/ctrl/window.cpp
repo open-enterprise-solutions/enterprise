@@ -115,8 +115,8 @@ bool ibValueWindowComposite::WriteData(ibDataNode& node) const
 bool ibValueWindowComposite::ReadData(const ibDataNode& node)
 {
 	if (ibValueCommandBar* bar = GetCommandBar()) {
-		if (const ibDataNode* layers = node.FindChild(ibProtocol::ibForm::ibCommandBar::Layers)) {
-			if (const ibDataNode* barNode = layers->FindChild(ibProtocol::ibForm::ibCommandBar::CommandBar))
+		if (auto layers = node.FindChild(ibProtocol::ibForm::ibCommandBar::Layers)) {
+			if (auto barNode = layers->FindChild(ibProtocol::ibForm::ibCommandBar::CommandBar))
 				bar->ReadData(*barNode);
 		}
 	}

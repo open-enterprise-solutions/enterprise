@@ -7,17 +7,16 @@
 #include <wx/intl.h>   // _() — what a refusal says to a person
 #include <wx/log.h>
 
-#include "core/net/httpClient.h"   // ws:// — and wss://, the client's TLS (ibTlsClientContext)
+#include "core/net/httpClient.h"       // ws:// — and wss://, the client's TLS (ibTlsClientContext)
 #include "core/net/ioThreads.h"
-#include "core/net/ports.h"        // ibPort::Clients — the port an address leaves out
+#include "core/net/ports.h"            // ibPort::Clients — the port an address leaves out
+#include "core/net/webSocketFrame.h"   // ibInflate — a packet of some size comes deflated
+#include "core/serialize/dataBuilder.h"   // ibBinaryProvider::IsPacket — a packet told from a deflated one
 
 namespace {
 
 // How long Close waits for the server to be told the socket is closing, before its thread is stopped under it.
 constexpr std::chrono::seconds kCloseWithin(1);
-
-// How a notification of the server's begins — the method first, where an answer has its id.
-const ibString kNotificationHead(wxT("{\"jsonrpc\":\"2.0\",\"method\":"));
 
 // A base's name in the path — its UTF-8 bytes, every one but the unreserved escaped.
 std::string EscapeSegment(const wxString& segment)
@@ -136,32 +135,24 @@ bool ibProtocolConnectionServer::Open(const wxString& address, const wxString& t
 			}
 			m_answered.notify_all();
 		},
-		[this](const ibString& text) {
-			Receive(text);
+		// The protocol speaks packets: a text is the two ends no longer agreeing, and the socket counts as gone.
+		[this](const ibString&) {
+			Closed("a text message, where the protocol speaks packets");
 		},
-		// A binary message is a text deflated, as the server packs one of some size (ibWebSocket::Send) — one that does
-		// not inflate: the two ends no longer agree, and the socket counts as gone.
-		[this](std::string packed) {
-			ibString text;
-			if (ibInflate(packed, text)) {
-				Receive(text);
+		// A packet as it is, or deflated, as the server packs one of some size (ibWebSocket::Send) — told by its first
+		// bytes. One that does not inflate: the socket counts as gone.
+		[this](std::string data) {
+			ibMemoryBuffer packet;
+			if (ibBinaryProvider::IsPacket(data.data(), data.size()))
+				packet.AppendData(data.data(), data.size());
+			else if (!ibInflate(data, packet)) {
+				Closed("an answer that does not inflate");
 				return;
 			}
-			{
-				std::lock_guard<std::mutex> lock(m_mutex);
-				m_closed = true;
-				m_reason = "an answer that does not inflate";
-			}
-			m_answered.notify_all();
+			Receive(packet);
 		},
 		[this](const std::string& reason) {
-			// The socket gone: a request waiting is answered with that.
-			{
-				std::lock_guard<std::mutex> lock(m_mutex);
-				m_closed = true;
-				m_reason = reason;
-			}
-			m_answered.notify_all();
+			Closed(reason);
 		});
 	// The host as a resolver takes it — an IPv6 literal without the brackets the address wraps it in.
 	std::string name(host.utf8_str());
@@ -239,7 +230,7 @@ std::unique_ptr<ibProtocolConnection> ibProtocolConnectionServer::OpenChannel(wx
 	return channel;
 }
 
-bool ibProtocolConnectionServer::Exchange(const ibString& request, ibString& answer,
+bool ibProtocolConnectionServer::Exchange(const ibMemoryBuffer& request, ibProtocolNode& answer,
 	ibProtocol::ibRefusal& refusal, wxString& error)
 {
 	std::lock_guard<std::mutex> exchanging(m_exchanging);
@@ -255,7 +246,7 @@ bool ibProtocolConnectionServer::Exchange(const ibString& request, ibString& ans
 		m_answer.reset();
 	}
 	// Queued, and sent in order; a socket that cannot take it goes, and the wait below hears that.
-	m_socketClient->Send(request);
+	m_socketClient->Send(request.GetData(), request.GetDataLen());
 
 	// Its answer is the next answer the socket hands over: one request is in flight at a time.
 	std::unique_lock<std::mutex> lock(m_mutex);
@@ -270,31 +261,48 @@ bool ibProtocolConnectionServer::Exchange(const ibString& request, ibString& ans
 	return true;
 }
 
-void ibProtocolConnectionServer::Receive(const ibString& text)
+void ibProtocolConnectionServer::Receive(const ibMemoryBuffer& packet)
 {
-	// A NOTIFICATION — a method and no id, said unasked: to whoever listens, here. Told by how it begins: the server
-	// writes a notification's method where an answer's id stands (ibClientHost::NotifyChanged, NotifyDebug), so an
-	// answer of a frame is never parsed twice, and the debugger's news, of any length, is never an answer.
-	if (text.StartsWith(kNotificationHead)) {
-		std::function<void(const ibString&)> notified;
+	// Checked here, once, as it lies — a packet that is none: the two ends no longer agree.
+	ibProtocolNode said;
+	if (!ibProtocolNode::Read(packet, said)) {
+		Closed("a message that is not a packet");
+		return;
+	}
+
+	// A NOTIFICATION — a method and no id, said unasked: to whoever listens, here. An answer always has its id
+	// (ibClientHost::Answer), so the debugger's news, of any length, is never an answer.
+	if (!said.Has(ibProtocol::ibRpc::Id)) {
+		std::function<void(const ibProtocolNode&)> notified;
 		{
 			std::lock_guard<std::mutex> lock(m_mutex);
 			notified = m_notified;
 		}
 		if (notified)
-			notified(text);
+			notified(said);
 		return;
 	}
 
 	// …else the answer to the request waiting.
 	{
 		std::lock_guard<std::mutex> lock(m_mutex);
-		m_answer = text;
+		m_answer = std::move(said);
 	}
 	m_answered.notify_all();
 }
 
-void ibProtocolConnectionServer::Listen(std::function<void(const ibString& text)> notified)
+void ibProtocolConnectionServer::Closed(const std::string& reason)
+{
+	// The socket gone, or no longer understood: a request waiting is answered with that.
+	{
+		std::lock_guard<std::mutex> lock(m_mutex);
+		m_closed = true;
+		m_reason = reason;
+	}
+	m_answered.notify_all();
+}
+
+void ibProtocolConnectionServer::Listen(std::function<void(const ibProtocolNode& said)> notified)
 {
 	std::lock_guard<std::mutex> lock(m_mutex);
 	m_notified = std::move(notified);

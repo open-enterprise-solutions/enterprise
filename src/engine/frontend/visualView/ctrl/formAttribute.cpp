@@ -43,7 +43,7 @@ bool ibValueForm::ReadAttributes(const ibDataNode& node)
 		else { DropAttributeBinds(*it); it = m_attributes.erase(it); }
 	}
 
-	if (const ibDataNode* attrsNode = node.FindChild(wxT("Attributes"))) {
+	if (auto attrsNode = node.FindChild(wxT("Attributes"))) {
 		for (const ibDataNode& attrNode : attrsNode->Children()) {
 			const bool isMain = attrNode.GetValue<bool>(wxT("Main"));
 			if (isMain && hasMain)
@@ -325,7 +325,7 @@ bool ibValueForm::WriteFormCommands(ibDataNode& node) const
 bool ibValueForm::ReadFormCommands(const ibDataNode& node)
 {
 	m_formCommands.clear();
-	if (const ibDataNode* cmdsNode = node.FindChild(wxT("FormCommands"))) {
+	if (auto cmdsNode = node.FindChild(wxT("FormCommands"))) {
 		for (const ibDataNode& cmdNode : cmdsNode->Children()) {
 			ibValuePtr<ibFormCommandValue> holder(new ibFormCommandValue(this));
 			if (!holder->ReadProperty(cmdNode))   // like ReadAttributes: a failed read is a failed load, not a silent drop

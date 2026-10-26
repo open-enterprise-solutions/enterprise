@@ -40,7 +40,7 @@ constexpr long kMaxExponent = 1000;
 constexpr size_t kMaxNumberLength = 1000;
 
 // What the parser says about a text, as something a person can read. Its message quotes the bytes it stopped
-// on, and stopped in the MIDDLE of a character (`{"name": Борщ}`) those are not UTF-8 - decoded strictly the
+// on, and stopped in the MIDDLE of a character (`{"name": Café}`) those are not UTF-8 - decoded strictly the
 // whole sentence, line and column included, came out EMPTY. The sentence is ASCII; what is not becomes `?`.
 wxString ibJsonParserText(const char* what)
 {

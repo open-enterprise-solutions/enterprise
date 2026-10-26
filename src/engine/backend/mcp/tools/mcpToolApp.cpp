@@ -129,7 +129,7 @@ public:
 		// DEFAULTS TO TRUE, and asked of the field rather than of the value: `debug: false` has
 		// to be distinguishable from "not said", or the default silently wins over an explicit no.
 		bool withDebug = true;
-		if (params.FindField(ArgDebug().Name()) != nullptr)
+		if (params.Has(ArgDebug().Name()))
 			withDebug = ArgDebug().Flag(params);
 
 		const bool restart = ArgRestart().Flag(params);

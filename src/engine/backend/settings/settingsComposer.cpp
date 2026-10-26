@@ -76,8 +76,8 @@ bool ibRestoreComposerSettings(ibSettingsCategory category, const ibGuid& object
 	if (!storage->Restore(ibUserSettingsKey(category, objectKey, id, user), node))
 		return false;
 
-	const ibDataNode* settingsNode = node.FindChild(kChildSettings);
-	if (settingsNode == nullptr)
+	auto settingsNode = node.FindChild(kChildSettings);
+	if (!settingsNode)
 		return false;
 
 	ibSettingsDescription settings;
@@ -140,7 +140,7 @@ bool ibRenameComposerSettings(ibSettingsCategory category, const ibGuid& objectK
 	ibDataNode renamed;
 	renamed.SetValue(kFieldId,   id);
 	renamed.SetValue(kFieldName, newName);
-	if (const ibDataNode* settingsNode = node.FindChild(kChildSettings))
+	if (auto settingsNode = node.FindChild(kChildSettings))
 		renamed.Child(kChildSettings) = *settingsNode;
 	else
 		return false;   // an entry with no settings inside is not one this can rewrite

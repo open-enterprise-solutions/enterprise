@@ -239,9 +239,9 @@ public:
 		// ⚠ NO DEFAULT. A missing `confirm` is refused rather than read as either answer: assuming
 		// true writes to a live database on a forgotten argument, and assuming false makes a
 		// caller who meant to apply believe they did.
-		const ibDataValue* asked = params.FindField(ArgConfirm().Name());
+		auto asked = params.FindField(ArgConfirm().Name());
 
-		if (asked == nullptr || asked->Kind() != ibDataKind::Bool) {
+		if (!asked || asked->Kind() != ibDataKind::Bool) {
 			refusal = ibMcpText("Say confirm: true to write this to the database, or confirm: false to "
 				"see what it would do and roll back. Nothing was done.");
 			return false;

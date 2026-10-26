@@ -1382,12 +1382,12 @@ static wxString ibMcpUndeclaredArgument(const ibMcpTool* tool, const ibDataNode&
 	ibDataNode schema;
 	tool->DescribeInput(schema);
 
-	const ibDataNode* properties = schema.FindChild(wxT("properties"));
+	auto properties = schema.FindChild(wxT("properties"));
 
 	// A tool that declares no properties takes no arguments BY DESCRIPTION, but that is also what
 	// a tool looks like before anyone wrote its schema — so silence here is read as "no opinion"
 	// and lets the call through, rather than refusing every argument of an undocumented verb.
-	if (properties == nullptr)
+	if (!properties)
 		return wxEmptyString;
 
 	// ⚠ BOTH AREAS. A node keeps plain values in its FIELDS and composite ones in its PROPERTIES,
@@ -1398,14 +1398,9 @@ static wxString ibMcpUndeclaredArgument(const ibMcpTool* tool, const ibDataNode&
 	//
 	// The schema side is asked with FindChild, which reads the property area — ibMcpSchemaArgument
 	// declares every argument as a sub-node there.
-	for (const auto& field : arguments.Fields()) {
-		if (properties->FindChild(field.first) == nullptr)
+	for (const auto& field : arguments.Fields()) {   // scalars and objects alike — one set since 2026-10-26
+		if (!properties->FindChild(field.first))
 			return field.first;
-	}
-
-	for (const auto& prop : arguments.Properties()) {
-		if (properties->FindChild(prop.first) == nullptr)
-			return prop.first;
 	}
 
 	return wxEmptyString;
@@ -1431,14 +1426,14 @@ static wxString ibMcpArgumentsOnOffer(const ibMcpTool* tool, const wxString& giv
 	ibDataNode schema;
 	tool->DescribeInput(schema);
 
-	const ibDataNode* properties = schema.FindChild(wxT("properties"));
-	if (properties == nullptr)
+	auto properties = schema.FindChild(wxT("properties"));
+	if (!properties)
 		return wxEmptyString;
 
 	const wxString wanted = given.Lower();
 	wxString names;
 
-	for (const auto& declared : properties->Properties()) {
+	for (const auto& declared : properties->Fields()) {
 
 		if (!names.IsEmpty())
 			names += wxT(", ");
@@ -2378,10 +2373,10 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 	// and it tells them apart by how the caller opened: metadata present means modern, an
 	// `initialize` means legacy. Nothing else is consulted — the era is a property of the
 	// REQUEST, and the same client may be either on different days.
-	const ibDataNode* meta = parsed.m_params.FindChild(wxT("_meta"));
-	const ibDataValue* metaVersion = meta != nullptr
-		? meta->FindField(wxT("io.modelcontextprotocol/protocolVersion")) : nullptr;
-	const bool isModern = metaVersion != nullptr && metaVersion->Kind() == ibDataKind::String;
+	auto meta = parsed.m_params.FindChild(wxT("_meta"));
+	auto metaVersion = meta
+		? meta->FindField(wxT("io.modelcontextprotocol/protocolVersion")) : std::nullopt;
+	const bool isModern = metaVersion && metaVersion->Kind() == ibDataKind::String;
 
 	if (isModern) {
 		const wxString asked = metaVersion->AsString();
@@ -2479,8 +2474,8 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 		//
 		// Read as PRESENCE, not as a value — the protocol declares a capability by naming it, and
 		// what is inside the object is the capability's own options.
-		if (const ibDataNode* capabilities = parsed.m_params.FindChild(wxT("capabilities")))
-			m_clientCanSample.store(capabilities->FindChild(wxT("sampling")) != nullptr);
+		if (auto capabilities = parsed.m_params.FindChild(wxT("capabilities")))
+			m_clientCanSample.store(capabilities->Has(wxT("sampling")));
 		else
 			m_clientCanSample.store(false);
 
@@ -2495,7 +2490,7 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 		// sends — gets ours, and the client decides whether it can live with it. That is the
 		// lifecycle's own rule, and it is why this cannot simply refuse.
 		wxString agreed(kProtocolVersion);
-		if (const ibDataValue* asked = parsed.m_params.FindField(wxT("protocolVersion"))) {
+		if (auto asked = parsed.m_params.FindField(wxT("protocolVersion"))) {
 			if (asked->Kind() == ibDataKind::String) {
 				const wxString wanted = asked->AsString();
 				for (const ibChar* const* v = kSupportedProtocolVersions; *v != nullptr; ++v) {
@@ -2559,7 +2554,7 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 		// because two of them are then distinguishable and neither is anonymous.
 		wxString arrival = _("An assistant has connected");
 
-		if (const ibDataNode* client = parsed.m_params.FindChild(wxT("clientInfo"))) {
+		if (auto client = parsed.m_params.FindChild(wxT("clientInfo"))) {
 			const wxString clientName = client->GetValue<wxString>(wxT("name"));
 			if (!clientName.IsEmpty())
 				arrival = wxString::Format(_("%s has connected"), clientName);
@@ -2650,7 +2645,7 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 		// name. Written this way round so a client that offers `pattern` and a client that offers
 		// the nine doors both end up asking the same question.
 		if (wanted.IsSameAs(wxT("pattern"), false)) {
-			if (const ibDataNode* arguments = parsed.m_params.FindChild(wxT("arguments")))
+			if (auto arguments = parsed.m_params.FindChild(wxT("arguments")))
 				wanted = arguments->GetValue<wxString>(wxT("name"));
 			else
 				wanted.clear();
@@ -2735,9 +2730,9 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 
 		if (name.IsSameAs(wxT("mcp_call"), false)) {
 
-			const ibDataNode* outer = parsed.m_params.FindChild(wxT("arguments"));
+			auto outer = parsed.m_params.FindChild(wxT("arguments"));
 
-			const wxString inner = outer != nullptr
+			const wxString inner = outer
 				? outer->GetValue<wxString>(wxT("tool")) : wxString();
 
 			if (inner.IsEmpty()) {
@@ -2749,8 +2744,8 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 				// unwrap forever, and there is no reading of it that means anything.
 				envelopeRefusal = ibMcpText("mcp_call cannot invoke itself.");
 			}
-			else if (outer->FindChild(wxT("arguments")) == nullptr
-				&& outer->FindField(wxT("arguments")) != nullptr) {
+			else if (!outer->FindChild(wxT("arguments"))
+				&& outer->Has(wxT("arguments"))) {
 
 				// 🛑 THE ENVELOPE IS WRONG, AND IT USED TO BE THE LETTER THAT SAID SO. `arguments`
 				// arriving as anything but an object - a JSON string, a number - is invisible to
@@ -2787,12 +2782,12 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 			ibDataNode arguments;
 
 			// The real arguments live one level in when the call arrived wrapped.
-			const ibDataNode* given = parsed.m_params.FindChild(wxT("arguments"));
+			auto given = parsed.m_params.FindChild(wxT("arguments"));
 
-			if (unwrapped && given != nullptr)
+			if (unwrapped && given)
 				given = given->FindChild(wxT("arguments"));
 
-			if (given != nullptr)
+			if (given)
 				arguments = *given;
 
 			// CARRIED OUT to the announcement and the journal — the real tool and its real
@@ -3036,16 +3031,16 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 			// text they would arrive as a wall of base64: technically the same bytes, and
 			// unreadable, which for a picture means useless.
 			if (ok) {
-				const ibDataValue* image = payload.FindField(wxT("image"));
-				const ibDataValue* type  = payload.FindField(wxT("imageType"));
+				auto image = payload.FindField(wxT("image"));
+				auto type  = payload.FindField(wxT("imageType"));
 
-				if (image != nullptr && image->Kind() == ibDataKind::String && !image->AsString().IsEmpty()) {
+				if (image && image->Kind() == ibDataKind::String && !image->AsString().IsEmpty()) {
 
 					std::shared_ptr<ibDataNode> picture = std::make_shared<ibDataNode>();
 					picture->SetValue(wxT("type"), wxString(wxT("image")));
 					picture->SetValue(wxT("data"), image->AsString());
 					picture->SetValue(wxT("mimeType"),
-						type != nullptr && type->Kind() == ibDataKind::String && !type->AsString().IsEmpty()
+						type && type->Kind() == ibDataKind::String && !type->AsString().IsEmpty()
 							? type->AsString().ToWxString() : wxString(wxT("image/png")));
 
 					blocks.push_back(ibDataValue::Child(picture));
@@ -3056,11 +3051,11 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 					// cannot say for itself: what was in focus, and how big it is.
 					wxString said = ibMcpText("A picture is attached.");
 
-					if (const ibDataValue* focus = payload.FindField(wxT("focus")))
+					if (auto focus = payload.FindField(wxT("focus")))
 						if (focus->Kind() == ibDataKind::String && !focus->AsString().IsEmpty())
 							said << wxT("\n") << ibMcpText("In focus: ") << focus->AsString();
 
-					if (const ibDataValue* note = payload.FindField(wxT("note")))
+					if (auto note = payload.FindField(wxT("note")))
 						if (note->Kind() == ibDataKind::String && !note->AsString().IsEmpty())
 							said << wxT("\n") << note->AsString();
 
@@ -3153,8 +3148,7 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 						// bands and never that `SpreadsheetDocument` and `GetArea` exist.
 						int fromPatterns = 0;
 						for (const ibDataValue& each : places) {
-							if (each.Kind() == ibDataKind::Child && each.AsChild()
-								&& each.AsChild()->FindField(wxT("pattern")) != nullptr)
+							if (each.Kind() == ibDataKind::Child && each.AsChild()->Has(wxT("pattern")))
 								++fromPatterns;
 						}
 
@@ -3220,8 +3214,8 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 			if (ok && name == wxT("chat_take")) {
 
 				auto empty = [&payload](const ibChar* field) {
-					const ibDataValue* list = payload.FindField(field);
-					return list == nullptr
+					auto list = payload.FindField(field);
+					return !list
 						|| list->Kind() != ibDataKind::Array
 						|| list->AsArray().empty();
 				};

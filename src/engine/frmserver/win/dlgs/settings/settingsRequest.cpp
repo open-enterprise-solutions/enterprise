@@ -211,7 +211,7 @@ void ChooseValue(const ibDataNode& act, const ibMetaData* metaData, ibListSettin
 	// The value in the cell — the server's own node, given back; none, or one the configuration cannot read: the empty
 	// one of the type.
 	ibValue value;
-	if (const ibDataNode* const written = act.FindChild(ibProtocol::ibRequest::ibListSettings::Value)) {
+	if (const auto written = act.FindChild(ibProtocol::ibRequest::ibListSettings::Value)) {
 		try {
 			value = metaData->Deserialize(*written);
 		}
@@ -274,12 +274,12 @@ bool ibRequestSettings(const ibDataNode& question, ibSettingsDescription& edited
 
 		// ON THE WAY — a reference field opened: the fields of its targets, and the window asked again with them; a cell's
 		// value to choose: chosen, and the window asked again — with it, when the choice was made at once.
-		if (response.FindField(ibProtocol::ibRequest::ibListSettings::Act) != nullptr) {
+		if (response.Has(ibProtocol::ibRequest::ibListSettings::Act)) {
 			const ibProtocol::ibRequest::ibListSettings::ibAct act = static_cast<ibProtocol::ibRequest::ibListSettings::ibAct>(response.GetValue<std::int32_t>(ibProtocol::ibRequest::ibListSettings::Act));
 			request = SettingsRequest(question, shown, error);
 			if (act == ibProtocol::ibRequest::ibListSettings::ibAct::Expand) {
 				std::vector<ibMetaID> targets;
-				if (const ibDataValue* const listed = response.FindField(ibProtocol::ibRequest::ibListSettings::Targets)) {
+				if (const auto listed = response.FindField(ibProtocol::ibRequest::ibListSettings::Targets)) {
 					if (listed->Kind() == ibDataKind::Array)
 						for (const ibDataValue& id : listed->AsArray())
 							targets.push_back(static_cast<ibMetaID>(id.AsInt()));
@@ -295,8 +295,8 @@ bool ibRequestSettings(const ibDataNode& question, ibSettingsDescription& edited
 			continue;
 		}
 
-		const ibDataNode* const settings = response.FindChild(ibProtocol::ibRequest::ibListSettings::Settings);
-		if (settings == nullptr)
+		const auto settings = response.FindChild(ibProtocol::ibRequest::ibListSettings::Settings);
+		if (!settings)
 			return false;   // …and Cancel leaves the composer exactly as it was: the copy is dropped
 
 		// What the window gave back — its values stay packed, restored by whoever runs them (backend_composition.h) — and

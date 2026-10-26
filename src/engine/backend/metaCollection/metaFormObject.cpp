@@ -183,7 +183,7 @@ ibMemoryBuffer ibValueMetaObjectFormBase::FormNodeToBlob(const ibDataValue& form
 {
 	if (formNode.Kind() != ibDataKind::Child)
 		return ibMemoryBuffer();
-	const std::shared_ptr<ibDataNode>& node = formNode.AsChild();
+	const auto node = formNode.AsChild();
 	if (!node)
 		return ibMemoryBuffer();
 	ibWriterMemory writer;

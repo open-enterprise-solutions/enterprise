@@ -186,7 +186,7 @@ public:
 		if (!roleName.IsEmpty() && !addRole(roleName))
 			return false;
 
-		if (const ibDataValue* several = params.FindField(ArgRoles().Name()))
+		if (auto several = params.FindField(ArgRoles().Name()))
 			if (several->Kind() == ibDataKind::Array)
 				for (const ibDataValue& one : several->AsArray())
 					if (one.Kind() == ibDataKind::String && !addRole(one.AsString()))
@@ -593,9 +593,9 @@ public:
 
 		// ⚠ NO DEFAULT for the value: a rights change assumed in either direction is a security
 		// decision nobody made.
-		const ibDataValue* asked = params.FindField(ArgValue().Name());
+		auto asked = params.FindField(ArgValue().Name());
 
-		if (asked == nullptr || asked->Kind() != ibDataKind::Bool) {
+		if (!asked || asked->Kind() != ibDataKind::Bool) {
 			refusal = ibMcpText("Say value: true to grant or value: false to deny. Nothing was changed.");
 			return false;
 		}
@@ -609,7 +609,7 @@ public:
 		// object rather than once, because objects declare different ones.
 		std::vector<wxString> wantedRights;
 
-		if (const ibDataValue* named = params.FindField(ArgRights().Name()))
+		if (auto named = params.FindField(ArgRights().Name()))
 			if (named->Kind() == ibDataKind::Array)
 				for (const ibDataValue& one : named->AsArray())
 					if (one.Kind() == ibDataKind::String)
@@ -826,7 +826,7 @@ public:
 		}
 
 		std::vector<wxString> joins;
-		if (const ibDataValue* several = params.FindField(ArgJoins().Name()))
+		if (auto several = params.FindField(ArgJoins().Name()))
 			if (several->Kind() == ibDataKind::Array)
 				for (const ibDataValue& one : several->AsArray())
 					if (one.Kind() == ibDataKind::String && !one.AsString().IsEmpty())

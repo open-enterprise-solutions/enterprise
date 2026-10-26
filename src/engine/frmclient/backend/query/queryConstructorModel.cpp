@@ -170,9 +170,10 @@ struct ibQueryModelAnswers {
 namespace {
 
 // A FIELD'S PICTURE AS THE SERVER NAMED IT (ibBackendPicture::SendPicture): an engine picture by its number, a
-// configuration's by its guid. A picture sent as its data has no name to keep — the drawer's default.
-ibPictureDescription PictureOf(const wxString& sent)
+// configuration's by its guid. A picture sent as its PNG has no name to keep — the drawer's default.
+ibPictureDescription PictureOf(const ibDataValue& picture)
 {
+	const wxString sent = picture.Kind() == ibDataKind::String ? wxString(picture.AsString()) : wxString();
 	unsigned long long id = 0;
 	if (!sent.IsEmpty() && sent.ToULongLong(&id))
 		return ibPictureDescription(static_cast<ibPictureID>(id));

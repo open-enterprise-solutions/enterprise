@@ -565,7 +565,7 @@ void ibVisualEditorNotebook::ibVisualEditor::ModifyProperty(ibProperty* prop, co
 	// AN EVENT GIVEN A HANDLER — its procedure written in the module first, as the desktop's editor did
 	// (ibVisualEditorNotebook::ModifyEvent): the handler is its node's Value.
 	const wxString type = prop->GetType();
-	const std::shared_ptr<ibDataNode> handler = value.Kind() == ibDataKind::Child ? value.AsChild() : nullptr;
+	const auto handler = value.Kind() == ibDataKind::Child ? value.AsChild() : std::nullopt;
 	if ((type == wxT("ibEventControl") || type == wxT("ibEventAction")) && handler)
 		m_visualNotebook->ModifyEvent(prop, oldValue, newValue);
 

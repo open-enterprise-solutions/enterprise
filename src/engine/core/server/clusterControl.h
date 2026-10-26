@@ -132,15 +132,15 @@ namespace ibClusterControl {
 		ibDataNode list;
 		if (!ibJsonProvider().Read(text, list))
 			return false;
-		const ibDataValue* const items = list.FindField(Servers);
-		if (items == nullptr || items->Kind() != ibDataKind::Array)
+		const auto items = list.FindField(Servers);
+		if (!items || items->Kind() != ibDataKind::Array)
 			return false;
 		port = static_cast<std::uint16_t>(list.GetValue<std::int32_t>(Port));
 		servers.clear();
 		for (const ibDataValue& item : items->AsArray()) {
-			if (item.Kind() != ibDataKind::Child || item.AsChild() == nullptr)
+			if (item.Kind() != ibDataKind::Child || !item.AsChild())
 				return false;
-			const ibDataNode& read = *item.AsChild();
+			const ibDataNode read = *item.AsChild();
 			ibClusterServer server;
 			server.m_base      = read.GetValue<ibString>(Base);
 			server.m_route     = static_cast<unsigned>(read.GetValue<std::int32_t>(Route));

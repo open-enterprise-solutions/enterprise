@@ -11,8 +11,8 @@
 #include "protocolNode.h"
 
 // THE COMMUNICATOR — the client's side of the protocol, one for the thin runtime and the thin designer, for a file
-// base and a server alike (the connection says which; both speak the same text). It writes each call's envelope
-// (JSON-RPC) with the client and the frame it holds named in it, reads the answer back, and keeps the frame it was
+// base and a server alike (the connection says which; both carry the same packets). It writes each call's envelope
+// (OES-RPC) with the client and the frame it holds named in it, reads the answer back, and keeps the frame it was
 // answered: a frame sent whole is kept as it is, a patch is applied to the one kept, and (protocol 2) each tab's view
 // is kept the way the server keeps it, so a tab's patch is applied to its own view (docs/public/client-protocol.md,
 // The frame). What it keeps is what the person sees — the main window draws it; the events of an answer (Messages,
@@ -77,10 +77,10 @@ private:
 		ibProtocol::ibRefusal& refusal, wxString& error);
 	// The socket dropped and the server offered to resume: open it again, login {Token} under a new id, and send
 	// `sent` again under the id it already carries. False — the session is gone, or this connection cannot return.
-	bool Resume(const ibString& sent, ibString& answer, ibProtocol::ibRefusal& refusal, wxString& error);
+	bool Resume(const ibMemoryBuffer& sent, ibProtocolNode& answer, ibProtocol::ibRefusal& refusal, wxString& error);
 	// The answer's frame, whole or as a patch, taken into the one kept; an answer that is no frame leaves it. A whole one
-	// is taken OUT of the answer — what it carries beside the frame stays in it.
-	void Take(ibProtocolNode& answer);
+	// is copied out of the answer as it lies — what it carries beside the frame stays in it.
+	void Take(const ibProtocolNode& answer);
 	// The client is gone (logged out, or its session is): nothing of it is kept.
 	void Forget();
 	// debug {…} on the debugger's connection, under m_debugMutex.
@@ -100,7 +100,8 @@ private:
 	long long      m_number = 0;
 	ibProtocolNode m_frame;
 	// (protocol 2) the view last answered for each tab NOT active now, by the tab's id — what a patch to that tab is
-	// applied to when it becomes active; the active tab's is the frame's own View. Moved, never copied.
+	// applied to when it becomes active; the active tab's is the frame's own View. Each its own bytes, copied out of
+	// the frame as they lay.
 	std::map<long long, ibProtocolNode> m_views;
 
 	// (protocol 3) the state events held for the next call, in the order done (Hold). A lock of their own: Hold is the

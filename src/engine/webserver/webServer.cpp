@@ -131,8 +131,8 @@ bool WantsDeflate(const ibHttpRequest& request)
 }
 
 // A BROWSER'S SOCKET TO A FILE BASE — the base is the server here: the relay is the connection its clients log in
-// through, told what the base says to them, and they leave with it. The text is the engine's both ways: the base's
-// own, and the socket reads it and writes it (and deflates it, when the browser asked).
+// through, told what the base says to them, and they leave with it. Packets both ways (OES-RPC), the base's own: the
+// socket hands them over as they are (and deflates one of some size, when the browser asked).
 class ibFileRelay : public ibWebSocketHandler {
 public:
 
@@ -140,28 +140,29 @@ public:
 		m_base(base), m_socket(std::move(socket))
 	{
 		const std::weak_ptr<ibWebSocket> told = m_socket;
-		m_base.Listen(this, [told](const ibString& text) {
+		m_base.Listen(this, [told](const ibMemoryBuffer& packet) {
 			if (const std::shared_ptr<ibWebSocket> socket = told.lock())
-				socket->Send(text);
+				socket->Send(packet.GetData(), packet.GetDataLen(), ibWebSocketSend::Deflate);
 		});
 	}
 
-	virtual void OnMessage(const ibString& text) override
+	virtual void OnMessage(const ibString&) override
 	{
-		ibString answer;
+		m_socket->Close(ibWebSocketClose::Unsupported, "the protocol speaks packets");
+	}
+
+	virtual void OnBinary(std::string data) override
+	{
+		const ibMemoryBuffer packet(data.data(), data.size());
+		ibMemoryBuffer answer;
 		wxString error;
-		if (!m_base.Call(text, this, m_socket->GetRequest().m_address, answer, error)) {
+		if (!m_base.Call(packet, this, m_socket->GetRequest().m_address, answer, error)) {
 			ibWebServerSay(ibJournalMark::Error, wxT("a browser's call did not reach its base: %s"), error);
 			m_socket->Close(ibWebSocketClose::ServerError, "the base is not open");
 			return;
 		}
 		if (!answer.IsEmpty())
-			m_socket->Send(answer);
-	}
-
-	virtual void OnBinary(std::string) override
-	{
-		m_socket->Close(ibWebSocketClose::Unsupported, "the protocol speaks text");
+			m_socket->Send(answer.GetData(), answer.GetDataLen(), ibWebSocketSend::Deflate);
 	}
 
 	virtual void OnClose() override
@@ -307,16 +308,30 @@ bool ibWebServer::Publish(const ibWebPublication& publication)
 			return std::make_shared<ibFileRelay>(*held, socket);
 		});
 		m_http.Post(path, [held](const ibHttpRequest& request, ibHttpResponder respond) {
-			// A request on its own — no connection, as an application server answers a POST.
-			ibString answer;
-			wxString error;
+			// A request on its own — no connection, as an application server answers a POST: JSON-RPC text, the base's
+			// packet made of it and its answer's written back as text (its types named by the words it carries).
 			ibHttpResponse response;
-			if (!held->Call(request.GetText(), nullptr, request.m_address, answer, error))
+			ibProtocolNode asked, answered;
+			if (!ibProtocolNode::Read(request.GetText(), asked)) {
+				response.m_status = 400;
+				respond(std::move(response));
+				return;
+			}
+			ibMemoryBuffer packet, answer;
+			wxString error;
+			asked.Write(packet);
+			if (!held->Call(packet, nullptr, request.m_address, answer, error))
 				response.m_status = 503;
 			else if (answer.IsEmpty())
 				response.m_status = 204;   // a notification — no answer wanted
-			else
-				response.SetText(answer, "application/json");
+			else if (!ibProtocolNode::Read(answer, answered))
+				response.m_status = 502;
+			else {
+				// The types named where they stand, as the JSON view names them — not a list of them beside.
+				answered.Remove(ibProtocol::ibRpc::Types);
+				answered.SetValue(ibProtocol::ibRpc::Version, ibString(wxT("2.0")));
+				response.SetText(answered.Write(), "application/json");
+			}
 			respond(std::move(response));
 		});
 		return true;

@@ -49,6 +49,9 @@ protected:
 	// A control's life as a host takes it — the designer's editor writes a new one's node with them (WriteClasses).
 	void GenerateControl(class ibValueFrame* control, bool firstCreated = false);
 	void RefreshControl(class ibValueFrame* control, class ibDataNode& node);
+	// …and drawn again over the node it was drawn as: its own part read anew, each in it drawn there copied as it was,
+	// one not there (added since) read whole.
+	void RefreshControl(class ibValueFrame* control, class ibDataNode& node, const class ibDataNode& drawn);
 	void ClearControl(class ibValueFrame* control);
 
 private:

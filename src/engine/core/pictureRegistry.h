@@ -37,7 +37,8 @@ public:
 	static std::vector<ibPictureEntry> GetArrayPicture();
 };
 
-// Initialize with Base-64 + PNG data — a master, kept as it is: a reader scales it to the size it shows.
+// Initialize with Base-64 + PNG data — a master, its text in the source read into its bytes once, here, and kept as it
+// is: a reader scales it to the size it shows.
 extern CORE_API bool RegisterPicture(const wxString name, const ibPictureID& id, const wxString& base64);
 
 #endif

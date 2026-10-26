@@ -193,11 +193,11 @@ ibPropertyObject* ibFormDesignView::FindColumnById(ibFormAttributeValue* entry, 
 void ibFormDesignView::ReadPath(const ibDataNode& node, ibSourceDescription& desc)
 {
 	desc.ClearSource();
-	const ibDataValue* const hops = node.FindField(ibProtocol::ibView::ibFormDesigner::Path);
-	if (hops == nullptr || hops->Kind() != ibDataKind::Array)
+	const auto hops = node.FindField(ibProtocol::ibView::ibFormDesigner::Path);
+	if (!hops || hops->Kind() != ibDataKind::Array)
 		return;
 	for (const ibDataValue& hop : hops->AsArray()) {
-		if (hop.Kind() != ibDataKind::Child || hop.AsChild() == nullptr)
+		if (hop.Kind() != ibDataKind::Child || !hop.AsChild())
 			continue;
 		unsigned long long type = 0;
 		hop.AsChild()->GetValue<wxString>(ibProtocol::ibView::ibFormDesigner::Type).ToULongLong(&type);
@@ -213,7 +213,7 @@ bool ibFormDesignView::FetchComposition(const ibDataNode& request, ibDataNode& r
 	ReadPath(request, desc);
 	const std::vector<ibSourceHop>& path = desc.GetPath();
 	std::vector<ibMetaID> refTypes;
-	if (const ibDataValue* const targets = request.FindField(ibProtocol::ibView::ibFormDesigner::Targets)) {
+	if (const auto targets = request.FindField(ibProtocol::ibView::ibFormDesigner::Targets)) {
 		if (targets->Kind() == ibDataKind::Array)
 			for (const ibDataValue& id : targets->AsArray())
 				refTypes.push_back(static_cast<ibMetaID>(id.AsInt()));
@@ -290,11 +290,10 @@ bool ibFormDesignView::FetchAttribute(const ibDataNode& request, ibDataNode& res
 	case ibProtocol::ibView::ibFormDesigner::ibCommand::Paste: {
 		// The node the client copied of its form's Attributes — the whole entry, its description and its held value (a
 		// dynamic list's Source, Settings), as a form save writes it; a fresh NON-main entry of it, wired in.
-		const ibDataNode* const copied = request.FindChild(ibProtocol::ibView::ibFormDesigner::Value);
-		if (copied == nullptr)
+		const auto copied = request.FindChild(ibProtocol::ibView::ibFormDesigner::Value);
+		if (!copied)
 			return false;
 		ibDataNode node = *copied;
-		RestoreProperties(node);
 		shown = m_valueForm->PasteAttribute(node);
 		break;
 	}
@@ -349,7 +348,7 @@ bool ibFormDesignView::FetchAttribute(const ibDataNode& request, ibDataNode& res
 			break;
 		}
 		// THE NAME — through the form's rename, as the desktop's tree renamed it (OnEndLabelEdit): unique, and the
-		// module's variable bound under it again. Text — the wire brings it back a field (RestoreProperties).
+		// module's variable bound under it again. Text — the wire brings it back a field.
 		if (request.GetValue<wxString>(ibProtocol::ibView::ibFormDesigner::Name) == ibProtocol::ibView::ibFormDesigner::Name) {
 			if (!m_valueForm->RenameAttribute(entry, request.GetValue<wxString>(ibProtocol::ibView::ibFormDesigner::Value)))
 				return false;
@@ -361,6 +360,8 @@ bool ibFormDesignView::FetchAttribute(const ibDataNode& request, ibDataNode& res
 		return false;
 	}
 
+	// An attribute is what the controls bound to it show — their titles, their columns: the form drawn whole.
+	UpdateControl(m_valueForm);
 	WriteForm(response);
 	if (shown != nullptr)
 		response.SetValue(ibProtocol::ibView::ibFormDesigner::Attribute, static_cast<std::int32_t>(shown->GetId()));

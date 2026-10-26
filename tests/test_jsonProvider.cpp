@@ -30,9 +30,7 @@
 namespace {
 
 ibMemoryBuffer Blob(const char* s) {
-	ibMemoryBuffer b;
-	b.AppendData(s, (size_t)strlen(s));
-	return b;
+	return ibMemoryBuffer(s, strlen(s));
 }
 
 // Emit a node as JSON text.
@@ -78,12 +76,12 @@ TEST(JsonProvider, Scalars_SurviveRoundTrip) {
 	EXPECT_FALSE(back.GetValue<bool>(wxT("off")));
 	EXPECT_EQ(back.GetValue<std::int32_t>(wxT("id")), -42);
 
-	const ibDataValue* wide = back.FindField(wxT("wide"));
-	ASSERT_TRUE(wide != nullptr);
+	auto wide = back.FindField(wxT("wide"));
+	ASSERT_TRUE(wide);
 	EXPECT_EQ(wide->AsNumber().ToString(), wxT("123456789012345678901234567890.125"));
 
-	const ibDataValue* none = back.FindField(wxT("none"));
-	ASSERT_TRUE(none != nullptr);
+	auto none = back.FindField(wxT("none"));
+	ASSERT_TRUE(none);
 	EXPECT_TRUE(none->IsEmpty());
 }
 
@@ -105,8 +103,8 @@ TEST(JsonProvider, Binary_SurvivesAsBinaryNotString) {
 	// `Parse(...).FindField(...)` would leave that pointer dangling at the end of the
 	// full expression.
 	const ibDataNode back = Parse(Emit(n));
-	const ibDataValue* v = back.FindField(wxT("blob"));
-	ASSERT_TRUE(v != nullptr);
+	auto v = back.FindField(wxT("blob"));
+	ASSERT_TRUE(v);
 	ASSERT_EQ(v->Kind(), ibDataKind::Binary);
 	EXPECT_EQ(v->AsBinary().GetDataLen(), (size_t)strlen("bytes"));
 }
@@ -135,15 +133,15 @@ TEST(JsonProvider, Array_KeepsOrderAndKinds) {
 
 	const ibDataNode back = Parse(Emit(n));   // named — FindField points into it
 
-	const ibDataValue* list = back.FindField(wxT("list"));
-	ASSERT_TRUE(list != nullptr);
+	auto list = back.FindField(wxT("list"));
+	ASSERT_TRUE(list);
 	ASSERT_EQ(list->AsArray().size(), (size_t)3);
 	EXPECT_EQ(list->AsArray()[0].AsInt(), (std::int64_t)1);
 	EXPECT_EQ(list->AsArray()[1].AsString(), wxT("two"));
 	EXPECT_TRUE(list->AsArray()[2].AsBool());
 
-	const ibDataValue* empty = back.FindField(wxT("empty"));
-	ASSERT_TRUE(empty != nullptr);
+	auto empty = back.FindField(wxT("empty"));
+	ASSERT_TRUE(empty);
 	EXPECT_TRUE(empty->AsArray().empty());
 }
 
@@ -153,7 +151,7 @@ TEST(JsonProvider, Children_RecurseWithIdentity) {
 	ibDataNode root(1001, 1);
 	root.AddChild(2002, 2).SetRawData(Blob("child-A"));
 	root.AddChild(2002, 3).SetRawData(Blob("child-B"));
-	root.Children()[0].AddChild(3003, 4).SetRawData(Blob("grandchild"));
+	root.Handle(root.Children()[0]).AddChild(3003, 4).SetRawData(Blob("grandchild"));
 
 	const ibDataNode back = Parse(Emit(root));
 
@@ -176,8 +174,8 @@ TEST(JsonProvider, ChildValue_ReturnsToPropertyArea) {
 	n.Child(wxT("Type")).AddField(wxT("typeName"), ibDataValue::String(wxT("String")));
 
 	const ibDataNode back = Parse(Emit(n));
-	const ibDataNode* sub = back.FindChild(wxT("Type"));
-	ASSERT_TRUE(sub != nullptr);
+	auto sub = back.FindChild(wxT("Type"));
+	ASSERT_TRUE(sub);
 	EXPECT_EQ(sub->GetValue<wxString>(wxT("typeName")), wxT("String"));
 }
 
@@ -218,11 +216,11 @@ TEST(JsonProvider, NodeType_KeptWordLookedUpAfter) {
 	lookup.SetTypeLookup([](const ibString& name) -> ibClassID { return name == wxT("Catalog") ? 1001 : 0; });
 	lookup.LookupTypes(back);
 	EXPECT_EQ(back.GetClsid(), (ibClassID)1001);
-	EXPECT_EQ(back.FindField(wxT("NodeType")), nullptr);
-	const ibDataNode* const innerBack = back.FindChild(wxT("Inner"));
-	ASSERT_TRUE(innerBack != nullptr);
+	EXPECT_FALSE(back.Has(wxT("NodeType")));
+	const auto innerBack = back.FindChild(wxT("Inner"));
+	ASSERT_TRUE(innerBack);
 	EXPECT_EQ(innerBack->GetClsid(), (ibClassID)1001);
-	EXPECT_EQ(innerBack->FindField(wxT("NodeType")), nullptr);
+	EXPECT_FALSE(innerBack->Has(wxT("NodeType")));
 }
 
 // The rule of a key, for a tree another reader made of the text (the thin client's): the one the text reader keeps — the
@@ -239,9 +237,9 @@ TEST(JsonProvider, ReadEntry_PlacesKeysAsTheTextReaderDoes) {
 
 	EXPECT_EQ(node.GetClsid(), (ibClassID)1001);
 	EXPECT_EQ(node.GetMetaId(), (ibMetaID)7);
-	EXPECT_EQ(node.FindField(wxT("TypeDesc")), nullptr);
+	EXPECT_FALSE(node.Has(wxT("TypeDesc")));
 	EXPECT_EQ(node.GetValue<wxString>(wxT("Name")), wxT("Nomenclature"));
-	EXPECT_TRUE(node.FindChild(wxT("Type")) != nullptr);
+	EXPECT_TRUE(node.FindChild(wxT("Type")));
 
 	// …and a string's: a binary only where Write wrote one.
 	EXPECT_EQ(ibJsonProvider::ReadString(wxT("base64:AQI=")).Kind(), ibDataKind::Binary);
@@ -260,8 +258,8 @@ TEST(JsonProvider, Date_DegradesToString_ByDesign) {
 	n.AddField(wxT("when"), ibDataValue::Date(ibDateTime(2023, 11, 14, 22, 13, 20)));
 
 	const ibDataNode back = Parse(Emit(n));   // named — FindField points into it
-	const ibDataValue* v = back.FindField(wxT("when"));
-	ASSERT_TRUE(v != nullptr);
+	auto v = back.FindField(wxT("when"));
+	ASSERT_TRUE(v);
 	EXPECT_EQ(v->Kind(), ibDataKind::String);
 	EXPECT_FALSE(v->AsString().IsEmpty());
 }
@@ -273,9 +271,9 @@ TEST(JsonProvider, ScalarProperty_ComesBackAsField_ByDesign) {
 	n.SetProperty(wxT("Name"), ibDataValue::String(wxT("Nomenclature")));
 
 	const ibDataNode back = Parse(Emit(n));
-	EXPECT_TRUE(back.FindProperty(wxT("Name")) == nullptr);
-	const ibDataValue* asField = back.FindField(wxT("Name"));
-	ASSERT_TRUE(asField != nullptr);
+	EXPECT_TRUE(!back.FindProperty(wxT("Name")));
+	auto asField = back.FindField(wxT("Name"));
+	ASSERT_TRUE(asField);
 	EXPECT_EQ(asField->AsString(), wxT("Nomenclature"));
 }
 
@@ -290,10 +288,10 @@ TEST(JsonProvider, TypeDesc_IsDroppedNotMaterialised) {
 	provider.Write(n, w);
 
 	const ibDataNode back = Parse(w.buffer());
-	EXPECT_TRUE(back.FindField(wxT("TypeDesc")) == nullptr);
-	EXPECT_TRUE(back.FindProperty(wxT("TypeDesc")) == nullptr);
-	const ibDataValue* typeId = back.FindField(wxT("typeId"));
-	ASSERT_TRUE(typeId != nullptr);
+	EXPECT_TRUE(!back.FindField(wxT("TypeDesc")));
+	EXPECT_TRUE(!back.FindProperty(wxT("TypeDesc")));
+	auto typeId = back.FindField(wxT("typeId"));
+	ASSERT_TRUE(typeId);
 	EXPECT_EQ(typeId->AsUInt(), (std::uint64_t)777);
 }
 
@@ -303,9 +301,8 @@ TEST(JsonProvider, TypeDesc_IsDroppedNotMaterialised) {
 
 // Malformed input throws rather than handing back a half-built tree.
 TEST(JsonProvider, MalformedInput_Throws) {
-	ibMemoryBuffer bad;
 	const char* text = "{ \"a\": [1, 2 ";
-	bad.AppendData(text, strlen(text));
+	const ibMemoryBuffer bad(text, strlen(text));
 
 	ibReaderMemory reader(bad);
 	ibDataNode out;
@@ -332,9 +329,7 @@ namespace {
 
 ibMemoryBuffer Text(const std::string& text)
 {
-	ibMemoryBuffer buf;
-	buf.AppendData(text.data(), text.size());
-	return buf;
+	return ibMemoryBuffer(text.data(), text.size());
 }
 
 // A root object whose field "v" is `arrays` nested arrays around the number 1.
@@ -388,9 +383,9 @@ void RunOnStack(size_t bytes, const std::function<void()>& body)
 
 const ibDataValue* InnermostArray(const ibDataNode& node, int arrays)
 {
-	const ibDataValue* v = node.FindField(wxT("v"));
+	auto v = node.FindField(wxT("v"));
 	for (int i = 0; i < arrays; ++i) {
-		if (v == nullptr || v->Kind() != ibDataKind::Array || v->AsArray().size() != 1)
+		if (!v || v->Kind() != ibDataKind::Array || v->AsArray().size() != 1)
 			return nullptr;
 		v = &v->AsArray()[0];
 	}
@@ -443,8 +438,8 @@ TEST(JsonProvider, Nesting_SiblingsAtTheLimit_AreBothRead) {
 	}
 	text += '}';
 	const ibDataNode node = Parse(Text(text));
-	EXPECT_NE(node.FindField(wxT("a")), nullptr);
-	EXPECT_NE(node.FindField(wxT("b")), nullptr);
+	EXPECT_TRUE(node.Has(wxT("a")));
+	EXPECT_TRUE(node.Has(wxT("b")));
 }
 
 // The deepest legal text on the stack a worker thread has on macOS (512 KB). Each level moves

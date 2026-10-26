@@ -6,24 +6,17 @@ namespace {
 
 ibMetaID IdOf(const ibDataNode& node, const wxString& field)
 {
-	const ibDataValue* id = node.FindField(field);
-	return (id != nullptr && id->Kind() == ibDataKind::Number) ? (ibMetaID)id->AsInt() : 0;
+	auto id = node.FindField(field);
+	return (id && id->Kind() == ibDataKind::Number) ? (ibMetaID)id->AsInt() : 0;
 }
 
 // The path is written and read by the mechanism that owns it — a link's path IS a source description,
 // so its serialiser is the one already in the tree rather than a second spelling of the same hops.
-//
-// ⚠ A FIELD AS WRITTEN, A PROPERTY AS IT CROSSED THE WIRE. WritePath adds the path as a field holding a node; the
-// protocol's JSON reader puts every member that is an object into the node's properties (jsonProvider.cpp), so a
-// link the thin designer sends back came with its path where a field was looked for — read as no path, the link
-// was cleared and a parameters row dropped as one whose source is gone. Both places are read.
 void ReadPath(const ibDataNode& node, ibSourceDescription& source)
 {
 	source.ClearSource();
-	const ibDataValue* path = node.FindField(wxT("path"));
-	if (path == nullptr)
-		path = node.FindProperty(wxT("path"));
-	if (path != nullptr)
+	const auto path = node.FindField(wxT("path"));
+	if (path)
 		ibSourceDescriptionMemory::ReadNode(*path, source);
 }
 
@@ -42,10 +35,10 @@ bool ibChoiceLinkDescriptionMemory::ReadNode(const ibDataValue& value, ibChoiceT
 	if (value.Kind() != ibDataKind::Child || !value.AsChild())
 		return true;   // nothing saved: the field is governed by nobody
 
-	const ibDataNode& node = *value.AsChild();
+	const ibDataNode node = *value.AsChild();
 	ReadPath(node, linkDesc.m_source);
 
-	if (const ibDataValue* governed = node.FindField(wxT("governedType"))) {
+	if (auto governed = node.FindField(wxT("governedType"))) {
 		if (governed->Kind() == ibDataKind::Number)
 			linkDesc.m_governedType = (ibClassID)governed->AsUInt();
 	}
@@ -69,15 +62,15 @@ bool ibChoiceLinkDescriptionMemory::ReadNode(const ibDataValue& value, ibChoiceP
 	if (value.Kind() != ibDataKind::Child || !value.AsChild())
 		return true;   // nothing saved: the choice is narrowed by nothing
 
-	const ibDataValue* rows = value.AsChild()->FindField(wxT("rows"));
-	if (rows == nullptr || rows->Kind() != ibDataKind::Array)
+	auto rows = value.AsChild()->FindField(wxT("rows"));
+	if (!rows || rows->Kind() != ibDataKind::Array)
 		return true;
 
 	for (const ibDataValue& one : rows->AsArray()) {
 		if (one.Kind() != ibDataKind::Child || !one.AsChild())
 			continue;
 
-		const ibDataNode& node = *one.AsChild();
+		const ibDataNode node = *one.AsChild();
 		ibChoiceParameterRowDescription row;
 		row.m_parameter = IdOf(node, wxT("parameter"));
 		ReadPath(node, row.m_source);

@@ -58,7 +58,7 @@ bool ibHomePageDescription::ReadNode(const ibDataValue& value)
 	if (value.Kind() != ibDataKind::Child)
 		return false;   // absent / never written — the default (empty) description stands
 
-	const std::shared_ptr<ibDataNode>& root = value.AsChild();
+	const auto root = value.AsChild();
 	if (!root)
 		return false;
 
@@ -66,17 +66,13 @@ bool ibHomePageDescription::ReadNode(const ibDataValue& value)
 
 	for (int idx = eHomePageColumn_Left; idx < eHomePageColumn_Count; idx++) {
 		m_columns[idx].clear();
-		// A field, as every description keeps a list — a JSON text does not say an entry's area, and its reader puts a
-		// list among the fields (ibJsonProvider::ReadEntry); a file written before kept the column a property.
-		const ibDataValue* columnVal = root->FindField(s_columnNodeName[idx]);
-		if (columnVal == nullptr)
-			columnVal = root->FindProperty(s_columnNodeName[idx]);
-		if (columnVal == nullptr || columnVal->Kind() != ibDataKind::Array)
+		const auto columnVal = root->FindField(s_columnNodeName[idx]);
+		if (!columnVal || columnVal->Kind() != ibDataKind::Array)
 			continue;
 		for (const ibDataValue& itemVal : columnVal->AsArray()) {
 			if (itemVal.Kind() != ibDataKind::Child)
 				continue;
-			const std::shared_ptr<ibDataNode>& itemNode = itemVal.AsChild();
+			const auto itemNode = itemVal.AsChild();
 			if (!itemNode)
 				continue;
 			ibHomePageItem item;

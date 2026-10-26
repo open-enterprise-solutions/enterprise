@@ -130,7 +130,7 @@ void ibRestoreFormSettings(ibValueForm* form)
 		// off — so the loop walks the LIST, not whatever the row happens to hold.
 		for (const wxString& name : ibValueFrame::GetAllowedUserProperty()) {
 
-			if (stored.FindProperty(name) == nullptr)
+			if (!stored.FindProperty(name))
 				continue;
 
 			ibProperty* property = control->GetProperty(name);

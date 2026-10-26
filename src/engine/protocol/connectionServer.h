@@ -12,11 +12,11 @@ class ibIoThreads;
 class ibTlsContext;
 class ibWebSocketClient;
 
-// AN APPLICATION SERVER — over its port: one WebSocket to `oes://server[:port]/<base>`, one text message per request,
-// its answer the next answer on it; `oess://` — the same over TLS, the server's certificate checked against the name
-// in the address. Asked for compressed, as the protocol offers it: an answer of some size comes as a binary message,
-// raw deflate. Between the answers the server may say something unasked — a notification, a message with a method and
-// no id — which goes to whoever listens. A dropped socket is not itself the end of a thin client's session: the
+// AN APPLICATION SERVER — over its port: one WebSocket to `oes://server[:port]/<base>`, one packet per request (a
+// binary message), its answer the next answer on it; `oess://` — the same over TLS, the server's certificate checked
+// against the name in the address. Asked for compressed, as the protocol offers it: an answer of some size comes raw
+// deflate, told from a packet by its first bytes. Between the answers the server may say something unasked — a
+// notification, a packet with a method and no id — which goes to whoever listens. A dropped socket is not itself the end of a thin client's session: the
 // communicator opens this socket again and logs in by token (docs/public/client-protocol.md).
 class PROTOCOL_API ibProtocolConnectionServer : public ibProtocolConnection {
 public:
@@ -41,19 +41,21 @@ public:
 
 	virtual ~ibProtocolConnectionServer();
 
-	virtual bool Exchange(const ibString& request, ibString& answer,
+	virtual bool Exchange(const ibMemoryBuffer& request, ibProtocolNode& answer,
 		ibProtocol::ibRefusal& refusal, wxString& error) override;
 	// The same address, opened again. False when Open has never succeeded.
 	virtual bool Reconnect(wxString& error) override;
 	// …and a second socket to it, the debugger's (protocol 6).
 	virtual std::unique_ptr<ibProtocolConnection> OpenChannel(wxString& error) override;
 	// What the server says unasked — on the thread that reads the socket.
-	virtual void Listen(std::function<void(const ibString& text)> notified) override;
+	virtual void Listen(std::function<void(const ibProtocolNode& said)> notified) override;
 
 private:
 
-	// A message the socket hands over — an answer, or a notification.
-	void Receive(const ibString& text);
+	// A packet the socket hands over — an answer, or a notification.
+	void Receive(const ibMemoryBuffer& packet);
+	// …and the socket gone, or no longer understood — why.
+	void Closed(const std::string& reason);
 
 	// THE SOCKET AND THE THREAD IT GOES BY — made by Open, gone in Close: once the thread has stopped, nothing of the
 	// socket is called. Its messages come as they arrive, for as long as it is open — an answer handed to the request
@@ -68,11 +70,11 @@ private:
 	// whoever listens.
 	std::mutex                                 m_mutex;
 	std::condition_variable                    m_answered;
-	std::optional<ibString>                    m_answer;
+	std::optional<ibProtocolNode>              m_answer;
 	bool                                       m_opened = false;
 	bool                                       m_closed = true;
 	std::string                                m_reason;
-	std::function<void(const ibString&)>       m_notified;
+	std::function<void(const ibProtocolNode&)> m_notified;
 
 	// The address Open succeeded with, and whom it trusted — what Reconnect opens again.
 	wxString                                   m_address;

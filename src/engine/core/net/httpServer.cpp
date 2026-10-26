@@ -585,7 +585,7 @@ public:
 	}
 
 	virtual void Send(const ibString& text) override;
-	virtual void SendBinary(std::string data) override;
+	virtual void Send(const void* data, std::size_t len, ibWebSocketSend flags) override;
 	virtual void Close(std::uint16_t code, const std::string& reason) override;
 
 	virtual const ibHttpRequest& GetRequest() const override { return m_request; }
@@ -1579,10 +1579,18 @@ void ibServerWebSocket::Send(const ibString& text)
 		connection->SendMessage(ibWebSocketOpcode::Text, std::move(bytes));
 }
 
-void ibServerWebSocket::SendBinary(std::string data)
+// …bytes the same way: nothing to encode, deflated only when the sender said they may be (ibWebSocketSend).
+void ibServerWebSocket::Send(const void* data, std::size_t len, ibWebSocketSend flags)
 {
-	if (const std::shared_ptr<ibConnection> connection = m_connection.lock())
-		connection->SendMessage(ibWebSocketOpcode::Binary, std::move(data));
+	const std::shared_ptr<ibConnection> connection = m_connection.lock();
+	if (!connection)
+		return;
+	std::string bytes(static_cast<const char*>(data), len);
+	std::string packed;
+	if (flags == ibWebSocketSend::Deflate && m_deflate && bytes.size() >= kDeflateFrom && ibDeflate(bytes, packed))
+		connection->SendMessage(ibWebSocketOpcode::Binary, std::move(packed));
+	else
+		connection->SendMessage(ibWebSocketOpcode::Binary, std::move(bytes));
 }
 
 void ibServerWebSocket::Close(std::uint16_t code, const std::string& reason)

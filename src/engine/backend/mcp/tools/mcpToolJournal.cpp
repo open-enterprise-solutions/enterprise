@@ -877,19 +877,13 @@ public:
 		// disappears while the line still lands (measured on the first run of this verb). What the
 		// caller means is a STRUCTURE, so one is built - which is also the value they would have
 		// written in script.
-		// ⚠ AND IT ARRIVES IN THE PROPERTY BAG, NOT AMONG THE FIELDS. `ibJsonProvider::Read` puts a
-		// nested object into the node's PROPERTIES - the two areas are one key set on the way in, and
-		// a Child lands on the property side. Reading only `FindField` found nothing and the payload
-		// vanished while the line still landed, twice, before the areas were checked (2026-09-09).
-		const ibDataValue* details = params.FindField(ArgWriteDetails().Name());
-		if (details == nullptr)
-			details = params.FindProperty(ArgWriteDetails().Name());
+		const auto details = params.FindField(ArgWriteDetails().Name());
 
 		ibValue carried;
 		bool hasPayload = false;
 
-		if (details != nullptr && details->Kind() == ibDataKind::Child) {
-			const std::shared_ptr<ibDataNode> sent = details->AsChild();
+		if (details && details->Kind() == ibDataKind::Child) {
+			const auto sent = details->AsChild();
 			ibValueStructure* const built = new ibValueStructure();
 			for (const std::pair<ibString, ibDataValue>& field : sent->Fields()) {
 				// Scalars only, and deliberately: a nested object in a journal line is a report, not

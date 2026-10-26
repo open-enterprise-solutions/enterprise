@@ -64,16 +64,14 @@ bool ibFormEditView::OnCreate(ibFrontendDocument* docBase, long flags)
 	// (a system control's class is not offered: Visible false).
 	wxWindowID id = control_id;
 
-	const std::vector<ibProtocolNode> classes = answer.FindChild(ibProtocol::ibView::ibFormDesigner::Classes).Children();
-	std::vector<wxString> pictures;
-	for (const ibProtocolNode& described : classes)
-		pictures.push_back(described.GetString(ibProtocol::ibView::ibFormDesigner::Picture));
-	ibProtocolPictureReceive(pictures);   // at once, not a call per class
+	const ibProtocolNode palette = answer.FindChild(ibProtocol::ibView::ibFormDesigner::Classes);
+	const std::vector<ibProtocolNode> classes = palette.Children();
+	ibProtocolPictureReceive(palette);   // at once, not a call per class
 
 	for (const ibProtocolNode& described : classes) {
 		if (!described.GetBool(ibProtocol::ibView::ibFormDesigner::Visible, true))
 			continue;
-		const wxBitmap controlImage = ibProtocolPicture(described.GetString(ibProtocol::ibView::ibFormDesigner::Picture));
+		const wxBitmap controlImage = ibProtocolPicture(described, ibProtocol::ibView::ibFormDesigner::Picture);
 		if (controlImage.IsOk()) {
 			m_controlDataArray.push_back({ described.GetString(ibProtocol::ibView::ibFormDesigner::Name), controlImage, id++ });
 		}

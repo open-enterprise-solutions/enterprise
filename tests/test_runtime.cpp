@@ -528,7 +528,7 @@ TEST(RuntimeTest, TernaryWithANumberConditionUsesTheTypedTest) {
 	EXPECT_EQ(v.GetInteger(), 2);
 }
 
-// `and` / `or` used to run both operands, so a guard written the 1C way
+// `and` / `or` used to run both operands, so a guard written the usual way
 // (`u <> Undefined and u.Property(...)`) raised on the reference it had just
 // tested. The side that cannot change the answer does not run; the side that
 // can still does, including when it raises.

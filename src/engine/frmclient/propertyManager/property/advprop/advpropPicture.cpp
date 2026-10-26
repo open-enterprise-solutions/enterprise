@@ -92,7 +92,7 @@ static int s_indFilter = -1;
 wxPGPictureProperty::wxPGPictureProperty(const wxString& label,
 	const wxString& strName,
 	const wxVariant& value,
-	const std::shared_ptr<ibDataNode>& pictures) : wxPGProperty(label, strName),
+	const std::optional<ibDataNode>& pictures) : wxPGProperty(label, strName),
 	m_propertySource(nullptr),
 	m_propertyBackend(nullptr), m_propertyConfiguration(nullptr), m_propertyFile(nullptr)
 {
@@ -124,7 +124,7 @@ wxPGPictureProperty::wxPGPictureProperty(const wxString& label,
 
 		// The configuration's pictures — the picture metaobjects of the owner's configuration, or of the one it extends:
 		// the server's, brought by the row by name and guid.
-		if (pictures != nullptr) {
+		if (pictures) {
 			// …each drawn with its own picture, as the desktop's: the server's, asked for by its id all at once (picture
 			// {Pictures}) — one call for the lot, and none once the client keeps them.
 			std::vector<wxString> ids;

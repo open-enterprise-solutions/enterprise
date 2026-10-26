@@ -14,7 +14,8 @@
  * @property {string} key the form's Key — what an event names it by
  * @property {(control: number, kind: number, args?: object, subscribed?: number[]) => Promise<any>} send
  * @property {(control: number, request: object) => Promise<any>} fetch
- * @property {(id: string | number | undefined) => string} picture a picture's URL, '' when there is none
+ * @property {(picture: string | number | Uint8Array | undefined) => string} picture a picture's URL — by its id, or a
+ *   file's PNG as its field holds it — '' when there is none
  * @property {(node: any) => Promise<void>} fetchPictures the pictures a node names, asked for before it is drawn — a
  *   table's page fetched after the frame
  */

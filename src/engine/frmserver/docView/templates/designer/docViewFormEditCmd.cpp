@@ -167,8 +167,8 @@ bool ibFormDesignView::FetchControl(const ibDataNode& request, ibDataNode& respo
 	ibValueFrame* made = nullptr;
 	if (static_cast<ibProtocol::ibView::ibFormDesigner::ibCommand>(request.GetValue<std::int32_t>(ibProtocol::ibView::ibFormDesigner::Command)) ==
 		ibProtocol::ibView::ibFormDesigner::ibCommand::Paste) {
-		const ibDataNode* const copied = request.FindChild(ibProtocol::ibView::ibFormDesigner::Value);
-		if (copied == nullptr)
+		const auto copied = request.FindChild(ibProtocol::ibView::ibFormDesigner::Value);
+		if (!copied)
 			return false;
 		made = PasteObject(target != nullptr ? target : GetValueForm(), *copied);
 	}
@@ -202,8 +202,8 @@ bool ibFormDesignView::FetchCommandControl(const ibDataNode& request, ibDataNode
 	// The command as the command tree's row has it (CommandPath, Kind) — under Value: the request's own Kind is the
 	// request's.
 	ibValueFrame* const target = m_valueForm->FindControlByID(request.GetValue<std::int32_t>(ibProtocol::ibView::ibFormDesigner::Control));
-	const ibDataNode* const command = request.FindChild(ibProtocol::ibView::ibFormDesigner::Value);
-	if (command == nullptr)
+	const auto command = request.FindChild(ibProtocol::ibView::ibFormDesigner::Value);
+	if (!command)
 		return false;
 	ibCommandDescription desc;
 	ReadPath(*command, desc);
@@ -364,7 +364,6 @@ ibValueFrame* ibFormDesignView::PasteObject(ibValueFrame* dstObject, const ibDat
 	// anchored across that — a child is owned by its parent's list.
 	ibValueFrame* parentObject = dstObject->GetComponentType() == COMPONENT_TYPE_SIZERITEM ? dstObject->GetParent() : dstObject;
 	ibDataNode node = copied;
-	RestoreProperties(node);
 	ibValueFrame* const clipboard = m_valueForm->NewObject(node.GetClsid(), parentObject, false);
 	if (clipboard == nullptr)
 		return nullptr;

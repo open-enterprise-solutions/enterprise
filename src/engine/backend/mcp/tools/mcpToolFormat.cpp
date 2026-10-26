@@ -79,16 +79,10 @@ ibDataValue Sample(const ibFormatString& format, const wxString& shown, const ib
 	return ibDataValue::Child(entry);
 }
 
-// The object a caller sent under `set` - as a child, or as a value carrying one.
-const ibDataNode* NodeArgument(const ibDataNode& params, const wxString& name)
+// The object a caller sent under `set` — a field and a property are one set, and a child is a field of its own kind.
+std::optional<ibDataNode> NodeArgument(const ibDataNode& params, const wxString& name)
 {
-	if (const ibDataNode* child = params.FindChild(name))
-		return child;
-	for (const ibDataValue* value : { params.FindField(name), params.FindProperty(name) }) {
-		if (value != nullptr && value->Kind() == ibDataKind::Child)
-			return value->AsChild().get();
-	}
-	return nullptr;
+	return params.FindChild(name);
 }
 
 //---------------------------------------------------------------------------
@@ -146,7 +140,7 @@ public:
 		ibFormatString format = ibFormatString::Parse(ArgFormat().Text(params));
 
 		// CLEAR first, then SET - so a call that does both says "instead of", not "and then nothing".
-		if (const ibDataValue* clear = params.FindField(ArgClear().Name())) {
+		if (auto clear = params.FindField(ArgClear().Name())) {
 			if (clear->Kind() == ibDataKind::Array) {
 				for (const ibDataValue& item : clear->AsArray()) {
 					ibFormatCode code = ibFormatCode::NumberDigits;
@@ -160,7 +154,7 @@ public:
 			}
 		}
 
-		if (const ibDataNode* set = NodeArgument(params, ArgSet().Name())) {
+		if (const auto set = NodeArgument(params, ArgSet().Name())) {
 			for (const std::pair<ibString, ibDataValue>& field : set->Fields()) {
 				ibFormatCode code = ibFormatCode::NumberDigits;
 				if (!ibFormatString::FindCode(field.first, code)) {
@@ -236,7 +230,7 @@ public:
 		result.AddField(wxT("samples"), ibDataValue::Child(samples));
 
 		// …and the caller's own, when one came.
-		if (const ibDataValue* given = params.FindField(ArgSample().Name())) {
+		if (auto given = params.FindField(ArgSample().Name())) {
 			ibValue value;
 			switch (given->Kind()) {
 			case ibDataKind::Number: value = ibValue(given->AsNumber()); break;

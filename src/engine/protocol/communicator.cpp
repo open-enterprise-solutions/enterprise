@@ -1,5 +1,4 @@
 #include "communicator.h"
-#include "protocolValue.h"
 
 #include <algorithm>
 #include <chrono>
@@ -41,16 +40,11 @@ ibProtocol::ibRefusal RefusalOf(long long code)
 }
 
 // AN ANSWER READ — the result of the call of that id, or its refusal: one call is in flight on a connection at a time,
-// and an envelope with no id is the server refusing a request it could not read — still that one's.
-bool ReadAnswer(const ibString& answer, long long id, ibProtocolNode& result, ibProtocol::ibRefusal& refusal,
+// and an envelope with no id is the server refusing a request it could not read — still that one's. The result is the
+// answer's own bytes, read where they lie.
+bool ReadAnswer(const ibProtocolNode& root, long long id, ibProtocolNode& result, ibProtocol::ibRefusal& refusal,
 	wxString& error)
 {
-	ibProtocolNode root;
-	if (!ibProtocolNode::Read(answer, root) || !root.IsNode()) {
-		refusal = ibProtocol::ibRefusal::Failed;
-		error = wxT("the server's answer could not be read");
-		return false;
-	}
 	if (root.GetInt(ibProtocol::ibRpc::Id, id) != id) {
 		refusal = ibProtocol::ibRefusal::Failed;
 		error = wxT("the server answered another call");
@@ -108,36 +102,79 @@ int ExchangeDelay()
 #endif
 }
 
-// Password, Token and the debugger's Channel key are bearer secrets. The debug journal records the exchange; the release
-// build's macro is empty. Only a text that names one is read again: a login's, the key's. Every frame read a second time
-// for the journal cost more than reading it for the client (a Debug profile, 2026-10-20: 535 ms against 387).
-ibString Redacted(const ibString& text)
+// A REQUEST — its id, its method's name and its params, as the wire carries every call: a call's (CallLocked), the
+// debugger's (DebugLocked) and the login that resumes a session (Resume).
+ibProtocolNode Request(long long id, ibProtocol::ibMethod method, const ibProtocolNode& params)
 {
-	static const ibString password = ibString(wxT("\"")) + ibString(ibProtocol::ibLogin::Password) + wxT("\"");
-	static const ibString token = ibString(wxT("\"")) + ibString(ibProtocol::ibLogin::Token) + wxT("\"");
-	static const ibString channel = ibString(wxT("\"")) + ibString(ibProtocol::ibDebug::Channel) + wxT("\"");
-	if (!text.Contains(password) && !text.Contains(token) && !text.Contains(channel))
-		return text;
+	ibProtocolNode request;
+	request.SetValue(ibProtocol::ibRpc::Id, id)
+		.SetValue(ibProtocol::ibRpc::Method, ibProtocol::MethodName(method))
+		.SetValue(ibProtocol::ibRpc::Params, params.IsNode() ? params : ibProtocolNode());
+	return request;
+}
 
-	ibProtocolValue node;
-	if (!ibProtocolValue::Read(text.wc_str(), text.length(), node) || node.GetNode() == nullptr)
-		return text;
-	const auto hide = [](const ibProtocolValue* object) {
-		ibProtocolBody* const entries = object != nullptr ? object->GetNode() : nullptr;
-		if (entries == nullptr)
-			return;
-		for (const char* name : { ibProtocol::ibLogin::Password, ibProtocol::ibLogin::Token, ibProtocol::ibDebug::Channel }) {
-			ibProtocolValue* const found = entries->Find(name);
-			if (found != nullptr && found->GetKind() == ibProtocolValue::ibKind::Text)
-				*found = ibProtocolValue(ibString(wxT("***")));
+// WHAT THE DEBUG JOURNAL DOES NOT WRITE AS IT IS, at any depth of a request. The bearer secrets — Password, Token and
+// the debugger's Channel key: a login's at the top of its params, a setting's under its Args (the assistant access's
+// key went into the journal whole, 2026-10-26). And bytes — a file's part, a picture: their length, not their base64
+// (an upload of 55 parts was 341 KB of the journal, 2026-10-26).
+const char* const kSecrets[] = { ibProtocol::ibLogin::Password, ibProtocol::ibLogin::Token, ibProtocol::ibDebug::Channel };
+
+bool NeedsRedacting(const ibProtocolNode& node)
+{
+	for (const char* secret : kSecrets) {
+		if (node.Has(secret))
+			return true;
+	}
+	for (const auto& [name, entry] : node.Entries()) {
+		if (entry.IsBinary())
+			return true;
+		if (entry.IsNode() && NeedsRedacting(entry))
+			return true;
+		if (entry.IsList()) {
+			for (const ibProtocolNode& item : node.GetList(name)) {
+				if (NeedsRedacting(item))
+					return true;
+			}
 		}
-	};
-	hide(&node);
-	hide(node.GetNode()->Find(ibProtocol::ibRpc::Params));
-	hide(node.GetNode()->Find(ibProtocol::ibRpc::Result));
-	ibString hidden;
-	node.Write(hidden);
-	return hidden;
+	}
+	return false;
+}
+
+// …each written where it lies — a secret as `***`, bytes as their length; `node` a handle into the copy being written.
+// The node's own bytes go last, its parts walked as they were read.
+void Redact(ibProtocolNode& node)
+{
+	for (const char* secret : kSecrets) {
+		if (node.Has(secret))
+			node.SetValue(secret, ibString(wxT("***")));
+	}
+	std::vector<std::pair<ibString, std::size_t>> bytes;
+	for (auto& [name, entry] : node.Entries()) {
+		if (entry.IsBinary())
+			bytes.emplace_back(name, entry.AsBinary().GetDataLen());
+		else if (entry.IsNode())
+			Redact(entry);
+		else if (entry.IsList()) {
+			for (ibProtocolNode& item : node.GetList(name))
+				Redact(item);
+		}
+	}
+	for (const auto& [name, length] : bytes)
+		node.SetValue(name.utf8_str().c_str(), ibString::Format(wxT("<%llu bytes>"), static_cast<unsigned long long>(length)));
+}
+
+// A REQUEST AS THE DEBUG JOURNAL WRITES IT — its JSON view, redacted. The release build's macro is empty, and nothing of
+// this is made. An answer is not written out: a frame rendered for the journal cost more than reading it for the client
+// (a Debug profile, 2026-10-20: 535 ms against 387) — its length is.
+ibString Redacted(const ibProtocolNode& request)
+{
+	if (!NeedsRedacting(request.FindChild(ibProtocol::ibRpc::Params)))
+		return request.Write();
+
+	ibProtocolNode redacted = request.Clone();
+	ibProtocolNode params = redacted.Child(ibProtocol::ibRpc::Params);
+	Redact(params);
+	return redacted.Write();
 }
 
 } // namespace
@@ -221,11 +258,10 @@ void ibCommunicator::Listen(std::function<void()> changed)
 
 	// Of this client, as logged in now — a connection may carry more than one, and each is told of its own.
 	const ibString client = GetClient();
-	m_connection->Listen([client, changed = std::move(changed)](const ibString& text) {
-		ibProtocolNode node;
-		if (!ibProtocolNode::Read(text, node) || node.GetString(ibProtocol::ibRpc::Method) != ibProtocol::ibRpc::Changed)
+	m_connection->Listen([client, changed = std::move(changed)](const ibProtocolNode& said) {
+		if (said.GetString(ibProtocol::ibRpc::Method) != ibProtocol::ibRpc::Changed)
 			return;
-		if (node.FindChild(ibProtocol::ibRpc::Params).GetString(ibProtocol::ibLogin::Client) != client)
+		if (said.FindChild(ibProtocol::ibRpc::Params).GetString(ibProtocol::ibLogin::Client) != client)
 			return;
 		changed();
 	});
@@ -263,11 +299,10 @@ bool ibCommunicator::ListenDebug(std::function<void(const ibProtocolNode& news)>
 
 	// Told before it is bound, so news the moment it is bound is not lost — of this client only.
 	const ibString client = GetClient();
-	channel->Listen([client, told = std::move(told)](const ibString& text) {
-		ibProtocolNode node;
-		if (!ibProtocolNode::Read(text, node) || node.GetString(ibProtocol::ibRpc::Method) != ibProtocol::ibRpc::Debug)
+	channel->Listen([client, told = std::move(told)](const ibProtocolNode& said) {
+		if (said.GetString(ibProtocol::ibRpc::Method) != ibProtocol::ibRpc::Debug)
 			return;
-		const ibProtocolNode news = node.FindChild(ibProtocol::ibRpc::Params);
+		const ibProtocolNode news = said.FindChild(ibProtocol::ibRpc::Params);
 		if (news.GetString(ibProtocol::ibLogin::Client) != client)
 			return;
 		told(news);
@@ -310,15 +345,13 @@ bool ibCommunicator::DebugLocked(const ibProtocolNode& params, ibProtocolNode& r
 
 	// The client named, as every call names it; nothing held goes with it, and no frame is asked for.
 	const long long id = ++m_debugLastId;
-	ibProtocolNode request;
-	request.SetValue(ibProtocol::ibRpc::Version, "2.0")
-		.SetValue(ibProtocol::ibRpc::Id, id)
-		.SetValue(ibProtocol::ibRpc::Method, ibProtocol::MethodName(ibProtocol::ibMethod::Debug))
-		.SetValue(ibProtocol::ibRpc::Params, params.IsNode() ? params : ibProtocolNode());
+	ibProtocolNode request = Request(id, ibProtocol::ibMethod::Debug, params);
 	request.Child(ibProtocol::ibRpc::Params).SetValue(ibProtocol::ibLogin::Client, m_debugClient);
 
-	ibString answer;
-	if (!m_debugConnection->Exchange(request.Write(), answer, refusal, error))
+	ibMemoryBuffer sent;
+	request.Write(sent);
+	ibProtocolNode answer;
+	if (!m_debugConnection->Exchange(sent, answer, refusal, error))
 		return false;
 	return ReadAnswer(answer, id, result, refusal, error);
 }
@@ -395,11 +428,7 @@ bool ibCommunicator::CallLocked(ibProtocol::ibMethod method, const ibProtocolNod
 	// The params copied once, into the request — and the client and the frame it holds named in them: a frame answer is
 	// then the patch from it. A field a method does not read is skipped by the server.
 	const long long id = ++m_lastId;
-	ibProtocolNode request;
-	request.SetValue(ibProtocol::ibRpc::Version, "2.0")
-		.SetValue(ibProtocol::ibRpc::Id, id)
-		.SetValue(ibProtocol::ibRpc::Method, ibProtocol::MethodName(method))
-		.SetValue(ibProtocol::ibRpc::Params, params.IsNode() ? params : ibProtocolNode());
+	ibProtocolNode request = Request(id, method, params);
 	ibProtocolNode named = request.Child(ibProtocol::ibRpc::Params);
 	if (!beforeLogin) {
 		named.SetValue(ibProtocol::ibLogin::Client, m_client);
@@ -409,28 +438,26 @@ bool ibCommunicator::CallLocked(ibProtocol::ibMethod method, const ibProtocolNod
 	// ⭐ WHAT WAS HELD GOES WITH ANY CALL — the server applies it before the call itself, so the code a press runs reads the
 	// row the cursor stands on. Taken once: a call that does not get through loses it with the session it was of. A
 	// client going says nothing more of where it was, and the debugger's call is no work of the client's (the server
-	// would drop it). Each held event owns its tree (Hold): moved in, not copied.
+	// would drop it). Each held event's bytes go in at the list's end as they are (Hold made them its own).
 	if (!beforeLogin && method != ibProtocol::ibMethod::Logout && method != ibProtocol::ibMethod::Debug) {
 		std::vector<ibProtocolNode> pending;
 		{
 			std::lock_guard<std::mutex> lock(m_pendingMutex);
 			pending.swap(m_pending);
 		}
-		if (!pending.empty()) {
-			ibProtocolBody* const held = named.ListOf(ibProtocol::ibLogin::Pending);
-			for (ibProtocolNode& event : pending) {
-				if (event.m_root)
-					held->Add() = std::move(*event.m_root);
-			}
+		for (const ibProtocolNode& event : pending) {
+			if (event.IsNode())
+				named.Writable()->AddItem(ibProtocol::ibLogin::Pending) = event.Held();
 		}
 	}
 
-	// THE WHOLE EXCHANGE, beside the call's own line — what went, and what came back with how long it took: the debug
+	// THE WHOLE EXCHANGE, beside the call's own line — what went, and how long what came back is and took: the debug
 	// build's journal (the macro is nothing in a release one).
-	const ibString sent = request.Write();
-	ibJournalInfo(wxT("protocol"), wxT("%s sent: %s"), ibProtocol::MethodName(method), Redacted(sent));
+	ibJournalInfo(wxT("protocol"), wxT("%s sent: %s"), ibProtocol::MethodName(method), Redacted(request));
 
-	ibString answer;
+	ibMemoryBuffer sent;
+	request.Write(sent);
+	ibProtocolNode answer;
 	const auto exchanging = std::chrono::steady_clock::now();
 	if (ExchangeDelay() > 0)
 		std::this_thread::sleep_for(std::chrono::milliseconds(ExchangeDelay()));
@@ -438,13 +465,14 @@ bool ibCommunicator::CallLocked(ibProtocol::ibMethod method, const ibProtocolNod
 		return false;
 	exchanged = msSince(exchanging);
 
-	ibJournalInfo(wxT("protocol"), wxT("%s answered in %lld ms, %zu characters: %s"), ibProtocol::MethodName(method),
-		msSince(began), answer.length(), Redacted(answer));
+	ibJournalInfo(wxT("protocol"), wxT("%s answered in %lld ms, %zu bytes"), ibProtocol::MethodName(method),
+		msSince(began), answer.Held().Weight());
 
 	return ReadAnswer(answer, id, result, refusal, error);
 }
 
-bool ibCommunicator::Resume(const ibString& sent, ibString& answer, ibProtocol::ibRefusal& refusal, wxString& error)
+bool ibCommunicator::Resume(const ibMemoryBuffer& sent, ibProtocolNode& answer, ibProtocol::ibRefusal& refusal,
+	wxString& error)
 {
 	// A transport failure of a session the server offered to keep. One try. The unanswered request keeps its id;
 	// the login that precedes it takes a newer one, so the counter never goes backwards and never back to 0.
@@ -458,18 +486,16 @@ bool ibCommunicator::Resume(const ibString& sent, ibString& answer, ibProtocol::
 	}
 
 	const long long loginId = ++m_lastId;
-	ibProtocolNode request;
-	request.SetValue(ibProtocol::ibRpc::Version, "2.0")
-		.SetValue(ibProtocol::ibRpc::Id, loginId)
-		.SetValue(ibProtocol::ibRpc::Method, ibProtocol::MethodName(ibProtocol::ibMethod::Login));
-	request.Child(ibProtocol::ibRpc::Params)
-		.SetValue(ibProtocol::ibLogin::Token, m_token)
+	ibProtocolNode params;
+	params.SetValue(ibProtocol::ibLogin::Token, m_token)
 		.SetValue(ibProtocol::ibLogin::Mode, static_cast<int>(m_mode))
 		.SetValue(ibProtocol::ibLogin::Protocol, ibProtocol::Version);
-	const ibString loginSent = request.Write();
-	ibJournalInfo(wxT("protocol"), wxT("login sent: %s"), Redacted(loginSent));
+	const ibProtocolNode request = Request(loginId, ibProtocol::ibMethod::Login, params);
+	ibJournalInfo(wxT("protocol"), wxT("login sent: %s"), Redacted(request));
+	ibMemoryBuffer loginSent;
+	request.Write(loginSent);
 
-	ibString loginAnswer;
+	ibProtocolNode loginAnswer;
 	ibProtocol::ibRefusal loginRefusal = ibProtocol::ibRefusal::None;
 	wxString loginError;
 	if (!m_connection->Exchange(loginSent, loginAnswer, loginRefusal, loginError)) {
@@ -488,13 +514,13 @@ bool ibCommunicator::Resume(const ibString& sent, ibString& answer, ibProtocol::
 		return false;
 	}
 
-	ibJournalInfo(wxT("protocol"), wxT("sent again: %s"), Redacted(sent));
+	ibJournalInfo(wxT("protocol"), wxT("sent again: %zu bytes"), sent.GetDataLen());
 	if (!m_connection->Exchange(sent, answer, refusal, error))
 		return false;
 	return true;
 }
 
-void ibCommunicator::Take(ibProtocolNode& answer)
+void ibCommunicator::Take(const ibProtocolNode& answer)
 {
 	if (!answer.Has(ibProtocol::ibFrame::Frame))
 		return;   // not a frame — a fetch's rows, a schema's tree, a file's part
@@ -507,40 +533,29 @@ void ibCommunicator::Take(ibProtocolNode& answer)
 		const long long was = m_frame.GetInt(ibProtocol::ibFrame::ActiveTab);
 		const long long active = patch.GetInt(ibProtocol::ibFrame::ActiveTab, was);
 		if (m_protocol >= 2 && active != was && m_frame.IsNode()) {
-			ibProtocolBody& frame = *m_frame.m_body;
 			const auto own = m_views.find(active);
-			ibProtocolValue* const held = frame.Find(ibProtocol::ibFrame::View);
-			if (held != nullptr) {
-				ibProtocolValue leaving = std::move(*held);
-				if (own != m_views.end()) {
-					*held = std::move(*own->second.m_root);
-					m_views.erase(own);
-				}
-				else {
-					*held = leaving;
-				}
-				m_views[was] = ibProtocolNode(std::move(leaving));
-			}
-			else if (own != m_views.end()) {
-				frame.Set(ibProtocol::ibFrame::View) = std::move(*own->second.m_root);
+			const ibProtocolNode leaving = m_frame.FindChild(ibProtocol::ibFrame::View);
+			if (leaving.IsNode())
+				m_views[was] = leaving.Clone();
+			if (own != m_views.end()) {
+				m_frame.SetValue(ibProtocol::ibFrame::View, own->second);
 				m_views.erase(own);
 			}
 		}
 		m_frame.Apply(patch);
 	}
 	else {
-		// Whole: the frame's own entries TAKEN out of the answer, not copied — what it says beside the frame stays in it
-		// for the caller (Draw reads the events there, a door its own result). The views kept begin again with it.
-		ibProtocolValue frame = ibProtocolValue::Node();
-		std::vector<ibProtocolEntry> beside;
-		for (ibProtocolEntry& entry : answer.m_body->m_entries) {
-			if (IsFrameWord(entry.m_name))
-				frame.GetNode()->m_entries.push_back(std::move(entry));
-			else
-				beside.push_back(std::move(entry));
+		// Whole: the frame's own entries copied out of the answer as they lie — what it says beside the frame stays in it
+		// for the caller (Draw reads the events there, a door its own result) — and the names of its types. The views
+		// kept begin again with it.
+		auto frame = std::make_shared<ibProtocolTree>();
+		frame->m_made = false;
+		for (const auto& field : answer.Held().Fields()) {
+			if (IsFrameWord(field.first))
+				frame->m_root.AddField(field.first, field.second);
 		}
-		answer.m_body->m_entries.swap(beside);
-		m_frame = ibProtocolNode(std::move(frame));
+		frame->NameTypes(answer.m_tree->m_types);
+		m_frame = ibProtocolNode(std::move(frame), ibProtocolNode::ibShape::Node);
 		m_views.clear();
 	}
 	m_number = answer.GetInt(ibProtocol::ibFrame::Frame);

@@ -299,13 +299,13 @@ bool ibPropertySource::GetProtocolValue(ibDataNode& row, ibReader reader)
 		// cell (ibPGDataSourceProperty: shown bound, read only): the type as the binding resolves it from its leaf, its
 		// words, and whether it may be composite (Multiple — not in a table's shape). Only the protocol carries it:
 		// stored, the type is the leaf's (WriteNodeValue — the path alone). Unbound — none.
-		const ibDataValue* const held = row.FindProperty(ibProtocol::ibSchema::ibProperties::Value);
-		const std::shared_ptr<ibDataNode> value = held != nullptr ? held->AsChild() : nullptr;
-		if (value != nullptr && !IsEmptyProperty()) {
+		const auto held = row.FindProperty(ibProtocol::ibSchema::ibProperties::Value);
+		if (held && held->Kind() == ibDataKind::Child && !IsEmptyProperty()) {
 			const ibSelectorDataType shape = factory != nullptr ? factory->GetFilterDataType() : ibSelectorDataType::ibSelectorDataType_reference;
 			ibDataValue typeDesc;
 			ibBackendTypeDescriptionMemory::WriteNode(typeDesc, GetValueAsTypeDesc(), metaData);
-			ibDataNode& sourceType = value->Child(ibProtocol::ibSchema::ibProperties::SourceType);
+			// …written where the value lies in the row: the one under the name, filled on.
+			ibDataNode& sourceType = row.Child(ibProtocol::ibSchema::ibProperties::Value).Child(ibProtocol::ibSchema::ibProperties::SourceType);
 			sourceType.SetProperty(ibProtocol::ibSchema::ibProperties::Value, typeDesc);
 			sourceType.SetValue(ibProtocol::ibSchema::ibProperties::Presentation,
 				wxVariant(get_cell_variant<ibVariantDataSource>()->CloneSourceAttribute()).MakeString());

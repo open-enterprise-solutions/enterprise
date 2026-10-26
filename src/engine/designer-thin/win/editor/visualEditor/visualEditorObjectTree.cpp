@@ -223,7 +223,7 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::CreateTre
 	};
 
 	for (const ibProtocolNode& described : classes.Children())
-		add(described.GetString(ibProtocol::ibView::ibFormDesigner::Name), ibProtocolPicture(described.GetString(ibProtocol::ibView::ibFormDesigner::Picture)));
+		add(described.GetString(ibProtocol::ibView::ibFormDesigner::Name), ibProtocolPicture(described, ibProtocol::ibView::ibFormDesigner::Picture));
 
 	// The command bar and its command — the engine's pictures, not a class the server describes (the desktop's were its
 	// toolbar's and tool's).
@@ -593,7 +593,7 @@ ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorItemPopupMenu::ibVisualEdi
 			for (const ibProtocolNode& made : handler->m_classes.Children()) {
 				if (made.GetString(ibProtocol::ibView::ibFormDesigner::Name) != className)
 					continue;
-				const wxBitmap picture = ibProtocolPicture(made.GetString(ibProtocol::ibView::ibFormDesigner::Picture));
+				const wxBitmap picture = ibProtocolPicture(made, ibProtocol::ibView::ibFormDesigner::Picture);
 				if (picture.IsOk())
 					item->SetBitmap(picture);
 				break;

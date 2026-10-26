@@ -56,9 +56,9 @@ public:
 			"is in, when it is a start page's cell}; respond {Client, Id: the pending "
 			"Request's id, Response}; fetch {Client, Control, Request, Form} - a table's rows {Direction 0/1/-1, Anchor, "
 			"Count, Parent} or a spreadsheet's cells {Top, Left, Bottom, Right}; activate / close {Client, Tab}; "
-			"upload {Client, Name, Data: base64, at most 1 MB} -> File (the id of a new temporary file of the client), "
-			"then upload {Client, File, Data} for each next part; download {Client, File, Part} -> Name, Part, Parts, "
-			"Data; open {Client, File} -> the frame, the file opened as a document of the template its name matches "
+			"upload {Client, Name, Data: the part's bytes written \"base64:<...>\", at most 1 MB} -> File (the id of a "
+			"new temporary file of the client), then upload {Client, File, Data} for each next part; download {Client, "
+			"File, Part} -> Name, Part, Parts, Data (\"base64:<...>\"); open {Client, File} -> the frame, the file opened as a document of the template its name matches "
 			"(the frame's Templates: Title, Mask). A client's files go when its session does. command {Client, Command} "
 			"-> the frame: a command of the frame's Menu (1 Undo, 2 Redo, 3 Save, 4 Close) done on the active tab's "
 			"document; one not Enabled is refused. The Menu is a tree of items: Separator; Command with Title, "
@@ -94,10 +94,10 @@ public:
 		}
 		// A client in this same process: the call goes to the host as it is, no envelope, and its answer is the result.
 		// A refusal says why by its number, as the wire does in the error's code.
-		const ibDataNode* const given = params.FindChild(ArgParams().Name());
+		const auto given = params.FindChild(ArgParams().Name());
 		ibProtocol::ibRefusal why = ibProtocol::ibRefusal::None;
 		wxString error;
-		if (host->Call(ibProtocol::MethodFromName(ArgMethod().Text(params).utf8_str()), given != nullptr ? *given : ibDataNode(),
+		if (host->Call(ibProtocol::MethodFromName(ArgMethod().Text(params).utf8_str()), given ? *given : ibDataNode(),
 				result, why, error))
 			return true;
 		refusal = wxString::Format(wxT("refused %d: %s"), static_cast<std::int32_t>(why), error);

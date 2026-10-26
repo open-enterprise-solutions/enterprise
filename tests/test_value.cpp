@@ -355,8 +355,8 @@ TEST(ValueTest, ADatePackedIntoANodeComesBackAsTheSameReading) {
     ASSERT_TRUE(read.Deserialize(node));
     EXPECT_EQ(ibValueTypes::TYPE_DATE, read.GetType());
     EXPECT_EQ(written.GetDate(), read.GetDate());
-    const ibDataValue* stored = node.FindField(kValueFieldData);
-    ASSERT_TRUE(stored != nullptr && stored->Kind() == ibDataKind::Date);
+    auto stored = node.FindField(kValueFieldData);
+    ASSERT_TRUE(stored && stored->Kind() == ibDataKind::Date);
     EXPECT_EQ(ibDateTime(2026, 3, 29, 2, 30), stored->AsDate());
 
     const ibValue none(ibValueTypes::TYPE_DATE);

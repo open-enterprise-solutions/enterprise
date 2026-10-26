@@ -14,7 +14,7 @@
 #include "frmclient/backend/metaData.h"                                      // a tab's configuration — its tab
 #include "frmclient/docView/tabDocument.h"                                   // a tab's fetch — a composer's, its targets' fields
 #include "frmclient/mainFrame/mainFrame.h"                                  // ibFrontendMainFrame::Respond — a target's fields asked
-#include "frmclient/win/picture.h"                                          // ibProtocolPicture — a field's picture, by its id
+#include "frmclient/win/picture.h"                                          // ibProtocolPicture — a field's picture, as it names it
 #include "protocol/protocol.h"
 
 #include <wx/dialog.h>
@@ -66,7 +66,7 @@ static int ibSettingsFieldIcon(wxTreeCtrl* tree, const wxIcon& icon)
 
 // …the picture a field is described with — the column's, as the server names it (the desktop's GetSourcePicture); none
 // answers 0.
-static int ibSettingsFieldIcon(wxTreeCtrl* tree, const wxString& picture)
+static int ibSettingsFieldIcon(wxTreeCtrl* tree, const ibDataValue& picture)
 {
 	wxIcon icon;
 	const wxBitmap bitmap = ibProtocolPicture(picture);
@@ -173,7 +173,9 @@ std::vector<ibSettingsPlainField> ibReadSettingsFields(const ibProtocolNode& fie
 		ibReadProtocolNode(described.FindChild(ibProtocol::ibRequest::ibListSettings::Type), *type);
 		ibTypeDescriptionMemory::ReadNode(ibDataValue::Child(type), field.m_type);
 		field.m_available = described.GetBool(ibProtocol::ibRequest::ibListSettings::Available, true);
-		field.m_picture = described.GetString(ibProtocol::ibRequest::ibListSettings::Picture);
+		// The picture as it lies — its id, or a file's PNG.
+		const ibDataNode* const node = described.GetBody();
+		field.m_picture = node != nullptr ? node->GetProperty(ibProtocol::ibRequest::ibListSettings::Picture) : ibDataValue();
 		read.push_back(std::move(field));
 	}
 	return read;

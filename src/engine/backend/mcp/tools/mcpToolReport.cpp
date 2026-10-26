@@ -658,9 +658,9 @@ wxString WordOfComparison(ibComparisonKind kind)
 bool ValueForPath(const ibCompositionDescription& composition, const wxString& path,
 	const ibDataNode& params, ibValue& value, wxString& refusal)
 {
-	const ibDataValue* given = params.FindField(ibMcpValueArgument().Name());
+	auto given = params.FindField(ibMcpValueArgument().Name());
 
-	if (given == nullptr) {
+	if (!given) {
 		refusal = ibMcpText("A filter needs a value to compare against.");
 		return false;
 	}
@@ -818,16 +818,16 @@ bool ConditionFromTree(const ibCompositionDescription& composition, const ibData
 		return false;
 	}
 	for (const ibDataValue& entry : said.AsArray()) {
-		if (entry.Kind() != ibDataKind::Child || entry.AsChild() == nullptr) {
+		if (entry.Kind() != ibDataKind::Child || !entry.AsChild()) {
 			refusal = ibMcpText("Each entry of `condition` is an object - a line {path, comparison, value} or a "
 				"group {group, lines}.");
 			return false;
 		}
-		const ibDataNode& line = *entry.AsChild();
-		const ibDataValue* use = line.FindField(wxT("use"));
-		const bool on = use == nullptr || use->Kind() != ibDataKind::Bool || use->AsBool();
+		const ibDataNode line = *entry.AsChild();
+		auto use = line.FindField(wxT("use"));
+		const bool on = !use || use->Kind() != ibDataKind::Bool || use->AsBool();
 
-		if (const ibDataValue* group = line.FindField(wxT("group"))) {
+		if (auto group = line.FindField(wxT("group"))) {
 			const wxString word = group->Kind() == ibDataKind::String ? group->AsString().ToWxString() : wxString();
 			const auto kind = std::find_if(GroupWords().begin(), GroupWords().end(),
 				[&word](const std::pair<const ibChar*, ibFilterGroupKind>& known) { return word.IsSameAs(known.first, false); });
@@ -836,8 +836,8 @@ bool ConditionFromTree(const ibCompositionDescription& composition, const ibData
 				return false;
 			}
 			std::vector<ibFilterNodeDescription> children;   // read apart — `into` does not move under `added`
-			const ibDataValue* lines = line.FindField(wxT("lines"));
-			if (lines != nullptr && !ConditionFromTree(composition, *lines, children, refusal))
+			auto lines = line.FindField(wxT("lines"));
+			if (lines && !ConditionFromTree(composition, *lines, children, refusal))
 				return false;
 			ibFilterNodeDescription& added = ibFilterDescription::AppendGroup(into, kind->second);
 			added.m_use = on;
@@ -845,16 +845,16 @@ bool ConditionFromTree(const ibCompositionDescription& composition, const ibData
 			continue;
 		}
 
-		const ibDataValue* pathSaid = line.FindField(wxT("path"));
-		const wxString path = pathSaid != nullptr && pathSaid->Kind() == ibDataKind::String ? pathSaid->AsString().ToWxString() : wxString();
+		auto pathSaid = line.FindField(wxT("path"));
+		const wxString path = pathSaid && pathSaid->Kind() == ibDataKind::String ? pathSaid->AsString().ToWxString() : wxString();
 		if (path.IsEmpty()) {
 			refusal = ibMcpText("A line of `condition` names its field - \"path\".");
 			return false;
 		}
 		if (!PathIsOffered(composition, path, refusal))
 			return false;
-		const ibDataValue* comparisonSaid = line.FindField(wxT("comparison"));
-		const wxString word = comparisonSaid != nullptr && comparisonSaid->Kind() == ibDataKind::String
+		auto comparisonSaid = line.FindField(wxT("comparison"));
+		const wxString word = comparisonSaid && comparisonSaid->Kind() == ibDataKind::String
 			? comparisonSaid->AsString().ToWxString() : wxString();
 		ibComparisonKind comparison = ibComparisonKind_Equal;
 		if (!ComparisonFromWord(word, comparison, refusal))
@@ -862,8 +862,8 @@ bool ConditionFromTree(const ibCompositionDescription& composition, const ibData
 		ibFilterNodeDescription& added = ibFilterDescription::Append(into, path, comparison, ibDataNode(), on);
 		if (!ibComparisonTakesValue(comparison))
 			continue;   // «filled» asks the field alone
-		const ibDataValue* valuePath = line.FindField(wxT("valuePath"));
-		if (valuePath != nullptr && valuePath->Kind() == ibDataKind::String && !valuePath->AsString().IsEmpty()) {
+		auto valuePath = line.FindField(wxT("valuePath"));
+		if (valuePath && valuePath->Kind() == ibDataKind::String && !valuePath->AsString().IsEmpty()) {
 			if (!PathIsOffered(composition, valuePath->AsString(), refusal))
 				return false;
 			added.m_right.m_path = valuePath->AsString();   // a field of the same row
@@ -1067,8 +1067,8 @@ public:
 		ibFilterDescription& filter = settings->m_filter;
 
 		const wxString path = ArgLinePath().Text(params);
-		const ibDataValue* const tree = params.FindField(ArgCondition().Name());
-		if (tree != nullptr && !path.IsEmpty()) {
+		const auto tree = params.FindField(ArgCondition().Name());
+		if (tree && !path.IsEmpty()) {
 			refusal = ibMcpText("Say the condition one way - the whole `condition` as a tree, or one line by `path`.");
 			return false;
 		}
@@ -1082,7 +1082,7 @@ public:
 			[&path](const ibFilterNodeDescription& node) {
 				return node.m_left.m_path.IsSameAs(path, false); });
 
-		if (tree != nullptr) {
+		if (tree) {
 			// THE WHOLE TREE, checked entry by entry before it replaces anything.
 			std::vector<ibFilterNodeDescription> said;
 			if (!ConditionFromTree(composition, *tree, said, refusal))
@@ -1129,7 +1129,7 @@ public:
 			}
 		}
 
-		if (tree != nullptr || !path.IsEmpty()) {
+		if (tree || !path.IsEmpty()) {
 			composer->SetCompositionDesc(composition);
 			activeMetaData->Modify(true);
 		}
@@ -1678,12 +1678,12 @@ public:
 				: ibConditionalAppearanceRuleDescription();
 			bool says = false;
 
-			const ibDataValue* const tree = params.FindField(ArgCondition().Name());
-			if (tree != nullptr && ArgConditionPath().Given(params)) {
+			const auto tree = params.FindField(ArgCondition().Name());
+			if (tree && ArgConditionPath().Given(params)) {
 				refusal = ibMcpText("Say the condition one way - the whole `condition` as a tree, or one line by `path`.");
 				return false;
 			}
-			if (tree != nullptr) {
+			if (tree) {
 				says = true;
 				std::vector<ibFilterNodeDescription> said;
 				if (!ConditionFromTree(composition, *tree, said, refusal))
@@ -1713,7 +1713,7 @@ public:
 				}
 			}
 
-			if (const ibDataValue* many = params.FindField(ArgFields().Name())) {
+			if (auto many = params.FindField(ArgFields().Name())) {
 				says = true;
 				rule.m_fields.clear();
 				if (many->Kind() == ibDataKind::Array)
@@ -1896,7 +1896,7 @@ public:
 				found->m_type.SetDefaultMetaType(clsid);
 			}
 
-			if (params.FindField(ArgForUser().Name()) != nullptr)
+			if (params.Has(ArgForUser().Name()))
 				found->m_userSettable = ArgForUser().Flag(params);
 
 			// ⭐ THE VALUE IS STORED AS THE PACKED NODE ITSELF - the shape ibStoredValue reads back when the
@@ -1911,11 +1911,11 @@ public:
 			// run: a date written as text went in as a String, every call said yes, and the report would not
 			// compose (2026-09-29).
 			ibValue given;
-			const ibDataNode* packed = params.FindChild(ibMcpValueArgument().Name());
-			const ibDataValue* scalar = packed == nullptr ? params.FindField(ibMcpValueArgument().Name()) : nullptr;
-			if (packed != nullptr)
+			auto packed = params.FindChild(ibMcpValueArgument().Name());
+			auto scalar = !packed ? params.FindField(ibMcpValueArgument().Name()) : std::nullopt;
+			if (packed)
 				given = ibStoredValue(*packed, metaData);
-			else if (scalar != nullptr) {
+			else if (scalar) {
 				switch (scalar->Kind()) {
 					case ibDataKind::String: given = ibValue(scalar->AsString()); break;
 					case ibDataKind::Number: given = ibValue(scalar->AsNumber()); break;
@@ -1923,7 +1923,7 @@ public:
 					default: break;
 				}
 			}
-			if ((packed != nullptr || scalar != nullptr) && found->m_type.GetClsidCount() > 0 && !given.IsEmpty()
+			if ((packed || scalar) && found->m_type.GetClsidCount() > 0 && !given.IsEmpty()
 			    && !found->m_type.ContainType(given.GetClassType())) {
 				refusal = wxString::Format(
 					ibMcpText("'%s' holds a value of the type it declares, and this is not one. A date is not "
@@ -1931,9 +1931,9 @@ public:
 						"under `packed`."), name);
 				return false;
 			}
-			if (packed != nullptr)
+			if (packed)
 				found->m_value = *packed;
-			else if (scalar != nullptr)
+			else if (scalar)
 				ibStoreValue(found->m_value, given);
 		}
 
@@ -2018,7 +2018,7 @@ public:
 		// ONE FIELD OR MANY, read into one list so the loop below is the only place that knows how.
 		std::vector<wxString> wanted;
 
-		if (const ibDataValue* many = params.FindField(ArgPaths().Name())) {
+		if (auto many = params.FindField(ArgPaths().Name())) {
 			if (many->Kind() == ibDataKind::Array)
 				for (const ibDataValue& one : many->AsArray())
 					if (one.Kind() == ibDataKind::String && !one.AsString().IsEmpty())
@@ -2341,7 +2341,7 @@ public:
 
 		// A variant's synonym is a caption like any other — every language the configuration declares
 		// (ibMcpCaptionInEveryLanguage).
-		if (params.FindField(ArgSynonym().Name()) != nullptr
+		if (params.Has(ArgSynonym().Name())
 		    && !ibMcpCaptionInEveryLanguage(composer->GetMetaData(), synonym,
 		                                    ibMcpText("The variant's synonym"), refusal))
 			return false;
@@ -2411,7 +2411,7 @@ public:
 				variant->m_name = name;
 			}
 
-			if (params.FindField(ArgSynonym().Name()) != nullptr)
+			if (params.Has(ArgSynonym().Name()))
 				variant->m_synonym = synonym;
 		}
 
@@ -2602,7 +2602,7 @@ public:
 		// same shape report_select uses for `path` / `paths`.
 		std::vector<wxString> wanted;
 
-		if (const ibDataValue* many = params.FindField(ArgGroupByMany().Name())) {
+		if (auto many = params.FindField(ArgGroupByMany().Name())) {
 			if (many->Kind() == ibDataKind::Array)
 				for (const ibDataValue& one : many->AsArray())
 					if (one.Kind() == ibDataKind::String && !one.AsString().IsEmpty())
@@ -2906,9 +2906,9 @@ public:
 
 		// The KIND is checked, the way module_write checks it: an argument that is not a string
 		// reads as empty and would silently clear the query instead of setting it.
-		const ibDataValue* incoming = params.FindField(ArgText().Name());
+		auto incoming = params.FindField(ArgText().Name());
 
-		if (incoming == nullptr || incoming->Kind() != ibDataKind::String) {
+		if (!incoming || incoming->Kind() != ibDataKind::String) {
 			refusal = ibMcpText("'text' must be a string holding the query. Nothing was written.");
 			return false;
 		}
@@ -3068,8 +3068,8 @@ public:
 			return false;
 		}
 
-		const ibDataNode* given = params.FindChild(ArgComposition().Name());
-		if (given == nullptr) {
+		auto given = params.FindChild(ArgComposition().Name());
+		if (!given) {
 			refusal = ibMcpText("No composition given. report_get answers with the shape this takes.");
 			return false;
 		}

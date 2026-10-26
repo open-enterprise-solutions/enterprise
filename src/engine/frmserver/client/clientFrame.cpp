@@ -445,8 +445,8 @@ bool ibClientFrame::ShowScheduleEditor(ibJobScheduleDescription& schedule)
 	ibDataNode response;
 	if (!DoRequest(request, response))
 		return false;
-	const ibDataValue* const edited = response.FindField(ibProtocol::ibRequest::ibSchedule::Schedule);
-	if (edited == nullptr || !ibJobScheduleDescriptionMemory::ReadNode(*edited, schedule))
+	const auto edited = response.FindField(ibProtocol::ibRequest::ibSchedule::Schedule);
+	if (!edited || !ibJobScheduleDescriptionMemory::ReadNode(*edited, schedule))
 		return false;
 
 	// OK MARKS THE FORM, as the desktop's did (ibFrontendMainFrame::ShowScheduleEditor): the window that did the editing

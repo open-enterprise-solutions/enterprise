@@ -55,10 +55,9 @@ public:
 		return icon;
 	}
 
-	static wxImage GetImageFromBase64(const wxString& src, const wxSize& size = wxDefaultSize) {
-		const wxImage image = ibProtocolImage(src);
-		return size != wxDefaultSize && image.IsOk() ? image.Scale(size.x, size.y, wxIMAGE_QUALITY_HIGH) : image;
-	}
+	// A MASTER IN THE SOURCE — a PNG written as Base-64 text (the art provider's, the splash's), read at the size it is
+	// shown — none asked: as it is.
+	static wxImage GetImageFromBase64(const wxString& src, const wxSize& size = wxDefaultSize);
 };
 
 #endif

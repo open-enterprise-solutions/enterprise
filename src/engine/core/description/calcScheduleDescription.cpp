@@ -6,8 +6,8 @@ namespace {
 
 ibMetaID IdOf(const ibDataNode& node, const wxString& field)
 {
-	const ibDataValue* id = node.FindField(field);
-	return (id != nullptr && id->Kind() == ibDataKind::Number) ? (ibMetaID)id->AsInt() : 0;
+	auto id = node.FindField(field);
+	return (id && id->Kind() == ibDataKind::Number) ? (ibMetaID)id->AsInt() : 0;
 }
 
 }
@@ -18,10 +18,10 @@ bool ibCalcScheduleDescriptionMemory::ReadNode(const ibDataValue& value, ibCalcS
 	if (value.Kind() != ibDataKind::Child || !value.AsChild())
 		return true;   // nothing saved: no schedule
 
-	const ibDataNode& node = *value.AsChild();
+	const ibDataNode node = *value.AsChild();
 	scheduleDesc.SetSchedule(IdOf(node, wxT("register")), IdOf(node, wxT("value")), IdOf(node, wxT("date")));
 
-	if (const ibDataValue* links = node.FindField(wxT("links"))) {
+	if (auto links = node.FindField(wxT("links"))) {
 		if (links->Kind() == ibDataKind::Array) {
 			for (const ibDataValue& one : links->AsArray()) {
 				if (one.Kind() == ibDataKind::Child && one.AsChild())

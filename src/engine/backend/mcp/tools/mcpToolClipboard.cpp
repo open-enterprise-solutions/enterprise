@@ -55,9 +55,9 @@ ibMetaData* OpenConfiguration(wxString& refusal)
 ibValueMetaObject* FindObject(ibMetaData* metaData, const ibDataNode& params,
 	const wxString& field, wxString& refusal)
 {
-	const ibDataValue* asked = params.FindField(field);
+	auto asked = params.FindField(field);
 
-	if (asked == nullptr || asked->Kind() != ibDataKind::Number) {
+	if (!asked || asked->Kind() != ibDataKind::Number) {
 		refusal = wxString::Format(ibMcpText("No %s given."), field);
 		return nullptr;
 	}
@@ -266,7 +266,7 @@ public:
 
 		ibValueMetaObject* parent = nullptr;
 
-		if (const ibDataValue* parentId = params.FindField(ArgParentId().Name())) {
+		if (auto parentId = params.FindField(ArgParentId().Name())) {
 			if (parentId->Kind() == ibDataKind::Number) {
 				parent = ibFindMetaObjectById(metaData, (ibMetaID)parentId->AsInt());
 				if (parent == nullptr) {

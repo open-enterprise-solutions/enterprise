@@ -100,11 +100,9 @@ TEST(NumberPeriodicity, TheSettingRoundTrips)
 	// Absent from a configuration saved before the setting existed. Loaded into a new document,
 	// whose constructor default is nonperiodical: an empty property does not write over that.
 	ibDataNode older;
-	for (const auto& field : saved.Fields())
-		older.AddField(field.first, field.second);
-	for (const auto& prop : saved.Properties()) {
-		if (prop.first != wxT("NumberPeriodicity"))
-			older.SetProperty(prop.first, prop.second);
+	for (const auto& field : saved.Fields()) {
+		if (field.first != wxT("NumberPeriodicity"))
+			older.AddField(field.first, field.second);
 	}
 	ibValueMetaObjectDocument* fresh = MakeDocument(cfg);
 	ASSERT_NE(fresh, nullptr);

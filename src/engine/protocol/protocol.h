@@ -109,7 +109,7 @@ namespace ibProtocol {
 	// password or the start).
 	enum class ibRefusal : int {
 		None         = 0,
-		BadParameter = 400,   // a parameter missing or malformed: Data not base64, a part over the limit, a new file without a Name
+		BadParameter = 400,   // a parameter missing or malformed: Data not bytes, a part over the limit, a new file without a Name
 		LoginRefused = 401,   // login: the user or the password
 		NoSession    = 401,   // any other call: no such client, or its session is gone — log in anew
 		NoRight      = 403,   // the person has no right to it
@@ -130,6 +130,9 @@ namespace ibProtocol {
 		inline constexpr const char* Error   = "error";
 		inline constexpr const char* Code    = "code";
 		inline constexpr const char* Message = "message";
+		// A packet's names of the types its nodes are of — a field per clsid, its digits the name and the type's name the
+		// value (OES-RPC: a node carries its clsid, and only the answer knows the configuration's names).
+		inline constexpr const char* Types   = "types";
 
 		// What the server says unasked — a notification's method: a client's frame changed by itself (params: Client).
 		inline constexpr const char* Changed = "changed";
@@ -144,6 +147,7 @@ namespace ibProtocol {
 		inline constexpr const char* Id            = "NodeId";
 		inline constexpr const char* Type          = "NodeType";
 		inline constexpr const char* Children      = "NodeChildren";
+		inline constexpr const char* Raw           = "NodeRaw";
 		inline constexpr const char* Removed       = "NodeRemoved";
 		inline constexpr const char* RemovedIds    = "NodeRemovedIds";
 		inline constexpr const char* Order         = "NodeOrder";
@@ -307,7 +311,7 @@ namespace ibProtocol {
 	}
 
 	// A FILE, going up and down. upload {Name, Data} → File: a new temporary file, Data its first part; {File, Data} →
-	// File: its next part (Data: base64). download {File, Part} → Name, Part, Parts, Data — the file's part, from 0, of
+	// File: its next part (Data: its bytes, a Binary). download {File, Part} → Name, Part, Parts, Data — the file's part, from 0, of
 	// how many there are. open {File} → the frame: the file opened by the template its name says (the frame's
 	// Templates — Title, Mask, Extension, OnlyOpen, Picture each); {Extension} → the frame: a new document of the
 	// template that opens that extension.
@@ -315,7 +319,7 @@ namespace ibProtocol {
 
 		inline constexpr const char* File      = "File";        // an uploaded file's id
 		inline constexpr const char* Name      = "Name";
-		inline constexpr const char* Data      = "Data";        // a part going up or down, in base64
+		inline constexpr const char* Data      = "Data";        // a part going up or down, its bytes
 		inline constexpr const char* Part      = "Part";        // download's: the part asked for, from 0
 		inline constexpr const char* Parts     = "Parts";       // …and how many the file has
 		inline constexpr const char* Extension = "Extension";   // a template's; open's, without a File: the template a new
@@ -328,10 +332,11 @@ namespace ibProtocol {
 	}
 
 	// ⭐ A PICTURE IS NAMED BY ITS ID, EVERYWHERE — an answer carries the id alone, and the picture is loaded by this,
-	// apart: picture {Pictures} → Pictures: the pictures of those ids, each {Id, Picture} (PNG, base64) — a backend one by
-	// its number (a registered picture, a class's own: its class id), a configuration's by its guid and its version,
-	// `<guid>#<version>` (a changed picture is another version); several at once,
-	// asked by a client that has not got them and kept by it. One there is none of comes back empty, not refused.
+	// apart: picture {Pictures} → Pictures: the pictures of those ids, each {Id, Picture} (the PNG's bytes, a Binary) — a
+	// backend one by its number (a registered picture, a class's own: its class id), a configuration's by its guid and its
+	// version, `<guid>#<version>` (a changed picture is another version); several at once,
+	// asked by a client that has not got them and kept by it. One there is none of comes back empty, not refused. A
+	// picture with no id of its own (a file's) is not asked for: the field that names it holds its PNG instead.
 	namespace ibPicture {
 
 		inline constexpr const char* Pictures = "Pictures";

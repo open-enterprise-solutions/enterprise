@@ -239,8 +239,7 @@ ibReaderMemory* ibReaderMemory::open_chunk(std::uint64_t ID) const
 		std::uint8_t* dest;
 		unsigned	dest_sz;
 		_decompressLZ(&dest, &dest_sz, pointer(), dwSize);
-		ibMemoryBuffer unpacked;
-		unpacked.AppendData(dest, dest_sz);
+		const ibMemoryBuffer unpacked(dest, dest_sz);
 		std::free(dest);
 		return new ibReaderMemory(unpacked, tell() + dwSize);
 	}

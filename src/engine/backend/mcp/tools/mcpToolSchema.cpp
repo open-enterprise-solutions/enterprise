@@ -135,7 +135,7 @@ ibDataNode* NodeAt(ibDataNode& root, const wxString& path, wxString& refusal)
 				path, (int)index, (int)at->Children().size());
 			return nullptr;
 		}
-		at = &at->Children()[(size_t)index];
+		at = &at->Handle(at->Children()[(size_t)index]);
 	}
 
 	return at;
@@ -169,7 +169,7 @@ std::shared_ptr<ibDataNode> FormTree(const ibDataNode& params, ibValueMetaObject
 		return nullptr;
 	}
 
-	return tree.AsChild();
+	return std::make_shared<ibDataNode>(*tree.AsChild());
 }
 
 //---------------------------------------------------------------------------
@@ -264,8 +264,8 @@ public:
 
 	bool Call(const ibDataNode& params, ibDataNode& result, wxString& refusal) const override
 	{
-		const ibDataNode* given = params.FindChild(ArgSchema().Name());
-		if (given == nullptr) {
+		auto given = params.FindChild(ArgSchema().Name());
+		if (!given) {
 			refusal = ibMcpText("No `schema` came with the call, so there is nothing to put there.");
 			return false;
 		}

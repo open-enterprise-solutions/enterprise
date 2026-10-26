@@ -156,7 +156,7 @@ private:
 	// ⚠ THIS DICTIONARY EXISTED IN ALL THREE LOCALES AND NOTHING READ IT: the
 	// file shipped inside every .hlk, ibHelpCategory::displayName was declared
 	// and never assigned, and the tree view fell back to showing the raw key
-	// ("global_functions" instead of "Глобальные функции"). Wired 2026-09-04.
+	// ("global_functions" instead of its title, "Global functions"). Wired 2026-09-04.
 	std::map<wxString, wxString> m_categoryNames;
 
 	// Source-file digest used by Fingerprint(). Computed once at

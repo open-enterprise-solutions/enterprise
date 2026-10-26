@@ -378,8 +378,8 @@ public:
 		std::unique_ptr<ibScratchModule> scratch;
 		ibValueMetaObjectModuleBase* module = nullptr;
 
-		const ibDataValue* id = params.FindField(ArgId().Name());
-		if (id != nullptr && id->Kind() == ibDataKind::Number) {
+		auto id = params.FindField(ArgId().Name());
+		if (id && id->Kind() == ibDataKind::Number) {
 			ibValueMetaObject* object = ibFindMetaObjectById(activeMetaData, (ibMetaID)id->AsInt());
 			module = ibMcpModuleOf(object, refusal);
 			if (module == nullptr)

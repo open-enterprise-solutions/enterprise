@@ -22,7 +22,6 @@
 #include "objinspect/objinspect.h"
 #include "settings/settingsxml.h"
 
-#include "core/utils/base64.h"   // ibBase64 — a file's part, in and out of the call's text
 
 #include "frmclient/docView/docManager.h"
 #include "frmclient/docView/templates/docViewFile.h"
@@ -1036,7 +1035,7 @@ void ibFrontendMainFrame::DrawMenu(const ibProtocolNode& menu)
 				if (!art.IsEmpty())
 					added->SetBitmap(wxArtProvider::GetBitmapBundle(art, wxART_MENU, wxSize(16, 16)));
 				else if (item.Has(ibProtocol::ibFrame::ibMenu::Picture)) {
-					const wxBitmap picture = ibProtocolPicture(item.GetString(ibProtocol::ibFrame::ibMenu::Picture));
+					const wxBitmap picture = ibProtocolPicture(item, ibProtocol::ibFrame::ibMenu::Picture);
 					if (picture.IsOk())
 						added->SetBitmap(picture);
 				}
@@ -1102,16 +1101,13 @@ void ibFrontendMainFrame::DrawTemplates(const ibProtocolNode& templates)
 	for (ibFrontendDocTemplate* const temp : m_docManager->GetTemplatesVector())
 		delete temp;
 	const std::vector<ibProtocolNode> items = templates.Children();
-	std::vector<wxString> pictures;
-	for (const ibProtocolNode& item : items)
-		pictures.push_back(item.GetString(ibProtocol::ibFile::Picture));
-	ibProtocolPictureReceive(pictures);
+	ibProtocolPictureReceive(templates);
 	for (const ibProtocolNode& item : items) {
 		const wxString title = item.GetString(ibProtocol::ibFile::Title);
 		const long flags = ibTEMPLATE_VISIBLE | (item.GetBool(ibProtocol::ibFile::OnlyOpen) ? ibTEMPLATE_ONLY_OPEN : 0);
 		ibFrontendDocTemplate* const temp = new ibFrontendDocTemplate(m_docManager, title, item.GetString(ibProtocol::ibFile::Mask),
 			wxEmptyString, item.GetString(ibProtocol::ibFile::Extension), title, title, CLASSINFO(ibFrontendFileDocument), nullptr, flags);
-		const wxBitmap picture = ibProtocolPicture(item.GetString(ibProtocol::ibFile::Picture));
+		const wxBitmap picture = ibProtocolPicture(item, ibProtocol::ibFile::Picture);
 		if (picture.IsOk()) {
 			wxIcon icon;
 			icon.CopyFromBitmap(picture);
@@ -1161,7 +1157,7 @@ void ibFrontendMainFrame::DrawTabs(const ibProtocolNode& tabs)
 		ibTabDocument* const opened = CreateDocument(static_cast<ibProtocol::ibView::ibKind>(tab.GetInt(ibProtocol::ibFrame::ibTab::Kind)), id);
 		m_documents[id] = opened;
 		opened->SetTitle(title);
-		const wxBitmap icon = ibProtocolPicture(tab.GetString(ibProtocol::ibFrame::ibTab::Icon));
+		const wxBitmap icon = ibProtocolPicture(tab, ibProtocol::ibFrame::ibTab::Icon);
 		if (icon.IsOk()) {
 			wxIcon picture;
 			picture.CopyFromBitmap(icon);
@@ -1430,7 +1426,7 @@ void ibFrontendMainFrame::ShowRequest(const ibProtocolNode& request, ibProtocolN
 		if (dialog.ShowModal() != wxID_OK)
 			break;
 		ibDataValue edited;
-		if (ibJobScheduleDescriptionMemory::WriteNode(edited, dialog.GetSchedule()) && edited.AsChild() != nullptr)
+		if (ibJobScheduleDescriptionMemory::WriteNode(edited, dialog.GetSchedule()) && edited.Kind() == ibDataKind::Child)
 			ibWriteProtocolNode(*edited.AsChild(), response.Child(ibProtocol::ibRequest::ibSchedule::Schedule));
 		break;
 	}
@@ -1510,7 +1506,7 @@ void ibFrontendMainFrame::ShowRequest(const ibProtocolNode& request, ibProtocolN
 	case ibProtocol::ibRequest::ibKind::ViewMode: {
 		// The server's mode numbers are the data view's own (ibProtocol::ibForm::ibTable::ibViewMode); cancelled — answered with no Mode.
 		wxTableViewModeDialog dialog(parent, wxID_ANY, static_cast<ibDataViewViewMode>(request.GetInt(ibProtocol::ibRequest::ibViewMode::Mode)),
-			ibProtocolPicture(request.GetString(ibProtocol::ibRequest::ibViewMode::Picture)));
+			ibProtocolPicture(request, ibProtocol::ibRequest::ibViewMode::Picture));
 		if (dialog.ShowModal() == wxID_OK)
 			response.SetValue(ibProtocol::ibRequest::ibViewMode::Mode, static_cast<long long>(dialog.GetViewMode()));
 		break;
@@ -1589,12 +1585,13 @@ bool ibFrontendMainFrame::UploadFile(const wxString& path, wxString& file)
 
 	// In parts, as the server keeps them: the first names the file and is answered its id, each next one names the id.
 	// An empty file is its first call with nothing in it.
-	std::vector<char> part(kUploadPartSize);
 	file.clear();
 	for (bool first = true;; first = false) {
-		const ssize_t read = source.Read(part.data(), part.size());
+		ibMemoryBuffer part;
+		const ssize_t read = source.Read(part.GetWriteBuf(kUploadPartSize), kUploadPartSize);
 		if (read == wxInvalidOffset)
 			return false;
+		part.UngetWriteBuf(static_cast<std::size_t>(read));
 		if (read == 0 && !first)
 			return true;
 
@@ -1603,9 +1600,7 @@ bool ibFrontendMainFrame::UploadFile(const wxString& path, wxString& file)
 			params.SetValue(ibProtocol::ibFile::Name, wxFileName(path).GetFullName());
 		else
 			params.SetValue(ibProtocol::ibFile::File, file);
-		ibString text;
-		ibBase64::Append(text, part.data(), static_cast<std::size_t>(read));
-		params.SetValue(ibProtocol::ibFile::Data, text);
+		params.SetValue(ibProtocol::ibFile::Data, part);
 
 		ibProtocol::ibRefusal refusal = ibProtocol::ibRefusal::None;
 		wxString error;
@@ -1614,7 +1609,7 @@ bool ibFrontendMainFrame::UploadFile(const wxString& path, wxString& file)
 			return false;
 		}
 		file = answer.GetString(ibProtocol::ibFile::File);
-		if (static_cast<std::size_t>(read) < part.size())
+		if (static_cast<std::size_t>(read) < kUploadPartSize)
 			return true;
 	}
 }
@@ -1637,9 +1632,7 @@ bool ibFrontendMainFrame::DownloadFile(const wxString& file, const wxString& pat
 			return false;
 		}
 		parts = answer.GetInt(ibProtocol::ibFile::Parts);
-		ibMemoryBuffer data;
-		if (!ibBase64::Read(answer.GetString(ibProtocol::ibFile::Data), data))
-			return false;
+		const ibMemoryBuffer data = answer.GetBinary(ibProtocol::ibFile::Data);
 		if (data.GetDataLen() != 0 && target.Write(data.GetData(), data.GetDataLen()) != data.GetDataLen())
 			return false;
 	}

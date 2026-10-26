@@ -34,7 +34,7 @@ bool ibDialogGeneration::ShowModal(ibMetaID& id)
 		return false;
 
 	// Cancelled — no Id; and only what was offered can come back.
-	if (response.FindField(ibProtocol::ibRequest::ibGeneration::Id) == nullptr)
+	if (!response.FindField(ibProtocol::ibRequest::ibGeneration::Id))
 		return false;
 	const ibMetaID chosen = response.GetValue<std::int32_t>(ibProtocol::ibRequest::ibGeneration::Id);
 	if (!m_metaDesc.ContainMetaType(chosen))

@@ -123,9 +123,7 @@ void ibMcpTool::ibMcpArgument::Declare(ibDataNode& schema) const
 	// undeclared-argument gate then refused the very arguments those tools read. Caught by asking
 	// the RUNNING server what it publishes (2026-09-01); nothing in the source says which of the
 	// pair a name belongs to.
-	ibDataNode* properties = schema.FindChild(kSchemaProperties);
-	if (properties == nullptr)
-		properties = &schema.Child(kSchemaProperties);
+	ibDataNode* properties = &schema.Child(kSchemaProperties);   // the one there, or a new one
 
 	ibMcpSchemaArgument(*properties, m_name,
 		SchemaWordFor(m_kind), m_description, m_values);
@@ -140,10 +138,8 @@ void ibMcpTool::ibMcpArgument::Declare(ibDataNode& schema) const
 		// The argument's OWN node, the one ibMcpSchemaArgument just filled — found, not remade, for
 		// the same reason as above: Child() here would throw away the type and the description and
 		// leave an entry that is nothing but an example.
-		ibDataNode* argument = properties->FindChild(m_name);
-
-		if (argument != nullptr && m_shape(empty))
-			argument->AddField(wxT("example"), empty);
+		if (properties->FindChild(m_name) && m_shape(empty))
+			properties->Child(m_name).AddField(wxT("example"), empty);
 	}
 
 	if (!m_required)
@@ -155,8 +151,10 @@ void ibMcpTool::ibMcpArgument::Declare(ibDataNode& schema) const
 	// looking for something the tool will never read.
 	std::vector<ibDataValue> required;
 
-	if (const ibDataValue* already = schema.FindField(kSchemaRequired))
-		required = already->AsArray();
+	if (auto already = schema.FindField(kSchemaRequired)) {
+		for (const ibDataValue& name : already->AsArray())
+			required.push_back(name);
+	}
 
 	required.push_back(ibDataValue::String(m_name));
 	schema.SetField(kSchemaRequired, ibDataValue::Array(required));
@@ -175,7 +173,7 @@ void ibMcpTool::ibMcpArgument::Declare(ibDataNode& schema) const
 // (Found 2026-09-06, by a required `value` that had come.)
 bool ibMcpTool::ibMcpArgument::Given(const ibDataNode& params) const
 {
-	return params.FindField(m_name) != nullptr || params.FindChild(m_name) != nullptr;
+	return params.Has(m_name);
 }
 
 wxString ibMcpTool::ibMcpArgument::Text(const ibDataNode& params) const
@@ -185,8 +183,8 @@ wxString ibMcpTool::ibMcpArgument::Text(const ibDataNode& params) const
 
 std::int64_t ibMcpTool::ibMcpArgument::Whole(const ibDataNode& params) const
 {
-	const ibDataValue* given = params.FindField(m_name);
-	return given != nullptr && given->Kind() == ibDataKind::Number ? given->AsInt() : 0;
+	auto given = params.FindField(m_name);
+	return given && given->Kind() == ibDataKind::Number ? given->AsInt() : 0;
 }
 
 bool ibMcpTool::ibMcpArgument::Flag(const ibDataNode& params) const
@@ -634,10 +632,10 @@ wxString ibMcpArgumentFault(const ibMcpTool* tool, const ibDataNode& arguments)
 		return wxT("string");
 	};
 
-	const auto arrived = [](const ibDataValue* value, const ibDataNode* child) -> wxString {
-		if (child != nullptr)
+	const auto arrived = [](const std::optional<ibDataValue>& value, const std::optional<ibDataNode>& child) -> wxString {
+		if (child)
 			return wxT("an object");
-		if (value == nullptr)
+		if (!value)
 			return wxT("nothing");
 		switch (value->Kind()) {
 			case ibDataKind::String: return wxT("a string");
@@ -652,12 +650,12 @@ wxString ibMcpArgumentFault(const ibMcpTool* tool, const ibDataNode& arguments)
 
 	for (const ibMcpTool::ibMcpArgument& argument : tool->Arguments()) {
 
-		const ibDataValue* value = arguments.FindField(argument.Name());
-		const ibDataNode*  child = arguments.FindChild(argument.Name());
+		auto value = arguments.FindField(argument.Name());
+		auto child = arguments.FindChild(argument.Name());
 
 		// ABSENT IS NOT THIS GATE'S BUSINESS — a required one that never came is answered by
 		// ibMcpMissingArgument, in its own words.
-		if (value == nullptr && child == nullptr)
+		if (!value && !child)
 			continue;
 
 		const ibMcpTool::ibMcpArgument::Kind kind = argument.KindOf();
@@ -665,17 +663,17 @@ wxString ibMcpArgumentFault(const ibMcpTool* tool, const ibDataNode& arguments)
 
 		switch (kind) {
 			case ibMcpTool::ibMcpArgument::Kind::Whole:
-				fits = child == nullptr && value != nullptr && value->Kind() == ibDataKind::Number;
+				fits = !child && value && value->Kind() == ibDataKind::Number;
 				break;
 			case ibMcpTool::ibMcpArgument::Kind::Flag:
-				fits = child == nullptr && value != nullptr && value->Kind() == ibDataKind::Bool;
+				fits = !child && value && value->Kind() == ibDataKind::Bool;
 				break;
 			case ibMcpTool::ibMcpArgument::Kind::Many:
-				fits = child == nullptr && value != nullptr && value->Kind() == ibDataKind::Array;
+				fits = !child && value && value->Kind() == ibDataKind::Array;
 				break;
 			case ibMcpTool::ibMcpArgument::Kind::Node:
 				// A node may arrive either way — as a child, or as a value carrying one.
-				fits = child != nullptr || (value != nullptr && value->Kind() == ibDataKind::Child);
+				fits = child || (value && value->Kind() == ibDataKind::Child);
 				break;
 			case ibMcpTool::ibMcpArgument::Kind::Any:
 				// Whatever came is the right shape, because this gate is not the one that knows.
@@ -684,7 +682,7 @@ wxString ibMcpArgumentFault(const ibMcpTool* tool, const ibDataNode& arguments)
 				fits = true;
 				break;
 			default:
-				fits = child == nullptr && value != nullptr && value->Kind() == ibDataKind::String;
+				fits = !child && value && value->Kind() == ibDataKind::String;
 				break;
 		}
 
@@ -697,7 +695,7 @@ wxString ibMcpArgumentFault(const ibMcpTool* tool, const ibDataNode& arguments)
 		// ⭐ AND A CLOSED SET IS CLOSED. `enum` is published in the schema, and a word outside it
 		// used to reach the tool, where each one decided for itself what to do about it — some
 		// refused, some took a default and carried on with a choice nobody made.
-		if (argument.Values().empty() || value == nullptr || value->Kind() != ibDataKind::String)
+		if (argument.Values().empty() || !value || value->Kind() != ibDataKind::String)
 			continue;
 
 		const wxString said = value->AsString();
@@ -1299,7 +1297,7 @@ void ibMcpSayProperties(const ibPropertyObject* object, ibDataNode& node,
 			// away, addressed by the id printed here — which is the thing a caller actually needs.
 			if (value.Kind() == ibDataKind::Child && value.AsChild()) {
 
-				const ibDataNode& held = *value.AsChild();
+				const ibDataNode held = *value.AsChild();
 				ibDataNode& shown = entry->Child(wxT("value"));
 
 				// ⚠ THE NAME IS A PROPERTY, THE ID IS A FIELD — the node keeps two areas and they are
@@ -1309,7 +1307,7 @@ void ibMcpSayProperties(const ibPropertyObject* object, ibDataNode& node,
 				// (Guid, Id, Deleted) go to fields, editable values (Name, Synonym, Comment) go to
 				// properties.
 				shown.SetValue(wxT("name"), held.GetProp<wxString>(wxT("Name")));
-				if (const ibDataValue* id = held.FindField(wxT("Id")))
+				if (auto id = held.FindField(wxT("Id")))
 					shown.AddField(wxT("id"), *id);
 			}
 			else {
@@ -1335,9 +1333,9 @@ ibValueMetaObject* ibMcpObjectNamed(const ibDataNode& params, wxString& refusal,
 	// ⚠ ASKED WHETHER IT WAS GIVEN, not just what it is. GetValue answers 0 for an argument that
 	// was never sent, and 0 is a perfectly good number to go looking for — which is how "you
 	// forgot the id" turned into "no object has id 0" at the callsites that skipped the guard.
-	const ibDataValue* given = params.FindField(field);
+	auto given = params.FindField(field);
 
-	if (given == nullptr || given->Kind() != ibDataKind::Number) {
+	if (!given || given->Kind() != ibDataKind::Number) {
 		refusal = wxString::Format(
 			ibMcpText("Pass the object's NodeId as `%s` - metadata_list and metadata_get give it."),
 			field);
@@ -1425,28 +1423,31 @@ void ibMcpPictureIdAsText(ibDataValue& shape)
 {
 	if (shape.Kind() != ibDataKind::Child)
 		return;
-	const std::shared_ptr<ibDataNode>& node = shape.AsChild();
+	// The node read out is a copy of its bytes: written, it goes back as the value.
+	auto node = shape.AsChild();
 	if (!node)
 		return;
 
-	const ibDataValue* id = node->FindField(wxT("ClassId"));
-	if (id == nullptr || id->Kind() != ibDataKind::Number)
+	auto id = node->FindField(wxT("ClassId"));
+	if (!id || id->Kind() != ibDataKind::Number)
 		return;
 
 	node->SetField(wxT("ClassId"), ibDataValue::String(
 		wxString::Format(wxT("%llu"), (unsigned long long)id->AsUInt())));
+	shape = ibDataValue::Child(std::make_shared<ibDataNode>(std::move(*node)));
 }
 
 void ibMcpPictureIdAsNumber(ibDataValue& shape)
 {
 	if (shape.Kind() != ibDataKind::Child)
 		return;
-	const std::shared_ptr<ibDataNode>& node = shape.AsChild();
+	// The node read out is a copy of its bytes: written, it goes back as the value.
+	auto node = shape.AsChild();
 	if (!node)
 		return;
 
-	const ibDataValue* id = node->FindField(wxT("ClassId"));
-	if (id == nullptr || id->Kind() != ibDataKind::String)
+	auto id = node->FindField(wxT("ClassId"));
+	if (!id || id->Kind() != ibDataKind::String)
 		return;
 
 	// Parsed into wx's own type first: ToULongLong writes through an `unsigned long long*` and std::uint64_t is
@@ -1458,6 +1459,7 @@ void ibMcpPictureIdAsNumber(ibDataValue& shape)
 	if (!id->AsString().ToULongLong(&parsed))
 		return;
 	node->SetField(wxT("ClassId"), ibDataValue::UInt(static_cast<std::uint64_t>(parsed)));
+	shape = ibDataValue::Child(std::make_shared<ibDataNode>(std::move(*node)));
 }
 
 wxString ibMcpFencedExcerpt(const wxString& text, const wxString& language, size_t maxLines)
@@ -1675,7 +1677,7 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 	// there is: a picture could be read here and not written back (found 2026-09-22 giving the Print group its
 	// printer; the way round built for it that day was the wrong fix, and this is the right one).
 	const ibPropertyTString* asCaption = dynamic_cast<const ibPropertyTString*>(property);
-	if (const ibDataNode* byLanguage = asCaption != nullptr ? params.FindChild(ibMcpValueArgument().Name()) : nullptr) {
+	if (auto byLanguage = asCaption != nullptr ? params.FindChild(ibMcpValueArgument().Name()) : std::nullopt) {
 
 		ibTranslateString edited = asCaption->GetValueAsTranslate();
 		int written = 0;
@@ -1724,7 +1726,7 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 	// takes a value, rather than in a verb of its own on each tree. Passing no
 	// language keeps the old behaviour (write the value as it stands), which is
 	// what a caller working in one language wants.
-	if (const ibDataValue* language = params.FindField(ibMcpLanguageArgument().Name())) {
+	if (auto language = params.FindField(ibMcpLanguageArgument().Name())) {
 
 		// ⭐ THE TYPE SAYS WHETHER IT CARRIES LANGUAGES. `ibPropertyTString` IS the translatable
 		// string — that is what the class is for, declared once where the property is created — so
@@ -1804,8 +1806,8 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 		// translation away from each other; the id is what the property actually stores and what
 		// the front compares against (advpropList's ValueToString does exactly this). A caller that
 		// read the list back can point at an entry by its id and be right whatever it is called.
-		const ibDataValue* asked = params.FindField(ibMcpValueArgument().Name());
-		const bool byNumber = asked != nullptr && asked->Kind() == ibDataKind::Number;
+		auto asked = params.FindField(ibMcpValueArgument().Name());
+		const bool byNumber = asked && asked->Kind() == ibDataKind::Number;
 		const long askedId = byNumber ? (long)asked->AsNumber().ToInt() : 0;
 
 		// …and the WORD only when a word came. Read as text unconditionally, a number was refused
@@ -1814,7 +1816,7 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 		// setting a command's Group by the id metadata_get had just listed). An ARRAY was refused the
 		// same way (`expected 4, got 7`) before the set below was reached: promised in form_set's
 		// description, and never once taken (measured 2026-09-28, putting a column under an option).
-		const bool bySet = asked != nullptr && asked->Kind() == ibDataKind::Array;
+		const bool bySet = asked && asked->Kind() == ibDataKind::Array;
 		const wxString word = byNumber || bySet ? wxString() : ibMcpValueArgument().Text(params);
 
 		// TWO VOCABULARIES FOR ONE VALUE — the inspector reads "Within second",
@@ -1934,9 +1936,9 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 	// area and objects in the properties area as a child, so both are looked for —
 	// a caller sending back what it read should not have to know which it holds.
 	ibDataValue value;
-	if (const ibDataValue* scalar = params.FindField(ibMcpValueArgument().Name()))
+	if (auto scalar = params.FindField(ibMcpValueArgument().Name()))
 		value = *scalar;
-	else if (const ibDataNode* composite = params.FindChild(ibMcpValueArgument().Name())) {
+	else if (auto composite = params.FindChild(ibMcpValueArgument().Name())) {
 		value = ibDataValue::Child(std::make_shared<ibDataNode>(*composite));
 		// …and a picture's id comes back as the digits this door sent out — turned into a number here,
 		// because the property stores one (mcpTool.h, ibMcpPictureIdAsText).

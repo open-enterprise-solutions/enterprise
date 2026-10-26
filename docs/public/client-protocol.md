@@ -16,8 +16,8 @@ is never renumbered.
 
 | Transport | Where | For |
 |---|---|---|
-| WebSocket `ws://host:port/<base>/client` (`wss://` over TLS), one JSON-RPC 2.0 message per call | an application server | thin clients, web servers |
-| HTTP `POST /<base>/client`, one JSON-RPC request per call | an application server | whatever cannot hold a socket |
+| WebSocket `ws://host:port/<base>/client` (`wss://` over TLS), one OES-RPC packet per binary message | an application server | thin clients, web servers |
+| HTTP `POST /<base>/client`, one JSON-RPC request per call — the same tree as JSON | an application server | whatever cannot hold a socket |
 | In process: `ibClientHost::Call(method, params, result, refusal, error)` | the client's own process | a file base; the assistant's MCP tool (`client_call`) |
 
 The address is `oes://server[:port]/<base>`, or `oess://` when the server speaks TLS - its `backend.conf` names a
@@ -27,8 +27,11 @@ WebSocket, and a thin runtime's when `backend.conf` `Resume` is 0, ends its sess
 with the window on (left out, 120 seconds; 0 is off; never more than 30 minutes) keeps the session that long, and
 comes back with `login` `{Token}`.
 
-A WebSocket opened with `?compress=deflate` gets every answer of 1 KB and more as a binary message: the JSON, raw
-deflate (RFC 1951 — a browser's `DecompressionStream("deflate-raw")`). A text message is the JSON as it is.
+A packet is the node the server builds, as its bytes lie (`src/engine/core/serialize/dataBuilder.h`): `OES1`, the
+version, the length, then the root — `id`, `method` and `params`, or `id` and `result` or `error`, and `types`, the
+names of the types its nodes carry. Text is UTF-16LE; bytes (a picture's PNG, a file's part) are a `Binary`, never
+text. A WebSocket opened with `?compress=deflate` gets every answer of 1 KB and more raw-deflated (RFC 1951 — a
+browser's `DecompressionStream("deflate-raw")`); a packet begins `OES1`, a deflated one never does.
 
 ## Methods
 
@@ -51,7 +54,7 @@ deflate (RFC 1951 — a browser's `DecompressionStream("deflate-raw")`). A text 
 | `open` | `Client`, `File` or `Extension` | the frame — the file opened as a document; without a file, a new document of the template that opens `Extension` (File → New) |
 | `command` | `Client`, `Command` | the frame — the command done on the active tab's document |
 | `presentation` | `Client`, `Value`, `Format` | `Text` — the value as a person reads it, formatted by the server (`Format`: the codes `Format()` takes) |
-| `picture` | `Client`, `Pictures` — the ids: an engine picture's number, a configuration picture's `<guid>#<version>` (read by the guid) | `Pictures` — each `Id`, `Picture` (PNG, base64; empty when there is none of that id) |
+| `picture` | `Client`, `Pictures` — the ids: an engine picture's number, a configuration picture's `<guid>#<version>` (read by the guid) | `Pictures` — each `Id`, `Picture` (the PNG, a `Binary`; empty when there is none of that id) |
 | `debug` | `Client`, `Command` and its fields (protocol 6) | at once, never the frame — [The debugger](#the-debugger) |
 
 `login`'s `Read` saves the start's own reads: the designer names the debugger's store (`Schema` 15), which was a
@@ -181,7 +184,7 @@ carries the picture itself:
   is none of too, so it is not asked again. Before it draws an answer, the client asks for every picture the answer
   names at once (its `Picture`, `Icon` and `…Picture` fields): the designer's start is one `picture` call, not one for
   the templates and another for the tree;
-- only a picture with no id (one held as a file's bytes) comes as itself, a PNG in base64.
+- only a picture with no id (one held as a file's bytes) comes as itself: the field holds its PNG, a `Binary`.
 
 A field's `State` carries `Text`, as shown, and `Value`, the value with its type: `{"t": <type id>, "type": <name>,
 "v": <text>}`, a reference `{"t", "m", "g"}`. An `event` that changes a field (`Change`) gives either: `Value` is
@@ -362,8 +365,8 @@ wait; which calls a person can make meanwhile is the client's to say.
 ## What the server says unasked
 
 A client's frame may change without a call of its: a report composed in the background is delivered, an idle handler
-runs, work nobody called asks the person something. The server then sends the client's connection a JSON-RPC
-notification — no id, no answer:
+runs, work nobody called asks the person something. The server then sends the client's connection a
+notification — a request with no id, which nothing answers:
 
 | Method | Params | The client |
 |---|---|---|
@@ -516,9 +519,9 @@ are HTTP's by meaning; where two reasons share one, the method tells them apart.
 
 An HTTP status answers only what comes before the protocol: no base at the address (404), a notification (204).
 
-A message that cannot be read as a request — not JSON, JSON nesting more than 256 objects and arrays (the
-outermost counted), or no `method` in it — is answered with JSON-RPC's own parse error, `-32700`, and an `id` of
-`null`, over a WebSocket and over HTTP alike. It is refused before anything else is looked at, the client and its
+A message that cannot be read as a request — not a packet (over HTTP, not JSON), nesting more than 256 nodes and
+lists (the outermost counted), or no `method` in it — is answered with JSON-RPC's own parse error, `-32700`, and an
+empty `id` (`null` in JSON), over a WebSocket and over HTTP alike. It is refused before anything else is looked at, the client and its
 session included.
 
 ## What it guarantees
@@ -535,7 +538,7 @@ session included.
   window, runs a repeated call again. A dropped socket with the window off, or a designer's, ends its session.
 - HTTP `POST` is not bound to a connection. The `Client` id remains its bearer. The window and the token are not
   offered there.
-- A file travels in base64 inside JSON.
+- Over HTTP `POST` — JSON — bytes travel as `"base64:<...>"`.
 - The debugger reaches the runtimes on the server's own machine. An application server brings up no debug server, so
   its clients are not debugged.
 - The platform's own captions are in the server's language, not the session's.

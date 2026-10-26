@@ -81,8 +81,6 @@ private:
 	void WriteClasses(ibDataNode& response);
 	// A control's rows as the designer's inspector shows them, under Control, its id — its command bar's with them.
 	static void WriteRows(ibValueFrame* control, ibDataNode& controls);
-	// The form handed back, its properties where a reader looks for them — the wire brought each scalar back a field.
-	static void RestoreProperties(ibDataNode& node);
 	// A property or an event of an attribute, of a form command, given the value the request carries (Name, Value) —
 	// its owner asked and told, as the inspector's door asks and tells it.
 	static bool SetProperty(ibPropertyObject* object, const ibDataNode& request);

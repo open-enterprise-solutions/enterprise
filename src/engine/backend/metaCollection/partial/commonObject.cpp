@@ -1198,7 +1198,7 @@ bool ibValueMetaObjectRecordDataHierarchyMutableRef::ReadData(const ibDataNode& 
 		// The parent is linked once every item is read: an item edited to sit under a later one stands before it.
 		std::vector<std::pair<wxObjectDataPtr<ibPredefinedValueObject>, ibGuid>> parents;
 		for (const ibDataValue& item : predefinedVal.AsArray()) {
-			const std::shared_ptr<ibDataNode>& pv = item.AsChild();
+			const auto pv = item.AsChild();
 			if (!pv)
 				continue;
 			const ibGuid valueGuid = pv->GetValue<ibGuid>(wxT("Guid"));
@@ -1208,7 +1208,7 @@ bool ibValueMetaObjectRecordDataHierarchyMutableRef::ReadData(const ibDataNode& 
 			const bool valueIsFolder = pv->GetValue<bool>(wxT("IsFolder"));
 			m_predefinedObjectVector.emplace_back(
 				new ibPredefinedValueObject(valueGuid, valueName, valueCode, valueDescription, valueIsFolder));
-			if (pv->FindField(wxT("Parent")) != nullptr)
+			if (pv->Has(wxT("Parent")))
 				parents.emplace_back(m_predefinedObjectVector.back(), pv->GetValue<ibGuid>(wxT("Parent")));
 		}
 		for (const auto& parent : parents)

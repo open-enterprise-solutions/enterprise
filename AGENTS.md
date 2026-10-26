@@ -15,5 +15,5 @@ and the like). This file only points the way; the rules live where the people re
   ([development.md §1](docs/development.md); the lint refuses them). A PERSON whose code is inside
   the commit is named as a co-author — that trailer stays.
 - **Language:** English. No Cyrillic in code, comments, test names, commits, pull requests,
-  issues, review replies, or docs. The exception is the name of a 1C configuration metadata
+  issues, review replies, or docs. The exception is the name of a configuration's metadata
   object that already has a Cyrillic name.

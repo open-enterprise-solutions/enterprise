@@ -8,6 +8,8 @@
 
 #include "backend/backend_core.h"
 
+class ibDataValue;   // core/serialize/dataBuilder.h — a picture as an answer names it
+
 struct ibBackendPictureEntry {
 	wxString m_name;
 	wxBitmap m_data;
@@ -34,10 +36,10 @@ public:
 	static ibPicture GetServerPicture(const ibPictureDescription& pictureDesc, const class ibMetaData* metaData = nullptr);
 
 	// ⭐ A PICTURE BY ITS ID — all an answer names a picture by: a backend picture's number, a configuration picture's
-	// guid and its version, `<guid>#<version>`, of the configuration given (none given: no configuration picture). The
-	// picture itself the client loads apart, by the id (ibProtocol::ibMethod::Picture), and keeps with its version; one
-	// held as a file's bytes has no id of its own and goes as itself. Empty: no picture.
-	static ibString SendPicture(const ibPictureDescription& pictureDesc, const class ibMetaData* metaData);
+	// guid and its version, `<guid>#<version>`, of the configuration given (none given: no configuration picture) — a
+	// String. The picture itself the client loads apart, by the id (ibProtocol::ibMethod::Picture), and keeps with its
+	// version; one held as a file's bytes has no id of its own and goes as itself, its PNG — a Binary. Empty: no picture.
+	static ibDataValue SendPicture(const ibPictureDescription& pictureDesc, const class ibMetaData* metaData);
 	// …a backend picture by its number alone — no configuration names it: a decimal (a std::uint64_t is past what a JSON number
 	// keeps). 0: no picture.
 	static ibString SendPicture(const ibPictureID& id);
@@ -52,17 +54,19 @@ public:
 #pragma endregion 
 
 #pragma region __picture_conv_h__
-	static ibString CreateBase64Image(const wxImage& image);
+	// A MASTER IN THE SOURCE — a PNG written as Base-64 text in a `_res.cpp`, read at the size it is shown.
 	static wxImage GetImageFromBase64(const wxString& src, const wxSize& size = wxDefaultSize);
 	static wxBitmap GetBitmapFromBase64(const wxString& src, const wxSize& size = wxDefaultSize);
 	static wxIcon GetIconFromBase64(const wxString& src, const wxSize& size = wxDefaultSize);
 
 	// A PICTURE AS DATA (core/graphics/picture.h) and a wx one: from an image made just now, shared with nobody —
-	// a master kept in base64 is read at the size it is shown first (GetImageFromBase64); and for a window, made
-	// anew every time, its own.
+	// a master in the source is read at the size it is shown first (GetImageFromBase64); and for a window, made
+	// anew every time, its own, at the size asked (none asked: as it is).
 	static ibPicture FromImage(const wxImage& image);
-	static wxBitmap ToBitmap(const ibPicture& picture);
-	static wxIcon ToIcon(const ibPicture& picture);
+	static wxBitmap ToBitmap(const ibPicture& picture, const wxSize& size = wxDefaultSize);
+	static wxIcon ToIcon(const ibPicture& picture, const wxSize& size = wxDefaultSize);
+	// …and its PNG as Base-64 text — for a page that takes a picture in a data URI (the desktop's web view), never the wire.
+	static ibString CreateBase64Image(const wxImage& image);
 #pragma endregion
 };
 
@@ -70,7 +74,7 @@ public:
 // engine's registry whether it has that picture.
 class BACKEND_API ibBackendPictureDescriptionMemory : public ibPictureDescriptionMemory {
 public:
-	static bool ReadNode(const class ibDataValue& value, ibPictureDescription& pictureDesc);
+	static bool ReadNode(const ibDataValue& value, ibPictureDescription& pictureDesc);
 };
 
 // Initialize with XPM data

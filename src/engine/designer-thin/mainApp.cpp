@@ -16,7 +16,7 @@
 #include "core/diagnostics/crashGuard.h"   // ibCrashGuard::Install — the process's journal and dumps
 #include "frmclient/artProvider/splash/splashLogo.h"   // the splash's picture, the desktop's
 #include "frmclient/backend/appData.h"                 // the base it opens — held there, as the engine's appData held it
-#include "frmclient/win/picture.h"                     // ibProtocolPicture — a PNG in base64, made a bitmap
+#include "frmclient/backend/backend_picture.h"         // ibBackendPicture::GetImageFromBase64 — the splash, a master in the source
 #include "protocol/connectionFile.h"
 #include "protocol/connectionServer.h"
 
@@ -95,7 +95,7 @@ bool ibAppDesigner::OnInit()
 	// THE SPLASH — the desktop's (designer/mainApp.cpp): up while the base opens and the client logs in, gone with the
 	// main window shown — or before a refusal is said, which it would stand over.
 	const auto splashDestroy = [](wxSplashScreen* shown) { shown->Destroy(); };
-	std::unique_ptr<wxSplashScreen, decltype(splashDestroy)> splash(new ibProcessSplashScreen(ibProtocolPicture(s_splashLogo_png),
+	std::unique_ptr<wxSplashScreen, decltype(splashDestroy)> splash(new ibProcessSplashScreen(wxBitmap(ibBackendPicture::GetImageFromBase64(s_splashLogo_png)),
 		wxSPLASH_CENTRE_ON_SCREEN, -1, nullptr, -1, wxDefaultPosition, wxDefaultSize, wxBORDER_SIMPLE), splashDestroy);
 
 	std::unique_ptr<ibProtocolConnection> connection;

@@ -94,9 +94,9 @@ bool ibValueMetaObjectAccumulationRegister::ReadData(const ibDataNode& node)
 
 	// Absent sub-node = a configuration written before the totals tables existed. The object keeps
 	// the id it was given at construction rather than being left at zero.
-	if (const ibDataNode* totals = node.FindChild(wxT("BalanceTotals")))
+	if (auto totals = node.FindChild(wxT("BalanceTotals")))
 		m_totalsBalances->LoadNode(*totals);
-	if (const ibDataNode* totals = node.FindChild(wxT("TurnoverTotals")))
+	if (auto totals = node.FindChild(wxT("TurnoverTotals")))
 		m_totalsTurnovers->LoadNode(*totals);
 
 	m_propertyObjectModule->SetNodeValue(node.GetProperty(m_propertyObjectModule->GetName()));

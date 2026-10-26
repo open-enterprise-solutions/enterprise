@@ -335,8 +335,8 @@ void WriteBorder(ibDataNode& into, const ibChar* name,
 void ReadBorder(const ibDataNode& from, const ibChar* name,
 	ibSpreadsheetBorderDescription& border)
 {
-	const ibDataNode* node = from.FindChild(name);
-	if (node == nullptr)
+	auto node = from.FindChild(name);
+	if (!node)
 		return;
 
 	border.m_style = (ibSpreadsheetPenStyle)node->GetValue<std::int32_t>(wxT("style"));
@@ -352,18 +352,18 @@ void ReadBorder(const ibDataNode& from, const ibChar* name,
 
 bool ibSpreadsheetCellDescriptionMemory::ReadNode(const ibDataValue& value, ibSpreadsheetCellDescription& cell)
 {
-	const std::shared_ptr<ibDataNode>& node = value.AsChild();
+	const auto node = value.AsChild();
 	if (!node)
 		return false;
 
 	cell.m_value = node->GetValue<ibString>(wxT("value"));
 	cell.m_detailsParameter = node->GetValue<ibString>(wxT("parameter"));
 
-	if (node->FindField(wxT("alignHorz")) != nullptr)
+	if (node->Has(wxT("alignHorz")))
 		cell.m_alignHorz = node->GetValue<std::int32_t>(wxT("alignHorz"));
-	if (node->FindField(wxT("alignVert")) != nullptr)
+	if (node->Has(wxT("alignVert")))
 		cell.m_alignVert = node->GetValue<std::int32_t>(wxT("alignVert"));
-	if (node->FindField(wxT("orient")) != nullptr)
+	if (node->Has(wxT("orient")))
 		cell.m_textOrient = node->GetValue<std::int32_t>(wxT("orient"));
 
 	cell.m_font.FromString(node->GetValue<ibString>(wxT("font")));
@@ -375,17 +375,17 @@ bool ibSpreadsheetCellDescriptionMemory::ReadNode(const ibDataValue& value, ibSp
 	ReadBorder(*node, wxT("top"),    cell.m_borderAt[2]);
 	ReadBorder(*node, wxT("bottom"), cell.m_borderAt[3]);
 
-	if (node->FindField(wxT("rowSpan")) != nullptr)
+	if (node->Has(wxT("rowSpan")))
 		cell.m_row_size = node->GetValue<std::int32_t>(wxT("rowSpan"));
-	if (node->FindField(wxT("colSpan")) != nullptr)
+	if (node->Has(wxT("colSpan")))
 		cell.m_col_size = node->GetValue<std::int32_t>(wxT("colSpan"));
 
-	if (node->FindField(wxT("fit")) != nullptr)
+	if (node->Has(wxT("fit")))
 		cell.m_fitMode =
 			(ibSpreadsheetCellDescription::ibFitMode)node->GetValue<std::int32_t>(wxT("fit"));
-	if (node->FindField(wxT("readOnly")) != nullptr)
+	if (node->Has(wxT("readOnly")))
 		cell.m_isReadOnly = node->GetValue<bool>(wxT("readOnly"));
-	if (node->FindField(wxT("fill")) != nullptr)
+	if (node->Has(wxT("fill")))
 		cell.m_fillSetType = (ibSpreadsheetFillType)node->GetValue<std::int32_t>(wxT("fill"));
 
 	return true;
@@ -452,14 +452,14 @@ bool ibSpreadsheetCellDescriptionMemory::WriteNode(ibDataValue& value, const ibS
 
 bool ibSpreadsheetDescriptionMemory::ReadNode(const ibDataValue& value, ibSpreadsheetDescription& spreadsheetDesc)
 {
-	const std::shared_ptr<ibDataNode>& sheet = value.AsChild();
+	const auto sheet = value.AsChild();
 	if (!sheet)
 		return true;   // an empty sheet — an ordinary state
 
-	if (const ibDataValue* cells = sheet->FindField(kSheetCells)) {
+	if (auto cells = sheet->FindField(kSheetCells)) {
 		for (const ibDataValue& entry : cells->AsArray()) {
 
-			const std::shared_ptr<ibDataNode>& node = entry.AsChild();
+			const auto node = entry.AsChild();
 			if (!node)
 				continue;
 
@@ -478,13 +478,13 @@ bool ibSpreadsheetDescriptionMemory::ReadNode(const ibDataValue& value, ibSpread
 	// side rather than two copies that could disagree.
 	auto readBand = [&](const ibChar* which, bool rows) {
 
-		const ibDataNode* band = sheet->FindChild(which);
-		if (band == nullptr)
+		auto band = sheet->FindChild(which);
+		if (!band)
 			return;
 
-		if (const ibDataValue* areas = band->FindField(wxT("areas"))) {
+		if (auto areas = band->FindField(wxT("areas"))) {
 			for (const ibDataValue& entry : areas->AsArray()) {
-				const std::shared_ptr<ibDataNode>& node = entry.AsChild();
+				const auto node = entry.AsChild();
 				if (!node)
 					continue;
 
@@ -497,16 +497,16 @@ bool ibSpreadsheetDescriptionMemory::ReadNode(const ibDataValue& value, ibSpread
 			}
 		}
 
-		if (const ibDataValue* breaks = band->FindField(wxT("breaks"))) {
+		if (auto breaks = band->FindField(wxT("breaks"))) {
 			for (const ibDataValue& entry : breaks->AsArray()) {
 				if (rows) spreadsheetDesc.AddRowBrake((int)entry.AsInt());
 				else      spreadsheetDesc.AddColBrake((int)entry.AsInt());
 			}
 		}
 
-		if (const ibDataValue* sizes = band->FindField(wxT("sizes"))) {
+		if (auto sizes = band->FindField(wxT("sizes"))) {
 			for (const ibDataValue& entry : sizes->AsArray()) {
-				const std::shared_ptr<ibDataNode>& node = entry.AsChild();
+				const auto node = entry.AsChild();
 				if (!node)
 					continue;
 
@@ -526,9 +526,9 @@ bool ibSpreadsheetDescriptionMemory::ReadNode(const ibDataValue& value, ibSpread
 		//
 		// Written now because the node form is where a description says what it
 		// is, and a fold is part of what a sheet is.
-		if (const ibDataValue* groups = band->FindField(wxT("groups"))) {
+		if (auto groups = band->FindField(wxT("groups"))) {
 			for (const ibDataValue& entry : groups->AsArray()) {
-				const std::shared_ptr<ibDataNode>& node = entry.AsChild();
+				const auto node = entry.AsChild();
 				if (!node)
 					continue;
 
@@ -546,7 +546,7 @@ bool ibSpreadsheetDescriptionMemory::ReadNode(const ibDataValue& value, ibSpread
 	readBand(kSheetRows, true);
 	readBand(kSheetCols, false);
 
-	if (const ibDataNode* freeze = sheet->FindChild(kSheetFreeze)) {
+	if (auto freeze = sheet->FindChild(kSheetFreeze)) {
 		spreadsheetDesc.SetRowFreeze(freeze->GetValue<std::int32_t>(wxT("row")));
 		spreadsheetDesc.SetColFreeze(freeze->GetValue<std::int32_t>(wxT("col")));
 	}
@@ -570,9 +570,11 @@ bool ibSpreadsheetDescriptionMemory::WriteNode(ibDataValue& value, const ibSprea
 		if (!ibSpreadsheetCellDescriptionMemory::WriteNode(entry, *cell))
 			continue;
 
-		if (const std::shared_ptr<ibDataNode>& node = entry.AsChild()) {
+		// A value is its bytes: the cell's node with its place added is the entry written again.
+		if (auto node = entry.AsChild()) {
 			node->AddField(wxT("row"), ibDataValue::Int((std::int64_t)cell->m_row));
 			node->AddField(wxT("col"), ibDataValue::Int((std::int64_t)cell->m_col));
+			entry = ibDataValue::Child(std::make_shared<ibDataNode>(std::move(*node)));
 		}
 
 		cells.push_back(entry);

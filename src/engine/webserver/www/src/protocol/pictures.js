@@ -1,6 +1,7 @@
 // THE PICTURES — named by their id everywhere (a backend picture's number, a configuration picture's guid), never
 // carried in an answer. The page asks for every id an answer names in one `picture` call before it draws it, and keeps
-// them for the session: an id that has none is kept too, so it is not asked again (docs/public/client-protocol.md).
+// them for the session: an id that has none is kept too, so it is not asked again (docs/public/client-protocol.md). A
+// picture with no id of its own (a file's) is its PNG itself, the bytes in the field that names it: drawn as it is.
 
 /** @typedef {import('./session.js').Session} Session */
 
@@ -8,8 +9,10 @@ export class Pictures {
 	/** @param {Session} session */
 	constructor(session) {
 		this.session = session;
-		/** @type {Map<string, string>} id → a data: URL, or '' when there is none of that id */
+		/** @type {Map<string, string>} id → the picture's URL, or '' when there is none of that id */
 		this.known = new Map();
+		/** @type {WeakMap<Uint8Array, string>} a field's PNG → its URL, made once */
+		this.given = new WeakMap();
 	}
 
 	/**
@@ -25,7 +28,7 @@ export class Pictures {
 			return;
 		const answer = await this.session.call('picture', { Pictures: [...wanted] });
 		for (const one of answer.Pictures?.NodeChildren ?? answer.Pictures ?? [])
-			this.known.set(String(one.Id), one.Picture ? `data:image/png;base64,${one.Picture}` : '');
+			this.known.set(String(one.Id), urlOf(one.Picture));
 		for (const id of wanted) {
 			if (!this.known.has(id))
 				this.known.set(id, '');
@@ -33,12 +36,28 @@ export class Pictures {
 	}
 
 	/**
-	 * The picture's URL to draw, '' when there is none or it has not come.
-	 * @param {string | number | undefined} id
+	 * The picture's URL to draw, '' when there is none or it has not come — a field's value: its id, or its PNG.
+	 * @param {string | number | Uint8Array | undefined} picture
 	 */
-	url(id) {
-		return id === undefined || id === null || id === '' ? '' : this.known.get(String(id)) ?? '';
+	url(picture) {
+		if (picture instanceof Uint8Array) {
+			let url = this.given.get(picture);
+			if (url === undefined) {
+				url = urlOf(picture);
+				this.given.set(picture, url);
+			}
+			return url;
+		}
+		return picture === undefined || picture === null || picture === '' ? '' : this.known.get(String(picture)) ?? '';
 	}
+}
+
+/**
+ * A PNG's bytes as a URL to draw — '' when there are none.
+ * @param {unknown} png
+ */
+function urlOf(png) {
+	return png instanceof Uint8Array && png.length !== 0 ? URL.createObjectURL(new Blob([png], { type: 'image/png' })) : '';
 }
 
 /**
@@ -51,7 +70,7 @@ function collect(node, into) {
 			collect(one, into);
 		return;
 	}
-	if (node === null || typeof node !== 'object')
+	if (node === null || typeof node !== 'object' || node instanceof Uint8Array)
 		return;
 	for (const [name, value] of Object.entries(node)) {
 		if ((name === 'Icon' || name.endsWith('Picture')) && (typeof value === 'string' || typeof value === 'number')) {

@@ -114,6 +114,12 @@ ibObjectInspector* ibObjectInspector::GetObjectInspector()
 
 void ibObjectInspector::Create(ibPropertyObject* object, bool force)
 {
+	// THE WINDOW TAKING ITS TABS DOWN (IsClosingWindow): what its parts select as they go is not the person's — the
+	// inspector lets go of what it shows and asks the server nothing. The tree, shown again as the tabs closed, asked its
+	// properties after the logout (2026-10-26); a part letting go of its own before it dies still clears the grid.
+	if (object != nullptr && mainFrame != nullptr && mainFrame->IsClosingWindow())
+		object = nullptr;
+
 	// The DEFERRED rebuild (the CallAfter below) reads m_pendingObject at FIRE time, so it must ALWAYS track the
 	// latest requested object — record it on EVERY call, not only when we defer. Otherwise a rebuild queued for object
 	// A that is then re-selected to B (e.g. a form closing hands the inspector to its metaobject) would still fire on

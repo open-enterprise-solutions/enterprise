@@ -487,9 +487,8 @@ TEST(ByteCodeAOT, DependencyIdsAndVersions) {
 
 TEST(ByteCodeAOT, RejectBadMagic) {
 	// Garbage that doesn't start with our magic.
-	ibMemoryBuffer buf;
 	uint32_t junk[8] = { 0xDEADBEEF, 1, 2, 3, 4, 5, 6, 7 };
-	buf.AppendData(junk, sizeof(junk));
+	const ibMemoryBuffer buf(junk, sizeof(junk));
 
 	ibReaderMemory r(buf);
 	ibByteCode dst;
@@ -499,9 +498,8 @@ TEST(ByteCodeAOT, RejectBadMagic) {
 TEST(ByteCodeAOT, RejectShortBuffer) {
 	// Only 2 bytes — not even enough for the magic. Reader must fail
 	// without reading past end.
-	ibMemoryBuffer buf;
 	uint8_t two[2] = { 0xFF, 0xFF };
-	buf.AppendData(two, 2);
+	const ibMemoryBuffer buf(two, 2);
 
 	ibReaderMemory r(buf);
 	ibByteCode dst;

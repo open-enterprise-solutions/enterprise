@@ -73,9 +73,9 @@ bool ibValueForm::DispatchEvent(const ibFormID& controlId, ibProtocol::ibEvent::
 	for (ibValueFrame* node = control; node != nullptr; node = node->GetParent()) {
 		ibDataNode state;
 		node->OnUpdate(state, host);
-		const ibDataValue* enabled = state.FindField(ibProtocol::ibForm::ibState::Enabled);
-		const ibDataValue* visible = state.FindField(ibProtocol::ibForm::ibState::Visible);
-		if ((enabled != nullptr && !enabled->AsBool()) || (visible != nullptr && !visible->AsBool()))
+		auto enabled = state.FindField(ibProtocol::ibForm::ibState::Enabled);
+		auto visible = state.FindField(ibProtocol::ibForm::ibState::Visible);
+		if ((enabled && !enabled->AsBool()) || (visible && !visible->AsBool()))
 			return false;
 	}
 
@@ -124,8 +124,8 @@ bool ibValueForm::ReadData(const ibDataNode& node)
 	// Its command bar — the "Layers" block a composite control keeps it in (ibValueWindowComposite::ReadData); a form
 	// saved without it keeps the bar it is made with.
 	if (ibValueCommandBar* bar = GetCommandBar()) {
-		if (const ibDataNode* layers = node.FindChild(ibProtocol::ibForm::ibCommandBar::Layers)) {
-			if (const ibDataNode* barNode = layers->FindChild(ibProtocol::ibForm::ibCommandBar::CommandBar))
+		if (auto layers = node.FindChild(ibProtocol::ibForm::ibCommandBar::Layers)) {
+			if (auto barNode = layers->FindChild(ibProtocol::ibForm::ibCommandBar::CommandBar))
 				bar->ReadData(*barNode);
 		}
 	}

@@ -55,8 +55,8 @@ public:
 };
 
 // ⭐⭐ THE SEQUENCES A DOCUMENT REGISTERS IN — a list of its own, BESIDE the registers it posts
-// movements to and not among them (Max, 2026-09-18: "последовательности живут у себя… есть
-// последовательность, а есть движение"). Two doors, because they are two acts: a movement is what the
+// movements to and not among them (Max, 2026-09-18: "sequences live on their own… there is a
+// sequence, and there is a movement"). Two doors, because they are two acts: a movement is what the
 // document DID, a registration is that the document STANDS in an order — and a solution turns them on
 // and off separately.
 //

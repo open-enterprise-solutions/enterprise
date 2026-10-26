@@ -23,9 +23,25 @@ const ibDataValue* FindEntry(const ibEntries& entries, const ibString& name)
 	return nullptr;
 }
 
-// One area of entries — the fields, or the properties (a named sub-node is one) — each kept in its own area.
-bool DiffEntries(const ibEntries& from, const ibEntries& to, bool properties, ibDataNode& patch,
-	std::vector<ibDataValue>& removed)
+// The entries of a node, and its children — read out where they lie (one more owner of the bytes each), to be looked up.
+ibEntries EntriesOf(const ibDataNode& node)
+{
+	ibEntries entries;
+	for (const auto& entry : node.Fields())
+		entries.push_back(entry);
+	return entries;
+}
+
+std::vector<ibDataNode> ChildrenOf(const ibDataNode& node)
+{
+	std::vector<ibDataNode> children;
+	for (const ibDataNode& child : node.Children())
+		children.push_back(child);
+	return children;
+}
+
+// The node's entries — a named sub-node is one of them.
+bool DiffEntries(const ibEntries& from, const ibEntries& to, ibDataNode& patch, std::vector<ibDataValue>& removed)
 {
 	for (const auto& entry : to) {
 		const ibDataValue* const was = FindEntry(from, entry.first);
@@ -48,10 +64,7 @@ bool DiffEntries(const ibEntries& from, const ibEntries& to, bool properties, ib
 				value = ibDataValue::Child(sub);
 			}
 		}
-		if (properties)
-			patch.SetProperty(entry.first, value);
-		else
-			patch.AddField(entry.first, value);
+		patch.AddField(entry.first, value);
 	}
 	for (const auto& entry : from) {
 		if (FindEntry(to, entry.first) == nullptr)
@@ -79,7 +92,7 @@ bool DiffChildren(const std::vector<ibDataNode>& from, const std::vector<ibDataN
 	if (!Keyed(from) || !Keyed(to)) {
 		patch.AddField(ibProtocol::ibNode::ChildrenWhole, ibDataValue::Bool(true));
 		for (const ibDataNode& child : to)
-			patch.Children().push_back(child);
+			patch.AddChild(child);
 		return true;
 	}
 
@@ -103,7 +116,7 @@ bool DiffChildren(const std::vector<ibDataNode>& from, const std::vector<ibDataN
 			// New — or another node under the same id: the old one goes, this one comes whole.
 			if (found != was.end())
 				removedIds.push_back(ibDataValue::Int(child.GetMetaId()));
-			patch.Children().push_back(child);
+			patch.AddChild(child);
 			inserted = true;
 			continue;
 		}
@@ -140,13 +153,12 @@ bool Diff(const ibDataNode& from, const ibDataNode& to, ibDataNode& patch)
 	patch.SetMetaId(to.GetMetaId());
 
 	std::vector<ibDataValue> removed;
-	if (!DiffEntries(from.Fields(), to.Fields(), false, patch, removed)
-		|| !DiffEntries(from.Properties(), to.Properties(), true, patch, removed))
+	if (!DiffEntries(EntriesOf(from), EntriesOf(to), patch, removed))
 		return false;
 	if (!removed.empty())
 		patch.AddField(ibProtocol::ibNode::Removed, ibDataValue::Array(removed));
 
-	return DiffChildren(from.Children(), to.Children(), patch);
+	return DiffChildren(ChildrenOf(from), ChildrenOf(to), patch);
 }
 
 } // namespace

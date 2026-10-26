@@ -162,7 +162,7 @@ bool ibValueMetaObjectCalculationRegister::ReadData(const ibDataNode& node)
 	m_propertyAttributeCalculationType->SetNodeValue(node.GetProperty(m_propertyAttributeCalculationType->GetName()));
 
 	m_propertyUseRecalculation->SetNodeValue(node.GetProperty(m_propertyUseRecalculation->GetName()));
-	if (const ibDataNode* saved = node.FindChild(m_recalculation->GetName()))
+	if (auto saved = node.FindChild(m_recalculation->GetName()))
 		m_recalculation->LoadNode(*saved);
 
 	m_propertyObjectModule->SetNodeValue(node.GetProperty(m_propertyObjectModule->GetName()));

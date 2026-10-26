@@ -48,7 +48,7 @@ bool ibDialogSelectTypeForm::ShowModal(int& chosen)
 
 	// Cancelled — answered with no Id: a generic form's kind is wxNOT_FOUND, so no kind is the only word for it.
 	ibDataNode response;
-	if (!frame->Request(request, response) || response.FindField(ibProtocol::ibRequest::ibFormType::Id) == nullptr)
+	if (!frame->Request(request, response) || !response.FindField(ibProtocol::ibRequest::ibFormType::Id))
 		return false;
 
 	// Only what was offered can come back.

@@ -145,10 +145,10 @@ void ibApplyFormSettings(ibValueForm* form, const ibDataNode& root)
 			// storage); a node read from the wire (the editor's Apply) has it among its fields, under the property's
 			// own name — the row the editor was asked with (AppendControl): JSON has one key set, and a plain value is
 			// read back as a field (ibJsonReader).
-			const ibDataValue* value = stored.FindProperty(name);
-			if (value == nullptr)
+			auto value = stored.FindProperty(name);
+			if (!value)
 				value = stored.FindField(property->GetName());
-			if (value == nullptr)
+			if (!value)
 				continue;
 
 			// 🛑 ONE PROPERTY AT A TIME, GUARDED — a value written by an older shape of this form

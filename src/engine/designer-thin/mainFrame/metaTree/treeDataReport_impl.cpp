@@ -40,7 +40,7 @@ void ibDataReportTree::Draw(const ibProtocolNode& root)
 		for (const ibProtocolNode& entry : root.FindChild(ibProtocol::ibSchema::ibMetaData::Menu).Children()) {
 			if (entry.GetString(ibProtocol::ibSchema::ibMetaData::Name) != wxT("ObjectModule"))
 				continue;
-			const wxBitmap bitmap = ibProtocolPicture(entry.GetString(ibProtocol::ibSchema::ibMetaData::Picture));
+			const wxBitmap bitmap = ibProtocolPicture(entry, ibProtocol::ibSchema::ibMetaData::Picture);
 			if (bitmap.IsOk()) {
 				m_buttonModule->SetBitmap(bitmap);
 				Layout();   // …the button grows by its picture

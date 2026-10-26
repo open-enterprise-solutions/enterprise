@@ -4122,7 +4122,7 @@ delimOperation:
 				}
 				// ⭐⭐ `and` / `or` DECIDE BEFORE THE RIGHT SIDE RUNS. Both operands used to be
 				// compiled, and run, and only then combined: `u <> Undefined and u.Property("x")`
-				// raised on Undefined, which is the guard 1C writes everywhere. Same shape as
+				// raised on Undefined, which is the guard written everywhere. Same shape as
 				// `?(cond, a, b)`: test the left, jump over the right when it cannot change the
 				// answer. AND skips a false left; OR skips a true left.
 				//

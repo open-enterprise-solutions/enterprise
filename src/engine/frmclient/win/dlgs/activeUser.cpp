@@ -54,7 +54,7 @@ void ibDialogActiveUser::RefreshActiveUserTable(const ibProtocolNode& shown)
 		m_activeTable->AssignImageList(imageList, wxIMAGE_LIST_SMALL);
 
 		const int imageUser =
-			imageList->Add(ibProtocolPicture(shown.GetString(ibProtocol::ibSchema::ibActiveUser::Picture)));
+			imageList->Add(ibProtocolPicture(shown, ibProtocol::ibSchema::ibActiveUser::Picture));
 
 		for (const ibProtocolNode& row : arr.Children()) {
 
@@ -149,7 +149,7 @@ ibDialogActiveUser::ibDialogActiveUser(wxWindow* parent, const ibProtocolNode& s
 	wxDialog::Centre(wxBOTH);
 
 	wxIcon dlg_icon;
-	dlg_icon.CopyFromBitmap(ibProtocolPicture(shown.GetString(ibProtocol::ibSchema::ibActiveUser::Icon)));
+	dlg_icon.CopyFromBitmap(ibProtocolPicture(shown, ibProtocol::ibSchema::ibActiveUser::Icon));
 
 	wxDialog::SetIcon(dlg_icon);
 	wxDialog::SetFocus();

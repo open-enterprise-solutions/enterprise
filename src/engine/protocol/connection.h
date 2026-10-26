@@ -7,23 +7,25 @@
 
 #include <wx/string.h>
 
-#include "core/fstring.h"   // ibString — the text a connection carries
+#include "core/memory/memoryBuffer.h"   // ibMemoryBuffer — the packets a connection carries
 
 #include "protocol/protocol.h"
+#include "protocol/protocolNode.h"      // ibProtocolNode — the node a packet that came is
 
 #include "protocol/protocolApi.h"
 
-// A CONNECTION TO A BASE'S CLIENTS — text, as the port speaks it: one JSON-RPC request in, its answer out; false when
-// the request did not get there or no answer came back, with why. The text is the engine's both ways (ibString). How
-// it gets there is the connection's: a file base is opened in this very process and handed the text itself
-// (ibProtocolConnectionFile) — nothing converted, one more owner of it — and an application server is sent its
-// bytes over its port (ibProtocolConnectionServer). Above it nothing differs — the communicator draws a file base and
-// a server alike, from the same text.
+// A CONNECTION TO A BASE'S CLIENTS — packets, as the port speaks them (OES-RPC 1.0, core/serialize/dataBuilder.h):
+// one request in, its answer out — the node the answer's packet is (ibProtocolNode::Read), checked ONCE, where it came
+// in, and read where it lies; false when the request did not get there, no answer came back or what came is no packet,
+// with why. How it gets there is the connection's: a file base is opened in this very process and handed the packet
+// itself (ibProtocolConnectionFile) — nothing converted, one more owner of its bytes — and an application server is
+// sent the bytes over its port (ibProtocolConnectionServer). Above it nothing differs — the communicator draws a file
+// base and a server alike, from the same bytes.
 class PROTOCOL_API ibProtocolConnection {
 public:
 	virtual ~ibProtocolConnection() = default;
 
-	virtual bool Exchange(const ibString& request, ibString& answer,
+	virtual bool Exchange(const ibMemoryBuffer& request, ibProtocolNode& answer,
 		ibProtocol::ibRefusal& refusal, wxString& error) = 0;
 
 	// Open this connection again after it has closed. False when there is nowhere to return to — a file base has
@@ -39,9 +41,9 @@ public:
 		return nullptr;
 	}
 
-	// WHAT THE SERVER SAYS UNASKED — a JSON-RPC notification (`changed {Client}`: a client's frame changed by itself),
-	// handed to `notified` as text on the connection's thread, not the window's; empty — told nothing.
-	virtual void Listen(std::function<void(const ibString& text)> notified) = 0;
+	// WHAT THE SERVER SAYS UNASKED — a notification (`changed {Client}`: a client's frame changed by itself), handed to
+	// `notified` as the node its packet is, on the connection's thread, not the window's; empty — told nothing.
+	virtual void Listen(std::function<void(const ibProtocolNode& said)> notified) = 0;
 };
 
 #endif

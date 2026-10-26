@@ -56,13 +56,7 @@ void ibDialogFunctionAll::BuildTree(const ibProtocolNode& shown)
 
 	// Every picture the tree names asked for at once — not a call per item drawn.
 	const std::vector<ibProtocolNode> groups = shown.FindChild(ibProtocol::ibSchema::ibAllFunctions::Groups).Children();
-	std::vector<wxString> pictures;
-	for (const ibProtocolNode& group : groups) {
-		pictures.push_back(group.GetString(ibProtocol::ibSchema::ibAllFunctions::Icon));
-		for (const ibProtocolNode& item : group.Children())
-			pictures.push_back(item.GetString(ibProtocol::ibSchema::ibAllFunctions::Icon));
-	}
-	ibProtocolPictureReceive(pictures);
+	ibProtocolPictureReceive(shown);
 
 	wxTreeItemId root = m_treeCtrlElements->AddRoot(wxEmptyString);
 	for (const ibProtocolNode& group : groups) {

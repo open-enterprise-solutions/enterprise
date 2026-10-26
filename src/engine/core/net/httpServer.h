@@ -70,6 +70,10 @@ struct CORE_API ibHttpResponse {
 using ibHttpResponder = std::function<void(ibHttpResponse response)>;
 using ibHttpHandler   = std::function<void(const ibHttpRequest& request, ibHttpResponder respond)>;
 
+// HOW BYTES GO — as they are, or deflated when the peer asked for it as it connected (?compress=deflate). The sender's
+// to say, for it knows what it sends: a packet of the protocol's may be; what a relay carries on is final already.
+enum class ibWebSocketSend : std::uint8_t { AsIs = 0, Deflate = 1 };
+
 // AN OPEN WEBSOCKET, as its handler holds it. Every call is safe from any thread; after the socket closed it does
 // nothing.
 class ibWebSocket {
@@ -79,7 +83,8 @@ public:
 	// A message, queued and sent in order. The engine's text has its bytes made here, once — and, for a peer that asked
 	// for it as it connected (?compress=deflate), one of some size goes deflated in a binary message (ibDeflate).
 	virtual void Send(const ibString& text) = 0;
-	virtual void SendBinary(std::string data) = 0;
+	// …and bytes, in a binary message — deflated as a text is when `flags` say they may be.
+	virtual void Send(const void* data, std::size_t len, ibWebSocketSend flags = ibWebSocketSend::AsIs) = 0;
 	// The closing handshake begun, with `code` and `reason` (RFC 6455 § 7.4); OnClose follows.
 	virtual void Close(std::uint16_t code, const std::string& reason) = 0;
 

@@ -32,9 +32,7 @@ namespace {
 
 ibMemoryBuffer Bytes(const char* text)
 {
-	ibMemoryBuffer buffer;
-	buffer.AppendData(text, std::strlen(text));
-	return buffer;
+	return ibMemoryBuffer(text, std::strlen(text));
 }
 
 ibMemoryBuffer ConfigBlob(std::uint64_t sign, bool withBody)

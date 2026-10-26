@@ -546,7 +546,7 @@ void ibValueModelTableBox::Command_ShowViewMode()
 	request.SetValue(ibProtocol::ibRequest::ibViewMode::Mode, static_cast<std::int32_t>(m_propertyViewMode->GetValueAsEnum()));
 
 	ibDataNode response;
-	if (!frame->Request(request, response) || response.FindField(ibProtocol::ibRequest::ibViewMode::Mode) == nullptr)
+	if (!frame->Request(request, response) || !response.FindField(ibProtocol::ibRequest::ibViewMode::Mode))
 		return;   // cancelled
 
 	const std::int32_t chosen = response.GetValue<std::int32_t>(ibProtocol::ibRequest::ibViewMode::Mode);

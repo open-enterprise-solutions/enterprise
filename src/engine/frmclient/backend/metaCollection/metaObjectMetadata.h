@@ -26,7 +26,7 @@ public:
 
 	// The forms the workspace may show, as the server lists them (Id, Name, FullName, Picture, Common; a form's owner:
 	// Owner, OwnerName, OwnerPicture).
-	const std::vector<ibDataNode>& GetFormArray() const { return m_formArray.Children(); }
+	ibDataRange<ibDataNode> GetFormArray() const { return m_formArray.Children(); }
 
 	virtual bool IsEditable() const override { return !m_readOnly; }
 

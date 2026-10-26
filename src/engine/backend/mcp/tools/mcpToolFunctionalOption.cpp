@@ -112,7 +112,7 @@ public:
 		result.SetValue(wxT("object"), member->GetName());
 
 		// READING - no `into` given. Which options this object belongs to, with the names beside the ids.
-		if (params.FindField(ArgInto().Name()) == nullptr) {
+		if (!params.FindField(ArgInto().Name())) {
 			std::vector<ibDataValue> in;
 			for (const ibMetaID& id : member->GetFunctionalOptions()) {
 				ibValueMetaObject* const option = ibFindMetaObjectById(metaData, id);

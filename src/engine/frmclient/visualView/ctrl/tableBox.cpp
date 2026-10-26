@@ -747,7 +747,7 @@ void ibValueModelTableBox::OnContextMenu(ibDataViewEvent& event)
 	wxMenu menu;
 	for (std::size_t idx = 0; idx < entries.size(); ++idx) {
 		wxMenuItem* const item = menu.Append(kFirstEntryId + static_cast<int>(idx), entries[idx].GetString(ibProtocol::ibForm::ibCommandBar::Caption));
-		const wxBitmap picture = ibProtocolPicture(entries[idx].GetString(ibProtocol::ibForm::ibCommandBar::Picture));
+		const wxBitmap picture = ibProtocolPicture(entries[idx], ibProtocol::ibForm::ibCommandBar::Picture);
 		if (picture.IsOk())
 			item->SetBitmap(picture);
 		item->Enable(entries[idx].GetBool(ibProtocol::ibForm::ibCommandBar::Enabled, true));
@@ -822,9 +822,9 @@ void ibValueModelTableBoxColumn::Update(const ibProtocolNode& node)
 	// representation says (the server resolves Auto, and sends no picture for a text one).
 	const bool picture = state.GetInt(ibProtocol::ibForm::ibState::Representation) == static_cast<int>(ibProtocol::ibForm::ibState::ibRepresentation::Picture);
 	m_column->SetTitle(picture ? ibString() : state.GetString(ibProtocol::ibForm::ibState::Caption));
-	m_column->SetBitmap(ibProtocolPicture(state.GetString(ibProtocol::ibForm::ibTable::HeaderPicture)));
+	m_column->SetBitmap(ibProtocolPicture(state, ibProtocol::ibForm::ibTable::HeaderPicture));
 	m_column->SetFooterTitle(picture ? ibString() : state.GetString(ibProtocol::ibForm::ibTable::FooterText));
-	m_column->SetFooterBitmap(ibProtocolPicture(state.GetString(ibProtocol::ibForm::ibTable::FooterPicture)));
+	m_column->SetFooterBitmap(ibProtocolPicture(state, ibProtocol::ibForm::ibTable::FooterPicture));
 
 	m_column->SetWidth(static_cast<int>(node.GetInt(ibProtocol::ibForm::ibTable::Width, 80)));
 	m_column->SetAlignment(static_cast<wxAlignment>(node.GetInt(ibProtocol::ibForm::ibTable::HeaderAlign, wxALIGN_LEFT)));

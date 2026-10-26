@@ -701,7 +701,7 @@ void ibValueCommandBar::Update(ibDataNode& state)
 
 		// The representation decides which of the two a client shows — said here once, not left to each client.
 		entry.SetValue(ibProtocol::ibForm::ibCommandBar::Caption, c.representation == ibRepresentation_Picture ? wxString() : c.caption);
-		entry.SetValue(ibProtocol::ibForm::ibCommandBar::Picture, c.representation == ibRepresentation_Text ? ibString() : ibBackendPicture::SendPicture(c.picture, GetMetaData()));
+		entry.SetValue(ibProtocol::ibForm::ibCommandBar::Picture, c.representation == ibRepresentation_Text ? ibDataValue() : ibBackendPicture::SendPicture(c.picture, GetMetaData()));
 		entry.SetValue(ibProtocol::ibForm::ibCommandBar::Tooltip, c.tooltip.IsEmpty() ? c.caption : c.tooltip);
 		entry.SetValue(ibProtocol::ibForm::ibCommandBar::Enabled, c.enabled);
 		entry.SetValue(ibProtocol::ibForm::ibCommandBar::Kind, static_cast<std::int32_t>(c.kind));
@@ -825,29 +825,29 @@ void WriteCommandTree(ibDataNode& node, ibValueForm* form)
 		return;
 
 	// ALL three sections first (form / standard / global), in order, so they show even when EMPTY — GatherFormCommands
-	// labels its entries with exactly these strings. Rows are kept by their PLACE: a node's children move as it grows.
-	std::map<wxString, size_t> sections;
-	for (const wxString& section : GetCommandSections()) {
-		sections[section] = node.Children().size();
-		node.AddChild(0, 0).SetValue(ibProtocol::ibSchema::ibProperties::Name, section);
-	}
-	std::map<wxString, size_t> subgroups;   // "section\x1fsubgroup" -> its place in the section (Standard nests per source)
+	// labels its entries with exactly these strings. Rows are kept as AddChild gives them: a handle stays on its row as
+	// the tree grows around it (ibDataNode::Handle).
+	const auto addGroup = [](ibDataNode& parent, const wxString& name) {
+		ibDataNode& group = parent.AddChild(0, 0);
+		group.SetValue(ibProtocol::ibSchema::ibProperties::Name, name);
+		return &group;
+	};
+	std::map<wxString, ibDataNode*> sections;
+	for (const wxString& section : GetCommandSections())
+		sections[section] = addGroup(node, section);
+	std::map<wxString, ibDataNode*> subgroups;   // "section\x1fsubgroup" -> its row in the section (Standard nests per source)
 
 	for (const ibCommandSourceEntry& entry : GatherFormCommands(form)) {
 		auto section = sections.find(entry.group);
-		if (section == sections.end()) {   // defensive: an unexpected section -> appended at the end
-			section = sections.emplace(entry.group, node.Children().size()).first;
-			node.AddChild(0, 0).SetValue(ibProtocol::ibSchema::ibProperties::Name, entry.group);
-		}
-		ibDataNode* parent = &node.Children()[section->second];
+		if (section == sections.end())   // defensive: an unexpected section -> appended at the end
+			section = sections.emplace(entry.group, addGroup(node, entry.group)).first;
+		ibDataNode* parent = section->second;
 		if (!entry.subgroup.IsEmpty()) {   // nested under a per-source SUB-group (the form / a table)
 			const wxString key = entry.group + wxT("\x1f") + entry.subgroup;
 			auto sub = subgroups.find(key);
-			if (sub == subgroups.end()) {
-				sub = subgroups.emplace(key, parent->Children().size()).first;
-				parent->AddChild(0, 0).SetValue(ibProtocol::ibSchema::ibProperties::Name, entry.subgroup);
-			}
-			parent = &parent->Children()[sub->second];
+			if (sub == subgroups.end())
+				sub = subgroups.emplace(key, addGroup(*parent, entry.subgroup)).first;
+			parent = sub->second;
 		}
 
 		// A form command's row is known by its id — the inspector's rows of it are; any other's, by its path only.
@@ -855,7 +855,7 @@ void WriteCommandTree(ibDataNode& node, ibValueForm* form)
 			? form->FindFormCommandById(entry.desc.GetLeaf()) : nullptr;
 		ibDataNode& row = parent->AddChild(0, formCommand != nullptr ? formCommand->GetId() : 0);
 		row.SetValue(ibProtocol::ibSchema::ibProperties::Name, entry.label);
-		const ibString picture = ibBackendPicture::SendPicture(entry.picture, form->GetMetaData());   // the command's own picture, else the tree's default
+		const ibDataValue picture = ibBackendPicture::SendPicture(entry.picture, form->GetMetaData());   // the command's own picture, else the tree's default
 		if (!picture.IsEmpty())
 			row.SetValue(ibProtocol::ibSchema::ibProperties::Picture, picture);
 

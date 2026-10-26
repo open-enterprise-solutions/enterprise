@@ -148,7 +148,7 @@ ibDialogAbout::ibDialogAbout(wxWindow* parent, const ibProtocolNode& shown, int 
 
 	Centre(wxBOTH);
 
-	const wxBitmap picture = ibProtocolPicture(shown.GetString(ibProtocol::ibSchema::ibAbout::Picture));
+	const wxBitmap picture = ibProtocolPicture(shown, ibProtocol::ibSchema::ibAbout::Picture);
 	if (picture.IsOk()) {
 		wxIcon dlg_icon;
 		dlg_icon.CopyFromBitmap(picture);

@@ -165,10 +165,10 @@ void ibValueModelTableBoxColumn::OnUpdate(ibDataNode& state, ibVisualHost* host)
 	state.SetValue(ibProtocol::ibForm::ibTable::FooterText, m_propertyFooterText->GetValueAsTranslateString());
 	state.SetValue(ibProtocol::ibForm::ibState::Representation, static_cast<std::int32_t>(rep));
 	if (rep != ibRepresentation::ibRepresentation_Text) {
-		const ibString header = ibBackendPicture::SendPicture(m_propertyHeaderPicture->GetValueAsPictureDesc(), GetMetaData());
+		const ibDataValue header = ibBackendPicture::SendPicture(m_propertyHeaderPicture->GetValueAsPictureDesc(), GetMetaData());
 		if (!header.IsEmpty())
 			state.SetValue(ibProtocol::ibForm::ibTable::HeaderPicture, header);
-		const ibString footer = ibBackendPicture::SendPicture(m_propertyFooterPicture->GetValueAsPictureDesc(), GetMetaData());
+		const ibDataValue footer = ibBackendPicture::SendPicture(m_propertyFooterPicture->GetValueAsPictureDesc(), GetMetaData());
 		if (!footer.IsEmpty())
 			state.SetValue(ibProtocol::ibForm::ibTable::FooterPicture, footer);
 	}

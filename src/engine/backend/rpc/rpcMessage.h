@@ -85,8 +85,15 @@ BACKEND_API bool ibRpcParseRequest(const ibString& text, ibRpcRequest& request, 
 // …read before its caller is known: only a composition's own parts are turned back into classes, and a node that names
 // its type by any other word keeps the word (`unknownType`) — for the caller's session to look up (ibRpcLookupTypes).
 BACKEND_API bool ibRpcParseRequest(const ibString& text, ibRpcRequest& request, wxString& error, bool& unknownType);
+// …and the request as a PACKET (OES-RPC 1.0, serialize/dataBuilder.h) — the client protocol's: its bytes checked and
+// taken as the node they are, nothing parsed; the envelope's words are JSON-RPC's (method, id, params), with no jsonrpc.
+BACKEND_API bool ibRpcParseRequest(const ibMemoryBuffer& packet, ibRpcRequest& request, wxString& error);
 // The words a reading kept, looked up in THAT configuration — the caller's session's: the text is not read again.
 BACKEND_API void ibRpcLookupTypes(ibDataNode& node, const class ibMetaData* metaData);
+// ⭐ A PACKET'S TYPES IN WORDS — a node's header says its clsid, and a client knows no classes: the answer carries the
+// names of the types its nodes are, once each (`types`: a field per clsid, named by its digits, holding the name), as
+// the JSON view says them (ibRpcRenderNode's resolver).
+BACKEND_API void ibRpcNameTypes(ibDataNode& answer);
 
 // A MESSAGE THAT IS AN ANSWER, not a call. Once the server can ask the client
 // something (sampling), the same endpoint starts receiving both — and they are

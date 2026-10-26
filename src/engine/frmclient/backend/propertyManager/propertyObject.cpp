@@ -13,16 +13,6 @@
 #define propBlock 0x00023456
 #define eventBlock 0x00023457
 
-// The pictures the rows name — a choice's, a type's — by their ids, at any depth.
-static void PicturesOf(const ibDataNode& rows, std::vector<wxString>& pictures)
-{
-	for (const ibDataNode& row : rows.Children()) {
-		if (const ibDataValue* const picture = row.FindField(ibProtocol::ibSchema::ibProperties::Picture))
-			pictures.push_back(picture->AsString());
-		PicturesOf(row, pictures);
-	}
-}
-
 namespace ibPropertyGate {
 
 // Said once, so neither verb below repeats the null check at every place it has something to say.
@@ -499,18 +489,16 @@ bool ibPropertyObject::Receive(const ibProtocolNode& answer)
 	ibDataNode rows;
 	ibReadProtocolNode(answer, rows);
 	// Every choice's and type's picture asked for at once — not a call per choice read.
-	std::vector<wxString> pictures;
-	PicturesOf(rows, pictures);
-	ibProtocolPictureReceive(pictures);
+	ibProtocolPictureReceive(answer);
 	Receive(m_category, rows);
 	return true;
 }
 
 void ibPropertyObject::Receive(ibPropertyCategory* category, ibDataNode& rows)
 {
-	for (ibDataNode& row : rows.Children()) {
+	for (ibDataNode row : rows.Children()) {   // the row's bytes where they lie, held
 		// A CATEGORY — a row with no class, its rows within.
-		if (row.FindField(ibProtocol::ibSchema::ibProperties::Class) == nullptr)
+		if (!row.FindField(ibProtocol::ibSchema::ibProperties::Class))
 			Receive(CreatePropertyCategory(category, row.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Name),
 				row.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Title)), row);
 		else
@@ -572,23 +560,23 @@ bool ibPropertyObject::PasteProperty(ibReaderMemory& reader)
 	// being handed over as an empty ibDataValue — a property type that (rightly) refuses an empty
 	// value made the whole paste fail, so pasting a Document onto a Constant died instead of
 	// copying the properties the two do share. "Nothing arrived" is not "an empty value arrived".
-	if (const ibDataNode* propsNode = builder.Root().FindChild(wxT("props"))) {
+	if (auto propsNode = builder.Root().FindChild(wxT("props"))) {
 		for (unsigned int idx = 0; idx < GetPropertyCount(); idx++) {
 			ibProperty* prop = GetProperty(idx);
 			wxASSERT(prop);
-			const ibDataValue* incoming = propsNode->FindProperty(prop->GetName());
-			if (incoming == nullptr)
+			auto incoming = propsNode->FindProperty(prop->GetName());
+			if (!incoming)
 				continue;
 			if (!prop->PasteNodeValue(*incoming))
 				return false;
 		}
 	}
-	if (const ibDataNode* eventsNode = builder.Root().FindChild(wxT("events"))) {
+	if (auto eventsNode = builder.Root().FindChild(wxT("events"))) {
 		for (unsigned int idx = 0; idx < GetEventCount(); idx++) {
 			ibEvent* event = GetEvent(idx);
 			wxASSERT(event);
-			const ibDataValue* incoming = eventsNode->FindProperty(event->GetName());
-			if (incoming == nullptr)
+			auto incoming = eventsNode->FindProperty(event->GetName());
+			if (!incoming)
 				continue;
 			if (!event->PasteNodeValue(*incoming))
 				return false;

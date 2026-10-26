@@ -168,7 +168,7 @@ namespace {
 // ⚠ IT SHIPPED IN EVERY .hlk AND NOTHING PARSED IT. ibHelpCategory::displayName
 // was declared, documented as "looked up from _categories.json at load", and
 // never assigned by anybody — the tree view's fallback (`displayName.IsEmpty()
-// ? key`) then showed "global_functions" where "Глобальные функции" was
+// ? key`) then showed "global_functions" where its title ("Global functions") was
 // translated and waiting, in all three locales.
 //
 // Missing or malformed is a WARNING and never a failure: the tree falls back to

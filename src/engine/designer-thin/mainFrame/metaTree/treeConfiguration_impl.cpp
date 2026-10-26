@@ -63,14 +63,6 @@ void ibObjectIds(const ibProtocolNode& row, std::set<long long>& ids)
 		ibObjectIds(child, ids);
 }
 
-// The pictures of `row` and the rows under it, by their ids — asked of the server at once, not a call per row drawn.
-void ibRowPictures(const ibProtocolNode& row, std::vector<wxString>& pictures)
-{
-	pictures.push_back(row.GetString(ibProtocol::ibSchema::ibMetaData::Picture));
-	for (const ibProtocolNode& child : row.Children())
-		ibRowPictures(child, pictures);
-}
-
 // The places of the rows under `row` (at `path`) — what an external file's tree opens the first time.
 void ibRowPaths(const ibProtocolNode& row, const wxString& path, std::set<wxString>& paths)
 {
@@ -106,9 +98,8 @@ void ibMetaTreeBase::Draw(const ibProtocolNode& root)
 	const bool shown = root.IsNode() && root.GetId() != 0;
 	m_root = shown ? root.Clone() : ibProtocolNode();
 
-	std::vector<wxString> pictures;
-	ibRowPictures(m_root, pictures);
-	ibProtocolPictureReceive(pictures);
+	// The rows' pictures asked of the server at once — not a call per row drawn.
+	ibProtocolPictureReceive(m_root);
 
 	// ⭐ FROZEN FOR THE WHOLE OF IT — the control is what freezes, not the panel around it (the desktop's).
 	wxWindowUpdateLocker freeze(m_metaTreeCtrl);
@@ -802,10 +793,8 @@ bool ibMetaTreeBase::AppendMetaMenu(wxMenu& menu, const ibProtocolNode& row)
 	if (entries.empty())
 		return standard;
 
-	std::vector<wxString> pictures;
-	for (const ibProtocolNode& entry : entries)
-		pictures.push_back(entry.GetString(ibProtocol::ibSchema::ibMetaData::Picture));
-	ibProtocolPictureReceive(pictures);
+	// The entries' pictures asked for at once — not a call per entry.
+	ibProtocolPictureReceive(items);
 
 	for (size_t idx = 0; idx < entries.size(); idx++) {
 

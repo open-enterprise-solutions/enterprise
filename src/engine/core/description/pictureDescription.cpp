@@ -5,7 +5,7 @@
 
 bool ibExternalPictureDescriptionMemory::ReadNode(const ibDataValue& value, ibExternalPictureDescription& pictureDesc)
 {
-	const std::shared_ptr<ibDataNode>& root = value.AsChild();
+	const auto root = value.AsChild();
 	if (!root)
 		return false;
 	const wxString name = root->GetValue<wxString>(wxT("Name"));
@@ -33,7 +33,7 @@ bool ibExternalPictureDescriptionMemory::WriteNode(ibDataValue& value, const ibE
 
 bool ibPictureDescriptionMemory::ReadNode(const ibDataValue& value, ibPictureDescription& pictureDesc)
 {
-	const std::shared_ptr<ibDataNode>& root = value.AsChild();
+	const auto root = value.AsChild();
 	if (!root)
 		return false;
 
@@ -46,7 +46,7 @@ bool ibPictureDescriptionMemory::ReadNode(const ibDataValue& value, ibPictureDes
 		// over as digits in a string and takes it back the same way (mcpTool.h, ibMcpPictureIdAsText /
 		// AsNumber) — the door's difficulty, kept at the door: this is the shape a picture is SAVED in,
 		// and a transport has no business in it.
-		if (const ibDataValue* id = root->FindField(wxT("ClassId")))
+		if (auto id = root->FindField(wxT("ClassId")))
 			read.m_class_identifier = (ibPictureID)id->AsUInt();
 	}
 	else if (read.m_type == ibPictureType::eFromConfiguration) {

@@ -10,9 +10,9 @@
 const structural = new Set(['NodeRemoved', 'NodeRemovedIds', 'NodeOrder', 'NodeChildrenWhole', 'NodeChildren',
 	'NodeType', 'NodeId']);
 
-/** @param {any} value */
+/** A node — no list, no bytes (a Binary is a value, as the thin client's). @param {any} value */
 function isNode(value) {
-	return value !== null && typeof value === 'object' && !Array.isArray(value);
+	return value !== null && typeof value === 'object' && !Array.isArray(value) && !ArrayBuffer.isView(value);
 }
 
 /** A child's id — 0 for one that has none. @param {any} node */

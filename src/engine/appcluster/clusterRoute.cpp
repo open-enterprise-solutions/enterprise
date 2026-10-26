@@ -2,7 +2,7 @@
 
 #include "core/crypto/sessionToken.h"
 #include "core/exception.h"
-#include "core/serialize/jsonProvider.h"
+#include "core/serialize/dataBuilder.h"   // ibBinaryProvider — the first packet read where it lies
 #include "protocol/protocol.h"
 
 #include "appCluster.h"
@@ -11,19 +11,20 @@
 namespace {
 
 // THE ROUTE A CLIENT'S FIRST MESSAGE NAMES — the one its token ends in: a login's Token, a debugger's Channel. 0 — none
-// named, or a message the cluster cannot read: what it is, the server says.
-unsigned RouteOf(const ibString& message)
+// named, or a message the cluster cannot read: what it is, the server says. The packet is read where it lies.
+unsigned RouteOf(const std::string& message)
 {
+	const ibMemoryBuffer packet(message.data(), message.size());
 	ibDataNode read;
 	try {
-		if (!ibJsonProvider().Read(message, read))
+		if (!ibBinaryProvider().Read(packet, read))
 			return 0;
 	}
 	catch (const ibCoreException&) {
 		return 0;
 	}
-	const ibDataNode* const params = read.FindChild(ibProtocol::ibRpc::Params);
-	if (params == nullptr)
+	const auto params = read.FindChild(ibProtocol::ibRpc::Params);
+	if (!params)
 		return 0;
 	ibString token = params->GetValue<ibString>(ibProtocol::ibLogin::Token);
 	if (token.IsEmpty())
@@ -42,10 +43,15 @@ ibClusterRoute::ibClusterRoute(asio::io_context& io, std::vector<ibClusterWorker
 {
 }
 
-void ibClusterRoute::OnMessage(const ibString& text)
+void ibClusterRoute::OnMessage(const ibString&)
+{
+	m_socket->Close(ibWebSocketClose::Unsupported, "the protocol speaks packets");
+}
+
+void ibClusterRoute::OnBinary(std::string data)
 {
 	if (m_relay == nullptr) {
-		m_worker = Choose(RouteOf(text));
+		m_worker = Choose(RouteOf(data));
 		if (m_worker == nullptr) {
 			ibAppClusterSay(ibJournalMark::Warning, wxT("base '%s': none of its servers serves - a client told so"),
 				m_workers.front()->GetServer().m_base);
@@ -59,12 +65,7 @@ void ibClusterRoute::OnMessage(const ibString& text)
 				ibAppClusterSay(ibJournalMark::Warning, wxT("base %s: %s"), name, reason);
 			});
 	}
-	m_relay->OnMessage(text);
-}
-
-void ibClusterRoute::OnBinary(std::string)
-{
-	m_socket->Close(ibWebSocketClose::Unsupported, "the protocol speaks text");
+	m_relay->OnBinary(std::move(data));
 }
 
 void ibClusterRoute::OnClose()

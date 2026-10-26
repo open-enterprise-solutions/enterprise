@@ -484,7 +484,7 @@ public:
 
 		ibValueMetaObject* from = nullptr;
 
-		if (const ibDataValue* id = params.FindField(ArgId().Name()); id != nullptr && id->Kind() == ibDataKind::Number) {
+		if (auto id = params.FindField(ArgId().Name()); id && id->Kind() == ibDataKind::Number) {
 
 			from = ibFindMetaObjectById(metaData, (ibMetaID)id->AsInt());
 			if (from == nullptr) {
@@ -509,7 +509,7 @@ public:
 		// number carrying two opposite meanings — so it is turned into -1 here, once, rather than
 		// tested for at every level (found the first time it ran: depth 1 answered no children at
 		// all, where 1 is precisely "the children of this node").
-		const bool given = params.FindField(ArgDepth().Name()) != nullptr;
+		const bool given = params.Has(ArgDepth().Name());
 		const int asked = given ? (int)ArgDepth().Whole(params) : 2;
 		const int depth = asked <= 0 ? -1 : asked;
 
@@ -758,7 +758,7 @@ public:
 
 		// BY ID FIRST — it is the identity. A name is what a person types and
 		// what a rename changes.
-		if (const ibDataValue* id = params.FindField(ArgId().Name())) {
+		if (auto id = params.FindField(ArgId().Name())) {
 			if (id->Kind() == ibDataKind::Number) {
 				const ibMetaID metaId = (ibMetaID)id->AsInt();
 				found = ibFindMetaObjectById(metaData, metaId);
@@ -983,7 +983,7 @@ public:
 		// configuration's own root object — the same thing a click gets by
 		// walking up from a group row.
 		ibValueMetaObject* parent = nullptr;
-		if (const ibDataValue* parentId = params.FindField(ArgParentId().Name())) {
+		if (auto parentId = params.FindField(ArgParentId().Name())) {
 			if (parentId->Kind() == ibDataKind::Number) {
 				parent = ibFindMetaObjectById(metaData, (ibMetaID)parentId->AsInt());
 				if (parent == nullptr) {
@@ -1059,7 +1059,7 @@ public:
 		// exist, which words each accepts, and whether a value is legal are all the created
 		// object's answers; the answer below reports its whole property list, so a caller learns
 		// what it may set from the object rather than from this file.
-		if (const ibDataNode* wanted = params.FindChild(ArgProperties().Name())) {
+		if (auto wanted = params.FindChild(ArgProperties().Name())) {
 
 			std::vector<ibDataValue> refused;
 
@@ -1070,10 +1070,8 @@ public:
 			// object with neither, and the answer carried no refusal to say so, because nothing had
 			// been refused: nothing had been SEEN (2026-09-22, giving a command group its caption and
 			// its printer, then finding both empty).
-			std::vector<std::pair<ibString, ibDataValue>> asked = wanted->Fields();
-			asked.insert(asked.end(), wanted->Properties().begin(), wanted->Properties().end());
-
-			for (const auto& field : asked) {
+			// One set since 2026-10-26: the fields are all of them.
+			for (const auto& field : wanted->Fields()) {
 
 				ibProperty* property = created->GetProperty(field.first);
 
@@ -1195,9 +1193,9 @@ public:
 		}
 
 		// The rest of the header. Neither is a property, so neither can travel in the map.
-		if (const ibDataValue* note = params.FindField(ArgNote().Name()))
+		if (auto note = params.FindField(ArgNote().Name()))
 			created->SetNoteContent(note->AsString());
-		if (const ibDataValue* help = params.FindField(ArgHelp().Name()))
+		if (auto help = params.FindField(ArgHelp().Name()))
 			created->SetHelpContent(help->AsString());
 
 		// ⭐⭐ AND NOW IT IS RUN AND ANNOUNCED — the two phases the quiet road skips.
@@ -1495,7 +1493,7 @@ public:
 		}
 
 		ibValueMetaObject* object = nullptr;
-		if (const ibDataValue* id = params.FindField(ArgId().Name())) {
+		if (auto id = params.FindField(ArgId().Name())) {
 			if (id->Kind() == ibDataKind::Number) {
 				object = ibFindMetaObjectById(metaData, (ibMetaID)id->AsInt());
 				if (object == nullptr) {
@@ -1793,7 +1791,7 @@ public:
 		// with HTTP 500 over a change that had already landed.
 		wxString shown;
 
-		if (const ibDataValue* value = params.FindField(ibMcpValueArgument().Name())) {
+		if (auto value = params.FindField(ibMcpValueArgument().Name())) {
 			switch (value->Kind()) {
 				case ibDataKind::String: shown = value->AsString(); break;
 				case ibDataKind::Bool:   shown = value->AsBool() ? wxT("yes") : wxT("no"); break;
@@ -2081,7 +2079,7 @@ public:
 		// ⭐ THE WHOLE DESCRIPTION IS ANSWERED FIRST, and before a type NAME is resolved — because a
 		// caller sending one has said everything, and demanding a name beside it would refuse the
 		// composite case this road exists for.
-		if (const ibDataNode* shape = params.FindChild(ArgTypeShape().Name())) {
+		if (auto shape = params.FindChild(ArgTypeShape().Name())) {
 
 			ibTypeDescription described;
 			const std::shared_ptr<ibDataNode> copy = std::make_shared<ibDataNode>(*shape);
@@ -2091,7 +2089,7 @@ public:
 			// the wrong kind: the call died inside with "ibDataValue: wrong value kind (expected 6, got 4)",
 			// which tells the caller nothing (2026-09-17). A name is resolved here the two ways `type` resolves
 			// one, and anything else in the list is refused in words.
-			if (const ibDataValue* types = copy->FindField(wxT("Types")); types != nullptr && types->Kind() == ibDataKind::Array) {
+			if (auto types = copy->FindField(wxT("Types")); types && types->Kind() == ibDataKind::Array) {
 				std::vector<ibDataValue> entries;
 				for (const ibDataValue& item : types->AsArray()) {
 					if (item.Kind() == ibDataKind::Child) {
@@ -2150,7 +2148,7 @@ public:
 		}
 
 		ibClassID clsid = 0;
-		if (const ibDataValue* typeId = params.FindField(ArgTypeId().Name())) {
+		if (auto typeId = params.FindField(ArgTypeId().Name())) {
 			if (typeId->Kind() == ibDataKind::Number)
 				clsid = (ibClassID)typeId->AsUInt();
 		}
@@ -2423,7 +2421,7 @@ public:
 				return false;
 			scheduleDesc.SetSchedule(schedule, value, date);
 
-			if (const ibDataNode* links = params.FindChild(ArgScheduleLinks().Name())) {
+			if (auto links = params.FindChild(ArgScheduleLinks().Name())) {
 				ibPropertyChoiceList dimensions;
 				property->GetScheduleLinkList(scheduleDesc, dimensions);
 				for (const auto& link : links->Fields()) {
@@ -2588,7 +2586,7 @@ public:
 		ibChoiceTypeLinkDescription linkDesc = linkProperty->GetValueAsLinkDesc();
 		ibChoiceParametersDescription paramsDesc = paramsProperty->GetValueAsParametersDesc();
 
-		if (!ArgLink().Given(params) && !ArgGovernedType().Given(params) && params.FindChild(ArgParameters().Name()) == nullptr) {
+		if (!ArgLink().Given(params) && !ArgGovernedType().Given(params) && !params.FindChild(ArgParameters().Name())) {
 			Say(object, linkDesc, paramsDesc, result);
 			return true;
 		}
@@ -2655,7 +2653,7 @@ public:
 		}
 
 		// ---- what is shown in the list ----------------------------------------------------------
-		if (const ibDataNode* rows = params.FindChild(ArgParameters().Name())) {
+		if (auto rows = params.FindChild(ArgParameters().Name())) {
 
 			// The neighbours a value may come from — the same list for every row, so it is asked once.
 			ibPropertyChoiceList sources;
@@ -2679,8 +2677,6 @@ public:
 			std::vector<wxString> given;
 			for (const auto& field : rows->Fields())
 				given.push_back(field.first);
-			for (const auto& prop : rows->Properties())
-				given.push_back(prop.first);
 
 			for (const wxString& parameter : given) {
 
@@ -2708,10 +2704,10 @@ public:
 				}
 
 				// The value's source, and optionally what becomes of an already chosen value.
-				const ibDataNode* cell = rows->FindChild(parameter);
-				const ibDataValue* said = cell != nullptr ? cell->FindField(wxT("from")) : rows->FindField(parameter);
-				if (cell != nullptr) {
-					if (const ibDataValue* mode = cell->FindField(wxT("on_change"))) {
+				auto cell = rows->FindChild(parameter);
+				auto said = cell ? cell->FindField(wxT("from")) : rows->FindField(parameter);
+				if (cell) {
+					if (auto mode = cell->FindField(wxT("on_change"))) {
 						const wxString word = mode->AsString();
 						if (word.IsSameAs(wxT("keep"), false)) row.m_onChange = ibChoiceParameterOnChange::Keep;
 						else if (!word.IsSameAs(wxT("clear"), false)) {
@@ -2725,14 +2721,14 @@ public:
 				// 🛑 THE RIGHT SIDE IS A FIELD, NEVER A VALUE. A value written there (`"Closed": false`) used
 				// to read as an empty name, and an empty name removes the row: the call meant to add a
 				// condition took one away and answered as if it had done what it was asked.
-				if (said != nullptr && said->Kind() != ibDataKind::String && said->Kind() != ibDataKind::Empty) {
+				if (said && said->Kind() != ibDataKind::String && said->Kind() != ibDataKind::Empty) {
 					refusal = wxString::Format(
 						ibMcpText("'%s' is given a value - a row takes its value from a FIELD beside '%s', by name, and "
 							"narrows by whatever that field holds. A fixed value has to stand in a field to narrow by it."),
 						parameter, object->GetName());
 					return false;
 				}
-				const wxString from = said != nullptr ? said->AsString().ToWxString() : wxString();
+				const wxString from = said ? said->AsString().ToWxString() : wxString();
 
 				// An empty source removes the row rather than writing a condition over nothing.
 				if (from.IsEmpty())
@@ -2899,11 +2895,11 @@ class ibMcpToolChoicePreview : public ibMcpTool {
 	static ibValue ValueOf(const ibMetaData* metaData, const ibValueMetaObjectAttributeBase* neighbour,
 		const ibDataNode& values, const wxString& name)
 	{
-		if (const ibDataNode* packed = values.FindChild(name))
+		if (auto packed = values.FindChild(name))
 			return metaData->Deserialize(*packed);
 
-		const ibDataValue* said = values.FindField(name);
-		if (said == nullptr)
+		auto said = values.FindField(name);
+		if (!said)
 			return ibValue();
 
 		switch (said->Kind()) {
@@ -2978,7 +2974,7 @@ public:
 		// ---- the neighbours, written first ------------------------------------------------------
 		// Named out of the same list metadata_set_choice names them from, so the two tools spell a
 		// neighbour alike.
-		if (const ibDataNode* values = params.FindChild(ArgValues().Name())) {
+		if (auto values = params.FindChild(ArgValues().Name())) {
 
 			ibPropertyChoiceList sources;
 			if (ibPropertyChoiceParameters* paramsProperty =
@@ -2987,8 +2983,6 @@ public:
 
 			std::vector<wxString> given;
 			for (const auto& value : values->Fields())
-				given.push_back(value.first);
-			for (const auto& value : values->Properties())
 				given.push_back(value.first);
 
 			for (const wxString& name : given) {

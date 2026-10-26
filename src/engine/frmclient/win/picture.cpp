@@ -9,8 +9,9 @@
 #include <wx/mstream.h>
 
 #include "core/pictureRegistry.h"              // the engine's own pictures, as the core registered them
-#include "core/utils/base64.h"                 // ibBase64 — a picture's PNG, read where its text lies
+#include "core/serialize/dataBuilder.h"        // ibDataNode — a property's row, the field that names a picture
 #include "frmclient/mainFrame/mainFrame.h"     // ibFrontendMainFrame::Fetch — the pictures asked of the server
+#include "protocol/protocolNode.h"             // ibProtocolNode — the field that names a picture
 
 namespace {
 
@@ -48,10 +49,11 @@ wxString IdOf(ibPictureID id)
 	return wxString::Format(wxT("%llu"), static_cast<unsigned long long>(id));
 }
 
-// A picture's data itself, not its id — a PNG's base64 begins with its signature's.
-bool IsPictureData(const wxString& value)
+// A picture's PNG as a bitmap — none: no PNG.
+wxBitmap BitmapOf(const ibMemoryBuffer& png)
 {
-	return value.StartsWith(wxT("iVBORw0KGgo"));
+	const wxImage image = ibProtocolImage(png);
+	return image.IsOk() ? wxBitmap(image) : wxBitmap();
 }
 
 // THE ENGINE'S OWN, by its number — the core's master, shown at 16 (tools/pictures/render.js); none: not the engine's.
@@ -65,42 +67,69 @@ wxBitmap EnginePicture(const wxString& id)
 	return image.IsOk() ? wxBitmap(image.Scale(16, 16, wxIMAGE_QUALITY_HIGH)) : wxBitmap();
 }
 
-// The picture ids a node names, wherever they are: a field that holds one by its name (Picture, Icon, OwnerPicture…).
-void PicturesOf(const ibProtocolNode& node, std::vector<wxString>& ids)
+void PicturesOf(const ibDataNode& node, std::vector<wxString>& ids);
+
+// The picture ids a node names, wherever they are: a field that holds one by its name (Picture, Icon, OwnerPicture…). A
+// picture's PNG is no id: it is not asked for. Read where it lies, as ibProtocolPicture reads its field — the wire's
+// node walked by its handles made one of each entry at every level, every inspector filled (a Debug profile, 2026-10-26).
+void PicturesOf(const ibString& name, const ibDataValue& value, std::vector<wxString>& ids)
 {
-	for (const auto& [name, value] : node.Entries()) {
-		if (value.IsString()) {
-			if (name == "Icon" || name.EndsWith(wxT("Picture")))
-				ids.push_back(value.AsString());
-		}
-		else if (value.IsNode())
-			PicturesOf(value, ids);
-		else if (value.IsList()) {
-			for (const ibProtocolNode& item : node.GetList(name))
-				PicturesOf(item, ids);
-		}
+	if (value.Kind() == ibDataKind::String) {
+		if (name == "Icon" || name.EndsWith(wxT("Picture")))
+			ids.push_back(value.AsString());
 	}
+	else if (value.Kind() == ibDataKind::Child) {
+		if (const auto sub = value.AsChild())
+			PicturesOf(*sub, ids);
+	}
+	else if (value.Kind() == ibDataKind::Array) {
+		for (const ibDataValue& item : value.AsArray())
+			PicturesOf(ibString(), item, ids);
+	}
+}
+
+void PicturesOf(const ibDataNode& node, std::vector<wxString>& ids)
+{
+	for (const auto& [name, value] : node.Fields())
+		PicturesOf(name, value, ids);
+	for (const ibDataNode& child : node.Children())
+		PicturesOf(child, ids);
 }
 
 } // namespace
 
-wxBitmap ibProtocolPicture(const wxString& value)
+wxBitmap ibProtocolPicture(const ibProtocolNode& node, const char* name)
 {
-	if (value.IsEmpty())
+	// The wire's node is the engine's: its field read where it lies, by the one door below.
+	const ibDataNode* const read = node.GetBody();
+	return read != nullptr ? ibProtocolPicture(*read, name) : wxBitmap();
+}
+
+wxBitmap ibProtocolPicture(const ibDataNode& node, const char* name)
+{
+	const auto value = node.FindField(name);
+	return value ? ibProtocolPicture(*value) : wxBitmap();
+}
+
+wxBitmap ibProtocolPicture(const ibDataValue& value)
+{
+	if (value.Kind() == ibDataKind::Binary)
+		return BitmapOf(value.AsBinary());
+	return value.Kind() == ibDataKind::String ? ibProtocolPicture(wxString(value.AsString())) : wxBitmap();
+}
+
+wxBitmap ibProtocolPicture(const wxString& id)
+{
+	if (id.IsEmpty())
 		return wxBitmap();
-	// A picture with no id of its own is its data — a file's, an art of the client's own (the splash's logo).
-	if (IsPictureData(value)) {
-		const wxImage image = ibProtocolImage(value);
-		return image.IsOk() ? wxBitmap(image) : wxBitmap();
-	}
 	{
 		std::lock_guard<std::mutex> lock(s_picturesLock);
-		if (const wxBitmap* const kept = FindKept(value))
+		if (const wxBitmap* const kept = FindKept(id))
 			return *kept;
 	}
-	ibProtocolPictureReceive({ value });
+	ibProtocolPictureReceive({ id });
 	std::lock_guard<std::mutex> lock(s_picturesLock);
-	const wxBitmap* const kept = FindKept(value);
+	const wxBitmap* const kept = FindKept(id);
 	return kept != nullptr ? *kept : wxBitmap();
 }
 
@@ -116,7 +145,7 @@ void ibProtocolPictureReceive(const std::vector<wxString>& ids)
 	std::set<wxString> asked;
 	ibProtocolNode params;
 	for (const wxString& id : ids) {
-		if (id.IsEmpty() || IsPictureData(id) || asked.count(id) != 0)
+		if (id.IsEmpty() || asked.count(id) != 0)
 			continue;
 		{
 			std::lock_guard<std::mutex> lock(s_picturesLock);
@@ -141,27 +170,25 @@ void ibProtocolPictureReceive(const std::vector<wxString>& ids)
 	if (frame == nullptr || !frame->Fetch(ibProtocol::ibMethod::Picture, params, answer))
 		return;
 	for (const ibProtocolNode& picture : answer.FindChild(ibProtocol::ibPicture::Pictures).Children()) {
-		const wxImage image = ibProtocolImage(picture.GetString(ibProtocol::ibPicture::Picture));
+		const wxBitmap bitmap = BitmapOf(picture.GetBinary(ibProtocol::ibPicture::Picture));
 		std::lock_guard<std::mutex> lock(s_picturesLock);
-		Keep(picture.GetString(ibProtocol::ibPicture::Id), image.IsOk() ? wxBitmap(image) : wxBitmap());
+		Keep(picture.GetString(ibProtocol::ibPicture::Id), bitmap);
 	}
 }
 
 void ibProtocolPictureReceive(const ibProtocolNode& answer)
 {
 	std::vector<wxString> ids;
-	PicturesOf(answer, ids);
+	if (const ibDataNode* const read = answer.GetBody())
+		PicturesOf(*read, ids);
 	ibProtocolPictureReceive(ids);
 }
 
-wxImage ibProtocolImage(const wxString& base64)
+wxImage ibProtocolImage(const ibMemoryBuffer& png)
 {
-	if (base64.IsEmpty())
-		return wxImage();
 	// A PNG or nothing — data that is not one reads as no picture, not as a damaged file said to the person.
-	ibMemoryBuffer png;
 	static const char s_signature[] = "\x89PNG\r\n\x1a\n";
-	if (!ibBase64::Read(base64.wc_str(), base64.length(), png) || png.GetDataLen() < sizeof(s_signature) - 1 || std::memcmp(png.GetData(), s_signature, sizeof(s_signature) - 1) != 0)
+	if (png.GetDataLen() < sizeof(s_signature) - 1 || std::memcmp(png.GetData(), s_signature, sizeof(s_signature) - 1) != 0)
 		return wxImage();
 	if (wxImage::FindHandler(wxBITMAP_TYPE_PNG) == nullptr)
 		wxImage::AddHandler(new wxPNGHandler());

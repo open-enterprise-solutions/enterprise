@@ -63,7 +63,7 @@ ibDialogApplyChange::ibDialogApplyChange(const ibProtocolNode& request, wxWindow
 
 	wxDialog::Centre(wxBOTH);
 
-	const wxBitmap picture = ibProtocolPicture(request.GetString(ibProtocol::ibRequest::ibApplyChange::Picture));
+	const wxBitmap picture = ibProtocolPicture(request, ibProtocol::ibRequest::ibApplyChange::Picture);
 	if (picture.IsOk()) {
 		wxIcon dlg_icon;
 		dlg_icon.CopyFromBitmap(picture);

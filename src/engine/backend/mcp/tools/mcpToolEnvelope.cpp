@@ -201,7 +201,7 @@ public:
 		const wxString query = ArgQuery().Text(params);
 
 		bool withSchema = true;
-		if (params.FindField(ArgSchema().Name()) != nullptr)
+		if (params.Has(ArgSchema().Name()))
 			withSchema = ArgSchema().Flag(params);
 
 		// SCORED FIRST, CHOSEN SECOND. Which tools are good enough cannot be known while they are
@@ -337,8 +337,8 @@ public:
 		// note_read's) is where the thing asked about is built HERE; a pattern says how such a thing is built
 		// anywhere. Both are worth reading, but the trim below must not cut the first for the second.
 		std::stable_partition(places.begin(), places.end(), [](const ibDataValue& place) {
-			const std::shared_ptr<ibDataNode>& node = place.AsChild();
-			return node && node->FindField(wxT("id")) != nullptr;
+			const auto node = place.AsChild();
+			return node && node->Has(wxT("id"));
 		});
 
 		// ⚠ A HANDFUL, BECAUSE THIS IS THE TOOL FINDER. The corpus can answer a common word from

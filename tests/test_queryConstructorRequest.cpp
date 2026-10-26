@@ -102,10 +102,10 @@ struct OpenConfiguration : ibMetaDataConfigurationFile
 	LoadGuard m_open{ this };
 };
 
-std::vector<wxString> Strings(const ibDataValue* listed)
+std::vector<wxString> Strings(const std::optional<ibDataValue>& listed)
 {
 	std::vector<wxString> out;
-	if (listed != nullptr)
+	if (listed)
 		for (const ibDataValue& item : listed->AsArray())
 			out.push_back(item.AsString());
 	return out;
@@ -135,10 +135,10 @@ TEST(QueryConstructorRequest, WithNoConfigurationTheSourcesAreAnsweredEmpty)
 {
 	ibDataNode response;
 	ASSERT_TRUE(ibFetchQueryConstructorRequest(Request(qc::ibRequest::Sources), response, nullptr));
-	const ibDataNode* const sources = response.FindChild(qc::Sources);
+	const auto sources = response.FindChild(qc::Sources);
 	ASSERT_NE(nullptr, sources);
 	// …and so are the kinds' pictures: no kind, no row.
-	const ibDataNode* const kinds = response.FindChild(qc::Kinds);
+	const auto kinds = response.FindChild(qc::Kinds);
 	ASSERT_NE(nullptr, kinds);
 	EXPECT_TRUE(kinds->Children().empty());
 }
@@ -161,7 +161,7 @@ TEST(QueryConstructorRequest, EachKindIsOneRowWithItsClassPicture)
 		kinds.push_back(row.GetValue<wxString>(qc::Name));
 		const ibCtorAbstractType* const ctor = cfg.GetAvailableCtor(kinds.back());
 		EXPECT_EQ(ctor != nullptr ? wxString(ibBackendPicture::SendPicture(ctor->GetClassType())) : wxString(),
-			row.FindField(qc::Picture) != nullptr ? row.GetValue<wxString>(qc::Picture) : wxString()) << kinds.back();
+			row.Has(qc::Picture) ? row.GetValue<wxString>(qc::Picture) : wxString()) << kinds.back();
 	}
 	EXPECT_EQ(expected, std::set<wxString>(kinds.begin(), kinds.end()));
 	EXPECT_EQ(expected.size(), kinds.size()) << "a kind is one row";
@@ -195,9 +195,9 @@ TEST(QueryConstructorRequest, CheckAnswersTheDesktopsCheckNames)
 		const wxString desktop = DesktopCheckNames(text, cfg);
 		ibDataNode response;
 		ASSERT_TRUE(ibFetchQueryConstructorRequest(CheckRequest(text), response, &cfg));
-		EXPECT_EQ(desktop, response.FindField(qc::Error) != nullptr ? response.GetValue<wxString>(qc::Error) : wxString())
+		EXPECT_EQ(desktop, response.Has(qc::Error) ? response.GetValue<wxString>(qc::Error) : wxString())
 			<< text.ToStdString();
-		EXPECT_EQ(nullptr, response.FindField(qc::UngroupedProjections)) << "the verdict is asked alone";
+		EXPECT_FALSE(response.Has(qc::UngroupedProjections)) << "the verdict is asked alone";
 	}
 	// The three texts above are a sound one and two refusals, so the comparison is not over silence alone.
 	EXPECT_TRUE(DesktopCheckNames(wxT("SELECT S.Region, SUM(S.Amount) AS Total FROM Document.Sales AS S GROUP BY S.Region"), cfg).IsEmpty());
@@ -218,7 +218,7 @@ TEST(QueryConstructorRequest, CheckWithTheSelectNamedAnswersTheDesktopsUngrouped
 		ASSERT_TRUE(ibFetchQueryConstructorRequest(UngroupedRequest(text, 0, -1), response, &cfg));
 		EXPECT_EQ(DesktopUngroupedProjections(text, cfg), Strings(response.FindField(qc::UngroupedProjections)))
 			<< text.ToStdString();
-		EXPECT_EQ(nullptr, response.FindField(qc::Error)) << "the grouping is asked alone";
+		EXPECT_FALSE(response.Has(qc::Error)) << "the grouping is asked alone";
 	}
 	EXPECT_EQ(std::vector<wxString>{ wxT("S.Period") }, DesktopUngroupedProjections(
 		wxT("SELECT S.Region, S.Period, SUM(S.Amount) AS Total FROM Document.Sales AS S GROUP BY S.Region"), cfg));
@@ -235,10 +235,10 @@ TEST(QueryConstructorRequest, ASourceNobodyHasHasNoFieldsAndNoError)
 {
 	ibDataNode response;
 	ASSERT_TRUE(ibFetchQueryConstructorRequest(Request(qc::ibRequest::Fields, wxT("Catalog.Nobody")), response, nullptr));
-	const ibDataNode* const fields = response.FindChild(qc::Fields);
-	ASSERT_NE(nullptr, fields);
+	const auto fields = response.FindChild(qc::Fields);
+	ASSERT_TRUE(fields);
 	EXPECT_TRUE(fields->Children().empty());
-	EXPECT_EQ(nullptr, response.FindField(qc::Error));
+	EXPECT_FALSE(response.Has(qc::Error));
 }
 
 TEST(QueryConstructorRequest, ASourceTheParserRefusesSaysWhy)
@@ -253,7 +253,7 @@ TEST(QueryConstructorRequest, ASourceNobodyHasTakesNoParameters)
 	ibDataNode response;
 	ASSERT_TRUE(ibFetchQueryConstructorRequest(
 		Request(qc::ibRequest::SourceParameters, wxT("AccumulationRegister.Nobody.Balance")), response, nullptr));
-	const ibDataNode* const parameters = response.FindChild(qc::Parameters);
+	const auto parameters = response.FindChild(qc::Parameters);
 	ASSERT_NE(nullptr, parameters);
 	EXPECT_TRUE(parameters->Children().empty());
 }

@@ -47,11 +47,11 @@ wxVariant WriteSource(const wxVariant& value, const ibSourceDescription& desc)
 wxVariant ReadSourceType(const wxVariant& value)
 {
 	const ibDataValue node = ibVariantDataSerializable::GetNodeValue(value);
-	const ibDataNode* const type = node.AsChild() != nullptr
-		? node.AsChild()->FindChild(ibProtocol::ibSchema::ibProperties::SourceType) : nullptr;
+	const auto type = node.Kind() == ibDataKind::Child
+		? node.AsChild()->FindChild(ibProtocol::ibSchema::ibProperties::SourceType) : std::nullopt;
 	return wxVariant(new ibVariantDataSerializable(value.GetType(),
-		type != nullptr ? type->GetProperty(ibProtocol::ibSchema::ibProperties::Value) : ibDataValue(),
-		type != nullptr ? type->GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Presentation) : wxString()));
+		type ? type->GetProperty(ibProtocol::ibSchema::ibProperties::Value) : ibDataValue(),
+		type ? type->GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Presentation) : wxString()));
 }
 
 }
@@ -72,10 +72,10 @@ public:
 			wxVariant value = property->GetValue();
 			ibDataNode row;
 			if (property->GetProtocolValue(row)) {
-				if (row.FindField(ibProtocol::ibSchema::ibProperties::SourceDataType) != nullptr)
+				if (row.Has(ibProtocol::ibSchema::ibProperties::SourceDataType))
 					filter = static_cast<ibSourceDataType>(row.GetValue<std::int32_t>(ibProtocol::ibSchema::ibProperties::SourceDataType));
 				// …the classes its Type row offers, in the server's order (Classes);
-				if (const ibDataNode* const classes = row.FindChild(ibProtocol::ibSchema::ibProperties::Classes)) {
+				if (const auto classes = row.FindChild(ibProtocol::ibSchema::ibProperties::Classes)) {
 					for (const ibDataNode& entry : classes->Children()) {
 						unsigned long long clsid = 0;
 						entry.GetValue<wxString>(ibProtocol::ibSchema::ibProperties::Type).ToULongLong(&clsid);
@@ -104,9 +104,9 @@ ibPGDataSourceProperty::ibPGDataSourceProperty(const ibPropertyObject* property,
 	// The Type row — the desktop's, over the type the binding holds (RefreshChildren), read only: its window offers the
 	// classes the row named (Classes — `types`), composite unless the control's is a table's shape (SourceType's Multiple).
 	const ibDataValue node = ibVariantDataSerializable::GetNodeValue(value);
-	const ibDataNode* const type = node.AsChild() != nullptr
-		? node.AsChild()->FindChild(ibProtocol::ibSchema::ibProperties::SourceType) : nullptr;
-	m_typeSelector = new ibPGTypeProperty(types, type != nullptr && type->GetValue<bool>(ibProtocol::ibSchema::ibProperties::Multiple),
+	const auto type = node.Kind() == ibDataKind::Child
+		? node.AsChild()->FindChild(ibProtocol::ibSchema::ibProperties::SourceType) : std::nullopt;
+	m_typeSelector = new ibPGTypeProperty(types, type && type->GetValue<bool>(ibProtocol::ibSchema::ibProperties::Multiple),
 		_("Type"), wxT("type"));
 	AddPrivateChild(m_typeSelector);
 

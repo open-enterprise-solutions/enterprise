@@ -47,7 +47,7 @@ void WriteListSourceFields(ibDataNode& into, ibMetaID mainTable, const wxString&
 		descriptor->FillSourceExplorer(explorer);
 		for (unsigned int i = 0; i < explorer.GetHelperCount(); ++i) {
 			const ibSourceDataObject::ibSourceExplorer* const node = explorer.GetHelper(i);
-			if (node == nullptr || node->IsTableSection())
+			if (!node || node->IsTableSection())
 				continue;
 			ibWriteSettingsField(fields, node->GetSourceName(), node->GetSourceSynonym(),
 				static_cast<ibMetaID>(node->GetSourceId()), node->GetTypeValueDesc(),
@@ -120,9 +120,9 @@ bool ibComposerCompositionView::OnClientEvent(ibProtocol::ibEvent::ibKind event,
 		document->Modify(true);
 		return true;
 	case ibProtocol::ibEvent::ibKind::Change: {
-		const ibDataNode* const node = args.FindChild(ibProtocol::ibView::ibComposer::Composition);
+		const auto node = args.FindChild(ibProtocol::ibView::ibComposer::Composition);
 		ibCompositionDescription composition;
-		if (node == nullptr || !ibCompositionDescriptionMemory::ReadNode(*node, composition))
+		if (!node || !ibCompositionDescriptionMemory::ReadNode(*node, composition))
 			return false;
 		// Where the desktop's panel wrote — the composer's own description — and the configuration modified
 		// (ibComposerEditor::MarkModified).
@@ -153,7 +153,7 @@ bool ibFetchComposerRequest(const ibDataNode& request, ibDataNode& response, con
 		return true;
 	case ibProtocol::ibView::ibComposer::ibRequest::Expand: {
 		std::vector<ibMetaID> targets;
-		if (const ibDataValue* const listed = request.FindField(ibProtocol::ibView::ibComposer::Targets)) {
+		if (const auto listed = request.FindField(ibProtocol::ibView::ibComposer::Targets)) {
 			if (listed->Kind() == ibDataKind::Array)
 				for (const ibDataValue& id : listed->AsArray())
 					targets.push_back(static_cast<ibMetaID>(id.AsInt()));
@@ -163,7 +163,7 @@ bool ibFetchComposerRequest(const ibDataNode& request, ibDataNode& response, con
 		return true;
 	}
 	case ibProtocol::ibView::ibComposer::ibRequest::Source:
-		WriteListSourceFields(response, request.FindField(ibProtocol::ibView::ibComposer::Id) != nullptr
+		WriteListSourceFields(response, request.Has(ibProtocol::ibView::ibComposer::Id)
 			? static_cast<ibMetaID>(request.GetValue<std::int32_t>(ibProtocol::ibView::ibComposer::Id)) : static_cast<ibMetaID>(wxNOT_FOUND),
 			request.GetValue<wxString>(ibProtocol::ibView::ibComposer::Text), metaData);
 		return true;

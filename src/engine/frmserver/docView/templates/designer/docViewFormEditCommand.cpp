@@ -28,11 +28,11 @@ void ibFormDesignView::FillCommandTree(ibDataNode& node)
 void ibFormDesignView::ReadPath(const ibDataNode& node, ibCommandDescription& desc)
 {
 	desc.ClearCommand();
-	const ibDataValue* const hops = node.FindField(ibProtocol::ibView::ibFormDesigner::CommandPath);
-	if (hops == nullptr || hops->Kind() != ibDataKind::Array)
+	const auto hops = node.FindField(ibProtocol::ibView::ibFormDesigner::CommandPath);
+	if (!hops || hops->Kind() != ibDataKind::Array)
 		return;
 	for (const ibDataValue& hop : hops->AsArray()) {
-		if (hop.Kind() == ibDataKind::Child && hop.AsChild() != nullptr)
+		if (hop.Kind() == ibDataKind::Child)
 			desc.AppendCommand(static_cast<ibMetaID>(hop.AsChild()->GetValue<std::int32_t>(ibProtocol::ibView::ibFormDesigner::Id)));
 	}
 	const std::int32_t kind = node.GetValue<std::int32_t>(ibProtocol::ibView::ibFormDesigner::Kind);
@@ -62,11 +62,10 @@ bool ibFormDesignView::FetchFormCommand(const ibDataNode& request, ibDataNode& r
 	case ibProtocol::ibView::ibFormDesigner::ibCommand::Paste: {
 		// The node the client copied of its form's FormCommands — the properties, the Action event, the form-unique id;
 		// a fresh entry of it, a unique name and id.
-		const ibDataNode* const copied = request.FindChild(ibProtocol::ibView::ibFormDesigner::Value);
-		if (copied == nullptr)
+		const auto copied = request.FindChild(ibProtocol::ibView::ibFormDesigner::Value);
+		if (!copied)
 			return false;
 		ibDataNode node = *copied;
-		RestoreProperties(node);
 		shown = m_valueForm->PasteFormCommand(node);
 		break;
 	}
@@ -88,6 +87,8 @@ bool ibFormDesignView::FetchFormCommand(const ibDataNode& request, ibDataNode& r
 		return false;
 	}
 
+	// A command is what the buttons and bars bound to it show — their captions, their pictures: the form drawn whole.
+	UpdateControl(m_valueForm);
 	WriteForm(response);
 	if (shown != nullptr)
 		response.SetValue(ibProtocol::ibView::ibFormDesigner::FormCommand, static_cast<std::int32_t>(shown->GetId()));

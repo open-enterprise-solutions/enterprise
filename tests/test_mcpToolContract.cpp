@@ -172,8 +172,8 @@ std::set<wxString> DeclaredArguments(const ibDataNode& schema)
 {
 	std::set<wxString> names;
 
-	if (const ibDataNode* properties = schema.FindChild(wxT("properties"))) {
-		for (const auto& entry : properties->Properties())
+	if (auto properties = schema.FindChild(wxT("properties"))) {
+		for (const auto& entry : properties->Fields())
 			names.insert(entry.first);
 	}
 
@@ -185,7 +185,7 @@ std::vector<wxString> RequiredArguments(const ibDataNode& schema)
 {
 	std::vector<wxString> names;
 
-	if (const ibDataValue* required = schema.FindField(wxT("required"))) {
+	if (auto required = schema.FindField(wxT("required"))) {
 		if (required->Kind() == ibDataKind::Array) {
 			for (const ibDataValue& item : required->AsArray()) {
 				if (item.Kind() == ibDataKind::String)
@@ -347,7 +347,7 @@ TEST(McpToolContract, EveryTool_PublishesAnObjectSchema)
 
 		const ibDataNode schema = SchemaOf(tool);
 
-		const ibDataValue* type = schema.FindField(wxT("type"));
+		auto type = schema.FindField(wxT("type"));
 		ASSERT_NE(type, nullptr) << tool->GetName().ToStdString() << " publishes no schema type";
 		ASSERT_EQ(type->Kind(), ibDataKind::String);
 		EXPECT_EQ(type->AsString(), wxT("object"))
@@ -374,23 +374,23 @@ TEST(McpToolContract, TheEnvelope_TakesItsArgumentsAsAnObject)
 	ASSERT_NE(envelope, nullptr) << "the envelope every deferred tool is called through is missing";
 
 	const ibDataNode schema = SchemaOf(envelope);
-	const ibDataNode* properties = schema.FindChild(wxT("properties"));
+	auto properties = schema.FindChild(wxT("properties"));
 	ASSERT_NE(properties, nullptr);
 
-	const ibDataNode* arguments = properties->FindChild(wxT("arguments"));
+	auto arguments = properties->FindChild(wxT("arguments"));
 	ASSERT_NE(arguments, nullptr) << "mcp_call declares no `arguments`";
 
-	const ibDataValue* type = arguments->FindField(wxT("type"));
+	auto type = arguments->FindField(wxT("type"));
 	ASSERT_NE(type, nullptr);
 	EXPECT_EQ(type->AsString(), wxT("object"))
 		<< "mcp_call's `arguments` is read with FindChild and must be declared an object";
 
 	// And the name beside it is a plain name, not a structure — the other half of the pair, so a
 	// fix to one cannot silently take the other with it.
-	const ibDataNode* target = properties->FindChild(wxT("tool"));
+	auto target = properties->FindChild(wxT("tool"));
 	ASSERT_NE(target, nullptr) << "mcp_call declares no `tool`";
 
-	const ibDataValue* targetType = target->FindField(wxT("type"));
+	auto targetType = target->FindField(wxT("type"));
 	ASSERT_NE(targetType, nullptr);
 	EXPECT_EQ(targetType->AsString(), wxT("string"));
 }
@@ -450,16 +450,16 @@ TEST(McpToolContract, EveryDeclaredArgument_SaysWhatItIsAndWhatItMeans)
 	for (const ibMcpTool* tool : ibMcpTools()) {
 
 		const ibDataNode schema = SchemaOf(tool);
-		const ibDataNode* properties = schema.FindChild(wxT("properties"));
-		if (properties == nullptr)
+		auto properties = schema.FindChild(wxT("properties"));
+		if (!properties)
 			continue;   // a verb that takes no arguments — an ordinary shape
 
-		for (const auto& entry : properties->Properties()) {
+		for (const auto& entry : properties->Fields()) {
 
 			ASSERT_EQ(entry.second.Kind(), ibDataKind::Child)
 				<< tool->GetName().ToStdString() << " / " << entry.first.ToStdString();
 
-			const std::shared_ptr<ibDataNode>& argument = entry.second.AsChild();
+			const auto argument = entry.second.AsChild();
 			ASSERT_NE(argument, nullptr);
 
 			// ⭐ EXCEPT WHERE "ANY VALUE" IS THE HONEST ANSWER, and that is not a hole
@@ -476,7 +476,7 @@ TEST(McpToolContract, EveryDeclaredArgument_SaysWhatItIsAndWhatItMeans)
 			const bool takesAnyValue = KindOfArgument(tool, entry.first) ==
 				ibMcpTool::ibMcpArgument::Kind::Any;
 
-			const ibDataValue* type = argument->FindField(wxT("type"));
+			auto type = argument->FindField(wxT("type"));
 			if (!takesAnyValue) {
 				EXPECT_NE(type, nullptr)
 					<< tool->GetName().ToStdString() << " / " << entry.first.ToStdString()
@@ -492,7 +492,7 @@ TEST(McpToolContract, EveryDeclaredArgument_SaysWhatItIsAndWhatItMeans)
 			// nothing about whether a number is a NodeId, a row or a length —
 			// which is exactly how three arguments were guessed wrong in one
 			// session.
-			const ibDataValue* description = argument->FindField(wxT("description"));
+			auto description = argument->FindField(wxT("description"));
 			ASSERT_NE(description, nullptr)
 				<< tool->GetName().ToStdString() << " / " << entry.first.ToStdString()
 				<< " is undescribed";

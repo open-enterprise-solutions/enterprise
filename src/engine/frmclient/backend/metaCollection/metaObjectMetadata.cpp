@@ -25,7 +25,7 @@ ibDataValue HomePageValue(const ibDataNode& node)
 	const ibDataValue value = node.GetProperty(ibProtocol::ibSchema::ibHomePage::HomePage);
 	if (value.Kind() == ibDataKind::Child)
 		return value;
-	if (const ibDataNode* const child = node.FindChild(ibProtocol::ibSchema::ibHomePage::HomePage))
+	if (const auto child = node.FindChild(ibProtocol::ibSchema::ibHomePage::HomePage))
 		return ibDataValue::Child(std::make_shared<ibDataNode>(*child));
 	return ibDataValue();
 }
@@ -47,7 +47,7 @@ void ibValueMetaObjectConfiguration::ReadHomePage()
 	ibReadProtocolNode(answer, shown);
 	m_homePage.ReadNode(HomePageValue(shown));
 	m_readOnly = shown.GetValue<bool>(ibProtocol::ibSchema::ibHomePage::ReadOnly);
-	if (const ibDataNode* const forms = shown.FindChild(ibProtocol::ibSchema::ibHomePage::Forms))
+	if (const auto forms = shown.FindChild(ibProtocol::ibSchema::ibHomePage::Forms))
 		m_formArray = *forms;
 }
 
