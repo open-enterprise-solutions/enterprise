@@ -79,14 +79,14 @@ TEST(ClientFrameApply, NodeEntryMergedNotReplaced)
 	ibDataNode& view = from.Child(wxT("View"));
 	view.SetValue(wxT("Key"), wxString(wxT("form-1")));
 	view.Child(wxT("State")).SetValue(wxT("Title"), wxString(wxT("Receipt")));
-	view.FindChild(wxT("State"))->SetValue(wxT("Modified"), false);
+	view.Child(wxT("State")).SetValue(wxT("Modified"), false);
 
 	ibDataNode to;
 	Ballast(to);
 	ibDataNode& now = to.Child(wxT("View"));
 	now.SetValue(wxT("Key"), wxString(wxT("form-1")));
 	now.Child(wxT("State")).SetValue(wxT("Title"), wxString(wxT("Receipt")));
-	now.FindChild(wxT("State"))->SetValue(wxT("Modified"), true);
+	now.Child(wxT("State")).SetValue(wxT("Modified"), true);
 
 	ExpectApplied(from, to);
 }
@@ -106,7 +106,7 @@ TEST(ClientFrameApply, ChildrenByIdChangedRemovedInsertedReordered)
 	Control(to, 1, wxT("Number"));
 	Control(to, 5, wxT("Comment"));
 	ibDataNode& changed = Control(to, 3, wxT("Supplier"));
-	changed.FindChild(wxT("State"))->SetValue(wxT("ReadOnly"), true);
+	changed.Child(wxT("State")).SetValue(wxT("ReadOnly"), true);
 
 	ExpectApplied(from, to);
 }
@@ -181,7 +181,7 @@ TEST(ClientFrameApply, SubscriptionComesAndGoes)
 	Ballast(listening);
 	const long long input = static_cast<int>(ibProtocol::ibEvent::ibKind::Input);
 	const long long row = static_cast<int>(ibProtocol::ibEvent::ibKind::Row);
-	Control(listening, 1, wxT("Number")).FindChild(wxT("State"))->AddField(subscribed,
+	Control(listening, 1, wxT("Number")).Child(wxT("State")).AddField(subscribed,
 		ibDataValue::Array(std::vector<ibDataValue>{ ibDataValue::Int(input), ibDataValue::Int(row) }));
 
 	ExpectApplied(bare, listening);

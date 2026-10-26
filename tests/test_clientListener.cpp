@@ -34,6 +34,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <csignal>
 #include <future>
 #include <string>
 #include <thread>
@@ -86,6 +87,20 @@ bool SendPing(httplib::ws::WebSocketClient& client)
 {
 	return client.send(PingPacket().data(), PingPacket().size());
 }
+
+// THE TEST'S CLIENT WRITES WHERE THE SERVER HAS HUNG UP — a close frame after Stop, a ping past the fifteen seconds.
+// Off Windows such a write raises SIGPIPE, whose default ends the process, and under ctest the process is the test
+// (macOS CI, 2026-10-26). Ignored for the test's duration: the other way round from ibDefaultSigpipe
+// (test_valueHttp.cpp), which puts the default back to see that the engine's own sends never raise it.
+#ifndef _WIN32
+struct ibIgnoredSigpipe {
+	void (*m_before)(int);
+	ibIgnoredSigpipe() : m_before(signal(SIGPIPE, SIG_IGN)) {}
+	~ibIgnoredSigpipe() { signal(SIGPIPE, m_before); }
+};
+#else
+struct ibIgnoredSigpipe {};
+#endif
 
 // …and the refusal, read from the packet it came in: its JSON view names the method.
 bool Refused(const std::string& packet)
@@ -414,6 +429,7 @@ TEST(ClientListener, ABurstOfConnectionsAddsNoThread) {
 TEST(ClientListener, StopReturnsWhileSocketsAreOpen) {
 	WxReady();
 	ASSERT_EQ(ibApplicationHost::Get(), nullptr);
+	const ibIgnoredSigpipe ignored{};   // the clients close after the listener has stopped
 
 	ibClientHost host(nullptr);
 	ibClientListener listener;
@@ -434,6 +450,7 @@ TEST(ClientListener, StopReturnsWhileSocketsAreOpen) {
 TEST(ClientListener, ASocketThatNeverLogsInClosesFifteenSecondsAfterItOpened) {
 	WxReady();
 	ASSERT_EQ(ibApplicationHost::Get(), nullptr);
+	const ibIgnoredSigpipe ignored{};   // a ping may go after the server has closed
 
 	ibClientHost host(nullptr);
 	ibClientListener listener;
@@ -478,6 +495,7 @@ TEST(ClientListener, ASocketThatNeverLogsInClosesFifteenSecondsAfterItOpened) {
 TEST(ClientListener, ASocketThatKeepsSendingClosesFifteenSecondsAfterItOpened) {
 	WxReady();
 	ASSERT_EQ(ibApplicationHost::Get(), nullptr);
+	const ibIgnoredSigpipe ignored{};   // a ping may go after the server has closed
 
 	ibClientHost host(nullptr);
 	ibClientListener listener;
