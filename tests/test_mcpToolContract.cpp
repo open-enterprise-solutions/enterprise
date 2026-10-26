@@ -348,7 +348,7 @@ TEST(McpToolContract, EveryTool_PublishesAnObjectSchema)
 		const ibDataNode schema = SchemaOf(tool);
 
 		auto type = schema.FindField(wxT("type"));
-		ASSERT_NE(type, nullptr) << tool->GetName().ToStdString() << " publishes no schema type";
+		ASSERT_TRUE(type) << tool->GetName().ToStdString() << " publishes no schema type";
 		ASSERT_EQ(type->Kind(), ibDataKind::String);
 		EXPECT_EQ(type->AsString(), wxT("object"))
 			<< tool->GetName().ToStdString() << " must take a named-argument object";
@@ -375,23 +375,23 @@ TEST(McpToolContract, TheEnvelope_TakesItsArgumentsAsAnObject)
 
 	const ibDataNode schema = SchemaOf(envelope);
 	auto properties = schema.FindChild(wxT("properties"));
-	ASSERT_NE(properties, nullptr);
+	ASSERT_TRUE(properties);
 
 	auto arguments = properties->FindChild(wxT("arguments"));
-	ASSERT_NE(arguments, nullptr) << "mcp_call declares no `arguments`";
+	ASSERT_TRUE(arguments) << "mcp_call declares no `arguments`";
 
 	auto type = arguments->FindField(wxT("type"));
-	ASSERT_NE(type, nullptr);
+	ASSERT_TRUE(type);
 	EXPECT_EQ(type->AsString(), wxT("object"))
 		<< "mcp_call's `arguments` is read with FindChild and must be declared an object";
 
 	// And the name beside it is a plain name, not a structure — the other half of the pair, so a
 	// fix to one cannot silently take the other with it.
 	auto target = properties->FindChild(wxT("tool"));
-	ASSERT_NE(target, nullptr) << "mcp_call declares no `tool`";
+	ASSERT_TRUE(target) << "mcp_call declares no `tool`";
 
 	auto targetType = target->FindField(wxT("type"));
-	ASSERT_NE(targetType, nullptr);
+	ASSERT_TRUE(targetType);
 	EXPECT_EQ(targetType->AsString(), wxT("string"));
 }
 
@@ -460,7 +460,7 @@ TEST(McpToolContract, EveryDeclaredArgument_SaysWhatItIsAndWhatItMeans)
 				<< tool->GetName().ToStdString() << " / " << entry.first.ToStdString();
 
 			const auto argument = entry.second.AsChild();
-			ASSERT_NE(argument, nullptr);
+			ASSERT_TRUE(argument);
 
 			// ⭐ EXCEPT WHERE "ANY VALUE" IS THE HONEST ANSWER, and that is not a hole
 			// in the rule. `metadata_set` writes an ATTRIBUTE, and an attribute is a
@@ -478,12 +478,12 @@ TEST(McpToolContract, EveryDeclaredArgument_SaysWhatItIsAndWhatItMeans)
 
 			auto type = argument->FindField(wxT("type"));
 			if (!takesAnyValue) {
-				EXPECT_NE(type, nullptr)
+				EXPECT_TRUE(type)
 					<< tool->GetName().ToStdString() << " / " << entry.first.ToStdString()
 					<< " has no type";
 			}
 			else {
-				EXPECT_EQ(type, nullptr)
+				EXPECT_FALSE(type)
 					<< tool->GetName().ToStdString() << " / " << entry.first.ToStdString()
 					<< " takes any value, so it must not publish one type as if it were the only one";
 			}
@@ -493,7 +493,7 @@ TEST(McpToolContract, EveryDeclaredArgument_SaysWhatItIsAndWhatItMeans)
 			// which is exactly how three arguments were guessed wrong in one
 			// session.
 			auto description = argument->FindField(wxT("description"));
-			ASSERT_NE(description, nullptr)
+			ASSERT_TRUE(description)
 				<< tool->GetName().ToStdString() << " / " << entry.first.ToStdString()
 				<< " is undescribed";
 			ASSERT_EQ(description->Kind(), ibDataKind::String);

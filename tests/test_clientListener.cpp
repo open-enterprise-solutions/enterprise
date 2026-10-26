@@ -13,7 +13,9 @@
 
 #include "backend/appData.h"
 #include "backend/appHost.h"
+#include "backend/rpc/rpcMessage.h"
 #include "clientListener.h"
+#include "core/serialize/dataBuilder.h"
 #include "frmserver/client/clientHost.h"
 
 #include <wx/file.h>
@@ -65,7 +67,34 @@ unsigned OldClientCeiling()
 	return base * 4;
 }
 
-const char kPing[] = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\"}";
+// A request for a method nobody has, as the packet a client sends (OES-RPC): the server answers it with a refusal
+// that names the method. Text it does not take — it closes the socket.
+const std::string& PingPacket()
+{
+	static const std::string packet = [] {
+		ibDataNode request;
+		request.SetValue(wxT("id"), 1);
+		request.SetValue(wxT("method"), wxString(wxT("ping")));
+		ibMemoryBuffer bytes;
+		ibBinaryProvider().Write(request, bytes);
+		return std::string(static_cast<const char*>(bytes.GetData()), bytes.GetDataLen());
+	}();
+	return packet;
+}
+
+bool SendPing(httplib::ws::WebSocketClient& client)
+{
+	return client.send(PingPacket().data(), PingPacket().size());
+}
+
+// …and the refusal, read from the packet it came in: its JSON view names the method.
+bool Refused(const std::string& packet)
+{
+	ibDataNode answer;
+	if (!ibBinaryProvider().Read(ibMemoryBuffer(packet.data(), packet.size()), answer))
+		return false;
+	return ibRpcRenderNode(answer).ToUtf8().find("no method named") != std::string::npos;
+}
 
 // Threads of this process. A retired pool thread stays visible until some later enqueue joins it.
 unsigned CountThreads()
@@ -111,12 +140,12 @@ unsigned CountThreads()
 
 bool Answered(httplib::ws::WebSocketClient& client)
 {
-	if (!client.send(kPing))
+	if (!SendPing(client))
 		return false;
 	std::string reply;
-	if (client.read(reply) != httplib::ws::Text)
+	if (client.read(reply) != httplib::ws::Binary)
 		return false;
-	return reply.find("no method named") != std::string::npos;
+	return Refused(reply);
 }
 
 // Connected, and a reply has come back, so the server holds the socket and has answered on it.
@@ -223,7 +252,6 @@ TEST(ClientListener, MoreConnectionsThanTheOldPoolAllGetAReply) {
 		<< refusal.ToStdString();
 
 	const std::string url = "ws://127.0.0.1:" + std::to_string(port) + "/demo/client";
-	const std::string request = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\"}";
 
 	std::vector<std::unique_ptr<httplib::ws::WebSocketClient>> clients(count);
 	std::vector<int> opened(count, 0);
@@ -252,7 +280,7 @@ TEST(ClientListener, MoreConnectionsThanTheOldPoolAllGetAReply) {
 		if (!opened[i])
 			continue;
 		threads.emplace_back([&, i] {
-			if (!clients[i]->send(request)) {
+			if (!SendPing(*clients[i])) {
 				reads[i] = -2;
 				return;
 			}
@@ -265,9 +293,8 @@ TEST(ClientListener, MoreConnectionsThanTheOldPoolAllGetAReply) {
 	for (unsigned i = 0; i < count; ++i) {
 		if (!opened[i])
 			continue;
-		EXPECT_EQ(reads[i], static_cast<int>(httplib::ws::Text)) << "connection " << i;
-		EXPECT_NE(replies[i].find("no method named"), std::string::npos)
-			<< "connection " << i << " answered: " << replies[i];
+		EXPECT_EQ(reads[i], static_cast<int>(httplib::ws::Binary)) << "connection " << i;
+		EXPECT_TRUE(Refused(replies[i])) << "connection " << i;
 	}
 
 	clients.clear();
@@ -424,7 +451,7 @@ TEST(ClientListener, ASocketThatNeverLogsInClosesFifteenSecondsAfterItOpened) {
 	bool closed = false;
 	while (std::chrono::steady_clock::now() - opened < std::chrono::seconds(25)) {
 		if (std::chrono::steady_clock::now() >= nextSend) {
-			if (!client.send("x")) {
+			if (!SendPing(client)) {
 				closed = true;
 				break;
 			}
@@ -432,7 +459,7 @@ TEST(ClientListener, ASocketThatNeverLogsInClosesFifteenSecondsAfterItOpened) {
 		}
 		std::string reply;
 		const auto read = client.read(reply);
-		if (read == httplib::ws::Text || read == httplib::ws::Timeout)
+		if (read == httplib::ws::Binary || read == httplib::ws::Timeout)
 			continue;
 		closed = true;
 		break;
@@ -468,7 +495,7 @@ TEST(ClientListener, ASocketThatKeepsSendingClosesFifteenSecondsAfterItOpened) {
 	bool closed = false;
 	while (std::chrono::steady_clock::now() - opened < std::chrono::seconds(25)) {
 		if (std::chrono::steady_clock::now() >= nextSend) {
-			if (!client.send("x")) {
+			if (!SendPing(client)) {
 				closed = true;
 				break;
 			}
@@ -476,7 +503,7 @@ TEST(ClientListener, ASocketThatKeepsSendingClosesFifteenSecondsAfterItOpened) {
 		}
 		std::string reply;
 		const auto read = client.read(reply);
-		if (read == httplib::ws::Text || read == httplib::ws::Timeout)
+		if (read == httplib::ws::Binary || read == httplib::ws::Timeout)
 			continue;
 		closed = true;
 		break;

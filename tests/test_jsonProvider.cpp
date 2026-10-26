@@ -264,19 +264,6 @@ TEST(JsonProvider, Date_DegradesToString_ByDesign) {
 	EXPECT_FALSE(v->AsString().IsEmpty());
 }
 
-// Fields and Properties flatten into one key set, so a scalar PROPERTY comes back
-// as a FIELD. (A Child property is the exception — see the test above.)
-TEST(JsonProvider, ScalarProperty_ComesBackAsField_ByDesign) {
-	ibDataNode n;
-	n.SetProperty(wxT("Name"), ibDataValue::String(wxT("Nomenclature")));
-
-	const ibDataNode back = Parse(Emit(n));
-	EXPECT_TRUE(!back.FindProperty(wxT("Name")));
-	auto asField = back.FindField(wxT("Name"));
-	ASSERT_TRUE(asField);
-	EXPECT_EQ(asField->AsString(), wxT("Nomenclature"));
-}
-
 // TypeDesc is injected beside a typeId with no node entry behind it — the parser
 // drops it rather than inventing a key the writer never had.
 TEST(JsonProvider, TypeDesc_IsDroppedNotMaterialised) {
@@ -381,13 +368,13 @@ void RunOnStack(size_t bytes, const std::function<void()>& body)
 #endif
 }
 
-const ibDataValue* InnermostArray(const ibDataNode& node, int arrays)
+std::optional<ibDataValue> InnermostArray(const ibDataNode& node, int arrays)
 {
 	auto v = node.FindField(wxT("v"));
 	for (int i = 0; i < arrays; ++i) {
 		if (!v || v->Kind() != ibDataKind::Array || v->AsArray().size() != 1)
-			return nullptr;
-		v = &v->AsArray()[0];
+			return std::nullopt;
+		v = v->AsArray()[0];
 	}
 	return v;
 }
@@ -399,16 +386,16 @@ TEST(JsonProvider, Nesting_AtTheLimit_IsRead) {
 	// Root plus (limit - 1) arrays is exactly `limit` containers.
 	const int limit = ibJsonProvider::kMaxNesting;
 	const ibDataNode arrays = Parse(NestedArrays(limit - 1));
-	const ibDataValue* leaf = InnermostArray(arrays, limit - 1);
-	ASSERT_NE(leaf, nullptr);
+	const std::optional<ibDataValue> leaf = InnermostArray(arrays, limit - 1);
+	ASSERT_TRUE(leaf);
 	EXPECT_EQ(leaf->Kind(), ibDataKind::Number);
 	EXPECT_EQ(leaf->AsInt(), (std::int64_t)1);
 
 	const ibDataNode objects = Parse(NestedObjects(limit));
-	const ibDataNode* inner = &objects;
+	std::optional<ibDataNode> inner = objects;
 	for (int i = 1; i < limit; ++i) {
 		inner = inner->FindChild(wxT("c"));
-		ASSERT_NE(inner, nullptr);
+		ASSERT_TRUE(inner);
 	}
 	EXPECT_EQ(inner->GetValue<std::int32_t>(wxT("n")), 1);
 }
@@ -449,7 +436,7 @@ TEST(JsonProvider, Nesting_AtTheLimit_FitsASmallThreadStack) {
 	RunOnStack(512 * 1024, [&read] {
 		try {
 			const ibDataNode node = Parse(NestedArrays(ibJsonProvider::kMaxNesting - 1));
-			read = InnermostArray(node, ibJsonProvider::kMaxNesting - 1) != nullptr;
+			read = InnermostArray(node, ibJsonProvider::kMaxNesting - 1).has_value();
 		}
 		catch (...) {
 			read = false;

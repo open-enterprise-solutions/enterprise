@@ -227,7 +227,7 @@ bool ibFetchSpreadsheet(const ibSpreadsheetObject& document, ibDataNode& respons
 		for (const ibDataValue& entry : cells->AsArray()) {
 			ibDataNode node = *entry.AsChild();
 			const ibSpreadsheetCellDescription* const cell = desc.GetCell(node.GetValue<std::int32_t>(wxT("row")), node.GetValue<std::int32_t>(wxT("col")));
-			const wxString text = cell != nullptr ? document.ComputeStringValueFromParameters(cell->m_value, cell->m_fillSetType) : wxString();
+			const ibString text = cell != nullptr ? document.ComputeStringValueFromParameters(cell->m_value, cell->m_fillSetType) : ibString();
 			if (cell != nullptr && (text != cell->m_value || cell->m_fillSetType != ibSpreadsheetFillType::ibSpreadsheetFillType_StrText)) {
 				node.SetField(wxT("value"), ibDataValue::String(text));
 				node.SetField(wxT("fill"), ibDataValue::Int(static_cast<std::int64_t>(ibSpreadsheetFillType::ibSpreadsheetFillType_StrText)));

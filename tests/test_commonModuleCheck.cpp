@@ -128,10 +128,10 @@ TEST_F(CommonModuleCheck, ConfigCheckReportsABrokenModuleAndOneThatWasNeverCompi
 	wxString refusal;
 	ASSERT_TRUE(check->Call(params, result, refusal)) << refusal.ToStdString();
 
-	const ibDataValue* brokenProblem = nullptr;
-	const ibDataValue* neverProblem = nullptr;
+	std::optional<ibDataValue> brokenProblem;
+	std::optional<ibDataValue> neverProblem;
 	auto problems = result.FindField(wxT("problems"));
-	ASSERT_NE(problems, nullptr);
+	ASSERT_TRUE(problems);
 	ASSERT_EQ(problems->Kind(), ibDataKind::Array);
 	for (const ibDataValue& one : problems->AsArray()) {
 		if (one.Kind() != ibDataKind::Child || !one.AsChild())
@@ -143,26 +143,26 @@ TEST_F(CommonModuleCheck, ConfigCheckReportsABrokenModuleAndOneThatWasNeverCompi
 			for (const ibDataValue& line : diagnostics->AsArray()) {
 				if (line.Kind() == ibDataKind::Child && line.AsChild()
 					&& line.AsChild()->GetValue<wxString>(wxT("message")).Contains(wxT("Nope")))
-					brokenProblem = &one;
+					brokenProblem = one;
 			}
 		}
 		if (one.AsChild()->GetValue<wxString>(wxT("name")) == never->GetName()
 			|| text.Contains(never->GetName()))
-			neverProblem = &one;
+			neverProblem = one;
 		EXPECT_FALSE(text.Contains(clean->GetName()) && one.AsChild()->Has(wxT("diagnostics"))
 			&& one.AsChild()->GetValue<wxString>(wxT("says")).Contains(wxT("does not compile")));
 	}
 
-	ASSERT_NE(brokenProblem, nullptr);
+	ASSERT_TRUE(brokenProblem);
 	auto diagnostics = brokenProblem->AsChild()->FindField(wxT("diagnostics"));
-	ASSERT_NE(diagnostics, nullptr);
+	ASSERT_TRUE(diagnostics);
 	EXPECT_EQ(diagnostics->Kind(), ibDataKind::Array);
 	EXPECT_FALSE(diagnostics->AsArray().empty());
 	EXPECT_TRUE(brokenProblem->AsChild()->GetValue<bool>(wxT("checked")));
 
-	ASSERT_NE(neverProblem, nullptr);
+	ASSERT_TRUE(neverProblem);
 	EXPECT_FALSE(neverProblem->AsChild()->GetValue<bool>(wxT("checked")));
 	auto empty = neverProblem->AsChild()->FindField(wxT("diagnostics"));
-	ASSERT_NE(empty, nullptr);
+	ASSERT_TRUE(empty);
 	EXPECT_TRUE(empty->Kind() == ibDataKind::Array && empty->AsArray().empty());
 }

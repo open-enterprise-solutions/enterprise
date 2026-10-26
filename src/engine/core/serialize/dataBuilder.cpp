@@ -1061,8 +1061,11 @@ struct ibPacketCheck {
 
 	void Node(std::uint32_t node, std::uint32_t end, int depth) const
 	{
-		if (depth > ibBinaryProvider::kMaxNesting || ibFiber::StackLow())
+		if (depth > ibBinaryProvider::kMaxNesting)
 			Refuse(L"nesting too deep", node);
+		// …and a reserve that runs out first is the reader's, not the bytes': the packet may be a sound one.
+		if (ibFiber::StackLow())
+			ibCoreException::Error(_("ibBinaryProvider: the packet is nested deeper than the stack allows"));
 		if (std::uint64_t(node) + kNodeHeader > end)
 			Refuse(L"a node's header past its container", node);
 		const std::uint32_t length = Rd<std::uint32_t>(m_base, node + kLength);

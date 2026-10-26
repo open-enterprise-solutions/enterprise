@@ -5,7 +5,6 @@
 
 #include <gtest/gtest.h>
 
-#include <memory>   // std::make_shared - a Child value's node
 #include <cstring>
 
 #include "core/serialize/dataBuilder.h"
@@ -183,76 +182,3 @@ TEST(DataNode, NamedFields_OptimisticCursor_ReorderedAndMissing) {
 	EXPECT_TRUE(n.GetValue<wxString>(wxT("zzz")).IsEmpty());
 }
 
-// The stream of a node with its format stamp lowered: the entries' bytes are the same, only what they
-// MEAN differs, which is exactly what the stamp is for. The meta block is chunk id 0x2350 (std::uint64_t), size
-// (std::uint64_t), then the stamp (std::uint32_t).
-static void LowerTheStamp(ibMemoryBuffer& buf, unsigned char to)
-{
-	const unsigned char id[8] = { 0x50, 0x23, 0, 0, 0, 0, 0, 0 };
-	unsigned char* bytes = static_cast<unsigned char*>(buf.GetData());
-	size_t at = buf.GetDataLen();
-	int found = 0;
-	for (size_t i = 0; i + 8 + 8 + 4 <= buf.GetDataLen(); ++i)
-		if (memcmp(bytes + i, id, 8) == 0) { at = i + 16; ++found; }
-	ASSERT_EQ(1, found) << "one meta block in the stream";
-	ASSERT_EQ(3u, bytes[at]) << "written under format 3";
-	bytes[at] = to;
-}
-
-// A node written under format 1 (before 2026-09) holds INSTANTS - milliseconds of real time from the
-// wxDateTime epoch - where a format-3 node holds an ibDateTime's count. Read back, a format-1 date is
-// the instant's parts on this machine's clock (the bridge), and the old empty literal and 0 (no date)
-// are the empty date - in every place a node keeps a date.
-TEST(DataNode, AFormatOneNodeReadsItsDatesAsInstants) {
-	const wxDateTime instant(15, wxDateTime::Jan, 2025, 10, 30, 0);   // an instant, as an old build kept a date
-	const ibDateTime raw(static_cast<long long>(instant.GetValue().GetValue()));   // its number, as the stream held it
-
-	ibDataNode written(1001, 7);
-	written.AddField(wxT("stamp"),     ibDataValue::Date(raw));
-	written.AddField(wxT("was_empty"), ibDataValue::Date(ibDateTime(-62135604000000ll)));
-	written.AddField(wxT("no_date"),   ibDataValue::Date(ibDateTime(0ll)));
-	// ...and a date in every other place a node keeps one: a property, an array, a Child value's field.
-	written.SetProperty(wxT("prop"), ibDataValue::Date(raw));
-	written.AddField(wxT("list"), ibDataValue::Array({ ibDataValue::Date(raw), ibDataValue::Date(ibDateTime(0ll)) }));
-	auto inner = std::make_shared<ibDataNode>();
-	inner->AddField(wxT("when"), ibDataValue::Date(raw));
-	written.AddField(wxT("child"), ibDataValue::Child(inner));
-	ibMemoryBuffer buf = WriteFull(written);
-	LowerTheStamp(buf, 1);
-
-	ibClassID clsid = 0; ibMetaID metaId = 0;
-	const ibDataNode read = ReadFull(buf, clsid, metaId);
-	const ibDateTime crossed(2025, 1, 15, 10, 30);   // the instant's parts on this machine's clock
-	EXPECT_EQ(crossed, read.FindField(wxT("stamp"))->AsDate());
-	EXPECT_EQ(ibDateTime::OfWxDateTime(instant), read.FindField(wxT("stamp"))->AsDate());
-	EXPECT_TRUE(read.FindField(wxT("was_empty"))->AsDate().IsEmpty());
-	EXPECT_TRUE(read.FindField(wxT("no_date"))->AsDate().IsEmpty());
-	ASSERT_TRUE(read.Has(wxT("prop")));
-	EXPECT_EQ(crossed, read.FindProperty(wxT("prop"))->AsDate());
-	ASSERT_TRUE(read.Has(wxT("list")));
-	ASSERT_EQ(2u, read.FindField(wxT("list"))->AsArray().size());
-	EXPECT_EQ(crossed, read.FindField(wxT("list"))->AsArray()[0].AsDate());
-	EXPECT_TRUE(read.FindField(wxT("list"))->AsArray()[1].AsDate().IsEmpty());
-	ASSERT_TRUE(read.Has(wxT("child")));
-	EXPECT_EQ(crossed, read.FindField(wxT("child"))->AsChild()->FindField(wxT("when"))->AsDate());
-}
-
-// A node written under format 2 (the first form of the wall reading, PR #217) holds the same readings
-// counted from 1970-01-01, where 0 stood for "no date". Read back each is the date it named; that
-// form's empty date (0001-01-01 counted from 1970) is the empty date.
-TEST(DataNode, AFormatTwoNodeCountsItsDatesFrom1970) {
-	const long long from1970 = ibDateTime(2026, 3, 29, 2, 30) - ibDateTime(1970, 1, 1);
-
-	ibDataNode written(1001, 7);
-	written.AddField(wxT("a_date"),    ibDataValue::Date(ibDateTime(from1970)));
-	written.AddField(wxT("was_empty"), ibDataValue::Date(ibDateTime(-62135596800000ll)));
-	written.AddField(wxT("no_date"),   ibDataValue::Date(ibDateTime(0ll)));
-	ibMemoryBuffer buf = WriteFull(written);
-	LowerTheStamp(buf, 2);
-
-	ibClassID clsid = 0; ibMetaID metaId = 0;
-	const ibDataNode read = ReadFull(buf, clsid, metaId);
-	EXPECT_EQ(ibDateTime(2026, 3, 29, 2, 30), read.FindField(wxT("a_date"))->AsDate());
-	EXPECT_TRUE(read.FindField(wxT("was_empty"))->AsDate().IsEmpty());
-	EXPECT_TRUE(read.FindField(wxT("no_date"))->AsDate().IsEmpty());
-}

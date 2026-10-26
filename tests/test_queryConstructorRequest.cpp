@@ -136,10 +136,10 @@ TEST(QueryConstructorRequest, WithNoConfigurationTheSourcesAreAnsweredEmpty)
 	ibDataNode response;
 	ASSERT_TRUE(ibFetchQueryConstructorRequest(Request(qc::ibRequest::Sources), response, nullptr));
 	const auto sources = response.FindChild(qc::Sources);
-	ASSERT_NE(nullptr, sources);
+	ASSERT_TRUE(sources);
 	// …and so are the kinds' pictures: no kind, no row.
 	const auto kinds = response.FindChild(qc::Kinds);
-	ASSERT_NE(nullptr, kinds);
+	ASSERT_TRUE(kinds);
 	EXPECT_TRUE(kinds->Children().empty());
 }
 
@@ -254,6 +254,6 @@ TEST(QueryConstructorRequest, ASourceNobodyHasTakesNoParameters)
 	ASSERT_TRUE(ibFetchQueryConstructorRequest(
 		Request(qc::ibRequest::SourceParameters, wxT("AccumulationRegister.Nobody.Balance")), response, nullptr));
 	const auto parameters = response.FindChild(qc::Parameters);
-	ASSERT_NE(nullptr, parameters);
+	ASSERT_TRUE(parameters);
 	EXPECT_TRUE(parameters->Children().empty());
 }
