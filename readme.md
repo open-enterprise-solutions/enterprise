@@ -196,7 +196,7 @@ The unit tests (Google Test) build with the same tree: `-DBUILD_TESTING=ON`.
 
 ### wxWidgets Submodule
 
-wxWidgets 3.3.2 lives at `src/3rdparty/wxWidgets` as a git submodule. After cloning:
+wxWidgets 3.3.4 lives at `src/3rdparty/wxWidgets` as a git submodule. After cloning:
 
 ```bash
 git submodule update --init --recursive
@@ -222,7 +222,7 @@ enterprise/
 │                             # organisation only and is empty for everyone else. The build never
 │                             # needs it, so links to docs/private/… will not open for you.
 └── src/
-    ├── 3rdparty/             # Git submodules: wxWidgets 3.3.2, Mbed TLS, Asio, llhttp, cpp-httplib, nlohmann/json
+    ├── 3rdparty/             # Git submodules: wxWidgets 3.3.4, Mbed TLS, Asio, llhttp, cpp-httplib, nlohmann/json
     └── engine/
         ├── core/             # What the engine and its clients share: values, strings, dates, nodes, the journal
         ├── backend/          # Core engine DLL
@@ -270,7 +270,7 @@ enterprise/
 | Layer | Technology |
 |---|---|
 | Language | C++20 |
-| GUI framework | wxWidgets 3.3.2 |
+| GUI framework | wxWidgets 3.3.4 |
 | Primary database | Firebird (embedded) |
 | Production alternative | PostgreSQL |
 | Other databases | ODBC; SQLite (tests + logging) |

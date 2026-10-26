@@ -71,7 +71,7 @@ pkg-checks `gtk+-3.0`, so wx will not configure without it; and under GTK `guid.
 `linux-debug` / `linux-release` presets generate for. The driver `-dev` packages are only needed
 for the `OES_USE_*` options you turn on — SQLite is always embedded.
 
-**No system wxWidgets package is needed** — wxWidgets 3.3.2 is built from the in-tree submodule
+**No system wxWidgets package is needed** — wxWidgets 3.3.4 is built from the in-tree submodule
 by the CMake build (see below); a distro `libwxgtk` would be both unused and older.
 
 For other distributions, install the equivalent packages providing Firebird, PostgreSQL, SQLite3,
@@ -265,7 +265,7 @@ macros to every TU, and a `CopyMsvcCRT` target that copies
 
 ## macOS — CMake
 
-CMake cross-platform build is available. wxWidgets 3.3.2 is built from the in-tree submodule.
+CMake cross-platform build is available. wxWidgets 3.3.4 is built from the in-tree submodule.
 
 ```bash
 cd /path/to/enterprise
@@ -375,7 +375,7 @@ cmake --build build --parallel 3    # 16GB RAM
 cmake --build build --parallel 6    # 32GB+ RAM
 ```
 
-wxWidgets 3.3.2 is built from the in-tree submodule automatically. No system wxWidgets required.
+wxWidgets 3.3.4 is built from the in-tree submodule automatically. No system wxWidgets required.
 
 The same CMake options and build targets apply as described in the [macOS section](#macos--cmake).
 
@@ -383,14 +383,16 @@ The same CMake options and build targets apply as described in the [macOS sectio
 
 ## wxWidgets Submodule Details
 
-wxWidgets 3.3.2 lives as a git submodule at `src/3rdparty/wxWidgets`, tracked
-on the wxWidgets `3.2` maintenance branch.
+wxWidgets 3.3.4 lives as a git submodule at `src/3rdparty/wxWidgets`, pinned
+to the `v3.3.4` release tag (3.3 releases are cut from wxWidgets `master`, so
+there is no branch to track). A bump checks out the new tag and runs
+`git submodule update --init --recursive` inside it: wx's own third-party
+libraries move with it.
 
 ```
 .gitmodules entry:
   path   = src/3rdparty/wxWidgets
   url    = https://github.com/wxWidgets/wxWidgets.git
-  branch = 3.2
 ```
 
 - **Windows (MSBuild):** the solution links the **pre-built** wxWidgets
@@ -398,7 +400,10 @@ on the wxWidgets `3.2` maintenance branch.
   `…\lib\vc_x64_dll` (x64), plus the `mswu` includes
   (`oes3rdParty` = `$(SolutionDir)src\3rdparty\`).
   The libraries are `wxmsw33u*` / `wxbase33u*` (release) and `wxmsw33ud*`
-  (debug). The submodule source is not compiled by the MSBuild build.
+  (debug). The submodule source is not compiled by the MSBuild build. The
+  DLLs carry the full version in their names (`wxbase334ud_vc_custom.dll`),
+  so after a bump the new ones are copied next to the executables in
+  `bin\<Platform>\<Configuration>\`.
   Build those binaries as C++20, like the engine: copy
   `build\msw\cxx20.props` to `build\msw\wx_local.props` (wx ignores it in git
   and every wx project imports it), then build `build\msw\wx_vc17.sln`.

@@ -38,7 +38,7 @@ The runtime executes compiled bytecode, renders forms through wxWidgets, and sto
 | Area | Technology |
 |---|---|
 | Language | C++20 (no modules) |
-| GUI | wxWidgets 3.3.2 (git submodule at `src/3rdparty/wxWidgets`) |
+| GUI | wxWidgets 3.3.4 (git submodule at `src/3rdparty/wxWidgets`) |
 | Build (Windows) | MSBuild — `enterprise.sln` (Visual Studio 2022, toolset v143) |
 | Build (cross-platform) | CMake — `CMakeLists.txt` at repo root; macOS / Linux build supported, Windows uses MSBuild |
 | Primary database | Firebird (embedded) |
@@ -124,7 +124,7 @@ enterprise/
 │       ├── restructure-plan.md   # PLAN — grouping, declaration order, naming (nothing applied)
 │       └── configuration-compare.md  # Compare/Merge feature — walker, model, Apply paths
 └── src/
-    ├── 3rdparty/wxWidgets/  # Submodule (wxWidgets 3.3.2)
+    ├── 3rdparty/wxWidgets/  # Submodule (wxWidgets 3.3.4)
     └── engine/
         ├── core/            # core.dll     — shared meanings under backend and frmclient: ids, ibString/ibNumber/
         │                    #   ibDateTime/ibGuid, fileSystem, serialize (dataBuilder, JSON), ibCoreException,

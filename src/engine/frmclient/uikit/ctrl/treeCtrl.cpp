@@ -926,7 +926,7 @@ ibTreeItem *ibTreeItem::HitTest(const wxPoint& point,
                         theCtrl->m_imagesState.HasImages() )
                 {
                     int state_h;
-                    theCtrl->m_imagesState.GetImageLogicalSize(theCtrl, GetState(),
+                    theCtrl->m_imagesState.GetImageLogicalSize(theCtrl,
                                                        state_w, state_h);
                 }
 
@@ -1050,7 +1050,7 @@ ibTreeItem::DoCalculateSize(ibTreeCtrl* control,
     int state = GetState();
     if ( state != wxTREE_ITEMSTATE_NONE && control->m_imagesState.HasImages() )
     {
-        control->m_imagesState.GetImageLogicalSize(control, state, state_w, state_h);
+        control->m_imagesState.GetImageLogicalSize(control, state_w, state_h);
         if ( image_w != 0 )
             state_w += MARGIN_BETWEEN_STATE_AND_IMAGE;
         else
@@ -2551,14 +2551,9 @@ void ibTreeCtrl::CalculateLineHeight()
         // Calculate a m_lineHeight value from the state Image sizes.
         // May be toggle off. Then ibTreeCtrl will spread when
         // necessary (which might look ugly).
-        int n = m_imagesState.GetImageCount();
-        for (int i = 0; i < n ; i++)
-        {
-            int width = 0, height = 0;
-            m_imagesState.GetImageLogicalSize(this, i, width, height);
-            if (height > m_lineHeight)
-                m_lineHeight = height;
-        }
+        const int height = m_imagesState.GetImageLogicalSize(this).y;
+        if (height > m_lineHeight)
+            m_lineHeight = height;
     }
 
     if ( m_imagesButtons.HasImages() )
@@ -2566,14 +2561,9 @@ void ibTreeCtrl::CalculateLineHeight()
         // Calculate a m_lineHeight value from the Button image sizes.
         // May be toggle off. Then ibTreeCtrl will spread when
         // necessary (which might look ugly).
-        int n = m_imagesButtons.GetImageCount();
-        for (int i = 0; i < n ; i++)
-        {
-            int width = 0, height = 0;
-            m_imagesButtons.GetImageLogicalSize(this, i, width, height);
-            if (height > m_lineHeight)
-                m_lineHeight = height;
-        }
+        const int height = m_imagesButtons.GetImageLogicalSize(this).y;
+        if (height > m_lineHeight)
+            m_lineHeight = height;
     }
 
     m_lineHeight += FromDIP(2); // Add some extra interline space.
@@ -2699,7 +2689,7 @@ void ibTreeCtrl::PaintItem(ibTreeItem *item, wxDC& dc)
     {
         if ( m_imagesState.HasImages() )
         {
-            m_imagesState.GetImageLogicalSize(this, state, state_w, state_h);
+            m_imagesState.GetImageLogicalSize(this, state_w, state_h);
             if ( image_w != 0 )
                 state_w += MARGIN_BETWEEN_STATE_AND_IMAGE;
             else
@@ -3013,7 +3003,7 @@ ibTreeCtrl::PaintLevel(ibTreeItem *item,
                     image += wxTreeItemIcon_Selected - wxTreeItemIcon_Normal;
 
                 int image_w, image_h;
-                m_imagesButtons.GetImageLogicalSize(this, image, image_w, image_h);
+                m_imagesButtons.GetImageLogicalSize(this, image_w, image_h);
                 int xx = x - image_w/2;
                 int yy = y_mid - image_h/2;
 
@@ -3641,7 +3631,7 @@ bool ibTreeCtrl::GetBoundingRect(const wxTreeItemId& item,
         if ( state != wxTREE_ITEMSTATE_NONE && m_imagesState.HasImages() )
         {
             int state_h;
-            m_imagesState.GetImageLogicalSize( this, state, state_w, state_h );
+            m_imagesState.GetImageLogicalSize( this, state_w, state_h );
             if ( image_w != 0 )
                 state_w += MARGIN_BETWEEN_STATE_AND_IMAGE;
             else
