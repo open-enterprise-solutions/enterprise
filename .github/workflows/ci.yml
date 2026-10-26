@@ -250,24 +250,53 @@ jobs:
       # ⭐ RETRIED, THEN CHECKED — not trusted. `choco install` can exit 0 while the package feed itself
       # answered a transient 504 (seen 2026-10-16 on #473-#475): the install step stayed green, ccache
       # never reached the PATH, and the launcher the env block names above pointed CMake at a compiler
-      # that does not exist, which is the error CMakeTestCXXCompiler actually raised. A few attempts
-      # absorb a flaky feed; if ccache is still missing after them, this step fails HERE, with the
-      # straightforward reason, instead of as a confusing "CreateProcess failed" three steps later.
+      # that does not exist, which is the error CMakeTestCXXCompiler actually raised. If ccache is still
+      # missing after the attempts, this step fails HERE, with the straightforward reason, instead of as a
+      # confusing "CreateProcess failed" three steps later.
+      #
+      # ⭐ THE PROGRAM ITSELF IS KEPT IN THE ACTIONS CACHE, by its version. Chocolatey only fetched the
+      # release from GitHub, and that download answered 504 three times over on 2026-10-26 — the job went
+      # red on nothing of ours. Kept, it is fetched once per version; a miss fetches it with more patience.
+      - name: The compiler cache's program
+        id: ccache-program
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/ccache-program
+          key: ccache-program-windows-4.14.2
+
       - name: Install ccache
         shell: pwsh
         run: |
-          $installed = $false
-          for ($i = 1; $i -le 3; $i++) {
-            choco install ccache --no-progress -y
-            if (Get-Command ccache -ErrorAction SilentlyContinue) { $installed = $true; break }
-            Write-Host "ccache not on PATH after attempt $i/3 - retrying..."
-            Start-Sleep -Seconds 15
+          $dir = Join-Path $env:RUNNER_TEMP 'ccache-program'
+          $exe = Join-Path $dir 'ccache.exe'
+          $url = 'https://github.com/ccache/ccache/releases/download/v4.14.2/ccache-4.14.2-windows-x86_64.zip'
+          for ($i = 1; $i -le 5 -and -not (Test-Path $exe); $i++) {
+            try {
+              $zip = Join-Path $env:RUNNER_TEMP 'ccache.zip'
+              $unpacked = Join-Path $env:RUNNER_TEMP 'ccache-zip'
+              Invoke-WebRequest $url -OutFile $zip
+              Expand-Archive $zip $unpacked -Force
+              New-Item -ItemType Directory -Force $dir | Out-Null
+              Copy-Item (Get-ChildItem $unpacked -Recurse -Filter ccache.exe | Select-Object -First 1).FullName $exe
+            }
+            catch {
+              Write-Host "ccache download, attempt $i/5: $_ - retrying..."
+              Start-Sleep -Seconds (20 * $i)
+            }
           }
-          if (-not $installed) {
-            Write-Error "ccache did not install after 3 attempts (Chocolatey feed likely unavailable) - failing here instead of at Configure."
+          if (-not (Test-Path $exe)) {
+            Write-Error "ccache did not install after 5 attempts (GitHub's release download unavailable) - failing here instead of at Configure."
             exit 1
           }
-          ccache --version
+          $dir >> $env:GITHUB_PATH
+          & $exe --version
+
+      - name: Keep the compiler cache's program
+        if: steps.ccache-program.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/ccache-program
+          key: ccache-program-windows-4.14.2
 
       - name: Compiler cache
         uses: actions/cache/restore@v4
