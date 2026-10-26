@@ -89,9 +89,9 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_DEPRECATE=1;_CRT_NON_CONFORMING_SWPRINTFS=1;_SCL_SECURE_NO_WARNINGS=1;__WXMSW__;_UNICODE;WXUSINGDLL;_USRDLL;CORE_EXPORTS;_WIN32_WINNT=0x0A00;ASIO_STANDALONE;ASIO_SEPARATE_COMPILATION;ASIO_NO_DEPRECATED;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <ConformanceMode>false</ConformanceMode>
+      <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
-      <LanguageStandard>stdcpp17</LanguageStandard>
+      <LanguageStandard>stdcpp20</LanguageStandard>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <AdditionalIncludeDirectories>$(oesEngine);$(oes3rdParty)asio\asio\include;$(oes3rdParty)llhttp\include;$(oes3rdParty)mbedtls\include;$(oesEngine)core\tls;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <!-- Asio's templates (net\) make more sections than an object file holds by default. -->

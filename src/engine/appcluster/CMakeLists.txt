@@ -18,7 +18,7 @@ set(APPCLUSTER_SOURCES
 add_executable(appcluster ${APPCLUSTER_SOURCES})
 
 set_target_properties(appcluster PROPERTIES
-    CXX_STANDARD 17
+    CXX_STANDARD 20
     CXX_STANDARD_REQUIRED ON
 )
 

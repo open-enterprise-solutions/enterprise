@@ -1426,7 +1426,7 @@ wxString ibQueryRenderer::RenderDDL(const ibDdlStatement& ddl)
 		// supplied on the DDL) for "CREATE TABLE" and appends its suffix (ON COMMIT … / none).
 		wxString sql = (ddl.m_temporary && !ddl.m_createPrefix.empty())
 		             ? ddl.m_createPrefix + wxT(" ")
-		             : wxT("CREATE TABLE ");
+		             : wxString(wxT("CREATE TABLE "));
 		if (ddl.m_ifNotExists) sql += wxT("IF NOT EXISTS ");
 		sql += QuoteIdent(ddl.m_table) + wxT(" (");
 		// Two columns both marked PRIMARY KEY are one key, not two. A column-level PRIMARY KEY

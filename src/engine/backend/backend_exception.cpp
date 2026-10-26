@@ -454,7 +454,7 @@ wxString ibBackendException::ProcessExceptionError(const wxString& strFileName,
 				strFileName,
 				strDocPath,
 				currLine,
-				strErrorMessage + (strStackMessage.IsEmpty() ? wxT("") : wxT("\n\nCall stack:") + strStackMessage)
+				strErrorMessage + (strStackMessage.IsEmpty() ? wxString() : wxT("\n\nCall stack:") + strStackMessage)
 			);
 
 			if (auto* sess = ibSession::Current())

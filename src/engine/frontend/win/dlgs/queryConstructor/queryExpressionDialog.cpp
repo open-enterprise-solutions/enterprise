@@ -287,7 +287,7 @@ void ibDialogQueryExpression::FillLanguageTree()
 		ibQueryScalarFnArity(fn, least, most);
 		wxString args;
 		for (size_t i = 0; i < least; ++i)
-			args += (i == 0 ? wxString() : wxT(", "));
+			args += (i == 0 ? wxString() : wxString(wxT(", ")));
 		return ibQueryScalarFnText(fn) + wxT("(") + args + wxT(")");
 	};
 	auto callGroup = [&](const wxTreeItemId& parent, std::initializer_list<ibQueryScalarFn> fns) {
@@ -560,7 +560,7 @@ wxString ibDialogQueryExpression::CheckExpressionNames(const ibQueryAstExprPtr& 
 				int shown = 0;
 				for (const ibQueryConstructorField& f : m_fields) {
 					if (shown++ >= 6) { offered += wxT(", …"); break; }
-					offered += (offered.IsEmpty() ? wxString() : wxT(", ")) + f.m_name;
+					offered += (offered.IsEmpty() ? wxString() : wxString(wxT(", "))) + f.m_name;
 				}
 				complaint = wxString::Format(
 					_("'%s' is not a field of this query. It offers: %s"), e.m_path.front(), offered);
@@ -578,7 +578,7 @@ wxString ibDialogQueryExpression::CheckExpressionNames(const ibQueryAstExprPtr& 
 				if (!named || !ibReadPeriodUnit(unit.m_path.front(), parsed)) {
 					wxString words;
 					for (const std::pair<ibTotalsPeriod, wxString>& u : ibPeriodUnits())
-						words += (words.IsEmpty() ? wxString() : wxT(", ")) + u.second;
+						words += (words.IsEmpty() ? wxString() : wxString(wxT(", "))) + u.second;
 					complaint = wxString::Format(
 						_("%s takes a period as its argument %u. Write one of: %s"),
 						ibQueryScalarFnText(e.m_scalar), static_cast<unsigned>(unitAt + 1), words);
@@ -607,7 +607,7 @@ wxString ibDialogQueryExpression::CheckExpressionNames(const ibQueryAstExprPtr& 
 			if (e.m_path.size() < 2 && !ibQueryCastType(e, primitive)) {
 				wxString words;
 				for (const wxString& word : ibQueryCastPrimitiveWords())
-					words += (words.IsEmpty() ? wxString() : wxT(", ")) + word;
+					words += (words.IsEmpty() ? wxString() : wxString(wxT(", "))) + word;
 				complaint = wxString::Format(_("CAST takes a primitive type (%s) or a type: CAST(<field> AS <Kind>.<Name>)"), words);
 			}
 			else if (e.m_arg)

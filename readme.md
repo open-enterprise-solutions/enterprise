@@ -1,7 +1,7 @@
 # Open Enterprise Solutions (OES)
 
 OES is a source-available platform for building line-of-business applications — stock, accounting,
-payroll, sales, whatever a business keeps books on — written in C++17. You describe the business
+payroll, sales, whatever a business keeps books on — written in C++20. You describe the business
 in **metadata** (catalogs, documents, registers, charts of accounts and of calculation types), write
 its rules in a built-in scripting language, and read its data with a **query language and a report
 composer**. The platform turns the description into database tables, forms and reports, and keeps
@@ -269,7 +269,7 @@ enterprise/
 
 | Layer | Technology |
 |---|---|
-| Language | C++17 |
+| Language | C++20 |
 | GUI framework | wxWidgets 3.3.2 |
 | Primary database | Firebird (embedded) |
 | Production alternative | PostgreSQL |

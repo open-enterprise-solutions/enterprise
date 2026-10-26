@@ -15,7 +15,7 @@
 
 ## 1. What this project is
 
-**Open Enterprise Solutions (OES)** — a C++17 cross-platform low-code
+**Open Enterprise Solutions (OES)** — a C++20 cross-platform low-code
 enterprise application platform. Developers define business
 applications through **metadata** (object types, forms, modules) and a
 built-in **scripting language**, not by writing low-level code. The

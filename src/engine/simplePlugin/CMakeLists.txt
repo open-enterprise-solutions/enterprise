@@ -7,7 +7,7 @@ set(SIMPLEPLUGIN_SOURCES
 add_library(simplePlugin SHARED ${SIMPLEPLUGIN_SOURCES})
 
 set_target_properties(simplePlugin PROPERTIES
-    CXX_STANDARD 17
+    CXX_STANDARD 20
     CXX_STANDARD_REQUIRED ON
 )
 

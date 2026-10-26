@@ -823,13 +823,13 @@ const ibBackendQueryColumn* ResolveColumnSingle(const std::vector<ibSourceBindin
 	// so an author whose alias was simply wrong went looking for a missing feature (2026-09-04).
 	wxString written;
 	for (const wxString& segment : path)
-		written += (written.IsEmpty() ? wxString() : wxT(".")) + segment;
+		written += (written.IsEmpty() ? wxString() : wxString(wxT("."))) + segment;
 
 	if (path.size() == 2) {
 		wxString asked;
 		for (const ibSourceBinding& s : sources)
 			if (s.m_q != nullptr)
-				asked += (asked.IsEmpty() ? wxString() : wxT(", ")) + SpokenSourceName(sources, s.m_q);
+				asked += (asked.IsEmpty() ? wxString() : wxString(wxT(", "))) + SpokenSourceName(sources, s.m_q);
 		ThrowQueryException(e.m_line, e.m_col, wxString::Format(
 			_("'%s': this query has no source called '%s' (it reads: %s). If '%s' is a field to walk "
 			  "THROUGH, this clause does not carry a walk yet."),
@@ -1127,7 +1127,7 @@ ibTypeDescription CastTargetType(const ibQueryAstExpr& cast)
 		return type;
 	wxString named;
 	for (const wxString& segment : cast.m_path)
-		named += (named.IsEmpty() ? wxString() : wxT(".")) + segment;
+		named += (named.IsEmpty() ? wxString() : wxString(wxT("."))) + segment;
 	if (cast.m_path.size() < 2)
 		ThrowQueryException(cast.m_line, cast.m_col, wxString::Format(
 			_("CAST takes a primitive type (Number(15, 2), String(50), Date, Boolean) or a table a reference points at (%s); '%s' is neither"),
@@ -1486,7 +1486,7 @@ ibValue EvalValue(const ibQueryAstExpr& e, const std::map<wxString, ibValue>& pa
 		wxString named;
 		if (!e.m_args.empty() && e.m_args.front()->m_kind == ibQueryAstExprKind::Column)
 			for (const wxString& segment : e.m_args.front()->m_path)
-				named += (named.IsEmpty() ? wxString() : wxT(".")) + segment;
+				named += (named.IsEmpty() ? wxString() : wxString(wxT("."))) + segment;
 		if (named.IsEmpty())
 			ThrowQueryException(e.m_line, e.m_col, _("TYPE takes a type name"));
 		// Made through the door in typeDescription.h — this tier names no runtime value class.
@@ -2238,7 +2238,7 @@ ibQueryPredicatePtr BuildWherePredicate(const std::vector<ibSourceBinding>& sour
 		if (reference == 0) {
 			wxString named;
 			for (const wxString& segment : e.m_path)
-				named += (named.IsEmpty() ? wxString() : wxT(".")) + segment;
+				named += (named.IsEmpty() ? wxString() : wxString(wxT("."))) + segment;
 			ThrowQueryException(e.m_line, e.m_col, wxString::Format(
 				_("REFS takes a table a reference can point at, or a family of them (CatalogRef, AnyRef); '%s' is neither"), named));
 		}
@@ -4562,7 +4562,7 @@ bool PopulateBuilder(const ibQuerySelect& ast, const std::map<wxString, ibValue>
 
 			wxString path;
 			for (const wxString& segment : oe.m_path)
-				path += (path.IsEmpty() ? wxString() : wxT(".")) + segment;
+				path += (path.IsEmpty() ? wxString() : wxString(wxT("."))) + segment;
 
 			ThrowQueryException(oe.m_line, oe.m_col, wxString::Format(
 				_("ORDER BY '%s' needs that path among the GROUP BY keys - a grouped query can only "

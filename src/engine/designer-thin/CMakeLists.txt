@@ -72,7 +72,7 @@ set(DESIGNER_THIN_SOURCES
 add_executable(designer-thin ${DESIGNER_THIN_SOURCES})
 
 set_target_properties(designer-thin PROPERTIES
-    CXX_STANDARD 17
+    CXX_STANDARD 20
     CXX_STANDARD_REQUIRED ON
 )
 

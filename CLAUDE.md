@@ -6,7 +6,7 @@ This file gives an AI assistant (Claude Code or similar) the context needed to w
 
 ## What This Project Is
 
-**Open Enterprise Solutions (OES)** is a C++17 cross-platform low-code enterprise application platform. It lets developers define business applications through metadata (object types, forms, modules) and a built-in scripting language, without writing low-level code.
+**Open Enterprise Solutions (OES)** is a C++20 cross-platform low-code enterprise application platform. It lets developers define business applications through metadata (object types, forms, modules) and a built-in scripting language, without writing low-level code.
 
 **"Cross-platform" here is measured, not aspirational.** The platform core — metadata, the
 language and its compiler, the bytecode interpreter, the query engine, the database layer and the
@@ -37,7 +37,7 @@ The runtime executes compiled bytecode, renders forms through wxWidgets, and sto
 
 | Area | Technology |
 |---|---|
-| Language | C++17 |
+| Language | C++20 (no modules) |
 | GUI | wxWidgets 3.3.2 (git submodule at `src/3rdparty/wxWidgets`) |
 | Build (Windows) | MSBuild — `enterprise.sln` (Visual Studio 2022, toolset v143) |
 | Build (cross-platform) | CMake — `CMakeLists.txt` at repo root; macOS / Linux build supported, Windows uses MSBuild |
@@ -654,13 +654,13 @@ Specialized agents for OES development tasks. Defined in `~/.claude/agents/oes-*
 Checks code for vulnerabilities: SQL injection (string concatenation in queries instead of `ibPreparedStatement`), buffer overflows (strcpy/sprintf), hardcoded credentials, unsafe file access, memory leaks (missing RAII). Flags MD5 password hashing as critical.
 
 ### Code Reviewer (`oes-code-reviewer`)
-Reviews code against C++17 standards and OES architecture rules: RAII, const-correctness, explicit constructors, cross-platform compatibility (MSVC/Clang/GCC), naming conventions (`ib` prefix, `m_` members), no GUI headers in backend.
+Reviews code against C++20 standards and OES architecture rules: RAII, const-correctness, explicit constructors, cross-platform compatibility (MSVC/Clang/GCC), naming conventions (`ib` prefix, `m_` members), no GUI headers in backend.
 
 ### Test Writer (`oes-test-writer`)
 Generates Google Test tests. Naming: `TEST(ClassName, Method_Condition_Expected)`. Uses MockDatabaseLayer for unit tests, real SQLite for integration tests. Handles throw-by-value / catch-by-const-ref exceptions (see decision #5).
 
 ### CMake Writer (`oes-cmake-writer`)
-Generates and fixes CMakeLists.txt. Target-based approach, C++17, compatible with MSVC 2019+/Clang/GCC 9+. Handles wxWidgets submodule, optional DB drivers (OES_USE_FIREBIRD, etc.).
+Generates and fixes CMakeLists.txt. Target-based approach, C++20, compatible with MSVC 2022/Clang/GCC 11+. Handles wxWidgets submodule, optional DB drivers (OES_USE_FIREBIRD, etc.).
 
 ### System Architect (`oes-system-architect`)
 Evaluates architecture, identifies coupling issues, circular dependencies, two-DLL separation violations. Proposes incremental refactoring plans.
@@ -678,4 +678,4 @@ Schema design, query optimization, cross-DB compatibility (Firebird/PostgreSQL, 
 CI/CD, cross-platform builds (MSBuild + CMake), release management. PRs → develop, releases → master with tag.
 
 ### Code Refactorer (`oes-code-refactorer`)
-Fixes MSVC-specific code for Clang/GCC, breaks circular includes, modernizes to C++17 where appropriate. One refactoring per PR.
+Fixes MSVC-specific code for Clang/GCC, breaks circular includes, modernizes to C++20 where appropriate. One refactoring per PR.

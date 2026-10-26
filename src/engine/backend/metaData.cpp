@@ -399,7 +399,7 @@ ibValueMetaObject* ibMetaData::CreateMetaObject(const ibClassID& clsidIn, ibValu
 wxString ibMetaData::GetNewName(ibValueMetaObject* parent, const ibNameRequest& request)
 {
 	const wxString currPrefix = request.m_prefix.Length() > 0 ?
-		request.m_prefix : wxT("newItem");
+		request.m_prefix : wxString(wxT("newItem"));
 
 	// Normalise to upper case, matching stringUtils::CompareString's
 	// case-insensitive semantics, so set lookups are exact comparisons.

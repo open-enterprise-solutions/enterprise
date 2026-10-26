@@ -136,7 +136,7 @@ inline std::shared_ptr<ibQueryAstExpr> ibTestRecordLambda(
 	const std::shared_ptr<ibQueryAstExpr> tree =
 		ibBuildLambdaQueryAstFromCode(compiler.m_cByteCode, funcIndex, &refusal, nameOfOuter);
 	if (tree == nullptr)
-		return Refused(source, refusal.IsEmpty() ? wxT("(the recorder gave no reason)") : refusal);
+		return Refused(source, refusal.IsEmpty() ? wxString(wxT("(the recorder gave no reason)")) : refusal);
 	return tree;
 }
 

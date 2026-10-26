@@ -164,15 +164,16 @@ bool ibDatabaseLayerODBC::Open()
 
 		memset(buff, 0, 8192 * sizeof(SQLTCHAR));
 
-		//wxCharBuffer connectionCharBuffer = ConvertToUnicodeStream(m_strConnection);
-		void* connectionCharBuffer = (void*)&m_strConnection.c_str();
+		// The text in the same bytes as the DSN's above. This passed the ADDRESS of the temporary c_str() returns —
+		// the driver was handed a pointer's bytes for a connection string; strict C++20 refused to take it.
+		const wxCharBuffer connectionCharBuffer = ConvertToUnicodeStream(m_strConnection);
 
 #if wxUSE_GUI
 		SQLRETURN nRet = m_pInterface->GetSQLDriverConnect()((SQLHDBC)m_sqlHDBC, m_parentContext ? (SQLHWND)m_parentContext->GetHandle() : nullptr, (SQLTCHAR*)(const char*)connectionCharBuffer,
-			(SQLSMALLINT)m_strConnection.Length(), (SQLTCHAR*)buff, 8192, &iLen, m_bPrompt ? SQL_DRIVER_PROMPT : SQL_DRIVER_NOPROMPT);
+			SQL_NTS, (SQLTCHAR*)buff, 8192, &iLen, m_bPrompt ? SQL_DRIVER_PROMPT : SQL_DRIVER_NOPROMPT);
 #else
 		SQLRETURN nRet = m_pInterface->GetSQLDriverConnect()((SQLHDBC)m_sqlHDBC, nullptr, (SQLTCHAR*)(const char*)connectionCharBuffer,
-			(SQLSMALLINT)m_strConnection.Length(), (SQLTCHAR*)buff, 8192, &iLen, SQL_DRIVER_NOPROMPT);
+			SQL_NTS, (SQLTCHAR*)buff, 8192, &iLen, SQL_DRIVER_NOPROMPT);
 #endif
 
 		if (nRet != SQL_SUCCESS && nRet != SQL_SUCCESS_WITH_INFO)

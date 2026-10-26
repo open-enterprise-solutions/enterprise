@@ -25,8 +25,8 @@ void ResolveCredentials(const ibFirebirdMaintenance::ServiceConnection& conn,
 		             wxT("back to SYSDBA/masterkey - set real creds for ")
 		             wxT("production deploys"));
 	}
-	user = conn.username.IsEmpty() ? wxT("SYSDBA")    : conn.username;
-	pwd  = conn.password.IsEmpty() ? wxT("masterkey") : conn.password;
+	user = conn.username.IsEmpty() ? wxString(wxT("SYSDBA"))    : conn.username;
+	pwd  = conn.password.IsEmpty() ? wxString(wxT("masterkey")) : conn.password;
 }
 
 // Build the SPB (Service Parameter Block) for service_mgr attach.

@@ -28,13 +28,15 @@ project(enterprise
 # C++ standard
 # ---------------------------------------------------------------------------
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+# No C++20 modules here — and without this every source is scanned for them first.
+set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 
 if(APPLE)
     enable_language(OBJCXX)
-    set(CMAKE_OBJCXX_STANDARD 17)
+    set(CMAKE_OBJCXX_STANDARD 20)
     set(CMAKE_OBJCXX_STANDARD_REQUIRED ON)
     set(CMAKE_OBJCXX_EXTENSIONS OFF)
 endif()
@@ -424,6 +426,8 @@ include_directories(
 # Configure wxWidgets build options before add_subdirectory
 set(wxBUILD_SHARED   ON  CACHE BOOL "Build wxWidgets as shared libraries" FORCE)
 set(wxBUILD_MONOLITHIC OFF CACHE BOOL "Build wxWidgets as a single library" FORCE)
+# wx follows CMAKE_CXX_STANDARD only when its option is not cached yet; an existing build tree keeps the old one.
+set(wxBUILD_CXX_STANDARD ${CMAKE_CXX_STANDARD} CACHE STRING "C++ standard used to build wxWidgets targets" FORCE)
 
 # Disable wxWidgets components we do not need to speed up the build
 set(wxBUILD_TESTS    OFF CACHE BOOL "" FORCE)

@@ -1338,7 +1338,7 @@ bool ibMcpServer::RunTool(const class ibMcpTool* tool, const ibDataNode& argumen
 	// The figure is the point: a caller that was told the connection dropped can read here whether
 	// the work took four seconds or four minutes, and whether it succeeded anyway.
 	ibJournalInfo(wxT("mcp"), wxT("%s: %s in %lld ms"), toolName,
-		call->m_ok ? wxT("done") : (call->m_refusal.IsEmpty() ? wxT("refused") : call->m_refusal),
+		call->m_ok ? wxString(wxT("done")) : (call->m_refusal.IsEmpty() ? wxString(wxT("refused")) : call->m_refusal),
 		static_cast<long long>(std::chrono::duration_cast<std::chrono::milliseconds>(
 			std::chrono::steady_clock::now() - startedAt).count()));
 
@@ -3123,7 +3123,7 @@ ibString ibMcpServer::Answer(const ibString& request, const ibMcpWireHeaders& he
 
 							wxString named;
 							for (const wxString& each : languages)
-								named += (named.IsEmpty() ? wxString() : wxT(", ")) + each;
+								named += (named.IsEmpty() ? wxString() : wxString(wxT(", "))) + each;
 
 							m_saidLanguages = true;
 							result.SetValue(wxT("languages"),

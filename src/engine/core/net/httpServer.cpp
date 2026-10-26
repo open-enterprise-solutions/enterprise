@@ -77,6 +77,12 @@ std::string Trim(const std::string& text)
 	return text.substr(first, last - first + 1);
 }
 
+// A path's UTF-8 text as plain bytes — since C++20 `u8string()` answers std::u8string, not std::string.
+std::string Utf8(const std::u8string& text)
+{
+	return std::string(text.begin(), text.end());
+}
+
 // `token` among the comma-separated words of a header, as Connection and Upgrade list them.
 bool HasToken(const std::string& list, const std::string& token)
 {
@@ -179,7 +185,7 @@ const char* ContentType(const std::filesystem::path& file)
 		{ ".ttf", "font/ttf" },                   { ".otf", "font/otf" },
 		{ ".wasm", "application/wasm" },          { ".pdf", "application/pdf" },
 	};
-	const auto found = s_types.find(Lower(file.extension().u8string()));
+	const auto found = s_types.find(Lower(Utf8(file.extension().u8string())));
 	return found != s_types.end() ? found->second : "application/octet-stream";
 }
 
@@ -426,7 +432,7 @@ public:
 			return Plain(404, "Not Found");
 
 		std::shared_ptr<const std::string> data;
-		const std::string key = file.u8string();
+		const std::string key = Utf8(file.u8string());
 		{
 			std::lock_guard<std::mutex> lock(m_mutex);
 			const auto found = m_files.find(key);
@@ -465,7 +471,7 @@ public:
 		std::filesystem::path path;
 		if (!Resolve(std::filesystem::path(), relative, path))
 			return Plain(404, "Not Found");
-		const std::string name = path.generic_u8string();
+		const std::string name = Utf8(path.generic_u8string());
 		auto found = files.end();
 		if (!name.empty() && relative.back() != '/')
 			found = files.find(name);

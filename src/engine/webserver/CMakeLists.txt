@@ -15,7 +15,7 @@ set(WEBSERVER_SOURCES
 add_executable(webserver ${WEBSERVER_SOURCES})
 
 set_target_properties(webserver PROPERTIES
-    CXX_STANDARD 17
+    CXX_STANDARD 20
     CXX_STANDARD_REQUIRED ON
 )
 

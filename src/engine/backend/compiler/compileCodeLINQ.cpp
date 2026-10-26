@@ -920,7 +920,7 @@ wxString UniqueColumnName(const std::vector<wxString>& taken, const wxString& pr
 		? wxString::Format(wxT("Field%d"), (int)taken.size() + 1)
 		: proposed;
 	for (int n = 1; isTaken(name); ++n)
-		name = wxString::Format(wxT("%s%d"), proposed.IsEmpty() ? wxT("Field") : proposed, n);
+		name = wxString::Format(wxT("%s%d"), proposed.IsEmpty() ? wxString(wxT("Field")) : proposed, n);
 	return name;
 }
 

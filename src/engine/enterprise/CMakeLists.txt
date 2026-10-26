@@ -19,7 +19,7 @@ set(ENTERPRISE_SOURCES
 add_executable(enterprise ${ENTERPRISE_SOURCES})
 
 set_target_properties(enterprise PROPERTIES
-    CXX_STANDARD 17
+    CXX_STANDARD 20
     CXX_STANDARD_REQUIRED ON
 )
 

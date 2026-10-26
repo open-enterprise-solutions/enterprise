@@ -704,7 +704,7 @@ wxString ibMcpArgumentFault(const ibMcpTool* tool, const ibDataNode& arguments)
 
 		for (const wxString& word : argument.Values()) {
 			known = known || word.IsSameAs(said, false);
-			allowed += (allowed.IsEmpty() ? wxString() : wxT(", ")) + word;
+			allowed += (allowed.IsEmpty() ? wxString() : wxString(wxT(", "))) + word;
 		}
 
 		if (!known) {

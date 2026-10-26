@@ -1064,7 +1064,7 @@ static void AppendColumnsOf(const ibQueryAstExprPtr& e, std::vector<wxString>& i
 	if (e->m_kind == ibQueryAstExprKind::Column) {
 		wxString path;
 		for (const wxString& segment : e->m_path)
-			path += (path.IsEmpty() ? wxString() : wxT(".")) + segment;
+			path += (path.IsEmpty() ? wxString() : wxString(wxT("."))) + segment;
 		if (!path.IsEmpty())
 			ibDataComposer::AppendFields(into, { path });
 		return;

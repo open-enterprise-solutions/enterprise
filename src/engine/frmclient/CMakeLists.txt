@@ -81,7 +81,7 @@ target_link_libraries(frmclient PRIVATE Threads::Threads)
 # system a name two libraries export is ONE: the backend's own calls would land in this library's copies (the model
 # view, wx's event names). Hidden by default, FRMCLIENT_API shows what is meant to be seen.
 set_target_properties(frmclient PROPERTIES
-    CXX_STANDARD 17
+    CXX_STANDARD 20
     CXX_STANDARD_REQUIRED ON
     POSITION_INDEPENDENT_CODE ON
     CXX_VISIBILITY_PRESET hidden

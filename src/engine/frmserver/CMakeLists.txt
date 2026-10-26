@@ -37,7 +37,7 @@ target_link_libraries(frmserver
 )
 
 set_target_properties(frmserver PROPERTIES
-    CXX_STANDARD 17
+    CXX_STANDARD 20
     CXX_STANDARD_REQUIRED ON
     POSITION_INDEPENDENT_CODE ON
     OUTPUT_NAME "frmserver"

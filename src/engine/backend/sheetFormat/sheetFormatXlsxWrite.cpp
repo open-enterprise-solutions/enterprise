@@ -349,7 +349,7 @@ wxString Styles(const std::vector<CellStyle>& styles)
 			if (!style.m_borderStyle[i].IsEmpty())
 				xml += wxString::Format(wxT("<%s style=\"%s\"><color rgb=\"%s\"/></%s>"),
 					names[i], style.m_borderStyle[i],
-					style.m_borderColour[i].IsEmpty() ? wxT("FF000000") : style.m_borderColour[i],
+					style.m_borderColour[i].IsEmpty() ? wxString(wxT("FF000000")) : style.m_borderColour[i],
 					names[i]);
 			else
 				xml += wxString::Format(wxT("<%s/>"), names[i]);

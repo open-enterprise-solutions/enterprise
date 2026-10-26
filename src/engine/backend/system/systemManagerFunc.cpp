@@ -462,7 +462,7 @@ void ibValueSystemFunction::WriteJournalEvent(const wxString& strMessage, ibStat
 	// The category a caller did not give: "script" is where code written in the configuration lands,
 	// which is what a person filters by when they want to see what an assistant's run did.
 	const wxString source = wxT("script");
-	const wxString event  = strEvent.IsEmpty() ? wxT("script.event") : strEvent;
+	const wxString event  = strEvent.IsEmpty() ? wxString(wxT("script.event")) : strEvent;
 
 	// 🛑⭐⭐ THE OBJECT IS APPENDED TO THE TEXT, and that is a RETREAT from what this first did — for
 	// a measured reason. The obvious road was `Audit`'s details overload, which takes an ibValue and

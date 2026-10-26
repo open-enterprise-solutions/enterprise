@@ -82,8 +82,8 @@ wxString ibFirebirdReplicationConfig::Build(
 		// Format: `host:port / user : password`. Default credentials
 		// SYSDBA / masterkey if caller didn't override — typical for
 		// LAN mesh with shared service account.
-		const wxString user = p.username.IsEmpty() ? wxT("SYSDBA") : p.username;
-		const wxString pwd  = p.password.IsEmpty() ? wxT("masterkey") : p.password;
+		const wxString user = p.username.IsEmpty() ? wxString(wxT("SYSDBA")) : p.username;
+		const wxString pwd  = p.password.IsEmpty() ? wxString(wxT("masterkey")) : p.password;
 
 		if (!LooksSafeForConfig(p.address)
 		 || !LooksSafeForConfig(user)

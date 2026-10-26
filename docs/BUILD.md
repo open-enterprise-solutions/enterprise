@@ -399,10 +399,14 @@ on the wxWidgets `3.2` maintenance branch.
   (`oes3rdParty` = `$(SolutionDir)src\3rdparty\`).
   The libraries are `wxmsw33u*` / `wxbase33u*` (release) and `wxmsw33ud*`
   (debug). The submodule source is not compiled by the MSBuild build.
+  Build those binaries as C++20, like the engine: copy
+  `build\msw\cxx20.props` to `build\msw\wx_local.props` (wx ignores it in git
+  and every wx project imports it), then build `build\msw\wx_vc17.sln`.
 - **macOS / Linux (CMake):** wxWidgets is built from the submodule via
   `add_subdirectory()` as **shared** libraries (`wxBUILD_SHARED=ON`,
-  monolithic OFF; tests/samples/demos disabled). No system wxWidgets is
-  needed, and no separate `configure` step is required.
+  monolithic OFF; tests/samples/demos disabled), with the engine's C++
+  standard (`wxBUILD_CXX_STANDARD` = `CMAKE_CXX_STANDARD`). No system
+  wxWidgets is needed, and no separate `configure` step is required.
 
 ---
 
@@ -603,7 +607,7 @@ only from the workflow file on `master`; what it builds is `develop`. The workfl
 
 **Fix:** Copy `fbclient.dll` (Windows) or `libfbclient.so` (Linux) and the Firebird message files (`firebird.msg`) next to the executable.
 
-### MSVC C++17 features not available
+### MSVC C++20 features not available
 
 **Symptom:** Compilation errors about `std::execution` or structured bindings.
 

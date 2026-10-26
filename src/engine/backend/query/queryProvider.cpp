@@ -2582,15 +2582,15 @@ ibQueryRamTable MaterialiseNode(const ibQueryNode* node, const std::vector<const
 			wxString claimed, orphaned;
 			for (const ibBackendQueryColumn* c : refCols) {
 				if (node->m_queryable->OwnsColumn(c))
-					claimed += (claimed.IsEmpty() ? wxString() : wxT(", ")) + c->GetName();
+					claimed += (claimed.IsEmpty() ? wxString() : wxString(wxT(", "))) + c->GetName();
 				else if (!SubtreeProvides(spec.m_root, c))
-					orphaned += (orphaned.IsEmpty() ? wxString() : wxT(", ")) + c->GetName();
+					orphaned += (orphaned.IsEmpty() ? wxString() : wxString(wxT(", "))) + c->GetName();
 			}
 			ibJournalInfo(wxT("query.compose"), wxT("source %s: claimed [%s]%s%s"),
 				node->m_queryable->GetQueryName(),
 				claimed,
 				orphaned.IsEmpty() ? wxT("") : wxT("  ORPHANED ["),
-				orphaned.IsEmpty() ? wxT("") : (orphaned + wxT("]")));
+				orphaned.IsEmpty() ? wxString() : (orphaned + wxT("]")));
 		}
 		std::vector<ibQueryCondition> conds = condsByName
 			? LeafConditionsByName(spec, node->m_queryable)
@@ -2681,8 +2681,8 @@ ibQueryRamTable MaterialiseNode(const ibQueryNode* node, const std::vector<const
 			node->m_joinKind == ibQueryJoinKind::Inner ? wxT("inner") :
 			node->m_joinKind == ibQueryJoinKind::Left  ? wxT("left")  :
 			node->m_joinKind == ibQueryJoinKind::Right ? wxT("right") : wxT("full"),
-			onL != nullptr ? onL->GetName() : wxT("(no key)"),
-			onR != nullptr ? onR->GetName() : wxT("(no key)"),
+			onL != nullptr ? onL->GetName() : wxString(wxT("(no key)")),
+			onR != nullptr ? onR->GetName() : wxString(wxT("(no key)")),
 			node->m_on.m_cross ? wxT("  CROSS - every row against every row") : wxT(""));
 	}
 
@@ -2815,12 +2815,12 @@ ibDataQueryResult ProjectToAliases(ibQueryRamTable&& TC, const ibDataQuerySpec& 
 	ibJournalIf {
 		wxString have;
 		for (const ibQueryRamColumn& c : TC.Columns())
-			have += (have.IsEmpty() ? wxString() : wxT(", "))
+			have += (have.IsEmpty() ? wxString() : wxString(wxT(", ")))
 			      + wxString::Format(wxT("%s#%u"), c.m_name, static_cast<unsigned>(c.m_id));
 		wxString out;
 		for (size_t k = 0; k < outCols.size(); ++k)
 			if (outCols[k] != nullptr)
-				out += (out.IsEmpty() ? wxString() : wxT(", "))
+				out += (out.IsEmpty() ? wxString() : wxString(wxT(", ")))
 				     + wxString::Format(wxT("%s#%u"), outCols[k]->GetName(), static_cast<unsigned>(outIds[k]));
 		ibJournalInfo(wxT("query.stitch"),
 			wxT("IN MEMORY: %ld composed rows, holds [%s]  carries out [%s]"),

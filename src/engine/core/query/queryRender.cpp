@@ -231,9 +231,9 @@ wxString RenderExpr(const ibQueryAstExpr& expr)
 				first = false;
 			}
 			if (expr.m_over->m_frame == ibQueryAstFrame::Rows)
-				out += (first ? wxString() : wxT(" ")) + Kw(ibQueryKeyword::Rows);
+				out += (first ? wxString() : wxString(wxT(" "))) + Kw(ibQueryKeyword::Rows);
 			else if (expr.m_over->m_frame == ibQueryAstFrame::Range)
-				out += (first ? wxString() : wxT(" ")) + Kw(ibQueryKeyword::Range);
+				out += (first ? wxString() : wxString(wxT(" "))) + Kw(ibQueryKeyword::Range);
 			out += wxT(")");
 		}
 		return out;

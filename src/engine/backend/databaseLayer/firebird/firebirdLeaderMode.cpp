@@ -102,7 +102,7 @@ void HeartbeatLoop(LeaderModeState* st) {
 
 				const wxString hostForConnect =
 					(cur.leaderHost == ::wxGetHostName())
-						? wxT("localhost")
+						? wxString(wxT("localhost"))
 						: cur.leaderHost;
 				const wxString newUrl = (cur.leaderPort > 0)
 					? wxString::Format(wxT("inet://%s:%u/%s"),
@@ -168,7 +168,7 @@ void PromoteSelfToLeader(LeaderModeState* st) {
 		if (cur.valid && cur.leaderPort > 0) {
 			const wxString hostForConnect =
 				(cur.leaderHost == ::wxGetHostName())
-					? wxT("localhost")
+					? wxString(wxT("localhost"))
 					: cur.leaderHost;
 			const wxString newUrl = wxString::Format(
 				wxT("inet://%s:%u/%s"),
@@ -432,7 +432,7 @@ ibFirebirdLeaderMode::Status ibFirebirdLeaderMode::InitForDatabase(const wxStrin
 		// keeps the follower-on-same-host path symmetric.
 		const wxString hostForConnect =
 			(cur.leaderHost == ::wxGetHostName())
-				? wxT("localhost")
+				? wxString(wxT("localhost"))
 				: cur.leaderHost;
 		st.connectUrl      = wxString::Format(
 			wxT("inet://%s:%u/%s"),

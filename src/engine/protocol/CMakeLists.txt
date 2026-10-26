@@ -46,7 +46,7 @@ target_link_libraries(protocol PRIVATE Threads::Threads)
 # WHAT IT EXPORTS, AND NOTHING ELSE — as a DLL does: hidden by default, PROTOCOL_API shows what is meant to be seen
 # (see frmclient/CMakeLists.txt).
 set_target_properties(protocol PROPERTIES
-    CXX_STANDARD 17
+    CXX_STANDARD 20
     CXX_STANDARD_REQUIRED ON
     POSITION_INDEPENDENT_CODE ON
     CXX_VISIBILITY_PRESET hidden

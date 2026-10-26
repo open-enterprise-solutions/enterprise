@@ -97,7 +97,7 @@ public:
 		const ibMetaData* const context =
 			activeMetaData != nullptr && activeMetaData->IsConfigOpen() ? activeMetaData : nullptr;
 
-		const wxString named = module.IsEmpty() ? wxT("module") : module;
+		const wxString named = module.IsEmpty() ? wxString(wxT("module")) : module;
 		const std::vector<ibDiagnostic> diagnostics = ibCheckScript(text, named, context);
 
 		// ⭐⭐ THE VERDICT IS ABOUT THE TEXT THAT WAS SENT, and only compiling it with the
@@ -129,7 +129,7 @@ public:
 		// to trust the verdict.
 		result.SetValue(wxT("scope"), wxString(context != nullptr
 			? ibMcpText("this configuration's context, but NO owning object - see ownNames if there are any")
-			: wxT("text-only")));
+			: wxString(wxT("text-only"))));
 
 		// ⭐⭐ AND AN UNRESOLVED NAME SAYS WHICH OF THE TWO IT IS. `Var is not found` is what this
 		// tool answers about a document's OWN attribute, because a bare text has no owner — and a
@@ -233,7 +233,7 @@ public:
 			activeMetaData != nullptr && activeMetaData->IsConfigOpen() ? activeMetaData : nullptr;
 
 		const std::vector<ibQueryOutline> outlines =
-			ibOutlineScriptQueries(text, module.IsEmpty() ? wxT("module") : module, context);
+			ibOutlineScriptQueries(text, module.IsEmpty() ? wxString(wxT("module")) : module, context);
 
 		std::vector<ibDataValue> queries;
 		for (const ibQueryOutline& outline : outlines) {
@@ -297,7 +297,7 @@ public:
 		result.AddField(wxT("count"), ibDataValue::Int((std::int64_t)queries.size()));
 		result.AddField(wxT("queries"), ibDataValue::Array(queries));
 		result.SetValue(wxT("scope"), wxString(context != nullptr
-			? ibMcpText("this configuration's context") : wxT("text-only")));
+			? ibMcpText("this configuration's context") : wxString(wxT("text-only"))));
 
 		if (queries.empty())
 			result.SetValue(wxT("note"), ibMcpText("No `from ...` query and no `restrict ...` in this "

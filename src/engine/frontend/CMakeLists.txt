@@ -98,7 +98,7 @@ target_link_libraries(frontend
 )
 
 set_target_properties(frontend PROPERTIES
-    CXX_STANDARD 17
+    CXX_STANDARD 20
     CXX_STANDARD_REQUIRED ON
     POSITION_INDEPENDENT_CODE ON
     OUTPUT_NAME "frontend"
@@ -231,7 +231,7 @@ target_link_libraries(wfrontend
 )
 
 set_target_properties(wfrontend PROPERTIES
-    CXX_STANDARD 17
+    CXX_STANDARD 20
     CXX_STANDARD_REQUIRED ON
     POSITION_INDEPENDENT_CODE ON
     OUTPUT_NAME "wfrontend"

@@ -121,6 +121,16 @@ for one spelling.
 This one shipped four times in a single batch — three in one dialog, one in a new test — and every
 one of them compiled clean on `Debug|x86`. It is invisible to the local build by construction.
 
+**Since C++20 (2026-10-26) MSVC refuses the literal too.** `/std:c++20` brings conformance with it
+(`ConformanceMode=true` on the `.sln` road, `/permissive-` by default on CMake's), and its strict `?:`
+finds `cond ? str : wxT("x")` ambiguous — the literal converts to `wxString`, and `wxString` converts
+to `const wchar_t*` (C2445). GCC and Clang take that pair; MSVC is now the stricter one. The fix is
+the same: `wxString(wxT("x"))`, or `wxString()` for an empty one — about forty sites, one evening.
+
+⚠ Not by a blind sweep. Where the result goes into a POINTER — `const wchar_t* p = s ? s : L""`
+(`fstring.h`) — the same wrap compiles and returns a pointer into a dead temporary. Sweep what the
+compiler named, or look at every destination.
+
 ### 1.5a′ A wide `printf` is not wide on Apple (2026-09-26)
 
 Apple's libc passes every character of `swprintf` / `vswprintf` through the thread's multibyte locale.
@@ -312,6 +322,26 @@ that could not compile anywhere were left for Linux, macOS and CI to find, half 
 somebody else's machine. The tree is larger than the build you happen to run: grep `tests/` in the
 same pass as `src/`. It is the same class as the two build systems seeing different source sets
 (§ 3).
+
+### 1.11 The standard: C++20, no modules (2026-10-26)
+
+- Both roads say it: `LanguageStandard=stdcpp20` + `ConformanceMode=true` in every `.vcxproj`;
+  `CMAKE_CXX_STANDARD 20` and `CMAKE_CXX_SCAN_FOR_MODULES OFF` in CMake — no modules, so no scan.
+- wxWidgets builds with the same standard: `wxBUILD_CXX_STANDARD` on CMake's road, `wx_local.props`
+  on the `.sln` road's prebuilt binaries ([BUILD.md](BUILD.md#wxwidgets-submodule-details)).
+- `path::u8string()` answers `std::u8string` now, not `std::string`.
+- The library is bounded by the oldest toolchain in CI — MSVC 2022, GCC 11 (ubuntu-22.04), Apple
+  Clang 15 (macOS 14). Per their published status, not yet tried in CI:
+
+| On all three | Not yet on all three |
+|---|---|
+| `std::span`, `std::bit_cast` and `<bit>`, `std::source_location` | `std::format` — GCC 13 |
+| `contains`, `starts_with` / `ends_with`, `std::erase_if` | `std::jthread`, `std::stop_token` — libc++ 18 |
+| `<concepts>`, `<compare>` (`<=>`) | `std::atomic<std::shared_ptr>` |
+| `<semaphore>`, `<latch>`, `<barrier>`, `atomic::wait` | `<chrono>` time zones, `format`, `parse` — GCC 13–14, libc++ 19 |
+| `<ranges>` (GCC 11 partly), the `<chrono>` calendar | |
+
+The right column waits for the images to move (ubuntu-24.04, macOS 15).
 
 ---
 

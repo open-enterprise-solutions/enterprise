@@ -2105,7 +2105,7 @@ public:
 		// columns sees the left-to-right result without asking again.
 		std::vector<ibDataValue> shown;
 		for (const ibSelectedFieldDescription& field : selected)
-			shown.push_back(ibDataValue::String(field.IsAuto() ? wxT("(auto)") : field.m_path));
+			shown.push_back(ibDataValue::String(field.IsAuto() ? wxString(wxT("(auto)")) : field.m_path));
 
 		result.AddField(wxT("shows"), ibDataValue::Array(shown));
 		ibMcpSayComposerComplaints(composition, result);

@@ -56,7 +56,7 @@ ibString ibValueBackgroundJob::GetString() const
 	if (m_run == nullptr)
 		return wxT("BackgroundJob");
 	if (!m_run->IsComplete())
-		return m_run->Activity().IsEmpty() ? wxT("BackgroundJob: running")
+		return m_run->Activity().IsEmpty() ? wxString(wxT("BackgroundJob: running"))
 		                                   : m_run->Activity();
 	return m_run->Error().IsEmpty() ? wxT("BackgroundJob: done")
 	                                : wxT("BackgroundJob: failed");

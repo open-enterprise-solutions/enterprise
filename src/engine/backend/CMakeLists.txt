@@ -275,7 +275,7 @@ endif()
 # Target properties
 # ---------------------------------------------------------------------------
 set_target_properties(backend PROPERTIES
-    CXX_STANDARD          17
+    CXX_STANDARD          20
     CXX_STANDARD_REQUIRED ON
     CXX_EXTENSIONS        OFF
     C_STANDARD            11

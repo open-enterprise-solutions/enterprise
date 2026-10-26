@@ -2014,7 +2014,7 @@ ibQueryRamTable ibCalcScheduleDataQueryable::ComputeRows(const std::vector<ibQue
 		pass.Pause();
 		wxString over;
 		for (const Span& span : spans)
-			over += (over.IsEmpty() ? wxString() : wxT(" + ")) + ibCalcSchedulePeriodName(span.m_period);
+			over += (over.IsEmpty() ? wxString() : wxString(wxT(" + "))) + ibCalcSchedulePeriodName(span.m_period);
 		ibJournalInfo(wxT("query.road"), wxT("ScheduleData of %s: %s summed over %s in %lld ms, %ld row(s)"),
 			m_reg->GetName(), alias == r ? wxT("the records") : wxT("the pieces"), over, pass.Ms(), passRows);
 	};

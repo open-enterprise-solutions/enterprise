@@ -1461,7 +1461,7 @@ public:
 			if (!command.IsOk()) {
 				refusal = wxString::Format(
 					ibMcpText("There is no command called '%s' here. Available: %s."),
-					wanted, available.IsEmpty() ? wxT("none") : available);
+					wanted, available.IsEmpty() ? wxString(wxT("none")) : available);
 				form->DecrRef();
 				return false;
 			}

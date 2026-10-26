@@ -3431,7 +3431,7 @@ void ibTreeListMainWindow::PaintItem(ibTreeListItem * item, wxDC & dc) {
 	int text_h = 0;
 	dc.GetTextExtent(item->GetText(GetMainColumn()).size() > 0
 		? item->GetText(GetMainColumn())
-		: _T("M"),  // dummy text to avoid zero height and no highlight width
+		: wxString(_T("M")),  // dummy text to avoid zero height and no highlight width
 		nullptr, &text_h);
 
 	// determine background and show it
@@ -4554,7 +4554,7 @@ void ibTreeListMainWindow::CalculateSize(ibTreeListItem * item, wxDC & dc) {
 	dc.SetFont(GetItemFont(item));
 	dc.GetTextExtent(item->GetText(m_main_column).size() > 0
 		? item->GetText(m_main_column)
-		: _T(" "),  // blank to avoid zero height and no highlight width
+		: wxString(_T(" ")),  // blank to avoid zero height and no highlight width
 		&text_w, &text_h);
 	// restore normal font
 	dc.SetFont(m_normalFont);

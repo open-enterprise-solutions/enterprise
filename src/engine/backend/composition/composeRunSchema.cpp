@@ -428,7 +428,7 @@ bool ibComposeRunSchema::Run(const ibDataNode& request, ibDataNode& result, wxSt
 				if (!declared) {
 					wxString names;
 					for (const ibParameterDescription& p : description.m_parameters)
-						names += (names.IsEmpty() ? wxString() : wxT(", ")) + p.m_name;
+						names += (names.IsEmpty() ? wxString() : wxString(wxT(", "))) + p.m_name;
 					refusal = names.IsEmpty()
 						? wxString::Format(
 							ibComposeText("This schema asks for no parameters, so '%s' sets nothing."),

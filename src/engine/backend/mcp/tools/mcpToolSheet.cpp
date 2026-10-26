@@ -1374,7 +1374,7 @@ public:
 
 			refusal = wxString::Format(
 				ibMcpText("Nothing here reads that kind of file. Readable: %s."),
-				readable.IsEmpty() ? wxT("none") : readable);
+				readable.IsEmpty() ? wxString(wxT("none")) : readable);
 			return false;
 		}
 

@@ -247,7 +247,7 @@ target_include_directories(oes_tests PRIVATE
 # On non-Windows the backend is a .dylib/.so; ensure the test can find it
 # at runtime by setting the RPATH to the build output directory.
 set_target_properties(oes_tests PROPERTIES
-    CXX_STANDARD          17
+    CXX_STANDARD          20
     CXX_STANDARD_REQUIRED ON
     BUILD_RPATH            "${CMAKE_BINARY_DIR}/bin"
     INSTALL_RPATH          "${CMAKE_BINARY_DIR}/bin"
@@ -346,7 +346,7 @@ target_include_directories(oes_string_tests PRIVATE
 )
 
 set_target_properties(oes_string_tests PROPERTIES
-    CXX_STANDARD          17
+    CXX_STANDARD          20
     CXX_STANDARD_REQUIRED ON
     BUILD_RPATH            "${CMAKE_BINARY_DIR}/bin"
     INSTALL_RPATH          "${CMAKE_BINARY_DIR}/bin"
@@ -379,7 +379,7 @@ target_include_directories(oes_query_totals_test PRIVATE
 )
 
 set_target_properties(oes_query_totals_test PROPERTIES
-    CXX_STANDARD          17
+    CXX_STANDARD          20
     CXX_STANDARD_REQUIRED ON
     BUILD_RPATH            "${CMAKE_BINARY_DIR}/bin"
     INSTALL_RPATH          "${CMAKE_BINARY_DIR}/bin"
@@ -412,7 +412,7 @@ target_include_directories(oes_query_parity_test PRIVATE
 )
 
 set_target_properties(oes_query_parity_test PROPERTIES
-    CXX_STANDARD          17
+    CXX_STANDARD          20
     CXX_STANDARD_REQUIRED ON
     BUILD_RPATH            "${CMAKE_BINARY_DIR}/bin"
     INSTALL_RPATH          "${CMAKE_BINARY_DIR}/bin"
@@ -444,7 +444,7 @@ target_include_directories(oes_query_join_parity_test PRIVATE
 )
 
 set_target_properties(oes_query_join_parity_test PROPERTIES
-    CXX_STANDARD          17
+    CXX_STANDARD          20
     CXX_STANDARD_REQUIRED ON
     BUILD_RPATH            "${CMAKE_BINARY_DIR}/bin"
     INSTALL_RPATH          "${CMAKE_BINARY_DIR}/bin"
@@ -479,7 +479,7 @@ target_include_directories(oes_temp_db_sqlite_test PRIVATE
 )
 
 set_target_properties(oes_temp_db_sqlite_test PROPERTIES
-    CXX_STANDARD          17
+    CXX_STANDARD          20
     CXX_STANDARD_REQUIRED ON
     BUILD_RPATH            "${CMAKE_BINARY_DIR}/bin"
     INSTALL_RPATH          "${CMAKE_BINARY_DIR}/bin"
@@ -516,7 +516,7 @@ target_include_directories(oes_job_tenancy_test PRIVATE
 )
 
 set_target_properties(oes_job_tenancy_test PROPERTIES
-    CXX_STANDARD          17
+    CXX_STANDARD          20
     CXX_STANDARD_REQUIRED ON
     BUILD_RPATH            "${CMAKE_BINARY_DIR}/bin"
     INSTALL_RPATH          "${CMAKE_BINARY_DIR}/bin"
@@ -552,7 +552,7 @@ target_include_directories(oes_multi_base_test PRIVATE
 )
 
 set_target_properties(oes_multi_base_test PROPERTIES
-    CXX_STANDARD          17
+    CXX_STANDARD          20
     CXX_STANDARD_REQUIRED ON
     BUILD_RPATH            "${CMAKE_BINARY_DIR}/bin"
     INSTALL_RPATH          "${CMAKE_BINARY_DIR}/bin"
@@ -592,7 +592,7 @@ target_include_directories(oes_protocol_test PRIVATE
 )
 
 set_target_properties(oes_protocol_test PROPERTIES
-    CXX_STANDARD          17
+    CXX_STANDARD          20
     CXX_STANDARD_REQUIRED ON
     BUILD_RPATH            "${CMAKE_BINARY_DIR}/bin"
     INSTALL_RPATH          "${CMAKE_BINARY_DIR}/bin"
@@ -646,7 +646,7 @@ target_include_directories(oes_frontend_runtime_test PRIVATE
 )
 
 set_target_properties(oes_frontend_runtime_test PROPERTIES
-    CXX_STANDARD          17
+    CXX_STANDARD          20
     CXX_STANDARD_REQUIRED ON
     BUILD_RPATH            "${CMAKE_BINARY_DIR}/bin"
     INSTALL_RPATH          "${CMAKE_BINARY_DIR}/bin"
@@ -690,7 +690,7 @@ if(OES_USE_POSTGRESQL)
     )
 
     set_target_properties(oes_pg_dialect_test PROPERTIES
-        CXX_STANDARD          17
+        CXX_STANDARD          20
         CXX_STANDARD_REQUIRED ON
         BUILD_RPATH            "${CMAKE_BINARY_DIR}/bin"
         INSTALL_RPATH          "${CMAKE_BINARY_DIR}/bin"

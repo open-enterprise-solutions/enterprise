@@ -21,8 +21,8 @@ class BACKEND_API ibVariantDataCommandSource : public wxVariantData {
 			return wxT("<not selected>");                        // nothing bound
 		wxString text;
 		if (m_owner != nullptr)
-			return m_owner->WalkCommand(m_commandDesc, &text) ? text : wxT("<not found>");
-		return m_display.IsEmpty() ? wxT("<not selected>") : m_display;   // no owner to walk -> cached picker name
+			return m_owner->WalkCommand(m_commandDesc, &text) ? text : wxString(wxT("<not found>"));
+		return m_display.IsEmpty() ? wxString(wxT("<not selected>")) : m_display;   // no owner to walk -> cached picker name
 	}
 
 public:

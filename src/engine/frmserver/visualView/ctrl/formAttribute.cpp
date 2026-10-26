@@ -224,7 +224,7 @@ bool ibValueForm::IsAttributeNameUnique(const wxString& name, const ibFormAttrib
 
 wxString ibValueForm::MakeUniqueAttributeName(const wxString& base) const
 {
-	const wxString stem = base.IsEmpty() ? wxT("Attribute") : base;
+	const wxString stem = base.IsEmpty() ? wxString(wxT("Attribute")) : base;
 	if (IsAttributeNameUnique(stem))
 		return stem;
 	for (unsigned int n = 1; ; ++n) {
@@ -261,7 +261,7 @@ bool ibValueForm::IsFormCommandNameUnique(const wxString& name, const ibFormComm
 
 wxString ibValueForm::MakeUniqueFormCommandName(const wxString& base) const
 {
-	const wxString stem = base.IsEmpty() ? wxT("Command") : base;
+	const wxString stem = base.IsEmpty() ? wxString(wxT("Command")) : base;
 	if (IsFormCommandNameUnique(stem))
 		return stem;
 	for (unsigned int n = 1; ; ++n) {
