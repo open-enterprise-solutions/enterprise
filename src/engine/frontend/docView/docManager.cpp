@@ -12,6 +12,7 @@
 
 #include "frontend/win/dlgs/choiceTemplate.h"
 #include "backend/backend_picture.h"
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 #include "backend/metadataConfiguration.h"
 #include "backend/moduleManager/moduleManager.h"
 
@@ -419,7 +420,7 @@ void ibDocManager::AddDocTemplate(const ibPictureID& id,
 		this, descr, filter, dir, ext, docTypeName, viewTypeName,
 		docClassInfo, viewClassInfo, flags);
 
-	docTemplate->SetClassIcon(ibBackendPicture::GetPictureAsIcon(id));
+	docTemplate->SetClassIcon(ToIcon(ibBackendPicture::GetPicture(id)));
 
 	AssociateTemplate(docTemplate);
 }
@@ -456,7 +457,7 @@ void ibDocManager::AddDocTemplate(const ibClassID& clsid,
 		ibTEMPLATE_INVISIBLE | (!ext.IsEmpty() ? ibTEMPLATE_SAVE_AS_FILE : 0));
 
 	docTemplate->SetClassID(clsid);
-	docTemplate->SetClassIcon(ibBackendPicture::GetPictureAsIcon(clsid));
+	docTemplate->SetClassIcon(ToIcon(ibBackendPicture::GetPicture(clsid)));
 
 	AssociateTemplate(docTemplate);
 }
@@ -550,7 +551,7 @@ ibMetaDocument* ibDocManager::OpenForm(ibValueMetaObject* metaObject, long flags
 		if (docParent == nullptr)
 			AddDocument(newDocument);
 
-		newDocument->SetIcon(metaObject->GetIcon());
+		newDocument->SetIcon(ToIcon(metaObject->GetIcon()));
 
 		if (newDocument->OnCreate(metaObject->GetModuleName(), flags | ibDOC_NEW)) {
 			newDocument->SetCommandProcessor(newDocument->OnCreateCommandProcessor());

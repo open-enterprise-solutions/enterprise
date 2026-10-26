@@ -1,4 +1,5 @@
 #include "about.h"
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 #include "backend/metaCollection/metaObjectMetadata.h"
 #include "backend/appData.h"
@@ -150,7 +151,7 @@ ibDialogAbout::ibDialogAbout(wxWindow* parent, int id)
 	Centre(wxBOTH);
 
 	wxIcon dlg_icon;
-	dlg_icon.CopyFromBitmap(ibBackendPicture::GetPicture(g_metaCommonMetadataCLSID));
+	dlg_icon.CopyFromBitmap(ToBitmap(ibBackendPicture::GetPicture(g_metaCommonMetadataCLSID)));
 	SetIcon(dlg_icon);
 	SetFocus();
 

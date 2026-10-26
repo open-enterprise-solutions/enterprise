@@ -1,4 +1,5 @@
 #include "toolBar.h"
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 // Designer-only context menu (right-click on a toolbar in the form
 // editor): offers "Add tool" / "Add separator". Web has no designer
@@ -14,8 +15,8 @@ enum
 void ibValueToolbar::PrepareDefaultMenu(wxMenu* menu)
 {
 #ifndef OES_USE_WEB
-	menu->Append(MENU_ADDITEM, _("Add tool\tInsert"))->SetBitmap(ibValueToolBarItem::GetIconGroup());
-	menu->Append(MENU_ADDITEM_SEPARATOR, _("Add separator\tInsert"))->SetBitmap(ibValueToolBarSeparator::GetIconGroup());
+	menu->Append(MENU_ADDITEM, _("Add tool\tInsert"))->SetBitmap(ToIcon(ibValueToolBarItem::GetIconGroup()));
+	menu->Append(MENU_ADDITEM_SEPARATOR, _("Add separator\tInsert"))->SetBitmap(ToIcon(ibValueToolBarSeparator::GetIconGroup()));
 	menu->AppendSeparator();
 #else
 	(void)menu;

@@ -33,7 +33,6 @@
 #include "backend/system/value/valueDynamicList.h"
 
 #include <wx/init.h>
-#include <wx/image.h>  // wxInitAllImageHandlers — wx decodes nothing until registered
 #include <wx/log.h>    // wxLogStderr — a wx warning must not become a modal box                        // wxInitializer — wxBase before appData
 
 namespace {
@@ -65,17 +64,7 @@ struct BuiltInRuntime : ::testing::Test {
 		if (!m_wxInit.IsOk())
 			GTEST_SKIP() << "wxBase init failed (no wxApp host)";
 
-		// IMAGE HANDLERS, because a decoder that was never registered cannot
-		// decode. Bringing up application data builds the metadata configuration,
-		// which fills the language list, which loads icons through
-		// `wxImage::LoadFile` — and wx ships with NO handlers until something
-		// registers them. A GUI app does it at startup; a bare wxBase binary does
-		// not, so every icon reports "Unknown image data format".
-		//
-		// The data is fine. Reading that message as a broken resource was wrong.
-		wxInitAllImageHandlers();
-
-		// AND NO MODAL DIALOGS, whatever else warns. wx's default log target is
+		// NO MODAL DIALOGS, whatever warns. wx's default log target is
 		// wxLogGui, where a warning IS a MessageBox — in a headless run that is
 		// not a failure but a HANG, and the report says "timed out" without
 		// naming anything. Same trap the GUI harness hit; same remedy.

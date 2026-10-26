@@ -524,8 +524,8 @@ public:
 #pragma endregion
 
 	//support icons
-	virtual wxIcon GetIcon() const;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const;
+	static ibPicture GetIconGroup();
 
 	// Iterator runtime path lives on ibValueModel — drives Get*Fetch
 	// in batches. GetEmptyRow yields the typed skeleton for the

@@ -126,8 +126,8 @@ class ibValueBoxSizer : public ibValueSizer {
 	ibValueBoxSizer();
 
 	//support icons
-	virtual wxIcon GetIcon() const;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const;
+	static ibPicture GetIconGroup();
 
 	//load & save object in control 
 	virtual bool ReadData(const ibDataNode& node);
@@ -145,8 +145,8 @@ class ibValueWrapSizer : public ibValueSizer {
 	ibValueWrapSizer();
 
 	//support icons
-	virtual wxIcon GetIcon() const;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const;
+	static ibPicture GetIconGroup();
 
 	//load & save object in control
 	virtual bool ReadData(const ibDataNode& node);
@@ -171,8 +171,8 @@ class ibValueStaticBoxSizer : public ibValueSizer {
 	virtual void OnUpdate(ibDataNode& state, ibVisualHost* host) override;
 
 	//support icons
-	virtual wxIcon GetIcon() const;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const;
+	static ibPicture GetIconGroup();
 
 	//load & save object in control 
 	virtual bool ReadData(const ibDataNode& node);
@@ -200,8 +200,8 @@ class ibValueGridSizer : public ibValueSizer {
 	ibValueGridSizer();
 
 	//support icons
-	virtual wxIcon GetIcon() const;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const;
+	static ibPicture GetIconGroup();
 
 	//load & save object in control 
 	virtual bool ReadData(const ibDataNode& node);

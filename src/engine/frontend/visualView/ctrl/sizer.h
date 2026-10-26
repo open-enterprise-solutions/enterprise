@@ -163,8 +163,8 @@ class ibValueBoxSizer : public ibValueSizer {
 	virtual void Cleanup(wxObject* obj, ibVisualHost* visualHost) override;
 
 	//support icons
-	virtual wxIcon GetIcon() const;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const;
+	static ibPicture GetIconGroup();
 
 	//load & save object in control 
 	virtual bool ReadData(const ibDataNode& node);
@@ -190,8 +190,8 @@ class ibValueWrapSizer : public ibValueSizer {
 	virtual void Cleanup(wxObject* obj, ibVisualHost* visualHost) override;
 
 	//support icons
-	virtual wxIcon GetIcon() const;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const;
+	static ibPicture GetIconGroup();
 
 	//load & save object in control
 	virtual bool ReadData(const ibDataNode& node);
@@ -218,8 +218,8 @@ class ibValueStaticBoxSizer : public ibValueSizer {
 	virtual void Cleanup(wxObject* obj, ibVisualHost* visualHost) override;
 
 	//support icons
-	virtual wxIcon GetIcon() const;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const;
+	static ibPicture GetIconGroup();
 
 	//load & save object in control 
 	virtual bool ReadData(const ibDataNode& node);
@@ -253,8 +253,8 @@ class ibValueGridSizer : public ibValueSizer {
 	virtual void Cleanup(wxObject* obj, ibVisualHost* visualHost) override;
 
 	//support icons
-	virtual wxIcon GetIcon() const;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const;
+	static ibPicture GetIconGroup();
 
 	//load & save object in control 
 	virtual bool ReadData(const ibDataNode& node);

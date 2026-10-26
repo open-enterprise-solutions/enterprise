@@ -317,6 +317,24 @@ else()
     target_compile_options(llhttp PRIVATE -w)
 endif()
 
+# THE CORE'S PNG (core/graphics/picture.h) — a picture as data is read, scaled and written without a wx image, so the
+# server needs none. lodepng is one file with its own inflate and deflate, built here as
+# core/graphics/lodepng/lodepng.vcxproj builds it; a picture comes as bytes, never from lodepng's own file reading.
+oes_require_submodule(lodepng lodepng.h)
+add_library(lodepng STATIC "${OES_3RDPARTY_DIR}/lodepng/lodepng.cpp")
+target_include_directories(lodepng PUBLIC "${OES_3RDPARTY_DIR}/lodepng")
+target_compile_definitions(lodepng PRIVATE LODEPNG_NO_COMPILE_DISK)
+set_target_properties(lodepng PROPERTIES POSITION_INDEPENDENT_CODE ON)
+if(MSVC)
+    target_compile_options(lodepng PRIVATE /W0)
+else()
+    target_compile_options(lodepng PRIVATE -w)
+endif()
+
+# THE CORE'S SVG (ibPicture::FromSvg) — NanoSVG, two headers, compiled in core/graphics/picture.cpp: an SVG read and
+# drawn into pixels the core writes as a PNG. Nothing to build here.
+oes_require_submodule(nanosvg src/nanosvg.h)
+
 if(WIN32)
     add_compile_definitions(
         WIN32

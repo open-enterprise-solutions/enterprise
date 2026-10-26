@@ -21,9 +21,9 @@ public:
 	bool AccessRight_Use() const { return IsFullAccess() || AccessRight(m_roleUse); }
 #pragma endregion
 
-	wxBitmap GetPictureAsBitmap() const {
+	ibPicture GetPicture() const {
 		if (!m_propertyPicture->IsEmptyProperty())
-			return m_propertyPicture->GetValueAsBitmap();
+			return m_propertyPicture->GetValueAsPicture();
 		return ibBackendPicture::CreatePicture(g_metaCommonMetadataCLSID);
 	}
 	// …and what the picture IS — what a server sends it by (ibBackendPicture::GetServerPicture), as a command's; none —
@@ -41,8 +41,8 @@ public:
 	ibValueMetaObjectSection(const wxString& name = wxEmptyString, const wxString& synonym = wxEmptyString, const wxString& comment = wxEmptyString);
 
 	//support icons
-	virtual wxIcon GetIcon() const;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const;
+	static ibPicture GetIconGroup();
 
 	//prepare menu for item
 	virtual bool CollectContextMenu(std::vector<ibMetaMenuItem>& items);

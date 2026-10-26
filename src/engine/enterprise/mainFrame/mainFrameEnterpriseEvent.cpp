@@ -4,6 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "mainFrameEnterprise.h"
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
    
 #include "win/dlg/functionAll.h"
 #include "win/dlg/enterpriseOption.h"
@@ -50,7 +51,7 @@ void ibFrontendMainFrameEnterprise::OnAuditLog(wxCommandEvent& event)
 		ibAuditLogDocument* doc = docManager->CreateDocument<ibAuditLogDocument>();
 		if (doc != nullptr) {
 			doc->SetTitle(_("Registration journal"));
-			doc->SetIcon(ibBackendPicture::GetPictureAsIcon(g_picUserActiveCLSID));
+			doc->SetIcon(ToIcon(ibBackendPicture::GetPicture(g_picUserActiveCLSID)));
 			docManager->AddDocument(doc);
 			if (!doc->OnCreate(wxEmptyString, 0))
 				doc->DeleteAllViews();

@@ -8,6 +8,7 @@
 #include "visualEditorDragItem.h"   // ibFormDragItem — the polymorphic drop kinds (ApplyDrop enacts the drop)
 #include "backend/propertyManager/propertyManager.h"
 #include "frontend/visualView/layers/commandBar.h"      // ibValueCommandBar (command-interface node)
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 #include <wx/imaglist.h>
 
@@ -198,7 +199,7 @@ void ibVisualEditorNotebook::ibVisualEditor::ibVisualEditorObjectTree::CreateTre
 	m_iconList = new wxImageList(ICON_SIZE, ICON_SIZE);
 	
 	for (auto objClass : ibValue::GetListCtorsByType(ibCtorObjectType::ibCtorObjectType_object_control)) {
-		const wxIcon& controlIcon = objClass->GetClassIcon();
+		const wxIcon& controlIcon = ToIcon(objClass->GetClassIcon());
 		if (controlIcon.IsOk()) {
 			const int retIndex = m_iconList->Add(controlIcon);
 			if (retIndex != wxNOT_FOUND) {

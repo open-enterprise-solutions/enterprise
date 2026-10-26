@@ -21,8 +21,6 @@
 #include <string>
 #include <vector>
 
-#include <wx/icon.h>
-
 #include "backend/backend_mainFrame.h"
 #include "backend/uniqueKey.h"
 #include "core/serialize/dataBuilder.h"   // ibDataNode — a request and its response
@@ -160,10 +158,6 @@ public:
 	const wxString& GetTitle()      const { return m_title; }
 	const wxString& GetStatusText() const { return m_status; }
 
-	// The application's icon, when the configuration has one; a tab without an icon of its own shows it.
-	void          SetIcon(const wxIcon& icon) { m_icon = icon; }
-	const wxIcon& GetIcon() const             { return m_icon; }
-
 	struct PendingMessage {
 		ibStatusMessage level;
 		wxString        text;
@@ -279,7 +273,6 @@ private:
 	ibClientInstance* m_clientInstance = nullptr;   // borrowed; the instance owns the frame
 	wxString             m_title;
 	wxString             m_status;
-	wxIcon               m_icon;
 
 	// One entry per tab. A tab goes after its document's views (DeleteAllViews takes the view and the
 	// document), never before.

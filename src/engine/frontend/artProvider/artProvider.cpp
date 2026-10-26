@@ -1,6 +1,6 @@
 #include "artProvider.h"
 
-#include "backend/backend_picture.h"   // ibBackendPicture::GetImageFromBase64
+#include "frontend/win/picture.h"   // ToBitmap — a master read and scaled by the core, drawn
 
 // EVERY PICTURE HERE IS A PNG IN BASE64, one string each in private/picturePredefined.h: a master four times the
 // size of its drawing, scaled down here to the size asked. Its source is an SVG in tools/pictures/render.js, which
@@ -16,16 +16,17 @@
 // which would only be stretched in its turn.
 static wxBitmapBundle BundleOf(const wxString& png, const wxSize& size)
 {
-	const wxImage master = ibBackendPicture::GetImageFromBase64(png);
+	const ibPicture master = ibPicture::FromBase64(png);
 	if (!master.IsOk())
 		return wxBitmapBundle();
 
+	const ibSize largest = master.GetSize();
 	wxVector<wxBitmap> bitmaps;
 	for (const int times : { 1, 2, 4 }) {
-		const wxSize at(size.x * times, size.y * times);
-		if (times > 1 && (at.x > master.GetWidth() || at.y > master.GetHeight()))
+		const ibSize at(size.x * times, size.y * times);
+		if (times > 1 && (at.m_width > largest.m_width || at.m_height > largest.m_height))
 			break;
-		bitmaps.push_back(wxBitmap(at == master.GetSize() ? master : master.Scale(at.x, at.y, wxIMAGE_QUALITY_HIGH)));
+		bitmaps.push_back(ToBitmap(master.Scale(at)));
 	}
 	return wxBitmapBundle::FromBitmaps(bitmaps);
 }

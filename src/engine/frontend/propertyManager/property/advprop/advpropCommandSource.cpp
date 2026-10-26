@@ -1,4 +1,5 @@
 #include "advpropCommandSource.h"
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 #include "backend/propertyManager/property/propertyCommandSource.h"            // ibPropertyCommandSource (registered here)
 #include "backend/propertyManager/property/variant/variantCommandSource.h"    // ibVariantDataCommandSource (the cell value)
@@ -135,7 +136,7 @@ wxPGEditorDialogAdapter* ibPGCommandSourceProperty::GetEditorDialog() const
 			// Each command shows ITS OWN picture (the command determines the icon — GatherFormCommands resolved it);
 			// index 0 is the group / default icon.
 			wxImageList* images = new wxImageList(16, 16);
-			images->Add(ibValueMetaObjectAttribute::GetIconGroup());   // 0 = group / default
+			images->Add(ToIcon(ibValueMetaObjectAttribute::GetIconGroup()));   // 0 = group / default
 			tc->AssignImageList(images);
 
 			// Grouped tree of the form's command sources (entries arrive grouped in order; new group on change).

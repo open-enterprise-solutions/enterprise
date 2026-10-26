@@ -115,7 +115,7 @@ class ibValueModelTableBox : public ibValueWindowComposite,
 	void FillControlMembers(ibMemberTable& helper) const;   // bound in ctor (was PrepareNames)
 
 	//support icons
-	static wxIcon GetIconGroup();
+	static ibPicture GetIconGroup();
 
 	//other
 	void AddColumn();
@@ -278,7 +278,7 @@ public:
 	virtual bool IsMainSourceBound() const override;
 
 	//support icons
-	virtual wxIcon GetIcon() const;
+	virtual ibPicture GetIcon() const;
 
 	/**
 	* Property events
@@ -555,7 +555,7 @@ public:
 	bool IsGroupShown() const;
 
 	//support icons
-	static wxIcon GetIconGroup();
+	static ibPicture GetIconGroup();
 
 public:
 
@@ -573,7 +573,7 @@ public:
 	virtual int GetComponentType() const { return COMPONENT_TYPE_ABSTRACT; }
 
 	//support icons
-	virtual wxIcon GetIcon() const;
+	virtual ibPicture GetIcon() const;
 
 	//load & save object in control
 	virtual bool ReadData(const ibDataNode& node);
@@ -722,7 +722,7 @@ public:
 	bool IsCellEditable(const ibDataViewItem& item) const;
 
 	//support icons
-	static wxIcon GetIconGroup();
+	static ibPicture GetIconGroup();
 
 public:
 
@@ -775,7 +775,7 @@ public:
 	virtual int GetComponentType() const { return COMPONENT_TYPE_ABSTRACT; }
 
 	//support icons
-	virtual wxIcon GetIcon() const;
+	virtual ibPicture GetIcon() const;
 
 	/**
 	* Property events

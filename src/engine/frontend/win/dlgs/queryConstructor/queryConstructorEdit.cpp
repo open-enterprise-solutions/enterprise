@@ -5,6 +5,7 @@
 
 #include "queryConstructorInternal.h"
 #include "queryTempTableDialog.h"   // a table handed in, described
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 #include <wx/treectrl.h>      // the area picker's tree — checkboxes, one row per grouping
 #include <wx/imaglist.h>      // …and its pictures, taken from the same icons the grids draw
@@ -945,7 +946,7 @@ private:
 		// it does not — a level whose path the model cannot resolve right now (a temp table not yet
 		// built, a source being edited) is still a level, and a blank where its neighbours have icons
 		// reads as "this one is broken" rather than as "its type is not known this second".
-		const wxIcon icon = row.icon.IsOk() ? row.icon : ibValue::GetIconGroup();
+		const wxIcon icon = row.icon.IsOk() ? row.icon : ToIcon(ibValue::GetIconGroup());
 		const int image = icon.IsOk() ? m_images->Add(icon) : -1;
 		const wxTreeItemId item = m_tree->AppendItem(parent, row.caption, image, image);
 		if (!row.node) {

@@ -5,6 +5,7 @@
 
 #include "mainFrameDesigner.h"
 #include "core/picturePredefined.h"   // the assistant's icon, from the picture registry
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 //********************************************************************************
 //*                                Hotkey support                                *
@@ -224,7 +225,7 @@ void ibFrontendMainFrameDesigner::InitializeDefaultMenu()
 	// page where the address, the key and the whole setup already are is exactly where somebody
 	// goes when they want to change any of it. One place for the server, not two.
 	menuItem = m_menuAdministration->Append(wxID_APPLICATION_MCP_ASSISTANT, _("Assistant window"));
-	menuItem->SetBitmap(ibBackendPicture::GetPicture(g_picAssistantCLSID));
+	menuItem->SetBitmap(ToBitmap(ibBackendPicture::GetPicture(g_picAssistantCLSID)));
 
 	m_frameMenuBar->Append(m_menuAdministration, _("Administration"));
 

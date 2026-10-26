@@ -100,7 +100,8 @@ public:
 	{
 		return ibMcpText("Start the application on this base - the thick client, the thin one or the web "
 			"server, with or without the debugger attached. The same launch the designer's Debug menu "
-			"performs, so connection flags and the debug port are handled. Refuses when the "
+			"performs, so connection flags and the debug port are handled; the web server answers its "
+			"page's address in `page` - no browser is opened. Refuses when the "
 			"configuration has edits the base does not hold - a module written a moment ago as much as "
 			"a change of structure: config_apply them first, because a launch must never write to a base "
 			"as a side effect (database_diff lists only the structure).\n\n"
@@ -213,7 +214,8 @@ public:
 		const wxString useWeb = application.Lower();
 		const bool manifest = useWeb.IsSameAs(wxT("webserver"));
 
-		const long pid = appData->RunApplication(useWeb, withDebug, manifest);
+		wxString page;
+		const long pid = appData->RunApplication(useWeb, withDebug, manifest, &page);
 
 		if (pid == 0) {
 			refusal = wxString::Format(ibMcpText("%s could not be started."), application);
@@ -225,6 +227,8 @@ public:
 		result.SetValue(wxT("started"), application);
 		result.AddField(wxT("pid"), ibDataValue::Int((std::int64_t)pid));
 		result.AddField(wxT("debug"), ibDataValue::Bool(withDebug));
+		if (!page.IsEmpty())
+			result.SetValue(wxT("page"), page);   // the web server's page, to open in a browser
 
 		if (ended)
 			result.AddField(wxT("endedPrevious"), ibDataValue::Bool(true));

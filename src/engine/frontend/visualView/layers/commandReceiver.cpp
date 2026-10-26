@@ -7,6 +7,7 @@
 #include "backend/metaCollection/metaCommandObject.h" // ibValueMetaObjectCommand — the leaf command
 #include "backend/metaCollection/metaObject.h"     // g_metaCommandCLSID
 #include "backend/backend_picture.h"                // ibBackendPicture::CreatePicture (a standard action's picture)
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 #include "backend/srcDataObject.h"                  // ibSourceDataObject — the form's main object (command parameter)
 #include "backend/metaCollection/genericData.h"     // ibValueMetaObjectGenericData::GetMetaID (parameter type match)
 #include "core/description/typeDescription.h"                // ibTypeDescription::GetClsidList (command parameter type)
@@ -178,7 +179,7 @@ bool ibFrontendCommandReceiver::ResolveValueByPath(const ibCommandDescription& d
 	ibFormCommandValue* fc = nullptr;
 	if (leaf.ConvertToValue(fc) && fc != nullptr) {
 		outCaption = fc->GetCaption();
-		outIcon    = fc->IsEmptyPicture() ? wxNullBitmap : fc->GetPictureBitmap();
+		outIcon    = fc->IsEmptyPicture() ? wxNullBitmap : ToBitmap(fc->GetPicture());
 		if (outModifiesData != nullptr)
 			*outModifiesData = true;
 		return true;
@@ -187,7 +188,7 @@ bool ibFrontendCommandReceiver::ResolveValueByPath(const ibCommandDescription& d
 	ibValueMetaObjectCommand* cmd = nullptr;
 	if (leaf.ConvertToValue(cmd) && cmd != nullptr) {
 		outCaption = cmd->GetSynonym().IsEmpty() ? cmd->GetName() : cmd->GetSynonym();
-		outIcon    = cmd->IsEmptyPicture() ? wxNullBitmap : cmd->GetPictureAsBitmap();
+		outIcon    = cmd->IsEmptyPicture() ? wxNullBitmap : ToBitmap(cmd->GetPicture());
 		if (outModifiesData != nullptr)
 			*outModifiesData = cmd->GetModifiesData();
 		return true;
@@ -198,7 +199,7 @@ bool ibFrontendCommandReceiver::ResolveValueByPath(const ibCommandDescription& d
 		outCaption = obj->GetSynonym();
 		if (desc.GetCommandType() == ibInterfaceCommandType_Create)
 			outCaption += wxT(": ") + wxString(_("Create"));
-		outIcon = wxBitmap(obj->GetIcon());
+		outIcon = ToBitmap(obj->GetIcon());
 		return true;
 	}
 	// (4) standard action — its caption + picture + modifies flag off the resolved frame's bus.
@@ -207,7 +208,7 @@ bool ibFrontendCommandReceiver::ResolveValueByPath(const ibCommandDescription& d
 		auto actions = frame->GetStandardCommands(frame->GetTypeForm());
 		outCaption = actions.GetCaptionByID((ibActionID)desc.GetLeaf());
 		const ibPictureDescription pic = actions.GetPictureByID((ibActionID)desc.GetLeaf());
-		outIcon = pic.IsEmptyPicture() ? wxNullBitmap : ibBackendPicture::CreatePicture(pic, gate->GetMetaData());
+		outIcon = pic.IsEmptyPicture() ? wxNullBitmap : ToBitmap(ibBackendPicture::CreatePicture(pic, gate->GetMetaData()));
 		if (outModifiesData != nullptr)
 			*outModifiesData = actions.GetModifiesDataByID((ibActionID)desc.GetLeaf());
 		// A standard action's OWN default display — Close / Update are picture-only, Add / Post picture+text.
@@ -237,7 +238,7 @@ bool ibFrontendCommandReceiver::ResolveSubCommands(const ibCommandDescription& d
 		ibCommandSubItem item;
 		item.desc    = ibCommandDescription(sub->GetMetaID());   // the sub-command is terminal on its own
 		item.caption = sub->GetSynonym().IsEmpty() ? sub->GetName() : sub->GetSynonym();   // rendered menu text = SYNONYM
-		item.icon    = wxBitmap(sub->GetIcon());
+		item.icon    = ToBitmap(sub->GetIcon());
 		out.push_back(item);
 	}
 	return !out.empty();

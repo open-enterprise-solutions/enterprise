@@ -208,7 +208,7 @@ git submodule update --init --recursive
 
 ```
 enterprise/
-├── enterprise.sln            # MSBuild solution (22 projects, Mbed TLS and llhttp among them)
+├── enterprise.sln            # MSBuild solution (23 projects, Mbed TLS, llhttp and LodePNG among them)
 ├── CMakeLists.txt            # the cross-platform build, tests included
 ├── Common.props              # Shared MSBuild properties (paths, platforms)
 ├── ConfigurationDefs.props   # Preprocessor definitions per configuration
@@ -222,7 +222,7 @@ enterprise/
 │                             # organisation only and is empty for everyone else. The build never
 │                             # needs it, so links to docs/private/… will not open for you.
 └── src/
-    ├── 3rdparty/             # Git submodules: wxWidgets 3.3.4, Mbed TLS, Asio, llhttp, cpp-httplib, nlohmann/json
+    ├── 3rdparty/             # Git submodules: wxWidgets 3.3.4, Mbed TLS, Asio, llhttp, LodePNG, NanoSVG, cpp-httplib, nlohmann/json
     └── engine/
         ├── core/             # What the engine and its clients share: values, strings, dates, nodes, the journal
         ├── backend/          # Core engine DLL
@@ -277,6 +277,7 @@ enterprise/
 | Client protocol | JSON-RPC 2.0 over WebSocket / HTTP |
 | Network | Asio (standalone) + llhttp — the core's HTTP and WebSocket, server and client |
 | TLS and ciphers | Mbed TLS |
+| Pictures | LodePNG and NanoSVG — the core reads, scales and writes PNG and draws SVG; the server has no wx image |
 | AI access | Model Context Protocol (Streamable HTTP) |
 | Build (Windows) | MSBuild / Visual Studio 2022 (toolset v143) |
 | Build (cross-platform) | CMake ≥ 3.20 — `CMakeLists.txt` at repo root (Windows / macOS / Linux) |

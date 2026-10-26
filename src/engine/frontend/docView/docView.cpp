@@ -22,6 +22,7 @@
 
 // For compilers that support precompilation, includes "wx.h".
 #include "wx/wxprec.h"
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 
 #if wxUSE_DOC_VIEW_ARCHITECTURE

@@ -20,10 +20,10 @@ public:
 			metaObject->ConvertToValue(refValue) : false;
 	}
 
-	virtual wxIcon GetClassIcon() const {
+	virtual ibPicture GetClassIcon() const {
 		const ibValueMetaObject* metaObject = GetMetaObject();
 		return metaObject ?
-			metaObject->GetIcon() : wxNullIcon;
+			metaObject->GetIcon() : ibPicture();
 	}
 
 	virtual ibCtorObjectMetaType GetMetaTypeCtor() const = 0;

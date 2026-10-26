@@ -39,8 +39,8 @@ class BACKEND_API ibValueMetaObjectResource : public ibValueMetaObjectAttribute 
 	const class ibValueMetaObjectChartOfAccounts* GetChartOfAccounts() const;
 
 	//support icons
-	virtual wxIcon GetIcon() const;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const;
+	static ibPicture GetIconGroup();
 
 	//get data selector
 	virtual ibSelectorDataType GetFilterDataType() const;

@@ -6,6 +6,7 @@
 
 #include "tableBox.h"
 #include "form.h"
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 #include "core/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "backend/appData.h"
@@ -164,8 +165,8 @@ enum
 
 void ibValueModelTableBoxColumnGroup::PrepareDefaultMenu(wxMenu* menu)
 {
-	menu->Append(MENU_GROUP_ADD_COLUMN, _("Add column\tInsert"))->SetBitmap(ibValueModelTableBoxColumn::GetIconGroup());
-	menu->Append(MENU_GROUP_ADD_GROUP, _("Add column group"))->SetBitmap(ibValueModelTableBoxColumnGroup::GetIconGroup());
+	menu->Append(MENU_GROUP_ADD_COLUMN, _("Add column\tInsert"))->SetBitmap(ToIcon(ibValueModelTableBoxColumn::GetIconGroup()));
+	menu->Append(MENU_GROUP_ADD_GROUP, _("Add column group"))->SetBitmap(ToIcon(ibValueModelTableBoxColumnGroup::GetIconGroup()));
 	menu->AppendSeparator();
 }
 

@@ -21,7 +21,7 @@
 #include "backend/system/value/valueOLE.h"   // ibValueOLE::ReleaseComObjects in normal OnExit
 #endif
 
-#include "backend/backend_picture.h"
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 #include "frontend/artProvider/splash/splashLogo.h"   // one picture for the designer and the application
 
 #if wxVERSION_NUMBER >= 2905 && wxVERSION_NUMBER <= 3100
@@ -206,16 +206,14 @@ int ibAppEnterprise::DoOnRun()
 	}
 
 	ibProcessSplashScreen* splashScreenLoader =
-		new ibProcessSplashScreen(ibBackendPicture::GetBitmapFromBase64(s_splashLogo_png),
+		new ibProcessSplashScreen(ToBitmap(ibPicture::FromBase64(s_splashLogo_png)),
 			wxSPLASH_CENTRE_ON_SCREEN,
 			-1, nullptr, -1, wxDefaultPosition, wxDefaultSize,
 			wxBORDER_SIMPLE
 		);
 
-	// Image handlers are already up: backend.dll registers them ALL from its picture
-	// auto-loader (backend_picture.cpp), which runs at DLL load — before this. Calling
-	// wxInitAllImageHandlers again only produced a screenful of "Adding duplicate image
-	// handler" in the debug log (wx deletes the duplicate and logs it).
+	// The image handlers are the window's: the backend keeps its pictures as data and puts none up (backend_picture.h).
+	wxInitAllImageHandlers();
 	wxXmlResource::Get()->InitAllHandlers();
 #if wxVERSION_NUMBER >= 2905 && wxVERSION_NUMBER <= 3100
 	wxXmlResource::Get()->AddHandler(new wxAuiNotebookXmlHandler);

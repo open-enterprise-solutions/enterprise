@@ -11,9 +11,9 @@ wxVariantData* ibPropertyExternalPicture::CreateVariantData(const ibExternalPict
 
 ////////////////////////////////////////////////////////////////////////
 
-wxBitmap ibPropertyExternalPicture::GetValueAsBitmap() const
+ibPicture ibPropertyExternalPicture::GetValueAsPicture() const
 {
-	return get_cell_variant<ibVariantDataExternalPicture>()->GetPictureBitmap();
+	return get_cell_variant<ibVariantDataExternalPicture>()->GetPicture();
 }
 
 const ibExternalPictureDescription& ibPropertyExternalPicture::GetValueAsPictureDesc() const

@@ -1,4 +1,5 @@
 #include "predefinedEditor.h"
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 #include "frontend/visualView/ctrl/frame.h"
 #include "frontend/win/theme/luna_toolbarart.h"
@@ -82,10 +83,10 @@ void ibDialogPredefinedEditor::CreateDialogView()
 	m_toolbarTableEditor = new wxAuiToolBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxAUI_TB_HORZ_TEXT);
 	m_toolbarTableEditor->SetArtProvider(new wxAuiLunaToolBarArt());
 
-	m_toolAdd = m_toolbarTableEditor->AddTool(wxID_TOOL_ADD, _("Add"), ibBackendPicture::GetPicture(g_picAddCLSID), wxNullBitmap, wxITEM_NORMAL, wxEmptyString, wxEmptyString, nullptr);
-	m_toolCopy = m_toolbarTableEditor->AddTool(wxID_TOOL_COPY, _("Copy"), ibBackendPicture::GetPicture(g_picCopyCLSID), wxNullBitmap, wxITEM_NORMAL, wxEmptyString, wxEmptyString, nullptr);
-	m_toolEdit = m_toolbarTableEditor->AddTool(wxID_TOOL_EDIT, _("Edit"), ibBackendPicture::GetPicture(g_picEditCLSID), wxNullBitmap, wxITEM_NORMAL, wxEmptyString, wxEmptyString, nullptr);
-	m_toolDelete = m_toolbarTableEditor->AddTool(wxID_TOOL_DELETE, _("Delete"), ibBackendPicture::GetPicture(g_picDeleteCLSID), wxNullBitmap, wxITEM_NORMAL, wxEmptyString, wxEmptyString, nullptr);
+	m_toolAdd = m_toolbarTableEditor->AddTool(wxID_TOOL_ADD, _("Add"), ToBitmap(ibBackendPicture::GetPicture(g_picAddCLSID)), wxNullBitmap, wxITEM_NORMAL, wxEmptyString, wxEmptyString, nullptr);
+	m_toolCopy = m_toolbarTableEditor->AddTool(wxID_TOOL_COPY, _("Copy"), ToBitmap(ibBackendPicture::GetPicture(g_picCopyCLSID)), wxNullBitmap, wxITEM_NORMAL, wxEmptyString, wxEmptyString, nullptr);
+	m_toolEdit = m_toolbarTableEditor->AddTool(wxID_TOOL_EDIT, _("Edit"), ToBitmap(ibBackendPicture::GetPicture(g_picEditCLSID)), wxNullBitmap, wxITEM_NORMAL, wxEmptyString, wxEmptyString, nullptr);
+	m_toolDelete = m_toolbarTableEditor->AddTool(wxID_TOOL_DELETE, _("Delete"), ToBitmap(ibBackendPicture::GetPicture(g_picDeleteCLSID)), wxNullBitmap, wxITEM_NORMAL, wxEmptyString, wxEmptyString, nullptr);
 
 	m_toolbarTableEditor->EnableTool(wxID_TOOL_ADD, m_tableModelStore->IsEnabled(ibDataViewItem(nullptr), model_name));
 	m_toolbarTableEditor->EnableTool(wxID_TOOL_COPY, m_tableModelStore->IsEnabled(ibDataViewItem(nullptr), model_name));
@@ -132,7 +133,7 @@ void ibDialogPredefinedEditor::CreateDialogView()
 	wxDialog::Centre(wxBOTH);
 
 	wxIcon dlg_icon;
-	dlg_icon.CopyFromBitmap(ibBackendPicture::GetPicture(g_metaAttributeCLSID));
+	dlg_icon.CopyFromBitmap(ToBitmap(ibBackendPicture::GetPicture(g_metaAttributeCLSID)));
 
 	wxDialog::SetIcon(dlg_icon);
 	wxDialog::SetFocus();

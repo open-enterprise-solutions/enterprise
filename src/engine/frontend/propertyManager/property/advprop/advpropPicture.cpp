@@ -1,4 +1,5 @@
 #include "advpropPicture.h"
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 #include "backend/propertyManager/property/propertyPicture.h"
 #include "backend/propertyManager/property/variant/variantPicture.h"
@@ -60,7 +61,7 @@ wxPGPictureProperty::wxPGPictureProperty(const wxString& label,
 
 	for (auto so : ibBackendPicture::GetArrayPicture()) {
 		wxPGChoiceEntry& entry = systemChoices.AddAsSorted(so.m_name, system_value++);
-		entry.SetBitmap(so.m_data);
+		entry.SetBitmap(ToBitmap(so.m_picture));
 		m_valChoices.insert_or_assign(
 			entry.GetValue(), so.m_id
 		);
@@ -81,7 +82,7 @@ wxPGPictureProperty::wxPGPictureProperty(const wxString& label,
 				if (object->ConvertToValue(picture)) {
 					wxPGChoiceEntry& entry = configurationChoices.AddAsSorted(
 						object->GetName(), system_config++);
-					entry.SetBitmap(picture->GetValueAsBitmap());
+					entry.SetBitmap(ToBitmap(picture->GetValueAsPicture()));
 					m_confChoices.insert_or_assign(
 						entry.GetValue(), picture->GetGuid()
 					);
@@ -94,7 +95,7 @@ wxPGPictureProperty::wxPGPictureProperty(const wxString& label,
 				if (object->ConvertToValue(picture)) {
 					wxPGChoiceEntry& entry = configurationChoices.AddAsSorted(
 						object->GetName(), system_config++);
-					entry.SetBitmap(picture->GetValueAsBitmap());
+					entry.SetBitmap(ToBitmap(picture->GetValueAsPicture()));
 					m_confChoices.insert_or_assign(
 						entry.GetValue(), picture->GetGuid()
 					);
@@ -318,7 +319,7 @@ void ibPGExternalImageProperty::OnCustomPaint(wxDC& dc,
 			m_bitmap = wxNullBitmap;
 		}
 
-		m_bitmap = pictureVariant->GetPictureBitmap(wxSize(d.m_drawnWidth, d.m_drawnHeight));
+		m_bitmap = ToBitmap(pictureVariant->GetPicture(ibSize(d.m_drawnWidth, d.m_drawnHeight)));
 	}
 	else {
 		m_bitmap = wxNullBitmap;

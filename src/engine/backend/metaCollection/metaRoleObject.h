@@ -30,8 +30,8 @@ public:
 	ibValueMetaObjectRole(const wxString& name = wxEmptyString, const wxString& synonym = wxEmptyString, const wxString& comment = wxEmptyString);
 
 	//support icons
-	virtual wxIcon GetIcon() const;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const;
+	static ibPicture GetIconGroup();
 
 	// The role's access-policy module — session-global (manager-module
 	// shaped). It is where the OnAccessRead / OnAccessWrite handlers live

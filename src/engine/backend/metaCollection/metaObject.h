@@ -551,8 +551,8 @@ public:
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal) override;                   //attribute value
 
 	//support icons
-	virtual wxIcon GetIcon() const override { return wxNullIcon; }
-	static wxIcon GetIconGroup() { return wxNullIcon; }
+	virtual ibPicture GetIcon() const override { return ibPicture(); }
+	static ibPicture GetIconGroup() { return ibPicture(); }
 
 	// Recursive tree (de)serialization into/from the universal ibDataNode structure
 	// (serialize/dataBuilder.h). The ibMetaData containers drive the whole tree through

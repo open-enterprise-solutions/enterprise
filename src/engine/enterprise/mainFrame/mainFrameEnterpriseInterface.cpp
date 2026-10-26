@@ -1,4 +1,5 @@
 #include "mainFrameEnterprise.h"
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 #include <wx/artprov.h>
 #include <wx/renderer.h>
@@ -87,7 +88,7 @@ class ibSubSystemWindow : public wxWindow {
 		ibSubSystemButton(ibSubSystemWindow* mainWindow, wxWindowID id, const ibValueMetaObjectSection* object)
 			: wxControl(mainWindow, id, wxDefaultPosition, wxDefaultSize, wxNO_BORDER),
 			m_metaObject(object), m_popupWindow(nullptr),
-			m_mainWindow(mainWindow), m_bitmap(object->GetPictureAsBitmap()), m_eventType(wxEVT_BUTTON) {
+			m_mainWindow(mainWindow), m_bitmap(ToBitmap(object->GetPicture())), m_eventType(wxEVT_BUTTON) {
 
 			m_baseColour = wxSystemSettings::GetColour(wxSYS_COLOUR_3DFACE);
 			m_highlightColour = wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHT);
@@ -631,7 +632,7 @@ class ibSubSystemWindow : public wxWindow {
 
 						for (const auto object : array) {
 
-							ibCommandLink* df = new ibCommandLink(this, object->GetMetaID(), object->GetSynonym(), object->GetIcon());
+							ibCommandLink* df = new ibCommandLink(this, object->GetMetaID(), object->GetSynonym(), ToIcon(object->GetIcon()));
 							df->SetClientObject(new ibScrolledSubWindowSectionRefData(ibInterfaceCommandSection_Default));
 							df->Bind(wxEVT_BUTTON, &ibScrolledSubWindow::OnMenuItemClicked, this);
 
@@ -649,7 +650,7 @@ class ibSubSystemWindow : public wxWindow {
 						std::vector<ibValueMetaObject*> inGroup;
 						if (metaObject->GetInterfaceItemArrayObject(group, inGroup))
 							sizerLeft->Add(CreateCaptionedBlock(group->GetSynonym(), inGroup, ibInterfaceCommandSection_Default,
-								group->IsEmptyPicture() ? wxNullBitmap : group->GetPictureAsBitmap(), group->GetToolTip()), 0, wxEXPAND, FromDIP(5));
+								group->IsEmptyPicture() ? wxNullBitmap : ToBitmap(group->GetPicture()), group->GetToolTip()), 0, wxEXPAND, FromDIP(5));
 					}
 				}
 
@@ -686,7 +687,7 @@ class ibSubSystemWindow : public wxWindow {
 
 										for (const auto object : subArray) {
 
-											ibCommandLink* df = new ibCommandLink(wnd, object->GetMetaID(), object->GetSynonym(), object->GetIcon());
+											ibCommandLink* df = new ibCommandLink(wnd, object->GetMetaID(), object->GetSynonym(), ToIcon(object->GetIcon()));
 											df->SetClientObject(new ibScrolledSubWindowSectionRefData(ibInterfaceCommandSection_Default));
 											df->Bind(wxEVT_BUTTON, &ibScrolledSubWindow::OnMenuItemClicked, wnd);
 
@@ -703,7 +704,7 @@ class ibSubSystemWindow : public wxWindow {
 
 						for (const auto object : array) {
 
-							ibCommandLink* df = new ibCommandLink(this, object->GetMetaID(), object->GetSynonym(), object->GetIcon());
+							ibCommandLink* df = new ibCommandLink(this, object->GetMetaID(), object->GetSynonym(), ToIcon(object->GetIcon()));
 							df->SetClientObject(new ibScrolledSubWindowSectionRefData(ibInterfaceCommandSection_Default));
 							df->Bind(wxEVT_BUTTON, &ibScrolledSubWindow::OnMenuItemClicked, this);
 
@@ -741,7 +742,7 @@ class ibSubSystemWindow : public wxWindow {
 						std::vector<ibValueMetaObject*> inGroup;
 						if (metaObject->GetInterfaceItemArrayObject(group, inGroup))
 							sizerRight->Add(CreateCaptionedBlock(group->GetSynonym(), inGroup, ibInterfaceCommandSection_Default,
-								group->IsEmptyPicture() ? wxNullBitmap : group->GetPictureAsBitmap(), group->GetToolTip()), 0, wxEXPAND, FromDIP(5));
+								group->IsEmptyPicture() ? wxNullBitmap : ToBitmap(group->GetPicture()), group->GetToolTip()), 0, wxEXPAND, FromDIP(5));
 					}
 				}
 
@@ -791,7 +792,7 @@ class ibSubSystemWindow : public wxWindow {
 
 				for (const auto object : items) {
 
-					ibCommandLink* df = new ibCommandLink(this, object->GetMetaID(), object->GetSynonym(), object->GetIcon());
+					ibCommandLink* df = new ibCommandLink(this, object->GetMetaID(), object->GetSynonym(), ToIcon(object->GetIcon()));
 					df->SetClientObject(new ibScrolledSubWindowSectionRefData(area));
 
 					df->Bind(wxEVT_BUTTON, &ibScrolledSubWindow::OnMenuItemClicked, this);

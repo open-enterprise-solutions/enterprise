@@ -2,6 +2,7 @@
 #define _TOOLBAR_H__
 
 #include "window.h"
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 #ifndef OES_USE_WEB
 // Pulls in <wx/aui/auibar.h> (ibAuiToolBar / wxAuiToolBarEvent) —
 // designer + desktop-runtime only. Web builds its own ibWebToolbar render
@@ -53,8 +54,8 @@ class ibValueToolbar : public ibValueWindow {
 	virtual void Cleanup(wxObject* obj, ibVisualHost* visualHost) override;
 
 	//support icons
-	virtual wxIcon GetIcon() const;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const;
+	static ibPicture GetIconGroup();
 
 	/**
 	* Property events
@@ -138,7 +139,7 @@ public:
 						const ibPictureDescription& pictureDesc = collection.GetPictureByID(actionDesc.GetSystemAction());
 						if (pictureDesc.IsEmptyPicture())
 							return wxNullBitmap;
-						return ibBackendPicture::CreatePicture(pictureDesc, GetMetaData());
+						return ToBitmap(ibBackendPicture::CreatePicture(pictureDesc, GetMetaData()));
 					}
 				}
 			}
@@ -147,7 +148,7 @@ public:
 			}
 		}
 
-		return m_propertyPicture->GetValueAsBitmap();
+		return ToBitmap(m_propertyPicture->GetValueAsPicture());
 	}
 
 	wxString GetItemCaption(const ibStandardCommandSet& collection) const {
@@ -226,8 +227,8 @@ public:
 	virtual int GetComponentType() const { return COMPONENT_TYPE_ABSTRACT; }
 
 	//support icons
-	virtual wxIcon GetIcon() const;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const;
+	static ibPicture GetIconGroup();
 
 	//load & save object in control
 	virtual bool ReadData(const ibDataNode& node);
@@ -288,8 +289,8 @@ class ibValueToolBarSeparator : public ibValueControl {
 	virtual int GetComponentType() const { return COMPONENT_TYPE_ABSTRACT; }
 
 	//support icons
-	virtual wxIcon GetIcon() const;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const;
+	static ibPicture GetIconGroup();
 
 	//load & save object in control 
 	virtual bool ReadData(const ibDataNode& node);

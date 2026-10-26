@@ -22,3 +22,9 @@
 	path = src/3rdparty/llhttp
 	url = https://github.com/nodejs/llhttp.git
 	branch = release
+[submodule "src/3rdparty/lodepng"]
+	path = src/3rdparty/lodepng
+	url = https://github.com/lvandeve/lodepng.git
+[submodule "src/3rdparty/nanosvg"]
+	path = src/3rdparty/nanosvg
+	url = https://github.com/memononen/nanosvg.git

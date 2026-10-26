@@ -186,6 +186,7 @@
     <ClCompile Include="visualView\visualHostClientDocView.cpp" />
     <ClCompile Include="visualView\visualHost.cpp" />
     <ClCompile Include="visualView\visualHostEvent.cpp" />
+    <ClCompile Include="win\picture.cpp" />
     <ClCompile Include="win\ctrls\charts\wxareachart.cpp" />
     <ClCompile Include="win\ctrls\charts\wxareachartctrl.cpp" />
     <ClCompile Include="win\ctrls\charts\wxareachartdatasetoptions.cpp" />
@@ -588,6 +589,7 @@
     <ClInclude Include="visualView\visualHostClient.h" />
     <ClInclude Include="visualView\visualHost.h" />
     <ClInclude Include="window_ptr.h" />
+    <ClInclude Include="win\picture.h" />
     <ClInclude Include="win\typeconv.h" />
     <ClInclude Include="win\ctrls\charts\wxareachart.h" />
     <ClInclude Include="win\ctrls\charts\wxareachartctrl.h" />

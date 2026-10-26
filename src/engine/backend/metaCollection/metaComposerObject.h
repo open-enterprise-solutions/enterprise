@@ -90,8 +90,8 @@ public:
 	virtual ibPictureDescription GetColumnPicture() const override { return GetClassType(); }
 
 	//support icons
-	virtual wxIcon GetIcon() const;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const;
+	static ibPicture GetIconGroup();
 
 	//events — the owner is told, so the FIRST composer becomes the report's default one
 	virtual bool OnCreateMetaObject(ibMetaData* metaData, int flags);

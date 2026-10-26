@@ -305,7 +305,7 @@ std::function<void()> ibSchemaMetaData::Command(const ibSession& session, std::i
 				[](const ibRestructureInfo& info) { return ibDialogApplyChange::ShowApplyChange(info); });
 			ibBackendDocFrame* const frame = ibSession::CurrentFrame();
 			if (!applied && !refusal.IsEmpty() && frame != nullptr)
-				frame->ShowModalMessage(BackendErrorChain(refusal), wxMessageBoxCaptionStr, wxOK | wxCENTRE | wxICON_ERROR);
+				frame->ShowModalMessage(BackendErrorChain(refusal), _("Error"), wxOK | wxCENTRE | wxICON_ERROR);
 		};
 	}
 	case ibProtocol::ibSchema::ibMetaData::ibCommand::Load: {

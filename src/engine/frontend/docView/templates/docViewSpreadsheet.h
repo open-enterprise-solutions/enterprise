@@ -4,6 +4,7 @@
 #include "frontend/docView/docView.h"
 #include "frontend/win/editor/gridEditor/gridEditor.h"
 #include "backend/sheetFormat/sheetFormat.h"   // which formats this document can be saved as
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 // ----------------------------------------------------------------------------
 // Edit form classes
@@ -63,7 +64,7 @@ class FRONTEND_API ibSpreadsheetDocument : public ibMetaDocument {
 public:
 
 	virtual wxIcon GetIcon() const {
-		return ibBackendPicture::GetPictureAsIcon(g_metaCommonTemplateCLSID);
+		return ToIcon(ibBackendPicture::GetPicture(g_metaCommonTemplateCLSID));
 	}
 
 	ibSpreadsheetDocument() : ibMetaDocument() {}

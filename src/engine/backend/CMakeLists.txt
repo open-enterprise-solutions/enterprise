@@ -155,17 +155,16 @@ if(WIN32)
 endif()
 
 # ---------------------------------------------------------------------------
-# wxWidgets — the backend code currently uses some GUI types (wxIcon, wxFont,
-# wxPoint, wxBitmap) inherited from the Windows build, so we link wxCore too.
-# TODO: refactor backend to truly separate GUI types behind interfaces.
+# wxWidgets — of wx the base only: no window, no image, no font (wxUSE_GUI=0 makes a GUI type a compile error
+# here). A picture, a colour, a font are the core's data (core/graphics); a window's side draws them.
 # ---------------------------------------------------------------------------
+target_compile_definitions(backend PRIVATE wxUSE_GUI=0)
 target_link_libraries(backend
     PUBLIC
         # The shared meanings the engine is written in (ids, texts, numbers, dates, guids) — PUBLIC: every consumer of
         # the engine's headers speaks them too.
         core
         wx::base
-        wx::core
         wx::xml
         # No Mbed TLS: a cipher, a random byte, TLS are the core's (core/crypto, core/net).
 )

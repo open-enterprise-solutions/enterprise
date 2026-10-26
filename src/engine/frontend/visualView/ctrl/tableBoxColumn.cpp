@@ -2,6 +2,7 @@
 #include "core/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "form.h"
 #include "backend/choiceLinkResolver.h"   // ibChoiceHolder — where this column's link reads its neighbours
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 #ifndef OES_USE_WEB
 // Renderer pulls in dataview.h (wxDataView heavy). Web stubs don't
 // touch it.
@@ -186,21 +187,21 @@ void ibValueModelTableBoxColumn::OnUpdated(wxObject* wxobject, ibFrontendWindow*
 
 	if (m_propertyRepresentation->GetValueAsEnum() == ibRepresentation::ibRepresentation_Auto) {
 		dataViewColumn->SetTitle(GetControlTitle());
-		dataViewColumn->SetBitmap(m_propertyHeaderPicture->GetValueAsBitmap());
+		dataViewColumn->SetBitmap(ToBitmap(m_propertyHeaderPicture->GetValueAsPicture()));
 		dataViewColumn->SetFooterTitle(m_propertyFooterText->GetValueAsTranslateString());
-		dataViewColumn->SetFooterBitmap(m_propertyFooterPicture->GetValueAsBitmap());
+		dataViewColumn->SetFooterBitmap(ToBitmap(m_propertyFooterPicture->GetValueAsPicture()));
 	}
 	else if (m_propertyRepresentation->GetValueAsEnum() == ibRepresentation::ibRepresentation_PictureAndText) {
 		dataViewColumn->SetTitle(GetControlTitle());
-		dataViewColumn->SetBitmap(m_propertyHeaderPicture->GetValueAsBitmap());
+		dataViewColumn->SetBitmap(ToBitmap(m_propertyHeaderPicture->GetValueAsPicture()));
 		dataViewColumn->SetFooterTitle(m_propertyFooterText->GetValueAsTranslateString());
-		dataViewColumn->SetFooterBitmap(m_propertyFooterPicture->GetValueAsBitmap());
+		dataViewColumn->SetFooterBitmap(ToBitmap(m_propertyFooterPicture->GetValueAsPicture()));
 	}
 	else if (m_propertyRepresentation->GetValueAsEnum() == ibRepresentation::ibRepresentation_Picture) {
 		dataViewColumn->SetTitle(wxEmptyString);
-		dataViewColumn->SetBitmap(m_propertyHeaderPicture->GetValueAsBitmap());
+		dataViewColumn->SetBitmap(ToBitmap(m_propertyHeaderPicture->GetValueAsPicture()));
 		dataViewColumn->SetFooterTitle(wxEmptyString);
-		dataViewColumn->SetFooterBitmap(m_propertyFooterPicture->GetValueAsBitmap());
+		dataViewColumn->SetFooterBitmap(ToBitmap(m_propertyFooterPicture->GetValueAsPicture()));
 	}
 	else if (m_propertyRepresentation->GetValueAsEnum() == ibRepresentation::ibRepresentation_Text) {
 		dataViewColumn->SetTitle(GetControlTitle());

@@ -1,5 +1,6 @@
 ﻿#include "docViewFormEditor.h"
 #include "frontend/mainFrame/mainFrame.h"
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 wxIMPLEMENT_DYNAMIC_CLASS(ibFormEditView, ibMetaView);
 
@@ -53,7 +54,7 @@ bool ibFormEditView::OnCreate(ibDocument* docBase, long flags)
 		const ibCtorControlTypeBase* objectSingle = dynamic_cast<const ibCtorControlTypeBase*>(controlClass);
 		wxASSERT(objectSingle);
 		if (!objectSingle->IsControlSystem()) {
-			wxBitmap controlImage = objectSingle->GetClassIcon();
+			wxBitmap controlImage = ToIcon(objectSingle->GetClassIcon());
 			if (controlImage.IsOk()) {
 				m_controlDataArray.push_back({ controlClass->GetClassName(), controlImage, id++ });
 			}

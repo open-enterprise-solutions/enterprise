@@ -30,7 +30,7 @@ public:
 		: ibCtorControlTypeBase(className, classType, typeid(T), clsid) {
 	}
 
-	virtual wxIcon GetClassIcon() const {
+	virtual ibPicture GetClassIcon() const {
 		return T::GetIconGroup();
 	}
 

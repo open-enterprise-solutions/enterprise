@@ -36,9 +36,6 @@ public:
 	virtual bool Open();
 	virtual bool Open(const wxString& strConnection);
 	virtual bool Open(const wxString& strDSN, const wxString& strUser, const wxString& strPassword);
-#if wxUSE_GUI
-	virtual bool Open(const wxString& strConnection, bool bPromptForInfo, wxWindow* parent = nullptr);
-#endif
 
 	// close database  
 	virtual bool Close();
@@ -138,10 +135,6 @@ private:
 
 	wxString m_strConnection;
 
-#if wxUSE_GUI
-	bool m_bPrompt;
-	wxWindow* m_parentContext;
-#endif
 
 	bool m_bIsConnected;
 	ibInterfaceODBC* m_pInterface;

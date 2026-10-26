@@ -3,6 +3,7 @@
 
 #include "frontend/docView/docView.h"
 #include "mainFrame/metaTree/treeDataReport.h"
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 // The view using a standard wxTextCtrl to show its contents
 class ibReportEditView : public ibMetaView
@@ -36,7 +37,7 @@ public:
 		if (m_metaData != nullptr) {
 			ibValueMetaObject* metaObject = m_metaData->GetCommonMetaObject();
 			wxASSERT(metaObject);
-			return metaObject->GetIcon();
+			return ToIcon(metaObject->GetIcon());
 		}
 		return wxNullIcon;
 	}

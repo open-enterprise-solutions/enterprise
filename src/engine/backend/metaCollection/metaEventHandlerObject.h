@@ -81,8 +81,8 @@ public:
 	virtual ibClassID ResolveChild(const ibClassID&) const override { return 0; }
 
 	//support icons
-	virtual wxIcon GetIcon() const;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const;
+	static ibPicture GetIconGroup();
 
 	// designer context menu — "Open handler module", as a job's module is opened.
 	virtual bool CollectContextMenu(std::vector<ibMetaMenuItem>& items) override;

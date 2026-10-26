@@ -62,8 +62,8 @@ public:
 
 
 	// projected buttons inherit these LIVE from the command (not edited on the button)
-	wxBitmap GetPictureAsBitmap() const {
-		if (!m_propertyPicture->IsEmptyProperty()) return m_propertyPicture->GetValueAsBitmap();
+	ibPicture GetPicture() const {
+		if (!m_propertyPicture->IsEmptyProperty()) return m_propertyPicture->GetValueAsPicture();
 		return ibBackendPicture::CreatePicture(g_metaCommonMetadataCLSID);
 	}
 	// …and what the picture IS — what a server sends it by (ibBackendPicture::GetServerPicture).
@@ -111,8 +111,8 @@ public:
 	const ibValueMetaObjectModule* GetCommandModule() const { return m_propertyCommandModule->GetMetaObject(); }
 
 	// tree icon — the "run command" glyph (base64 PNG in metaCommandObject_res.cpp, like every metatype).
-	virtual wxIcon GetIcon() const;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const;
+	static ibPicture GetIconGroup();
 
 	// designer context menu — "Open command module" opens the handler module's code editor (metaCommandObjectMenu.cpp),
 	// exactly as a common module / object opens its module.

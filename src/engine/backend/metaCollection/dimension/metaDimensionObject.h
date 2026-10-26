@@ -26,8 +26,8 @@ class BACKEND_API ibValueMetaObjectDimension : public ibValueMetaObjectAttribute
 	const class ibValueMetaObjectChartOfAccounts* GetChartOfAccounts() const;
 
 	//support icons
-	virtual wxIcon GetIcon() const;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const;
+	static ibPicture GetIconGroup();
 
 	virtual void OnPropertyRefresh() override;
 	virtual bool OnDeleteMetaObject() override;

@@ -91,7 +91,7 @@ git submodule update --init --recursive
 
 The `--recursive` flag is required because wxWidgets itself contains submodules.
 
-**A CMake configure fetches what is missing.** wxWidgets, cpp-httplib, Mbed TLS, nlohmann/json, Asio and llhttp are
+**A CMake configure fetches what is missing.** wxWidgets, cpp-httplib, Mbed TLS, nlohmann/json, Asio, llhttp, LodePNG and NanoSVG are
 each checked before use, and one that is not there is fetched with `git submodule update --init --recursive` for
 that path (three attempts); only a tree with no git, or no network, stops with the command to run. A
 checkout that fetched less than the tree needs - an older workflow, a partial clone - still builds.
@@ -103,7 +103,10 @@ checkout that fetched less than the tree needs - an older workflow, a partial cl
 module asks the core for a cipher, a random byte, TLS. The core's network (`core/net`) has two more — Asio
 (`<asio.hpp>`, standalone, release `asio-1-36-0`, compiled once in `core/net/asio.cpp`; private to core — no header of
 `core/net` includes it) and llhttp (`<llhttp.h>`, branch `release/v9.3.0`, which
-carries the generated C sources; built as the static `llhttp` target, linked into core only).
+carries the generated C sources; built as the static `llhttp` target, linked into core only). The core's pictures
+(`core/graphics/picture.h`) have LodePNG (`<lodepng.h>`, one source, `LODEPNG_NO_COMPILE_DISK`; the static `lodepng`
+target, `core/graphics/lodepng/lodepng.vcxproj` in the solution, linked into core only). SVG is the core's too:
+NanoSVG (`<nanosvg/src/nanosvg.h>`, header only, compiled in `core/graphics/picture.cpp` — `ibPicture::FromSvg`).
 
 **nlohmann/json is the upstream repository, pinned to a release** (`src/3rdparty/nlohmann`). Updating it is
 moving the pin:
@@ -340,8 +343,8 @@ under the MSBuild solution. CI does not set the option, so it is not built there
 ### macOS-specific Notes
 
 - wxWidgets is built from the submodule via `add_subdirectory()` — no system wxWidgets needed
-- Backend links against `wx::base`, `wx::core`, `wx::xml`, `wx::propgrid`, `wx::aui`, `wx::stc` — not `wx::net`:
-  every socket is the core's (`core/net`)
+- Core, protocol, backend and frmserver link against `wx::base` (and the backend `wx::xml`) only, compiled with
+  `wxUSE_GUI=0` — a GUI type there is a compile error; not `wx::net` either: every socket is the core's (`core/net`)
 - Firebird embedded is not available via Homebrew; use SQLite for local development
 - App bundles (`designer.app`, `enterprise.app`) are created automatically by CMake, and this
   path is **exercised, not merely declared**: they have been built on a real Mac, with the

@@ -42,8 +42,8 @@ class BACKEND_API ibValueMetaObjectSessionParameter : public ibValueMetaObjectAt
 		: ibValueMetaObjectAttribute(valType) {}
 
 	//support icons
-	virtual wxIcon GetIcon() const;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const;
+	static ibPicture GetIconGroup();
 };
 
 //////////////////////////////////////////////////////////////////////

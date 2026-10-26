@@ -4,6 +4,7 @@
 #include "frontend/docView/docView.h"
 #include "backend/metadataConfiguration.h"
 #include "backend/debugger/debugDefs.h"
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 #include <wx/aui/aui.h>
 #include <wx/srchctrl.h>
@@ -143,7 +144,7 @@ protected:
 		wxASSERT(typeCtor);
 		wxImageList* imageList = m_treeCtrl->GetImageList();
 		wxASSERT(imageList);
-		const int imageIndex = imageList->Add(typeCtor->GetClassIcon());
+		const int imageIndex = imageList->Add(ToIcon(typeCtor->GetClassIcon()));
 		return m_treeCtrl->AddRoot(name.IsEmpty() ? typeCtor->GetClassName() : name,
 			imageIndex, imageIndex, nullptr);
 	}
@@ -154,7 +155,7 @@ protected:
 		wxASSERT(typeCtor);
 		wxImageList* imageList = m_treeCtrl->GetImageList();
 		wxASSERT(imageList);
-		const int imageIndex = imageList->Add(typeCtor->GetClassIcon());
+		const int imageIndex = imageList->Add(ToIcon(typeCtor->GetClassIcon()));
 		return m_treeCtrl->AppendItem(parent, name.IsEmpty() ? typeCtor->GetClassName() : name,
 			imageIndex, imageIndex, new ibTreeItemClsid(clsid));
 	}
@@ -163,7 +164,7 @@ protected:
 		const ibClassID& clsid, ibValueMetaObject* metaObject) const {
 		wxImageList* imageList = m_treeCtrl->GetImageList();
 		wxASSERT(imageList);
-		const int imageIndex = imageList->Add(metaObject->GetIcon());
+		const int imageIndex = imageList->Add(ToIcon(metaObject->GetIcon()));
 		return m_treeCtrl->AppendItem(parent, metaObject->GetName(),
 			imageIndex, imageIndex, new ibTreeItemClsidObject(clsid, metaObject));
 	}
@@ -171,7 +172,7 @@ protected:
 	wxTreeItemId AppendItem(const wxTreeItemId& parent, ibValueMetaObject* metaObject) const {
 		wxImageList* imageList = m_treeCtrl->GetImageList();
 		wxASSERT(imageList);
-		const int imageIndex = imageList->Add(metaObject->GetIcon());
+		const int imageIndex = imageList->Add(ToIcon(metaObject->GetIcon()));
 		return m_treeCtrl->AppendItem(parent, metaObject->GetName(),
 			imageIndex, imageIndex, new ibTreeItemObject(metaObject));
 	}

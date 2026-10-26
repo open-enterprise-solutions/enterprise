@@ -166,6 +166,9 @@
     <ClCompile Include="win\ctrls\treelistctrl.cpp">
       <Filter>win\ctrls</Filter>
     </ClCompile>
+    <ClCompile Include="win\picture.cpp">
+      <Filter>win</Filter>
+    </ClCompile>
     <ClCompile Include="win\dlgs\formSelector\formSelector.cpp">
       <Filter>win\dlgs\formSelector</Filter>
     </ClCompile>
@@ -1693,6 +1696,9 @@
     </ClInclude>
     <ClInclude Include="win\ctrls\charts\wxtimeserieschartoptions.h">
       <Filter>win\ctrls\charts</Filter>
+    </ClInclude>
+    <ClInclude Include="win\picture.h">
+      <Filter>win</Filter>
     </ClInclude>
     <ClInclude Include="win\typeconv.h">
       <Filter>win</Filter>

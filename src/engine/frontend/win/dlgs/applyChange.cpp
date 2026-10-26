@@ -1,4 +1,5 @@
 #include "applyChange.h"
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 ibDialogApplyChange::ibDialogApplyChange(const ibRestructureInfo& info, wxWindow* parent) :
 	wxDialog(parent, wxID_ANY, _("Design changes"), wxDefaultPosition, wxSize(500, 200), wxDEFAULT_DIALOG_STYLE)
@@ -57,7 +58,7 @@ ibDialogApplyChange::ibDialogApplyChange(const ibRestructureInfo& info, wxWindow
 	wxDialog::Centre(wxBOTH);
 
 	wxIcon dlg_icon;
-	dlg_icon.CopyFromBitmap(ibBackendPicture::GetPicture(g_picStructureCLSID));
+	dlg_icon.CopyFromBitmap(ToBitmap(ibBackendPicture::GetPicture(g_picStructureCLSID)));
 
 	wxDialog::SetIcon(dlg_icon);
 	wxDialog::SetFocus();

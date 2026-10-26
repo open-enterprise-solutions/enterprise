@@ -1185,9 +1185,9 @@ void ibDebuggerClient::ibDebuggerClientConnection::RecvCommand(void* pointer, un
 		watchData.SetBridgeId(ibGuid(strAsker));
 		for (unsigned int i = 0; i < countExpression; i++) {
 #if _USE_64_BIT_POINT_IN_DEBUGGER == 1
-			const wxTreeItemId& item = reinterpret_cast<void*>(commandReader.r_u64());
+			const std::uint64_t item = commandReader.r_u64();
 #else 
-			const wxTreeItemId& item = reinterpret_cast<void*>(commandReader.r_u32());
+			const std::uint64_t item = commandReader.r_u32();
 #endif 
 			wxString strExpression, strValue, strType;
 
@@ -1210,9 +1210,9 @@ void ibDebuggerClient::ibDebuggerClientConnection::RecvCommand(void* pointer, un
 	else if (commandFromServer == CommandId_ExpandExpression) {
 		wxString strAsker; commandReader.r_stringZ(strAsker);
 #if _USE_64_BIT_POINT_IN_DEBUGGER == 1
-		ibWatchWindowData watchData(wxTreeItemId(reinterpret_cast<void*>(commandReader.r_u64())));
+		ibWatchWindowData watchData(commandReader.r_u64());
 #else
-		ibWatchWindowData watchData(wxTreeItemId(reinterpret_cast<void*>(commandReader.r_u32())));
+		ibWatchWindowData watchData(commandReader.r_u32());
 #endif
 		watchData.SetBridgeId(ibGuid(strAsker));
 

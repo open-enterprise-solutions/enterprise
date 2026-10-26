@@ -14,6 +14,7 @@
 #include <functional>                            // std::function — the recursive section walk
 #include "frontend/visualView/ctrl/tableBox.h"  // g_controlTableBoxCLSID — the form's tables (their own commands)
 #include "backend/backend_picture.h"            // ibBackendPicture::CreatePicture — an action-command's own picture
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 #include "backend/srcDataObject.h"              // ibSourceDataObject / ibSourceExplorer + IsReference — the form's data types (parameterized-command filter)
 #include "core/description/typeDescription.h"            // ibTypeDescription::GetClsidList — a command's parameter type
 #include "backend/tabularModel.h"               // ibValueModel::GetModelComposer — the setting a quick filter edits
@@ -160,10 +161,10 @@ std::vector<ibCommandSourceEntry> GatherFormCommands(ibValueForm* form)
 	// The COMMAND determines its picture — from its OWN Picture property. No picture on the command -> NO icon
 	// (text-only projection); we do NOT force the metatype glyph. A table action bakes its own picture (section 2).
 	auto commandIcon = [](ibValueMetaObjectCommand* cmd) -> wxBitmap {
-		return cmd->IsEmptyPicture() ? wxNullBitmap : cmd->GetPictureAsBitmap();
+		return cmd->IsEmptyPicture() ? wxNullBitmap : ToBitmap(cmd->GetPicture());
 	};
 	auto actionIcon = [metaData](const ibPictureDescription& pic) -> wxBitmap {
-		return pic.IsEmptyPicture() ? wxNullBitmap : ibBackendPicture::CreatePicture(pic, metaData);
+		return pic.IsEmptyPicture() ? wxNullBitmap : ToBitmap(ibBackendPicture::CreatePicture(pic, metaData));
 	};
 
 	const std::vector<wxString> sections = GetCommandSections();
@@ -181,7 +182,7 @@ std::vector<ibCommandSourceEntry> GatherFormCommands(ibValueForm* form)
 		if (fc == nullptr)
 			continue;
 		const ibCommandDescription desc(fc->GetId());   // 1-hop [id] — the form command's own id
-		const wxBitmap icon = fc->IsEmptyPicture() ? wxNullBitmap : fc->GetPictureBitmap();
+		const wxBitmap icon = fc->IsEmptyPicture() ? wxNullBitmap : ToBitmap(fc->GetPicture());
 		out.push_back({ sForm, fc->GetName(), desc, icon, wxEmptyString, fc->GetFullName() });   // tree: name; cell: Form.<name>
 	}
 
@@ -269,7 +270,7 @@ std::vector<ibCommandSourceEntry> GatherFormCommands(ibValueForm* form)
 				wxString name = item->GetName();
 				if (groupType == ibInterfaceCommandType_Create)
 					name += wxT(": ") + wxString(_("Create"));
-				out.push_back({ section->GetName(), name, desc, wxBitmap(item->GetIcon()), groupLabel, name });
+				out.push_back({ section->GetName(), name, desc, ToBitmap(item->GetIcon()), groupLabel, name });
 			}
 		};
 		const std::vector<ibValueMetaObjectCommandGroup*> declaredGroups =
@@ -465,7 +466,7 @@ const std::vector<ibCommandEntry>& ibValueCommandBar::BuildCommands()
 				wxString caption = cmd->GetSynonym();
 				if (caption.IsEmpty()) caption = cmd->GetName();
 				const bool modifies = cmd->GetModifiesData();
-				const wxBitmap icon = wxBitmap(cmd->GetIcon());   // the command determines its picture
+				const wxBitmap icon = ToBitmap(cmd->GetIcon());   // the command determines its picture
 				ownCommands.emplace_back(cmdId++, caption, ibPictureDescription(),
 					ibRepresentation_PictureAndText, !(viewOnly && modifies), item, icon);
 			}
@@ -492,7 +493,7 @@ const std::vector<ibCommandEntry>& ibValueCommandBar::BuildCommands()
 			for (const auto& g : groups) {
 				const ibValueMetaObjectCommandGroup* group = g.first;
 				ibCommandEntry entry(cmdId++, group->GetSynonym(), ibPictureDescription(), ibRepresentation_PictureAndText,
-					true, nullptr, group->IsEmptyPicture() ? wxNullBitmap : group->GetPictureAsBitmap());
+					true, nullptr, group->IsEmptyPicture() ? wxNullBitmap : ToBitmap(group->GetPicture()));
 				entry.kind = ibCommandEntryKind_Group;
 				entry.members = g.second;
 				entry.tooltip = group->GetToolTip();
@@ -866,7 +867,7 @@ static bool FillCommandBarToolBar(ibAuiToolBar* bar, ibValueCommandBar* cbar, ib
 		}
 		// The command's own live bitmap (resolved in BuildCommands) wins; fall back to a picture description.
 		wxBitmap bmp = c.bitmap.IsOk() ? c.bitmap
-			: (c.picture.IsEmptyPicture() ? wxNullBitmap : ibBackendPicture::CreatePicture(c.picture, metaData));
+			: (c.picture.IsEmptyPicture() ? wxNullBitmap : ToBitmap(ibBackendPicture::CreatePicture(c.picture, metaData)));
 		wxString label = c.caption;
 		if (c.representation == ibRepresentation_Picture) label = wxEmptyString;   // icon only
 		else if (c.representation == ibRepresentation_Text) bmp = wxNullBitmap;    // text only

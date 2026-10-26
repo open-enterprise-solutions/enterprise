@@ -11,14 +11,14 @@
 #include <wx/settings.h>
 #include <wx/sizer.h>
 
-#include "backend/backend_picture.h"
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 #include "res/visualResource.h"   // the caption's window buttons
 
 wxDEFINE_EVENT(wxEVT_INNER_FRAME_RESIZED, wxCommandEvent);
 
 static wxBitmap FrameButton(const wxString& png)
 {
-	return ibBackendPicture::GetBitmapFromBase64(png, wxSize(16, 16));
+	return ToBitmap(ibPicture::FromBase64(png, ibSize(16, 16)));
 }
 
 ibInnerFrame::ibInnerFrame(wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSize& size, long style)

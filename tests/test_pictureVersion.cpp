@@ -11,9 +11,6 @@
 
 #include <cstring>
 
-#include <wx/image.h>
-#include <wx/mstream.h>
-
 #include "backend/backend_picture.h"
 #include "backend/metadataConfiguration.h"
 #include "backend/metaCollection/metaObject.h"
@@ -153,11 +150,12 @@ TEST(ibBackendPicture, SendPicture_BackendPicture_NumberAlone)
 TEST(ibBackendPicture, SendPicture_FilePicture_ItsPngBytes)
 {
 	// A picture held as a file's bytes has no id of its own: it goes as its PNG — the bytes themselves, no text of them.
-	wxImage drawn(16, 16);
-	wxMemoryOutputStream file;
-	ASSERT_TRUE(drawn.SaveFile(file, wxBITMAP_TYPE_PNG));
-	std::string bytes(file.GetLength(), '\0');
-	file.CopyTo(bytes.data(), bytes.size());
+	const ibPicture drawn = ibPicture::FromSvg(
+		wxT("<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16'><rect width='16' height='16'/></svg>"),
+		ibSize(16, 16));
+	ASSERT_TRUE(drawn.IsOk());
+	const ibMemoryBuffer& file = drawn.GetData();
+	const std::string bytes(static_cast<const char*>(file.GetData()), file.GetDataLen());
 
 	const ibDataValue sent = ibBackendPicture::SendPicture(ibPictureDescription(Image(bytes, 16, 16)), nullptr);
 	ASSERT_EQ(sent.Kind(), ibDataKind::Binary);

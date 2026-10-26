@@ -2,6 +2,7 @@
 
 #include "backend/propertyManager/property/variant/variantSource.h"   // ibVariantDataSource + ibBackendFormAttribute (via backend_type.h)
 #include "backend/system/value/valueTable.h"
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 #include "frontend/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
 #include "frontend/propertyManager/property/private/propertyRegistry.h"
@@ -260,8 +261,8 @@ wxPGEditorDialogAdapter* ibPGDataSourceProperty::GetEditorDialog() const
 
 		wxImageList* GetSourceImageList() const {
 			wxImageList* list = new wxImageList(icon_size, icon_size);
-			list->Add(ibValue::GetIconGroup());
-			list->Add(ibValueModelTable::GetIconGroup());
+			list->Add(ToIcon(ibValue::GetIconGroup()));
+			list->Add(ToIcon(ibValueModelTable::GetIconGroup()));
 			return list;
 		}
 

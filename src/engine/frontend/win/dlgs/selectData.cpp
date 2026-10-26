@@ -1,4 +1,5 @@
 #include "selectData.h"
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 #include "backend/metaData.h"
 #include "frontend/mainFrame/mainFrame.h"
@@ -48,7 +49,7 @@ ibDialogSelectDataType::ibDialogSelectDataType(const ibMetaData* metaData, const
 	for (const auto clsid : array) {
 		if (const ibCtorAbstractType* typeCtor = metaData->GetAvailableCtor(clsid)) {
 			wxImageList* imageList = m_listData->GetImageList(wxIMAGE_LIST_SMALL);
-			long lSelectedItem = m_listData->InsertItem(m_listData->GetItemCount(), typeCtor->GetClassName(), imageList->Add(typeCtor->GetClassIcon()));
+			long lSelectedItem = m_listData->InsertItem(m_listData->GetItemCount(), typeCtor->GetClassName(), imageList->Add(ToIcon(typeCtor->GetClassIcon())));
 			m_listTypeClass.insert_or_assign(lSelectedItem, clsid);
 		}
 	}

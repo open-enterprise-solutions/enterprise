@@ -161,6 +161,9 @@
     <ClCompile Include="graphics\geometry.cpp">
       <Filter>graphics</Filter>
     </ClCompile>
+    <ClCompile Include="graphics\picture.cpp">
+      <Filter>graphics</Filter>
+    </ClCompile>
     <ClCompile Include="guid.cpp" />
     <ClCompile Include="job\jobScheduleRules.cpp">
       <Filter>job</Filter>

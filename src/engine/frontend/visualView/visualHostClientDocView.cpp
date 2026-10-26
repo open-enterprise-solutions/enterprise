@@ -1,4 +1,5 @@
 #include "visualHostClient.h"
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 #include "backend/metaCollection/partial/commonObject.h"
 
@@ -47,14 +48,14 @@ bool ibFormVisualDocument::OnCreate(const wxString& path, long flags)
 	if (sourceObject != nullptr && !IsVisualDemonstrationDoc()) {
 		const ibValueMetaObjectGenericData* genericObject = sourceObject->GetSourceMetaObject();
 		if (genericObject != nullptr) {
-			ibFormVisualDocument::SetIcon(genericObject->GetIcon());
+			ibFormVisualDocument::SetIcon(ToIcon(genericObject->GetIcon()));
 			ibFormVisualDocument::SetFilename(genericObject->GetFileName());
 		}
 	}
 	else {
 		const ibValueMetaObjectFormBase* creator = m_valueForm->GetFormMetaObject();
 		if (creator != nullptr) {
-			ibFormVisualDocument::SetIcon(creator->GetIcon());
+			ibFormVisualDocument::SetIcon(ToIcon(creator->GetIcon()));
 			ibFormVisualDocument::SetFilename(creator->GetFileName());
 		}
 	}

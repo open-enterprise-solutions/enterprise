@@ -16,7 +16,7 @@ wxString ibVariantDataExternalPicture::GetPictureFileName() const
 	return m_pictureExternalFile.m_img_name;
 }
 
-wxBitmap ibVariantDataExternalPicture::GetPictureBitmap(const wxSize& size) const
+ibPicture ibVariantDataExternalPicture::GetPicture(const ibSize& size) const
 {
 	return ibBackendPicture::CreatePicture(m_pictureExternalFile, size);
 }
@@ -33,7 +33,7 @@ wxString ibVariantDataPicture::MakeString() const
 	return wxEmptyString;
 }
 
-wxBitmap ibVariantDataPicture::GetPictureBitmap(const wxSize& size) const
+ibPicture ibVariantDataPicture::GetPicture(const ibSize& size) const
 {
 	return ibBackendPicture::CreatePicture(m_pictureDesc,
 		m_ownerProperty != nullptr ? m_ownerProperty->GetMetaData() : nullptr, size);

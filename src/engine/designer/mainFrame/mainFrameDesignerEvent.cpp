@@ -5,6 +5,7 @@
 
 #include "mainFrameDesigner.h"
 #include "core/fileKind.h"   // extensions live in one table, not at each call site
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 #include "backend/appData.h"
 #include "backend/backend_exception.h"
@@ -220,10 +221,14 @@ static void LaunchWebDebug(wxWindow* parent, bool withDebug)
 	// withDebug=true -> the server starts with --debug so its debugServer
 	// comes up; the designer's debugClient then finds it on one of
 	// ibPort::Debugger, out-of-band of the manifest.
+	wxString page;
 	if (appData->RunApplication(wxT("webserver"),
-			/*searchDebug=*/withDebug, /*useManifest=*/true) == 0) {
+			/*searchDebug=*/withDebug, /*useManifest=*/true, &page) == 0) {
 		wxMessageBox(_("Failed to start webserver"),
 			wxTheApp->GetAppDisplayName(), wxOK | wxICON_ERROR, parent);
+	}
+	else if (!page.IsEmpty()) {
+		wxLaunchDefaultBrowser(page);
 	}
 }
 
@@ -868,7 +873,7 @@ void ibFrontendMainFrameDesigner::OnMcpAssistant(wxCommandEvent& WXUNUSED(event)
 		return;
 
 	doc->SetTitle(_("Assistant"));
-	doc->SetIcon(ibBackendPicture::GetPictureAsIcon(g_picAssistantCLSID));
+	doc->SetIcon(ToIcon(ibBackendPicture::GetPicture(g_picAssistantCLSID)));
 	docManager->AddDocument(doc);
 
 	if (!doc->OnCreate(wxEmptyString, 0))
@@ -904,7 +909,7 @@ void ibFrontendMainFrameDesigner::OnAuditLog(wxCommandEvent& event)
 		ibAuditLogDocument* doc = docManager->CreateDocument<ibAuditLogDocument>();
 		if (doc != nullptr) {
 			doc->SetTitle(_("Registration journal"));
-			doc->SetIcon(ibBackendPicture::GetPictureAsIcon(g_picUserActiveCLSID));
+			doc->SetIcon(ToIcon(ibBackendPicture::GetPicture(g_picUserActiveCLSID)));
 			docManager->AddDocument(doc);
 			if (!doc->OnCreate(wxEmptyString, 0))
 				doc->DeleteAllViews();

@@ -199,6 +199,7 @@ set(WFRONTEND_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/visualView/ctrl/staticboxsizer_res.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/visualView/ctrl/wrapsizer_res.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/web/webStubs.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/win/picture.cpp
 )
 
 add_library(wfrontend SHARED ${WFRONTEND_SOURCES})

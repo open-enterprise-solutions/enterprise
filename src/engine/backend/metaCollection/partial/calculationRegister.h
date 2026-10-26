@@ -290,8 +290,8 @@ public:
 	std::vector<const ibValueMetaObjectCalculationRegister*> GetRelatedRegisters() const;
 
 	//support icons
-	virtual wxIcon GetIcon() const;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const;
+	static ibPicture GetIconGroup();
 
 	//events:
 	virtual bool OnCreateMetaObject(ibMetaData* metaData, int flags);
@@ -525,8 +525,8 @@ class ibValueMetaObjectCalculationRegister::ibValueMetaObjectRecalculation : pub
 public:
 
 	//support icons
-	virtual wxIcon GetIcon() const override;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const override;
+	static ibPicture GetIconGroup();
 
 	// Its dimensions — what it was saved with, and what has to load under it.
 	virtual ibClassID ResolveChild(const ibClassID& clsid) const override {

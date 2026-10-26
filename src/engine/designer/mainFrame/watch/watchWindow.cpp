@@ -21,6 +21,8 @@ static unsigned long long GetWatchId(const wxTreeItemId& item) { return reinterp
 #else
 static unsigned int GetWatchId(const wxTreeItemId& item) { return reinterpret_cast<unsigned int>(item.GetID()); }
 #endif
+// …and the row an answer names by it.
+static wxTreeItemId GetWatchItem(std::uint64_t id) { return wxTreeItemId(reinterpret_cast<void*>(static_cast<std::uintptr_t>(id))); }
 
 // Text dropped on the pane — a selection dragged from the code — becomes a watched expression.
 class ibWatchDropTarget : public wxTextDropTarget
@@ -89,7 +91,7 @@ void ibWatchWindow::SetVariable(const ibWatchWindowData& watchData)
 	for (unsigned int i = 0; i < watchData.GetWatchCount(); ++i) {
 		// The id is a row of THIS tree: the bridge lets through only the answers to its own
 		// questions (ibDebuggerClientBridgeDesigner::OnSetVariable).
-		const wxTreeItemId& item = watchData.GetItem(i);
+		const wxTreeItemId item = GetWatchItem(watchData.GetItem(i));
 		if (!item.IsOk())
 			continue;
 
@@ -108,7 +110,7 @@ void ibWatchWindow::SetVariable(const ibWatchWindowData& watchData)
 
 void ibWatchWindow::SetExpanded(const ibWatchWindowData& watchData)
 {
-	const wxTreeItemId& item = watchData.GetItem();
+	const wxTreeItemId item = GetWatchItem(watchData.GetItem());
 	if (!item.IsOk())
 		return;
 

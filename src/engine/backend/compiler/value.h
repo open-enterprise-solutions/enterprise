@@ -1688,8 +1688,8 @@ public:
 	ibValue* GetThis() { return this; }
 
 	//support icons
-	virtual wxIcon GetIcon() const;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const;
+	static ibPicture GetIconGroup();
 
 	virtual bool SetAt(const ibValue& varKeyValue, const ibValue& varValue);
 	virtual bool GetAt(const ibValue& varKeyValue, ibValue& pvarValue);

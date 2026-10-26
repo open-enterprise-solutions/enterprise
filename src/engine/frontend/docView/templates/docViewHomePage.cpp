@@ -4,6 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "docViewHomePage.h"
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 #include <wx/splitter.h>
 #include <wx/panel.h>
@@ -80,7 +81,7 @@ ibHomePageDocument* ibHomePageDocument::ShowHomePage()
 	}
 
 	homeDoc->SetTitle(_("Home page"));
-	homeDoc->SetIcon(ibBackendPicture::GetPictureAsIcon(g_picHomePageCLSID));
+	homeDoc->SetIcon(ToIcon(ibBackendPicture::GetPicture(g_picHomePageCLSID)));
 	documentManager->AddDocument(homeDoc);
 
 	if (!homeDoc->OnCreate(wxEmptyString, 0)) {
@@ -190,12 +191,12 @@ void ibHomePageView::BuildCellHeader(wxWindow* pane, wxSizer* paneSizer,
 	wxIcon headerIcon;
 	if (metaForm != nullptr) {
 		const ibValueMetaObject* const owner = metaForm->GetParent();
-		headerIcon = owner != nullptr ? owner->GetIcon() : metaForm->GetIcon();
+		headerIcon = owner != nullptr ? ToIcon(owner->GetIcon()) : ToIcon(metaForm->GetIcon());
 		if (!headerIcon.IsOk())
-			headerIcon = metaForm->GetIcon();
+			headerIcon = ToIcon(metaForm->GetIcon());
 	}
 	if (!headerIcon.IsOk())
-		headerIcon = ibBackendPicture::GetPictureAsIcon(g_picHomePageCLSID);
+		headerIcon = ToIcon(ibBackendPicture::GetPicture(g_picHomePageCLSID));
 
 	if (headerIcon.IsOk()) {
 		wxBitmap iconBitmap;

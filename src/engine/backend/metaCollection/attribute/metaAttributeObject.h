@@ -257,8 +257,8 @@ class BACKEND_API ibValueMetaObjectAttribute : public ibValueMetaObjectAttribute
 	virtual bool IsFunctionalOptionAllowed() const override { return true; }
 
 	//support icons
-	virtual wxIcon GetIcon() const;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const;
+	static ibPicture GetIconGroup();
 
 	//check if attribute is fill
 	virtual bool FillCheck() const { return m_propertyFillCheck->GetValueAsBoolean() && GetClsidCount() > 0; }

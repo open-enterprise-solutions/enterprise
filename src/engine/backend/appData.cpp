@@ -1007,7 +1007,7 @@ bool ibApplicationInstance::DestroyAppDataEnv()
 #include "core/startProcess.h"   // ibStartProcess — a launch is asked for from a fiber too (app_run on the server)
 
 #pragma region execute 
-long ibApplicationInstance::RunApplication(const wxString& strAppName, bool searchDebug, bool useManifest) const
+long ibApplicationInstance::RunApplication(const wxString& strAppName, bool searchDebug, bool useManifest, wxString* page) const
 {
 	// Hand the child process the raw password captured at login, not the stored hash.
 	// Otherwise enterprise.exe authenticates with the hash itself — which only worked
@@ -1024,7 +1024,7 @@ long ibApplicationInstance::RunApplication(const wxString& strAppName, bool sear
 		userName    = s->GetUserInfo().m_strUserName;
 		rawPassword = s->GetSessionRawPassword();
 	}
-	const long started = RunApplication(strAppName, userName, rawPassword, searchDebug, useManifest);
+	const long started = RunApplication(strAppName, userName, rawPassword, searchDebug, useManifest, page);
 	// The session keeps the password. A second launch of this same session
 	// still has it; only the copy on this stack is overwritten.
 	for (size_t i = 0; i < rawPassword.length(); ++i)
@@ -1033,7 +1033,7 @@ long ibApplicationInstance::RunApplication(const wxString& strAppName, bool sear
 	return started;
 }
 
-long ibApplicationInstance::RunApplication(const wxString& strAppName, const wxString& strUserName, const wxString& strUserPassword, bool searchDebug, bool useManifest) const
+long ibApplicationInstance::RunApplication(const wxString& strAppName, const wxString& strUserName, const wxString& strUserPassword, bool searchDebug, bool useManifest, wxString* page) const
 {
 	// All OES binaries spawn with unified `--flag=value` syntax: one long-name
 	// set (server/dbport/db/user/file/ibuser/locale/debug). Passwords go on
@@ -1091,12 +1091,12 @@ long ibApplicationInstance::RunApplication(const wxString& strAppName, const wxS
 			executeCmd += wxT(" --debug");
 		add(executeCmd, wxT("locale"), host != nullptr ? host->GetLocaleName() : wxString());
 
-		// The window keeps painting while the base opens: the wait is on this thread, so the browser is launched
-		// before a caller closing right after it tears the application down.
+		// The wait is the core's (std::this_thread::sleep_for between its looks, up to five seconds). The page is the
+		// caller's to open — a browser is a window's, and the engine draws none.
 		wxString url;
-		const long pid = ibStartWebServer(executeCmd, url, []() { wxYieldIfNeeded(); });
-		if (!url.IsEmpty())
-			wxLaunchDefaultBrowser(url);
+		const long pid = ibStartWebServer(executeCmd, url);
+		if (page != nullptr)
+			*page = url;
 
 		// Web debug attach: the server is up with --debug, its in-process
 		// ibDebuggerServer is listening on one of ibPort::Debugger

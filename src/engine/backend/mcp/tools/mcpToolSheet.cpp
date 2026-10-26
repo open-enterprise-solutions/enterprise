@@ -31,7 +31,6 @@
 #include "backend/sheetFormat/sheetFormat.h"   // a format registers itself and says what it reads
 #include "core/description/spreadsheetDescription.h"
 #include "core/fileSystem.h"   // ibFileExists
-#include <wx/colour.h>   // wxColour::Set — a colour from its name
 
 namespace {
 
@@ -1053,12 +1052,10 @@ public:
 		// A name, `#rrggbb` or `R,G,B` — what the arguments promise, read the way the report's
 		// conditional appearance reads a colour; anything else is refused, not painted black.
 		const auto colourOf = [&refusal](const wxString& word, ibColour& colour) {
-			wxColour parsed;
-			if (!parsed.Set(word.Find(wxT(',')) != wxNOT_FOUND ? wxT("rgb(") + word + wxT(")") : word) || !parsed.IsOk()) {
+			if (!colour.FromString(word)) {
 				refusal = wxString::Format(ibMcpText("'%s' is not a colour - write it `R,G,B` (`255,235,156`), `#FFEB9C` or a name."), word);
 				return false;
 			}
-			colour = ibColour(parsed.Red(), parsed.Green(), parsed.Blue());
 			return true;
 		};
 

@@ -5,34 +5,29 @@
 
 #include "core/description/pictureDescription.h"
 #include "core/picturePredefined.h"
+#include "core/pictureRegistry.h"    // ibPictureEntry — a picture by its number
 
 #include "backend/backend_core.h"
 
 class ibDataValue;   // core/serialize/dataBuilder.h — a picture as an answer names it
 
-struct ibBackendPictureEntry {
-	wxString m_name;
-	wxBitmap m_data;
-	ibPictureID m_id;
-};
-
+// ⭐ THE SERVER'S PICTURES ARE DATA — ibPicture, a PNG's bytes, read and scaled by the core; no wx image here. A window
+// makes its own from one (the desktop: frontend/win/picture.h).
 class BACKEND_API ibBackendPicture {
 	ibBackendPicture() = delete;
 public:
 
-	static void RegisterPicture(const wxString name, const ibPictureID& id, const wxBitmap& bitmap);
-
+	// A FILE'S PICTURE — its PNG, as it is: the server reads no other kind. Refused: no file, or no PNG in it.
 	static bool LoadFromFile(const wxString& strFileName, ibExternalPictureDescription& pictureDesc);
 	static bool LoadFromFile(const wxString& strFileName, ibPictureDescription& pictureDesc);
 
-	static wxBitmap CreatePicture(const ibExternalPictureDescription& pictureDesc, const wxSize& size = wxSize(16, 16));
-	static wxBitmap CreatePicture(const ibPictureDescription& pictureDesc,
-		const class ibMetaData* metaData = nullptr, const wxSize& size = wxSize(16, 16));
+	static ibPicture CreatePicture(const ibExternalPictureDescription& pictureDesc, const ibSize& size = ibSize(16, 16));
+	static ibPicture CreatePicture(const ibPictureDescription& pictureDesc,
+		const class ibMetaData* metaData = nullptr, const ibSize& size = ibSize(16, 16));
 
-	// THE PICTURE A SERVER SENDS, by its description — never a wx image on a worker thread. A backend one (a registered
-	// picture, a class's icon) is made once and kept here; a type of the configuration's own (a catalog's reference),
-	// which no global class knows, is its constructor's icon in the configuration given; a configuration's picture and
-	// a file's are made from what they keep.
+	// THE PICTURE A SERVER SENDS, by its description. A backend one (a registered picture, a class's icon) is made once
+	// and kept here; a type of the configuration's own (a catalog's reference), which no global class knows, is its
+	// constructor's icon in the configuration given; a configuration's picture and a file's are made from what they keep.
 	static ibPicture GetServerPicture(const ibPictureDescription& pictureDesc, const class ibMetaData* metaData = nullptr);
 
 	// ⭐ A PICTURE BY ITS ID — all an answer names a picture by: a backend picture's number, a configuration picture's
@@ -46,27 +41,10 @@ public:
 
 #pragma region __picture_factory_h__
 	static bool IsRegisterPicture(const ibPictureID& id);
-	static wxBitmap GetPicture(const ibPictureID& id);
-	static wxIcon GetPictureAsIcon(const ibPictureID& id);
-	// …and by its description: a backend one by its number, as above; a configuration's and a file's made from what they keep.
-	static wxIcon GetPictureAsIcon(const ibPictureDescription& pictureDesc, const class ibMetaData* metaData = nullptr);
-	static std::vector<ibBackendPictureEntry> GetArrayPicture();
-#pragma endregion 
-
-#pragma region __picture_conv_h__
-	// A MASTER IN THE SOURCE — a PNG written as Base-64 text in a `_res.cpp`, read at the size it is shown.
-	static wxImage GetImageFromBase64(const wxString& src, const wxSize& size = wxDefaultSize);
-	static wxBitmap GetBitmapFromBase64(const wxString& src, const wxSize& size = wxDefaultSize);
-	static wxIcon GetIconFromBase64(const wxString& src, const wxSize& size = wxDefaultSize);
-
-	// A PICTURE AS DATA (core/graphics/picture.h) and a wx one: from an image made just now, shared with nobody —
-	// a master in the source is read at the size it is shown first (GetImageFromBase64); and for a window, made
-	// anew every time, its own, at the size asked (none asked: as it is).
-	static ibPicture FromImage(const wxImage& image);
-	static wxBitmap ToBitmap(const ibPicture& picture, const wxSize& size = wxDefaultSize);
-	static wxIcon ToIcon(const ibPicture& picture, const wxSize& size = wxDefaultSize);
-	// …and its PNG as Base-64 text — for a page that takes a picture in a data URI (the desktop's web view), never the wire.
-	static ibString CreateBase64Image(const wxImage& image);
+	// A backend picture by its number, at 16: a registered one scaled from its master, else a class's icon.
+	static ibPicture GetPicture(const ibPictureID& id);
+	// …and every one of them: the registered ones, the metadata's classes' and the controls'.
+	static std::vector<ibPictureEntry> GetArrayPicture();
 #pragma endregion
 };
 
@@ -76,17 +54,5 @@ class BACKEND_API ibBackendPictureDescriptionMemory : public ibPictureDescriptio
 public:
 	static bool ReadNode(const ibDataValue& value, ibPictureDescription& pictureDesc);
 };
-
-// Initialize with XPM data
-extern BACKEND_API bool RegisterBackendPicture(const wxString name,
-	const ibPictureID& id, const char* const* data);
-
-// Initialize with Base-64 + PNG data
-extern BACKEND_API bool RegisterBackendPicture(const wxString name,
-	const ibPictureID& id, const wxString& base64);
-
-// Initialize with BMP
-extern BACKEND_API bool RegisterBackendPicture(const wxString name,
-	const ibPictureID& id, const wxBitmap& bitmap);
 
 #endif

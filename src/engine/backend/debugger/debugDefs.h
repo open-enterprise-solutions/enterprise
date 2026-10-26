@@ -262,7 +262,7 @@ public:
 
 /////////////////////////////////////////////////////////////////////////////////////////////
 
-#include <wx/treectrl.h>
+#include <cstdint>   // std::uint64_t — a watch's row, the number the wire carries
 
 struct ibLocalWindowData {
 
@@ -310,17 +310,19 @@ public:
 
 struct ibWatchWindowData {
 
-	wxTreeItemId m_item;
+	// The row asked about, numbered by the asker (a pointer of its tree) and said back by the runtime — a number
+	// nothing on this side takes apart.
+	std::uint64_t m_item;
 
 	struct ibWatchWindowItem {
 
-		wxTreeItemId m_item;
+		std::uint64_t m_item;
 		wxString	 m_name;
 		wxString	 m_value;
 		wxString	 m_type;
 		bool		 m_hasAttributes;
 
-		ibWatchWindowItem(const wxString& n, const wxString& v, const wxString& t, bool a, const wxTreeItemId& i) :
+		ibWatchWindowItem(const wxString& n, const wxString& v, const wxString& t, bool a, std::uint64_t i) :
 			m_item(i), m_name(n), m_value(v), m_type(t), m_hasAttributes(a) {
 		}
 	};
@@ -339,12 +341,12 @@ struct ibWatchWindowData {
 
 public:
 
-	ibWatchWindowData(const wxTreeItemId& item = nullptr) : m_item(item) {}
+	ibWatchWindowData(std::uint64_t item = 0) : m_item(item) {}
 
 	const wxString& GetBridgeId() const { return m_bridgeId; }
 	void SetBridgeId(const wxString& id) { m_bridgeId = id; }
 
-	wxTreeItemId GetItem() const {
+	std::uint64_t GetItem() const {
 		return m_item;
 	}
 
@@ -352,11 +354,11 @@ public:
 		m_listExpression.emplace_back(name, value, type, hasAttributes, m_item);
 	}
 
-	void AddWatch(const wxString& name, const wxString& value, const wxString& type, bool hasAttributes, const wxTreeItemId& item) {
+	void AddWatch(const wxString& name, const wxString& value, const wxString& type, bool hasAttributes, std::uint64_t item) {
 		m_listExpression.emplace_back(name, value, type, hasAttributes, item);
 	}
 
-	wxTreeItemId GetItem(unsigned int idx) const {
+	std::uint64_t GetItem(unsigned int idx) const {
 		return m_listExpression[idx].m_item;
 	}
 

@@ -268,16 +268,19 @@ public:
 	// emitted in unified `--flag=value` form which every bin's parser
 	// accepts.
 	// useManifest=true starts the web server (ibStartWebServer): it
-	// publishes this file base and the default browser opens its page.
+	// publishes this file base, and `page` is given its address - the caller
+	// opens it, a browser being a window's (the engine opens none).
 	// Returns pid.
 	long RunApplication(const wxString& strAppName,
 		bool searchDebug = true,
-		bool useManifest = false) const;
+		bool useManifest = false,
+		wxString* page = nullptr) const;
 	long RunApplication(const wxString& strAppName,
 		const wxString& strUserName,
 		const wxString& strUserPassword,
 		bool searchDebug = true,
-		bool useManifest = false) const;
+		bool useManifest = false,
+		wxString* page = nullptr) const;
 #pragma endregion
 
 	ibRunMode GetAppMode() const { return m_runMode; }

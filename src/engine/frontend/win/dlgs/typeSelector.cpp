@@ -4,6 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "typeSelector.h"
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 #include "backend/metaData.h"
 #include "backend/compiler/value.h"
@@ -45,7 +46,7 @@ wxTreeItemId AppendType(ibCheckTree* tc, const wxTreeItemId& parent, const ibCto
 	wxASSERT(imageList);
 
 	// A type may have no picture (the base answers wxNullIcon) — the image list refuses one aloud.
-	const wxIcon picture = so->GetClassIcon();
+	const wxIcon picture = ToIcon(so->GetClassIcon());
 	const int icon = picture.IsOk() ? imageList->Add(picture) : -1;
 	const wxTreeItemId item = tc->AppendItem(parent, so->GetClassName(), icon, icon, new ibTypeItemData(so));
 
@@ -238,7 +239,7 @@ bool ibShowTypeSelector(wxWindow* parent, ibSelectorDataType kind,
 		auto heading = headings.find(family);
 		if (heading == headings.end() && IsReference(clsid)) {
 			wxImageList* imageList = tc->GetImageList();
-			const int groupIcon = imageList->Add(so->GetClassIcon());
+			const int groupIcon = imageList->Add(ToIcon(so->GetClassIcon()));
 			const wxString familyName = ibValue::GetNameObjectFromID(family);
 			heading = headings.emplace(family, tc->AppendItem(tc->GetRootItem(), familyName, groupIcon, groupIcon)).first;
 		}

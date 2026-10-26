@@ -1,6 +1,7 @@
 #include "toolBar.h"
 #include "core/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "backend/appData.h"
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 #ifdef OES_USE_WEB
 #include "frontend/web/webWindow.h"
 #include "backend/backend_picture.h"
@@ -82,7 +83,7 @@ void ibValueToolBarItem::OnCreated(wxObject* wxobject, ibFrontendWindow* wxparen
 
 	wxAuiToolBarItem* toolItem = toolbar->AddTool(GetControlID(),
 		m_propertyTitle->GetValueAsTranslateString(),
-		m_propertyPicture->GetValueAsBitmap(),
+		ToBitmap(m_propertyPicture->GetValueAsPicture()),
 		wxNullBitmap,
 		wxItemKind::wxITEM_NORMAL,
 		m_properyTooltip->GetValueAsTranslateString(),
@@ -149,10 +150,10 @@ void ibValueToolBarItem::Update(wxObject* wxobject, ibVisualHost* visualHost)
 	const bool hasPic = bmp.IsOk();
 
 	// data:image/png;base64,... so the browser can <img src> it directly.
-	// ibBackendPicture::CreateBase64Image handles the PNG encode.
+	// CreateBase64Image (frontend/win/picture.h) handles the PNG encode.
 	wxString pictureUri;
 	if (hasPic) {
-		const wxString b64 = ibBackendPicture::CreateBase64Image(bmp.ConvertToImage());
+		const wxString b64 = CreateBase64Image(bmp.ConvertToImage());
 		if (!b64.IsEmpty())
 			pictureUri = wxT("data:image/png;base64,") + b64;
 	}

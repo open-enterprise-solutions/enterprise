@@ -34,8 +34,8 @@ class ibValueButton : public ibValueWindow, public ibFrontendCommandReceiver {
 	virtual void Cleanup(wxObject* obj, ibVisualHost* visualHost) override;
 
 	//support icons
-	virtual wxIcon GetIcon() const;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const;
+	static ibPicture GetIconGroup();
 
 	//load & save object in control 
 	virtual bool ReadData(const ibDataNode& node);
@@ -145,8 +145,8 @@ class ibValueStaticText : public ibValueWindow,
 	virtual void Cleanup(wxObject* obj, ibVisualHost* visualHost) override;
 
 	//support icons
-	virtual wxIcon GetIcon() const;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const;
+	static ibPicture GetIconGroup();
 
 	//load & save object in control
 	virtual bool ReadData(const ibDataNode& node);
@@ -261,8 +261,8 @@ class ibValueTextCtrl : public ibValueWindow,
 	virtual void Cleanup(wxObject* obj, ibVisualHost* visualHost) override;
 
 	//support icons
-	virtual wxIcon GetIcon() const;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const;
+	static ibPicture GetIconGroup();
 
 	/**
 	* Property events
@@ -490,8 +490,8 @@ class ibValueCheckbox : public ibValueWindow,
 	virtual void Cleanup(wxObject* obj, ibVisualHost* visualHost) override;
 
 	//support icons
-	virtual wxIcon GetIcon() const;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const;
+	static ibPicture GetIconGroup();
 
 	/**
 	* Property events
@@ -561,8 +561,8 @@ class ibValueRadioButton : public ibValueWindow {
 	virtual void Cleanup(wxObject* obj, ibVisualHost* visualHost) override;
 
 	//support icons
-	virtual wxIcon GetIcon() const;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const;
+	static ibPicture GetIconGroup();
 
 	//load & save object in control 
 	virtual bool ReadData(const ibDataNode& node);
@@ -591,8 +591,8 @@ class ibValueStaticLine : public ibValueWindow {
 	virtual void Cleanup(wxObject* obj, ibVisualHost* visualHost) override;
 
 	//support icons
-	virtual wxIcon GetIcon() const;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const;
+	static ibPicture GetIconGroup();
 
 	//load & save object in control 
 	virtual bool ReadData(const ibDataNode& node);
@@ -620,8 +620,8 @@ class ibValueSlider : public ibValueWindow {
 	virtual void Cleanup(wxObject* obj, ibVisualHost* visualHost) override;
 
 	//support icons
-	virtual wxIcon GetIcon() const;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const;
+	static ibPicture GetIconGroup();
 
 	//load & save object in control 
 	virtual bool ReadData(const ibDataNode& node);
@@ -654,8 +654,8 @@ class ibValueGauge : public ibValueWindow {
 	virtual void Cleanup(wxObject* obj, ibVisualHost* visualHost) override;
 
 	//support icons
-	virtual wxIcon GetIcon() const;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const;
+	static ibPicture GetIconGroup();
 
 	//load & save object in control 
 	virtual bool ReadData(const ibDataNode& node);

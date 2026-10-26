@@ -1,4 +1,5 @@
 #include "advpropDynamicSource.h"
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 #include "frontend/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
 #include "frontend/propertyManager/property/private/propertyRegistry.h"
@@ -65,7 +66,7 @@ ibPGDynamicSourceProperty::ibPGDynamicSourceProperty(ibPropertyObject* property,
 			const ibBackendQueryable* queryable = factory->Resolve(d->GetNamespace(), d->GetName());
 			const ibValueMetaObjectGenericData* metaObject = queryable != nullptr ? queryable->GetSourceMetaObject() : nullptr;
 			m_choices.Add(d->GetNamespace() + wxT(".") + d->GetName(),
-				metaObject != nullptr ? wxBitmapBundle(metaObject->GetIcon()) : wxBitmapBundle());
+				metaObject != nullptr ? wxBitmapBundle(ToIcon(metaObject->GetIcon())) : wxBitmapBundle());
 			m_sources.emplace_back(d->GetNamespace(), d->GetName());
 		}
 	}

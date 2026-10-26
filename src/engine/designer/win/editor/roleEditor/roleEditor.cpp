@@ -1,4 +1,5 @@
 #include "roleEditor.h"
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 #include "frontend/docView/docView.h"                       // docManager — notify open editors of the change
 #include "designer/docManager/templates/docViewMetaFile.h"  // ibMetaDocument — a config metaobject document
@@ -133,7 +134,7 @@ void ibRoleEditor::InitRole()
 	wxASSERT(typeCtor);
 
 	wxImageList* imageList = m_roleCtrl->GetImageList();
-	int imageIndex = imageList->Add(typeCtor->GetClassIcon());
+	int imageIndex = imageList->Add(ToIcon(typeCtor->GetClassIcon()));
 	m_treeMETADATA = m_roleCtrl->AddRoot(_("Configuration"), imageIndex, imageIndex,
 		new ibTreeItemObject(activeMetaData->GetCommonMetaObject()));
 
@@ -163,7 +164,7 @@ wxTreeItemId ibRoleEditor::GroupFor(const ibClassID& clsid)
 
 	wxImageList* imageList = m_roleCtrl->GetImageList();
 	wxASSERT(imageList);
-	const int imageIndex = imageList->Add(typeCtor->GetClassIcon());
+	const int imageIndex = imageList->Add(ToIcon(typeCtor->GetClassIcon()));
 
 	const wxString caption = ibMetaGroupCaption(clsid);
 	const wxTreeItemId group = m_roleCtrl->AppendItem(m_treeMETADATA,

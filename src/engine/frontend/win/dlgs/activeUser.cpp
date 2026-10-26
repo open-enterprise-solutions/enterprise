@@ -6,6 +6,7 @@
 #include "backend/session/sessionSnapshot.h"
 #include "backend/lock/lockManager.h"
 #include "backend/backend_exception.h"
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 #include <wx/menu.h>
 
@@ -39,7 +40,7 @@ void ibDialogActiveUser::RefreshActiveUserTable()
 		m_activeTable->AssignImageList(imageList, wxIMAGE_LIST_SMALL);
 
 		const int imageUser =
-			imageList->Add(ibBackendPicture::GetPicture(g_picUserCLSID));
+			imageList->Add(ToBitmap(ibBackendPicture::GetPicture(g_picUserCLSID)));
 
 		for (unsigned int idx = 0; idx < arr.GetSessionCount(); idx++) {
 
@@ -143,7 +144,7 @@ ibDialogActiveUser::ibDialogActiveUser(wxWindow* parent, wxWindowID id, const wx
 	wxDialog::Centre(wxBOTH);
 
 	wxIcon dlg_icon;
-	dlg_icon.CopyFromBitmap(ibBackendPicture::GetPicture(g_picUserActiveCLSID));
+	dlg_icon.CopyFromBitmap(ToBitmap(ibBackendPicture::GetPicture(g_picUserActiveCLSID)));
 
 	wxDialog::SetIcon(dlg_icon);
 	wxDialog::SetFocus();

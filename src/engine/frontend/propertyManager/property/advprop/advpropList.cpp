@@ -1,6 +1,7 @@
 #include "advpropList.h"
 #include "backend/propertyManager/property/propertyList.h"
 #include "backend/backend_picture.h"   // ibBackendPicture::CreatePicture — a choice's picture, by its id
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 #include "frontend/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
 #include "frontend/propertyManager/property/private/propertyRegistry.h"
 #include "frontend/propertyManager/propertyEditor.h"
@@ -36,7 +37,7 @@ ibPGListProperty::ibPGListProperty(const ibPropertyObject* property, const wxStr
 	wxPGChoices ch;
 	for (unsigned int idx = 0; idx < choices.GetCount(); idx++) {
 		wxPGChoiceEntry item(choices.GetLabel(idx), choices.GetId(idx));
-		item.SetBitmap(ibBackendPicture::CreatePicture(choices.GetPicture(idx), metaData));
+		item.SetBitmap(ToBitmap(ibBackendPicture::CreatePicture(choices.GetPicture(idx), metaData)));
 		ch.Add(item);
 	}
 	m_choices.Assign(ch);

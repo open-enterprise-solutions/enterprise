@@ -4,6 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "queryConstructorInternal.h"
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 using namespace queryctor;
 
@@ -866,7 +867,7 @@ wxWindow* ibDialogQueryConstructor::BuildTablesPage(wxWindow* parent)
 	//
 	// So: the cell SHOWS it, the editor CHANGES it. (The names are the other way round — an alias
 	// is typed where it stands, because a name is not an expression.)
-	m_fieldModel->SetIconColumn(kGridCol1, ibValue::GetIconGroup());
+	m_fieldModel->SetIconColumn(kGridCol1, ToIcon(ibValue::GetIconGroup()));
 	// PER ROW: the column already said what it looks like; this only carries the answer.
 	m_fieldModel->SetIconReader([this](unsigned int row) -> wxIcon {
 		const ibQuerySelect* select = Current();
@@ -1125,7 +1126,7 @@ wxWindow* ibDialogQueryConstructor::BuildGroupingPage(wxWindow* parent)
 		return true;
 	});
 	m_grouping = MakeGrid(keysPane, m_groupingModel, [this] { FillAll(); });
-	m_groupingModel->SetIconColumn(kGridCol1, ibValue::GetIconGroup());
+	m_groupingModel->SetIconColumn(kGridCol1, ToIcon(ibValue::GetIconGroup()));
 	m_groupingModel->SetIconReader([this](unsigned int row) -> wxIcon {
 		const ibQuerySelect* select = Current();
 		return select != nullptr && row < select->m_groupBy.size()
@@ -1245,7 +1246,7 @@ wxWindow* ibDialogQueryConstructor::BuildGroupingPage(wxWindow* parent)
 		return true;
 	});
 	m_aggregates = MakeGrid(aggPane, m_aggregateModel, [this] { FillAll(); });
-	m_aggregateModel->SetIconColumn(kGridCol1, ibValue::GetIconGroup());
+	m_aggregateModel->SetIconColumn(kGridCol1, ToIcon(ibValue::GetIconGroup()));
 	// AN AGGREGATE WEARS ITS ARGUMENT PICTURE: what SUM(x) is about is x.
 	m_aggregateModel->SetIconReader([this](unsigned int row) -> wxIcon {
 		const ibQuerySelect* select = Current();
@@ -1477,7 +1478,7 @@ wxWindow* ibDialogQueryConstructor::BuildIndexPage(wxWindow* parent)
 		return true;
 	});
 	m_indexFields = MakeGrid(rightPane, m_indexModel, [this] { FillAll(); });
-	m_indexModel->SetIconColumn(kGridCol1, ibValue::GetIconGroup());
+	m_indexModel->SetIconColumn(kGridCol1, ToIcon(ibValue::GetIconGroup()));
 	m_indexModel->SetIconReader([this](unsigned int row) -> wxIcon {
 		const ibQuerySelect* select = Current();
 		return select != nullptr && row < select->m_indexBy.size()
@@ -1573,7 +1574,7 @@ wxWindow* ibDialogQueryConstructor::BuildOrderPage(wxWindow* parent)
 	});
 	m_order = MakeGrid(rightPane, m_orderModel, [this] { FillAll(); });
 	AttachContextMenu(m_order, bar);
-	m_orderModel->SetIconColumn(kGridCol1, ibValue::GetIconGroup());
+	m_orderModel->SetIconColumn(kGridCol1, ToIcon(ibValue::GetIconGroup()));
 	m_orderModel->SetIconReader([this](unsigned int row) -> wxIcon {
 		const ibQuerySelect* select = Current();
 		return select != nullptr && row < select->m_orderBy.size()
@@ -1884,7 +1885,7 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 	//
 	// The picture and the choice renderer are back: neither was ever the cause, and taking them out
 	// cost a working cell for a guess. (Sorry, Max — that one was mine.)
-	m_totalsDimensionModel->SetIconColumn(kGridCol1, ibValue::GetIconGroup());
+	m_totalsDimensionModel->SetIconColumn(kGridCol1, ToIcon(ibValue::GetIconGroup()));
 	m_totalsDimensionModel->SetIconReader([this](const ibTotalsRow& at) -> wxIcon {
 		// A SEPARATOR IS NOT A FIELD, so it carries no field picture — what it is is said in the cell
 		// itself (`SPLIT`), and borrowing a field's icon would draw it as one more grouping.
@@ -2212,7 +2213,7 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 	});
 	m_totalsAggregates = MakeGrid(aggPane, m_totalsAggregateModel, [this] { FillAll(); });
 	AttachContextMenu(m_totalsAggregates, aggBar);
-	m_totalsAggregateModel->SetIconColumn(kGridCol1, ibValue::GetIconGroup());
+	m_totalsAggregateModel->SetIconColumn(kGridCol1, ToIcon(ibValue::GetIconGroup()));
 	m_totalsAggregateModel->SetIconReader([this](unsigned int row) -> wxIcon {
 		const ibQuerySelect* select = Current();
 		if (select == nullptr || row >= select->m_totalsAggregates.size()) return wxNullIcon;

@@ -1,6 +1,7 @@
 #include "notebook.h"
 #include "core/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "frontend/visualView/pageWindow.h"
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 //***********************************************************************************
 //*                           IMPLEMENT_DYNAMIC_CLASS                               *
@@ -29,7 +30,7 @@ void ibValueNotebookPage::OnCreated(wxObject* wxobject, wxWindow* wxparent, ibVi
 
     // A page the functional options of this base make unavailable is off the notebook the way an invisible one is.
     if (notebook != nullptr && m_propertyVisible->GetValueAsBoolean() && IsAvailable()) {
-        notebook->AddPage(page, m_propertyTitle->GetValueAsTranslateString(), false, m_propertyPicture->GetValueAsBitmap());
+        notebook->AddPage(page, m_propertyTitle->GetValueAsTranslateString(), false, ToBitmap(m_propertyPicture->GetValueAsPicture()));
         page->SetOrientation(m_propertyOrient->GetValueAsInteger());
     }
     else {
@@ -76,19 +77,19 @@ void ibValueNotebookPage::OnUpdated(wxObject* wxobject, wxWindow* wxparent, ibVi
     if (shown) {
 
         if (pos != pos_old)
-            notebook->InsertPage(pos, (wxWindow*)wxobject, m_propertyTitle->GetValueAsTranslateString(), pos_old == wxNOT_FOUND, m_propertyPicture->GetValueAsBitmap());
+            notebook->InsertPage(pos, (wxWindow*)wxobject, m_propertyTitle->GetValueAsTranslateString(), pos_old == wxNOT_FOUND, ToBitmap(m_propertyPicture->GetValueAsPicture()));
         
         if (m_propertyRepresentation->GetValueAsEnum() == ibRepresentation::ibRepresentation_Auto) {
             notebook->SetPageText(pos, m_propertyTitle->GetValueAsTranslateString());
-            notebook->SetPageBitmap(pos, m_propertyPicture->GetValueAsBitmap());
+            notebook->SetPageBitmap(pos, ToBitmap(m_propertyPicture->GetValueAsPicture()));
         }
         else if (m_propertyRepresentation->GetValueAsEnum() == ibRepresentation::ibRepresentation_PictureAndText) {
             notebook->SetPageText(pos, m_propertyTitle->GetValueAsTranslateString());
-            notebook->SetPageBitmap(pos, m_propertyPicture->GetValueAsBitmap());
+            notebook->SetPageBitmap(pos, ToBitmap(m_propertyPicture->GetValueAsPicture()));
         }
         else if (m_propertyRepresentation->GetValueAsEnum() == ibRepresentation::ibRepresentation_Picture) {
             notebook->SetPageText(pos, wxEmptyString);
-            notebook->SetPageBitmap(pos, m_propertyPicture->GetValueAsBitmap());
+            notebook->SetPageBitmap(pos, ToBitmap(m_propertyPicture->GetValueAsPicture()));
         }
         else if (m_propertyRepresentation->GetValueAsEnum() == ibRepresentation::ibRepresentation_Text) {
             notebook->SetPageText(pos, m_propertyTitle->GetValueAsTranslateString());

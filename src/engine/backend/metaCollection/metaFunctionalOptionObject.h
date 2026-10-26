@@ -31,8 +31,8 @@ public:
 	ibValueMetaObjectFunctionalOption();
 
 	//support icons
-	virtual wxIcon GetIcon() const override;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const override;
+	static ibPicture GetIconGroup();
 
 	// ⚠ THE TYPE IS PART OF THE METATYPE — Boolean, always; the value column asks this. (The fill check stays
 	// the base's "no": False is an answer, not an empty field.)

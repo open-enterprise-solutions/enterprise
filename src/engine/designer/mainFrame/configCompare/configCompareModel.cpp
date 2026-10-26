@@ -1,4 +1,5 @@
 #include "configCompareModel.h"
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 #include "backend/appData.h"
 #include "frontend/artProvider/artProvider.h"
@@ -272,7 +273,7 @@ void ibDataViewMetaDiffModel::GetValue(wxVariant& variant,
 		}
 		else if (iconClsid != 0) {
 			bitmap = wxBitmapBundle(
-				ibBackendPicture::GetPicture(iconClsid));
+				ToBitmap(ibBackendPicture::GetPicture(iconClsid)));
 		}
 		variant << ibDataViewIconText(name, bitmap);
 		break;

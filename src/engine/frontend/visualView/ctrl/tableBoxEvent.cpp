@@ -1,5 +1,6 @@
 #include "tableBox.h" 
 #include "tableBoxColumnRenderer.h"
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 #include "backend/appData.h"
 
@@ -392,7 +393,7 @@ void ibValueModelTableBox::OnContextMenu(ibDataViewEvent& event)
 			wxMenuItem* menuItem = menu.Append(id, actionData.GetCaptionByID(id));
 			ibPictureDescription pictureDesc = actionData.GetPictureByID(id);
 			if (!pictureDesc.IsEmptyPicture())
-				menuItem->SetBitmap(ibBackendPicture::CreatePicture(pictureDesc));
+				menuItem->SetBitmap(ToBitmap(ibBackendPicture::CreatePicture(pictureDesc)));
 			if (viewOnly && actionData.GetModifiesDataByID(id))
 				menuItem->Enable(false);   // grey data-modifying command in view-only
 		}

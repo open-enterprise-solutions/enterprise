@@ -7,6 +7,7 @@
 
 #include "frontend/docView/docView.h"
 #include "frontend/win/editor/textEditor/textEditor.h"
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 #include <wx/fdrepdlg.h>
 
@@ -51,7 +52,7 @@ class FRONTEND_API ibHelpDocument : public ibDocument
 public:
 
 	virtual wxIcon GetIcon() const {
-		return ibBackendPicture::GetPictureAsIcon(g_metaCommonModuleCLSID);
+		return ToIcon(ibBackendPicture::GetPicture(g_metaCommonModuleCLSID));
 	}
 
 	ibHelpDocument() : ibDocument() {}

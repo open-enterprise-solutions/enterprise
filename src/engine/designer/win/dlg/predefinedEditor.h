@@ -2,6 +2,7 @@
 #define __PREDEFINED_EDITOR__
 
 #include <wx/aui/auibar.h>
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 #include "backend/metaCollection/partial/commonObject.h"
 #include "frontend/win/ctrls/dataview/dataview.h"
@@ -242,7 +243,7 @@ class ibDialogPredefinedEditor : public wxDialog {
 			wxDialog::Centre(wxBOTH);
 
 			wxIcon dlg_icon;
-			dlg_icon.CopyFromBitmap(ibBackendPicture::GetPicture(g_metaAttributeCLSID));
+			dlg_icon.CopyFromBitmap(ToBitmap(ibBackendPicture::GetPicture(g_metaAttributeCLSID)));
 
 			wxDialog::SetIcon(dlg_icon);
 			wxDialog::SetFocus();

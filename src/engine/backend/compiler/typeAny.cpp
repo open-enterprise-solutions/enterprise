@@ -4,7 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "value.h"
-#include "backend/backend_picture.h"   // ibBackendPicture::GetIconFromBase64 — AnyRef's own picture
+#include "core/graphics/picture.h"   // ibPicture::FromBase64 — the master read, scaled to 16 once
 
 ////////////////////////////////////////////////////////////////////////////
 // A BARRIER IS A TYPE, not a special case in the interpreter
@@ -46,12 +46,10 @@ public:
 
 	// Its own picture where it has one — `AnyRef` stands in the type picker beside the families, which show their
 	// metatype's. The others are never offered there, and answer none.
-	wxIcon GetClassIcon() const override {
+	ibPicture GetClassIcon() const override {
 		if (m_picture == nullptr)
-			return wxNullIcon;
-		if (!m_icon.IsOk())
-			m_icon = ibBackendPicture::GetIconFromBase64(m_picture, wxSize(16, 16));
-		return m_icon;
+			return ibPicture();
+		return ibPicture::FromBase64(m_picture, ibSize(16, 16));
 	}
 
 	ibCtorObjectType GetObjectTypeCtor() const override { return ibCtorObjectType::ibCtorObjectType_object_system; }
@@ -67,7 +65,6 @@ public:
 private:
 	ibClassKind m_kind;   // the family: the high byte every member carries
 	const ibChar* m_picture;   // PNG, base64; null — no picture
-	mutable wxIcon m_icon;     // …decoded on the first ask, when the image handlers are there
 };
 
 // `Any` on its own — declared, restricting nothing. It exists so an author can

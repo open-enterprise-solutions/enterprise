@@ -4,6 +4,7 @@
 #include <wx/panel.h>
 #include <wx/treectrl.h>
 #include <wx/splitter.h>
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 
 #include "backend/metadataConfiguration.h"
@@ -56,7 +57,7 @@ private:
 		ibValueMetaObject* metaObject) {
 		wxImageList* imageList = m_roleCtrl->GetImageList();
 		wxASSERT(imageList);
-		const int imageIndex = imageList->Add(metaObject->GetIcon());
+		const int imageIndex = imageList->Add(ToIcon(metaObject->GetIcon()));
 		const wxTreeItemId item = m_roleCtrl->AppendItem(parent, metaObject->GetName(), imageIndex, imageIndex, new ibTreeItemObject(metaObject));
 		if (metaObject == m_keepSelObj)   // the row that was selected before this rebuild — remember it for restore
 			m_keepSelNode = item;

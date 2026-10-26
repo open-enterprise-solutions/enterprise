@@ -12,8 +12,8 @@ class BACKEND_API ibValueMetaObjectLanguage : public ibValueMetaObject {
 	ibValueMetaObjectLanguage(const wxString& name = wxEmptyString, const wxString& synonym = wxEmptyString, const wxString& comment = wxEmptyString);
 
 	//support icons
-	virtual wxIcon GetIcon() const;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const;
+	static ibPicture GetIconGroup();
 
 	//events: 
 	virtual bool OnDeleteMetaObject();

@@ -8,7 +8,8 @@
 #include "backend/metadataConfiguration.h"
 #include "backend/query/columnLayout.h"                         // ibIsComparableType — a whole-value blob has nothing to compare
 #include "backend/srcDataObject.h"                              // ibSourceDataObject::ibSourceExplorer
-#include "backend/backend_picture.h"                            // ibBackendPicture::GetPictureAsIcon — a column's picture made an icon
+#include "backend/backend_picture.h"                            // ibBackendPicture::CreatePicture — a column's picture, made an icon
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 #include "backend/metaCollection/partial/reference/reference.h" // ibValueReferenceDataObject — reference-as-source
 #include "backend/metaCollection/resource/metaResourceObject.h"   // the RESOURCE metatype — its own class icon
 #include "backend/query/queryConstructorModel.h"   // WalkPath — where a written path starts, and its hops by type
@@ -70,7 +71,7 @@ static int ibSettingsFieldIcon(wxTreeCtrl* tree, const wxIcon& icon)
 // already has one, and it would drift from the one the metadata tree shows.
 static int ibSettingsResourceIcon(wxTreeCtrl* tree)
 {
-	return ibSettingsFieldIcon(tree, ibValueMetaObjectResource::GetIconGroup());
+	return ibSettingsFieldIcon(tree, ToIcon(ibValueMetaObjectResource::GetIconGroup()));
 }
 
 // ONE FIELD, APPENDED. Split out of the walk below because a field that several types SHARE is
@@ -109,7 +110,7 @@ static wxTreeItemId AppendFieldNode(wxTreeCtrl* tree, const wxTreeItemId& parent
 	// registers.
 	const bool resource = isResource && isResource(data->m_path);
 	const int icon = resource ? ibSettingsResourceIcon(tree)
-	                          : ibSettingsFieldIcon(tree, ibBackendPicture::GetPictureAsIcon(col->GetSourcePicture()));
+	                          : ibSettingsFieldIcon(tree, ToIcon(ibBackendPicture::CreatePicture(col->GetSourcePicture())));
 	const wxTreeItemId item = tree->AppendItem(parent, label, icon, icon, data);
 	if (!data->m_refTypes.empty())
 		tree->AppendItem(item, wxEmptyString);   // dummy -> [+] (a reference expands into its target's fields)
@@ -260,7 +261,7 @@ void ibSettingsFieldTree::Populate(wxTreeCtrl* tree) const
 
 	// Attribute icon (index 0) on every field — same icon the source-explorer picker uses.
 	wxImageList* imgs = new wxImageList(16, 16);
-	imgs->Add(ibValue::GetIconGroup());
+	imgs->Add(ToIcon(ibValue::GetIconGroup()));
 	tree->AssignImageList(imgs);
 
 	const ibMetaData* metaData = GetMetaData();

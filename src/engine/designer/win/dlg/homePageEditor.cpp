@@ -16,6 +16,7 @@
 
 #include "backend/metaData.h"
 #include "backend/backend_picture.h"                 // ibBackendPicture::GetPicture — the toolbar art
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 #include "backend/metaCollection/metaFormObject.h"
 #include "frontend/win/theme/luna_toolbarart.h"
 
@@ -56,9 +57,9 @@ wxWindow* ibDialogHomePageEditor::CreateColumnPane(wxWindow* parent, ibHomePageC
 	wxAuiToolBar* toolbar = new wxAuiToolBar(pane, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxAUI_TB_HORZ_LAYOUT);
 	toolbar->SetArtProvider(new wxAuiLunaToolBarArt());
 
-	toolbar->AddTool(wxID_TOOL_ADD, _("Add"), ibBackendPicture::GetPicture(g_picAddCLSID));
-	toolbar->AddTool(wxID_TOOL_EDIT, _("Height"), ibBackendPicture::GetPicture(g_picEditCLSID));
-	toolbar->AddTool(wxID_TOOL_DELETE, _("Delete"), ibBackendPicture::GetPicture(g_picDeleteCLSID));
+	toolbar->AddTool(wxID_TOOL_ADD, _("Add"), ToBitmap(ibBackendPicture::GetPicture(g_picAddCLSID)));
+	toolbar->AddTool(wxID_TOOL_EDIT, _("Height"), ToBitmap(ibBackendPicture::GetPicture(g_picEditCLSID)));
+	toolbar->AddTool(wxID_TOOL_DELETE, _("Delete"), ToBitmap(ibBackendPicture::GetPicture(g_picDeleteCLSID)));
 	toolbar->AddSeparator();
 	toolbar->AddTool(wxID_TOOL_UP, _("Up"), wxArtProvider::GetBitmapBundle(wxART_GO_UP, wxART_TOOLBAR, FromDIP(wxSize(16, 16))));
 	toolbar->AddTool(wxID_TOOL_DOWN, _("Down"), wxArtProvider::GetBitmapBundle(wxART_GO_DOWN, wxART_TOOLBAR, FromDIP(wxSize(16, 16))));
@@ -155,7 +156,7 @@ void ibDialogHomePageEditor::CreateDialogView()
 	Layout();
 	Centre(wxBOTH);
 
-	SetIcon(ibBackendPicture::GetPictureAsIcon(g_picHomePageCLSID));
+	SetIcon(ToIcon(ibBackendPicture::GetPicture(g_picHomePageCLSID)));
 }
 
 const ibValueMetaObjectFormBase* ibDialogHomePageEditor::FindItemForm(const ibHomePageItem& item) const
@@ -192,7 +193,7 @@ void ibDialogHomePageEditor::FillColumn(ibHomePageColumn column, long selectInde
 		int imageIndex = -1;
 		if (imageList != nullptr) {
 			const wxIcon rowIcon = metaForm != nullptr ?
-				metaForm->GetIcon() : ibBackendPicture::GetPictureAsIcon(g_picHomePageCLSID);
+				ToIcon(metaForm->GetIcon()) : ToIcon(ibBackendPicture::GetPicture(g_picHomePageCLSID));
 			if (rowIcon.IsOk())
 				imageIndex = imageList->Add(rowIcon);
 		}
@@ -444,7 +445,7 @@ void ibDialogHomePageFormSelect::FillTree()
 		if (metaForm->GetClassType() == g_metaCommonFormCLSID) {
 			if (!commonGroup.IsOk())
 				commonGroup = m_treeCtrl->AppendItem(root, _("Common forms"),
-					AppendIcon(metaForm->GetIcon()), AppendIcon(metaForm->GetIcon()));
+					AppendIcon(ToIcon(metaForm->GetIcon())), AppendIcon(ToIcon(metaForm->GetIcon())));
 			parentNode = commonGroup;
 		}
 		else {
@@ -453,14 +454,14 @@ void ibDialogHomePageFormSelect::FillTree()
 				continue;
 			auto founded = groups.find(owner);
 			if (founded == groups.end()) {
-				const int ownerIcon = AppendIcon(owner->GetIcon());
+				const int ownerIcon = AppendIcon(ToIcon(owner->GetIcon()));
 				founded = groups.emplace(owner,
 					m_treeCtrl->AppendItem(root, owner->GetFullName(), ownerIcon, ownerIcon)).first;
 			}
 			parentNode = founded->second;
 		}
 
-		const int formIcon = AppendIcon(metaForm->GetIcon());
+		const int formIcon = AppendIcon(ToIcon(metaForm->GetIcon()));
 		m_treeCtrl->AppendItem(parentNode, metaForm->GetName(),
 			formIcon, formIcon, new ibHomePageFormItemData(metaForm->GetMetaID()));
 	}

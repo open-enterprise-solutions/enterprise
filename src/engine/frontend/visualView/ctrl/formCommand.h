@@ -65,8 +65,8 @@ public:
 	// GetDispatcher() -> named handler OR lambda, exactly like a control event. GetProcedure stays
 	// for the string view (serialize / inspector).
 	ibEvent* GetActionEvent() const { return m_eventCommand; }
-	wxBitmap GetPictureBitmap() const { return m_propertyPicture->GetValueAsBitmap(); }
-	bool     IsEmptyPicture()   const { return m_propertyPicture->IsEmptyProperty(); }
+	ibPicture GetPicture()     const { return m_propertyPicture->GetValueAsPicture(); }
+	bool      IsEmptyPicture() const { return m_propertyPicture->IsEmptyProperty(); }
 	ibMetaID GetId() const { return m_commandId; }
 
 	void SetCommandName(const wxString& name) { m_propertyName->SetValue(name); }

@@ -1,4 +1,5 @@
 #include "docViewAuditLog.h"
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 #include "backend/appData.h"
 #include "backend/logger/logger.h"
@@ -309,14 +310,14 @@ void ibAuditLogView::BuildLayout(wxWindow* parent)
 	m_toolbarMain->SetArtProvider(new wxAuiLunaToolBarArt());
 
 	m_toolbarMain->AddTool(wxID_AUDIT_TOOL_APPLY,    _("Apply"),
-		ibBackendPicture::GetPicture(g_picFilterSetCLSID));
+		ToBitmap(ibBackendPicture::GetPicture(g_picFilterSetCLSID)));
 	m_toolbarMain->AddTool(wxID_AUDIT_TOOL_CLEAR,    _("Clear"),
-		ibBackendPicture::GetPicture(g_picFilterClearCLSID));
+		ToBitmap(ibBackendPicture::GetPicture(g_picFilterClearCLSID)));
 	m_toolbarMain->AddTool(wxID_AUDIT_TOOL_REFRESH,  _("Refresh"),
-		ibBackendPicture::GetPicture(g_picUpdateFormCLSID));
+		ToBitmap(ibBackendPicture::GetPicture(g_picUpdateFormCLSID)));
 	m_toolbarMain->AddSeparator();
 	m_toolbarMain->AddTool(wxID_AUDIT_TOOL_OPEN_REF, _("Open object"),
-		ibBackendPicture::GetPicture(g_picSelectCLSID));
+		ToBitmap(ibBackendPicture::GetPicture(g_picSelectCLSID)));
 
 	// Live-refresh checkbox sits on the toolbar's right edge.
 	m_tailCheck = new wxCheckBox(m_toolbarMain, wxID_ANY, _("Live refresh (3 s)"));

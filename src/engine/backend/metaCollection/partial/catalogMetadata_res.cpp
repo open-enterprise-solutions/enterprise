@@ -3,14 +3,14 @@
 /* PNG */
 static const wxString s_catalog_16_png = wxT("iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAB0klEQVR4nOybQUsCURDH/7MKURZdIqNv0NlDRZcwomNlBAoKHaSvEX2PDh2KCiLzmhUdvUjHPkHqSp1KQkintwfDRfBtELHbzO8iT2Z05rfvvd3DPgfCcSAcFQDhxH8S7GYThR5oi8BLIJpHmGCuM6jqEJeSZ+2ToGkUJKi1m5jrxXFqwtOIBFwxjRWMCNcWGWgJ9GJ0GZ3mPWid2btgdqwCmrmJopknK4gaRGuNbGLPFmbdA5hphwYWythCClPpTcRm/FuAe1j0jZMHR/hLui91vN2X0XmqfX9n6s6Yj+NRedYZQKDlwfHk6nDzYcCryavNByNly7PfBQjTvoTZ8DXfZ6i2AHcqfRCCcFQAhKMCIBwVAOGoAAhHBUA4KgDCUQEQjgqAcFQAhKMCIBwVAOGoAAhHBUA4KgDCUQEQjgqAcFQAhKMCIBwVAOGoAAhHBVgjmJuDw89WHWFluDZu2HKsAhh4HBy/P5TRfW0ibHivy3u1+WDUbHnWIzNudnybKXaFCEI93khetG9GxVhnQPL8o2SWwR2iBqNsa94j0CbodJE3v3iLyMAVdLAfJDLQqbE+bi6RZ6aM+YPFEB6be2aiqgO+/vVjc/8ZfQ6AcMQL+AIAAP//8a8BhwAAAAZJREFUAwD/kW7vX30GmAAAAABJRU5ErkJggg==");
 
-wxIcon ibValueMetaObjectCatalog::GetIcon() const
+ibPicture ibValueMetaObjectCatalog::GetIcon() const
 {
 	return GetIconGroup();
 }
 
-wxIcon ibValueMetaObjectCatalog::GetIconGroup()
+ibPicture ibValueMetaObjectCatalog::GetIconGroup()
 {
-	static const ibPicture picture = ibBackendPicture::FromImage(ibBackendPicture::GetImageFromBase64(s_catalog_16_png, wxSize(16, 16)));
+	static const ibPicture picture = ibPicture::FromBase64(s_catalog_16_png, ibSize(16, 16));
 
-	return ibBackendPicture::ToIcon(picture);
+	return picture;
 }

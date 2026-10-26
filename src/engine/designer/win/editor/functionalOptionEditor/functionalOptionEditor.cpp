@@ -1,4 +1,5 @@
 #include "functionalOptionEditor.h"
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 #include "backend/metaCollection/metaGroups.h"   // what a group is called, and where it stands
 
@@ -60,7 +61,7 @@ void ibFunctionalOptionEditor::InitMembers()
 
 	wxImageList* imageList = m_membersCtrl->GetImageList();
 	wxASSERT(imageList);
-	const int imageIndex = imageList->Add(typeCtor->GetClassIcon());
+	const int imageIndex = imageList->Add(ToIcon(typeCtor->GetClassIcon()));
 
 	m_treeMETADATA = m_membersCtrl->AddRoot(_("Configuration"), imageIndex, imageIndex);
 	m_membersCtrl->SetItemBold(m_treeMETADATA);
@@ -86,7 +87,7 @@ wxTreeItemId ibFunctionalOptionEditor::GroupFor(const ibClassID& clsid)
 
 	wxImageList* imageList = m_membersCtrl->GetImageList();
 	wxASSERT(imageList);
-	const int imageIndex = imageList->Add(typeCtor->GetClassIcon());
+	const int imageIndex = imageList->Add(ToIcon(typeCtor->GetClassIcon()));
 
 	const wxString caption = ibMetaGroupCaption(clsid);
 	const wxTreeItemId group = m_membersCtrl->AppendItem(m_treeMETADATA,
@@ -100,7 +101,7 @@ wxTreeItemId ibFunctionalOptionEditor::AppendItem(const wxTreeItemId& parent, ib
 {
 	wxImageList* imageList = m_membersCtrl->GetImageList();
 	wxASSERT(imageList);
-	const int imageIndex = imageList->Add(metaObject->GetIcon());
+	const int imageIndex = imageList->Add(ToIcon(metaObject->GetIcon()));
 
 	const wxTreeItemId createItem = m_membersCtrl->AppendItem(
 		parent, metaObject->GetName(), imageIndex, imageIndex, new ibTreeItemObject(metaObject));

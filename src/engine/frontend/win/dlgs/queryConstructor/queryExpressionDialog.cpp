@@ -6,6 +6,7 @@
 #include "queryExpressionDialog.h"
 #include "queryConstructor.h"            // ibShowQueryConstructorFor — the nested query
 #include "queryCaseDialog.h"             // ibShowQueryCaseBuilder — CASE WHEN as the list it is
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 #include "../callbackDropTarget.h"      // one drop target for the product: a drop is a callback
 #include "queryFieldTree.h"              // the field row: its node, its walk, its drag
@@ -92,7 +93,7 @@ ibDialogQueryExpression::ibDialogQueryExpression(wxWindow* parent, const wxStrin
 		| wxTR_TWIST_BUTTONS);
 	{
 		wxImageList* images = new wxImageList(16, 16);
-		m_fieldIcon = images->Add(ibValue::GetIconGroup());
+		m_fieldIcon = images->Add(ToIcon(ibValue::GetIconGroup()));
 		m_fieldTree->AssignImageList(images);
 	}
 	// GROUPED BY SOURCE, in the order the query names them. Two tables merged into one list is

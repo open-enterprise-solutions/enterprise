@@ -22,6 +22,7 @@ target_include_directories(protocol
 target_compile_definitions(protocol
     PRIVATE
         NOPCH
+        wxUSE_GUI=0   # of wx the base only — a GUI type here is a compile error
 )
 
 # PROTOCOL_API resolves to dllexport only when PROTOCOL_EXPORTS is defined (protocolApi.h) — frontend's rule.

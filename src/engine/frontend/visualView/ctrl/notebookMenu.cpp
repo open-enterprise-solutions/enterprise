@@ -1,4 +1,5 @@
 #include "notebook.h"
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 enum
 {
@@ -7,7 +8,7 @@ enum
 
 void ibValueNotebook::PrepareDefaultMenu(wxMenu* menu)
 {
-	menu->Append(MENU_ADDPAGE, _("Add page\tInsert"))->SetBitmap(ibValueNotebookPage::GetIconGroup());
+	menu->Append(MENU_ADDPAGE, _("Add page\tInsert"))->SetBitmap(ToIcon(ibValueNotebookPage::GetIconGroup()));
 	menu->AppendSeparator();
 }
 

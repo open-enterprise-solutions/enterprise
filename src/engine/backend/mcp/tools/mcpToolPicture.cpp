@@ -30,11 +30,6 @@
 // The metatype's own name, resolved through ibResolveMetaKind like every other kind.
 static const ibChar* const kPictureKind = wxT("Picture");
 
-#include <wx/mstream.h>
-#include <wx/image.h>
-#include <wx/bmpbndl.h>   // wxBitmapBundle::FromSVG — the SVG reader the platform already carries
-
-#include <unordered_map>
 #include <vector>
 
 namespace {
@@ -94,7 +89,7 @@ const ibArg& ArgConfiguration()
 const ibArg& ArgData()
 {
 	static const ibArg s_a(wxT("data"), ibArg::Kind::Text,
-		ibMcpText("Base64 image bytes, for an image that is not in either list."));
+		ibMcpText("Base64 PNG bytes, for an image that is not in either list."));
 	return s_a;
 }
 
@@ -131,7 +126,7 @@ constexpr int kDrawnSide = 64;
 constexpr int kLargestSide = 1024;
 
 // THE SIZE ASKED FOR, 64 on whichever side was not said.
-bool AskedSide(const ibDataNode& params, wxSize& side, wxString& refusal)
+bool AskedSide(const ibDataNode& params, ibSize& side, wxString& refusal)
 {
 	const std::int64_t width  = ArgWidth().Given(params)  ? ArgWidth().Whole(params)  : kDrawnSide;
 	const std::int64_t height = ArgHeight().Given(params) ? ArgHeight().Whole(params) : kDrawnSide;
@@ -143,84 +138,46 @@ bool AskedSide(const ibDataNode& params, wxSize& side, wxString& refusal)
 		return false;
 	}
 
-	side = wxSize((int)width, (int)height);
+	side = ibSize((int)width, (int)height);
 	return true;
 }
 
 // ⭐ AN IMAGE DRAWN AS TEXT, turned into an image of its own. A caller that has nothing but this server has
-// no rasterizer, and a PNG is not written by hand; SVG is text, and the platform already carries a reader
-// for it (nanosvg, behind wxBitmapBundle::FromSVG). What comes out is an ordinary PNG with its measured size -
-// the same external picture `data` makes.
-bool DrawSvg(const wxString& svg, const wxSize& side, const wxString& name,
+// no rasterizer, and a PNG is not written by hand; SVG is text, and the core reads it (ibPicture::FromSvg).
+// What comes out is an ordinary PNG with its measured size - the same external picture `data` makes.
+bool DrawSvg(const wxString& svg, const ibSize& side, const wxString& name,
 	ibExternalPictureDescription& drawn, wxString& refusal)
 {
-#ifdef wxHAS_SVG
-	const wxScopedCharBuffer utf8 = svg.utf8_str();
-	const wxBitmapBundle bundle = wxBitmapBundle::FromSVG(utf8.data(), side);
-	const wxBitmap bitmap = bundle.IsOk() ? bundle.GetBitmap(side) : wxNullBitmap;
+	const ibPicture picture = ibPicture::FromSvg(svg, side);
 
-	// ⚠ TWO ANSWERS IN ONE NO: the reader refuses a text that is not SVG and an SVG with no shape in it alike -
-	// and the second is the likelier one, since text and filters are passed over (measured 2026-09-22: an SVG of
-	// one <text> was answered "not SVG"). The refusal says both.
-	if (!bitmap.IsOk()) {
+	// ⚠ THREE ANSWERS IN ONE NO: the reader refuses a text that is not SVG, an SVG with no shape in it and one that
+	// draws nothing alike - and the last two are the likelier, since text and filters are passed over without a word
+	// (measured 2026-09-22: an SVG of one <text> was answered "not SVG"). The refusal says all three.
+	if (!picture.IsOk()) {
 		refusal = ibMcpText("Nothing could be drawn: either that is not SVG, or nothing in it is a shape the "
-			"reader draws - shapes, paths, fills and strokes are read; text and filters are not.");
+			"reader draws, or every pixel came out transparent - shapes, paths, fills and strokes are read; text and "
+			"filters are not.");
 		return false;
 	}
 
-	const wxImage image = bitmap.ConvertToImage();
-
-	// 🛑 NOTHING DRAWN IS A REFUSAL, not a transparent square. The reader passes over what it does not
-	// know - text, filters - without a word, and a picture that shows nothing would be taken as set.
-	bool visible = !image.HasAlpha();
-	if (!visible) {
-		const unsigned char* alpha = image.GetAlpha();
-		for (int at = 0, count = image.GetWidth() * image.GetHeight(); at < count && !visible; ++at)
-			visible = alpha[at] != 0;
-	}
-
-	if (!visible) {
-		refusal = ibMcpText("The SVG drew nothing - every pixel came out transparent. Shapes, paths, fills and "
-			"strokes are read; text and filters are not.");
-		return false;
-	}
-
-	wxMemoryOutputStream out;
-	if (!image.SaveFile(out, wxBITMAP_TYPE_PNG)) {
-		refusal = ibMcpText("The SVG was drawn, but could not be kept as a PNG.");
-		return false;
-	}
-
-	std::string png(out.GetLength(), '\0');
-	out.CopyTo(png.data(), png.size());
-
+	const ibMemoryBuffer& png = picture.GetData();
 	drawn.m_img_name   = std::string(name.utf8_str());
-	drawn.m_img_buffer = std::move(png);
-	drawn.m_width      = (unsigned int)image.GetWidth();
-	drawn.m_height     = (unsigned int)image.GetHeight();
+	drawn.m_img_buffer = std::string(static_cast<const char*>(png.GetData()), png.GetDataLen());
+	drawn.m_width      = (unsigned int)side.m_width;
+	drawn.m_height     = (unsigned int)side.m_height;
 	return true;
-#else
-	(void)svg;
-	(void)side;
-	(void)name;
-	(void)drawn;
-	refusal = ibMcpText("This build of the platform cannot read SVG.");
-	return false;
-#endif
 }
 
 // The most rectangles a picture is said in: a flat icon needs a few hundred, and one that needs more is a
 // photograph, which SVG made of pixels says no better than its bytes do.
 constexpr size_t kMostRects = 4096;
 
-// ⭐ AND BACK THE OTHER WAY: an image said as SVG, so a caller that works in SVG can read a picture - one it
-// did not draw, or one it drew and has to change - and draw it again through picture_from_svg. A PNG keeps
-// no drawing to recover, so what is said is the pixels: each run of one colour a rectangle, runs standing on
-// one another joined, every colour ONE path - which also makes the commonest edit, a recolouring, one
-// attribute. Drawn back at the same size it gives the same image.
-bool SvgFromImage(wxImage image, wxString& svg, wxString& refusal)
+// ⭐ AND BACK THE OTHER WAY: an image said as SVG (ibPicture::ToSvg), so a caller that works in SVG can read a
+// picture - one it did not draw, or one it drew and has to change - and draw it again through picture_from_svg.
+// Every colour is ONE path, which also makes the commonest edit, a recolouring, one attribute.
+bool SvgFromImage(const ibPicture& image, wxString& svg, wxString& refusal)
 {
-	const int width = image.GetWidth(), height = image.GetHeight();
+	const int width = image.GetSize().m_width, height = image.GetSize().m_height;
 
 	if (width < 1 || height < 1 || width > kLargestSide || height > kLargestSide) {
 		refusal = wxString::Format(
@@ -229,93 +186,13 @@ bool SvgFromImage(wxImage image, wxString& svg, wxString& refusal)
 		return false;
 	}
 
-	if (!image.HasAlpha())
-		image.InitAlpha();   // a mask becomes transparency; an image with neither is opaque throughout
-
-	const unsigned char* rgb = image.GetData();
-	const unsigned char* alpha = image.GetAlpha();
-
-	// Alpha in the top byte, so a colour and its transparency are one key.
-	const auto colourAt = [&](int at) -> std::uint32_t {
-		return ((std::uint32_t)alpha[at] << 24) | ((std::uint32_t)rgb[at * 3] << 16)
-			| ((std::uint32_t)rgb[at * 3 + 1] << 8) | (std::uint32_t)rgb[at * 3 + 2];
-	};
-
-	struct Rect { int x, y, w, h; std::uint32_t colour; };
-	std::vector<Rect> done, open;   // `open` reach the row above, sorted by x
-
-	for (int y = 0; y < height; ++y) {
-
-		std::vector<Rect> next;
-		size_t above = 0;
-
-		for (int x = 0; x < width; ) {
-
-			const std::uint32_t colour = colourAt(y * width + x);
-			int end = x + 1;
-			while (end < width && colourAt(y * width + end) == colour)
-				++end;
-
-			if ((colour >> 24) != 0) {   // fully transparent is simply not drawn
-
-				while (above < open.size() && open[above].x < x)
-					done.push_back(open[above++]);
-
-				if (above < open.size() && open[above].x == x && open[above].w == end - x
-					&& open[above].colour == colour) {
-					Rect grown = open[above++];
-					grown.h++;
-					next.push_back(grown);
-				}
-				else {
-					next.push_back({ x, y, end - x, 1, colour });
-				}
-			}
-
-			x = end;
-		}
-
-		while (above < open.size())
-			done.push_back(open[above++]);
-		open.swap(next);
-
-		if (done.size() + open.size() > kMostRects) {
-			refusal = wxString::Format(
-				ibMcpText("The picture is too detailed to be said as SVG - more than %u rectangles. It is a "
-					"photograph rather than a drawing."), (unsigned int)kMostRects);
-			return false;
-		}
+	svg = image.ToSvg(kMostRects);
+	if (svg.IsEmpty()) {
+		refusal = wxString::Format(
+			ibMcpText("The picture is too detailed to be said as SVG - more than %u rectangles. It is a "
+				"photograph rather than a drawing."), (unsigned int)kMostRects);
+		return false;
 	}
-
-	done.insert(done.end(), open.begin(), open.end());
-
-	// ONE PATH PER COLOUR, in the order the colours are first met.
-	std::vector<std::uint32_t> order;
-	std::unordered_map<std::uint32_t, wxString> paths;
-
-	for (const Rect& rect : done) {
-		auto found = paths.find(rect.colour);
-		if (found == paths.end()) {
-			order.push_back(rect.colour);
-			found = paths.emplace(rect.colour, wxString()).first;
-		}
-		found->second << wxString::Format(wxT("M%d %dh%dv%dh-%dz"), rect.x, rect.y, rect.w, rect.h, rect.w);
-	}
-
-	svg = wxString::Format(wxT("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%d\" height=\"%d\" "
-		"viewBox=\"0 0 %d %d\">\n"), width, height, width, height);
-
-	for (std::uint32_t colour : order) {
-		svg << wxString::Format(wxT("<path fill=\"#%06x\""), (unsigned int)(colour & 0xFFFFFF));
-
-		const unsigned int opacity = colour >> 24;
-		if (opacity != 255)   // FromCDouble: a decimal POINT, whatever the locale says
-			svg << wxT(" fill-opacity=\"") << wxString::FromCDouble(opacity / 255.0, 3) << wxT("\"");
-
-		svg << wxT(" d=\"") << paths[colour] << wxT("\"/>\n");
-	}
-
-	svg << wxT("</svg>");
 	return true;
 }
 
@@ -329,15 +206,12 @@ const ibArg& ArgPicture()
 	return s_a;
 }
 
-// AN IMAGE FROM ITS OWN BYTES, at its own size.
-bool ImageFromBytes(const std::string& bytes, wxImage& image)
+// AN IMAGE FROM ITS OWN BYTES, at its own size — a PNG, the one form the platform keeps a picture in. None: the
+// bytes are no PNG.
+ibPicture ImageFromBytes(const std::string& bytes)
 {
-	if (bytes.empty())
-		return false;
-
-	wxLogNull noComplaintsToTheUser;   // a bad image is OUR refusal, not a dialog
-	wxMemoryInputStream stream(bytes.data(), bytes.size());
-	return image.LoadFile(stream, wxBITMAP_TYPE_ANY) && image.IsOk();
+	const ibPicture image(ibMemoryBuffer(bytes.data(), bytes.size()));
+	return image.GetSize() != ibSize() ? image : ibPicture();
 }
 
 // THE IMAGE A CONFIGURATION'S PICTURE OBJECT HOLDS, asked of its properties like the picture of any object is.
@@ -396,7 +270,7 @@ public:
 		// which is why it is listed first and unconditionally.
 		std::vector<ibDataValue> engine;
 
-		for (const ibBackendPictureEntry& entry : ibBackendPicture::GetArrayPicture()) {
+		for (const ibPictureEntry& entry : ibBackendPicture::GetArrayPicture()) {
 			std::shared_ptr<ibDataNode> line = std::make_shared<ibDataNode>();
 			line->SetValue(wxT("name"), entry.m_name);
 			// ⚠ THE DIGITS, AS TEXT. An engine picture's id fills sixty-four bits, and a JSON number on the
@@ -465,7 +339,7 @@ public:
 	{
 		return ibMcpText("Give an object its picture. Say WHERE it comes from: `engine` with a name from "
 			"picture_list, `configuration` with the name of a picture this configuration "
-			"declares, `data` with base64 image bytes and a `name` for it, or `svg` with a `name` - an image "
+			"declares, `data` with base64 PNG bytes and a `name` for it, or `svg` with a `name` - an image "
 			"DRAWN as SVG text, turned into a PNG here (64 x 64 unless `width` / `height` say otherwise) and "
 			"kept as an image of its own. When no engine picture fits, draw one: flat, a few colours, in the "
 			"manner of the engine's set. Objects that carry "
@@ -531,7 +405,7 @@ public:
 		if (!fromEngine.IsEmpty()) {
 
 			bool found = false;
-			for (const ibBackendPictureEntry& entry : ibBackendPicture::GetArrayPicture()) {
+			for (const ibPictureEntry& entry : ibBackendPicture::GetArrayPicture()) {
 				if (!entry.m_name.IsSameAs(fromEngine, false))
 					continue;
 				description = ibPictureDescription(entry.m_id);
@@ -575,7 +449,7 @@ public:
 			ibExternalPictureDescription external;
 
 			if (!fromSvg.IsEmpty()) {
-				wxSize side;
+				ibSize side;
 				if (!AskedSide(params, side, refusal) || !DrawSvg(fromSvg, side, name, external, refusal))
 					return false;
 			}
@@ -592,23 +466,18 @@ public:
 				// whose size reads 0 x 0 IS the empty picture (IsEmptyPicture) - so taking those from
 				// the caller would let a perfectly good image arrive and register as absent. They come
 				// from the image itself, which also proves the bytes are an image at all.
-				wxMemoryInputStream stream(bytes.GetData(), bytes.GetDataLen());
-				wxImage image;
-
-				{
-					wxLogNull noComplaintsToTheUser;   // a bad image is OUR refusal, not a dialog
-					if (!image.LoadFile(stream, wxBITMAP_TYPE_ANY) || !image.IsOk()) {
-						refusal = ibMcpText("Those bytes are not an image the platform can read. "
-							"Nothing was set.");
-						return false;
-					}
+				const ibSize measured = ibPicture(bytes).GetSize();
+				if (measured == ibSize()) {
+					refusal = ibMcpText("Those bytes are not a PNG - the one form the platform keeps a picture in. "
+						"Nothing was set.");
+					return false;
 				}
 
 				external.m_img_name   = std::string(name.utf8_str());
 				external.m_img_buffer = std::string(
 					static_cast<const char*>(bytes.GetData()), bytes.GetDataLen());
-				external.m_width      = (unsigned int)image.GetWidth();
-				external.m_height     = (unsigned int)image.GetHeight();
+				external.m_width      = (unsigned int)measured.m_width;
+				external.m_height     = (unsigned int)measured.m_height;
 			}
 
 			description = ibPictureDescription(external);
@@ -693,7 +562,7 @@ public:
 			return false;
 		}
 
-		wxSize side;
+		ibSize side;
 		ibExternalPictureDescription drawn;
 		if (!AskedSide(params, side, refusal) || !DrawSvg(svg, side, name, drawn, refusal))
 			return false;
@@ -786,10 +655,10 @@ public:
 
 		// EVERY PICTURE AT ITS OWN SIZE. An image of its own from its bytes; a configuration's from the bytes its
 		// Picture object keeps; one of the engine's set as the set holds it.
-		wxImage image;
+		ibPicture image;
 
 		if (description.m_type == ibPictureType::eFromFile) {
-			ImageFromBytes(description.m_img_data.m_img_buffer, image);
+			image = ImageFromBytes(description.m_img_data.m_img_buffer);
 		}
 		else if (description.m_type == ibPictureType::eFromConfiguration) {
 
@@ -806,15 +675,14 @@ public:
 				return false;
 			}
 
-			ImageFromBytes(held->GetValueAsPictureDesc().m_img_buffer, image);
+			image = ImageFromBytes(held->GetValueAsPictureDesc().m_img_buffer);
 		}
 		else {
-			const wxBitmap bitmap = ibBackendPicture::GetPicture(description.m_class_identifier);
-			if (bitmap.IsOk())
-				image = bitmap.ConvertToImage();
+			image = ibBackendPicture::GetPicture(description.m_class_identifier);
 		}
 
-		if (!image.IsOk()) {
+		const ibSize size = image.GetSize();
+		if (size == ibSize()) {
 			refusal = ibMcpText("The picture could not be read as an image.");
 			return false;
 		}
@@ -824,8 +692,8 @@ public:
 			return false;
 
 		result.SetValue(wxT("svg"), svg);
-		result.AddField(wxT("width"), ibDataValue::Int(image.GetWidth()));
-		result.AddField(wxT("height"), ibDataValue::Int(image.GetHeight()));
+		result.AddField(wxT("width"), ibDataValue::Int(size.m_width));
+		result.AddField(wxT("height"), ibDataValue::Int(size.m_height));
 		return true;
 	}
 };

@@ -18,6 +18,7 @@
 #include "core/memory/memoryStream.h"                                       // ibWriterMemory (drag payload buffer)
 #include "backend/metaCollection/partial/reference/reference.h"        // ibValueReferenceDataObject::Create (reference-as-source)
 #include "backend/system/value/valueTable.h"                           // ibValueModelTable — value-table attribute column add
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 #include <wx/treectrl.h>
 #include <wx/imaglist.h>
@@ -81,7 +82,7 @@ ibAttributeTree::ibVisualEditorAttributeTree(ibVisualEditor* owner, wxWindow* pa
 
 	// Every entry carries the default meta-attribute icon (index 0).
 	wxImageList* images = new wxImageList(16, 16);
-	images->Add(ibValueMetaObjectAttribute::GetIconGroup());
+	images->Add(ToIcon(ibValueMetaObjectAttribute::GetIconGroup()));
 	m_tcAttributes->AssignImageList(images);
 
 	// Single click always (re)selects — even the already-selected item — so ONE click surfaces the

@@ -3,6 +3,7 @@
 
 #include <wx/treectrl.h>
 #include <wx/splitter.h>
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 #include "backend/metadataConfiguration.h"
 
@@ -45,7 +46,7 @@ private:
 		ibValueMetaObject* metaObject) {
 		wxImageList* imageList = m_interfaceCtrl->GetImageList();
 		wxASSERT(imageList);
-		const int imageIndex = imageList->Add(metaObject->GetIcon());
+		const int imageIndex = imageList->Add(ToIcon(metaObject->GetIcon()));
 		// Bare NAME (GetName) — the item already sits UNDER its type group ("Documents" / "Data processors" / …), so the
 		// metatype-qualified GetFullName ("Document.Document1") just repeats the group. Mirrors the role editor's tree.
 		wxTreeItemId createItem = m_interfaceCtrl->AppendItem(parent, metaObject->GetName(), imageIndex, imageIndex, new ibTreeItemObject(metaObject));

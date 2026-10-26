@@ -10,7 +10,7 @@ class BACKEND_API ibPropertyPicture : public ibProperty {
 public:
 
 #pragma region _value_
-	wxBitmap GetValueAsBitmap() const;
+	ibPicture GetValueAsPicture() const;
 	ibPictureDescription& GetValueAsPictureDesc() const;
 	void SetValue(const ibPictureDescription& val);
 #pragma endregion 
@@ -55,7 +55,7 @@ class BACKEND_API ibPropertyExternalPicture : public ibProperty {
 public:
 
 #pragma region _value_
-	wxBitmap GetValueAsBitmap() const;
+	ibPicture GetValueAsPicture() const;
 	const ibExternalPictureDescription& GetValueAsPictureDesc() const;
 	ibGuid GetValueAsVersion() const;
 	void SetValue(const ibExternalPictureDescription& val);

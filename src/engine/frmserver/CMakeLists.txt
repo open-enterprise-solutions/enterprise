@@ -29,10 +29,11 @@ if(WIN32)
     target_compile_definitions(frmserver PRIVATE FRMSERVER_EXPORTS)
 endif()
 
+# Of wx the base only, as the backend's (backend/CMakeLists.txt): a form on the server is data, drawn by a client.
+target_compile_definitions(frmserver PRIVATE wxUSE_GUI=0)
 target_link_libraries(frmserver
     PRIVATE
         backend
-        wx::core
         wx::base
 )
 

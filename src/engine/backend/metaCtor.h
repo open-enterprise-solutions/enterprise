@@ -59,9 +59,9 @@ public:
 	}
 
 	// ITS METACLASS'S PICTURE — `DocumentObject` is every document's object, and it is shown as a document.
-	// A type with none answers wxNullIcon, which the type picker put into its image list: one "Couldn't add an
+	// A type with none answers an empty icon, which the type picker put into its image list: one "Couldn't add an
 	// image to the image list" per family, the moment an event handler's Source was opened.
-	virtual wxIcon GetClassIcon() const override { return m_metaClassCtor != nullptr ? m_metaClassCtor->GetClassIcon() : wxNullIcon; }
+	virtual ibPicture GetClassIcon() const override { return m_metaClassCtor != nullptr ? m_metaClassCtor->GetClassIcon() : ibPicture(); }
 
 	virtual ibCtorObjectType GetObjectTypeCtor() const { return ibCtorObjectType::ibCtorObjectType_object_system; }
 	virtual ibValue CreateObject() const { return wxEmptyValue; }
@@ -96,7 +96,7 @@ public:
 
 	ibCtorMetaClass(const wxString& className, const ibClassID& clsid) :ibCtorValueTypeBase(className, typeid(T), clsid) {}
 
-	virtual wxIcon GetClassIcon() const { return T::GetIconGroup(); }
+	virtual ibPicture GetClassIcon() const { return T::GetIconGroup(); }
 	virtual ibCtorObjectType GetObjectTypeCtor() const { return ibCtorObjectType::ibCtorObjectType_object_metadata; }
 
 	// ⭐ THE "ANY" OF EACH KIND ARRIVES WITH THE METACLASS, on its registration — `Catalog` registers, `CatalogRef`

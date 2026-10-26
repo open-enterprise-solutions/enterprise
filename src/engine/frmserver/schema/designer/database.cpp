@@ -88,7 +88,7 @@ std::function<void()> ibSchemaDatabase::Command(const ibSession& session, std::i
 				failure = _("Loading the database failed with an internal error.") + wxT("\n\n")
 					+ BackendErrorChain(wxString::FromUTF8(e.what()));
 			}
-			frame->ShowModalMessage(failure, wxMessageBoxCaptionStr, wxOK | wxCENTRE | wxICON_ERROR);
+			frame->ShowModalMessage(failure, _("Error"), wxOK | wxCENTRE | wxICON_ERROR);
 		};
 	case ibProtocol::ibSchema::ibCommand::Save: {
 		// THE DUMP IS WRITTEN FIRST, into a file of the session's, and then taken down: the server cannot write where
@@ -116,7 +116,7 @@ std::function<void()> ibSchemaDatabase::Command(const ibSession& session, std::i
 				}
 			}
 			frame->ShowModalMessage(_("Error when trying to upload data to a file!") + wxT("\n\n") + BackendErrorChain(),
-				wxMessageBoxCaptionStr, wxOK | wxCENTRE | wxICON_ERROR);
+				_("Error"), wxOK | wxCENTRE | wxICON_ERROR);
 		};
 	}
 	case ibProtocol::ibSchema::ibCommand::Clear:
@@ -129,7 +129,7 @@ std::function<void()> ibSchemaDatabase::Command(const ibSession& session, std::i
 				frame->ShowModalMessage(_("Database cleared successfully!"), wxString(), wxOK | wxCENTRE);
 			else
 				frame->ShowModalMessage(_("Error when trying to clear database!") + wxT("\n\n") + BackendErrorChain(),
-					wxMessageBoxCaptionStr, wxOK | wxCENTRE | wxICON_ERROR);
+					_("Error"), wxOK | wxCENTRE | wxICON_ERROR);
 		};
 	default:
 		break;

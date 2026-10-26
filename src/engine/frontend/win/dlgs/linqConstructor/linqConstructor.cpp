@@ -3,6 +3,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "linqConstructor.h"
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 #include "backend/backend_exception.h"          // ibEvalModeScope - every probe runs as a completion
 #include "backend/compiler/scriptComplete.h"    // the three IntelliSense doors, and the compiler's outline
@@ -623,7 +624,7 @@ int ibDialogLinqConstructor::KindIcon(wxTreeCtrl* tree, const wxString& section)
 		const ibMetaData* metaData = m_module != nullptr ? m_module->GetMetaData() : nullptr;
 		if (metaData != nullptr) {
 			if (const ibCtorAbstractType* ctor = metaData->GetAvailableCtor(kind)) {
-				const wxIcon icon = ctor->GetClassIcon();
+				const wxIcon icon = ToIcon(ctor->GetClassIcon());
 				if (icon.IsOk())
 					return icon;
 			}
@@ -710,7 +711,7 @@ void ibDialogLinqConstructor::OnBeginDrag(wxTreeEvent& event)
 
 void ibDialogLinqConstructor::FillFields(wxTreeCtrl* tree, const wxTreeItemId& item, const wxString& expression, const ibProbe& row)
 {
-	const int fieldIcon = IconIndex(tree, wxT("field"), [] { return ibValue::GetIconGroup(); });
+	const int fieldIcon = IconIndex(tree, wxT("field"), [] { return ToIcon(ibValue::GetIconGroup()); });
 	for (const wxString& field : row.m_names)
 		tree->AppendItem(item, field, fieldIcon, -1, new ibLinqNode(ibNodeKind::Field, expression, field));
 
@@ -834,7 +835,7 @@ void ibDialogLinqConstructor::WriteFieldByHand(wxTreeCtrl* tree, const wxTreeIte
 		return;
 
 	const wxTreeItemId field = tree->InsertItem(source, tree->GetPrevSibling(hint), name,
-		IconIndex(tree, wxT("field"), [] { return ibValue::GetIconGroup(); }), -1,
+		IconIndex(tree, wxT("field"), [] { return ToIcon(ibValue::GetIconGroup()); }), -1,
 		new ibLinqNode(ibNodeKind::Field, node->m_expression, name));
 	tree->SelectItem(field);
 }

@@ -2,9 +2,9 @@
 #include "core/serialize/dataBuilder.h"   // ibDataNode (control -> node)
 #include "frontend/visualView/ctrl/form.h"           // ibValueForm — GetOwnerForm (the command-door gate)
 #include "frontend/visualView/layers/commandBar.h"   // GatherFormCommands — the icon/caption source the navigator uses
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 #ifdef OES_USE_WEB
 #include "frontend/web/webWindow.h"
-#include "backend/backend_picture.h"
 #else
 #include "frontend/win/ctrls/controlButton.h"
 #endif
@@ -53,7 +53,7 @@ void ibValueButton::Update(wxObject* wxobject, ibVisualHost* visualHost)
 	// pulled straight FROM the command through the command door (ResolveValueByPath), not gathered. So a plain
 	// button shows its own text; a command button left blank shows the command's caption + icon.
 	wxString title = m_propertyTitle->GetValueAsTranslateString();
-	wxBitmap picture = m_propertyPicture->GetValueAsBitmap();
+	wxBitmap picture = ToBitmap(m_propertyPicture->GetValueAsPicture());
 	const ibCommandDescription& cmdDesc = GetCommandDesc();
 	ibValueForm* const ownerForm = GetOwnerForm();
 	bool cmdModifies = false;   // only meaningful when a command is bound (used for the view-only greying below)
@@ -88,7 +88,7 @@ void ibValueButton::Update(wxObject* wxobject, ibVisualHost* visualHost)
 	const bool hasPic = bmp.IsOk();
 	wxString pictureUri;
 	if (hasPic) {
-		const wxString b64 = ibBackendPicture::CreateBase64Image(bmp.ConvertToImage());
+		const wxString b64 = CreateBase64Image(bmp.ConvertToImage());
 		if (!b64.IsEmpty())
 			pictureUri = wxT("data:image/png;base64,") + b64;
 	}

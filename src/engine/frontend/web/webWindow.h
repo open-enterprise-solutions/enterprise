@@ -278,7 +278,7 @@ public:
 	// Representation / picture — mirrors ibWebToolBarItem. ibRepresentation
 	// enum: 0 Auto / 1 Text / 2 Picture / 3 PictureAndText. Server resolves
 	// Auto before pushing. Picture arrives as a data:image/png;base64 URI
-	// produced by ibBackendPicture::CreateBase64Image, so the browser
+	// produced by CreateBase64Image (frontend/win/picture.h), so the browser
 	// renders <img src="..."> directly.
 	void SetRepresentation(int r)               { m_representation = r; }
 	void SetHasPicture(bool v)                  { m_hasPicture     = v; }

@@ -3,6 +3,7 @@
 #include "frontend/win/theme/luna_toolbarart.h"
 #include "backend/metadataConfiguration.h"
 #include "backend/appData.h"
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 #define colUserName 1
 #define colUserFullName 2
@@ -69,10 +70,10 @@ ibDialogUserList::ibDialogUserList(wxWindow* parent, wxWindowID id, const wxStri
 	m_toolbarMain = new wxAuiToolBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxAUI_TB_HORZ_TEXT);
 	m_toolbarMain->SetArtProvider(new wxAuiLunaToolBarArt());
 
-	m_toolAdd = m_toolbarMain->AddTool(wxID_USERS_TOOL_ADD, _("Add"), ibBackendPicture::GetPicture(g_picAddCLSID), wxNullBitmap, wxITEM_NORMAL, wxEmptyString, wxEmptyString, nullptr);
-	m_toolCopy = m_toolbarMain->AddTool(wxID_USERS_TOOL_COPY, _("Copy"), ibBackendPicture::GetPicture(g_picCopyCLSID), wxNullBitmap, wxITEM_NORMAL, wxEmptyString, wxEmptyString, nullptr);
-	m_toolEdit = m_toolbarMain->AddTool(wxID_USERS_TOOL_EDIT, _("Edit"), ibBackendPicture::GetPicture(g_picEditCLSID), wxNullBitmap, wxITEM_NORMAL, wxEmptyString, wxEmptyString, nullptr);
-	m_toolDelete = m_toolbarMain->AddTool(wxID_USERS_TOOL_DELETE, _("Delete"), ibBackendPicture::GetPicture(g_picDeleteCLSID), wxNullBitmap, wxITEM_NORMAL, wxEmptyString, wxEmptyString, nullptr);
+	m_toolAdd = m_toolbarMain->AddTool(wxID_USERS_TOOL_ADD, _("Add"), ToBitmap(ibBackendPicture::GetPicture(g_picAddCLSID)), wxNullBitmap, wxITEM_NORMAL, wxEmptyString, wxEmptyString, nullptr);
+	m_toolCopy = m_toolbarMain->AddTool(wxID_USERS_TOOL_COPY, _("Copy"), ToBitmap(ibBackendPicture::GetPicture(g_picCopyCLSID)), wxNullBitmap, wxITEM_NORMAL, wxEmptyString, wxEmptyString, nullptr);
+	m_toolEdit = m_toolbarMain->AddTool(wxID_USERS_TOOL_EDIT, _("Edit"), ToBitmap(ibBackendPicture::GetPicture(g_picEditCLSID)), wxNullBitmap, wxITEM_NORMAL, wxEmptyString, wxEmptyString, nullptr);
+	m_toolDelete = m_toolbarMain->AddTool(wxID_USERS_TOOL_DELETE, _("Delete"), ToBitmap(ibBackendPicture::GetPicture(g_picDeleteCLSID)), wxNullBitmap, wxITEM_NORMAL, wxEmptyString, wxEmptyString, nullptr);
 
 	m_toolbarMain->SetForegroundColour(wxDefaultStypeFGColour);
 	m_toolbarMain->SetBackgroundColour(wxDefaultStypeBGColour);
@@ -116,7 +117,7 @@ ibDialogUserList::ibDialogUserList(wxWindow* parent, wxWindowID id, const wxStri
 	wxDialog::Centre(wxBOTH);
 
 	wxIcon dlg_icon;
-	dlg_icon.CopyFromBitmap(ibBackendPicture::GetPicture(g_picUserListCLSID));
+	dlg_icon.CopyFromBitmap(ToBitmap(ibBackendPicture::GetPicture(g_picUserListCLSID)));
 
 	wxDialog::SetIcon(dlg_icon);
 	wxDialog::SetFocus();

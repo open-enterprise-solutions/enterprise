@@ -46,7 +46,6 @@
 
 #include <wx/datetime.h>  // DateBench — the wxDateTime the value's date replaced
 #include <wx/init.h>   // SessionBench — wxBase before application data
-#include <wx/image.h>  // wxInitAllImageHandlers — the configuration loads icons
 #include <wx/log.h>    // wxLogStderr — a warning must not become a modal box
 
 // Resident-set probe for the million-row bench. NOMINMAX because this file uses
@@ -369,9 +368,7 @@ struct SessionBench : ::testing::Test {
     void SetUp() override {
         if (!m_wxInit.IsOk())
             GTEST_SKIP() << "wxBase init failed (no wxApp host)";
-        // As BuiltInRuntime (test_runtime.cpp): image handlers for the icons the
-        // configuration loads, and no modal log box in a headless run.
-        wxInitAllImageHandlers();
+        // As BuiltInRuntime (test_runtime.cpp): no modal log box in a headless run.
         if (wxLog::GetActiveTarget() != nullptr)
             delete wxLog::SetActiveTarget(new wxLogStderr());
         if (ibApplicationInstance::Get() == nullptr) {

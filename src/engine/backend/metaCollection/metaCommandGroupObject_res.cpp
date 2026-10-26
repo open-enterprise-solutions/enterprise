@@ -1,5 +1,5 @@
 #include "metaCommandGroupObject.h"
-#include "backend/backend_picture.h"   // ibBackendPicture::GetIconFromBase64
+#include "core/graphics/picture.h"   // ibPicture::FromBase64 — the master read, scaled to 16 once
 #include "core/picturePredefined.h"    // g_picCommandGroup*CLSID — the platform groups' pictures
 
 /* PNG */
@@ -18,14 +18,14 @@ ibPictureID ibCommandGroupPicture(ibInterfaceCommandSection area)
 	}
 }
 
-wxIcon ibValueMetaObjectCommandGroup::GetIcon() const
+ibPicture ibValueMetaObjectCommandGroup::GetIcon() const
 {
 	return GetIconGroup();
 }
 
-wxIcon ibValueMetaObjectCommandGroup::GetIconGroup()
+ibPicture ibValueMetaObjectCommandGroup::GetIconGroup()
 {
-	static const ibPicture picture = ibBackendPicture::FromImage(ibBackendPicture::GetImageFromBase64(s_commandGroup_64_png, wxSize(16, 16)));
+	static const ibPicture picture = ibPicture::FromBase64(s_commandGroup_64_png, ibSize(16, 16));
 
-	return ibBackendPicture::ToIcon(picture);
+	return picture;
 }

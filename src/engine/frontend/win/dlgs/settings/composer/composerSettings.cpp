@@ -1,5 +1,6 @@
 #include <wx/tokenzr.h>   // an area may name several groupings, comma-separated
 #include "frontend/win/dlgs/settings/composer/composerSettings.h"
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 #include "backend/srcDataObject.h"                 // ibSourceExplorer — the available fields
 #include "frontend/win/dlgs/settings/settingsFieldTree.h"      // which fields this composition offers — one answer
@@ -4504,9 +4505,9 @@ void ibComposerSettingsPanel::PopulateFieldTree(wxTreeCtrl* tree)
 	// in the available fields too). Index 0 is the attribute, index 1 the resource — the same two
 	// answers the settings field tree gives, so a field looks the same on every page of this window.
 	wxImageList* icons = new wxImageList(16, 16);
-	icons->Add(ibValue::GetIconGroup());
-	const wxIcon resourceIcon = ibValueMetaObjectResource::GetIconGroup();
-	icons->Add(resourceIcon.IsOk() ? resourceIcon : ibValue::GetIconGroup());
+	icons->Add(ToIcon(ibValue::GetIconGroup()));
+	const wxIcon resourceIcon = ToIcon(ibValueMetaObjectResource::GetIconGroup());
+	icons->Add(resourceIcon.IsOk() ? resourceIcon : ToIcon(ibValue::GetIconGroup()));
 	tree->AssignImageList(icons);
 
 	// WHICH PATHS ARE RESOURCES — asked of the DESCRIPTION, never copied: adding one changes the

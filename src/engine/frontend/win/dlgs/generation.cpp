@@ -1,6 +1,7 @@
 #include "generation.h"
 #include "backend/metaData.h"
 #include "frontend/mainFrame/mainFrame.h"
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 bool ibDialogGeneration::ShowModal(ibMetaID& id)
 {
@@ -40,7 +41,7 @@ ibDialogGeneration::ibDialogGeneration(const ibMetaData* metaData, const ibMetaD
 		const ibValueMetaObject* typeCtor = metaData->FindAnyObjectByFilter(m_metaDesc.GetByIdx(idx));
 		wxASSERT(typeCtor);
 		wxImageList* imageList = m_listData->GetImageList(wxIMAGE_LIST_SMALL);
-		long lSelectedItem = m_listData->InsertItem(m_listData->GetItemCount(), typeCtor->GetSynonym(), imageList->Add(typeCtor->GetIcon()));
+		long lSelectedItem = m_listData->InsertItem(m_listData->GetItemCount(), typeCtor->GetSynonym(), imageList->Add(ToIcon(typeCtor->GetIcon())));
 		m_listData->SetItemData(lSelectedItem, typeCtor->GetMetaID());
 	}
 
@@ -58,7 +59,7 @@ ibDialogGeneration::ibDialogGeneration(const ibMetaData* metaData, const ibMetaD
 	mainSizer->Add(buttonsSizer, 0, wxEXPAND, FromDIP(5));
 
 	wxIcon dlg_icon;
-	dlg_icon.CopyFromBitmap(ibBackendPicture::GetPicture(g_picGenerateCLSID));
+	dlg_icon.CopyFromBitmap(ToBitmap(ibBackendPicture::GetPicture(g_picGenerateCLSID)));
 
 	wxDialog::SetSizer(mainSizer);
 	wxDialog::Layout();

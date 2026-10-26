@@ -2,6 +2,7 @@
 
 #include "backend/propertyManager/property/variant/variantGen.h"
 #include "backend/backend_picture.h"   // ibBackendPicture::CreatePicture — a choice's picture, by its id
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 #include "frontend/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
 #include "frontend/propertyManager/property/private/propertyRegistry.h"
@@ -36,7 +37,7 @@ ibPGGenerationProperty::ibPGGenerationProperty(const ibPropertyObject* property,
     : wxPGProperty(label, strName), m_ownerProperty(property)
 {
     for (unsigned int idx = 0; idx < choices.GetCount(); idx++)
-        m_choices.Add(choices.GetLabel(idx), ibBackendPicture::CreatePicture(choices.GetPicture(idx)), choices.GetId(idx));
+        m_choices.Add(choices.GetLabel(idx), ToBitmap(ibBackendPicture::CreatePicture(choices.GetPicture(idx))), choices.GetId(idx));
 
     //m_flags |= wxPGFlags::ReadOnly;
     m_flags |= wxPGPropertyFlags_ActiveButton; // Property button always enabled.
@@ -101,12 +102,12 @@ wxPGEditorDialogAdapter* ibPGGenerationProperty::GetEditorDialog() const
                 auto group = groups.find(clsid);
                 if (group == groups.end()) {
                     const ibCtorAbstractType* so = ibValue::GetAvailableCtor(clsid);
-                    const int groupIcon = so != nullptr ? imageList->Add(so->GetClassIcon()) : -1;
+                    const int groupIcon = so != nullptr ? imageList->Add(ToIcon(so->GetClassIcon())) : -1;
                     group = groups.emplace(clsid, tc->AppendItem(tc->GetRootItem(),
                         so != nullptr ? so->GetClassName() : wxString(), groupIcon, groupIcon)).first;
                 }
 
-                const int icon = imageList->Add(metaObject->GetIcon());
+                const int icon = imageList->Add(ToIcon(metaObject->GetIcon()));
                 wxTreeItemId newItem = tc->AppendItem(group->second, metaObject->GetName(),
                     icon, icon, new ibTreeItemPropertyData(id));
 

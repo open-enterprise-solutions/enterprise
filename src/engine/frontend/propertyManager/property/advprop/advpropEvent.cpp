@@ -4,6 +4,7 @@
 #include "backend/propertyManager/property/eventControl.h"
 #include "core/stringUtils.h"
 #include "backend/backend_picture.h"      // ibBackendPicture::GetPicture
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 #include "core/picturePredefined.h"    // g_picEventCLSID — an event's picture
 
 #include "frontend/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
@@ -37,12 +38,12 @@ ibPGEventProperty::ibPGEventProperty(const wxString& label, const wxString& name
 // An event, as an event handler's Event list shows one — answered when the grid draws (advpropValuePicture.h).
 wxSize ibPGEventProperty::OnMeasureImage(int /*item*/) const
 {
-	return ibMeasureValuePicture(ibBackendPicture::GetPicture(g_picEventCLSID), GetGrid());
+	return ibMeasureValuePicture(ToBitmap(ibBackendPicture::GetPicture(g_picEventCLSID)), GetGrid());
 }
 
 void ibPGEventProperty::OnCustomPaint(wxDC& dc, const wxRect& rect, wxPGPaintData& paintdata)
 {
-	ibPaintValuePicture(ibBackendPicture::GetPicture(g_picEventCLSID), dc, rect, paintdata);
+	ibPaintValuePicture(ToBitmap(ibBackendPicture::GetPicture(g_picEventCLSID)), dc, rect, paintdata);
 }
 
 wxString ibPGEventProperty::ValueToString(wxVariant& value,

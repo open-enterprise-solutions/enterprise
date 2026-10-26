@@ -126,7 +126,7 @@ class ibValueGridBox : public ibValueWindowComposite, public ibTypeControlFactor
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal);                   //attribute value
 
 	//support icons
-	virtual wxIcon GetIcon() const;
+	virtual ibPicture GetIcon() const;
 
 	//load & save object in control
 	virtual bool ReadData(const ibDataNode& node);
@@ -147,7 +147,7 @@ public:
 	void FillControlMembers(ibMemberTable& helper) const;   // bound in ctor (was PrepareNames)
 
 	//support icons
-	static wxIcon GetIconGroup();
+	static ibPicture GetIconGroup();
 
 protected:
 

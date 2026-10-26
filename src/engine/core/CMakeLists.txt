@@ -35,6 +35,7 @@ target_include_directories(core
 target_compile_definitions(core
     PRIVATE
         NOPCH
+        wxUSE_GUI=0   # of wx the base only — a GUI type here is a compile error
 )
 
 # THE NETWORK (net/) — HTTP and WebSocket on Asio, llhttp and Mbed TLS. Asio compiled once, in net/asio.cpp: every other
@@ -48,7 +49,7 @@ endif()
 target_include_directories(core PRIVATE ${OES_3RDPARTY_DIR}/asio/asio/include)
 # MBED TLS IS THE CORE'S (core/tls declares it): a random byte, a cipher, TLS — whatever else needs one asks the core
 # (crypto/, net/). PRIVATE and hidden (the root CMakeLists.txt), so nothing reaches it past the core.
-target_link_libraries(core PRIVATE llhttp mbedtls mbedx509 mbedcrypto)
+target_link_libraries(core PRIVATE llhttp lodepng mbedtls mbedx509 mbedcrypto)
 if(WIN32)
     # crypt32 — the system's certificate store, a client's trust when it names none (net/tlsStream.cpp).
     target_link_libraries(core PRIVATE ws2_32 crypt32 bcrypt)

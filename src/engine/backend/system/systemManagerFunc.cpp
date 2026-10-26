@@ -916,7 +916,10 @@ void ibValueSystemFunction::EndJob(bool force) //EndJob
 
 void ibValueSystemFunction::UserInterruptProcessing()
 {
-	if (wxGetKeyState(WXK_CONTROL) && wxGetKeyState(WXK_CANCEL))
+	// THE PERSON'S BREAK IS THE SESSION'S CANCEL (ibSession::Cancel), heard here as the interpreter hears it between
+	// opcodes. The keyboard this process could read is the server's, not the person's.
+	const ibSession* session = ibSession::Current();
+	if (session != nullptr && ibRunCancelled(session->RunState()))
 		ibBackendInterruptException::Error();
 }
 

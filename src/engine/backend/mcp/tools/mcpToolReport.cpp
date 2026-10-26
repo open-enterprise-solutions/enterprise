@@ -51,7 +51,6 @@
 #include "backend/query/queryable.h"
 
 #include <algorithm>   // std::remove_if — taking a grouping level back out
-#include <wx/fontenum.h>   // wxFontEnumerator — a face the rule names must exist here
 
 namespace {
 
@@ -1514,12 +1513,12 @@ class ibMcpToolReportConditionalAppearance : public ibMcpTool {
 		switch (parameter) {
 		case ibAppearanceParameter::BackgroundColour:
 		case ibAppearanceParameter::TextColour: {
-			wxColour colour;
-			if (!colour.Set(word.Find(wxT(',')) != wxNOT_FOUND ? wxT("rgb(") + word + wxT(")") : word) || !colour.IsOk()) {
+			ibColour colour;
+			if (!colour.FromString(word)) {
 				refusal = wxString::Format(ibMcpText("'%s' is not a colour - write it `R,G,B` (`255,235,156`) or `#FFEB9C`."), word);
 				return false;
 			}
-			value = ibValue(new ibValueColour(ibColour(colour.Red(), colour.Green(), colour.Blue())));
+			value = ibValue(new ibValueColour(colour));
 			return true;
 		}
 		case ibAppearanceParameter::Font: {
@@ -1544,14 +1543,9 @@ class ibMcpToolReportConditionalAppearance : public ibMcpTool {
 				else
 					face << (face.IsEmpty() ? wxT("") : wxT(" ")) << one;
 			}
-			if (!face.IsEmpty()) {
-				if (!wxFontEnumerator::IsValidFacename(face)) {
-					refusal = wxString::Format(ibMcpText("'%s' is not a font face here - say the font in words: `bold`, "
-						"`italic 12`, `bold 10 Arial`."), face);
-					return false;
-				}
+			// The face as said: the fonts are the screen's that draws the report, and the server has none.
+			if (!face.IsEmpty())
 				font.m_faceName = face;
-			}
 			value = ibValue(new ibValueFont(font));
 			return true;
 		}

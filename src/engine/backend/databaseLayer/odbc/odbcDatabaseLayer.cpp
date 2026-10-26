@@ -51,10 +51,6 @@ ibDatabaseLayerODBC::ibDatabaseLayerODBC()
 	m_strPassword = wxEmptyString;
 	m_strConnection = wxEmptyString;
 
-#if wxUSE_GUI
-	m_bPrompt = false;
-	m_parentContext = nullptr;
-#endif
 }
 
 ibDatabaseLayerODBC::ibDatabaseLayerODBC(const ibDatabaseLayerODBC& src)
@@ -101,10 +97,6 @@ ibDatabaseLayerODBC::ibDatabaseLayerODBC(const ibDatabaseLayerODBC& src)
 	m_strPassword = wxEmptyString;
 	m_strConnection = wxEmptyString;
 
-#if wxUSE_GUI
-	m_bPrompt = false;
-	m_parentContext = nullptr;
-#endif
 }
 
 ibDatabaseLayerODBC::~ibDatabaseLayerODBC()
@@ -168,13 +160,8 @@ bool ibDatabaseLayerODBC::Open()
 		// the driver was handed a pointer's bytes for a connection string; strict C++20 refused to take it.
 		const wxCharBuffer connectionCharBuffer = ConvertToUnicodeStream(m_strConnection);
 
-#if wxUSE_GUI
-		SQLRETURN nRet = m_pInterface->GetSQLDriverConnect()((SQLHDBC)m_sqlHDBC, m_parentContext ? (SQLHWND)m_parentContext->GetHandle() : nullptr, (SQLTCHAR*)(const char*)connectionCharBuffer,
-			SQL_NTS, (SQLTCHAR*)buff, 8192, &iLen, m_bPrompt ? SQL_DRIVER_PROMPT : SQL_DRIVER_NOPROMPT);
-#else
 		SQLRETURN nRet = m_pInterface->GetSQLDriverConnect()((SQLHDBC)m_sqlHDBC, nullptr, (SQLTCHAR*)(const char*)connectionCharBuffer,
 			SQL_NTS, (SQLTCHAR*)buff, 8192, &iLen, SQL_DRIVER_NOPROMPT);
-#endif
 
 		if (nRet != SQL_SUCCESS && nRet != SQL_SUCCESS_WITH_INFO)
 		{
@@ -198,27 +185,9 @@ bool ibDatabaseLayerODBC::Open(const wxString& strConnection)
 	m_strUser = wxEmptyString;
 	m_strPassword = wxEmptyString;
 	m_strConnection = strConnection;
-#if wxUSE_GUI
-	m_bPrompt = false;
-	m_parentContext = nullptr;
-#endif
 
 	return Open();
 }
-
-#if wxUSE_GUI
-bool ibDatabaseLayerODBC::Open(const wxString& strConnection, bool bPromptForInfo, wxWindow* parent)
-{
-	m_strConnection = strConnection;
-	m_bPrompt = bPromptForInfo;
-	m_parentContext = parent;
-	m_strDSN = wxEmptyString;
-	m_strUser = wxEmptyString;
-	m_strPassword = wxEmptyString;
-
-	return Open();
-}
-#endif
 
 bool ibDatabaseLayerODBC::Open(const wxString& strDSN, const wxString& strUser, const wxString& strPassword)
 {
@@ -226,10 +195,6 @@ bool ibDatabaseLayerODBC::Open(const wxString& strDSN, const wxString& strUser, 
 	m_strUser = strUser;
 	m_strPassword = strPassword;
 	m_strConnection = wxEmptyString;
-#if wxUSE_GUI
-	m_bPrompt = false;
-	m_parentContext = nullptr;
-#endif
 
 	return Open();
 }

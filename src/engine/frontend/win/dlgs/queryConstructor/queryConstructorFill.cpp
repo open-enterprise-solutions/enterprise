@@ -4,7 +4,8 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "queryConstructorInternal.h"
-#include "backend/backend_picture.h"   // ibBackendPicture::GetPictureAsIcon — a field's picture made an icon of this tree's
+#include "backend/backend_picture.h"   // ibBackendPicture::CreatePicture — a field's picture, made an icon of this tree's
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 using namespace queryctor;
 
@@ -413,7 +414,7 @@ ibDialogQueryConstructor::TreeIcons ibDialogQueryConstructor::PrepareIcons(wxTre
 	// A FRESH LIST WITH THE TREE. The list is indexed by position, and a stale one would put a
 	// document's icon on a catalog.
 	icons.m_images = new wxImageList(16, 16);
-	icons.m_field = icons.m_images->Add(ibValue::GetIconGroup());
+	icons.m_field = icons.m_images->Add(ToIcon(ibValue::GetIconGroup()));
 	tree->AssignImageList(icons.m_images);
 	return icons;
 }
@@ -438,7 +439,7 @@ wxIcon ibDialogQueryConstructor::IconOfExpr(const ibQueryAstExprPtr& expr) const
 	const ibSourceMetaDataScope resolveAgainst(m_metaData);
 	const ibQueryConstructorField field =
 		m_model.FieldOfPath(*select, expr->m_path, m_package, m_statement);
-	return ibBackendPicture::GetPictureAsIcon(field.m_picture, m_metaData);
+	return ToIcon(ibBackendPicture::CreatePicture(field.m_picture, m_metaData));
 }
 
 
@@ -850,7 +851,7 @@ int ibDialogQueryConstructor::FieldIcon(TreeIcons& icons, const ibQueryConstruct
 		if (known.first == field.m_picture)
 			return known.second;
 
-	const wxIcon icon = ibBackendPicture::GetPictureAsIcon(field.m_picture, m_metaData);
+	const wxIcon icon = ToIcon(ibBackendPicture::CreatePicture(field.m_picture, m_metaData));
 	if (!icon.IsOk())
 		return icons.m_field;
 	const int index = icons.m_images->Add(icon);
@@ -911,7 +912,7 @@ int ibDialogQueryConstructor::KindIcon(TreeIcons& icons, const wxString& kind) c
 	}
 	else if (m_metaData != nullptr) {
 		if (const ibCtorAbstractType* ctor = m_metaData->GetAvailableCtor(kind)) {
-			const wxIcon icon = ctor->GetClassIcon();
+			const wxIcon icon = ToIcon(ctor->GetClassIcon());
 			if (icon.IsOk())
 				index = icons.m_images->Add(icon);
 		}

@@ -2,6 +2,7 @@
 #include "backend/compiler/value.h"
 #include "frontend/propertyManager/property/private/propertyRegistry.h"
 #include "frontend/settings/formSettings.h"   // the setting this window saves and clears
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 enum {
 	WXOES_PROPERTY_GRID = wxID_HIGHEST + 1001
@@ -78,7 +79,7 @@ void ibDialogFormEditor::CreateTree()
 
 	m_iconList = new wxImageList(ICON_SIZE, ICON_SIZE);
 	for (auto objClass : ibValue::GetListCtorsByType(ibCtorObjectType::ibCtorObjectType_object_control)) {
-		const wxIcon& controlIcon = objClass->GetClassIcon();
+		const wxIcon& controlIcon = ToIcon(objClass->GetClassIcon());
 		if (controlIcon.IsOk()) {
 			const int retIndex = m_iconList->Add(controlIcon);
 			if (retIndex != wxNOT_FOUND) {
@@ -264,7 +265,7 @@ ibDialogFormEditor::ibDialogFormEditor(ibValueForm* valueForm) :
 	Centre(wxBOTH);
 
 	wxIcon dlg_icon;
-	dlg_icon.CopyFromBitmap(ibBackendPicture::GetPicture(g_picChangeFormCLSID));
+	dlg_icon.CopyFromBitmap(ToBitmap(ibBackendPicture::GetPicture(g_picChangeFormCLSID)));
 	
 	wxDialog::SetIcon(dlg_icon);
 	wxDialog::SetFocus();

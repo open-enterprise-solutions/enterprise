@@ -29,8 +29,10 @@ struct CORE_API ibColour {
 
 	// A text — the form colours were always written in (the sides' typeConv ColourToString): `r,g,b`, e.g.
 	// "255,255,255", opaque. A channel that is not a number from 0 to 255 reads as 0, as that reader read it.
+	// Also `#rrggbb`, and a CSS colour keyword in any case, spaces between its words or not ("light blue").
 	// ⚠ A SYSTEM COLOUR BY ITS wx NAME ("wxSYS_COLOUR_WINDOW") IS REFUSED: it is a question to the desktop, and
-	// the core has none to ask. Refused — that, or an empty text — the colour is left alone.
+	// the core has none to ask. Refused — that, a word that names no colour, or an empty text — the colour is
+	// left alone.
 	bool FromString(const ibString& text);
 
 	// …and the text it reads from — empty for no colour at all (an unset colour was written "0,0,0", and read

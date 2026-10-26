@@ -30,7 +30,6 @@
 #include "backend/appData.h"   // a built-in reads appData before it dispatches
 
 #include <wx/init.h>
-#include <wx/image.h>  // wxInitAllImageHandlers — wx decodes nothing until registered
 #include <wx/log.h>    // wxLogStderr — a wx warning must not become a modal box
 #include <wx/tokenzr.h>   // wxStringTokenize — prefix bisection
 

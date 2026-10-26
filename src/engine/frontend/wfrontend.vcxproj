@@ -240,6 +240,7 @@
     <ClCompile Include="visualView\ctrl\staticboxsizer_res.cpp" />
     <ClCompile Include="visualView\ctrl\wrapsizer_res.cpp" />
     <ClCompile Include="web\webStubs.cpp" />
+    <ClCompile Include="win\picture.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="wfrontend.h" />
@@ -253,6 +254,7 @@
     <ClInclude Include="frontendTypes.h" />
     <ClInclude Include="visualView\visualHost.h" />
     <ClInclude Include="visualView\visualHostClient.h" />
+    <ClInclude Include="win\picture.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

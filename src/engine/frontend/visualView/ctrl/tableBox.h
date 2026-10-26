@@ -229,8 +229,8 @@ class ibValueModelTableBox : public ibValueWindowComposite,
 	virtual bool IsMainSourceBound() const override;
 
 	//support icons
-	virtual wxIcon GetIcon() const;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const;
+	static ibPicture GetIconGroup();
 
 	/**
 	* Property events
@@ -522,8 +522,8 @@ public:
 	virtual int GetComponentType() const { return COMPONENT_TYPE_ABSTRACT; }
 
 	//support icons
-	virtual wxIcon GetIcon() const;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const;
+	static ibPicture GetIconGroup();
 
 	virtual void PrepareDefaultMenu(wxMenu* menu);
 	virtual void ExecuteMenu(ibVisualHost* visualHost, int id);
@@ -694,8 +694,8 @@ public:
 	virtual int GetComponentType() const { return COMPONENT_TYPE_ABSTRACT; }
 
 	//support icons
-	virtual wxIcon GetIcon() const;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const;
+	static ibPicture GetIconGroup();
 
 	/**
 	* Property events

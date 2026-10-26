@@ -9,13 +9,6 @@
 
 namespace {
 
-// A watched row's number, as the asker gave it and the runtime says it back — a pointer of the asker's tree, carried as
-// a number nothing here takes apart.
-ibDataValue ItemValue(const wxTreeItemId& item)
-{
-	return ibDataValue::UInt(static_cast<std::uint64_t>(reinterpret_cast<std::uintptr_t>(item.GetID())));
-}
-
 // Where a piece of news is of — the runtime's session, the file and the module (a module by its address).
 void WritePlace(const ibDebugData& data, ibDataNode& event)
 {
@@ -33,12 +26,12 @@ void WriteLine(const ibDebugLineData& data, ibDataNode& event)
 // A watch's answer — the row asked about, who asked, and its values, each with the row it is of.
 void WriteWatch(const ibWatchWindowData& data, ibDataNode& event)
 {
-	event.AddField(ibProtocol::ibDebug::Item, ItemValue(data.GetItem()));
+	event.AddField(ibProtocol::ibDebug::Item, ibDataValue::UInt(data.GetItem()));
 	event.SetValue(ibProtocol::ibDebug::Asker, data.GetBridgeId());
 	ibDataNode& rows = event.Child(ibProtocol::ibDebug::Rows);
 	for (unsigned int i = 0; i < data.GetWatchCount(); i++) {
 		ibDataNode& row = rows.AddChild(0, 0);
-		row.AddField(ibProtocol::ibDebug::Item, ItemValue(data.GetItem(i)));
+		row.AddField(ibProtocol::ibDebug::Item, ibDataValue::UInt(data.GetItem(i)));
 		row.SetValue(ibProtocol::ibDebug::Name, data.GetName(i));
 		row.SetValue(ibProtocol::ibDebug::Value, data.GetValue(i));
 		row.SetValue(ibProtocol::ibDebug::Type, data.GetType(i));

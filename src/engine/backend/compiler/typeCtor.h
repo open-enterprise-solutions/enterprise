@@ -53,7 +53,7 @@ public:
 	virtual const std::type_info& GetTypeInfo() const { return typeid(void); }
 	virtual ibClassID GetClassType() const = 0;
 
-	virtual wxIcon GetClassIcon() const { return wxNullIcon; }
+	virtual ibPicture GetClassIcon() const { return ibPicture(); }
 
 	virtual ibCtorObjectType GetObjectTypeCtor() const = 0;
 
@@ -181,7 +181,7 @@ public:
 		ibCtorSingleType(className, typeid(T), clsid), m_valType(valType) {
 	}
 
-	virtual wxIcon GetClassIcon() const { return T::GetIconGroup(); }
+	virtual ibPicture GetClassIcon() const { return T::GetIconGroup(); }
 	virtual ibValueTypes GetValueType() const { return m_valType; }
 	virtual ibCtorObjectType GetObjectTypeCtor() const { return ibCtorObjectType::ibCtorObjectType_object_primitive; }
 	virtual void CallEvent(ibCtorObjectTypeEvent event) {
@@ -212,7 +212,7 @@ public:
 		ibCtorValueTypeBase(className, typeid(T), clsid) {
 	}
 
-	virtual wxIcon GetClassIcon() const { return T::GetIconGroup(); }
+	virtual ibPicture GetClassIcon() const { return T::GetIconGroup(); }
 	virtual ibCtorObjectType GetObjectTypeCtor() const { return ibCtorObjectType::ibCtorObjectType_object_value; }
 	// Forward the table trait to the concrete type — T::IsTableValue() resolves (via name
 	// lookup) to ibValueModel's gate for models, to ibValue's default otherwise. Pure
@@ -246,7 +246,7 @@ public:
 		ibCtorValueTypeBase(className, typeid(T), clsid) {
 	}
 
-	virtual wxIcon GetClassIcon() const { return T::GetIconGroup(); }
+	virtual ibPicture GetClassIcon() const { return T::GetIconGroup(); }
 	virtual ibCtorObjectType GetObjectTypeCtor() const { return ibCtorObjectType::ibCtorObjectType_object_system; }
 	virtual void CallEvent(ibCtorObjectTypeEvent event) {
 		if (event == ibCtorObjectTypeEvent::ibCtorObjectTypeEvent_Register)
@@ -301,7 +301,7 @@ public:
 		ibCtorSingleType(className, typeid(T), clsid) {
 	}
 
-	virtual wxIcon GetClassIcon() const { return T::GetIconGroup(); }
+	virtual ibPicture GetClassIcon() const { return T::GetIconGroup(); }
 	virtual ibValueTypes GetValueType() const { return ibValueTypes::TYPE_ENUM; }
 	virtual ibCtorObjectType GetObjectTypeCtor() const { return ibCtorObjectType::ibCtorObjectType_object_enum; }
 	virtual void CallEvent(ibCtorObjectTypeEvent event) {
@@ -336,7 +336,7 @@ public:
 		ibCtorSingleType(className, typeid(T), clsid) {
 	}
 
-	virtual wxIcon GetClassIcon() const { return T::GetIconGroup(); }
+	virtual ibPicture GetClassIcon() const { return T::GetIconGroup(); }
 	virtual ibValueTypes GetValueType() const { return ibValueTypes::TYPE_VALUE; }
 	virtual ibCtorObjectType GetObjectTypeCtor() const { return ibCtorObjectType::ibCtorObjectType_object_context; }
 	virtual void CallEvent(ibCtorObjectTypeEvent event) {

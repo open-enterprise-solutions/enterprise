@@ -2,6 +2,7 @@
 
 #include "backend/propertyManager/property/variant/variantOwner.h"
 #include "backend/backend_picture.h"   // ibBackendPicture::CreatePicture — a choice's picture, by its id
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 #include "frontend/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
 #include "frontend/propertyManager/property/private/propertyRegistry.h"
@@ -36,7 +37,7 @@ ibPGOwnerProperty::ibPGOwnerProperty(const ibPropertyObject* property, const wxS
 	: wxPGProperty(label, strName), m_ownerProperty(property)
 {
 	for (unsigned int idx = 0; idx < choices.GetCount(); idx++)
-		m_choices.Add(choices.GetLabel(idx), ibBackendPicture::CreatePicture(choices.GetPicture(idx)), choices.GetId(idx));
+		m_choices.Add(choices.GetLabel(idx), ToBitmap(ibBackendPicture::CreatePicture(choices.GetPicture(idx))), choices.GetId(idx));
 
 	//m_flags |= wxPGFlags::ReadOnly;
 	m_flags |= wxPGPropertyFlags_ActiveButton; // Property button always enabled.
@@ -89,14 +90,14 @@ wxPGEditorDialogAdapter* ibPGOwnerProperty::GetEditorDialog() const
 			wxImageList* imageList = tc->GetImageList();
 			wxASSERT(imageList);
 			const ibCtorAbstractType* so = ibValue::GetAvailableCtor(clsid);
-			int groupIcon = imageList->Add(so->GetClassIcon());
+			int groupIcon = imageList->Add(ToIcon(so->GetClassIcon()));
 			const wxTreeItemId& parentID = tc->AppendItem(tc->GetRootItem(), so->GetClassName(),
 				groupIcon, groupIcon);
 			for (auto metaObject : metaData->GetAnyArrayObject(clsid)) {
 				ibValueMetaObjectRecordDataRef* registerData = dynamic_cast<ibValueMetaObjectRecordDataRef*>(metaObject);
 				if (registerData != nullptr) {
 					{
-						int icon = imageList->Add(registerData->GetIcon());
+						int icon = imageList->Add(ToIcon(registerData->GetIcon()));
 						ibTreeItemPropertyData* itemData = new ibTreeItemPropertyData(metaObject);
 						wxTreeItemId newItem = tc->AppendItem(parentID, registerData->GetName(),
 							icon, icon,

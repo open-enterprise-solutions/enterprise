@@ -7,6 +7,7 @@
 #include "backend/propertyManager/property/propertyAccountingKind.h"
 #include "backend/propertyManager/property/propertyFunctionalOptions.h"
 #include "backend/backend_picture.h"   // ibBackendPicture::CreatePicture — a choice's picture, by its id
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 #include "frontend/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
 #include "frontend/propertyManager/property/private/propertyRegistry.h"
@@ -57,7 +58,7 @@ ibPGChartBindingProperty::ibPGChartBindingProperty(const ibPropertyObject* prope
 	: wxPGProperty(label, strName), m_ownerProperty(property), m_choiceMode(mode)
 {
 	for (unsigned int idx = 0; idx < choices.GetCount(); idx++)
-		m_choices.Add(choices.GetName(idx), ibBackendPicture::CreatePicture(choices.GetPicture(idx)), choices.GetId(idx));   // names, as the cell names them (ValueToString)
+		m_choices.Add(choices.GetName(idx), ToBitmap(ibBackendPicture::CreatePicture(choices.GetPicture(idx))), choices.GetId(idx));   // names, as the cell names them (ValueToString)
 
 	m_flags |= wxPGPropertyFlags_ActiveButton; // Property button always enabled.
 

@@ -12,8 +12,8 @@ public:
 	ibValueMetaObjectConstant() : ibValueMetaObjectStoredValue() {}
 
 	//support icons
-	virtual wxIcon GetIcon() const override;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const override;
+	static ibPicture GetIconGroup();
 
 	// --- the type facade — it stayed HERE, which is what the user edits ------------------------
 	//

@@ -20,7 +20,6 @@
 #include "backend/metaCollection/metaObjectMetadata.h"
 
 #include <wx/filename.h>
-#include <wx/image.h>    // wxInitAllImageHandlers — a new base loads icons, and wx decodes nothing until registered
 #include <wx/init.h>
 #include <wx/log.h>      // wxLogStderr — a warning must not become a modal box and hang a headless run
 
@@ -157,8 +156,7 @@ struct Base {
 			reason = wxT("wxBase init failed");
 			return;
 		}
-		// The same two a headless runtime test sets: icons the configuration loads, and no modal log.
-		wxInitAllImageHandlers();
+		// As a headless runtime test: no modal log.
 		if (wxLog::GetActiveTarget() != nullptr)
 			delete wxLog::SetActiveTarget(new wxLogStderr());
 

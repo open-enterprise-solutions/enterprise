@@ -1,4 +1,5 @@
 #include "commonAttributeEditor.h"
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 #include "frontend/docView/docView.h"                       // docManager — notify open editors
 #include "designer/docManager/templates/docViewMetaFile.h"  // ibMetaDocument
@@ -76,7 +77,7 @@ void ibCommonAttributeCompositionEditor::InitComposition()
 
 	wxImageList* imageList = m_compositionCtrl->GetImageList();
 	wxASSERT(imageList);
-	const int imageIndex = imageList->Add(typeCtor->GetClassIcon());
+	const int imageIndex = imageList->Add(ToIcon(typeCtor->GetClassIcon()));
 
 	m_treeMETADATA = m_compositionCtrl->AddRoot(_("Configuration"), imageIndex, imageIndex);
 	m_compositionCtrl->SetItemBold(m_treeMETADATA);
@@ -103,7 +104,7 @@ wxTreeItemId ibCommonAttributeCompositionEditor::GroupFor(const ibClassID& clsid
 
 	wxImageList* imageList = m_compositionCtrl->GetImageList();
 	wxASSERT(imageList);
-	const int imageIndex = imageList->Add(typeCtor->GetClassIcon());
+	const int imageIndex = imageList->Add(ToIcon(typeCtor->GetClassIcon()));
 
 	const wxString caption = ibMetaGroupCaption(clsid);
 	const wxTreeItemId group = m_compositionCtrl->AppendItem(m_treeMETADATA,
@@ -117,7 +118,7 @@ wxTreeItemId ibCommonAttributeCompositionEditor::AppendItem(const wxTreeItemId& 
 {
 	wxImageList* imageList = m_compositionCtrl->GetImageList();
 	wxASSERT(imageList);
-	const int imageIndex = imageList->Add(metaObject->GetIcon());
+	const int imageIndex = imageList->Add(ToIcon(metaObject->GetIcon()));
 
 	const wxTreeItemId createItem = m_compositionCtrl->AppendItem(
 		parent, metaObject->GetName(), imageIndex, imageIndex, new ibTreeItemObject(metaObject));

@@ -1,4 +1,5 @@
 #include "userItem.h"
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 #include "backend/appData.h"
 #include "core/utils/md5.hpp"
@@ -137,7 +138,7 @@ ibDialogUserItem::ibDialogUserItem(wxWindow* parent, wxWindowID id, const wxStri
 		entry.m_strRoleName = object->GetName();
 		entry.m_miRoleId = object->GetMetaID();
 		entry.m_mode = object->GetRoleCompositionMode();
-		const int image = imageList->Add(object->GetIcon());
+		const int image = imageList->Add(ToIcon(object->GetIcon()));
 		const wxTreeItemId& id = m_choiceRole->AppendItem(root, object->GetSynonym(), image, image);
 		m_choiceRole->SetItemState(id, ibCheckTree::UNCHECKED);
 		m_roleArray.insert_or_assign(id, entry);
@@ -187,7 +188,7 @@ ibDialogUserItem::ibDialogUserItem(wxWindow* parent, wxWindowID id, const wxStri
 	wxDialog::Centre(wxBOTH);
 
 	wxIcon dlg_icon;
-	dlg_icon.CopyFromBitmap(ibBackendPicture::GetPicture(g_picUserCLSID));
+	dlg_icon.CopyFromBitmap(ToBitmap(ibBackendPicture::GetPicture(g_picUserCLSID)));
 
 	wxDialog::SetIcon(dlg_icon);
 	wxDialog::SetFocus();

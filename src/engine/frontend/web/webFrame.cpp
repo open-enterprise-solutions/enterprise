@@ -1,4 +1,5 @@
 #include "webFrame.h"
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 #include <algorithm>
 #include <atomic>
@@ -318,7 +319,7 @@ ibFrontendWindow* ibWebFrame::CreateChildFrame(
 	// tab showed the generic form icon regardless of source type.
 	wxIcon tabIcon;
 	if (doc != nullptr) tabIcon = doc->GetIcon();
-	if (!tabIcon.IsOk() && form != nullptr) tabIcon = form->GetIcon();
+	if (!tabIcon.IsOk() && form != nullptr) tabIcon = ToIcon(form->GetIcon());
 	if (tabIcon.IsOk()) raw->SetIcon(tabIcon);
 
 	webFrame->AdoptTab(std::move(childFrame), form);

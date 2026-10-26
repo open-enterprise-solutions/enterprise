@@ -2,6 +2,7 @@
 
 #include "backend/propertyManager/property/variant/variantRecord.h"
 #include "backend/backend_picture.h"   // ibBackendPicture::CreatePicture — a choice's picture, by its id
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 #include "frontend/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
 #include "frontend/propertyManager/property/private/propertyRegistry.h"
@@ -36,7 +37,7 @@ ibPGRecordProperty::ibPGRecordProperty(const ibPropertyObject* property, const w
     // The classes AND the has-a-recorder rule both moved into ibPropertyRecord::GetValueList, so the
     // list here is the same one every other caller now sees.
     for (unsigned int idx = 0; idx < choices.GetCount(); idx++)
-        m_choices.Add(choices.GetLabel(idx), ibBackendPicture::CreatePicture(choices.GetPicture(idx)), choices.GetId(idx));
+        m_choices.Add(choices.GetLabel(idx), ToBitmap(ibBackendPicture::CreatePicture(choices.GetPicture(idx))), choices.GetId(idx));
 
     //m_flags |= wxPGFlags::ReadOnly;
     m_flags |= wxPGPropertyFlags_ActiveButton; // Property button always enabled.
@@ -88,13 +89,13 @@ wxPGEditorDialogAdapter* ibPGRecordProperty::GetEditorDialog() const
             wxImageList* imageList = tc->GetImageList();
             wxASSERT(imageList);
             const ibCtorAbstractType* so = ibValue::GetAvailableCtor(clsid);
-            int groupIcon = imageList->Add(so->GetClassIcon());
+            int groupIcon = imageList->Add(ToIcon(so->GetClassIcon()));
             const wxTreeItemId& parentID = tc->AppendItem(tc->GetRootItem(), so->GetClassName(),
                 groupIcon, groupIcon);
             for (auto metaObject : metaData->GetAnyArrayObject(clsid)) {
                 ibValueMetaObjectRegisterData* registerData = dynamic_cast<ibValueMetaObjectRegisterData*>(metaObject);
                 if (registerData != nullptr && registerData->HasRecorder()) {
-                    const int icon = imageList->Add(registerData->GetIcon());
+                    const int icon = imageList->Add(ToIcon(registerData->GetIcon()));
                     ibTreeItemPropertyData* itemData = new ibTreeItemPropertyData(metaObject);
                     wxTreeItemId newItem = tc->AppendItem(parentID, registerData->GetName(),
                         icon, icon,

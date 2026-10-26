@@ -602,7 +602,9 @@ See `docs/private/eval-scope-refactor.md` for the full architecture.
 
 ## What Not To Do
 
-- Do not add `#include` for wxWidgets headers in `backend.dll` source files — the backend must remain GUI-free
+- Do not add `#include` for wxWidgets GUI headers in `core.dll` / `protocol.dll` / `backend.dll` / `frmserver.dll`
+  source files — they are compiled with `wxUSE_GUI=0` and link wx base only; a picture, a colour, a font there is the
+  core's data (`core/graphics`)
 - Do not give `core.dll` anything beyond wx base: no wx core/GUI, no base, no script, no metadata — it sits under frmclient as well as backend
 - **Do not raise a MODAL from the engine.** `backend.dll` has no modal boxes of its own (verified
   2026-09-02; the last two were leftovers from when the designer and the engine were one binary —

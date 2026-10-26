@@ -14,8 +14,8 @@ public:
 	virtual ibSpreadsheetDescription& GetSpreadsheetDesc() const = 0;
 
 	//support icons
-	virtual wxIcon GetIcon() const;
-	static wxIcon GetIconGroup();
+	virtual ibPicture GetIcon() const;
+	static ibPicture GetIconGroup();
 
 	//module manager is started or exit 
 	virtual bool OnBeforeRunMetaObject(int flags);

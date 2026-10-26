@@ -15,6 +15,7 @@
 #include "core/fnumber.h"
 #include "core/fdatetime.h"
 #include "core/fstring.h"
+#include "core/graphics/picture.h"   // ibPicture — a picture as data: what an icon is on this side
 #include "core/memory/memoryBuffer.h"
 #include "core/stringUtils.h"
 

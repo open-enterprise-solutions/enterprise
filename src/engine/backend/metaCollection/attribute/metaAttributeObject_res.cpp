@@ -12,14 +12,14 @@ ibPictureDescription ibBackendSourceColumn::GetColumnPicture() const
 	return g_metaAttributeCLSID;
 }
 
-wxIcon ibValueMetaObjectAttribute::GetIcon() const
+ibPicture ibValueMetaObjectAttribute::GetIcon() const
 {
 	return GetIconGroup();
 }
 
-wxIcon ibValueMetaObjectAttribute::GetIconGroup()
+ibPicture ibValueMetaObjectAttribute::GetIconGroup()
 {
-	static const ibPicture picture = ibBackendPicture::FromImage(ibBackendPicture::GetImageFromBase64(s_attribute_16_png, wxSize(16, 16)));
+	static const ibPicture picture = ibPicture::FromBase64(s_attribute_16_png, ibSize(16, 16));
 
-	return ibBackendPicture::ToIcon(picture);
+	return picture;
 }

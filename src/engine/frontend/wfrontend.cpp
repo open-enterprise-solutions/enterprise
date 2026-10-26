@@ -38,7 +38,7 @@
 #include "backend/metaCollection/metaSectionObject.h"
 #include "backend/metaCollection/metaCommandGroupObject.h"   // the section's groups, in the desktop's order
 #include "backend/interfaceHelper.h"
-#include "backend/backend_picture.h"
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 #include <iostream>
 
@@ -1539,7 +1539,7 @@ WFRONTEND_API std::string wfrontendAllFunctionsJSON(const std::string& sessionId
 		if (!icon.IsOk()) return std::string();
 		const wxBitmap bmp(icon);
 		if (!bmp.IsOk()) return std::string();
-		const wxString b64 = ibBackendPicture::CreateBase64Image(bmp.ConvertToImage());
+		const wxString b64 = CreateBase64Image(bmp.ConvertToImage());
 		if (b64.IsEmpty()) return std::string();
 		return std::string("data:image/png;base64,") + std::string(b64.utf8_str());
 	};
@@ -1570,7 +1570,7 @@ WFRONTEND_API std::string wfrontendAllFunctionsJSON(const std::string& sessionId
 		// ibDialogFunctionAll::AppendGroupItem renders next to the
 		// category name).
 		if (const auto* typeCtor = ibValue::GetAvailableCtor(s.clsid)) {
-			const std::string uri = iconToDataUri(typeCtor->GetClassIcon());
+			const std::string uri = iconToDataUri(ToIcon(typeCtor->GetClassIcon()));
 			if (!uri.empty()) g["icon"] = uri;
 		}
 		nlohmann::json items = nlohmann::json::array();
@@ -1581,7 +1581,7 @@ WFRONTEND_API std::string wfrontendAllFunctionsJSON(const std::string& sessionId
 			it["id"]      = (int)obj->GetMetaID();
 			it["name"]    = std::string(obj->GetName().utf8_str());
 			it["synonym"] = std::string(obj->GetSynonym().utf8_str());
-			const std::string uri = iconToDataUri(obj->GetIcon());
+			const std::string uri = iconToDataUri(ToIcon(obj->GetIcon()));
 			if (!uri.empty()) it["icon"] = uri;
 			items.push_back(std::move(it));
 		}
@@ -1607,7 +1607,7 @@ WFRONTEND_API std::string wfrontendInterfacesJSON()
 	}
 	auto iconToDataUri = [](const wxBitmap& bmp) -> std::string {
 		if (!bmp.IsOk()) return std::string();
-		const wxString b64 = ibBackendPicture::CreateBase64Image(bmp.ConvertToImage());
+		const wxString b64 = CreateBase64Image(bmp.ConvertToImage());
 		if (b64.IsEmpty()) return std::string();
 		return std::string("data:image/png;base64,") + std::string(b64.utf8_str());
 	};
@@ -1638,7 +1638,7 @@ WFRONTEND_API std::string wfrontendInterfacesJSON()
 		o["id"]      = (int)iface->GetMetaID();
 		o["name"]    = std::string(iface->GetName().utf8_str());
 		o["synonym"] = std::string(iface->GetSynonym().utf8_str());
-		const std::string uri = iconToDataUri(iface->GetPictureAsBitmap());
+		const std::string uri = iconToDataUri(ToBitmap(iface->GetPicture()));
 		if (!uri.empty()) o["icon"] = uri;
 		std::vector<SectionSpec> sectionSpecs;
 		for (const ibInterfaceCommandSection area : g_platformCommandGroups) {
@@ -1665,7 +1665,7 @@ WFRONTEND_API std::string wfrontendInterfacesJSON()
 				it["id"]      = (int)obj->GetMetaID();
 				it["name"]    = std::string(obj->GetName().utf8_str());
 				it["synonym"] = std::string(obj->GetSynonym().utf8_str());
-				const std::string iconUri = iconFromIcon(obj->GetIcon());
+				const std::string iconUri = iconFromIcon(ToIcon(obj->GetIcon()));
 				if (!iconUri.empty()) it["icon"] = iconUri;
 				items.push_back(std::move(it));
 			}

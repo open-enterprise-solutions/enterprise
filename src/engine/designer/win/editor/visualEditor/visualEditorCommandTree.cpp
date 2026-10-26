@@ -22,6 +22,7 @@
 #include "frontend/docView/docView.h"                                   // ibMetaDocument — the editor's document config (create in the edited tree, not the global)
 #include "backend/backend_core.h"                                        // oes_clipboard_metadata — the metaobject clipboard format
 #include "core/memory/memoryStream.h"                                       // ibWriterMemory / ibReaderMemory — serialize (drag payload + copy/paste)
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 #include <map>            // std::map — pre-create the fixed command sections (shown even empty)
 #include <wx/treectrl.h>
@@ -94,7 +95,7 @@ ibCommandTree::ibVisualEditorCommandTree(ibVisualEditor* owner, wxWindow* parent
 	}, ID_COMMANDTREE_PROPERTIES);
 
 	wxImageList* images = new wxImageList(16, 16);
-	images->Add(ibValueMetaObjectAttribute::GetIconGroup());   // one default icon shared by every command node
+	images->Add(ToIcon(ibValueMetaObjectAttribute::GetIconGroup()));   // one default icon shared by every command node
 	m_tcCommands->AssignImageList(images);
 
 	wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
@@ -128,7 +129,7 @@ void ibCommandTree::RebuildTree()
 	// picture (the command determines its icon — GatherFormCommands resolved it). AssignImageList replaces the
 	// ctor's single-icon list.
 	wxImageList* images = new wxImageList(16, 16);
-	images->Add(ibValueMetaObjectAttribute::GetIconGroup());   // 0 = group / default
+	images->Add(ToIcon(ibValueMetaObjectAttribute::GetIconGroup()));   // 0 = group / default
 
 	const wxTreeItemId root = m_tcCommands->AddRoot(wxT("Commands"));
 

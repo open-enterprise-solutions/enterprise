@@ -1,4 +1,5 @@
 #include "tableBox.h"
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 enum
 {
@@ -8,8 +9,8 @@ enum
 
 void ibValueModelTableBox::PrepareDefaultMenu(wxMenu *menu)
 {
-	menu->Append(MENU_ADD_COLUMN, _("Add column\tInsert"))->SetBitmap(ibValueModelTableBoxColumn::GetIconGroup());
-	menu->Append(MENU_ADD_COLUMN_GROUP, _("Add column group"))->SetBitmap(ibValueModelTableBoxColumnGroup::GetIconGroup());
+	menu->Append(MENU_ADD_COLUMN, _("Add column\tInsert"))->SetBitmap(ToIcon(ibValueModelTableBoxColumn::GetIconGroup()));
+	menu->Append(MENU_ADD_COLUMN_GROUP, _("Add column group"))->SetBitmap(ToIcon(ibValueModelTableBoxColumnGroup::GetIconGroup()));
 	menu->AppendSeparator();
 }
 

@@ -18,7 +18,7 @@ public:
 	const ibGuid& GetPictureVersion() const { return m_version; }
 
 	wxString GetPictureFileName() const;
-	wxBitmap GetPictureBitmap(const wxSize& size = wxSize(16, 16)) const;
+	ibPicture GetPicture(const ibSize& size = ibSize(16, 16)) const;
 
 	void SetFromExternalFile(const ibExternalPictureDescription& container) {
 		m_pictureExternalFile = container;
@@ -71,7 +71,7 @@ public:
 	bool IsEmptyPicture() const { return m_pictureDesc.IsEmptyPicture(); }
 
 	ibPictureDescription& GetPictureDesc() { return m_pictureDesc; }
-	wxBitmap GetPictureBitmap(const wxSize& size = wxSize(16, 16)) const;
+	ibPicture GetPicture(const ibSize& size = ibSize(16, 16)) const;
 
 	ibVariantDataExternalPicture* CloneExternalPicture() const { return m_externalPicture->Clone(); }
 

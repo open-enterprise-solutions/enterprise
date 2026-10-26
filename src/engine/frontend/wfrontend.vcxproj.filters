@@ -49,6 +49,7 @@
     <ClCompile Include="web\webTimer.cpp">       <Filter>web</Filter></ClCompile>
     <ClCompile Include="web\webChildFrame.cpp">  <Filter>web</Filter></ClCompile>
     <ClCompile Include="web\webStubs.cpp">       <Filter>web</Filter></ClCompile>
+    <ClCompile Include="win\picture.cpp" />
     <ClCompile Include="visualView\visualHost.cpp">             <Filter>visualView</Filter></ClCompile>
     <ClCompile Include="visualView\visualHostEvent.cpp">        <Filter>visualView</Filter></ClCompile>
     <ClCompile Include="visualView\visualHostClient.cpp">       <Filter>visualView</Filter></ClCompile>
@@ -125,6 +126,7 @@
     <ClInclude Include="web\webChildFrame.h">   <Filter>web</Filter></ClInclude>
     <ClInclude Include="visualView\visualHost.h">       <Filter>visualView</Filter></ClInclude>
     <ClInclude Include="visualView\visualHostClient.h"> <Filter>visualView</Filter></ClInclude>
+    <ClInclude Include="win\picture.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="wfrontend.rc" />

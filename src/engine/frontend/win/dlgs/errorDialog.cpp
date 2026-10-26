@@ -5,6 +5,7 @@
 
 #include "errorDialog.h"
 #include "frontend/mainFrame/mainFrame.h"
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 #define DEF_LINENUMBER_ID 0
 #define DEF_IMAGE_ID 1
@@ -91,7 +92,7 @@ ibDialogError::ibDialogError(ibFrontendMainFrame* parent, wxWindowID id,
 	m_errorOutput->SetAcceleratorTable(accel);
 
 	wxIcon dlg_icon;
-	dlg_icon.CopyFromBitmap(ibBackendPicture::GetPicture(g_picErrorCLSID));
+	dlg_icon.CopyFromBitmap(ToBitmap(ibBackendPicture::GetPicture(g_picErrorCLSID)));
 
 	wxDialog::SetIcon(dlg_icon);
 	wxDialog::SetFocus();

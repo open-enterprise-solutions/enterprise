@@ -14,6 +14,7 @@
 
 #include "dataview.h"
 #include "backend/backend_picture.h"   // ibBackendPicture::GetPicture — a row's state picture, by its id
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 #include "frontend/win/typeconv.h"     // ColourToWxColour — an item's colours are the model's data
 #ifndef WX_PRECOMP
 #ifdef __WXMSW__
@@ -3203,7 +3204,7 @@ const wxBitmap& ibDataViewCtrl::RowPictureBitmap(const ibPictureID& picture)
 		return wxNullBitmap;
 	std::map<ibPictureID, wxBitmap>::const_iterator it = m_rowPictures.find(picture);
 	if (it == m_rowPictures.end())
-		it = m_rowPictures.emplace(picture, ibBackendPicture::GetPicture(picture)).first;
+		it = m_rowPictures.emplace(picture, ToBitmap(ibBackendPicture::GetPicture(picture))).first;
 	return it->second;
 }
 
@@ -6029,7 +6030,7 @@ public:
 			if (m_model != NULL) {
 				const ibPictureID picture = m_model->GetRowPicture(item);
 				if (picture != 0)
-					width += ibBackendPicture::GetPicture(picture).GetLogicalWidth() + m_dvc->FromDIP(4);
+					width += ToBitmap(ibBackendPicture::GetPicture(picture)).GetLogicalWidth() + m_dvc->FromDIP(4);
 			}
 		}
 		else

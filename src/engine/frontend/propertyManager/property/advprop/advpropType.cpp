@@ -1,5 +1,6 @@
 ﻿#include "advpropType.h"
 #include "advpropValuePicture.h"                                         // the value's picture, read when drawn
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 #include "backend/propertyManager/property/propertyType.h"
 #include "backend/propertyManager/property/variant/variantType.h"
@@ -58,11 +59,11 @@ void ibPGTypeProperty::FillByClsid(const ibSelectorDataType& selectorDataType, c
 				// the type picker (ibShowTypeSelector).
 				if (kind == ibCtorObjectMetaType::ibCtorObjectMetaType_Reference)
 					if (const ibCtorMetaAnyKind* family = ib_find_meta_any_kind(so->GetClassName(), kind)) {
-						auto choice = m_choices.Add(family->GetClassName(), family->GetClassIcon());
+						auto choice = m_choices.Add(family->GetClassName(), ToIcon(family->GetClassIcon()));
 						m_valChoices.insert_or_assign(choice.GetValue(), family->GetClassType());
 					}
 				for (auto ctor : metaData->GetListCtorsByType(clsid, kind)) {
-					auto choice = m_choices.Add(ctor->GetClassName(), ctor->GetMetaObject()->GetIcon());
+					auto choice = m_choices.Add(ctor->GetClassName(), ToIcon(ctor->GetMetaObject()->GetIcon()));
 					m_valChoices.insert_or_assign(choice.GetValue(), ctor->GetClassType());
 				}
 			};
@@ -80,7 +81,7 @@ void ibPGTypeProperty::FillByClsid(const ibSelectorDataType& selectorDataType, c
 		}
 	}
 	else {
-		auto choice = m_choices.Add(so->GetClassName(), so->GetClassIcon());
+		auto choice = m_choices.Add(so->GetClassName(), ToIcon(so->GetClassIcon()));
 		m_valChoices.insert_or_assign(
 			choice.GetValue(), so->GetClassType()
 		);
@@ -164,7 +165,7 @@ ibPGTypeProperty::ibPGTypeProperty(const ibPropertyObject* property, const ibSel
 	if (selectorDataType == ibSelectorDataType::ibSelectorDataType_reference ||
 		selectorDataType == ibSelectorDataType::ibSelectorDataType_any) {
 		if (const ibCtorAbstractType* anyRef = ibValue::GetAvailableCtor(wxT("AnyRef"))) {
-			auto choice = m_choices.Add(anyRef->GetClassName(), anyRef->GetClassIcon());
+			auto choice = m_choices.Add(anyRef->GetClassName(), ToIcon(anyRef->GetClassIcon()));
 			m_valChoices.insert_or_assign(choice.GetValue(), anyRef->GetClassType());
 		}
 	}
@@ -180,7 +181,7 @@ ibPGTypeProperty::ibPGTypeProperty(const ibPropertyObject* property, const ibSel
 			const ibCtorAbstractType* so = metaData != nullptr ? metaData->GetAvailableCtor(clsid) : ibValue::GetAvailableCtor(clsid);
 			if (so == nullptr)
 				continue;
-			auto choice = m_choices.Add(so->GetClassName(), so->GetClassIcon());
+			auto choice = m_choices.Add(so->GetClassName(), ToIcon(so->GetClassIcon()));
 			m_valChoices.insert_or_assign(choice.GetValue(), clsid);
 		}
 	}

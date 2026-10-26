@@ -4,6 +4,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "treeDataProcessor.h"
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 #include "frontend/artProvider/artProvider.h"
 #include "frontend/win/theme/luna_toolbarart.h"
@@ -111,7 +112,7 @@ ibDataProcessorTree::ibDataProcessorTree(ibMetaDocument* docParent, wxWindow* pa
 		if (ibMetaDataDataProcessor* metaData = fileDoc->GetMetaData()) {
 			if (ibValueMetaObjectDataProcessor* commonMeta = metaData->GetDataProcessor()) {
 				if (const ibValueMetaObjectModule* moduleMeta = commonMeta->GetObjectModule())
-					m_buttonModule->SetBitmap(moduleMeta->GetIcon());
+					m_buttonModule->SetBitmap(ToIcon(moduleMeta->GetIcon()));
 			}
 		}
 	}

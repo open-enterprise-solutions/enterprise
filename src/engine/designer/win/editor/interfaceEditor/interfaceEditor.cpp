@@ -1,4 +1,5 @@
 #include "interfaceEditor.h"
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 #include "frontend/docView/docView.h"                       // docManager — notify open editors of the change
 #include "designer/docManager/templates/docViewMetaFile.h"  // ibMetaDocument — a config metaobject document
@@ -72,7 +73,7 @@ void ibInterfaceEditor::InitInterface()
 	wxASSERT(typeCtor);
 
 	wxImageList* imageList = m_interfaceCtrl->GetImageList();
-	int imageIndex = imageList->Add(typeCtor->GetClassIcon());
+	int imageIndex = imageList->Add(ToIcon(typeCtor->GetClassIcon()));
 	m_treeMETADATA = m_interfaceCtrl->AddRoot(_("Configuration"), imageIndex, imageIndex, new ibTreeItemObject(activeMetaData->GetCommonMetaObject()));
 
 	m_interfaceCtrl->SetItemBold(m_treeMETADATA);
@@ -101,7 +102,7 @@ wxTreeItemId ibInterfaceEditor::GroupFor(const ibClassID& clsid)
 
 	wxImageList* imageList = m_interfaceCtrl->GetImageList();
 	wxASSERT(imageList);
-	const int imageIndex = imageList->Add(typeCtor->GetClassIcon());
+	const int imageIndex = imageList->Add(ToIcon(typeCtor->GetClassIcon()));
 
 	const wxString caption = ibMetaGroupCaption(clsid);
 	const wxTreeItemId group = m_interfaceCtrl->AppendItem(m_treeMETADATA,

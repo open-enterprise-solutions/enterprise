@@ -1,5 +1,6 @@
 #include "authorization.h"
 #include "backend/appData.h"
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 ///////////////////////////////////////////////////////////////////////////
 
@@ -24,7 +25,7 @@ ibDialogAuthentication::ibDialogAuthentication(wxWindow* parent, wxWindowID id, 
 	m_staticTextLogin = new wxStaticText(this, wxID_ANY, _("Login:"));
 	m_comboBoxLogin   = new wxBitmapComboBox(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize);
 	for (const auto& userInfo : ibUserInfo::ListAll())
-		m_comboBoxLogin->Append(userInfo.m_strUserName, ibBackendPicture::GetPicture(g_picUserCLSID));
+		m_comboBoxLogin->Append(userInfo.m_strUserName, ToBitmap(ibBackendPicture::GetPicture(g_picUserCLSID)));
 
 	m_staticTextPassword = new wxStaticText(this, wxID_ANY, _("Password:"));
 	m_textCtrlPassword   = new wxTextCtrl(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxTE_PASSWORD);
@@ -59,7 +60,7 @@ ibDialogAuthentication::ibDialogAuthentication(wxWindow* parent, wxWindowID id, 
 	wxDialog::Centre(wxBOTH);
 
 	wxIcon dlg_icon;
-	dlg_icon.CopyFromBitmap(ibBackendPicture::GetPicture(g_picAuthenticationCLSID));
+	dlg_icon.CopyFromBitmap(ToBitmap(ibBackendPicture::GetPicture(g_picAuthenticationCLSID)));
 
 	wxDialog::SetIcon(dlg_icon);
 	wxDialog::SetFocus();

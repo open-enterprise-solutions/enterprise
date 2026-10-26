@@ -1,6 +1,6 @@
 #include "checktree.h"
 
-#include "backend/backend_picture.h"
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 // The box in each state: normal, under the mouse, pressed (the left button down), disabled. A PNG master each,
 // drawn from its SVG by tools/pictures/render.js, scaled down here.
@@ -143,7 +143,7 @@ void ibCheckTree::Init()
 {
 	wxImageList* states;
 
-	const auto icon = [](const wxString& png) { return ibBackendPicture::GetIconFromBase64(png, wxSize(16, 16)); };
+	const auto icon = [](const wxString& png) { return ToIcon(ibPicture::FromBase64(png, ibSize(16, 16))); };
 
 	wxIcon icons[8];
 	icons[0] = icon(s_unchecked_png);

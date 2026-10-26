@@ -12,9 +12,9 @@ wxVariantData* ibPropertyPicture::CreateVariantData(ibPropertyObject* property, 
 
 ////////////////////////////////////////////////////////////////////////
 
-wxBitmap ibPropertyPicture::GetValueAsBitmap() const
+ibPicture ibPropertyPicture::GetValueAsPicture() const
 {
-	return get_cell_variant<ibVariantDataPicture>()->GetPictureBitmap();
+	return get_cell_variant<ibVariantDataPicture>()->GetPicture();
 }
 
 ibPictureDescription& ibPropertyPicture::GetValueAsPictureDesc() const

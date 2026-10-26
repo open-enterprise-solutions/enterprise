@@ -6,6 +6,7 @@
 #include "treeConfiguration.h"
 #include <wx/wupdlock.h>   // wxWindowUpdateLocker — the Freeze/Thaw pair taken as a guard
 #include "core/fileKind.h"   // extensions live in one table, not at each call site
+#include "frontend/win/picture.h"   // ToBitmap / ToIcon — a picture drawn
 
 #include "mainFrame/mainFrameDesigner.h"   // the documents are the window's — see the verbs below
 #include "backend/backend_exception.h"     // an engine refusal arrives as an exception
@@ -143,9 +144,9 @@ bool ibMetaTreeBase::AppendMetaMenu(wxMenu* menu, ibValueMetaObject* metaObject)
 
 		// Asked of the metaobject when there is one, taken from the item when there is not.
 		if (item.m_metaObject != nullptr)
-			menuItem->SetBitmap(item.m_metaObject->GetIcon());
+			menuItem->SetBitmap(ToIcon(item.m_metaObject->GetIcon()));
 		else if (item.m_picture != 0)
-			menuItem->SetBitmap(ibBackendPicture::GetPicture(item.m_picture));
+			menuItem->SetBitmap(ToBitmap(ibBackendPicture::GetPicture(item.m_picture)));
 
 		// ⭐⭐ THE ITEM CARRIES ITS OWN ACTION, so nothing is remembered between building the menu
 		// and clicking it. The item already NAMES what to open (Max, 2026-09-01: *"OpenObjectForm
@@ -1311,12 +1312,12 @@ void ibConfigurationTree::PrepareContextMenu(wxMenu* defaultMenu, const wxTreeIt
 		wxMenuItem* menuItem = nullptr;
 
 		menuItem = defaultMenu->Append(ID_METATREE_NEW, _("New"));
-		menuItem->SetBitmap(ibBackendPicture::GetPicture(g_picAddCLSID));
+		menuItem->SetBitmap(ToBitmap(ibBackendPicture::GetPicture(g_picAddCLSID)));
 		menuItem->Enable(!m_bReadOnly);
 		menuItem = defaultMenu->Append(ID_METATREE_EDIT, _("Edit"));
-		menuItem->SetBitmap(ibBackendPicture::GetPicture(g_picEditCLSID));
+		menuItem->SetBitmap(ToBitmap(ibBackendPicture::GetPicture(g_picEditCLSID)));
 		menuItem = defaultMenu->Append(ID_METATREE_DELETE, _("Remove"));
-		menuItem->SetBitmap(ibBackendPicture::GetPicture(g_picDeleteCLSID));
+		menuItem->SetBitmap(ToBitmap(ibBackendPicture::GetPicture(g_picDeleteCLSID)));
 		menuItem->Enable(!m_bReadOnly);
 	}
 
@@ -1337,7 +1338,7 @@ void ibConfigurationTree::PrepareContextMenu(wxMenu* defaultMenu, const wxTreeIt
 	}
 	else if (!metaObject && item != m_treeCOMMON) {
 		wxMenuItem* menuItem = defaultMenu->Append(ID_METATREE_NEW, _("New"));
-		menuItem->SetBitmap(ibBackendPicture::GetPicture(g_picAddCLSID));
+		menuItem->SetBitmap(ToBitmap(ibBackendPicture::GetPicture(g_picAddCLSID)));
 		menuItem->Enable(!m_bReadOnly);
 
 		// Same rule as InsertItem: an absent group must not match an invalid selection.
