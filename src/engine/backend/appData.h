@@ -368,8 +368,10 @@ public:
 	const ibString& GetInstanceName() const { return m_strInstance; }
 	const ibString& GetFile() const { return m_strFile; } // a Firebird base's folder (VCS working copy root)
 
-	// The platform locale — the PROCESS's (ibApplicationHost), asked here so its readers need not know that.
+	// The base's locale where it names one, else the PROCESS's (ibApplicationHost).
 	ibString GetLocale() const;
+	// The words its threads speak (core/localization/dictionary.h): null — the process's.
+	const ibDictionary* GetDictionary() const { return m_dictionary; }
 
 #pragma region session
 
@@ -481,6 +483,11 @@ private:
 	// subsystems below so it dies after them: they still write lines while they are destroyed, and those lines
 	// ask for it.
 	ibString m_strInstance;
+
+	// The words of the locale the base names (sys_settings, Regional — no user), read once as it opens; null —
+	// it names none, and its threads speak the process's language. The set is the process's (ibDictionary
+	// keeps one per language), so nothing here dies with the base.
+	const ibDictionary* m_dictionary = nullptr;
 
 	// Subsystem ownership — order below is THE teardown contract.
 	// C++ destroys members in reverse declaration order, so the last

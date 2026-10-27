@@ -4,7 +4,6 @@
 #include <functional>
 
 #include <wx/dialog.h>
-#include <wx/intl.h>
 #include <wx/treectrl.h>
 
 #include "protocol/protocolNode.h"

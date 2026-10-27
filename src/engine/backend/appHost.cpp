@@ -55,6 +55,23 @@ struct ibRegisterAppHostLocal {
 	}
 } s_registerAppHostLocal;
 
+// ⭐ THE WORDS THIS THREAD SPEAKS (ibDictionary, core/localization/dictionary.h): the dictionary of the base it
+// works for - the session's base, else the base the thread is bound to, else the base whose service runs on it -
+// and null for a thread that works for no base, or for a base that names no locale: the process's language then.
+// A pointer read off the base, no lock on the way: _() is said a dozen times per control made, on every thread.
+const ibDictionary* DictionaryOfThisThreadsBase()
+{
+	if (ibApplicationHost::IsEmpty())
+		return nullptr;
+	const ibSession* const session = ibSession::CurrentCached();
+	const ibApplicationInstance* base = session != nullptr ? session->GetApplicationInstance() : nullptr;
+	if (base == nullptr)
+		base = t_instance;
+	if (base == nullptr)
+		base = t_owner;
+	return base != nullptr ? base->GetDictionary() : nullptr;
+}
+
 } // namespace
 
 // The connections to its DBMS a base may hold when neither its infobase.conf nor backend.conf says (Connections):
@@ -112,6 +129,7 @@ ibApplicationHost* ibApplicationHost::Ensure(ibRunMode runMode)
 	if (s_applicationHost == nullptr) {
 		s_applicationHost.reset(new ibApplicationHost(runMode));
 		ibTechJournal::SetContext(&ibApplicationHost::GetJournalContext);
+		ibDictionary::SetSource(&DictionaryOfThisThreadsBase);
 	}
 
 	// …WITH ROOM FOR ONE MORE — as many bases as its config allows (backend.conf, Bases). Refused out loud and
@@ -224,6 +242,7 @@ void ibApplicationHost::CloseAll()
 	}
 
 	ibTechJournal::SetContext(nullptr);
+	ibDictionary::SetSource(nullptr);   // core outlives this library; its _() must not call back into it
 	s_applicationHost.reset();
 }
 
@@ -421,7 +440,11 @@ bool ibApplicationHost::InitLocale(const ibString& locale)
 			wish->GetCanonicalWithRegion(), m_locale.GetCanonicalName());
 
 	// Initialize the catalogs we'll be using.
-	m_locale.AddCatalog(ibT("open_es"));
+	m_locale.AddCatalog(kEngineDomain);
+	// THE ENGINE'S OWN WORDS come through its own catalogs (core/localization/dictionary.h): one set per
+	// language, chosen per thread by the base it works for; the process's language is this one. wxLocale keeps its copy of the catalog above for wx's own
+	// windows.
+	ibDictionary::SetProcessLanguage(m_locale.GetCanonicalName());
 
 	// ⭐ NO CATALOG OF OURS FOR THE LANGUAGE — NOTHING TO ASK. The engine's strings stay as they are written (English
 	// has no catalog: it is what they are written in), and a translations object with nothing of ours misses on every
@@ -430,7 +453,7 @@ bool ibApplicationHost::InitLocale(const ibString& locale)
 	// about two thirds of the application server's busy threads waiting on that one lock (2026-10-06, Debug, cdb).
 	// Without the object, `_()` hands the string back at once.
 	if (wxTranslations* const translations = wxTranslations::Get())
-		if (!translations->IsLoaded(ibT("open_es")))
+		if (!translations->IsLoaded(kEngineDomain))
 			wxTranslations::Set(nullptr);
 
 	// Initialize localization engine

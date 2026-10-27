@@ -5,8 +5,6 @@
 
 #include <vector>
 
-#include <wx/translation.h>
-
 // THE ENGINE'S COMPARISON (backend/metaCollection/metaDiff.h) AS THE THIN DESIGNER'S COMPARE TAB NAMES IT
 // (designer-thin/mainFrame/configCompare): the record and its status whole. Records arrive from schema ConfigCompare
 // Build (the server's Walk); m_left/m_right stay null — Name, Picture, LeftId, RightId and the side strings name each row.

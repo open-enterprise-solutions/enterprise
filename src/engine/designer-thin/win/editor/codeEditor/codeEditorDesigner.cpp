@@ -61,7 +61,7 @@ bool ibCodeEditorDesigner::GetDebugPointHint(int line, wxString& hint)
 	const auto it = breakpoints.find((unsigned int)line);
 	if (it == breakpoints.end() || it->second.IsEmpty())
 		return false;
-	hint = wxString::Format(_("Breakpoint condition: %s"), it->second);
+	hint = ibString::Format(_("Breakpoint condition: %s"), it->second);
 	return true;
 }
 

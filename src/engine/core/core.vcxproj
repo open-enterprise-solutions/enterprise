@@ -184,6 +184,7 @@
     <ClCompile Include="exception.cpp" />
     <ClCompile Include="fboolean.cpp" />
     <ClCompile Include="fdatetime.cpp" />
+    <ClCompile Include="fdatetimeParse.cpp" />
     <ClCompile Include="fiber\fiber.cpp" />
     <ClCompile Include="fiber\fiberLocals.cpp" />
     <ClCompile Include="fileKind.cpp" />
@@ -200,6 +201,7 @@
     <ClCompile Include="guid.cpp" />
     <ClCompile Include="job\jobScheduleRules.cpp" />
     <ClCompile Include="localization.cpp" />
+    <ClCompile Include="localization\dictionary.cpp" />
     <ClCompile Include="memory\lz\lzhuf.cpp" />
     <ClCompile Include="memory\compression.cpp" />
     <ClCompile Include="memory\memoryBuffer.cpp" />
@@ -305,6 +307,7 @@
     <ClInclude Include="guid.h" />
     <ClInclude Include="job\jobSchedule.h" />
     <ClInclude Include="localization.h" />
+    <ClInclude Include="localization\dictionary.h" />
     <ClInclude Include="logger\loggerQuery.h" />
     <ClInclude Include="mcp\mcpSettings.h" />
     <ClInclude Include="memory\lz\lzhuf.h" />

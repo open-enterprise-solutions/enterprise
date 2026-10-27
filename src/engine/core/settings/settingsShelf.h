@@ -43,6 +43,10 @@ enum class ibSettingsCategory : int {
 	// ⚠ APPENDED, as the rule above requires — taken in the middle it would have re-read every
 	// Default row as this one.
 	Mcp,
+	// ⭐ THE BASE ITSELF IS A TENANT TOO: the locale its words are said in belongs to the base and every
+	// client of it, so the row has NO user (ReadLocale, backend/appData.cpp). One well-known object
+	// key, as the platform's above.
+	Regional,
 };
 
 // ONE SAVED SETTING as a shelf shows it — the identity, the caption, and when it

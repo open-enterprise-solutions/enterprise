@@ -1983,7 +1983,7 @@ ibDataViewDateRenderer::CreateEditorCtrl(wxWindow* parent, wxRect labelRect, con
 	(
 		parent,
 		wxID_ANY,
-		value.GetDate().ToWxDateTime(),
+		typeConv::DateTimeToWxDateTime(value.GetDate()),
 		labelRect.GetTopLeft(),
 		labelRect.GetSize()
 	);
@@ -1992,19 +1992,19 @@ ibDataViewDateRenderer::CreateEditorCtrl(wxWindow* parent, wxRect labelRect, con
 bool ibDataViewDateRenderer::GetValueFromEditorCtrl(wxWindow* editor, ibVariant& value)
 {
 	wxDatePickerCtrl* ctrl = static_cast<wxDatePickerCtrl*>(editor);
-	value = ibDateTime::OfWxDateTime(ctrl->GetValue());
+	value = typeConv::WxDateTimeToDateTime(ctrl->GetValue());
 	return true;
 }
 
 bool ibDataViewDateRenderer::SetValue(const ibVariant& value)
 {
-	m_date = value.GetDate().ToWxDateTime();
+	m_date = typeConv::DateTimeToWxDateTime(value.GetDate());
 	return true;
 }
 
 bool ibDataViewDateRenderer::GetValue(ibVariant& value) const
 {
-	value = ibDateTime::OfWxDateTime(m_date);
+	value = typeConv::WxDateTimeToDateTime(m_date);
 	return true;
 }
 

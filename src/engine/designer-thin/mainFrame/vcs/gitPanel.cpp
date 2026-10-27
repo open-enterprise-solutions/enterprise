@@ -9,6 +9,7 @@
 #include <wx/msgdlg.h>
 #include <wx/dialog.h>
 #include <wx/textctrl.h>
+#include "core/localization/dictionary.h"   // _() — the panel's words
 
 enum {
 	ID_GIT_REFRESH = wxID_HIGHEST + 7100,
@@ -140,7 +141,7 @@ void ibGitPanel::RefreshStatus()
 		const long i = m_statusList->InsertItem(row++, e.xy);
 		m_statusList->SetItem(i, 1, e.path);
 	}
-	m_info->SetLabel(wxString::Format(_("%zu change(s)"), entries.size()));
+	m_info->SetLabel(ibString::Format(_("%zu change(s)"), entries.size()));
 }
 
 void ibGitPanel::ReportResult(const wxString& action, const ibGitResult& r)
@@ -190,7 +191,7 @@ void ibGitPanel::OnBranchSelected(wxCommandEvent&)
 	const wxString target = m_branchChoice->GetStringSelection();
 	if (target.empty() || target == m_git->CurrentBranch()) return;
 	const ibGitResult r = m_git->Checkout(target);
-	ReportResult(wxString::Format(_("Checkout %s"), target), r);
+	ReportResult(ibString::Format(_("Checkout %s"), target), r);
 	RefreshStatus();   // restores the combo selection if the checkout failed
 }
 
@@ -201,7 +202,7 @@ void ibGitPanel::OnNewBranch(wxCommandEvent&)
 	if (dlg.ShowModal() != wxID_OK) return;
 	const wxString name = dlg.GetValue().Strip(wxString::both);
 	if (name.empty()) return;
-	ReportResult(wxString::Format(_("Create %s"), name), m_git->CreateBranch(name, /*checkout*/true));
+	ReportResult(ibString::Format(_("Create %s"), name), m_git->CreateBranch(name, /*checkout*/true));
 	RefreshStatus();
 }
 
@@ -214,10 +215,10 @@ void ibGitPanel::OnStatusActivated(wxListEvent& event)
 	const wxString diff = m_git->Diff(path);
 
 	// Read-only monospaced diff viewer.
-	wxDialog dlg(this, wxID_ANY, wxString::Format(_("Diff: %s"), path),
+	wxDialog dlg(this, wxID_ANY, ibString::Format(_("Diff: %s"), path),
 		wxDefaultPosition, wxSize(700, 500), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER);
 	wxTextCtrl* txt = new wxTextCtrl(&dlg, wxID_ANY,
-		diff.empty() ? _("(no diff - untracked, binary, or staged)") : diff,
+		diff.empty() ? wxString(_("(no diff - untracked, binary, or staged)")) : diff,
 		wxDefaultPosition, wxDefaultSize,
 		wxTE_MULTILINE | wxTE_READONLY | wxTE_DONTWRAP);
 	txt->SetFont(wxFont(wxFontInfo().Family(wxFONTFAMILY_TELETYPE)));

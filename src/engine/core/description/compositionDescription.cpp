@@ -20,7 +20,7 @@
 
 #include "core/serialize/dataBuilder.h"         // ibDataNode / ibDataValue
 
-#include <wx/translation.h>                        // _() — the platform's names for its own parameters
+#include "core/localization/dictionary.h"                        // _() — the platform's names for its own parameters
 
 // ===========================================================================
 

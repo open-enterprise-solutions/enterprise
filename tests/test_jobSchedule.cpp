@@ -14,6 +14,7 @@
 #include <gtest/gtest.h>
 
 #include "core/job/jobSchedule.h"
+#include "frmclient/win/typeconv.h"   // DateTimeToWxDateTime / WxDateTimeToDateTime — a date across to wx and back
 #include "core/serialize/dataBuilder.h"
 
 #include <wx/datetime.h>   // wxDateTime::Month, the months the cases are written with
@@ -380,8 +381,8 @@ TEST(JobSchedule, Buffer_ReadsAVersionOneBlobsDatesAsInstants)
 	ASSERT_TRUE(ibJobScheduleDescriptionMemory::ReadBuffer(blob.GetData(), blob.GetDataLen(), dst));
 	// The stored number is the count of the anchor's reading; under version 1 it is an instant, read
 	// back as the reading of its local parts.
-	EXPECT_EQ(ibDateTime::OfWxDateTime(wxDateTime(wxLongLong(src.m_periodAnchor.GetValue()))), dst.m_periodAnchor);
-	EXPECT_EQ(ibDateTime::OfWxDateTime(wxDateTime(wxLongLong(src.m_activeFrom.GetValue()))), dst.m_activeFrom);
+	EXPECT_EQ(typeConv::WxDateTimeToDateTime(wxDateTime(wxLongLong(src.m_periodAnchor.GetValue()))), dst.m_periodAnchor);
+	EXPECT_EQ(typeConv::WxDateTimeToDateTime(wxDateTime(wxLongLong(src.m_activeFrom.GetValue()))), dst.m_activeFrom);
 	EXPECT_TRUE(dst.m_activeTo.IsEmpty());
 	EXPECT_EQ(src.m_intervalSeconds, dst.m_intervalSeconds);
 

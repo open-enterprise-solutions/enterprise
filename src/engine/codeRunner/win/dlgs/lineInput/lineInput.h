@@ -16,6 +16,7 @@
 #include <wx/icon.h>
 #include <wx/button.h>
 #include <wx/dialog.h>
+#include "core/localization/dictionary.h"   // _() — the dialog's words
 
 class ibDialogLineInput : public wxDialog
 {

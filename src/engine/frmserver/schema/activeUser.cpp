@@ -59,7 +59,7 @@ void ibSchemaActiveUser::Build(const ibSession& session, const ibDataNode& /*arg
 		row.SetValue(ibProtocol::ibSchema::ibActiveUser::Key, lock.keyData);
 		row.SetValue(ibProtocol::ibSchema::ibActiveUser::Mode, lock.lockMode == ibLockMode::Shared ? ibString(_("Shared")) : ibString(_("Exclusive")));
 		row.SetValue(ibProtocol::ibSchema::ibActiveUser::User, lock.userName);
-		row.SetValue(ibProtocol::ibSchema::ibActiveUser::Acquired, !lock.acquiredAt.IsEmpty() ? ibString(lock.acquiredAt.ToWxDateTime().FormatISOCombined()) : ibString());
+		row.SetValue(ibProtocol::ibSchema::ibActiveUser::Acquired, !lock.acquiredAt.IsEmpty() ? lock.acquiredAt.Format(ibT("%Y-%m-%dT%H:%M:%S")) : ibString());
 		row.SetValue(ibProtocol::ibSchema::ibActiveUser::Lock, lock.lockGuid.str());
 	}
 }

@@ -109,7 +109,7 @@ private:
 		ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectManagerModule>>(
 			m_categoryContext, ibT("JobModule"), _("Job module"), _("The job's code: the handler the job manager calls when the job runs, compiled with the session's modules so it can call common modules like any other code."));
 
-	ibRole* m_roleUse = ibValueMetaObject::CreateRole(ibT("Use"), wxGETTEXT_IN_CONTEXT("access right", "Use"));
+	ibRole* m_roleUse = ibValueMetaObject::CreateRole(ibT("Use"), ibGETTEXT_IN_CONTEXT("access right", "Use"));
 
 	friend class ibMetaData;
 };

@@ -8,8 +8,8 @@
 #include "core/variant.h"   // ibVariant — a bound as a value, printed through the engine's format
 #include "core/formatString.h"     // ibFormatString — the date format a script's Format uses
 
-#include <wx/datetime.h>      // the weekday and month NAMES Describe prints
-#include <wx/translation.h>   // _() — the sentence Describe says, in the language in force
+#include "core/fdatetime.h"   // the weekday and month NAMES Describe prints
+#include "core/localization/dictionary.h"   // _() — the sentence Describe says, in the language in force
 
 // ⭐ THE CALENDAR IS THE DATE'S (fdatetime.h). A moment is read into its parts ONCE and the parts are asked
 // the day's place - its month, its day and how far the month's end is, which of its weekday it is, the minute
@@ -191,16 +191,11 @@ ibString FormatInterval(int seconds)
 // Weekday names in Monday-first order, matching the mask's bit order.
 ibString FormatWeekDays(std::uint8_t mask)
 {
-	static const wxDateTime::WeekDay order[7] = {
-		wxDateTime::Mon, wxDateTime::Tue, wxDateTime::Wed,
-		wxDateTime::Thu, wxDateTime::Fri, wxDateTime::Sat, wxDateTime::Sun
-	};
-
 	ibString out;
-	for (int i = 0; i < 7; ++i) {
+	for (unsigned i = 0; i < 7; ++i) {
 		if ((mask & (1u << i)) == 0) continue;
 		if (!out.IsEmpty()) out += ibT(", ");
-		out += wxDateTime::GetWeekDayName(order[i], wxDateTime::Name_Abbr);
+		out += ibDateTime::WeekDayShortName(i + 1);
 	}
 	return out;
 }
@@ -208,11 +203,10 @@ ibString FormatWeekDays(std::uint8_t mask)
 ibString FormatMonths(std::uint16_t mask)
 {
 	ibString out;
-	for (int i = 0; i < 12; ++i) {
+	for (unsigned i = 0; i < 12; ++i) {
 		if ((mask & (1u << i)) == 0) continue;
 		if (!out.IsEmpty()) out += ibT(", ");
-		out += wxDateTime::GetMonthName(static_cast<wxDateTime::Month>(i),
-		                                 wxDateTime::Name_Abbr);
+		out += ibDateTime::MonthShortName(i + 1);
 	}
 	return out;
 }

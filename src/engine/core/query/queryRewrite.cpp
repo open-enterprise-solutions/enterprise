@@ -8,7 +8,7 @@
 #include "core/variant.h"   // ibVariant — a constant the rewrite writes itself
 #include "core/diagnostics/journal.h"   // ibJournalInfo — the rewrite says what it did
 
-#include <wx/translation.h>   // _() — the refusals' words
+#include "core/localization/dictionary.h"   // _() — the refusals' words
 
 #include <algorithm>
 #include <functional>

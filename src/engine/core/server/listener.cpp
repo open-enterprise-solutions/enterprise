@@ -9,7 +9,6 @@
 
 #include <wx/confbase.h>
 #include <wx/fileconf.h>
-#include <wx/intl.h>
 
 #include <cstddef>
 #include <filesystem>

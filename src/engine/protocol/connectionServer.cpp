@@ -5,7 +5,7 @@
 #include <iterator>
 #include <string>
 
-#include <wx/intl.h>   // _() — what a refusal says to a person
+#include "core/localization/dictionary.h"   // _() — what a refusal says to a person
 
 #include "core/fileSystem.h"           // ibPathOf — the trusted certificates' file
 

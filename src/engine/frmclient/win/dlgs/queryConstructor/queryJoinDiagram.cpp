@@ -239,7 +239,7 @@ void ibQueryJoinDiagram::OnPaint(wxPaintEvent&)
 			dc.SetTextForeground(faint);
 			// ASCII ONLY in this file's literals too: UTF-8 without a BOM, read in the system
 			// codepage. An ellipsis character here painted as mojibake inside the box.
-			dc.DrawText(wxString::Format(_("... %u more"),
+			dc.DrawText(ibString::Format(_("... %u more"),
 				static_cast<unsigned int>(m_tables[t].m_fields.size() - rows)),
 				box.x + 6, box.y + kHeaderRow + static_cast<int>(rows) * kRowHeight - kRowHeight + 2);
 		}

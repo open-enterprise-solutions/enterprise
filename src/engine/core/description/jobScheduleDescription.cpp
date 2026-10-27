@@ -8,7 +8,6 @@
 
 #include <type_traits>
 
-#include <wx/datetime.h>   // a version-1 blob's instant (ReadBuffer)
 
 bool ibJobScheduleDescription::operator==(const ibJobScheduleDescription& o) const
 {
@@ -230,7 +229,7 @@ bool ibJobScheduleDescriptionMemory::ReadBuffer(const void* data, size_t length,
 		// local parts - the old format's reader, and the one place the bridge is crossed here.
 		// 0 is "unbounded" in every version.
 		if (version == kScheduleBufferInstants)
-			target = ticks != 0 ? ibDateTime::OfWxDateTime(wxDateTime(wxLongLong(ticks))) : ibDateTime();
+			target = ticks != 0 ? ibDateTime::OfInstant(ticks) : ibDateTime();
 		else if (version == kScheduleBufferWallFrom1970)
 			target = ticks != 0 ? ibDateTime(1970, 1, 1).AddMilliseconds(ticks) : ibDateTime();
 		else

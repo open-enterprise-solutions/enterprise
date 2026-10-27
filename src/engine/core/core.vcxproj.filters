@@ -25,6 +25,9 @@
     <Filter Include="job">
       <UniqueIdentifier>{8826834c-f717-4ebb-bcc7-5673b403a7b3}</UniqueIdentifier>
     </Filter>
+    <Filter Include="localization">
+      <UniqueIdentifier>{6c0b8e41-2f7a-4d93-b5e8-0a91d3c47e25}</UniqueIdentifier>
+    </Filter>
     <Filter Include="logger">
       <UniqueIdentifier>{fff455ab-3c8d-40ac-96c6-886fc7e01630}</UniqueIdentifier>
     </Filter>
@@ -137,6 +140,7 @@
     <ClCompile Include="exception.cpp" />
     <ClCompile Include="fboolean.cpp" />
     <ClCompile Include="fdatetime.cpp" />
+    <ClCompile Include="fdatetimeParse.cpp" />
     <ClCompile Include="fiber\fiber.cpp">
       <Filter>fiber</Filter>
     </ClCompile>
@@ -166,6 +170,9 @@
       <Filter>job</Filter>
     </ClCompile>
     <ClCompile Include="localization.cpp" />
+    <ClCompile Include="localization\dictionary.cpp">
+      <Filter>localization</Filter>
+    </ClCompile>
     <ClCompile Include="memory\lz\lzhuf.cpp">
       <Filter>memory\lz</Filter>
     </ClCompile>
@@ -391,6 +398,9 @@
       <Filter>job</Filter>
     </ClInclude>
     <ClInclude Include="localization.h" />
+    <ClInclude Include="localization\dictionary.h">
+      <Filter>localization</Filter>
+    </ClInclude>
     <ClInclude Include="logger\loggerQuery.h">
       <Filter>logger</Filter>
     </ClInclude>

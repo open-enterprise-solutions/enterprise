@@ -380,10 +380,10 @@ bool ibPGExternalImageProperty::DisplayEditorDialog(wxPropertyGrid* pg, wxVarian
 		path = m_basePath;
 
 	wxFileDialog dlg(pg->GetPanel(),
-		m_dlgTitle.empty() ? _("Choose a picture") : m_dlgTitle,
+		m_dlgTitle.empty() ? wxString(_("Choose a picture")) : m_dlgTitle,
 		m_initialPath.empty() ? path : m_initialPath,
 		file,
-		m_wildcard.empty() ? _(wxALL_FILES) : m_wildcard,
+		m_wildcard.empty() ? wxString(_(wxALL_FILES)) : m_wildcard,
 		m_dlgStyle,
 		wxDefaultPosition);
 

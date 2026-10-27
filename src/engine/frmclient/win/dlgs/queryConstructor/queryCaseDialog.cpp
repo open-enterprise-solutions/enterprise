@@ -285,7 +285,7 @@ void ibDialogQueryCase::OnOk(wxCommandEvent& event)
 	// arriving somewhere else entirely.
 	for (size_t i = 0; i < m_branches.size(); ++i) {
 		if (m_branches[i].m_when.IsEmpty() || m_branches[i].m_then.IsEmpty()) {
-			wxMessageBox(wxString::Format(
+			wxMessageBox(ibString::Format(
 				_("Branch %u is unfinished: it needs both a condition and a result."),
 				static_cast<unsigned int>(i + 1)),
 				GetTitle(), wxOK | wxICON_WARNING, this);

@@ -37,7 +37,7 @@ browser's `DecompressionStream("deflate-raw")`); a packet begins `OES1`, a defla
 
 | Method | Parameters | Answer |
 |---|---|---|
-| `login` | `User`, `Password`, `Mode` (1 runtime — the default, 2 designer), `Protocol` (the newest version the client speaks, 1 if absent), `Features` (what this client accepts; `resume` opts into the slot below), `Read` (the schemas the client reads right after its start, each `{Schema}`) | `Client`, `Protocol` (the version both speak), `Features` (what the server offers; `resume` when a dropped thin runtime is kept), `Token` (that runtime only, once), `Read` (each schema of the login's `Read` the server built, as `schema` answers it, with its `Schema`), and the frame |
+| `login` | `User`, `Password`, `Mode` (1 runtime — the default, 2 designer), `Protocol` (the newest version the client speaks, 1 if absent), `Features` (what this client accepts; `resume` opts into the slot below), `Read` (the schemas the client reads right after its start, each `{Schema}`) | `Client`, `Protocol` (the version both speak), `Features` (what the server offers; `resume` when a dropped thin runtime is kept), `Token` (that runtime only, once), `Locale` (the base's language: the client's own words are said in it, [translations.md](translations.md)), `Read` (each schema of the login's `Read` the server built, as `schema` answers it, with its `Schema`), and the frame |
 | `login` | `Token` and no `User`, only while that client is detached | the same `Client`, `Protocol`, `Features`, and no frame and no new `Token`. The next `frame` `{Since}` is the patch |
 | `users` | — (before the login, no `Client`) | `Users` — the names the login window offers |
 | `logout` | `Client` | — |

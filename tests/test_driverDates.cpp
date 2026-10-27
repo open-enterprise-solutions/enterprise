@@ -8,6 +8,7 @@
 #include <wx/init.h>
 
 #include "backend/backend_core.h"                              // ibDateTime
+#include "frmclient/win/typeconv.h"   // DateTimeToWxDateTime / WxDateTimeToDateTime — a date across to wx and back
 #include "backend/databaseLayer/sqllite/sqliteDatabaseLayer.h"
 
 #include <wx/filefn.h>   // wxFileExists / wxRemoveFile - the cross-zone base
@@ -121,7 +122,7 @@ TEST(DriverDates, TheSkippedHourIsHeldEvenWhereTheMachineSkipsIt)
 	EXPECT_EQ(ibDateTime(2026, 3, 8, 2, 30, 0), ibValue(2026, 3, 8, 2, 30, 0).GetDate());
 	EXPECT_EQ(wxT("08.03.2026 02:30:00"), ibValue(2026, 3, 8, 2, 30, 0).GetString());
 	// ...and the bridge is the one road that cannot hold it, which is why nothing of the value's goes over it.
-	EXPECT_EQ(3u, static_cast<unsigned>(ibDateTime(2026, 3, 8, 2, 30, 0).ToWxDateTime().GetHour()));
+	EXPECT_EQ(3u, static_cast<unsigned>(typeConv::DateTimeToWxDateTime(ibDateTime(2026, 3, 8, 2, 30, 0)).GetHour()));
 }
 
 // ⭐ A BASE WRITTEN UNDER ONE CLOCK AND READ UNDER ANOTHER - the measurement of 2026-09-26 as a test.

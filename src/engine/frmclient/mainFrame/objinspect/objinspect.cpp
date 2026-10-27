@@ -409,7 +409,7 @@ void ibObjectInspector::OnPropertyGridChanging(wxPropertyGridEvent& event)
 		const wxString& helpString = prop_ptr->GetHelp();
 		if (!ModifyProperty(prop_ptr, event.GetPropertyValue()))
 			event.Veto();
-		const wxString& localized = wxGetTranslation(helpString);
+		const wxString& localized = ibGetTranslation(helpString);
 		m_pg->SetPropertyHelpString(propPtr, localized);
 		m_pg->SetDescription(propPtr->GetLabel(), localized);
 		return;
@@ -422,7 +422,7 @@ void ibObjectInspector::OnPropertyGridChanging(wxPropertyGridEvent& event)
 		const wxString& helpString = event_ptr->GetHelp();
 		if (!ModifyEvent(event_ptr, event.GetPropertyValue()))
 			event.Veto();
-		const wxString& localized = wxGetTranslation(helpString);
+		const wxString& localized = ibGetTranslation(helpString);
 		m_pg->SetPropertyHelpString(propPtr, localized);
 		m_pg->SetDescription(propPtr->GetLabel(), localized);
 		return;

@@ -242,7 +242,7 @@ void ibDialogActiveUser::OnKickSelected(wxCommandEvent&)
 		? wxString(_("(user not specified)"))
 		: user;
 	const int answer = wxMessageBox(
-		wxString::Format(_("Kick session of '%s'?"), userLabel),
+		ibString::Format(_("Kick session of '%s'?"), userLabel),
 		wxTheApp->GetAppDisplayName(), wxYES_NO | wxICON_QUESTION, this);
 	if (answer != wxYES) return;
 
@@ -293,8 +293,8 @@ void ibDialogActiveUser::OnForceReleaseSelected(wxCommandEvent&)
 	const wxString user = m_locksTable->GetItemText(row, 3);
 
 	const int answer = wxMessageBox(
-		wxString::Format(_("Force-release lock on '%s' held by '%s'?"),
-			ns, user.IsEmpty() ? _("(unknown)") : user),
+		ibString::Format(_("Force-release lock on '%s' held by '%s'?"),
+			ns, user.IsEmpty() ? wxString(_("(unknown)")) : user),
 		wxTheApp->GetAppDisplayName(), wxYES_NO | wxICON_QUESTION, this);
 	if (answer != wxYES) return;
 

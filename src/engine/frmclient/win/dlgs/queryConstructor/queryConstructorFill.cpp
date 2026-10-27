@@ -224,7 +224,7 @@ void ibDialogQueryConstructor::FillPackage()
 			m_batchStrip->DeleteAllPages();
 			for (size_t i = 0; i < statements; ++i)
 				m_batchStrip->AddPage(new wxPanel(m_batchStrip),
-					wxString::Format(_("Query %u"), static_cast<unsigned int>(i + 1)));
+					ibString::Format(_("Query %u"), static_cast<unsigned int>(i + 1)));
 		}
 		if (m_statement < statements && m_batchStrip->GetSelection() != static_cast<int>(m_statement))
 			m_batchStrip->SetSelection(static_cast<int>(m_statement));
@@ -1605,7 +1605,7 @@ void ibDialogQueryConstructor::FillUnions()
 			m_branchStrip->DeleteAllPages();
 			for (size_t i = 0; i < branches; ++i)
 				m_branchStrip->AddPage(new wxPanel(m_branchStrip),
-					wxString::Format(_("Query %u"), static_cast<unsigned int>(i + 1)));
+					ibString::Format(_("Query %u"), static_cast<unsigned int>(i + 1)));
 		}
 		const int wanted = m_unionBranch + 1;
 		if (wanted >= 0 && static_cast<size_t>(wanted) < m_branchStrip->GetPageCount()
@@ -1658,7 +1658,7 @@ void ibDialogQueryConstructor::FillUnions()
 		// answer too: this branch supplies nothing here, and the column is NULL for its rows.
 		for (unsigned int branch = 0; branch < m_unionFieldModel->BranchCount(); ++branch)
 			m_unionFields->GetRootColumnGroup()->AppendColumn(new ibDataViewColumn(
-				wxString::Format(_("Query %u"), branch + 1),
+				ibString::Format(_("Query %u"), branch + 1),
 				new ibRowChoiceRenderer([this, branch]() -> wxArrayString {
 					wxArrayString words;
 					words.Add(wxEmptyString);   // supplies nothing -> NULL
@@ -1707,7 +1707,7 @@ bool ibDialogQueryConstructor::AcceptName(const wxString& name, const wxString& 
 	// bottom of the window while the cell quietly kept its old text — and a person watching the
 	// cell has no reason to look at the far edge of the dialog. The rejection has to arrive where
 	// the eyes already are, and only then does the old value come back.
-	wxMessageBox(wxString::Format(
+	wxMessageBox(ibString::Format(
 			_("'%s' cannot be a %s.\n\nA name is one word: letters, digits and underscores, "
 			  "with no spaces or punctuation."), name, what),
 		_("Query constructor"), wxOK | wxICON_WARNING, this);
@@ -1732,7 +1732,7 @@ bool ibDialogQueryConstructor::Verdict(wxString& message) const
 		// ⚠ ASCII ONLY IN A STRING LITERAL. The sources carry no BOM, so MSVC reads them in the
 		// system codepage: an em dash typed here reaches the screen as three mojibake characters,
 		// its UTF-8 bytes read one at a time. Dashes belong in comments, where nobody renders them.
-		message = wxString::Format(
+		message = ibString::Format(
 			_("the link on '%s' has no condition: write one, or delete the link. Two tables with no "
 			  "link between them are simply multiplied."), unfinished);
 		return false;

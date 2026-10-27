@@ -3,9 +3,10 @@
 
 // WHAT A PROPERTY'S VALUE IS WRITTEN AS, READ INTO wx's AND BACK — the server writes a control's size, colour and
 // font as the core's text (ibSize, ibColour, ibFont: FromString / ToString); these turn it into the widgets' and
-// back, and read the system colours by name that the core leaves to the desktop.
+// back, and read the system colours by name that the core leaves to the desktop; a date crosses to the pickers here.
 
 #include <wx/colour.h>
+#include <wx/datetime.h>
 #include <wx/font.h>
 #include <wx/gdicmn.h>
 #include <wx/settings.h>
@@ -13,6 +14,7 @@
 #include <utility>
 
 #include "core/graphics/colour.h"     // ibColour — ColourToWxColour / WxColourToColour
+#include "core/fdatetime.h"           // ibDateTime — DateTimeToWxDateTime / WxDateTimeToDateTime
 #include "core/graphics/font.h"       // ibFont — FontToWxFont / WxFontToFont
 #include "core/graphics/geometry.h"   // ibSize — SizeToWxSize / WxSizeToSize
 
@@ -66,6 +68,28 @@ namespace typeConv
 
 	inline ibSize WxSizeToSize(const wxSize& size) {
 		return ibSize(size.x, size.y);
+	}
+
+	// A date crosses by its LOCAL PARTS and by nothing else: the reading 10:30 is the wxDateTime whose local time is
+	// 10:30, on whichever machine, and back. The empty date and an invalid wxDateTime are each other's - "no date" on
+	// either side - so a NULL column, an unset bound or a cleared picker crosses both ways as itself. The one place
+	// this is not an identity is a local time the machine does not have (02:30 on the morning its clocks go forward):
+	// wx moves that instant an hour on, and a reading carried across and back has moved with it.
+	inline wxDateTime DateTimeToWxDateTime(const ibDateTime& date) {
+		if (date.IsEmpty())
+			return wxDateTime();
+		ibDateTimeParts parts;
+		date.ToParts(parts);
+		return wxDateTime(static_cast<wxDateTime::wxDateTime_t>(parts.m_day), static_cast<wxDateTime::Month>(parts.m_month - 1),
+			parts.m_year, static_cast<wxDateTime::wxDateTime_t>(parts.m_hour), static_cast<wxDateTime::wxDateTime_t>(parts.m_minute),
+			static_cast<wxDateTime::wxDateTime_t>(parts.m_second), static_cast<wxDateTime::wxDateTime_t>(parts.m_millisecond));
+	}
+
+	inline ibDateTime WxDateTimeToDateTime(const wxDateTime& moment) {
+		if (!moment.IsValid())
+			return ibDateTime();
+		const wxDateTime::Tm tm = moment.GetTm();
+		return ibDateTime(tm.year, static_cast<unsigned>(tm.mon) + 1, tm.mday, tm.hour, tm.min, tm.sec, tm.msec);
 	}
 
 	// A system colour by its wx name, "wxSYS_COLOUR_WINDOW"; a name it does not know is the button face.

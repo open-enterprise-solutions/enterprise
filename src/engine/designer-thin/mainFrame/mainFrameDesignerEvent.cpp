@@ -31,7 +31,7 @@ static bool SaveBeforeChildLaunch(wxWindow* parent, const ibConfigurationTree* m
 	if (metaWindow == nullptr || !metaWindow->IsEdited())
 		return true;
 	const int ans = wxMessageBox(
-		wxString::Format(_("Configuration '%s' has been changed.\nDo you want to save?"),
+		ibString::Format(_("Configuration '%s' has been changed.\nDo you want to save?"),
 			metaWindow->GetConfigName()),
 		wxTheApp->GetAppDisplayName(),
 		wxYES_NO | wxCENTRE | wxICON_QUESTION, parent);
@@ -249,7 +249,7 @@ void ibFrontendMainFrameDesigner::OnConfiguration(wxCommandEvent& event)
 			// A configuration just read from a FILE lives nowhere but in the server's session, which is what makes the
 			// question worth asking here (ibMetaData::IsEdited).
 			if (m_metaWindow->IsEdited()) {
-				if (wxMessageBox(wxString::Format(_("Configuration '%s' has been changed.\nDo you want to save?"),
+				if (wxMessageBox(ibString::Format(_("Configuration '%s' has been changed.\nDo you want to save?"),
 					m_metaWindow->GetConfigName()), wxTheApp->GetAppDisplayName(), wxYES_NO | wxCENTRE | wxICON_QUESTION, this) == wxYES) {
 					OnUpdateConfiguration(event);
 				}

@@ -3,7 +3,7 @@
 #include "core/exception.h"            // ibCoreException — a write denied, a text that is no number
 #include "core/serialize/dataBuilder.h"   // ibDataNode — a value written, and read back
 
-#include <wx/translation.h>   // _() — the refusals' words
+#include "core/localization/dictionary.h"   // _() — the refusals' words
 
 // THE RUNTIME'S VALUE WITHOUT ITS RUNTIME — backend/compiler/value.cpp as it is, the lifecycle and the readings; what
 // needs the factory (a class's name, an object made of a node) is the side's.

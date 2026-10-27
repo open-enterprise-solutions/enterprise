@@ -53,7 +53,7 @@ ibDialogQueryExpression::ibDialogQueryExpression(wxWindow* parent, const wxStrin
                                                  const std::vector<ibQueryConstructorField>& fields,
                                                  const ibQueryAstExprPtr& existing,
                                                  const ibMetaData* metaData, bool readOnly, bool allowWindows)
-	: wxDialog(parent, wxID_ANY, title.IsEmpty() ? _("Arbitrary expression") : title,
+	: wxDialog(parent, wxID_ANY, title.IsEmpty() ? wxString(_("Arbitrary expression")) : title,
 		wxDefaultPosition, wxSize(820, 560), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
 	, m_fields(fields)
 	, m_metaData(metaData)
@@ -562,7 +562,7 @@ wxString ibDialogQueryExpression::CheckExpressionNames(const ibQueryAstExprPtr& 
 					if (shown++ >= 6) { offered += wxT(", …"); break; }
 					offered += (offered.IsEmpty() ? wxString() : wxString(wxT(", "))) + f.m_name;
 				}
-				complaint = wxString::Format(
+				complaint = ibString::Format(
 					_("'%s' is not a field of this query. It offers: %s"), e.m_path.front(), offered);
 			}
 			break;
@@ -579,7 +579,7 @@ wxString ibDialogQueryExpression::CheckExpressionNames(const ibQueryAstExprPtr& 
 					wxString words;
 					for (const std::pair<ibTotalsPeriod, wxString>& u : ibPeriodUnits())
 						words += (words.IsEmpty() ? wxString() : wxString(wxT(", "))) + u.second;
-					complaint = wxString::Format(
+					complaint = ibString::Format(
 						_("%s takes a period as its argument %u. Write one of: %s"),
 						ibQueryScalarFnText(e.m_scalar), static_cast<unsigned>(unitAt + 1), words);
 					return;
@@ -608,7 +608,7 @@ wxString ibDialogQueryExpression::CheckExpressionNames(const ibQueryAstExprPtr& 
 				wxString words;
 				for (const wxString& word : ibQueryCastPrimitiveWords())
 					words += (words.IsEmpty() ? wxString() : wxString(wxT(", "))) + word;
-				complaint = wxString::Format(_("CAST takes a primitive type (%s) or a type: CAST(<field> AS <Kind>.<Name>)"), words);
+				complaint = ibString::Format(_("CAST takes a primitive type (%s) or a type: CAST(<field> AS <Kind>.<Name>)"), words);
 			}
 			else if (e.m_arg)
 				walk(*e.m_arg);

@@ -260,7 +260,7 @@ wxSizer* ibDialogChoiceParameters::BuildRowsPane()
 		new ibDataViewChoiceRenderer(m_parameterWords, wxDATAVIEW_CELL_EDITABLE),
 		kGridCol1, FromDIP(196), wxAlignment::wxALIGN_LEFT));
 	m_rows->GetRootColumnGroup()->AppendColumn(new ibDataViewColumn(m_holder.IsEmpty()
-		? _("Attribute") : wxString::Format(_("Attribute of %s"), m_holder),
+		? _("Attribute") : ibString::Format(_("Attribute of %s"), m_holder),
 		new ibDataViewChoiceRenderer(m_sourceWords, wxDATAVIEW_CELL_EDITABLE),
 		kGridCol2, FromDIP(168), wxAlignment::wxALIGN_LEFT));
 	m_rows->GetRootColumnGroup()->AppendColumn(new ibDataViewColumn(_("On change"),
@@ -301,7 +301,7 @@ wxString ibDialogChoiceParameters::RowCellText(unsigned int row, unsigned int co
 			return wxString();
 		const ibOffered* parameter = ParameterOf(line.m_parameter);
 		return parameter != nullptr ? kFilter + parameter->m_label
-			: wxString::Format(_("Filter.<field %i is gone>"), (int)line.m_parameter);
+			: wxString(ibString::Format(_("Filter.<field %i is gone>"), (int)line.m_parameter));
 	}
 
 	if (col == kGridCol2) {
@@ -659,7 +659,7 @@ bool ibDialogChoiceParameters::Validate()
 			continue;
 
 		const ibOffered* source = SourceOf(m_params.m_rows[idx].m_source);
-		wxMessageBox(wxString::Format(
+		wxMessageBox(ibString::Format(
 			_("The row taking its value from '%s' has no parameter name.\n\n"
 			  "Choose one in the Name column - it says WHICH field of the chosen object this narrows - "
 			  "or remove the row."),

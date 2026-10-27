@@ -36,6 +36,10 @@ target_compile_definitions(core
     PRIVATE
         NOPCH
         wxUSE_GUI=0   # of wx the base only — a GUI type here is a compile error
+    # wx's _() stays off for every target that links core: the engine's _() is core/localization/dictionary.h,
+    # and a unit that reaches for _() without it fails to compile rather than translating through wx unseen.
+    PUBLIC
+        WXINTL_NO_GETTEXT_MACRO
 )
 
 # THE NETWORK (net/) — HTTP and WebSocket on Asio, llhttp and Mbed TLS. Asio compiled once, in net/asio.cpp: every other

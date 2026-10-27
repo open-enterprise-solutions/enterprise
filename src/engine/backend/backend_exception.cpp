@@ -481,7 +481,7 @@ ibString ibBackendException::Format(int codeError, const ibString& errorDesc)
 {
 	const ibString& format = GetErrorDesc(codeError);
 	std::wstring spec;
-	if (ibFStringFormat::Prepare(ibString(wxGetTranslation(format)), nullptr, 0, spec))
+	if (ibFStringFormat::Prepare(ibGetTranslation(format), nullptr, 0, spec))
 		return Format(format);   // nowhere to put it
 	return Format(format, errorDesc);
 }

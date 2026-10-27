@@ -3,6 +3,7 @@
 #include <wx/datectrl.h>            // wxDatePickerCtrl — the grid's picker, told the date
 
 #include "frmclient/backend/backend_core.h"   // ibDateTime — the date as the server stores it
+#include "frmclient/win/typeconv.h"   // DateTimeToWxDateTime / WxDateTimeToDateTime — a date across to wx and back
 #include "frmclient/backend/propertyManager/property/variant/variantSerializable.h"   // the value — the date's node
 #include "frmclient/propertyManager/property/private/prop.h"             // wxPGPropertyFlags_*
 #include "frmclient/propertyManager/property/private/propertyRegistry.h"
@@ -12,13 +13,13 @@ namespace {
 // The date a value holds, as the server stores it (a Date node); the empty date reads as an invalid wxDateTime…
 wxDateTime ReadDate(const wxVariant& value)
 {
-	return ibVariantDataSerializable::GetNodeValue(value).AsDate().ToWxDateTime();
+	return typeConv::DateTimeToWxDateTime(ibVariantDataSerializable::GetNodeValue(value).AsDate());
 }
 
 // …and the value of another: the same property's, named by the cell (ValueToString).
 wxVariant WriteDate(const wxVariant& value, const wxDateTime& date)
 {
-	return wxVariant(new ibVariantDataSerializable(value.GetType(), ibDataValue::Date(ibDateTime::OfWxDateTime(date)),
+	return wxVariant(new ibVariantDataSerializable(value.GetType(), ibDataValue::Date(typeConv::WxDateTimeToDateTime(date)),
 		wxEmptyString));
 }
 

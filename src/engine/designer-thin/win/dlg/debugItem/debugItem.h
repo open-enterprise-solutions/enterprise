@@ -14,6 +14,7 @@
 #include <wx/dialog.h>
 
 #include <wx/timer.h>
+#include "core/localization/dictionary.h"   // _() — the dialog's words
 
 class ibDialogDebugItem : public wxDialog {
 public:

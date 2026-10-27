@@ -2,8 +2,6 @@
 
 #include <iterator>
 
-#include <wx/intl.h>
-
 // ----------------------------------------------------------------------------
 // ibCommandProcessor — the bodies of wx's, the list of nodes made a list of owned commands
 // ----------------------------------------------------------------------------

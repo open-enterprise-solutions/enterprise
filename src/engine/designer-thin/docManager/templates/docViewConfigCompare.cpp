@@ -38,7 +38,7 @@ void ibConfigCompareDocument::Configure(
 	m_localRightPath = localRightPath;
 	m_appliedCallback = std::move(appliedCallback);
 	m_model.reset(new ibDataViewMetaDiffModel(std::move(records)));
-	SetTitle(wxString::Format(_("Compare: %s <-> %s"), leftLabel, rightLabel));
+	SetTitle(ibString::Format(_("Compare: %s <-> %s"), leftLabel, rightLabel));
 }
 
 ibFrontendView* ibConfigCompareDocument::DoCreateView()
@@ -227,12 +227,12 @@ void ibConfigCompareView::RefreshDirectionChoice()
 	// Pull always exists — left-side mutation needs no extra save
 	// wiring (designer handles activeMetaData; the applied callback
 	// rebuilds the tree).
-	m_directionChoice->Append(wxString::Format(_("%s -> %s"),
+	m_directionChoice->Append(ibString::Format(_("%s -> %s"),
 		m_compareDoc->GetRightLabel(), m_compareDoc->GetLeftLabel()));
 
 	// Push exists only when there's a save target (file path to download into).
 	if (m_compareDoc->CanPush()) {
-		m_directionChoice->Append(wxString::Format(_("%s -> %s"),
+		m_directionChoice->Append(ibString::Format(_("%s -> %s"),
 			m_compareDoc->GetLeftLabel(), m_compareDoc->GetRightLabel()));
 	}
 
@@ -430,7 +430,7 @@ void ibConfigCompareView::OnApplyMerge(wxCommandEvent& WXUNUSED(event))
 	if (skippedReorder > 0) {
 		if (!msg.IsEmpty())
 			msg += wxT("\n");
-		msg += wxString::Format(
+		msg += ibString::Format(
 			_("%d reorder-only change(s) skipped (not supported in V1)."),
 			skippedReorder);
 	}

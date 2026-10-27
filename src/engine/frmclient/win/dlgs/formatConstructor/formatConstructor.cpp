@@ -3,6 +3,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "formatConstructor.h"
+#include "frmclient/win/typeconv.h"   // DateTimeToWxDateTime / WxDateTimeToDateTime — a date across to wx and back
 
 #include "frmclient/backend/compiler/value.h"   // the sample's value: the client's, an ibVariant as the engine's is
 
@@ -66,7 +67,7 @@ ibDialogFormatConstructor::ibDialogFormatConstructor(wxWindow* parent, const wxS
 		for (const auto& pair : m_original.m_other)
 			kept += (kept.IsEmpty() ? wxString() : wxString(wxT("; "))) + pair.first + wxT("=") + pair.second;
 		top->Add(new wxStaticText(this, wxID_ANY,
-			wxString::Format(_("Kept as written - codes the platform does not read: %s"), kept)),
+			ibString::Format(_("Kept as written - codes the platform does not read: %s"), kept)),
 			wxSizerFlags().Border(wxLEFT | wxRIGHT | wxTOP, gap * 2));
 	}
 
@@ -368,7 +369,7 @@ void ibDialogFormatConstructor::ShowResult()
 	}
 	case 1: {
 		const wxDateTime now = wxDateTime::Now();
-		line = sample(now.Format(wxT("%d.%m.%Y %H:%M:%S")), ibValue(ibDateTime::OfWxDateTime(now))) + wxT("     ")
+		line = sample(now.Format(wxT("%d.%m.%Y %H:%M:%S")), ibValue(typeConv::WxDateTimeToDateTime(now))) + wxT("     ")
 			+ sample(_("empty date"), ibValue(ibValueTypes::TYPE_DATE));
 		break;
 	}
@@ -396,7 +397,7 @@ void ibDialogFormatConstructor::OnOk(wxCommandEvent& event)
 			continue;
 		m_notebook->SetSelection(check.m_page);
 		check.m_value->SetFocus();
-		wxMessageBox(wxString::Format(_("'%s' cannot hold ';' or '=': a format string has no way to write them."),
+		wxMessageBox(ibString::Format(_("'%s' cannot hold ';' or '=': a format string has no way to write them."),
 			check.m_on->GetLabel()), GetTitle(), wxOK | wxICON_WARNING, this);
 		return;
 	}

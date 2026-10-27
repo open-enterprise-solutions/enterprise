@@ -273,7 +273,7 @@ bool ibQueryLinkModel::SetValueByRow(const ibVariant& variant, unsigned row, uns
 			return false;   // the same table, or a name this query does not read
 		if (m_select->m_joins[to].m_on && !ibQueryIsTrueLiteral(m_select->m_joins[to].m_on)) {
 			if (m_onError)
-				m_onError(wxString::Format(
+				m_onError(ibString::Format(
 					_("'%s' already carries a link: delete it first, or write this one on another table"),
 					wanted));
 			return false;

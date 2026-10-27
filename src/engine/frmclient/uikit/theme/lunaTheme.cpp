@@ -829,4 +829,4 @@ private:
 	WX_DECLARE_THEME(luna)
 };
 
-WX_IMPLEMENT_THEME(ibLunaTheme, luna, wxTRANSLATE("OES Luna theme"));
+WX_IMPLEMENT_THEME(ibLunaTheme, luna, ibTRANSLATE("OES Luna theme"));

@@ -212,6 +212,11 @@ bool ibCommunicator::Login(const ibString& user, const ibString& password, ibPro
 	m_protocol = std::max(1, static_cast<int>(result.GetInt(ibProtocol::ibLogin::Protocol, 1)));
 	m_mode = mode;
 	m_token = result.GetString(ibProtocol::ibLogin::Token);
+	// The client's own words in the base's language, as the server names it (core/localization/dictionary.h). A
+	// server that names none leaves them as they are.
+	const ibString locale = result.GetString(ibProtocol::ibLogin::Locale);
+	if (!locale.IsEmpty())
+		ibDictionary::SetProcessLanguage(locale);
 	m_resume = false;
 	for (const ibProtocolNode& feature : result.GetList(ibProtocol::ibLogin::Features)) {
 		if (feature.AsString() == ibProtocol::ibLogin::FeatureResume)

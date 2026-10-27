@@ -336,7 +336,7 @@ ibDateTime ibDataMover::DateOfWire(long long raw, DateForm form)
 		return ibDateTime();
 	if (raw == 0)
 		return ibDateTime(1970, 1, 1);   // read as the first wall form read it, not moved by this machine's zone
-	return ibDateTime::OfWxDateTime(wxDateTime(wxLongLong(raw)));   // the instant's parts on this machine's clock
+	return ibDateTime::OfInstant(raw);   // the instant's parts on this machine's clock
 }
 
 static bool RawToStatement(const ibBackendQueryColumn* col, const ibReaderMemory& reader,

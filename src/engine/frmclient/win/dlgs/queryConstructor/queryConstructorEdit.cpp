@@ -255,7 +255,7 @@ void ibDialogQueryConstructor::ApplyQueryKind(bool focusName)
 			const ibQueryAstStatement& other = m_package.m_statements[i];
 			if (other.m_select == nullptr || !other.m_select->m_ontoName.IsSameAs(name, false))
 				continue;
-			wxMessageBox(wxString::Format(
+			wxMessageBox(ibString::Format(
 					_("Another query of this package already produces the result '%s'.\n\nResults are "
 					  "asked for by name, so two the same would make one of them unreachable."), name),
 				_("Query constructor"), wxOK | wxICON_WARNING, this);
@@ -400,7 +400,7 @@ wxString ibDialogQueryConstructor::SuggestTempTableName() const
 	};
 
 	for (unsigned int n = 1; ; ++n) {
-		const wxString candidate = wxString::Format(_("TempTable%u"), n);
+		const wxString candidate = ibString::Format(_("TempTable%u"), n);
 		if (!taken(candidate))
 			return candidate;
 	}
@@ -1672,7 +1672,7 @@ void ibDialogQueryConstructor::OnDescribeTempTable(wxCommandEvent&)
 			});
 		};
 		for (unsigned int n = 1; name.IsEmpty() || taken(name); ++n)
-			name = wxString::Format(_("TempTable%u"), n);
+			name = ibString::Format(_("TempTable%u"), n);
 	}
 
 	ibDialogQueryTempTable dialog(this, name, fields, m_model, m_metaData, !CanEdit());
@@ -1684,7 +1684,7 @@ void ibDialogQueryConstructor::OnDescribeTempTable(wxCommandEvent&)
 	const wxString table = chosen.StartsWith(wxT("&")) ? chosen.Mid(1) : chosen;
 	for (const ibQuerySource* other : CurrentSources())
 		if (other != source && other != nullptr && ibQuerySourceName(*other).IsSameAs(table, false)) {
-			wxMessageBox(wxString::Format(_("This query already has a table called '%s'."), table),
+			wxMessageBox(ibString::Format(_("This query already has a table called '%s'."), table),
 				_("Temporary table"), wxOK | wxICON_WARNING, this);
 			return;
 		}

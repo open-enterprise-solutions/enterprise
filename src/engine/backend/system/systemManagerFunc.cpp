@@ -52,11 +52,9 @@ ibDateTime ibValueSystemFunction::Date(int year, int month, int day, int hour, i
 	if (year < 1 || year > 9999)
 		ibBackendCoreException::Error(_("Date: '%s' is not a year"), ibString::Format(ibT("%d"), year));
 
-	const wxDateTime::Month wxMonth = static_cast<wxDateTime::Month>(wxDateTime::Jan + (month - 1));
-
 	if (day < 1 || day > static_cast<int>(ibDateTime::DaysInMonth(year, static_cast<unsigned>(month))))
 		ibBackendCoreException::Error(_("Date: %s has no day %s"),
-			wxDateTime::GetMonthName(wxMonth) + ibString::Format(ibT(" %d"), year),
+			ibDateTime::MonthName(static_cast<unsigned>(month)) + ibString::Format(ibT(" %d"), year),
 			ibString::Format(ibT("%d"), day));
 
 	if (hour < 0 || hour > 23 || minute < 0 || minute > 59 || second < 0 || second > 59)

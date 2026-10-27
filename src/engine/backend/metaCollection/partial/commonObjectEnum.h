@@ -54,7 +54,7 @@ class ibValueEnumDataPresentation : public ibValueEnumeration<ibDataPresentation
 	ibValueEnumDataPresentation() : ibValueEnumeration() {}
 
 	virtual void CreateEnumeration() {
-		AddEnumeration(ibDataPresentation_Description, ibT("Description"), wxGETTEXT_IN_CONTEXT("item name", "Description"));
+		AddEnumeration(ibDataPresentation_Description, ibT("Description"), ibGETTEXT_IN_CONTEXT("item name", "Description"));
 		AddEnumeration(ibDataPresentation_Code, ibT("Code"), _("Code"));
 	}
 };

@@ -5,7 +5,7 @@
 #include "queryRender.h"
 
 #include "core/query/queryKeywords.h"
-#include <wx/intl.h>   // _() — the renderer's own refusals are translated
+#include "core/localization/dictionary.h"   // _() — the renderer's own refusals are translated
 
 #include <set>   // which levels open a branch — read while the BY list is joined
 

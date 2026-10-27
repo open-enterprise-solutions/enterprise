@@ -10,7 +10,7 @@ const std::vector<const ibCompositionTheme*>& ibCompositionThemes()
 {
 	// THE ONE REPORTS WERE PAINTED IN until 2026-10-05 — a neutral green that blends rather than announces itself.
 	static const ibCompositionTheme s_meadow = {
-		ibT("Meadow"), wxTRANSLATE("Meadow"),
+		ibT("Meadow"), ibTRANSLATE("Meadow"),
 		ibColour(0xD4, 0xE4, 0xD4),
 		{ ibColour(0xE2, 0xEE, 0xE2), ibColour(0xE9, 0xF2, 0xE9), ibColour(0xF0, 0xF7, 0xF0) },
 		ibColour(0xFA, 0xFA, 0xF8),
@@ -18,7 +18,7 @@ const std::vector<const ibCompositionTheme*>& ibCompositionThemes()
 		ibColour(0x2E, 0x5E, 0x3A),
 	};
 	static const ibCompositionTheme s_neutral = {
-		ibT("Neutral"), wxTRANSLATE("Neutral"),
+		ibT("Neutral"), ibTRANSLATE("Neutral"),
 		ibColour(0xDA, 0xDC, 0xDE),
 		{ ibColour(0xE4, 0xE6, 0xE8), ibColour(0xEC, 0xED, 0xEF), ibColour(0xF3, 0xF4, 0xF5) },
 		ibColour(0xFB, 0xFB, 0xFB),
@@ -27,7 +27,7 @@ const std::vector<const ibCompositionTheme*>& ibCompositionThemes()
 	};
 	// THE DEFAULT — the blue-grey of the application's own window, so a report reads as part of it.
 	static const ibCompositionTheme s_sea = {
-		ibT("Sea"), wxTRANSLATE("Sea"),
+		ibT("Sea"), ibTRANSLATE("Sea"),
 		ibColour(0xD2, 0xDF, 0xEC),
 		{ ibColour(0xDF, 0xE8, 0xF2), ibColour(0xE7, 0xEE, 0xF6), ibColour(0xF0, 0xF4, 0xFA) },
 		ibColour(0xFA, 0xFB, 0xFD),
@@ -35,7 +35,7 @@ const std::vector<const ibCompositionTheme*>& ibCompositionThemes()
 		ibColour(0x24, 0x4A, 0x78),
 	};
 	static const ibCompositionTheme s_sand = {
-		ibT("Sand"), wxTRANSLATE("Sand"),
+		ibT("Sand"), ibTRANSLATE("Sand"),
 		ibColour(0xE8, 0xDF, 0xCB),
 		{ ibColour(0xEF, 0xE8, 0xD8), ibColour(0xF3, 0xEE, 0xE3), ibColour(0xF8, 0xF5, 0xEE) },
 		ibColour(0xFC, 0xFB, 0xF8),
@@ -45,7 +45,7 @@ const std::vector<const ibCompositionTheme*>& ibCompositionThemes()
 	// FOR PAPER — no tint at all, the structure carried by the weight of the type and by the grid alone. Here the
 	// white is not the loudest thing on the page: it is the whole page.
 	static const ibCompositionTheme s_blackAndWhite = {
-		ibT("BlackAndWhite"), wxTRANSLATE("Black and white"),
+		ibT("BlackAndWhite"), ibTRANSLATE("Black and white"),
 		ibColour(0xFF, 0xFF, 0xFF),
 		{ ibColour(0xFF, 0xFF, 0xFF), ibColour(0xFF, 0xFF, 0xFF), ibColour(0xFF, 0xFF, 0xFF) },
 		ibColour(0xFF, 0xFF, 0xFF),

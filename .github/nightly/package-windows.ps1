@@ -23,8 +23,9 @@ New-Item -ItemType Directory $stage | Out-Null
 Copy-Item -Recurse -Path (Join-Path $release '*') -Destination $stage
 Get-ChildItem -Recurse -File $stage -Include *.pdb, *.ilk, *.exp, *.lib | Remove-Item -Force
 
-# The translations — read from <exeDir>/lang/<code>/open_es.mo.
+# The translations — read from <exeDir>/lang/<code>/open_es.mo; the .po and the template beside them stay in the repository.
 Copy-Item -Recurse -Path 'lang' -Destination (Join-Path $stage 'lang')
+Get-ChildItem -Recurse -File (Join-Path $stage 'lang') -Include *.po, *.pot | Remove-Item -Force
 
 # The MSVC runtime, from the toolset that built it (vcvars sets VCToolsRedistDir).
 $crt = Get-ChildItem -Directory (Join-Path $env:VCToolsRedistDir 'x64') -Filter 'Microsoft.VC*.CRT' | Select-Object -First 1

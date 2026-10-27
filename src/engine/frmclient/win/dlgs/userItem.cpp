@@ -21,7 +21,7 @@ bool ibDialogUserItem::ReadUserData(const ibGuid& userGuid, bool copy)
 		// password; it does not inherit the hash.
 		m_bPasswordTouched = false;
 		m_textPassword->SetHint(!copy && userInfo.IsSetPassword()
-			? _("The password is set - type a new one to change it") : wxString());
+			? _("The password is set - type a new one to change it") : ibString());
 
 		if (userInfo.IsSetLanguage()) {
 

@@ -274,7 +274,7 @@ void ibAuditLogView::BuildLayout(wxWindow* parent)
 		0, wxALIGN_CENTER_VERTICAL | wxALL, parent->FromDIP(3));
 	m_sourceChoice = new wxChoice(parent, wxID_ANY);
 	for (int i = 0; kSources[i] != nullptr; ++i) {
-		m_sourceChoice->Append(kSources[i][0] == 0 ? _("any") : wxString(kSources[i]));
+		m_sourceChoice->Append(kSources[i][0] == 0 ? wxString(_("any")) : wxString(kSources[i]));
 	}
 	m_sourceChoice->SetSelection(0);
 	filt->Add(m_sourceChoice, 0, wxALL, parent->FromDIP(3));

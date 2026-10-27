@@ -209,7 +209,7 @@ public:
 					for (const wxString& had : known)
 						if (had.IsSameAs(one, false)) { found = true; break; }
 					if (!found) {
-						wxMessageBox(wxString::Format(
+						wxMessageBox(ibString::Format(
 							_("\"%s\" is not a grouping of this report: a figure can only be computed over one of its own groupings."),
 							one), _("Computed over"), wxOK | wxICON_WARNING);
 						return false;   // the cell keeps what it had — nothing silently wrong is stored
@@ -290,7 +290,7 @@ wxString ibDescribeTypes(const ibTypeDescription& typeDesc, const ibMetaData* me
 			described += wxT(", ");
 		described += typeCtor->GetClassName();
 	}
-	return described.IsEmpty() ? _("<any>") : described;
+	return described.IsEmpty() ? wxString(_("<any>")) : described;
 }
 
 // WHAT A FIELD READS AS, in the language a person reads — the title the output prints over its column
@@ -438,7 +438,7 @@ public:
 			return nullptr;
 		ibFieldDescription* entry = ibFieldEntryForPath(*selects, path);
 		if (entry == nullptr)
-			wxMessageBox(wxString::Format(_("\"%s\" does not say which select of the query it belongs to: name the selects with ONTO."),
+			wxMessageBox(ibString::Format(_("\"%s\" does not say which select of the query it belongs to: name the selects with ONTO."),
 				path), _("Fields"), wxOK | wxICON_WARNING);
 		return entry;
 	}
@@ -678,7 +678,7 @@ private:
 // the variants list and the picker's menu.
 static wxString ibUnnamedVariantCaption(size_t position)
 {
-	return wxString::Format(_("Variant %u"), static_cast<unsigned>(position + 1));
+	return ibString::Format(_("Variant %u"), static_cast<unsigned>(position + 1));
 }
 
 // THE VARIANTS, as a dataview model over the COMPOSITION — which is where they live. The window

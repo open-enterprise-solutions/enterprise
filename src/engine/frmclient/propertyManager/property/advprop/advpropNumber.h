@@ -45,7 +45,7 @@ protected:
 		if (value.IsNan()) {
 			if (value < 0) {
 				if (mode == wxPG_PROPERTY_VALIDATION_ERROR_MESSAGE) {
-					wxString msg = wxString::Format(_("Value must be higher."));
+					wxString msg = ibString::Format(_("Value must be higher."));
 					pValidationInfo->SetFailureMessage(msg);
 				}
 				value = 0;
@@ -53,7 +53,7 @@ protected:
 			}
 			if (value > 0) {
 				if (mode == wxPG_PROPERTY_VALIDATION_ERROR_MESSAGE) {
-					wxString msg = wxString::Format(_("Value must be less."));
+					wxString msg = ibString::Format(_("Value must be less."));
 					pValidationInfo->SetFailureMessage(msg);
 				}
 				value = 0;

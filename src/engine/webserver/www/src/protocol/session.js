@@ -23,7 +23,7 @@ import { applyPatch } from './patch.js';
 const protocol = 6;
 
 // What comes beside a frame and is not the frame: the events, and the login's own answer.
-const besideFrame = ['Messages', 'Clear', 'Exit', 'Properties', 'Client', 'Protocol', 'Features', 'Token', 'Read',
+const besideFrame = ['Messages', 'Clear', 'Exit', 'Properties', 'Client', 'Protocol', 'Features', 'Token', 'Read', 'Locale',
 	'Since', 'Patch'];
 
 // The state events — where the person is, held until the next call unless the control is subscribed to them

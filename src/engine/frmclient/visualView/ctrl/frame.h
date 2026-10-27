@@ -107,7 +107,7 @@ public:
 	// What a person reads it as in the form's tree — the desktop's GetControlTitle, answered by the server where the
 	// metadata is (its State's Caption, a form's or a page's Title: the synonym of what it is bound to when no Title is
 	// set); none said — its class.
-	virtual wxString GetControlTitle() const { return !m_title.IsEmpty() ? m_title : wxGetTranslation(m_className); }
+	virtual wxString GetControlTitle() const { return !m_title.IsEmpty() ? m_title : wxString(ibGetTranslation(m_className)); }
 	void SetControlTitle(const wxString& title) { m_title = title; }
 
 	// The state events the server is subscribed to on it — its State's Subscribed (protocol 3): something there runs on

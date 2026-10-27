@@ -286,7 +286,7 @@ void ibPanelMcpSettings::RefreshRunState()
 
 	if (m_stateLabel != nullptr)
 		m_stateLabel->SetLabel(running
-			? wxString::Format(_("Running at %s"), m_endpoint)
+			? ibString::Format(_("Running at %s"), m_endpoint)
 			: (m_settings.m_enabled
 				? _("Not running. It starts by itself next time you open the designer.")
 				: _("Not running, and switched off above - it will not start by itself.")));

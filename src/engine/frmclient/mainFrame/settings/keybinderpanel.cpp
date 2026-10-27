@@ -145,8 +145,8 @@ void ibPanelKeyBinder::UpdateState()
 
 	const ibKeyBinder::Command* const holder = m_pressedKey.code != 0 ? GetCommandForKey(m_pressedKey, command) : nullptr;
 	m_holderText->SetLabel(holder != nullptr
-		? wxString::Format(_("Now on \"%s\" (%s); assigning moves it here."), holder->name, holder->group)
-		: wxString());
+		? ibString::Format(_("Now on \"%s\" (%s); assigning moves it here."), holder->name, holder->group)
+		: ibString());
 
 	m_assignButton->Enable(command != nullptr && m_pressedKey.code != 0);
 	m_removeButton->Enable(command != nullptr && !command->keys.empty());

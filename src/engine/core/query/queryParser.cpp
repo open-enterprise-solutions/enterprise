@@ -8,7 +8,7 @@
 #include "core/description/typeDescription.h"   // ibTypeDescription — what a CAST to a primitive converts to
 #include "core/fiber/fiber.h"          // StackLow — a parenthesized expression is native recursion
 
-#include <wx/translation.h>   // _() — the refusals' words
+#include "core/localization/dictionary.h"   // _() — the refusals' words
 
 #include <algorithm>
 #include <iterator>

@@ -3,7 +3,7 @@
 #include "core/dynamicLibrary.h"
 #include "core/fileSystem.h"
 
-#include <wx/intl.h>   // _() — what a refusal says to a person
+#include "core/localization/dictionary.h"   // _() — what a refusal says to a person
 
 namespace {
 

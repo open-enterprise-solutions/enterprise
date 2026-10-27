@@ -1,8 +1,6 @@
 #include "core/fileKind.h"
 #include "core/fileSystem.h"   // ibPathOf — std::filesystem reads the extension
 
-#include <wx/intl.h>
-
 namespace {
 
 // ONE ROW PER KIND, and the row is the whole truth about it. A new kind is a
@@ -18,12 +16,12 @@ struct ibFileKindRow {
 };
 
 const ibFileKindRow s_kinds[] = {
-	{ ibFileKind::Application, ibT("oap"), wxTRANSLATE("Application files") },
-	{ ibFileKind::Tool,        ibT("otl"), wxTRANSLATE("Tool files")        },
-	{ ibFileKind::Report,      ibT("orp"), wxTRANSLATE("Report files")      },
-	{ ibFileKind::Table,       ibT("oxl"), wxTRANSLATE("Table files")       },
-	{ ibFileKind::Log,         ibT("olg"), wxTRANSLATE("Log files")         },
-	{ ibFileKind::Save,        ibT("osv"), wxTRANSLATE("Data files")        },
+	{ ibFileKind::Application, ibT("oap"), ibTRANSLATE("Application files") },
+	{ ibFileKind::Tool,        ibT("otl"), ibTRANSLATE("Tool files")        },
+	{ ibFileKind::Report,      ibT("orp"), ibTRANSLATE("Report files")      },
+	{ ibFileKind::Table,       ibT("oxl"), ibTRANSLATE("Table files")       },
+	{ ibFileKind::Log,         ibT("olg"), ibTRANSLATE("Log files")         },
+	{ ibFileKind::Save,        ibT("osv"), ibTRANSLATE("Data files")        },
 };
 
 const ibFileKindRow* RowFor(ibFileKind kind)
@@ -56,7 +54,7 @@ ibString ibFileFilter(ibFileKind kind)
 		return ibString();
 
 	const ibString mask = ibFileMask(kind);
-	const ibString description = wxGetTranslation(ibString::FromUTF8(row->description));
+	const ibString description = ibGetTranslation(ibString::FromUTF8(row->description));
 	return ibString::Format(ibT("%s (%s)|%s"), description, mask, mask);
 }
 

@@ -86,7 +86,7 @@ void ibFrontendHelpEditView::OnFind(wxFindDialogEvent& event)
 	}
 	if (wxSTC_INVALID_POSITION == result)
 	{
-		wxMessageBox(wxString::Format(_("\"%s\" not found!"), event.GetFindString().c_str()), _("Not Found!"), wxICON_ERROR, (wxWindow*)event.GetClientData());
+		wxMessageBox(ibString::Format(_("\"%s\" not found!"), event.GetFindString().c_str()), _("Not Found!"), wxICON_ERROR, (wxWindow*)event.GetClientData());
 	}
 	else
 	{

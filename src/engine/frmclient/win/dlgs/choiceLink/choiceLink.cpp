@@ -209,7 +209,7 @@ void ibDialogChoiceLink::ShowSelected()
 	const bool governed = line > 0;   // line 0 is <not set>
 
 	m_says->SetLabel(governed
-		? wxString::Format(_("The type of this field is then whatever '%s' declares."), m_fields[(size_t)line].m_label)
+		? ibString::Format(_("The type of this field is then whatever '%s' declares."), m_fields[(size_t)line].m_label)
 		: _("Nothing decides the type of this field."));
 
 	m_governed->Enable(governed);

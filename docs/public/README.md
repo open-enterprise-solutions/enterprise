@@ -50,3 +50,4 @@ Add a row to the table below when you add a document, so this folder can be read
 | [http-client.md](http-client.md) | HTTP and HTTPS from a script: the values, what they guarantee, where they stop |
 | [json.md](json.md) | JSON from a script: what reading gives, what the writer guarantees, where it stops |
 | [thin-client.md](thin-client.md) | The thin client: its parts, who does what, the document/view skeleton, spreadsheets, printing, a file base, what it guarantees |
+| [translations.md](translations.md) | The engine's own translations: one dictionary per language, chosen per thread by the base it works for; the base's locale; a language's name |

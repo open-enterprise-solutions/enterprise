@@ -590,7 +590,7 @@ bool ibFrontendDocument::OnSaveModified()
             return true;   // no frame → no prompt → treat as "ok to close"
 
         const int rc = wxMessageBox(
-            wxString::Format(_("Do you want to save changes to %s?"),
+            ibString::Format(_("Do you want to save changes to %s?"),
                              GetUserReadableName()),
             wxTheApp ? wxTheApp->GetAppDisplayName() : wxString(),
             wxYES_NO | wxCANCEL | wxICON_QUESTION | wxCENTRE);
@@ -620,7 +620,7 @@ void ibFrontendDocument::OnSaveBeforeForceClose()
         const wxString caption = wxTheApp ? wxTheApp->GetAppDisplayName()
                                           : wxString();
         const int rc = wxMessageBox(
-            wxString::Format(
+            ibString::Format(
                 _("Do you want to save changes to %s before closing it?"),
                 GetUserReadableName()),
             caption,
@@ -630,7 +630,7 @@ void ibFrontendDocument::OnSaveBeforeForceClose()
             while ( !Save() )
             {
                 const int retry = wxMessageBox(
-                    wxString::Format(
+                    ibString::Format(
                         _("Saving %s failed, would you like to retry?"),
                         GetUserReadableName()),
                     caption,
@@ -1699,7 +1699,7 @@ wxString ibFrontendDocManager::MakeNewDocumentName()
 {
     wxString name;
 
-    name.Printf(_("unnamed%d"), m_defaultDocumentNameCounter);
+    name = ibString::Format(_("unnamed%d"), m_defaultDocumentNameCounter);
     m_defaultDocumentNameCounter++;
 
     return name;

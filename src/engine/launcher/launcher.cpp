@@ -290,7 +290,7 @@ void ibFrameLauncher::StartApplication(const wxString& appName) {
 	// launcher used to close regardless, so a missing executable looked exactly like a click that did nothing —
 	// which is how the designer "would not start" on a Mac with nothing on screen to say why.
 	if (ibStartProcess(executeCmd, secrets) == 0) {
-		wxMessageBox(wxString::Format(_("Could not start %s.\n\n%s"), appName, executeCmd),
+		wxMessageBox(ibString::Format(_("Could not start %s.\n\n%s"), appName, executeCmd),
 			_("Launch OES"), wxOK | wxICON_ERROR, this);
 		return;
 	}
@@ -332,7 +332,7 @@ void ibFrameLauncher::OnButtonWeb(wxCommandEvent& event) {
 	// The window keeps painting while the base opens, and the browser is launched before the launcher closes.
 	ibString url;
 	if (ibStartWebServer(cmd, url, []() { wxYieldIfNeeded(); }) == 0) {
-		wxMessageBox(wxString::Format(_("Could not start %s.\n\n%s"), wxT("webserver"), cmd),
+		wxMessageBox(ibString::Format(_("Could not start %s.\n\n%s"), wxT("webserver"), cmd),
 			_("Launch OES"), wxOK | wxICON_ERROR, this);
 		return;
 	}

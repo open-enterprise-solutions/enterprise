@@ -941,6 +941,9 @@ bool ibClientHost::Call(ibProtocol::ibMethod method, const ibDataNode& params, i
 			// an empty answer where the configuration has no debugger. Only once the start is done, not waiting.
 			if (done && !client->unsettled.valid())
 				BuildSchema(*client->instance, params, result);
+			// The language the client's own words are said in: the base's, as the server says its own to it.
+			if (done)
+				result.SetValue(ibProtocol::ibLogin::Locale, m_applicationInstance->GetLocale());
 		}
 		}
 	}

@@ -14,6 +14,7 @@
 
 #include <gtest/gtest.h>
 #include "backend/backend_core.h"   // ibDateTime, and the ibString its text is
+#include "frmclient/win/typeconv.h"   // DateTimeToWxDateTime / WxDateTimeToDateTime — a date across to wx and back
 
 #include <wx/datetime.h>
 
@@ -200,7 +201,7 @@ TEST(DateTime, TheBridgeCarriesAReadingByItsParts)
 	};
 	for (const ibDateTimeParts& p : readings) {
 		const ibDateTime date = DateOf(p);
-		const wxDateTime dt = date.ToWxDateTime();
+		const wxDateTime dt = typeConv::DateTimeToWxDateTime(date);
 		ASSERT_TRUE(dt.IsValid()) << Text(p);
 
 		// The bridge hands wx the reading's parts, nothing else…
@@ -219,7 +220,7 @@ TEST(DateTime, TheBridgeCarriesAReadingByItsParts)
 		back.m_minute = tm.min;
 		back.m_second = tm.sec;
 		back.m_millisecond = tm.msec;
-		EXPECT_EQ(DateOf(back), ibDateTime::OfWxDateTime(dt)) << Text(p);
+		EXPECT_EQ(DateOf(back), typeConv::WxDateTimeToDateTime(dt)) << Text(p);
 
 		// THE ROUND TRIP, wherever wx keeps the parts in this zone — and at noon of a year it asks the C library about,
 		// it must.
@@ -227,11 +228,11 @@ TEST(DateTime, TheBridgeCarriesAReadingByItsParts)
 		if (p.m_hour == 12 && p.m_year >= 1970 && p.m_year <= 3000)
 			EXPECT_TRUE(kept) << Text(p);
 		if (kept)
-			EXPECT_EQ(date, ibDateTime::OfWxDateTime(dt)) << Text(p);
+			EXPECT_EQ(date, typeConv::WxDateTimeToDateTime(dt)) << Text(p);
 	}
-	EXPECT_TRUE(ibDateTime::OfWxDateTime(wxDateTime()).IsEmpty());
-	EXPECT_TRUE(ibDateTime::OfWxDateTime(wxInvalidDateTime).IsEmpty());
-	EXPECT_FALSE(ibDateTime().ToWxDateTime().IsValid()) << "the empty date crosses back as no date";
+	EXPECT_TRUE(typeConv::WxDateTimeToDateTime(wxDateTime()).IsEmpty());
+	EXPECT_TRUE(typeConv::WxDateTimeToDateTime(wxInvalidDateTime).IsEmpty());
+	EXPECT_FALSE(typeConv::DateTimeToWxDateTime(ibDateTime()).IsValid()) << "the empty date crosses back as no date";
 }
 
 // "Now" is what the machine's clock on the wall shows - the same reading wx's local parts give, under
@@ -240,9 +241,9 @@ TEST(DateTime, TheBridgeCarriesAReadingByItsParts)
 // (CI, 2026-10-20: `now` 4 ms past `after` + 1000).
 TEST(DateTime, NowIsWhatTheWallClockShows)
 {
-	const ibDateTime before = ibDateTime::OfWxDateTime(wxDateTime::UNow());
+	const ibDateTime before = typeConv::WxDateTimeToDateTime(wxDateTime::UNow());
 	const ibDateTime now = ibDateTime::Now();
-	const ibDateTime after = ibDateTime::OfWxDateTime(wxDateTime::UNow());
+	const ibDateTime after = typeConv::WxDateTimeToDateTime(wxDateTime::UNow());
 	EXPECT_FALSE(now.IsEmpty());
 	EXPECT_LE(before.AddMilliseconds(-1000), now);   // a second's slack: wx reads the clock by its own road
 	EXPECT_LE(now, after.AddMilliseconds(1000));
@@ -254,7 +255,7 @@ TEST(DateTime, NowIsWhatTheWallClockShows)
 TEST(DateTime, ElapsedSinceIsRealTimeOnThisMachine)
 {
 	const ibDateTime before(2026, 3, 29, 0, 30), after(2026, 3, 29, 4, 30);   // the European change is between them
-	const long long real = (after.ToWxDateTime() - before.ToWxDateTime()).GetMilliseconds().GetValue();
+	const long long real = (typeConv::DateTimeToWxDateTime(after) - typeConv::DateTimeToWxDateTime(before)).GetMilliseconds().GetValue();
 	EXPECT_EQ(real, after.ElapsedSince(before));
 	EXPECT_EQ(-real, before.ElapsedSince(after));
 	const ibDateTime quiet(2026, 7, 1, 12), later(2026, 7, 1, 12, 0, 1, 250);

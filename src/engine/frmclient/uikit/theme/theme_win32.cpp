@@ -1100,7 +1100,7 @@ const char **wxWin32Renderer::ms_xpmChecked[IndicatorStatus_Max] =
 // implementation
 // ============================================================================
 
-WX_IMPLEMENT_THEME(wxWin32Theme, win32, wxTRANSLATE("Win32 theme"));
+WX_IMPLEMENT_THEME(wxWin32Theme, win32, ibTRANSLATE("Win32 theme"));
 
 // ----------------------------------------------------------------------------
 // wxWin32Theme

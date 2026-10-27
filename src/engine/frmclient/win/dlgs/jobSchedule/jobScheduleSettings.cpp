@@ -3,6 +3,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "jobScheduleSettings.h"
+#include "frmclient/win/typeconv.h"   // DateTimeToWxDateTime / WxDateTimeToDateTime — a date across to wx and back
 
 #include <wx/notebook.h>
 #include <wx/sizer.h>
@@ -219,7 +220,7 @@ wxWindow* ibDialogJobSchedule::BuildMonthlyPage(wxWindow* parent)
 	wxArrayString fromEnd;
 	fromEnd.Add(_("last day"));
 	for (int back = 1; back <= 30; ++back)
-		fromEnd.Add(wxString::Format(_("%i before last"), back));
+		fromEnd.Add(ibString::Format(_("%i before last"), back));
 	wxBoxSizer* endCol = new wxBoxSizer(wxVERTICAL);
 	endCol->Add(new wxStaticText(page, wxID_ANY, _("From the end:")), wxSizerFlags(0));
 	m_monthDaysEnd = new wxCheckListBox(page, wxID_ANY, wxDefaultPosition, wxDefaultSize, fromEnd);
@@ -304,10 +305,10 @@ void ibDialogJobSchedule::LoadFromSchedule()
 
 	m_activeFromUse->SetValue(!m_schedule.m_activeFrom.IsEmpty());
 	if (!m_schedule.m_activeFrom.IsEmpty())
-		m_activeFrom->SetValue(m_schedule.m_activeFrom.ToWxDateTime());
+		m_activeFrom->SetValue(typeConv::DateTimeToWxDateTime(m_schedule.m_activeFrom));
 	m_activeToUse->SetValue(!m_schedule.m_activeTo.IsEmpty());
 	if (!m_schedule.m_activeTo.IsEmpty())
-		m_activeTo->SetValue(m_schedule.m_activeTo.ToWxDateTime());
+		m_activeTo->SetValue(typeConv::DateTimeToWxDateTime(m_schedule.m_activeTo));
 
 	const bool hasWindow = m_schedule.m_startMinute >= 0 && m_schedule.m_endMinute >= 0;
 	m_windowUse->SetValue(hasWindow);
@@ -337,8 +338,8 @@ void ibDialogJobSchedule::ApplyToSchedule()
 	const int unitIndex = m_intervalUnit->GetSelection() >= 0 ? m_intervalUnit->GetSelection() : 0;
 	m_schedule.m_intervalSeconds = m_intervalValue->GetValue() * s_unitSeconds[unitIndex];
 
-	m_schedule.m_activeFrom = m_activeFromUse->GetValue() ? ibDateTime::OfWxDateTime(m_activeFrom->GetValue()) : ibDateTime();
-	m_schedule.m_activeTo   = m_activeToUse->GetValue()   ? ibDateTime::OfWxDateTime(m_activeTo->GetValue())   : ibDateTime();
+	m_schedule.m_activeFrom = m_activeFromUse->GetValue() ? typeConv::WxDateTimeToDateTime(m_activeFrom->GetValue()) : ibDateTime();
+	m_schedule.m_activeTo   = m_activeToUse->GetValue()   ? typeConv::WxDateTimeToDateTime(m_activeTo->GetValue())   : ibDateTime();
 
 	if (m_windowUse->GetValue()) {
 		m_schedule.m_startMinute = MinutesFrom(m_windowStart, nullptr);

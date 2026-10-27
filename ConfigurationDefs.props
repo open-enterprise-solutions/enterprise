@@ -20,35 +20,38 @@
          library and the core both carry src\engine\core\tls), which keeps a file path with quotes in it
          out of a preprocessor definition. -->
     <OesTlsDefines>MBEDTLS_USER_CONFIG_FILE=&lt;oes_mbedtls_config.h&gt;;</OesTlsDefines>
+    <!-- wx's _() stays off for every project: the engine's _() is core/localization/dictionary.h (the CMake tree
+         says it on core, PUBLIC), and a unit that reaches for _() without it fails to compile. -->
+    <OesIntlDefines>WXINTL_NO_GETTEXT_MACRO;</OesIntlDefines>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)'=='Debug'">
     <ClCompile>
-      <PreprocessorDefinitions>DEBUG;$(OesDriverDefines)$(OesHttpDefines)$(OesTlsDefines)%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>DEBUG;$(OesDriverDefines)$(OesHttpDefines)$(OesTlsDefines)$(OesIntlDefines)%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)'=='Debug_Dedicated'">
     <ClCompile>
-      <PreprocessorDefinitions>DEBUG;$(OesDriverDefines)$(OesHttpDefines)$(OesTlsDefines)%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>DEBUG;$(OesDriverDefines)$(OesHttpDefines)$(OesTlsDefines)$(OesIntlDefines)%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)'=='Mixed'">
     <ClCompile>
-      <PreprocessorDefinitions>DEBUG;MIXED;$(OesDriverDefines)$(OesHttpDefines)$(OesTlsDefines)%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>DEBUG;MIXED;$(OesDriverDefines)$(OesHttpDefines)$(OesTlsDefines)$(OesIntlDefines)%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)'=='Mixed_Dedicated'">
     <ClCompile>
-      <PreprocessorDefinitions>DEBUG;MIXED;$(OesDriverDefines)$(OesHttpDefines)$(OesTlsDefines)%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>DEBUG;MIXED;$(OesDriverDefines)$(OesHttpDefines)$(OesTlsDefines)$(OesIntlDefines)%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)'=='Release'">
     <ClCompile>
-      <PreprocessorDefinitions>NDEBUG;$(OesDriverDefines)$(OesHttpDefines)$(OesTlsDefines)%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDEBUG;$(OesDriverDefines)$(OesHttpDefines)$(OesTlsDefines)$(OesIntlDefines)%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)'=='Release_Dedicated'">
     <ClCompile>
-      <PreprocessorDefinitions>NDEBUG;$(OesDriverDefines)$(OesHttpDefines)$(OesTlsDefines)%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDEBUG;$(OesDriverDefines)$(OesHttpDefines)$(OesTlsDefines)$(OesIntlDefines)%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
   </ItemDefinitionGroup>
 </Project>

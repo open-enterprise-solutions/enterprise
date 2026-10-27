@@ -154,7 +154,7 @@ ibGridEditor::~ibGridEditor()
 
 ibGridEditorPrintout* ibGridEditor::CreatePrintout() const
 {
-	return new ibGridEditorPrintout(m_spreadsheetObject, wxGP_SHOW_NONE, m_document ? m_document->GetTitle() : _("Spreadsheet document"));
+	return new ibGridEditorPrintout(m_spreadsheetObject, wxGP_SHOW_NONE, m_document ? m_document->GetTitle() : wxString(_("Spreadsheet document")));
 }
 
 #pragma region commands

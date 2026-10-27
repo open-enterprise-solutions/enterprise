@@ -8,6 +8,7 @@
 
 #include <gtest/gtest.h>
 #include "backend/compiler/value.h"
+#include "frmclient/win/typeconv.h"   // DateTimeToWxDateTime / WxDateTimeToDateTime — a date across to wx and back
 #include "backend/compiler/procUnitLambda.h"   // CopyValue — the LET road a script's `r = …` takes
 #include "backend/system/value/valueArray.h"   // ValueHashContract — composite keys
 #include "backend/system/systemManager.h"      // ibValueSystemFunction::Date — the script's door to a date
@@ -214,9 +215,9 @@ TEST(ValueTest, DateFromComponents) {
 
 TEST(ValueTest, DateFromDateTime) {
     wxDateTime dt(15, wxDateTime::Jan, 2025, 10, 30, 0);
-    ibValue v(ibDateTime::OfWxDateTime(dt));
+    ibValue v(typeConv::WxDateTimeToDateTime(dt));
     EXPECT_EQ(v.GetType(), ibValueTypes::TYPE_DATE);
-    wxDateTime recovered = v.GetDate().ToWxDateTime();
+    wxDateTime recovered = typeConv::DateTimeToWxDateTime(v.GetDate());
     EXPECT_EQ(recovered.GetYear(), 2025);
     EXPECT_EQ(recovered.GetMonth(), wxDateTime::Jan);
     EXPECT_EQ(recovered.GetDay(), 15);
@@ -249,8 +250,8 @@ TEST(ValueTest, TheEmptyDateIsOneValueOnEveryClock) {
     EXPECT_TRUE(text.IsEmpty());
     EXPECT_TRUE(text.SetDate(wxT("00010101000001")));
     EXPECT_FALSE(text.IsEmpty());
-    EXPECT_TRUE(ibValue(ibDateTime::OfWxDateTime(wxDateTime())).IsEmpty());   // an invalid wxDateTime crosses as the empty date
-    EXPECT_FALSE(ibValue(ibValueTypes::TYPE_DATE).GetDate().ToWxDateTime().IsValid());   // ...and back
+    EXPECT_TRUE(ibValue(typeConv::WxDateTimeToDateTime(wxDateTime())).IsEmpty());   // an invalid wxDateTime crosses as the empty date
+    EXPECT_FALSE(typeConv::DateTimeToWxDateTime(ibValue(ibValueTypes::TYPE_DATE).GetDate()).IsValid());   // ...and back
     EXPECT_EQ(wxT("01.01.0001 00:00:00"), ibValue(ibValueTypes::TYPE_DATE).GetString());
 }
 

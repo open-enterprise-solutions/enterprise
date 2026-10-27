@@ -154,7 +154,7 @@ ibDialogQueryTempTable::ibDialogQueryTempTable(wxWindow* parent, const wxString&
 		const wxString text = wxString(typed).Trim(true).Trim(false);
 		if (col == kTempColName) {
 			if (!ibQueryLexer::IsIdentifier(text)) {
-				wxMessageBox(wxString::Format(_("'%s' cannot be a field name.\n\nA name is one word: letters, "
+				wxMessageBox(ibString::Format(_("'%s' cannot be a field name.\n\nA name is one word: letters, "
 					"digits and underscores, with no spaces or punctuation."), text), GetTitle(), wxOK | wxICON_WARNING, this);
 				return false;
 			}
@@ -163,7 +163,7 @@ ibDialogQueryTempTable::ibDialogQueryTempTable(wxWindow* parent, const wxString&
 		}
 		ibTypeDescription type;
 		if (!ReadType(text, type)) {
-			wxMessageBox(wxString::Format(_("'%s' is not a type a field can be described by: Number(15, 2), "
+			wxMessageBox(ibString::Format(_("'%s' is not a type a field can be described by: Number(15, 2), "
 				"String(50), Date, Boolean, or a table a reference points at, such as Catalog.Items."), text),
 				GetTitle(), wxOK | wxICON_WARNING, this);
 			return false;
@@ -327,7 +327,7 @@ void ibDialogQueryTempTable::OnOk(wxCommandEvent& event)
 	// The name is a word the language reads — after an ampersand when the rows come from a parameter.
 	const wxString name = GetTableName();
 	if (!ibQueryLexer::IsIdentifier(name.StartsWith(wxT("&")) ? name.Mid(1) : name)) {
-		wxMessageBox(wxString::Format(_("'%s' cannot be a table name.\n\nA name is one word: letters, digits "
+		wxMessageBox(ibString::Format(_("'%s' cannot be a table name.\n\nA name is one word: letters, digits "
 			"and underscores, with no spaces or punctuation - after an ampersand when the table is a parameter."), name),
 			GetTitle(), wxOK | wxICON_WARNING, this);
 		m_nameBox->SetFocus();
@@ -337,7 +337,7 @@ void ibDialogQueryTempTable::OnOk(wxCommandEvent& event)
 	for (size_t i = 0; i < m_fields.size(); ++i)
 		for (size_t j = i + 1; j < m_fields.size(); ++j)
 			if (m_fields[i].m_name.IsSameAs(m_fields[j].m_name, false)) {
-				wxMessageBox(wxString::Format(_("Two fields are called '%s'."), m_fields[i].m_name),
+				wxMessageBox(ibString::Format(_("Two fields are called '%s'."), m_fields[i].m_name),
 					GetTitle(), wxOK | wxICON_WARNING, this);
 				return;
 			}

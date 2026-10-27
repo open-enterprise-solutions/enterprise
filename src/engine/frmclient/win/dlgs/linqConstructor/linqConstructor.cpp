@@ -296,7 +296,7 @@ ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxStrin
 			m_conditions->SelectRow(m_conditions->GetItemCount() - 1);
 		});
 		AddTool(bar, _("Delete"), wxART_DELETE, [this, removeSelected] { removeSelected(m_conditions); });
-		row->Add(pane(page, wxString::Format(_("Each line is a '%s'. A variable visible here is written by its name - it is the parameter."),
+		row->Add(pane(page, ibString::Format(_("Each line is a '%s'. A variable visible here is written by its name - it is the parameter."),
 			Word(KEY_WHERE)), bar, m_conditions), wxSizerFlags(5).Expand().Border(wxALL, gap));
 		m_conditions->SetDropTarget(new ibCallbackDropTarget([this] { AddSelectedToCondition(); }));
 
@@ -326,7 +326,7 @@ ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxStrin
 		AddTool(keyBar, _("Delete"), wxART_DELETE, [this, removeSelected] { removeSelected(m_groupKeys); });
 		AddTool(keyBar, _("Move up"), wxART_UP, [this, moveSelected] { moveSelected(m_groupKeys, -1); });
 		AddTool(keyBar, _("Move down"), wxART_DOWN, [this, moveSelected] { moveSelected(m_groupKeys, +1); });
-		keyRow->Add(pane(page, wxString::Format(_("Group by (%s ... %s)"), Word(KEY_GROUP), Word(KEY_BY)), keyBar, m_groupKeys),
+		keyRow->Add(pane(page, ibString::Format(_("Group by (%s ... %s)"), Word(KEY_GROUP), Word(KEY_BY)), keyBar, m_groupKeys),
 			wxSizerFlags(1).Expand().Border(wxALL, gap));
 		lists->Add(keyRow, wxSizerFlags(1).Expand());
 
@@ -367,7 +367,7 @@ ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxStrin
 
 		// THE GROUP'S NAME, and what it means, said where it is set.
 		wxBoxSizer* intoRow = new wxBoxSizer(wxHORIZONTAL);
-		intoRow->Add(new wxStaticText(page, wxID_ANY, wxString::Format(_("The group's name (%s)"), Word(KEY_INTO))),
+		intoRow->Add(new wxStaticText(page, wxID_ANY, ibString::Format(_("The group's name (%s)"), Word(KEY_INTO))),
 			wxSizerFlags().CenterVertical().Border(wxRIGHT, gap));
 		m_groupInto = new wxTextCtrl(page, wxID_ANY);
 		intoRow->Add(m_groupInto, wxSizerFlags(1));
@@ -462,7 +462,7 @@ ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxStrin
 		countRow(m_skipCount, KEY_SKIP, _("rows to pass over"));
 		countRow(m_takeCount, KEY_TAKE, _("rows at most"));
 
-		m_distinct = new wxCheckBox(box, wxID_ANY, wxString::Format(_("%s - no repeated rows"), Word(KEY_DISTINCT)));
+		m_distinct = new wxCheckBox(box, wxID_ANY, ibString::Format(_("%s - no repeated rows"), Word(KEY_DISTINCT)));
 		selection->Add(m_distinct, wxSizerFlags().Border(wxALL, gap / 2));
 
 		wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
@@ -755,7 +755,7 @@ void ibDialogLinqConstructor::FillFields(wxTreeCtrl* tree, const wxTreeItemId& i
 	// A SOURCE WHOSE ROWS THE WALK CANNOT DESCRIBE is still a source: its fields are written in by
 	// hand, on the author's responsibility - a double click on this line asks for one.
 	tree->AppendItem(item, row.m_resolved
-		? wxString::Format(_("%s - its columns are not known before it runs: double-click to write one"), row.m_type)
+		? ibString::Format(_("%s - its columns are not known before it runs: double-click to write one"), row.m_type)
 		: _("not read as a table here - double-click to write a field by hand"),
 		-1, -1, new ibLinqNode(ibNodeKind::Hint, expression));
 }
@@ -1253,7 +1253,7 @@ ibLinqBlock ibDialogLinqConstructor::Collect() const
 void ibDialogLinqConstructor::KeepCount(ibRowCount& count, const wxString& variable)
 {
 	count.m_variable = variable;
-	count.m_kept->SetLabelText(variable.IsEmpty() ? wxString() : wxString::Format(_("now: %s"), variable));
+	count.m_kept->SetLabelText(variable.IsEmpty() ? ibString() : ibString::Format(_("now: %s"), variable));
 	if (count.m_kept->IsShown() != !variable.IsEmpty()) {
 		count.m_kept->Show(!variable.IsEmpty());
 		count.m_kept->GetParent()->Layout();
@@ -1352,7 +1352,7 @@ wxString ibDialogLinqConstructor::ShowBlock()
 		const bool grouped = m_groupKeys->GetItemCount() > 0;
 		if (grouped) {
 			const wxString group = wxString(m_groupInto->GetValue()).Trim(true).Trim(false);
-			m_fieldsNote->SetLabelText(wxString::Format(
+			m_fieldsNote->SetLabelText(ibString::Format(
 				_("The query groups its rows. The answer's columns are the keys and the totals of the Grouping tab, "
 				  "then these - written over the group: %s.Key, %s.Values."),
 				group.IsEmpty() ? wxString(wxT("grp")) : group, group.IsEmpty() ? wxString(wxT("grp")) : group));
@@ -1425,13 +1425,13 @@ void ibDialogLinqConstructor::AskVerdict(const wxString& text)
 				+ binding.GetString(linq::Origin);
 			const long long offers = binding.GetInt(linq::Offers);
 			if (offers > 0)
-				names += wxString::Format(_(", %u fields"), (unsigned)offers);
+				names += ibString::Format(_(", %u fields"), (unsigned)offers);
 			names += wxT(")");
 		}
 		wxString columns;
 		for (const ibProtocolNode& column : read.FindChild(linq::Columns).Children())
 			columns += (columns.IsEmpty() ? wxString() : wxString(wxT(", "))) + column.GetString(linq::Name);
-		m_verdictLabel = wxString::Format(_("The compiler reads it: %s. Columns of the answer: %s."),
+		m_verdictLabel = ibString::Format(_("The compiler reads it: %s. Columns of the answer: %s."),
 			names, columns.IsEmpty() ? wxString(_("the row itself")) : columns);
 	}
 	m_verdict->SetForegroundColour(m_verdictRead ? wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT)

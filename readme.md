@@ -53,7 +53,7 @@ tree, forms, the language, queries and reports, and the pitfalls.
   appears), code editor with IntelliSense, a query constructor that edits the query inside the
   literal the caret is in, a spreadsheet template editor, configuration compare, and a git panel.
   Every property carries its own help text.
-- **Debugger** — remote, over TCP (port 1650): breakpoints with conditions, stepping, watches,
+- **Debugger** — remote, over a WebSocket (ports 7700–7709): breakpoints with conditions, stepping, watches,
   evaluation in the stopped frame; the designer attaches to a client on a file base, to a thin
   client's session on its server, or to the web runtime.
 - **Access control** — rights per object and operation, folded across a user's roles. A role either
@@ -66,8 +66,8 @@ tree, forms, the language, queries and reports, and the pitfalls.
 - **Jobs** — scheduled and background jobs in sessions of their own, with a cross-process claim so a
   job runs once across a cluster; the platform's own housekeeping (totals folding and verification,
   Firebird sweep and backup) runs on the same manager.
-- **AI access over MCP** — an MCP server inside the designer (and per base on the application server), 127 tools across the platform: read and
-  edit metadata, forms and modules; apply the configuration with a rehearsal; run code on the
+- **AI access over MCP** — an MCP server inside the designer (and per base on the application server), 113 tools across the platform: read and
+  edit metadata and modules; apply the configuration with a rehearsal; run code on the
   application; ask the data questions and compose reports; drive the debugger; read and write the
   registration journal. Protected by a token, listening on loopback by default; every call is
   journalled.
@@ -83,8 +83,8 @@ tree, forms, the language, queries and reports, and the pitfalls.
   server and starts, stops and restarts it — and starts the cluster itself when none runs.
 - **Thin client** — `enterprise-thin` runs no code of the configuration: the server holds the session,
   its forms and documents, the client draws what it is answered and sends what the person did. One
-  [client protocol](docs/public/client-protocol.md) — JSON-RPC 2.0 over WebSocket or HTTP to an
-  application server; a file base is the same protocol in the client's own process. The
+  [client protocol](docs/public/client-protocol.md) — binary OES-RPC packets over WebSocket, or JSON-RPC
+  over HTTP, to an application server; a file base is the same protocol in the client's own process. The
   designer, `designer-thin`, works on the same protocol. See [thin-client.md](docs/public/thin-client.md).
 - **Databases** — Firebird (embedded, shipped with the distribution) and PostgreSQL for production;
   ODBC; SQLite for tests and logging.
@@ -212,8 +212,7 @@ enterprise/
 ├── ConfigurationDefs.props   # Preprocessor definitions per configuration
 ├── LICENSE.md                # PolyForm Noncommercial 1.0.0 (source-available)
 ├── NOTICE.md                 # third-party licenses, the wx fork
-├── locale/                   # interface translations (ru, uk): the template and the catalogs
-├── lang/                     # the compiled catalogs the programs read at run time
+├── lang/                     # interface translations: the template, and per language (ru, uk) the .po and its .mo
 ├── tests/                    # Google Test suites (built by CMake)
 ├── docs/                     # how we work, build, portability, architecture — start with docs/README.md
 │   └── private/              # PRIVATE submodule (design docs) — resolves for members of the
@@ -235,7 +234,7 @@ enterprise/
         │   ├── session/      # Sessions, their registry and worker pools
         │   ├── lock/         # Record locks, cluster-wide
         │   ├── sheetFormat/  # Spreadsheet import and export (.xlsx, .docx)
-        │   ├── debugger/     # TCP debug server/client
+        │   ├── debugger/     # Debug server/client (WebSocket)
         │   ├── moduleManager/
         │   ├── propertyManager/
         │   └── system/       # Built-in functions and values
@@ -245,7 +244,7 @@ enterprise/
         ├── fileserver/       # A file base in the thin client's process
         ├── enterprise-thin/  # The thin client runtime executable
         ├── designer-thin/    # The thin designer executable
-        ├── webserver/        # The bases' transport for browsers (links protocol alone)
+        ├── webserver/        # The bases' transport for browsers and the browser client (www/); links protocol + core
         ├── launcher/         # Launcher (connection chooser)
         ├── appserver/        # The application server
         ├── appcluster/       # The application cluster: a server process per base, the port, restarts; a service
@@ -265,7 +264,7 @@ enterprise/
 | Primary database | Firebird (embedded) |
 | Production alternative | PostgreSQL |
 | Other databases | ODBC; SQLite (tests + logging) |
-| Client protocol | JSON-RPC 2.0 over WebSocket / HTTP |
+| Client protocol | OES-RPC 1.0 (binary) over WebSocket; JSON-RPC 2.0 over HTTP POST |
 | Network | Asio (standalone) + llhttp — the core's HTTP and WebSocket, server and client |
 | TLS and ciphers | Mbed TLS |
 | Pictures | LodePNG and NanoSVG — the core reads, scales and writes PNG and draws SVG; the server has no wx image |

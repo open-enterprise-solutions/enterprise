@@ -205,6 +205,8 @@ ibHelpService* ibApplicationInstance::GetHelpService()
 
 ibString ibApplicationInstance::GetLocale() const
 {
+	if (m_dictionary != nullptr)
+		return m_dictionary->GetLanguage();
 	ibApplicationHost* const host = ibApplicationHost::Get();
 	return host != nullptr ? host->GetLocale() : ibString();
 }
@@ -801,6 +803,21 @@ ibApplicationInstance* ibApplicationInstance::Open(ibRunMode runMode, const ibIn
 #endif
 }
 
+// THE LOCALE THE BASE NAMES — a shared row of sys_settings (Regional, a fixed object, no user): which language its
+// words come out in belongs to the base, not to the process, since one process holds several bases. Empty — it
+// names none.
+static ibString ReadLocale(const ibApplicationInstance* applicationInstance)
+{
+	ibSettingsStorage* const storage = ibApplicationInstance::GetSettingsStorage(applicationInstance);
+	ibDataNode row;
+	ibString locale;
+	if (storage != nullptr && storage->Restore(ibSettingsKey(ibSettingsCategory::Regional, ibGuid(ibT("72656769-6f6e-616c-0000-000000000002"))), row))
+		row.GetValue(ibT("locale"), locale);
+	if (!locale.IsEmpty())
+		ibJournalInfo(ibT("session.locale"), ibT("the base names the locale %s"), locale);
+	return locale;
+}
+
 // ⭐ THE ONE ROAD A BASE COMES UP BY, once its database is open — a file base and a server base alike: listed in
 // the process, the opening thread working for it, then its pool, its tables, its locale, its journal and its jobs.
 // A base that does not come up — refused or thrown — is closed again, alone, and the thread gets back what it had.
@@ -884,6 +901,7 @@ ibApplicationInstance* ibApplicationInstance::Open(std::unique_ptr<ibApplication
 
 		if (!SetLocaleAppDataEnv(request.m_locale))
 			return refuse();
+		applicationInstance->m_dictionary = ibDictionary::ForLanguage(ReadLocale(applicationInstance));
 
 		// Audit + trace logger — built after pool + tables so the
 		// first Audit row (session.opened) can fire on the next
@@ -1077,8 +1095,6 @@ long ibApplicationInstance::RunApplication(const ibString& strAppName, const ibS
 		? (ibT('"') + ibString(binary.GetFullPath()) + ibT("\" "))
 		: (strAppName + ibT(' '));
 
-	ibApplicationHost* const host = ibApplicationHost::Get();
-
 	// THE WEB SERVER publishes a file base: the base, its debugger, its language - a login is the browser's, and a
 	// base on a DBMS server is no publication of it (webserver/webServer.h). Its page is opened once the server says
 	// where it is.
@@ -1090,7 +1106,7 @@ long ibApplicationInstance::RunApplication(const ibString& strAppName, const ibS
 		add(executeCmd, ibT("file"), m_strFile);
 		if (searchDebug)
 			executeCmd += ibT(" --debug");
-		add(executeCmd, ibT("locale"), host != nullptr ? host->GetLocaleName() : ibString());
+		add(executeCmd, ibT("locale"), GetLocale());   // the base's, else the process's: the child comes up as this base's clients do
 
 		// The wait is the core's (std::this_thread::sleep_for between its looks, up to five seconds). The page is the
 		// caller's to open — a browser is a window's, and the engine draws none.
@@ -1151,7 +1167,7 @@ long ibApplicationInstance::RunApplication(const ibString& strAppName, const ibS
 	secrets.m_ibUser     = strUserName;
 	secrets.m_ibPassword = strUserPassword;
 
-	add(executeCmd, ibT("locale"), host != nullptr ? host->GetLocaleName() : ibString());
+	add(executeCmd, ibT("locale"), GetLocale());   // the base's, else the process's: the child comes up as this base's clients do
 
 	const long execute = ibStartProcess(executeCmd, secrets);
 

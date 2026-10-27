@@ -42,8 +42,8 @@ class FRMSERVER_API ibValueEnumStretch :
 	public:
 	ibValueEnumStretch() : ibValueEnumeration() {}
 	virtual void CreateEnumeration() {
-		AddEnumeration(wxStretch::wxSHRINK, ibT("Shrink"), wxGETTEXT_IN_CONTEXT("sizer flag", "Shrink"));
-		AddEnumeration(wxStretch::wxEXPAND, ibT("Expand"), wxGETTEXT_IN_CONTEXT("sizer flag", "Expand"));
+		AddEnumeration(wxStretch::wxSHRINK, ibT("Shrink"), ibGETTEXT_IN_CONTEXT("sizer flag", "Shrink"));
+		AddEnumeration(wxStretch::wxEXPAND, ibT("Expand"), ibGETTEXT_IN_CONTEXT("sizer flag", "Expand"));
 	}
 private:
 };

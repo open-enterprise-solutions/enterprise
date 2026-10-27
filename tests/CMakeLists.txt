@@ -36,6 +36,7 @@ add_executable(oes_tests
     bench_string.cpp
     test_number.cpp
     test_fdatetime.cpp
+    test_dictionary.cpp
     test_driverDates.cpp
     test_formatString.cpp
     test_blockSyntaxLINQ.cpp

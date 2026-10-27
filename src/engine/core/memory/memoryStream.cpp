@@ -4,7 +4,7 @@
 #include "core/fstring.h"          // ibString — w_stringZ / r_stringZ(ibString)
 #include "core/exception.h"      // a read past the end of a block is refused, not asserted
 
-#include <wx/translation.h>   // _() — the refusals' words
+#include "core/localization/dictionary.h"   // _() — the refusals' words
 
 #include <cstdarg>
 #include <cstdio>

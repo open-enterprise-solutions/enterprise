@@ -351,11 +351,11 @@ struct ibControlMenuItem {
 };
 
 const ibControlMenuItem s_controlMenu[] = {
-	{ ibProtocol::ibForm::ibType::Notebook,            ibProtocol::ibForm::ibType::NotebookPage,        wxTRANSLATE("Add page") },
-	{ ibProtocol::ibForm::ibType::Tablebox,            ibProtocol::ibForm::ibType::TableboxColumn,      wxTRANSLATE("Add column") },
-	{ ibProtocol::ibForm::ibType::Tablebox,            ibProtocol::ibForm::ibType::TableboxColumnGroup, wxTRANSLATE("Add column group") },
-	{ ibProtocol::ibForm::ibType::TableboxColumnGroup, ibProtocol::ibForm::ibType::TableboxColumn,      wxTRANSLATE("Add column") },
-	{ ibProtocol::ibForm::ibType::TableboxColumnGroup, ibProtocol::ibForm::ibType::TableboxColumnGroup, wxTRANSLATE("Add column group") },
+	{ ibProtocol::ibForm::ibType::Notebook,            ibProtocol::ibForm::ibType::NotebookPage,        ibTRANSLATE("Add page") },
+	{ ibProtocol::ibForm::ibType::Tablebox,            ibProtocol::ibForm::ibType::TableboxColumn,      ibTRANSLATE("Add column") },
+	{ ibProtocol::ibForm::ibType::Tablebox,            ibProtocol::ibForm::ibType::TableboxColumnGroup, ibTRANSLATE("Add column group") },
+	{ ibProtocol::ibForm::ibType::TableboxColumnGroup, ibProtocol::ibForm::ibType::TableboxColumn,      ibTRANSLATE("Add column") },
+	{ ibProtocol::ibForm::ibType::TableboxColumnGroup, ibProtocol::ibForm::ibType::TableboxColumnGroup, ibTRANSLATE("Add column group") },
 };
 
 } // namespace
@@ -385,7 +385,7 @@ void ibFormDesignView::WriteClasses(ibDataNode& response)
 				menu = &described.Child(ibProtocol::ibView::ibFormDesigner::Menu);
 			ibDataNode& entry = menu->AddChild(0, 0);
 			entry.SetValue(ibProtocol::ibView::ibFormDesigner::Name, ibString(item.added));
-			entry.SetValue(ibProtocol::ibView::ibFormDesigner::Title, ibString(wxGetTranslation(item.title)));
+			entry.SetValue(ibProtocol::ibView::ibFormDesigner::Title, ibGetTranslation(item.title));
 		}
 
 		if (controlCtor->IsControlSystem())

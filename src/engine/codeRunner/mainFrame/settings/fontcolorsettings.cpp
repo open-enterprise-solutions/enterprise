@@ -2,6 +2,7 @@
 #include "settingsxml.h"
 
 #include <wx/stc/stc.h>
+#include "core/localization/dictionary.h"   // _() — the dialog's words
 
 // Every kind on the one paper colour; what tells them apart is the ink.
 static const wxColour kPaper(0xFA, 0xF7, 0xF0);

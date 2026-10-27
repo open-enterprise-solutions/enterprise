@@ -11,8 +11,6 @@
 #include <unordered_set>
 #include <vector>
 
-#include <wx/translation.h>
-
 namespace {
 // Convert a property's value to a display string. A live value's text
 // (a module, a binary blob) can carry control characters, which render as

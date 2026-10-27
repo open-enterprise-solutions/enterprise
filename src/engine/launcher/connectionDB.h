@@ -2,7 +2,6 @@
 #define __CONNECTION_DB_H__
 
 #include <wx/artprov.h>
-#include <wx/intl.h>
 #include <wx/string.h>
 #include <wx/stattext.h>
 #include <wx/gdicmn.h>
@@ -20,6 +19,7 @@
 #include <wx/filepicker.h>
 
 #include <wx/wx.h>
+#include "core/localization/dictionary.h"   // _() — the dialog's words
 
 class ibDialogConnection : public wxDialog {
 	wxStaticText* m_staticTextName;

@@ -9,7 +9,7 @@
 #include "core/exception.h"              // ibCoreException — a kind mismatch, a packet refused
 #include "core/fiber/fiber.h"            // StackLow — the check descends a native frame a node
 
-#include <wx/translation.h>   // _() — the refusals' words
+#include "core/localization/dictionary.h"   // _() — the refusals' words
 
 #include <climits>                       // LLONG_MAX — an unsigned number past it is no whole one
 #include <cstring>                       // std::memcpy / memmove / memcmp — the bytes, read and moved

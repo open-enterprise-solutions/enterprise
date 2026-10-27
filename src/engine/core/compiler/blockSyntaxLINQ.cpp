@@ -10,7 +10,7 @@
 #include "core/stringUtils.h"
 #include "core/stringTokenizer.h"   // ibSplit — the names a clause lists
 
-#include <wx/translation.h>   // _() — the refusals' words
+#include "core/localization/dictionary.h"   // _() — the refusals' words
 
 #include <algorithm>
 #include <functional>

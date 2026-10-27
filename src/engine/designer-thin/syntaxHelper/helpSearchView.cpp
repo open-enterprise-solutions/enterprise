@@ -56,7 +56,7 @@ void ibHelpSearchView::RefreshList(const wxString& query) {
 		m_ids.push_back(e->id);
 		++visible;
 	}
-	m_badge->SetLabel(wxString::Format(_("Found: %zu"), visible));
+	m_badge->SetLabel(ibString::Format(_("Found: %zu"), visible));
 }
 
 void ibHelpSearchView::OnQueryChanged(wxCommandEvent& event) {

@@ -38,7 +38,7 @@ void ibQueryUnionModel::GetValueByRow(ibVariant& variant, unsigned row, unsigned
 
 	switch (col) {
 	case kUnionColName:
-		variant = wxString::Format(_("Query %u"), row + 1);
+		variant = ibString::Format(_("Query %u"), row + 1);
 		break;
 	case kUnionColKeepDuplicates: {
 		// THE COLUMN SAYS "No duplicates", AND THAT IS THE NEGATION OF WHAT THE AST STORES.
@@ -535,7 +535,7 @@ bool ibQueryUnionFieldModel::SetValueByRow(const ibVariant& variant, unsigned ro
 	// `Total sum` here meant writing it out and then showing the engine's lexical error about text
 	// the window itself produced.
 	if (!ibQueryLexer::IsIdentifier(name))
-		return refuse(wxString::Format(
+		return refuse(ibString::Format(
 			_("'%s' cannot be a field name: one word, letters, digits and underscores, "
 			  "no spaces or punctuation."), name));
 
@@ -547,7 +547,7 @@ bool ibQueryUnionFieldModel::SetValueByRow(const ibVariant& variant, unsigned ro
 	// a temp table's columns and index are these names — so two the same are ambiguous in earnest.
 	for (size_t i = 0; i < m_names.size(); ++i)
 		if (i != row && m_names[i].IsSameAs(name, false))
-			return refuse(wxString::Format(
+			return refuse(ibString::Format(
 				_("another field of the result is already called '%s'"), name));
 
 	// ⚠ BY ROW, NOT BY NAME. The row IS the projection — which is the whole point of the change:
@@ -577,7 +577,7 @@ bool ibQueryUnionFieldModel::SetValueByRow(const ibVariant& variant, unsigned ro
 				break;
 		}
 		if (!renamed)
-			return refuse(wxString::Format(
+			return refuse(ibString::Format(
 				_("'%s' is not a field of any branch any more - reopen the tab"), previous));
 	}
 	m_names[row] = name;

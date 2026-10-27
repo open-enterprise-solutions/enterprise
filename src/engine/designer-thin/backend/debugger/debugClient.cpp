@@ -89,7 +89,7 @@ static bool Send(ibProtocol::ibDebug::ibCommand command, ibProtocolNode params =
 	ibProtocol::ibRefusal refusal = ibProtocol::ibRefusal::None;
 	ibString error;
 	if (!frame->Debug(params, result, refusal, error)) {
-		Message(wxString::Format(_("The debugger did not take the command: %s"), error));
+		Message(ibString::Format(_("The debugger did not take the command: %s"), error));
 		return false;
 	}
 	if (answer != nullptr)
@@ -157,7 +157,7 @@ void ibDebuggerClient::Listen()
 		});
 	}, refusal, error);
 	if (!listening)
-		Message(wxString::Format(_("The debugger is not available: %s"), error));
+		Message(ibString::Format(_("The debugger is not available: %s"), error));
 }
 
 void ibDebuggerClient::Receive(const ibProtocolNode& news)

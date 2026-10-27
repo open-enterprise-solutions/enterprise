@@ -180,17 +180,17 @@ IB_NOINLINE void Raise(int code, const ibValue& value)
 //
 // ⚠ TRANSLATED HERE, WHEN IT IS SAID — which is why these are not codes. The code table
 // (gs_listErrorString) is filled by `_()` when the module loads, before any catalog, so a message moved
-// there would reach a translated screen in English. The literal is marked with wxTRANSLATE, which the
+// there would reach a translated screen in English. The literal is marked with ibTRANSLATE, which the
 // catalog sweep reads as it reads `_` (localization.md; fileKind.cpp does the same).
 template <class... Args>
 IB_NOINLINE void RaiseText(const char* text, Args&&... args)
 {
-	ibBackendCoreException::Error(wxGetTranslation(wxTRANS_INPUT_STR(text)), std::forward<Args>(args)...);   // what `_()` expands to
+	ibBackendCoreException::Error(ibGetTranslation(text), std::forward<Args>(args)...);   // what `_()` expands to
 }
 
 // …and at the call site in one word: `RuntimeError("…", args)` is RaiseText with its literal marked for the
 // catalog. The sweep reads it by name (--keyword=RuntimeError, localization.md), as it reads `_`.
-#define RuntimeError(text, ...) RaiseText(wxTRANSLATE(text), ##__VA_ARGS__)
+#define RuntimeError(text, ...) RaiseText(ibTRANSLATE(text), ##__VA_ARGS__)
 
 
 IB_FORCEINLINE ibValue& ResolveWrite(int slot, int idx,

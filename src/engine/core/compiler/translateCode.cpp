@@ -8,7 +8,7 @@
 #include "core/exception.h"
 #include "core/fboolean.h"   // g_booleanTrue / g_booleanFalse — the words of the boolean type
 
-#include <wx/translation.h>   // _() — the refusals' words
+#include "core/localization/dictionary.h"   // _() — the refusals' words
 
 //////////////////////////////////////////////////////////////////////
 //                           Constants

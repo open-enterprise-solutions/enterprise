@@ -8702,7 +8702,7 @@ wxAccStatus ibDataViewCtrlAccessible::GetName(int childId, wxString* name)
 		{
 			// Return row number if no textual column found.
 			// Rows are numbered from 1.
-			*name = wxString::Format(_("Row %i"), childId);
+			*name = ibString::Format(_("Row %i"), childId);
 		}
 		else
 		{
@@ -8812,7 +8812,7 @@ wxAccStatus ibDataViewCtrlAccessible::GetDescription(int childId, wxString* desc
 
 	if (childId == wxACC_SELF)
 	{
-		*description = wxString::Format(_("%s (%d items)"),
+		*description = ibString::Format(_("%s (%d items)"),
 			dvCtrl->GetName().c_str(), dvCtrl->GetRowCount());
 	}
 	else
@@ -8863,7 +8863,7 @@ wxAccStatus ibDataViewCtrlAccessible::GetDescription(int childId, wxString* desc
 				if (colName.empty())
 				{
 					// Columns are numbered from 1.
-					colName = wxString::Format(_("Column %u"), col + 1);
+					colName = ibString::Format(_("Column %u"), col + 1);
 				}
 
 				if (!itemDesc.empty())

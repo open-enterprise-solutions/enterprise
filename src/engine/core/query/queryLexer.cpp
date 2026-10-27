@@ -7,7 +7,7 @@
 #include "core/exception.h"       // ibCoreException — a lexer refusal is still one
 #include "core/query/queryRefusal.h"   // ibQueryRefusal — the text does not read: where and why, as data
 
-#include <wx/translation.h>   // _() — the refusals' words
+#include "core/localization/dictionary.h"   // _() — the refusals' words
 
 // The keyword and scalar-call tables the lexer matches against are the core's (core/query/queryKeywords.cpp):
 // the thin client's editor reads the same words.

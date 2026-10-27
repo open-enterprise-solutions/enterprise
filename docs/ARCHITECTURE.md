@@ -86,7 +86,7 @@ factories, no checks: a schema stores ids and structure.
 | `coreApi.h` | what every header of the core stands on, with no include of its own: `IB_EXPORT` / `IB_IMPORT` (every module's API macro is spelled with them), `CORE_API` / `CORE_EXPORTS`, `IB_FORCEINLINE` / `IB_NOINLINE`, the platform — `__IBMSW__` / `__IBOSX__` / `__IBGTK__` — and the string's character and literal, `ibChar` / `ibT("…")` |
 | `core.h` | `coreApi.h`, and id typedefs (`ibRoleID`, `ibMetaID`, `ibSourceId`, `ibFormID`, `ibActionID`, `ibPictureID`, `ibVersionID`), `ibValueTypes`, `ibDateFractions`, `ibCtorObjectType`, the primitives' class ids (`g_valueUndefinedCLSID`, `g_valueBooleanCLSID` … `g_valueNullCLSID`) and `GetIDByVT`, `COMPONENT_TYPE_*`, the packed value node's field names `kValueFieldClsid` "t" / `kValueFieldData` "v" |
 | `variant`, `variant_ptr.h` | `ibVariant` — THE value of the system: a flag, a number, a date, a text, or a counted reference to an object derived from it; its lifecycle, node serialization, the compare family (`CompareValueEQ` …). No base class, no factory; copying a value (`CloneValue`) and looking one up by text (`FindValue`) are the runtime's, not the variant's. A literal, a property's value, a cell, a sheet parameter are each one; the engine's `ibValue` (+ runtime, factory) and the thin client's (+ a small factory) derive from it. `ibVariantPtr<T>` — a counted, typed holder |
-| `clsid.h`, `fstring`, `fnumber`, `fdatetime`, `fboolean`, `guid`, `stringUtils.h` | `ibClassID`, `ibString` (+ pool, `ibEmptyString`), `ibNumber`, `ibDateTime`, `ibBoolean`, `ibGuid`. The core's text is `ibString` throughout; `wxString` meets it only in `fstring.h`, the conversion both ways |
+| `clsid.h`, `fstring`, `fnumber`, `fdatetime`, `fboolean`, `guid`, `stringUtils.h` | `ibClassID`, `ibString` (+ pool, `ibEmptyString`), `ibNumber`, `ibDateTime` (a wall-clock reading, no wx; free-form text read by `fdatetimeParse.cpp` — [date-model.md](public/date-model.md)), `ibBoolean`, `ibGuid`. The core's text is `ibString` throughout; `wxString` meets it only in `fstring.h`, the conversion both ways |
 | `compiler/` | the script language's words and its text: `codeDef.h` (opcodes, keywords), `ibTranslateCode` (the lexer — `s_listKeyWord`; its constant is an `ibVariant`), `ibParseCode` (what a module text declares, read without compiling it — the procedures window, autocomplete, the module outline), `ibFoldCode` (where a module's text folds — both code editors'), `ibLinqBlock` (LINQ's block syntax as parts). The compiler and the interpreter are the backend's |
 | `formatString` | `ibFormatString` — the `Format` string as a value: `Parse` / `Render`, `Apply(const ibVariant&)`, `FromTypeDesc` (the format a type description gives, over either side's description) |
 | `memory/` | `ibMemoryBuffer` (bytes: shared until written, the string's shape, no wx), `ibMemoryPool` (the per-thread block pool of strings and buffers), `ibWriterMemory` / `ibReaderMemory` (chunked byte streams over a buffer), lz block compression, `ibZlibDeflate` / `ibZlibInflate` (zlib's form — a stored blob's). A read, seek or advance past the end of a block, or a zero-terminated string with no terminator inside it, is refused (`ibCoreException`) in every build |
@@ -108,16 +108,16 @@ factories, no checks: a schema stores ids and structure.
 | `pictureRegistry`, `picturePredefined`, `fileKind`, `typeName`, `utils/base64.h` | the pictures a process registered, by number, as data; the file kinds the platform writes, in one table; a class's name as the source writes it (`ibTypeInfoName`); base64 straight into and out of `ibString` |
 | `logger/`, `mcp/`, `settings/` | the journal's question and row (`ibLogFilter`, `ibLogRow`; the reader is the server's), `ibMcpSettings`, the settings shelf's words (`ibSettingsCategory`, `ibComposerSettingsEntry`; the storage is the server's) |
 | `roleCompositionMode.h`, `selectorDataType.h`, `propertyChoiceMode.h` | one vocabulary each: how a role combines, what shape a type is picked in, how many of a property's choices are held |
-| `localization` | `ibLocalization` — template (`ibLocalizationEntryArray` or `en = '…'; ru = '…';`) + a language in, that language's text out; missing language → the first written. The owner passes the language |
+| `localization`, `localization/` | `ibLocalization` — template (`ibLocalizationEntryArray` or `en = '…'; ru = '…';`) + a language in, that language's text out; missing language → the first written. The owner passes the language. `ibDictionary` — the engine's own gettext: `_()`, `ibPLURAL`, `ibGETTEXT_IN_CONTEXT`, `ibGetTranslation`, the language the thread's base's ([translations.md](public/translations.md)) |
 | `diagnostics/` | the technology journal (`ibTechJournal`, `ibJournal*`) — ONE per process, the engine's, the protocol's and the client's lines in one file; `ibCrashGuard` (idempotent `Install`), leak tracker, `debugTrace.h`; the header-only app bases `oesApp.h` / `oesConsole.h` ([Entry-point helpers](#entry-point-helpers)) |
 | `build` | `GetBuildId` / `GetBuildStamp`, the program version (`OES_VERSION_MAJOR` / `_MINOR` / `_RELEASE` — every version resource reads them too) |
 | `version.rc2`, `program.manifest` | what every program's and library's resources share: the version block (company, product, copyright, the version from `build.h`) and the manifest merged into every executable's (supported OS, long paths) |
 | `programFolder` | `ibProgramFolder` — where the files a program shares are looked for (`backend.conf`, `lang/`, `help/`, `plugins/`, `_fb/`, `web/`, `server/`, the other programs): the executable's folder, or on macOS the folder that holds the `.app`. `ibDiagnosticFolder` — where `journal/`, `crashdumps/` and `oes-debug.log` go: the program folder, except for a program running from a macOS bundle, which writes under `~/Library/Logs/OES` |
 | `core.cpp` | `DllMain`: `DLL_THREAD_DETACH` drains the `ibString` pool for every process that holds one, engine or not |
 
-- Links: backend → core (PUBLIC); protocol → core; frmclient → core + protocol; enterprise-thin, designer-thin → core;
-  webserver → protocol + core; appcluster, appcluster-tray → core alone.
-- Not in core: `typeconv` (fonts/colours/GDI; in the GUI sides only, not in backend since 2026-10-13), frmclient's `dataProtocol` seam, the value's storage (each side's own),
+- Links: backend → core (PUBLIC); protocol → core; frmclient → core + protocol; enterprise-thin, designer-thin → frmclient +
+  protocol + core; webserver → protocol + core; appcluster, appcluster-tray → core alone.
+- Not in core: `typeconv` (fonts/colours/GDI, dates ⇄ `wxDateTime`; in the GUI sides only, not in backend since 2026-10-13), frmclient's `dataProtocol` seam, the value's storage (each side's own),
   the data view controls (frmclient's).
 - Every executable and library carries a version resource: its `<name>.rc` beside the project names the file and its
   kind and includes `core/version.rc2`; a program with a window adds its icon. Every executable merges
@@ -215,7 +215,7 @@ The init list is **the** ordering contract:
 | 6 | `m_mcpServer` | The designer's MCP listener — started by a designer session. |
 | 7 | `m_settingsStorage` | sys_settings — what people saved on their forms and lists. |
 
-`m_logger` is created by `Open` (`CreateLogger`) after the tables exist. `m_activeMetaData` — the application's `ibMetaDataConfiguration` — is made, loaded and run by `Open` (`CreateActiveMetaData(applicationInstance, flags)`, the flags from the request: the debug server), before any session is let in; a configuration that does not come up refuses the base. Launcher and codeRunner have none. It is held for the sessions to come: a session takes its own reference when it is let in and lets it go when it leaves. A designer's session (`Designer`, `ThinDesigner`) takes none: it makes the configuration it edits, an `ibMetaDataConfigurationStorage`, and holds it alone (`ibSession::AcquireMetaData`). Its apply replaces the active one with the configuration it published (`ReplaceActiveMetaData`); sessions already working finish on the old one, which closes with its last holder. The job manager starts with the base, at the end of `Open` — jobs need no user. Every metadata — a configuration, an external report or data processor, a configuration file — is made by `ibMetaData::MakeShared` and held by `shared_ptr` by whoever works in it. The plugins and the syntax-helper corpus (constructed in `InitLocale()` once the locale is settled — see `docs/syntax-helper-design.md`) are the process's.
+`m_logger` is created by `Open` (`CreateLogger`) after the tables exist. `m_activeMetaData` — the application's `ibMetaDataConfiguration` — is made, loaded and run by `Open` (`CreateActiveMetaData(applicationInstance, flags)`, the flags from the request: the debug server), before any session is let in; a configuration that does not come up refuses the base. Launcher and codeRunner have none. It is held for the sessions to come: a session takes its own reference when it is let in and lets it go when it leaves. A designer's session (`Designer`, `ThinDesigner`) takes none: it makes the configuration it edits, an `ibMetaDataConfigurationStorage`, and holds it alone (`ibSession::AcquireMetaData`). Its apply replaces the active one with the configuration it published (`ReplaceActiveMetaData`); sessions already working finish on the old one, which closes with its last holder. The job manager starts with the base, at the end of `Open` — jobs need no user. Every metadata — a configuration, an external report or data processor, a configuration file — is made by `ibMetaData::MakeShared` and held by `shared_ptr` by whoever works in it. The plugins and the syntax-helper corpus (constructed in `InitLocale()` once the locale is settled — see `docs/private/syntax-helper-design.md`) are the process's.
 
 ### Closing a base (`ibApplicationHost::Close` → `ibApplicationInstance::Close`)
 
@@ -261,7 +261,7 @@ A headless process that serves **one base** of its **server folder** for the app
 - **Settings in three layers**, key by key: built-in values → `backend.conf` (the process: `Locale`, `Workers`, `Bases`, the default `Connections`) → the base's `infobase.conf` (`Connections` to ITS DBMS). `Workers` and `Bases` are a maximum, 0 = no limit (the pool grows as sessions bring work); `Connections` 0 = the default; a value that cannot be used is said in the journal (`ibApplicationHost::ReadCount`).
 - **Secrets** are sealed in `server.conf` with AES-256-GCM (`ibFieldCipher`, key in `server.key`); plain text is refused. `appserver --set-password=<base>/<Password|IbPassword>` reads one from the keyboard and seals it.
 - **Opening:** its base through `CreateFile/ServerAppDataEnv` in `eSERVER_MODE`, then a session of kind `Service` logged into it. A base that does not open or refuses the login is said, and the server ends: the cluster shows that line as the cause.
-- **Who may come in** (`ibServiceExclusivePolicy`, asked at open by `CanOpen` and at every session by `CanAdd`): application servers (`eSERVER_MODE`) share a base with application servers, file bases with file bases — a file-base process (designer, enterprise, the web host) is refused while a server serves the base, and a server while a file base uses it. The row's run mode decides, whatever its kind: a server's thin clients are the server's. What several servers on one base share already lives in it: `sys_session`, `sys_lock`, a job's claim and its clock in `sys_job`.
+- **Who may come in** (`ibServiceExclusivePolicy`, asked at open by `CanOpen` and at every session by `CanAdd`): application servers (`eSERVER_MODE`) share a base with application servers, file bases with file bases — a file-base process (a thin client's file base, the web host) is refused while a server serves the base, and a server while a file base uses it. The row's run mode decides, whatever its kind: a server's thin clients are the server's. What several servers on one base share already lives in it: `sys_session`, `sys_lock`, a job's claim and its clock in `sys_job`.
 - **Journal:** every line about a base carries its name — `(trade1) source …`. The console shows the server's own lines and every warning and error; the running commentary stays in the file.
 - **Its port** (`clientListener`): `WS /<base>/client` and `POST /<base>/client` over the core's HTTP (`core/net`, Asio) — a waiting socket costs a buffer, not a thread. On `127.0.0.1` in the clear, the first free one of 7500–7599 (`ibPort::Workers`, `core/net/ports.h`), said on stdout (`serving <port>`): the clients come in by the cluster's port, TLS there, and the cluster carries them on. `ClientConnections` (backend.conf, 1000) at once; a socket that has not logged in goes 15 s after it opened.
 - **Its base's assistant access** (MCP), when the base's settings switch it on: on `server.conf`'s `McpPort`, given by the cluster from 7600–7699 (`ibPort::BaseAssistant`), so the bases of one cluster never meet on one port; on and its key are the base's settings. Of a base's several servers, the first (`--route=1`) holds it.
@@ -296,11 +296,11 @@ A transport between browsers and bases: it holds no forms and runs no code of it
 
 ### Entry-point helpers
 
-Two header-only helpers in `core/diagnostics/`, beside the guard they wire, cover the boilerplate a binary needs at startup. Header-only = the core itself never compiles them (it has wx base only); both helpers only call `CORE_API ibCrashGuard::*` plus wx primitives the binary already links. The programs that do not include them — the thin clients, `appcluster`, `appcluster-tray` — derive from `wxApp` / `wxAppConsole` and call `ibCrashGuard::Install` in their own `OnInit`.
+Two header-only helpers in `core/diagnostics/`, beside the guard they wire, cover the boilerplate a binary needs at startup. Header-only = the core itself never compiles them (it has wx base only); both helpers only call `CORE_API ibCrashGuard::*` plus wx primitives the binary already links. The programs that do not include them — `appcluster`, `appcluster-tray` — derive from `wxApp` / `wxAppConsole` and call `ibCrashGuard::Install` in their own `OnInit`.
 
 | Binary type | Helper | What it wires |
 |---|---|---|
-| GUI (`codeRunner` / `launcher`) | `ibWxApp` base class (`oesApp.h`) | `wxApp::OnInit` → `ibCrashGuard::Install` + `DoOnInit()`; `OnRun` → try/catch around `DoOnRun()`; 3 exception overrides (main-loop / unhandled / fatal) — the refusal it says and goes on is `ibCoreException`, nothing above the core. Subclass overrides only `GetExeName()` + optional `DoOnRun()`. |
+| GUI (`codeRunner` / `launcher` / `enterprise-thin` / `designer-thin`) | `ibWxApp` base class (`oesApp.h`) | `wxApp::OnInit` → `ibCrashGuard::Install` + `DoOnInit()`; `OnRun` → try/catch around `DoOnRun()`; 3 exception overrides (main-loop / unhandled / fatal) — the refusal it says and goes on is `ibCoreException`, nothing above the core. Subclass overrides only `GetExeName()` + optional `DoOnRun()`. |
 | Console (`appserver` / `webserver`) | `ibOesConsoleBoot` RAII (`oesConsole.h`) | Single object that holds a `wxInitializer` and calls `ibCrashGuard::Install`. `IsOk()` checks the wx init result. |
 
 ### Crash plumbing layers
@@ -524,7 +524,7 @@ The client's side is `frmclient/visualView/` (`visualHostClient.h/cpp` — the t
 ### Compiler Pipeline
 
 ```
-Source text (wxString)
+Source text (ibString)
         │
         ▼
  ibTranslateCode::Load() → Translate()
@@ -604,7 +604,7 @@ Mode is the session's (`ibCompileCode::SetCodeStyle()` writes its `ibCompileStat
 Key attributes:
 - `ibMetaID m_metaId` — numeric identifier within the configuration
 - `ibGuid m_metaGuid` — globally-unique GUID
-- `wxString GetName()` / `GetSynonym()` — developer name and user-visible synonym
+- `ibString GetName()` / `GetSynonym()` — developer name and user-visible synonym
 - `ibMetaData* m_metaData` — back-pointer to the owning metadata container
 
 ### Thirteen Business Object Types
@@ -761,7 +761,7 @@ OES distinguishes between **metadata** (compile-time, process-wide, shared) and 
 - **State machine** — `ibSessionState` (Created / Added / Rejected / Stopping / Gone), `ibAuthState` (Anonymous / Authenticated / AuthFailed)
 - **User info** — `ibUserInfo` (formerly `ibApplicationDataUserInfo`) — OES-user (from `sys_user` table), distinct from the DB-level admin user used to open the database connection. Plus `m_sessionRawPassword` — plain-text cached only for Designer "Start debugging" so spawned children can re-authenticate without prompting. `ibUserInfo` itself owns sys_user CRUD as static factories — `appData` no longer mediates.
 - **Working date** — `m_workDate` per-session (replaces the legacy static `ibValueSystemFunction::ms_workDate` so two web sessions don't step on each other).
-- **Translate state** — `ibTranslateState`: explicit override, the user's language, the configuration's own, and the resolved code (`override || user || configuration`). Selects which metadata synonym / form-label translation is shown. Per-session, so concurrent web tabs each render their own user's language and two bases in one process each keep their own. Distinct from the platform's wxLocale (UI gettext, process-wide). Read through `ibBackendLocalization::GetUserLanguage()`.
+- **Translate state** — `ibTranslateState`: explicit override, the user's language, the configuration's own, and the resolved code (`override || user || configuration`). Selects which metadata synonym / form-label translation is shown. Per-session, so concurrent web tabs each render their own user's language and two bases in one process each keep their own. Distinct from the engine's UI gettext (`ibDictionary`, the base's locale per thread). Read through `ibBackendLocalization::GetUserLanguage()`.
 - **Compile state** — `ibCompileState`: the code style (CES / VES) the session's modules compile in, taken from its base's configuration. Like the interpreter's `ibProcUnitState`, a thread with no session (codeRunner, tests) has its own `thread_local` one.
 - **Root module manager** — `m_root : ibValuePtr<ibValueModuleManagerRuntimeConfiguration>`. Created via `EnsureRoot()` in `ibSessionRegistry::NotifyAuthenticated`, right after `AcquireMetaData` and before the `OnAuthenticated` listeners. Stays nullptr for sessions that never run scripts — **the Designer never creates a root** (`EnsureRoot` is gated on `DesignerMode()`; it uses the lightweight `ibValueModuleManagerDesigner` in the compile cache instead), and likewise WebServer technical / Launcher. Objects/records/modules reach the right manager through the `ibSession::GetEditModuleManager(metaData)` seam (Designer → compile-cache designer manager; runtime → `m_root`). See `module-manager-split.md`.
 - **Frame** — `virtual ibBackendDocFrame* GetFrame() const { return nullptr; }` on base `ibSession`. Frame storage lives on derived sessions that have one (`ibClientSession::SetFrame(ibClientFrame*)`, `frmserver/client/clientSession.h` — a protocol client's). Base has no `m_frame` field — null means "no frame on this session" (codeRunner, a server's technical session). The frame belongs to the session that created it, not to a process-wide singleton.
@@ -855,7 +855,7 @@ All database access goes through the `db_query` macro, which is `ibApplicationIn
 
 ```cpp
 ibDatabaseResultSet* rs = db_query->RunQueryWithResults(
-    wxT("SELECT * FROM %s WHERE guid = ?"), table_name);
+    ibT("SELECT * FROM %s WHERE guid = ?"), table_name);
 ```
 
 Every driver folder except `odbc/` contains an `engine/` subdirectory with the vendored native client library; ODBC links the system driver manager (`odbc32` / `odbccp32`).
@@ -1088,31 +1088,27 @@ ibClientInstance::OnExit (frmserver) — the client logs out, or its connection 
 Two parallel translation surfaces exist; do not confuse them:
 
 - **Configuration language** — the session's translate state (`ibTranslateState::m_resolvedLanguageCode`), selects metadata synonyms / form-label translations stored *inside* the configuration. See `ibBackendLocalization::GetUserLanguage` / `SetUserLanguage`.
-- **Process UI language** — gettext catalogs under `locale/` (`ru.po` / `uk.po` + compiled `*.mo`). Strings wrapped in `_("...")` macros across `src/engine/**` end up in the `.mo` and are looked up by wxLocale at runtime. A program loads `lang/<code>/open_es.mo` beside it (`ibApplicationHost`, `backend/appHost.cpp`); the compiled catalog is copied there under that name, and the packages carry `lang/`.
+- **Engine UI language** — gettext catalogs under `lang/`, laid out as the programs read them: the template `lang/open_es.pot`, and per language `lang/<code>/open_es.po` with its compiled `open_es.mo` beside it. Strings wrapped in `_("...")` macros across `src/engine/**` end up in the `.mo` and are looked up by the engine's own `ibDictionary` (`core/localization/dictionary.h`), one per language, chosen per thread by the base it works for ([translations.md](public/translations.md)). A program finds `lang/` beside it, or walking up from its folder in a build tree; the packages carry `lang/`.
 
 **Workflow** (when adding new `_()` strings):
 
 ```
 # Regenerate the template from current sources (uses Poedit's gettext tools).
-xgettext --from-code=UTF-8 --keyword=_ --keyword=wxTRANSLATE --keyword=RuntimeError \
-         --keyword=wxPLURAL:1,2 --keyword=wxGETTEXT_IN_CONTEXT:1c,2 --language=C++ --no-wrap \
-         --output=locale/open_es.pot --files-from=<list-of-cpp-files>
+xgettext --from-code=UTF-8 --keyword=_ --keyword=ibTRANSLATE --keyword=RuntimeError \
+         --keyword=ibPLURAL:1,2 --keyword=ibGETTEXT_IN_CONTEXT:1c,2 --keyword=ibTRANSLATE_IN_CONTEXT:1c,2 --language=C++ --no-wrap \
+         --output=lang/open_es.pot --files-from=<list-of-cpp-files>
 
 # Merge new entries into each language file (preserves existing translations).
-msgmerge --no-wrap --update --backup=none locale/ru.po locale/open_es.pot
-msgmerge --no-wrap --update --backup=none locale/uk.po locale/open_es.pot
+msgmerge --no-wrap --update --backup=none lang/ru/open_es.po lang/open_es.pot
+msgmerge --no-wrap --update --backup=none lang/uk/open_es.po lang/open_es.pot
 
 # Translate empty msgstr entries (manually or in Poedit).
 
-# Compile to .mo for the runtime.
-msgfmt --check-format --output-file=locale/ru.mo locale/ru.po
-msgfmt --check-format --output-file=locale/uk.mo locale/uk.po
-
-# Put them where the programs read them.
-cp locale/ru.mo lang/ru/open_es.mo
-cp locale/uk.mo lang/uk/open_es.mo
+# Compile to .mo, in place: the programs read lang/<code>/open_es.mo.
+msgfmt --check-format --output-file=lang/ru/open_es.mo lang/ru/open_es.po
+msgfmt --check-format --output-file=lang/uk/open_es.mo lang/uk/open_es.po
 ```
 
 The Poedit GUI (`File → Open` on the .po) does Step 1 + the editing UI in one shot. CLI route is faster for batch updates from CI.
 
-One English word with two meanings takes a context for the special one: `wxGETTEXT_IN_CONTEXT("document attribute", "Number")` is translated apart from `_("Number")`.
+One English word with two meanings takes a context for the special one: `ibGETTEXT_IN_CONTEXT("document attribute", "Number")` is translated apart from `_("Number")`.

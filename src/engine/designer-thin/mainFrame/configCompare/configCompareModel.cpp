@@ -4,7 +4,6 @@
 #include "frmclient/backend/backend_picture.h"   // a group's picture, as the client has it
 
 #include <wx/artprov.h>
-#include <wx/translation.h>
 
 // --- ibDataViewDiffRowObject -----------------------------------------
 
@@ -291,7 +290,7 @@ void ibDataViewMetaDiffModel::GetValue(ibVariant& variant,
 		else if (rec.m_left != nullptr)
 			variant = ibVariant(SideSummary(rec.m_left));
 		else if (!rec.m_leftValue.IsEmpty() || rec.m_leftId != 0)
-			variant = ibVariant(rec.m_leftValue.IsEmpty() ? _("(unnamed)") : rec.m_leftValue);
+			variant = ibVariant(rec.m_leftValue.IsEmpty() ? wxString(_("(unnamed)")) : rec.m_leftValue);
 		else
 			variant = ibVariant(_("Missing"));
 		break;
@@ -304,7 +303,7 @@ void ibDataViewMetaDiffModel::GetValue(ibVariant& variant,
 		else if (rec.m_right != nullptr)
 			variant = ibVariant(SideSummary(rec.m_right));
 		else if (!rec.m_rightValue.IsEmpty() || rec.m_rightId != 0)
-			variant = ibVariant(rec.m_rightValue.IsEmpty() ? _("(unnamed)") : rec.m_rightValue);
+			variant = ibVariant(rec.m_rightValue.IsEmpty() ? wxString(_("(unnamed)")) : rec.m_rightValue);
 		else
 			variant = ibVariant(_("Missing"));
 		break;

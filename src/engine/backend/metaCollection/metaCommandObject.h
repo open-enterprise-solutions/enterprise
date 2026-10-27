@@ -167,7 +167,7 @@ private:
 		ibPropertyObject::CreateProperty<ibPropertyInnerModule<ibValueMetaObjectModule>>(
 			m_categoryContext, ibT("CommandModule"), _("Command module"), _("The command's code: CommandProcessing(CommandParameter, ExecuteParameters) runs when the command is invoked, with the typed command's reference as the parameter. Compiled when the command is run."));
 
-	ibRole* m_roleUse = ibValueMetaObject::CreateRole(ibT("Use"), wxGETTEXT_IN_CONTEXT("access right", "Use"));
+	ibRole* m_roleUse = ibValueMetaObject::CreateRole(ibT("Use"), ibGETTEXT_IN_CONTEXT("access right", "Use"));
 
 	friend class ibMetaData;
 };

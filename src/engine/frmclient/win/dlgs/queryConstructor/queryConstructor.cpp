@@ -651,9 +651,9 @@ wxWindow* ibDialogQueryConstructor::BuildPackagePage(wxWindow* parent)
 			return wxEmptyString;
 		const ibQueryAstStatement& statement = m_package.m_statements[row];
 		if (col == kGridCol1)
-			return wxString::Format(_("Query %u"), row + 1);
+			return ibString::Format(_("Query %u"), row + 1);
 		if (!statement.m_dropTemp.IsEmpty())
-			return wxString::Format(_("drops the temp table %s"), statement.m_dropTemp);
+			return ibString::Format(_("drops the temp table %s"), statement.m_dropTemp);
 		// ⭐ A LINK STANDS IN THE SEQUENCE TOO, so it has a row here — and it has no select, which
 		// means without this line it fell through to "selects" and the list said the one thing that
 		// is not true of it. The relations themselves are edited on the links tab; this row says
@@ -661,12 +661,12 @@ wxWindow* ibDialogQueryConstructor::BuildPackagePage(wxWindow* parent)
 		if (statement.IsLink())
 			return statement.m_linkIndex >= 0
 			    && (std::size_t)statement.m_linkIndex < m_package.m_links.size()
-				? wxString::Format(_("links %s"), m_package.m_links[statement.m_linkIndex].m_left)
-				: wxString(_("links the named selections"));
+				? ibString::Format(_("links %s"), m_package.m_links[statement.m_linkIndex].m_left)
+				: _("links the named selections");
 		if (statement.m_select && !statement.m_select->m_intoTemp.IsEmpty())
-			return wxString::Format(_("makes the temp table %s"), statement.m_select->m_intoTemp);
+			return ibString::Format(_("makes the temp table %s"), statement.m_select->m_intoTemp);
 		if (statement.m_select && !statement.m_select->m_ontoName.IsEmpty())
-			return wxString::Format(_("selects as %s"), statement.m_select->m_ontoName);
+			return ibString::Format(_("selects as %s"), statement.m_select->m_ontoName);
 		return _("selects");
 	});
 	m_statements = MakeGrid(panel, m_statementModel, [this] { FillAll(); });
@@ -1737,7 +1737,7 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 				if (other == static_cast<size_t>(at.m_node) || name.IsEmpty())
 					continue;
 				if (select->m_totalsSplits[other].m_name.IsSameAs(name, false)) {
-					wxMessageBox(wxString::Format(_("A separator called '%s' is already there."), name),
+					wxMessageBox(ibString::Format(_("A separator called '%s' is already there."), name),
 						_("Query constructor"), wxOK | wxICON_WARNING, this);
 					return false;
 				}
@@ -1809,7 +1809,7 @@ wxWindow* ibDialogQueryConstructor::BuildTotalsPage(wxWindow* parent)
 				const ibQueryTotalDim& other = *otherPtr;
 				const wxString otherName = ibQueryDimensionName(other);
 				if (otherName.IsSameAs(alias, false)) {
-					wxMessageBox(wxString::Format(
+					wxMessageBox(ibString::Format(
 							_("Another totals level is already called '%s'.\n\nLevels are read back "
 							  "by name, so two the same would make one of them unreachable."), alias),
 						_("Query constructor"), wxOK | wxICON_WARNING, this);

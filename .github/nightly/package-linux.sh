@@ -25,6 +25,7 @@ rm -rf "$stage"
 mkdir -p "$stage"
 cp -a "$release/." "$stage/"
 cp -a lang "$stage/lang"
+find "$stage/lang" \( -name '*.po' -o -name '*.pot' \) -delete   # the programs read the .mo only
 cp src/engine/backend/backend.conf "$stage/backend.conf"
 # The Firebird 5 kit the workflow laid out (fbkit/), as Firebird's own tree — see nightly.yml.
 cp -a fbkit "$stage/_fb"

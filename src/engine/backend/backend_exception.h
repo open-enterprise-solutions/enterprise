@@ -45,7 +45,7 @@ public:
 	// a format is its message's (codeDef.h).
 	template <class... Args>
 	static ibString Format(const ibString& format, const Args&... args) {
-		ibString strErrorBuffer = ibString::Format(ibString(wxGetTranslation(format)), args...);
+		ibString strErrorBuffer = ibString::Format(ibGetTranslation(format), args...);
 		if (IsEvalMode())
 			strErrorBuffer.Replace(ibT("\n"), ibT(" "));
 		stringUtils::TrimAll(strErrorBuffer);

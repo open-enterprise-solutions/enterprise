@@ -12252,3 +12252,218 @@ msgstr "Повторити %s"
 #: src/engine/frmserver/visualView/choiceRequest.cpp:56
 msgid "No settings have been saved here yet."
 msgstr "Тут ще не збережено жодного налаштування."
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "month"
+msgid "January"
+msgstr "січень"
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "month"
+msgid "February"
+msgstr "лютий"
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "month"
+msgid "March"
+msgstr "березень"
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "month"
+msgid "April"
+msgstr "квітень"
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "month"
+msgid "May"
+msgstr "травень"
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "month"
+msgid "June"
+msgstr "червень"
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "month"
+msgid "July"
+msgstr "липень"
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "month"
+msgid "August"
+msgstr "серпень"
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "month"
+msgid "September"
+msgstr "вересень"
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "month"
+msgid "October"
+msgstr "жовтень"
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "month"
+msgid "November"
+msgstr "листопад"
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "month"
+msgid "December"
+msgstr "грудень"
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "month, short"
+msgid "Jan"
+msgstr "січ"
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "month, short"
+msgid "Feb"
+msgstr "лют"
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "month, short"
+msgid "Mar"
+msgstr "бер"
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "month, short"
+msgid "Apr"
+msgstr "кві"
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "month, short"
+msgid "May"
+msgstr "тра"
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "month, short"
+msgid "Jun"
+msgstr "чер"
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "month, short"
+msgid "Jul"
+msgstr "лип"
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "month, short"
+msgid "Aug"
+msgstr "сер"
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "month, short"
+msgid "Sep"
+msgstr "вер"
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "month, short"
+msgid "Oct"
+msgstr "жов"
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "month, short"
+msgid "Nov"
+msgstr "лис"
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "month, short"
+msgid "Dec"
+msgstr "гру"
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "weekday, short"
+msgid "Mon"
+msgstr "Пн"
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "weekday, short"
+msgid "Tue"
+msgstr "Вт"
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "weekday, short"
+msgid "Wed"
+msgstr "Ср"
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "weekday, short"
+msgid "Thu"
+msgstr "Чт"
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "weekday, short"
+msgid "Fri"
+msgstr "Пт"
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "weekday, short"
+msgid "Sat"
+msgstr "Сб"
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "weekday, short"
+msgid "Sun"
+msgstr "Нд"
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "weekday"
+msgid "Monday"
+msgstr "понеділок"
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "weekday"
+msgid "Tuesday"
+msgstr "вівторок"
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "weekday"
+msgid "Wednesday"
+msgstr "середа"
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "weekday"
+msgid "Thursday"
+msgstr "четвер"
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "weekday"
+msgid "Friday"
+msgstr "п'ятниця"
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "weekday"
+msgid "Saturday"
+msgstr "субота"
+
+#: src/engine/core/fdatetime.cpp
+msgctxt "weekday"
+msgid "Sunday"
+msgstr "неділя"
+
+#: src/engine/core/fdatetimeParse.cpp
+msgctxt "date"
+msgid "today"
+msgstr "сьогодні"
+
+#: src/engine/core/fdatetimeParse.cpp
+msgctxt "date"
+msgid "yesterday"
+msgstr "вчора"
+
+#: src/engine/core/fdatetimeParse.cpp
+msgctxt "date"
+msgid "tomorrow"
+msgstr "завтра"
+
+#: src/engine/core/fdatetimeParse.cpp
+msgctxt "time"
+msgid "noon"
+msgstr "полудень"
+
+#: src/engine/core/fdatetimeParse.cpp
+msgctxt "time"
+msgid "midnight"
+msgstr "північ"

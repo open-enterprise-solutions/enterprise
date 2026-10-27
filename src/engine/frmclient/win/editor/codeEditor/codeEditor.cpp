@@ -495,7 +495,7 @@ void ibCodeEditor::FindText(const wxString& findString, int wxflags)
 		result = ibCodeEditor::SearchPrev(sciflags, findString);
 	}
 	if (wxSTC_INVALID_POSITION == result) {
-		wxMessageBox(wxString::Format(_("\"%s\" not found!"), findString.c_str()),
+		wxMessageBox(ibString::Format(_("\"%s\" not found!"), findString.c_str()),
 			_("Not Found!"), wxICON_ERROR, (wxWindow*)this);
 	}
 	else {

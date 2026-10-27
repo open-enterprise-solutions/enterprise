@@ -177,6 +177,8 @@ namespace ibProtocol {
 		inline constexpr const char* Token         = "Token";     // the bearer, once, in the password login's answer. The
 		                                                          // database keeps its hash (docs/public/client-protocol.md)
 		inline constexpr const char* Users         = "Users";     // users' answer: the names the login window offers
+		inline constexpr const char* Locale        = "Locale";    // the login's answer: the language the client's own
+		                                                          // words are said in - the base's (core/localization/dictionary.h)
 		// …and every call after it: {Client[, Since][, Pending]}.
 		inline constexpr const char* Since         = "Since";
 		inline constexpr const char* Pending       = "Pending";   // (protocol 3) the state events held since the last call,

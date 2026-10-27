@@ -4,7 +4,7 @@
 #include "core/exception.h"           // ibCoreException — malformed-JSON throw
 #include "core/fiber/fiber.h"         // StackLow — the depth count's backstop when the reserve runs out first
 
-#include <wx/translation.h>   // _() — the refusals' words
+#include "core/localization/dictionary.h"   // _() — the refusals' words
 #include <algorithm>                   // std::all_of — a whole number's digits
 #include <charconv>                    // std::to_chars — a whole number's digits, on the stack
 #include <cstdio>                      // std::snprintf — a date's digits

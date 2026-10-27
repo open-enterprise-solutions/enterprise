@@ -304,7 +304,7 @@ Two ways this sweep went wrong, both caught by the local build, both worth avoid
 
 ### 1.9a A `_()` msgid is ASCII, because the LOCALE decodes it (2026-09-02)
 
-`_(s)` hands the literal to `wxGetTranslation` as a `const char*`, and the `wxString` is built with
+`_(s)` hands the literal to `ibGetTranslation` as a `const char*`, and the `wxString` is built with
 the **runtime locale's** converter. CI runs under `C` / POSIX, where any byte above 0x7F cannot be
 decoded — so the whole string comes back **EMPTY**. Not truncated, not garbled: empty, silently.
 
@@ -313,8 +313,8 @@ description literal contained an em dash matched the set CI reported, exactly an
 passes on Windows and on macOS (UTF-8 by default), which is what kept it invisible.
 
 - Write ASCII in a msgid: `-` for `—`, `...` for `…`, `"` for `«»`. A msgid is a **key**;
-  typography belongs in the translation. The catalogue already agreed — `lang/ru/open_es.po` holds
-  736 msgids and not one em dash.
+  typography belongs in the translation. Three msgids in `lang/ru/open_es.po` still break it
+  (2026-10-27): `grep -n '^msgid ".*—' lang/ru/open_es.po` lists them.
 - Sweep with `LC_ALL=C grep -rn '_("[^"]*[^ -~]' --include=*.cpp --include=*.h backend frmserver frmclient`
   (the `LC_ALL` matters: without it `grep -P` refuses the byte class outright).
 - ⚠ **Comments are not affected and must not be swept.** One file carried 119 em dashes in prose

@@ -114,12 +114,12 @@ ibPGCalcScheduleProperty::ibPGCalcScheduleProperty(ibBackendProperty* property, 
 		for (const ibDataNode& field : link.Children())
 			fields.push_back(&field);
 		// Named as its neighbours are — what the row IS, not the field a configuration happens to link.
-		const wxString rowLabel = links.size() == 1 ? wxString(_("Schedule link"))
-			: wxString::Format(_("Schedule link %u"), static_cast<unsigned>(idx + 1));
+		const wxString rowLabel = links.size() == 1 ? _("Schedule link")
+			: ibString::Format(_("Schedule link %u"), static_cast<unsigned>(idx + 1));
 		wxPGChoices fieldChoices = GetChoices(fields);
 		wxEnumProperty* row = new wxEnumProperty(rowLabel, wxString::Format(wxT("link%li"), static_cast<long>(dimension)),
 			fieldChoices, 0);
-		row->SetHelpString(wxString::Format(_("The field of the register that answers for the schedule's dimension '%s'."),
+		row->SetHelpString(ibString::Format(_("The field of the register that answers for the schedule's dimension '%s'."),
 			link.GetValue<ibString>(ibProtocol::ibSchema::ibProperties::Title)));
 		AddPrivateChild(row);
 		m_linkRows.push_back(row);
