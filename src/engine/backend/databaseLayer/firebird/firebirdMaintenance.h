@@ -27,8 +27,6 @@
 
 #include "backend/backend.h"
 
-#include <wx/string.h>
-
 #include <functional>
 
 class ibInterfaceFirebird;

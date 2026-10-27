@@ -74,6 +74,9 @@ target_link_libraries(core
 find_package(Threads REQUIRED)
 target_link_libraries(core PRIVATE Threads::Threads)
 
+# dlopen / dlsym (dynamicLibrary.cpp, a database's client loaded at run time). On Windows this is empty.
+target_link_libraries(core PRIVATE ${CMAKE_DL_LIBS})
+
 # guid.cpp picks its generator by system: Windows -> CoCreateGuid, macOS -> CFUUID
 # (CoreFoundation), everything else -> libuuid's uuid_generate. Only the last one is a
 # separate library, and only on non-Apple UNIX; Apple's CFUUID rides in CoreFoundation.

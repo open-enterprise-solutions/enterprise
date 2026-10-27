@@ -44,8 +44,6 @@
 
 #include "backend/backend.h"
 
-#include <wx/string.h>
-
 class BACKEND_API ibFirebirdLeaderMode {
 public:
 	enum class Role {

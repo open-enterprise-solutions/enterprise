@@ -4,10 +4,7 @@
 #include "firebirdLease.h"
 #include "core/diagnostics/journal.h"   // ibJournal — this TU does not pull in backend_core.h
 #include "firebirdLocalServer.h"
-
-#include <wx/file.h>
-#include <wx/log.h>
-#include <wx/utils.h>
+#include "core/startProcess.h"   // ibHostName
 
 #include <atomic>
 #include <chrono>
@@ -101,7 +98,7 @@ void HeartbeatLoop(LeaderModeState* st) {
 					(unsigned)cur.leaderPort));
 
 				const ibString hostForConnect =
-					(cur.leaderHost == ::wxGetHostName())
+					(cur.leaderHost == ibHostName())
 						? ibString(ibT("localhost"))
 						: cur.leaderHost;
 				const ibString newUrl = (cur.leaderPort > 0)
@@ -167,7 +164,7 @@ void PromoteSelfToLeader(LeaderModeState* st) {
 		const auto cur = lease->ReadCurrentState();
 		if (cur.valid && cur.leaderPort > 0) {
 			const ibString hostForConnect =
-				(cur.leaderHost == ::wxGetHostName())
+				(cur.leaderHost == ibHostName())
 					? ibString(ibT("localhost"))
 					: cur.leaderHost;
 			const ibString newUrl = ibString::Format(
@@ -205,10 +202,10 @@ void PromoteSelfToLeader(LeaderModeState* st) {
 		                    ibT("but local server can't start; running in ")
 		                    ibT("degraded embedded-only mode (followers ")
 		                    ibT("cannot connect)"));
-		lease->WriteSelfAsLeader(::wxGetHostName(), /*port=*/0);
+		lease->WriteSelfAsLeader(ibHostName(), /*port=*/0);
 		newConnectUrl = dbPath;
 	} else {
-		lease->WriteSelfAsLeader(::wxGetHostName(), (uint16_t)serverPort);
+		lease->WriteSelfAsLeader(ibHostName(), (uint16_t)serverPort);
 		newConnectUrl = ibFirebirdLocalServer::MakeConnectUrl(dbPath);
 	}
 
@@ -237,7 +234,7 @@ void PromoteSelfToLeader(LeaderModeState* st) {
 // usually resolvable. Production deployments that need a specific
 // IP can override via mesh.conf eventually.
 ibString DiscoverHostName() {
-	return ::wxGetHostName();
+	return ibHostName();
 }
 
 } // namespace
@@ -333,18 +330,13 @@ ibFirebirdLeaderMode::Status ibFirebirdLeaderMode::InitForDatabase(const ibStrin
 	bool preferLeader = false;
 	{
 		ibString rest = dbPath.Mid(2);   // strip "\\" / "//"
-		const int s1 = (int)rest.Find('\\');
-		const int s2 = (int)rest.Find('/');
-		int slashIdx = -1;
-		if (s1 != wxNOT_FOUND && s2 != wxNOT_FOUND) slashIdx = std::min(s1, s2);
-		else if (s1 != wxNOT_FOUND) slashIdx = s1;
-		else if (s2 != wxNOT_FOUND) slashIdx = s2;
-		const ibString uncHost = (slashIdx >= 0) ? rest.Left(slashIdx) : rest;
-		preferLeader = uncHost.IsSameAs(::wxGetHostName(), /*caseSensitive*/ false);
+		const size_t slash = rest.find_first_of(ibT("\\/"));
+		const ibString uncHost = slash != ibString::npos ? rest.Left(slash) : rest;
+		preferLeader = uncHost.IsSameAs(ibHostName(), /*caseSensitive*/ false);
 		ibFb::LogThreadSafe(ibString::Format(
 			ibT("ibFirebirdLeaderMode: dbPath host '%s' vs local '%s' - ")
 			ibT("preferLeader=%d"),
-			uncHost, ::wxGetHostName(), (int)preferLeader));
+			uncHost, ibHostName(), (int)preferLeader));
 	}
 	if (!preferLeader) {
 		// 150 ms head start for preferred peers. Short enough that
@@ -431,7 +423,7 @@ ibFirebirdLeaderMode::Status ibFirebirdLeaderMode::InitForDatabase(const ibStrin
 		// in-process leader path already uses `localhost`; this
 		// keeps the follower-on-same-host path symmetric.
 		const ibString hostForConnect =
-			(cur.leaderHost == ::wxGetHostName())
+			(cur.leaderHost == ibHostName())
 				? ibString(ibT("localhost"))
 				: cur.leaderHost;
 		st.connectUrl      = ibString::Format(

@@ -1,13 +1,11 @@
 #include "firebirdLease.h"
 #include "firebirdCommon.h"
 #include "core/diagnostics/journal.h"   // ibJournal — this TU does not pull in backend_core.h
-
-#include <wx/file.h>
-#include <wx/log.h>
+#include "core/diagnostics/crashGuard.h"   // ibCrashGuard::CurrentPidPortable
 
 #include <cstring>
 
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 #include <windows.h>
 #else
 #include <fcntl.h>
@@ -50,14 +48,14 @@ constexpr uint32_t kVersion = 1;
 using ibFb::NowUnixMs;
 
 bool ReadLeaseFile(
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 	HANDLE h,
 #else
 	int fd,
 #endif
 	LeaseFileV1& out)
 {
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 	LARGE_INTEGER zero{}; zero.QuadPart = 0;
 	if (!SetFilePointerEx(h, zero, nullptr, FILE_BEGIN))
 		return false;
@@ -73,14 +71,14 @@ bool ReadLeaseFile(
 }
 
 bool WriteLeaseFile(
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 	HANDLE h,
 #else
 	int fd,
 #endif
 	const LeaseFileV1& in)
 {
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 	LARGE_INTEGER zero{}; zero.QuadPart = 0;
 	if (!SetFilePointerEx(h, zero, nullptr, FILE_BEGIN))
 		return false;
@@ -129,7 +127,7 @@ ibFirebirdLease::~ibFirebirdLease() {
 ibFirebirdLease::AcquireResult ibFirebirdLease::TryAcquireExclusive() {
 	if (m_holdsLock) return AcquireResult::AcquiredLock;
 
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 	// CreateFileW with FILE_SHARE_READ | FILE_SHARE_WRITE. Both flags
 	// matter — *exclusivity* between processes is enforced by the
 	// byte-range LockFileEx call below, not by the file-handle
@@ -247,7 +245,7 @@ bool ibFirebirdLease::WriteSelfAsLeader(const ibString& host, uint16_t port) {
 	// distinguish "same leader, refreshed heartbeat" from "new
 	// leader took over".
 	LeaseFileV1 cur{};
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 	const bool hadOld = ReadLeaseFile(m_hFile, cur);
 #else
 	const bool hadOld = ReadLeaseFile(m_fd, cur);
@@ -264,7 +262,7 @@ bool ibFirebirdLease::WriteSelfAsLeader(const ibString& host, uint16_t port) {
 	fresh.version          = kVersion;
 	fresh.generation       = nextGen;
 	fresh.heartbeatUnixMs  = NowUnixMs();
-	fresh.leaderPid        = (uint32_t)wxGetProcessId();
+	fresh.leaderPid        = (uint32_t)ibCrashGuard::CurrentPidPortable();
 	fresh.leaderPort       = port;
 	// host: zero-pad / truncate to 63 + NUL.
 	const auto hostUtf8 = host.utf8_str();
@@ -273,7 +271,7 @@ bool ibFirebirdLease::WriteSelfAsLeader(const ibString& host, uint16_t port) {
 	// remainder already zero from value-init
 	fresh.reserved = 0;
 
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 	return WriteLeaseFile(m_hFile, fresh);
 #else
 	return WriteLeaseFile(m_fd, fresh);
@@ -284,7 +282,7 @@ bool ibFirebirdLease::WriteVacating() {
 	if (!m_holdsLock) return false;
 
 	LeaseFileV1 cur{};
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 	if (!ReadLeaseFile(m_hFile, cur)) return false;
 #else
 	if (!ReadLeaseFile(m_fd, cur)) return false;
@@ -296,7 +294,7 @@ bool ibFirebirdLease::WriteVacating() {
 	// without waiting out the heartbeat staleness timeout.
 	cur.leaderPid       = 0;
 	cur.heartbeatUnixMs = NowUnixMs();
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 	return WriteLeaseFile(m_hFile, cur);
 #else
 	return WriteLeaseFile(m_fd, cur);
@@ -307,7 +305,7 @@ bool ibFirebirdLease::RefreshHeartbeat() {
 	if (!m_holdsLock) return false;
 
 	LeaseFileV1 cur{};
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 	if (!ReadLeaseFile(m_hFile, cur)) return false;
 #else
 	if (!ReadLeaseFile(m_fd, cur)) return false;
@@ -315,7 +313,7 @@ bool ibFirebirdLease::RefreshHeartbeat() {
 	if (!LookValid(cur)) return false;
 
 	cur.heartbeatUnixMs = NowUnixMs();
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 	return WriteLeaseFile(m_hFile, cur);
 #else
 	return WriteLeaseFile(m_fd, cur);
@@ -326,7 +324,7 @@ ibFirebirdLease::State ibFirebirdLease::ReadCurrentState() {
 	State s;
 	// Followers don't hold the lock; they open the file shared-read
 	// just to peek at the current leader's coordinates.
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 	HANDLE h = CreateFileW(
 		m_leasePath.wc_str(),
 		GENERIC_READ,
@@ -363,7 +361,7 @@ ibFirebirdLease::State ibFirebirdLease::ReadCurrentState() {
 
 void ibFirebirdLease::Release() {
 	if (m_holdsLock) {
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 		if (m_hFile != INVALID_HANDLE_VALUE) {
 			// Match the sentinel-byte lock range used in
 			// TryAcquireExclusive (kLockSentinelOffset, length 1).
@@ -390,7 +388,7 @@ void ibFirebirdLease::Release() {
 #endif
 		m_holdsLock = false;
 	}
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 	if (m_hFile != INVALID_HANDLE_VALUE) {
 		CloseHandle(m_hFile);
 		m_hFile = INVALID_HANDLE_VALUE;

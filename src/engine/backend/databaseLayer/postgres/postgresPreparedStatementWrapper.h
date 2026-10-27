@@ -1,17 +1,6 @@
 #ifndef __POSTGRESQL_PREPARED_STATEMENT_WRAPPER_H__
 #define __POSTGRESQL_PREPARED_STATEMENT_WRAPPER_H__
 
-// For compilers that support precompilation, includes "wx.h".
-#include <wx/wxprec.h>
-
-#ifdef __BORLANDC__
-#pragma hdrstop
-#endif
-
-#ifndef WX_PRECOMP
-#include <wx/wx.h>
-#endif
-
 #include "postgresPreparedStatementParameterCollection.h"
 #include "postgresInterface.h"
 

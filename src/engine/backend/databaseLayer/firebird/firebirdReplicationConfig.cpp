@@ -1,9 +1,8 @@
 #include "firebirdReplicationConfig.h"
 #include "core/diagnostics/journal.h"   // ibJournal — this TU does not pull in backend_core.h
-#include "core/fileSystem.h"            // ibRemoveFile, ibRenameFile
+#include "core/fileSystem.h"            // ibRemoveFile, ibRenameFile, ibPathOf
 
-#include <wx/file.h>
-#include <wx/filename.h>
+#include <fstream>
 
 namespace {
 
@@ -124,30 +123,29 @@ bool ibFirebirdReplicationConfig::WriteToRuntimeDir(
 	// Atomic write: stage into `<path>.tmp`, then rename over the
 	// final target. Prevents a crash mid-Write from leaving a
 	// partial replication.conf that FB would reject on next start.
-	wxFileName fn(fbRuntimeDir, ibT("replication.conf"));
-	const ibString finalPath = fn.GetFullPath();
+	const ibString finalPath = fbRuntimeDir + ibFILE_SEP_PATH + ibT("replication.conf");
 	const ibString tempPath  = finalPath + ibT(".tmp");
 
 	{
-		wxFile f;
-		if (!f.Open(tempPath, wxFile::write)) {
+		std::ofstream f(ibPathOf(tempPath), std::ios::binary | std::ios::trunc);
+		if (!f.is_open()) {
 			ibJournalError(ibT("db.firebird"),ibT("ibFirebirdReplicationConfig: cannot open %s"),
 			           tempPath);
 			return false;
 		}
-		// wxScopedCharBuffer carries its own length — strlen() on
+		// std::string carries its own length — strlen() on
 		// the raw bytes would truncate at any embedded NUL (defensive;
 		// our generated content has none, but new fields could).
 		const auto utf8 = content.utf8_str();
-		const size_t len = utf8.length();
-		if (f.Write(utf8.data(), len) != len) {
+		if (!f.write(utf8.data(), static_cast<std::streamsize>(utf8.length()))) {
 			ibJournalError(ibT("db.firebird"),ibT("ibFirebirdReplicationConfig: short write on %s"),
 			           tempPath);
-			f.Close();
+			f.close();
 			ibRemoveFile(tempPath);
 			return false;
 		}
-		if (!f.Close()) {
+		f.close();
+		if (f.fail()) {
 			ibJournalError(ibT("db.firebird"),ibT("ibFirebirdReplicationConfig: close failed on %s"),
 			           tempPath);
 			ibRemoveFile(tempPath);

@@ -3,9 +3,9 @@
 bool ibInterfacePostgres::Init()
 {
 #ifdef __WIN32__
-	bool bLoaded = m_PostgresDLL.Load(wxDynamicLibrary::CanonicalizeName(ibT("libpq")));
+	bool bLoaded = m_PostgresDLL.Load(ibDynamicLibrary::CanonicalizeName(ibT("libpq")));
 #else
-	bool bLoaded = m_PostgresDLL.Load(wxDynamicLibrary::CanonicalizeName(ibT("pq")));
+	bool bLoaded = m_PostgresDLL.Load(ibDynamicLibrary::CanonicalizeName(ibT("pq")));
 #endif
 	if (!bLoaded)
 	{

@@ -16,12 +16,10 @@
 #include "firebirdMaintenanceScheduler.h"
 #include "firebirdMaintenance.h"   // RunSweep / RunBackupRestoreCycle — the work itself
 #include "firebirdCommon.h"        // ibFb::NowUnixMs
+#include "core/fileSystem.h"         // ibFileExists / ibPathOf
 
 #include <atomic>
 #include <ctime>
-
-#include <wx/file.h>
-#include <wx/filename.h>
 
 // Firebird SQL dialect — owned by the driver. Static holds the definition (a
 // test reads it without constructing the driver); virtual GetDialect() exposes
@@ -560,7 +558,7 @@ bool ibDatabaseLayerFirebird::Open()
 		strDatabaseUrl = m_strServer + ibT(":") + m_strDatabase;
 	}
 
-	wxCharBuffer urlBuffer = ConvertToUnicodeStream(strDatabaseUrl);
+	std::string urlBuffer = ConvertToUnicodeStream(strDatabaseUrl);
 	unsigned int urlLength = GetEncodedStreamLength(strDatabaseUrl);
 
 	std::string dpbBuffer;
@@ -765,24 +763,22 @@ bool ibDatabaseLayerFirebird::Open()
 	{
 		// Check existence by *file path*, not by `strDatabaseUrl`.
 		// In leader-mode the URL is a TCP form like
-		// `inet://localhost:<port>/\\host\share\db.fdb` — wxFile::Exists
+		// `inet://localhost:<port>/\\host\share\db.fdb` — a file test
 		// against that always returns false, which used to silently
 		// route us into the CREATE branch even when the DB already
 		// existed on the share. FB then tried to CREATE over the URL
 		// and surfaced isc_io_error (335544344). The actual file path
 		// (m_strDatabase) is what should drive the create-vs-attach
 		// decision.
-		if (!wxFile::Exists(m_strDatabase)){
+		if (!ibFileExists(m_strDatabase)){
 
-			wxFileName fileDatabase(m_strDatabase);
-			// Mkdir(..., wxPATH_MKDIR_FULL) is the recursive variant —
-			// wxMkDir on a multi-level path silently fails, leaving FB
-			// to error out with "I/O error during open" when the
-			// containing directory doesn't exist yet.
-			wxFileName::Mkdir(fileDatabase.GetPath(), 0777, wxPATH_MKDIR_FULL);
+			// Every missing level of the folder, not only the last — without it FB errors out with
+			// "I/O error during open" when the containing directory does not exist yet.
+			std::error_code error;
+			std::filesystem::create_directories(ibPathOf(m_strDatabase).parent_path(), error);
 
 			nReturn = m_pInterface->GetIscCreateDatabase()(*(ISC_STATUS_ARRAY*)m_pStatus,
-				(unsigned short)urlLength, (const char*)urlBuffer,
+				(unsigned short)urlLength, urlBuffer.c_str(),
 				&pDatabase,
 				(unsigned short)dpbBuffer.length(), dpbBuffer.c_str(),
 				(unsigned short)0);
@@ -790,14 +786,14 @@ bool ibDatabaseLayerFirebird::Open()
 		else
 		{
 			nReturn = m_pInterface->GetIscAttachDatabase()(*(ISC_STATUS_ARRAY*)m_pStatus,
-				(unsigned short)urlLength, (const char*)urlBuffer,
+				(unsigned short)urlLength, urlBuffer.c_str(),
 				&pDatabase,
 				(unsigned short)dpbBuffer.length(), dpbBuffer.c_str());
 		}
 	}
 	else
 	{
-		nReturn = m_pInterface->GetIscAttachDatabase()(*(ISC_STATUS_ARRAY*)m_pStatus, urlLength, (char*)(const char*)urlBuffer,
+		nReturn = m_pInterface->GetIscAttachDatabase()(*(ISC_STATUS_ARRAY*)m_pStatus, urlLength, (char*)urlBuffer.c_str(),
 			&pDatabase,
 			dpbBuffer.length(), dpbBuffer.c_str());
 	}
@@ -1181,9 +1177,9 @@ int ibDatabaseLayerFirebird::DoRunQuery(const ibString& strQuery, bool bParseQue
 	ReconnectIfLeaderChanged();
 	if (m_pDatabase != 0)
 	{
-		wxCharBuffer sqlDebugBuffer = ConvertToUnicodeStream(strQuery);
+		std::string sqlDebugBuffer = ConvertToUnicodeStream(strQuery);
 #ifdef DEBUG
-		ibJournalInfo(ibT("db.firebird"), ibT("Running query: \"%s\"\n"), (const char*)sqlDebugBuffer);
+		ibJournalInfo(ibT("db.firebird"), ibT("Running query: \"%s\"\n"), sqlDebugBuffer.c_str());
 #endif // !DEBUG
 		std::vector<ibString> QueryArray;
 		if (bParseQuery)
@@ -1240,7 +1236,7 @@ int ibDatabaseLayerFirebird::DoRunQuery(const ibString& strQuery, bool bParseQue
 
 			while (start != stop)
 			{
-				wxCharBuffer sqlBuffer = ConvertToUnicodeStream(*start);
+				std::string sqlBuffer = ConvertToUnicodeStream(*start);
 				isc_db_handle pDatabase = m_pDatabase;
 				isc_tr_handle pTransaction = m_pTransaction;
 				// ⚠ LENGTH 0 = NULL-TERMINATED, and that is the only form that survives a long
@@ -1249,7 +1245,7 @@ int ibDatabaseLayerFirebird::DoRunQuery(const ibString& strQuery, bool bParseQue
 				// as its tail-end 18 KB and failed with "Unexpected end of command" at exactly
 				// length % 65536. Both prepare paths already pass 0; this was the one caller left
 				// spelling a length.
-				int nReturn = m_pInterface->GetIscDsqlExecuteImmediate()(*(ISC_STATUS_ARRAY*)m_pStatus, &pDatabase, &pTransaction, 0, (char*)(const char*)sqlBuffer, SQL_DIALECT_CURRENT, NULL);
+				int nReturn = m_pInterface->GetIscDsqlExecuteImmediate()(*(ISC_STATUS_ARRAY*)m_pStatus, &pDatabase, &pTransaction, 0, (char*)sqlBuffer.c_str(), SQL_DIALECT_CURRENT, NULL);
 				m_pDatabase = pDatabase;
 				m_pTransaction = pTransaction;
 				if (nReturn != 0)
@@ -1311,13 +1307,13 @@ ibDatabaseResultSet* ibDatabaseLayerFirebird::DoRunQueryWithResults(const ibStri
 	ReconnectIfLeaderChanged();
 	if (m_pDatabase != 0)
 	{
-		wxCharBuffer sqlDebugBuffer = ConvertToUnicodeStream(strQuery);
+		std::string sqlDebugBuffer = ConvertToUnicodeStream(strQuery);
 		// `#ifdef`, not `#if` — the sibling path above uses the former, and with DEBUG defined as an
 		// empty macro (`/D DEBUG`) `#if DEBUG` is not "on", it is a preprocessor error or a silent
 		// zero depending on the compiler. Two spellings of one switch mean one of them is off and
 		// nobody notices which.
 #ifdef DEBUG
-		ibJournalInfo(ibT("db.firebird"), ibT("Running query: \"%s\""), (const char*)sqlDebugBuffer);
+		ibJournalInfo(ibT("db.firebird"), ibT("Running query: \"%s\""), sqlDebugBuffer.c_str());
 #endif
 		std::vector<ibString> QueryArray = ParseQueries(strQuery);
 
@@ -1439,8 +1435,8 @@ ibDatabaseResultSet* ibDatabaseLayerFirebird::DoRunQueryWithResults(const ibStri
 				return NULL;
 			}
 
-			wxCharBuffer sqlBuffer = ConvertToUnicodeStream(QueryArray[QueryArray.size() - 1]);
-			nReturn = m_pInterface->GetIscDsqlPrepare()(*(ISC_STATUS_ARRAY*)m_pStatus, &pQueryTransaction, &pStatement, 0, (char*)(const char*)sqlBuffer, SQL_DIALECT_CURRENT, NULL);
+			std::string sqlBuffer = ConvertToUnicodeStream(QueryArray[QueryArray.size() - 1]);
+			nReturn = m_pInterface->GetIscDsqlPrepare()(*(ISC_STATUS_ARRAY*)m_pStatus, &pQueryTransaction, &pStatement, 0, (char*)sqlBuffer.c_str(), SQL_DIALECT_CURRENT, NULL);
 			if (nReturn != 0)
 			{
 				InterpretErrorCodes();
@@ -1646,8 +1642,8 @@ ibPreparedStatement* ibDatabaseLayerFirebird::DoPrepareStatement(const ibString&
 	// the actual page query printed nothing.
 #ifdef DEBUG
 	{
-		const wxCharBuffer sqlDebugBuffer = ConvertToUnicodeStream(strQuery);
-		ibJournalInfo(ibT("db.firebird"), ibT("Prepared query: \"%s\""), (const char*)sqlDebugBuffer);
+		const std::string sqlDebugBuffer = ConvertToUnicodeStream(strQuery);
+		ibJournalInfo(ibT("db.firebird"), ibT("Prepared query: \"%s\""), sqlDebugBuffer.c_str());
 	}
 #endif
 
@@ -1912,7 +1908,7 @@ int ibDatabaseLayerFirebird::TranslateErrorCode(int nCode)
 	return nCode;
 }
 
-//wxString ibDatabaseLayerFirebird::TranslateErrorCodeToString(ibInterfaceFirebird* pInterface, int nCode, ISC_STATUS_ARRAY status)
+//ibString ibDatabaseLayerFirebird::TranslateErrorCodeToString(ibInterfaceFirebird* pInterface, int nCode, ISC_STATUS_ARRAY status)
 ibString ibDatabaseLayerFirebird::TranslateErrorCodeToString(ibInterfaceFirebird* pInterface, int nCode, void* status)
 {
 	char szError[512];
@@ -1965,7 +1961,7 @@ ibString ibDatabaseLayerFirebird::TranslateErrorCodeToString(ibInterfaceFirebird
 
 void ibDatabaseLayerFirebird::InterpretErrorCodes()
 {
-	//ibJournalInfo(wxT("db.firebird"), wxT("ibDatabaseLayerFirebird::InterpretErrorCodes()"));
+	//ibJournalInfo(ibT("db.firebird"), ibT("ibDatabaseLayerFirebird::InterpretErrorCodes()"));
 
 	long nSqlCode = m_pInterface->GetIscSqlcode()(*(ISC_STATUS_ARRAY*)m_pStatus);
 	SetErrorMessage(ibDatabaseLayerFirebird::TranslateErrorCodeToString(m_pInterface.get(), nSqlCode, *(ISC_STATUS_ARRAY*)m_pStatus));

@@ -126,7 +126,7 @@ ibString ibDatabaseResultSetFirebird::GetResultString(int nField)
 	ResetErrorCodes();
 
 	// Each road returns its own string — made once, where it is known, decoded straight into the value's
-	// text — rather than a wxString made first and copied out of (for every text field of every row).
+	// text — rather than a string made first and copied out of (for every text field of every row).
 	XSQLVAR* pVar = &(m_pFields->sqlvar[nField - 1]);
 	if (IsNull(pVar))
 		return ibString();   // the column is NULL
@@ -571,7 +571,7 @@ void ibDatabaseResultSetFirebird::AllocateFieldSpace()
 		// `sqldata` pointing to a memory region of the right size; the
 		// engine writes typed bytes through it.  Storing as `new char[n]`
 		// (instead of `(char*)new ISC_X` etc.) lets FreeFieldSpace use a
-		// single wxDELETEA without typed-vs-char* delete UB.
+		// single delete[] without typed-vs-char* delete UB.
 		switch (pVar->sqltype & ~1)
 		{
 		case SQL_ARRAY:

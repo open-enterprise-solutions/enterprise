@@ -62,7 +62,7 @@ void ibPreparedStatementODBC::Close()
 		}
 		start++;
 	}
-	m_Statements.Clear();
+	m_Statements.clear();
 }
 
 void ibPreparedStatementODBC::FreeParameters()
@@ -80,7 +80,7 @@ void ibPreparedStatementODBC::FreeParameters()
 		}
 		start++;
 	}
-	m_Parameters.Clear();
+	m_Parameters.clear();
 }
 
 void ibPreparedStatementODBC::AddPreparedStatement(SQLHSTMT sqlStatementHandle)

@@ -3,8 +3,6 @@
 #include "core/diagnostics/journal.h"   // ibJournal — this TU does not pull in backend_core.h
 #include "core/fileSystem.h"            // ibFileExists, ibRemoveFile, ibRenameFile
 
-#include <wx/filename.h>
-
 #include <chrono>
 #include <string>
 #include <thread>
@@ -301,10 +299,9 @@ ibFirebirdMaintenance::Status ibFirebirdMaintenance::RunBackupRestoreCycle(
 	if (!conn.server.IsEmpty())
 		svcTarget = conn.server + ibT(":service_mgr");
 
-	wxFileName dbFn(databasePath);
-	const ibString backupPath  = dbFn.GetFullPath() + ibT(".tmp.fbk");
-	const ibString restorePath = dbFn.GetFullPath() + ibT(".tmp.new.fdb");
-	const ibString rollbackPath = dbFn.GetFullPath() + ibT(".bak");
+	const ibString backupPath  = databasePath + ibT(".tmp.fbk");
+	const ibString restorePath = databasePath + ibT(".tmp.new.fdb");
+	const ibString rollbackPath = databasePath + ibT(".bak");
 
 	// Clean up any leftovers from a prior aborted cycle.
 	TryRemoveTempFile(backupPath);

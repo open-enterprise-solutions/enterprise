@@ -8,8 +8,7 @@ namespace {
 // How many bytes `w` takes in UTF-8, up to its first NUL — counted from its own code units, nothing
 // converted: below 0x80 one byte, below 0x800 two, a surrogate pair four (a character past the BMP where
 // wchar_t is sixteen bits), any other unit three, and a 32-bit wchar_t past 0xFFFF four. `false` for what
-// UTF-8 cannot carry as it is — a lone surrogate, a value past U+10FFFF — which is left to the converter,
-// as it always was.
+// UTF-8 cannot carry as it is — a lone surrogate, a value past U+10FFFF — which is left to the string's encoder.
 bool EncodedLength(const wchar_t* w, size_t& bytes)
 {
 	bytes = 0;
@@ -37,13 +36,13 @@ bool EncodedLength(const wchar_t* w, size_t& bytes)
 }
 
 // wide -> UTF-8 into a buffer of exactly the encoded length (and its NUL) - see ConvertToUnicodeStream.
-wxCharBuffer EncodeUtf8(const wchar_t* w)
+std::string EncodeUtf8(const wchar_t* w)
 {
 	size_t bytes = 0;
 	if (!EncodedLength(w, bytes))
-		return wxConvUTF8.cWC2MB(w);   // not text UTF-8 carries as it is — the converter's road, as before
+		return ibString(w).ToUtf8();   // not text UTF-8 carries as it is — the string's encoder
 
-	wxCharBuffer out(bytes);
+	std::string out(bytes, '\0');
 	unsigned char* p = reinterpret_cast<unsigned char*>(out.data());
 	for (size_t i = 0; w[i] != 0; ++i) {
 		unsigned long u = static_cast<unsigned long>(w[i]);
@@ -82,7 +81,7 @@ unsigned int EncodedStreamLength(const wchar_t* w)
 
 // UTF-8 -> wide units, in ONE PASS, into a buffer as long as the bytes (each byte yields at most one code
 // unit, a four-byte sequence two) - on the stack for a short field, which is the ordinary one. `m_wellFormed`
-// false: the bytes go down the converter's road instead (ConvertFromUnicodeStream, below).
+// false: the bytes go to the string's decoder instead (ConvertFromUnicodeStream, below).
 struct WideText
 {
 	wchar_t              m_onStack[256];   // (not called `small` — that is a macro for `char` in the Windows headers)
@@ -140,15 +139,6 @@ void DecodeUtf8(const char* inputBuffer, WideText& out)
 	out.m_units = units;
 }
 
-// The converter's road — and, if that answers nothing, the default conversion — as it always was.
-ibString DecodeByConverter(const char* inputBuffer)
-{
-	ibString strReturn(wxConvUTF8.cMB2WC(inputBuffer).data());
-	if (strReturn == ibEmptyString)
-		strReturn << ibString(inputBuffer);
-	return strReturn;
-}
-
 } // namespace
 
 // ⭐ THE LENGTH IS COUNTED, NOT PRODUCED. A string parameter used to be converted twice — once here only to
@@ -161,7 +151,7 @@ unsigned int ibDatabaseStringConverter::GetEncodedStreamLength(const ibString& i
 // Text -> UTF-8, in ONE PASS into a buffer of exactly the encoded length (and its NUL). The converter it
 // replaces walked the string to size a buffer, walked it again to fill it, and was called once more by
 // GetEncodedStreamLength — for every statement's text and every string parameter bound.
-const wxCharBuffer ibDatabaseStringConverter::ConvertToUnicodeStream(const ibString& inputString)
+std::string ibDatabaseStringConverter::ConvertToUnicodeStream(const ibString& inputString)
 {
 	return EncodeUtf8(inputString.wc_str());
 }
@@ -172,9 +162,8 @@ const wxCharBuffer ibDatabaseStringConverter::ConvertToUnicodeStream(const ibStr
 // had worked — per field, forty thousand names in one batch of references (stack samples 2026-09-12).
 //
 // ⚠ STRICT, AND IT SAYS SO RATHER THAN GUESSING: a stray continuation byte, a cut-off tail, an overlong
-// form, a surrogate spelled in UTF-8 or a value past U+10FFFF sends the bytes down the converter's road,
-// exactly as before. So every string the converter accepted comes out the same — this is a shorter road
-// to the same answer, not a second opinion about the bytes.
+// form, a surrogate spelled in UTF-8 or a value past U+10FFFF sends the bytes to the string's decoder,
+// which puts U+FFFD where a character cannot be read. A well-formed string reads the same either way.
 ibString ibDatabaseStringConverter::ConvertFromUnicodeStream(const char* inputBuffer)
 {
 	// 🛑 A NULL FIELD HAS NO BYTES, AND IT READS AS THE EMPTY STRING. SQLite answers a NULL column with a null
@@ -185,11 +174,11 @@ ibString ibDatabaseStringConverter::ConvertFromUnicodeStream(const char* inputBu
 		return ibString();
 	WideText text;
 	DecodeUtf8(inputBuffer, text);
-	return text.m_wellFormed ? ibString(text.m_chars, text.m_units) : DecodeByConverter(inputBuffer);
+	return text.m_wellFormed ? ibString(text.m_chars, text.m_units) : ibString::FromUTF8(inputBuffer);
 }
 
-// …and straight into a value's text, the same one pass handed to the ibString whole: a field read into a
-// value no longer builds a wxString to be copied out of.
+// …and straight into a value's text, the same one pass handed to the string whole: a field read into a
+// value no longer builds a string to be copied out of.
 void ibDatabaseStringConverter::ConvertFromUnicodeStream(const char* inputBuffer, ibString& outputString)
 {
 	if (inputBuffer == nullptr) {   // a NULL field reads as the empty string (above)
@@ -198,5 +187,5 @@ void ibDatabaseStringConverter::ConvertFromUnicodeStream(const char* inputBuffer
 	}
 	WideText text;
 	DecodeUtf8(inputBuffer, text);
-	outputString = text.m_wellFormed ? ibString(text.m_chars, text.m_units) : ibString(DecodeByConverter(inputBuffer));
+	outputString = text.m_wellFormed ? ibString(text.m_chars, text.m_units) : ibString::FromUTF8(inputBuffer);
 }

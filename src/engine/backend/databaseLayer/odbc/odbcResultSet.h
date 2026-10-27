@@ -1,22 +1,11 @@
 #ifndef __ODBC_RESULT_SET_H__
 #define __ODBC_RESULT_SET_H__
 
-// For compilers that support precompilation, includes "wx.h".
-#include <wx/wxprec.h>
-
-#ifdef __BORLANDC__
-#pragma hdrstop
-#endif
-
-#ifndef WX_PRECOMP
-#include <wx/wx.h>
-#endif
-
-#include <wx/variant.h>
-#include <wx/dynarray.h>
-
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
+
+#include "core/variant.h"   // ibVariant — a fetched cell, empty until it is read
 
 #include "backend/databaseLayer/databaseResultSet.h"
 #include "odbcInterface.h"
@@ -26,7 +15,6 @@
 class ibPreparedStatementODBC;
 class ibDatabaseLayerODBC;
 
-WX_DECLARE_OBJARRAY(wxVariant, ValuesArray);
 typedef std::unordered_set<int> IntegerSet;
 typedef std::unordered_map<int, ibMemoryBuffer> BlobMap;
 
@@ -70,7 +58,7 @@ private:
 	SQLHSTMT m_pODBCStatement;
 
 	StringToIntMap m_FieldLookupMap;
-	ValuesArray m_fieldValues;
+	std::vector<ibVariant> m_fieldValues;
 	// List of values that have been retrieved
 	IntegerSet m_RetrievedValues;
 	// List of values that are nullptr

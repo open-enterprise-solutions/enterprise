@@ -9,9 +9,8 @@
 #include "backend/backend.h"
 #include "backend/appDataCtorToken.h"
 #include "backend/plugin/pluginApi.h"
+#include "core/dynamicLibrary.h"
 
-
-#include <wx/dynlib.h>
 #include <memory>
 #include <vector>
 
@@ -30,7 +29,7 @@ public:
 
 	struct LoadedPlugin {
 		ibString               m_path;
-		std::unique_ptr<wxDynamicLibrary> m_lib;
+		std::unique_ptr<ibDynamicLibrary> m_lib;
 		const ibPluginInfo*    m_info = nullptr;
 		ibPluginShutdownFn     m_shutdown = nullptr;
 

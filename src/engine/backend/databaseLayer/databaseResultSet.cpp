@@ -10,7 +10,6 @@ ibDatabaseResultSet::ibDatabaseResultSet()
 // dtor()
 ibDatabaseResultSet::~ibDatabaseResultSet()
 {
-	//wxPrintf(_("~ibDatabaseResultSet()\n"));
 	CloseMetaData();
 
 	// Whoever was keeping books on this one stops now — see the note on the declaration.

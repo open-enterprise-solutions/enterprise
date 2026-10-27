@@ -417,41 +417,41 @@ bool ibDatabaseLayerPostgres::Open()
 	if (m_pInterface == nullptr)
 		return false;
 
-	wxCharBuffer serverCharBuffer;
+	std::string serverCharBuffer;
 	const char* pHost = nullptr;
-	wxCharBuffer databaseBuffer;
+	std::string databaseBuffer;
 	const char* pDatabase = nullptr;
-	wxCharBuffer userCharBuffer;
+	std::string userCharBuffer;
 	const char* pUser = nullptr;
-	wxCharBuffer passwordCharBuffer;
+	std::string passwordCharBuffer;
 	const char* pPassword = nullptr;
 	const char* pTty = nullptr;
 	const char* pOptions = nullptr;
-	wxCharBuffer portCharBuffer;
+	std::string portCharBuffer;
 	const char* pPort = nullptr;
 
 	if (m_strServer != ibT("localhost") && m_strServer != ibT(""))
 	{
 		serverCharBuffer = ConvertToUnicodeStream(m_strServer);
-		pHost = serverCharBuffer;
+		pHost = serverCharBuffer.c_str();
 	}
 
 	if (m_strUser != ibT(""))
 	{
 		userCharBuffer = ConvertToUnicodeStream(m_strUser);
-		pUser = userCharBuffer;
+		pUser = userCharBuffer.c_str();
 	}
 
 	if (m_strPassword != ibT(""))
 	{
 		passwordCharBuffer = ConvertToUnicodeStream(m_strPassword);
-		pPassword = passwordCharBuffer;
+		pPassword = passwordCharBuffer.c_str();
 	}
 
 	if (m_strPort != ibT(""))
 	{
 		portCharBuffer = ConvertToUnicodeStream(m_strPort);
-		pPort = portCharBuffer;
+		pPort = portCharBuffer.c_str();
 	}
 
 	m_pDatabase = m_pInterface->GetPQsetdbLogin()(pHost, pPort, pOptions, pTty, nullptr, pUser, pPassword);
@@ -473,7 +473,7 @@ bool ibDatabaseLayerPostgres::Open()
 	if (m_strDatabase != ibT(""))
 	{
 		databaseBuffer = ConvertToUnicodeStream(m_strDatabase);
-		pDatabase = databaseBuffer;
+		pDatabase = databaseBuffer.c_str();
 
 		if (!DatabaseExists(m_strDatabase))
 		{
@@ -666,8 +666,8 @@ int ibDatabaseLayerPostgres::DoRunQuery(const ibString& strQuery, bool /*bParseQ
 	ResetErrorCodes();
 	SetLastSqlState(ibString());
 
-	wxCharBuffer sqlBuffer = ConvertToUnicodeStream(strQuery);
-	PGresult* pResultCode = m_pInterface->GetPQexec()((PGconn*)m_pDatabase, sqlBuffer);
+	std::string sqlBuffer = ConvertToUnicodeStream(strQuery);
+	PGresult* pResultCode = m_pInterface->GetPQexec()((PGconn*)m_pDatabase, sqlBuffer.c_str());
 	if ((pResultCode == nullptr) || (m_pInterface->GetPQresultStatus()(pResultCode) != PGRES_COMMAND_OK))
 	{
 		if (pResultCode != nullptr) {
@@ -688,8 +688,8 @@ int ibDatabaseLayerPostgres::DoRunQuery(const ibString& strQuery, bool /*bParseQ
 		// truth, not an error. Failure arrives as the exception thrown above.
 		//
 		// Read straight off the libpq buffer: it is an ASCII decimal digit string, so it
-		// needs neither the charset conversion nor a wxString. The old code built that
-		// wxString and then threw it away with the parse commented out — this does less
+		// needs neither the charset conversion nor a string. The old code built that
+		// string and then threw it away with the parse commented out — this does less
 		// work than either version.
 		const char* const cmdTuples = m_pInterface->GetPQcmdTuples()(pResultCode);
 		long rows = 0;
@@ -705,8 +705,8 @@ ibDatabaseResultSet* ibDatabaseLayerPostgres::DoRunQueryWithResults(const ibStri
 	ResetErrorCodes();
 	SetLastSqlState(ibString());
 
-	wxCharBuffer sqlBuffer = ConvertToUnicodeStream(strQuery);
-	PGresult* pResultCode = m_pInterface->GetPQexec()((PGconn*)m_pDatabase, sqlBuffer);
+	std::string sqlBuffer = ConvertToUnicodeStream(strQuery);
+	PGresult* pResultCode = m_pInterface->GetPQexec()((PGconn*)m_pDatabase, sqlBuffer.c_str());
 	if ((pResultCode == nullptr) || (m_pInterface->GetPQresultStatus()(pResultCode) != PGRES_TUPLES_OK))
 	{
 		if (pResultCode != nullptr) {

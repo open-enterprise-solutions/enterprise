@@ -1,6 +1,5 @@
 #include "resultSetMetaData.h"
 
-
 int ibResultSetMetaData::FindColumnByName(const ibString &colName)
 {
 	for (int i = 1; i <= GetColumnCount(); i++)
@@ -9,5 +8,5 @@ int ibResultSetMetaData::FindColumnByName(const ibString &colName)
 			return i;
 	}
 
-	return wxNOT_FOUND;
+	return -1;
 }

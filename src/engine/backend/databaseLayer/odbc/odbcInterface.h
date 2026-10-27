@@ -1,21 +1,12 @@
 #ifndef __ODBC_INTERFACES_H__
 #define __ODBC_INTERFACES_H__
 
-// For compilers that support precompilation, includes "wx.h".
-#include <wx/wxprec.h>
-
-#ifdef __BORLANDC__
-#pragma hdrstop
-#endif
-
-#ifndef WX_PRECOMP
-#include <wx/wx.h>
-#endif
-
 #include "core/fstring.h"   // ibString, ibT
+#include "core/dynamicLibrary.h"   // ibDynamicLibrary — the client library, loaded by name
 
-#include <wx/dynlib.h>
-
+#ifdef __IBMSW__
+#include <windows.h>   // the ODBC headers read Windows' types (HWND, GUID) and do not include them
+#endif
 #include <sql.h>
 #include <sqlext.h>
 
@@ -94,7 +85,7 @@ public:
 
 
 private:
-	wxDynamicLibrary m_ODBCDLL;
+	ibDynamicLibrary m_ODBCDLL;
 
 	SQLAllocHandleType m_pSQLAllocHandle;
 	SQLSetEnvAttrType m_pSQLSetEnvAttr;

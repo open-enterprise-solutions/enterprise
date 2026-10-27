@@ -1,17 +1,6 @@
 #ifndef __DATABASE_STRING_CONVERTER_H__
 #define __DATABASE_STRING_CONVERTER_H__
 
-// For compilers that support precompilation, includes "wx.h".
-#include <wx/wxprec.h>
-
-#ifdef __BORLANDC__
-#pragma hdrstop
-#endif
-
-#ifndef WX_PRECOMP
-#include <wx/wx.h>
-#endif
-
 #include "databaseLayerDef.h"
 
 // ⭐⭐ THE WIRE IS UTF-8, BOTH WAYS, FOR EVERY DRIVER — and nothing here is a setting.
@@ -24,13 +13,13 @@
 // one pass over the text.
 //
 // ⭐ ONE TEXT, ONE CODEC. A value's text, the statement's SQL, a column's name and a server's message are
-// all an ibString, and each crosses in one pass with no wxString made on the way.
+// all an ibString, and each crosses in one pass with no other string made on the way.
 class BACKEND_API ibDatabaseStringConverter
 {
 public:
 	virtual ~ibDatabaseStringConverter() = default;
 
-	static const wxCharBuffer ConvertToUnicodeStream(const ibString& inputString);
+	static std::string ConvertToUnicodeStream(const ibString& inputString);
 	static unsigned int GetEncodedStreamLength(const ibString& inputString);
 	static ibString ConvertFromUnicodeStream(const char* inputBuffer);
 	static void ConvertFromUnicodeStream(const char* inputBuffer, ibString& outputString);

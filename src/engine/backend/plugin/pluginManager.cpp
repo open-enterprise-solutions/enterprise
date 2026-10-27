@@ -7,10 +7,7 @@
 
 #include "core/fileSystem.h"
 
-#include <wx/filename.h>
-#include <wx/log.h>
-
-#ifdef __WXMSW__
+#ifdef __IBMSW__
   #include <windows.h>
 #endif
 
@@ -19,7 +16,7 @@ namespace {
 // otherwise pops up for every broken plugin dependency. Other platforms are
 // no-ops.
 struct ScopedSilenceLoadErrors {
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 	UINT m_prev;
 	ScopedSilenceLoadErrors()  { m_prev = ::SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOOPENFILEERRORBOX); }
 	~ScopedSilenceLoadErrors() { ::SetErrorMode(m_prev); }
@@ -32,9 +29,7 @@ struct ScopedSilenceLoadErrors {
 
 ibString ibPluginManager::GetPluginsDir()
 {
-	wxFileName fn = wxFileName::DirName(ibProgramFolder());
-	fn.AppendDir(ibT("plugins"));
-	return fn.GetPath();
+	return ibProgramFolder() + ibFILE_SEP_PATH + ibT("plugins");
 }
 
 size_t ibPluginManager::LoadAll()
@@ -45,9 +40,9 @@ size_t ibPluginManager::LoadAll()
 	if (!ibDirExists(dir))
 		return 0;
 
-	// Use the platform's dynamic-library suffix via wxDynamicLibrary — avoids
+	// The platform's dynamic-library suffix — avoids
 	// hard-coding ".dll" so the same code works on Linux (.so) / macOS (.dylib).
-	const ibString pattern = ibT("*") + wxDynamicLibrary::GetDllExt(wxDL_MODULE);
+	const ibString pattern = ibT("*") + ibDynamicLibrary::Extension();
 
 	std::vector<ibString> files;
 	ibDir::GetAllFiles(dir, &files, pattern, ibDIR_FILES);
@@ -58,8 +53,8 @@ size_t ibPluginManager::LoadAll()
 
 	for (const ibString& path : files) {
 
-		auto lib = std::make_unique<wxDynamicLibrary>();
-		if (!lib->Load(path, wxDL_DEFAULT | wxDL_QUIET)) {
+		auto lib = std::make_unique<ibDynamicLibrary>();
+		if (!lib->Load(path)) {
 			// Quiet in the UI, never quiet altogether. A stray DLL in the folder
 			// legitimately fails to load and must not disturb anyone — but so does
 			// OUR plugin when a dependency is missing or a symbol went unresolved,
@@ -70,15 +65,8 @@ size_t ibPluginManager::LoadAll()
 			continue;
 		}
 
-		// Suppress wx's error log when GetSymbol misses — every unrelated DLL
-		// in the folder will legitimately not export our plugin entry point
-		// and we don't want to spam the UI with "Couldn't find symbol..." popups.
-		ibPluginInfoFn info_fn = nullptr;
-		{
-			wxLogNull noLog;
-			info_fn = reinterpret_cast<ibPluginInfoFn>(
-				lib->GetSymbol(ibT("oes_plugin_info")));
-		}
+		// Every unrelated DLL in the folder legitimately does not export our entry point.
+		const auto info_fn = reinterpret_cast<ibPluginInfoFn>(lib->GetSymbol(ibT("oes_plugin_info")));
 		if (info_fn == nullptr)
 			continue; // not one of ours
 
@@ -90,12 +78,7 @@ size_t ibPluginManager::LoadAll()
 		}
 
 		// Optional initialise hook — a non-zero return aborts the load.
-		ibPluginInitializeFn init_fn = nullptr;
-		{
-			wxLogNull noLog;
-			init_fn = reinterpret_cast<ibPluginInitializeFn>(
-				lib->GetSymbol(ibT("oes_plugin_initialize")));
-		}
+		const auto init_fn = reinterpret_cast<ibPluginInitializeFn>(lib->GetSymbol(ibT("oes_plugin_initialize")));
 		// THE HOST, not NULL (ABI 2). One C struct with a `query` function; the
 		// plugin asks it for the capabilities it needs — see pluginHost.h. A
 		// plugin that wanted something the host does not offer is expected to
@@ -110,11 +93,7 @@ size_t ibPluginManager::LoadAll()
 		p.m_path = path;
 		p.m_lib  = std::move(lib);
 		p.m_info = info;
-		{
-			wxLogNull noLog;
-			p.m_shutdown = reinterpret_cast<ibPluginShutdownFn>(
-				p.m_lib->GetSymbol(ibT("oes_plugin_shutdown")));
-		}
+		p.m_shutdown = reinterpret_cast<ibPluginShutdownFn>(p.m_lib->GetSymbol(ibT("oes_plugin_shutdown")));
 		ibJournalInfo(ibT("plugin"),"Loaded plugin: %s %s", info->name ? info->name : "<unnamed>",
 			info->version ? info->version : "");
 

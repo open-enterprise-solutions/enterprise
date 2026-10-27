@@ -13,7 +13,7 @@ bool ibInterfaceFirebird::Init()
 	ibFirebirdBootstrap::Init();
 
 	bool bLoaded = false;
-#ifndef __WXMSW__
+#ifndef __IBMSW__
 	// ⭐ THE FIREBIRD BESIDE THE PROGRAM, BY ITS FULL PATH. Windows reaches _fb/ through SetDllDirectory; a
 	// POSIX loader has no such door and looks a bare name up in the system alone, so the kit a package
 	// carries (_fb/lib, laid out as Firebird's own tree: lib/, plugins/, intl/) was never loaded. The kit's
@@ -22,7 +22,7 @@ bool ibInterfaceFirebird::Init()
 	// bootstrap has just pointed at the same folder. No kit beside the program: the system's, as before.
 	const ibString& fbDir = ibFirebirdBootstrap::GetFbRuntimeDir();
 	if (!fbDir.IsEmpty()) {
-#if defined(__WXOSX__) || defined(__APPLE__)
+#if defined(__IBOSX__) || defined(__APPLE__)
 		const ibString kitClient = fbDir + ibT("/lib/libfbclient.dylib");
 #else
 		const ibString kitClient = fbDir + ibT("/lib/libfbclient.so.2");
@@ -32,8 +32,8 @@ bool ibInterfaceFirebird::Init()
 	}
 #endif
 	if (!bLoaded)
-		bLoaded = m_FirebirdDLL.Load(wxDynamicLibrary::CanonicalizeName(ibT("fbclient")));
-#if defined(__WXOSX__) || defined(__APPLE__)
+		bLoaded = m_FirebirdDLL.Load(ibDynamicLibrary::CanonicalizeName(ibT("fbclient")));
+#if defined(__IBOSX__) || defined(__APPLE__)
 	if (!bLoaded) {
 		bLoaded = m_FirebirdDLL.Load(ibT("/Library/Frameworks/Firebird.framework/Versions/A/Libraries/libfbclient.dylib"));
 	}

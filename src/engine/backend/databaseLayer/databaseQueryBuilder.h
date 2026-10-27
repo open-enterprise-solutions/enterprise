@@ -1004,7 +1004,7 @@ inline ibDmlStatement ibDelete(const ibString& table, ibQueryExprPtr where = nul
 
 // Ask a write to hand back columns from the rows it wrote:
 //
-//     ibReturning(ibUpdate(table, { { wxT("number"), … } }, where), { wxT("number") })
+//     ibReturning(ibUpdate(table, { { ibT("number"), … } }, where), { ibT("number") })
 //
 // A modifier rather than a parameter on every factory: RETURNING is orthogonal to WHICH
 // write it is, and threading it through ibInsert / ibUpdate / ibDelete / ibUpsert would

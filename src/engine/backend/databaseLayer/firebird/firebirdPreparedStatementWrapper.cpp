@@ -71,8 +71,8 @@ bool ibPreparedStatementFirebirdWrapper::Prepare()
 	m_pParameters->version = SQLDA_VERSION1;
 	m_pParameters->sqln = 1;
 
-	wxCharBuffer sqlBuffer = ConvertToUnicodeStream(m_strSQL);
-	nReturn = m_pInterface->GetIscDsqlPrepare()(m_Status, &m_pTransaction, &m_pStatement, 0, (char*)(const char*)sqlBuffer, SQL_DIALECT_CURRENT, m_pParameters);
+	std::string sqlBuffer = ConvertToUnicodeStream(m_strSQL);
+	nReturn = m_pInterface->GetIscDsqlPrepare()(m_Status, &m_pTransaction, &m_pStatement, 0, (char*)sqlBuffer.c_str(), SQL_DIALECT_CURRENT, m_pParameters);
 	if (nReturn != 0)
 	{
 		InterpretErrorCodes();

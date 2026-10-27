@@ -17,8 +17,6 @@
 
 #include "backend/backend.h"
 
-#include <wx/string.h>
-
 #include <vector>
 
 class BACKEND_API ibFirebirdReplicationConfig {

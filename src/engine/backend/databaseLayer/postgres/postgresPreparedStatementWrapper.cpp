@@ -130,8 +130,8 @@ void ibPreparedStatementPostgresWrapper::Deallocate()
 {
 	if (m_pDatabase == nullptr || m_strStatementName.IsEmpty())
 		return;
-	const wxCharBuffer sql = ConvertToUnicodeStream(ibT("DEALLOCATE \"") + m_strStatementName + ibT("\""));
-	PGresult* const pResult = m_pInterface->GetPQexec()(m_pDatabase, sql);
+	const std::string sql = ConvertToUnicodeStream(ibT("DEALLOCATE \"") + m_strStatementName + ibT("\""));
+	PGresult* const pResult = m_pInterface->GetPQexec()(m_pDatabase, sql.c_str());
 	// A refusal is not reported: the statement then lives until its connection closes, as every one did before.
 	// (Inside an aborted transaction the server takes nothing but its end — a statement closed there stays.)
 	if (pResult != nullptr)
@@ -147,8 +147,8 @@ int ibPreparedStatementPostgresWrapper::DoRunQuery()
 	int* paramLengths = m_Parameters.GetParamLengths();
 	int* paramFormats = m_Parameters.GetParamFormats();
 	int nResultFormat = 0; // 0 = text, 1 = binary (all or none on the result set, not column based)
-	wxCharBuffer statementNameBuffer = ConvertToUnicodeStream(m_strStatementName);
-	PGresult* pResult = m_pInterface->GetPQexecPrepared()(m_pDatabase, statementNameBuffer, nParameters, paramValues, paramLengths, paramFormats, nResultFormat);
+	std::string statementNameBuffer = ConvertToUnicodeStream(m_strStatementName);
+	PGresult* pResult = m_pInterface->GetPQexecPrepared()(m_pDatabase, statementNameBuffer.c_str(), nParameters, paramValues, paramLengths, paramFormats, nResultFormat);
 	if (pResult != nullptr)
 	{
 		ExecStatusType status = m_pInterface->GetPQresultStatus()(pResult);
@@ -164,7 +164,7 @@ int ibPreparedStatementPostgresWrapper::DoRunQuery()
 		{
 			// Straight off libpq's ASCII buffer — this runs on every DML statement, and the
 			// count is a decimal digit string, so neither the charset conversion nor the
-			// wxString it fed was buying anything. Matches DoRunQuery in the layer.
+			// string it fed was buying anything. Matches DoRunQuery in the layer.
 			const char* const cmdTuples = m_pInterface->GetPQcmdTuples()(pResult);
 			if (cmdTuples != nullptr && *cmdTuples != '\0')
 				nRows = std::strtol(cmdTuples, nullptr, 10);
@@ -192,8 +192,8 @@ ibDatabaseResultSet* ibPreparedStatementPostgresWrapper::DoRunQueryWithResults()
 	int* paramLengths = m_Parameters.GetParamLengths();
 	int* paramFormats = m_Parameters.GetParamFormats();
 	int nResultFormat = 0; // 0 = text, 1 = binary (all or none on the result set, not column based)
-	wxCharBuffer statementNameBuffer = ConvertToUnicodeStream(m_strStatementName);
-	PGresult* pResult = m_pInterface->GetPQexecPrepared()(m_pDatabase, statementNameBuffer, nParameters, paramValues, paramLengths, paramFormats, nResultFormat);
+	std::string statementNameBuffer = ConvertToUnicodeStream(m_strStatementName);
+	PGresult* pResult = m_pInterface->GetPQexecPrepared()(m_pDatabase, statementNameBuffer.c_str(), nParameters, paramValues, paramLengths, paramFormats, nResultFormat);
 	if (pResult != nullptr)
 	{
 		ExecStatusType status = m_pInterface->GetPQresultStatus()(pResult);

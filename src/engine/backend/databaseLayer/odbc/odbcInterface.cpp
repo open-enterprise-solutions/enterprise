@@ -5,16 +5,16 @@ bool ibInterfaceODBC::Init()
 	// If Windows, then default to odbc32 and try odbc second
 	// Otherwise try odbc first and try odbc32 second
 #ifdef __WIN32__
-	bool bLoaded = m_ODBCDLL.Load(wxDynamicLibrary::CanonicalizeName(ibT("odbc32")));
+	bool bLoaded = m_ODBCDLL.Load(ibDynamicLibrary::CanonicalizeName(ibT("odbc32")));
 #else
-	bool bLoaded = m_ODBCDLL.Load(wxDynamicLibrary::CanonicalizeName(ibT("odbc")));
+	bool bLoaded = m_ODBCDLL.Load(ibDynamicLibrary::CanonicalizeName(ibT("odbc")));
 #endif
 	if (!bLoaded)
 	{
 #ifdef __WIN32__
-		bLoaded = m_ODBCDLL.Load(wxDynamicLibrary::CanonicalizeName(ibT("odbc")));
+		bLoaded = m_ODBCDLL.Load(ibDynamicLibrary::CanonicalizeName(ibT("odbc")));
 #else
-		bLoaded = m_ODBCDLL.Load(wxDynamicLibrary::CanonicalizeName(ibT("odbc32")));
+		bLoaded = m_ODBCDLL.Load(ibDynamicLibrary::CanonicalizeName(ibT("odbc32")));
 #endif
 		if (!bLoaded)
 			return false;

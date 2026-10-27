@@ -123,7 +123,6 @@ ibString ibDatabaseResultSetMetaDataODBC::GetColumnName(int i)
 
 	if (nRet == SQL_SUCCESS)
 	{
-		//return wxString((wxChar*)col_name);
 		columnName = ConvertFromUnicodeStream((const char*)(ibChar*)col_name);
 	}
 

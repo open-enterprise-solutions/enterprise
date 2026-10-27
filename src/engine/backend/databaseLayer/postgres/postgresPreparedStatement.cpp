@@ -3,9 +3,6 @@
 #include "backend/databaseLayer/databaseErrorCodes.h"
 
 #include <atomic>   // the statement-name counter
-#include <wx/arrimpl.cpp>
-
-WX_DEFINE_OBJARRAY(ArrayOfPostgresPreparedStatementWrappers);
 
 ibPreparedStatementPostgres::ibPreparedStatementPostgres(ibInterfacePostgres* pInterface)
 	: ibPreparedStatement()
@@ -36,7 +33,7 @@ void ibPreparedStatementPostgres::Close()
 	// the connection is still there to ask.
 	for (size_t i = 0; i < m_Statements.size(); i++)
 		m_Statements[i].Deallocate();
-	m_Statements.Clear();
+	m_Statements.clear();
 }
 
 void ibPreparedStatementPostgres::AddStatement(PGconn* pDatabase, const ibString& strSQL, const ibString& strStatementName)
@@ -57,9 +54,9 @@ ibPreparedStatementPostgres* ibPreparedStatementPostgres::CreateStatement(ibInte
 	{
 		ibString strName = ibPreparedStatementPostgres::GenerateStatementName();
 		pStatement->AddStatement(pDatabase, (*start), strName);
-		wxCharBuffer nameBuffer = ibDatabaseStringConverter::ConvertToUnicodeStream(strName);
-		wxCharBuffer sqlBuffer = ibDatabaseStringConverter::ConvertToUnicodeStream(TranslateSQL((*start)));
-		PGresult* pResult = pInterface->GetPQprepare()(pDatabase, nameBuffer, sqlBuffer, 0, nullptr);
+		std::string nameBuffer = ibDatabaseStringConverter::ConvertToUnicodeStream(strName);
+		std::string sqlBuffer = ibDatabaseStringConverter::ConvertToUnicodeStream(TranslateSQL((*start)));
+		PGresult* pResult = pInterface->GetPQprepare()(pDatabase, nameBuffer.c_str(), sqlBuffer.c_str(), 0, nullptr);
 		if (pResult == nullptr)
 		{
 			delete pStatement;
@@ -254,11 +251,11 @@ ibString ibPreparedStatementPostgres::TranslateSQL(const ibString& strOriginalSQ
 	int nParameterIndex = 1;
 	ibString strReturn = ibEmptyString;//strOriginalSQL;
 	/*
-	int nFound = strReturn.Replace(_("?"), wxString::Format(_("$%d"), nParameterIndex), false);
+	int nFound = strReturn.Replace(_("?"), ibString::Format(_("$%d"), nParameterIndex), false);
 	while (nFound != 0)
 	{
 	  nParameterIndex++;
-	  nFound = strReturn.Replace(_("?"), wxString::Format(_("$%d"), nParameterIndex), false);
+	  nFound = strReturn.Replace(_("?"), ibString::Format(_("$%d"), nParameterIndex), false);
 	}
 	*/
 	bool bInStringLiteral = false;

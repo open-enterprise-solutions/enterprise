@@ -73,7 +73,7 @@ public:
 	// (SetErrorCode(code, kind)): the layer, the prepared statement, its wrapper, the result set and
 	// the blob writes. FB has no SQLSTATE — the gds code is the identifier.
 	static ibBackendDatabaseException::Kind ClassifyDatabaseError(int code);
-	//static wxString TranslateErrorCodeToString(ibInterfaceFirebird* pInterface, int nCode, ISC_STATUS_ARRAY status);
+	//static ibString TranslateErrorCodeToString(ibInterfaceFirebird* pInterface, int nCode, ISC_STATUS_ARRAY status);
 	static ibString TranslateErrorCodeToString(ibInterfaceFirebird* pInterface, int nCode, void* status);
 	static bool IsAvailable();
 

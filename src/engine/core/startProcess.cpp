@@ -303,3 +303,85 @@ long ibStartWebServer(const ibString& command, ibString& url, const std::functio
 	ibRemoveFile(manifest);
 	return pid;
 }
+
+#ifdef __IBMSW__
+namespace {
+
+// The windows of one process, told to close — what a console program without a window has none of.
+BOOL CALLBACK CloseWindowOf(HWND window, LPARAM pid)
+{
+	DWORD owner = 0;
+	::GetWindowThreadProcessId(window, &owner);
+	if (owner == static_cast<DWORD>(pid))
+		::PostMessageW(window, WM_CLOSE, 0, 0);
+	return TRUE;
+}
+
+} // namespace
+
+bool ibStopProcess(long pid)
+{
+	return ::EnumWindows(CloseWindowOf, static_cast<LPARAM>(pid)) != FALSE;
+}
+
+bool ibKillProcess(long pid)
+{
+	const HANDLE process = ::OpenProcess(PROCESS_TERMINATE, FALSE, static_cast<DWORD>(pid));
+	if (process == nullptr)
+		return false;
+	const BOOL ended = ::TerminateProcess(process, static_cast<UINT>(-1));
+	::CloseHandle(process);
+	return ended != FALSE;
+}
+
+bool ibProcessExists(long pid)
+{
+	const HANDLE process = ::OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, static_cast<DWORD>(pid));
+	if (process == nullptr)
+		return false;
+	DWORD code = 0;
+	const bool running = ::GetExitCodeProcess(process, &code) != FALSE && code == STILL_ACTIVE;
+	::CloseHandle(process);
+	return running;
+}
+
+bool ibSetEnv(const ibString& name, const ibString& value)
+{
+	// Both the system's block and the C runtime's copy: a library may read either (GetEnvironmentVariable, getenv).
+	return ::SetEnvironmentVariableW(name.wc_str(), value.wc_str()) != FALSE
+		&& ::_wputenv_s(name.wc_str(), value.wc_str()) == 0;
+}
+
+ibString ibHostName()
+{
+	wchar_t name[MAX_COMPUTERNAME_LENGTH + 1] = {};
+	DWORD size = MAX_COMPUTERNAME_LENGTH + 1;
+	return ::GetComputerNameW(name, &size) ? ibString(name) : ibString();
+}
+#else
+bool ibStopProcess(long pid)
+{
+	return ::kill(static_cast<pid_t>(pid), SIGTERM) == 0;
+}
+
+bool ibKillProcess(long pid)
+{
+	return ::kill(static_cast<pid_t>(pid), SIGKILL) == 0;
+}
+
+bool ibProcessExists(long pid)
+{
+	return ::kill(static_cast<pid_t>(pid), 0) == 0 || errno == EPERM;
+}
+
+bool ibSetEnv(const ibString& name, const ibString& value)
+{
+	return ::setenv(name.ToUtf8().c_str(), value.ToUtf8().c_str(), 1) == 0;
+}
+
+ibString ibHostName()
+{
+	char name[256] = {};
+	return ::gethostname(name, sizeof(name) - 1) == 0 ? ibString::FromUTF8(name) : ibString();
+}
+#endif

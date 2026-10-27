@@ -1,23 +1,9 @@
 #ifndef __ODBC_PARAMETER_H__
 #define __ODBC_PARAMETER_H__
 
-// For compilers that support precompilation, includes "wx.h".
-#include <wx/wxprec.h>
-
-#ifdef __BORLANDC__
-#pragma hdrstop
-#endif
-
-#ifndef WX_PRECOMP
-#include <wx/wx.h>
-#endif
-
-#include <wx/datetime.h>
-#include <sql.h>
-
 #include "backend/databaseLayer/databaseStringConverter.h"
 
-
+#include "odbcInterface.h"   // the ODBC headers, with the Windows ones they read first
 
 class ibDatabaseParameterODBC : public ibDatabaseStringConverter
 {
@@ -91,7 +77,7 @@ private:
 	ibString m_strDateValue;
 	bool m_bValue;
 	ibMemoryBuffer m_BufferValue;
-	wxCharBuffer m_CharBufferValue;
+	std::string m_CharBufferValue;
 #ifdef _WIN64
 	SQLLEN m_nBufferLength;
 #else

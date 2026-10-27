@@ -8,7 +8,7 @@ ibDatabaseParameterPostgres::ibDatabaseParameterPostgres() : m_nParameterType(ib
 }
 
 // A value's text goes to the wire as it came: encoded here, straight from its own characters, and the bytes
-// kept — no wxString made to hold it until GetDataPtr.
+// kept — no string made to hold it until GetDataPtr.
 ibDatabaseParameterPostgres::ibDatabaseParameterPostgres(const ibString& strValue) : m_nParameterType(ibDatabaseParameterPostgres::PARAM_STRING), m_CharBufferValue(ConvertToUnicodeStream(strValue)), m_nBufferLength(strValue.Length())
 {
 }
@@ -64,27 +64,27 @@ const void* ibDatabaseParameterPostgres::GetDataPtr()
 	switch (m_nParameterType)
 	{
 	case ibDatabaseParameterPostgres::PARAM_STRING:
-		pReturn = m_CharBufferValue;   // encoded when the value was given (the constructor)
+		pReturn = m_CharBufferValue.c_str();   // encoded when the value was given (the constructor)
 		break;
 	case ibDatabaseParameterPostgres::PARAM_INT:
 		m_CharBufferValue = ConvertToUnicodeStream(m_strValue);
-		pReturn = m_CharBufferValue;
+		pReturn = m_CharBufferValue.c_str();
 		break;
 	case ibDatabaseParameterPostgres::PARAM_DOUBLE:
 		m_CharBufferValue = ConvertToUnicodeStream(m_strValue);
-		pReturn = m_CharBufferValue;
+		pReturn = m_CharBufferValue.c_str();
 		break;
 	case ibDatabaseParameterPostgres::PARAM_NUMBER:
 		m_CharBufferValue = ConvertToUnicodeStream(m_strValue);
-		pReturn = m_CharBufferValue;
+		pReturn = m_CharBufferValue.c_str();
 		break;
 	case ibDatabaseParameterPostgres::PARAM_DATETIME:
 		m_CharBufferValue = ConvertToUnicodeStream(m_strDateValue);
-		pReturn = m_CharBufferValue;
+		pReturn = m_CharBufferValue.c_str();
 		break;
 	case ibDatabaseParameterPostgres::PARAM_BOOL:
 		m_CharBufferValue = ConvertToUnicodeStream(m_strValue);
-		pReturn = m_CharBufferValue;
+		pReturn = m_CharBufferValue.c_str();
 		break;
 	case ibDatabaseParameterPostgres::PARAM_BLOB:
 		pReturn = m_BufferValue.GetData();

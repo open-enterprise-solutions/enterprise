@@ -1,17 +1,6 @@
 #ifndef __PREPARED_STATEMENT_H__
 #define __PREPARED_STATEMENT_H__
 
-// For compilers that support precompilation, includes "wx.h".
-#include <wx/wxprec.h>
-
-#ifdef __BORLANDC__
-#pragma hdrstop
-#endif
-
-#ifndef WX_PRECOMP
-#include <wx/wx.h>
-#endif
-
 #include <unordered_set>
 
 #include "databaseLayerDef.h"
@@ -56,7 +45,7 @@ public:
 	/// Set the parameter at the 1-based position to a number value
 	virtual void SetParamNumber(int nPosition, const ibNumber& dblValue) = 0;
 	/// Set the parameter at the 1-based position to a string - the engine's own text (fstring.h), encoded
-	/// from its own characters; a wxString crosses into one on the way in
+	/// from its own characters
 	virtual void SetParamString(int nPosition, const ibString& strValue) = 0;
 	/// Set the parameter at the 1-based position to a nullptr  value
 	virtual void SetParamNull(int nPosition) = 0;

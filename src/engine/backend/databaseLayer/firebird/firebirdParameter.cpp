@@ -36,7 +36,7 @@ void ibDatabaseParameterFirebird::Set(const ibString& strValue)
 
 	// Set to SQL_TEXT manually. The bytes are made once and their length read off them — asking for the
 	// length separately converted the whole string a second time.
-	const wxCharBuffer valueBuffer = ConvertToUnicodeStream(m_strValue);
+	const std::string valueBuffer = ConvertToUnicodeStream(m_strValue);
 	unsigned int length = static_cast<unsigned int>(valueBuffer.length());
 
 	m_pParameter->sqltype = SQL_TEXT | 1;
@@ -82,7 +82,7 @@ void ibDatabaseParameterFirebird::Set(const ibString& strValue)
 	if (m_pParameter->sqllen > 0 && length > (unsigned int)m_pParameter->sqllen)
 		length = (unsigned int)m_pParameter->sqllen;
 
-	memcpy(m_pParameter->sqldata, (const char*)valueBuffer, length);
+	memcpy(m_pParameter->sqldata, valueBuffer.c_str(), length);
 	m_pParameter->sqllen = (ISC_SHORT)length;
 
 	m_nNullFlag = 0;

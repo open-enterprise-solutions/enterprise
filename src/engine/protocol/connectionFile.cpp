@@ -1,30 +1,28 @@
 #include "connectionFile.h"
 
+#include "core/dynamicLibrary.h"
 #include "core/fileSystem.h"
 
-#include <wx/dynlib.h>
-#include <wx/filename.h>
 #include <wx/intl.h>   // _() — what a refusal says to a person
-#include <wx/log.h>
 
 namespace {
 
 // fileserver beside the program — loaded once and never unloaded: what the server registers in the backend as it loads
 // (frmserver's forms and controls) must outlive every base, and an unloading at the process's end would run after the
-// statics it unregisters from (the 2026-10-07 exit crash, codeRunner). Null when it could not be loaded; `path` — where
-// it was looked for.
-wxDllType Library(ibString& path)
+// statics it unregisters from (the 2026-10-07 exit crash, codeRunner) — so the library is never deleted. Null when it
+// could not be loaded; `path` — where it was looked for.
+const ibDynamicLibrary* Library(ibString& path)
 {
 	// Beside the program. Inside enterprise-thin.app that is next to the bundle, where
 	// libfileserver.dylib is shipped — not Contents/MacOS/, which is only the binary.
 	path = ibProgramFolder() + ibFILE_SEP_PATH
-		+ wxDynamicLibrary::CanonicalizeName(ibT("fileserver"));
-	static const wxDllType s_library = [](const ibString& from) {
-		wxLogNull quiet;   // a library not found is said by the caller, not by a dialog of wx's
-		wxDynamicLibrary library;
-		return library.Load(from) ? library.Detach() : wxDllType(nullptr);
+		+ ibDynamicLibrary::CanonicalizeName(ibT("fileserver"));
+	static const ibDynamicLibrary* const s_library = [](const ibString& from) {
+		ibDynamicLibrary* const library = new ibDynamicLibrary;
+		library->Load(from);
+		return library;
 	}(path);
-	return s_library;
+	return s_library->IsLoaded() ? s_library : nullptr;
 }
 
 } // namespace
@@ -34,21 +32,17 @@ bool ibProtocolFileBase::Open(const ibString& request, ibString& error)
 	Close();
 
 	ibString path;
-	const wxDllType library = Library(path);
+	const ibDynamicLibrary* const library = Library(path);
 	if (library == nullptr) {
 		error = ibString::Format(_("The file base library could not be loaded: %s"), path);
 		return false;
 	}
-	const auto open = reinterpret_cast<decltype(&ibFileBaseOpen)>(
-		wxDynamicLibrary::RawGetSymbol(library, ibT("ibFileBaseOpen")));
-	const auto call = reinterpret_cast<decltype(&ibFileBaseCall)>(
-		wxDynamicLibrary::RawGetSymbol(library, ibT("ibFileBaseCall")));
-	const auto listen = reinterpret_cast<decltype(&ibFileBaseListen)>(
-		wxDynamicLibrary::RawGetSymbol(library, ibT("ibFileBaseListen")));
+	const auto open = reinterpret_cast<decltype(&ibFileBaseOpen)>(library->GetSymbol(ibT("ibFileBaseOpen")));
+	const auto call = reinterpret_cast<decltype(&ibFileBaseCall)>(library->GetSymbol(ibT("ibFileBaseCall")));
+	const auto listen = reinterpret_cast<decltype(&ibFileBaseListen)>(library->GetSymbol(ibT("ibFileBaseListen")));
 	const auto disconnect = reinterpret_cast<decltype(&ibFileBaseDisconnect)>(
-		wxDynamicLibrary::RawGetSymbol(library, ibT("ibFileBaseDisconnect")));
-	const auto close = reinterpret_cast<decltype(&ibFileBaseClose)>(
-		wxDynamicLibrary::RawGetSymbol(library, ibT("ibFileBaseClose")));
+		library->GetSymbol(ibT("ibFileBaseDisconnect")));
+	const auto close = reinterpret_cast<decltype(&ibFileBaseClose)>(library->GetSymbol(ibT("ibFileBaseClose")));
 	if (open == nullptr || call == nullptr || listen == nullptr || disconnect == nullptr || close == nullptr) {
 		error = ibString::Format(_("%s is not the file base library this program was built with."), path);
 		return false;

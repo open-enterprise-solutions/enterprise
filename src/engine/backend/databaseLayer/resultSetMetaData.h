@@ -1,17 +1,6 @@
 #ifndef __RESULT_SET_METADATA_H__
 #define __RESULT_SET_METADATA_H__
 
-// For compilers that support precompilation, includes "wx.h".
-#include <wx/wxprec.h>
-
-#ifdef __BORLANDC__
-#pragma hdrstop
-#endif
-
-#ifndef WX_PRECOMP
-#include <wx/wx.h>
-#endif
-
 #include "databaseLayerDef.h"
 #include "databaseStringConverter.h"
 

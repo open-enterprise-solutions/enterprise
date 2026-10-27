@@ -9,7 +9,7 @@
 //
 // When OFF: the methods return 0 / "" / no-op, leader-mode caller's
 // existing `EnsureStarted() == 0` branch handles the degrade-to-
-// embedded path automatically. winsock + windows.h + wxExecute stay
+// embedded path automatically. winsock + windows.h + CreateProcessW stay
 // out of the translation unit so a minimal build doesn't pull them.
 //
 // When ON: define OES_FB_LOCALSERVER for the build (MSBuild
@@ -21,15 +21,11 @@
 
 #include "firebirdBootstrap.h"
 #include "firebirdCommon.h"
-#include "core/fileSystem.h"   // ibFileExists, ibRemoveFile
+#include "core/fileSystem.h"   // ibFileExists, ibRemoveFile, ibPathOf
+#include "core/startProcess.h"   // ibStopProcess, ibKillProcess, ibProcessExists
+#include "core/diagnostics/crashGuard.h"   // ibCrashGuard::CurrentPidPortable
 
-#include <wx/filename.h>
-#include <wx/process.h>
-#include <wx/stdpaths.h>
-#include <wx/textfile.h>
-#include <wx/utils.h>
-
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 #include <windows.h>
 #include <winsock2.h>
 #pragma comment(lib, "ws2_32.lib")
@@ -37,6 +33,8 @@
 
 #include <atomic>
 #include <chrono>
+#include <filesystem>
+#include <fstream>
 #include <mutex>
 #include <thread>
 
@@ -59,7 +57,7 @@ bool              s_atexitInstalled = false;   // guarded by s_spawnMu
 // for this use case — child grabs the same port immediately, and
 // even if another process snatches it the child fails fast.
 int PickFreePort() {
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 	WSADATA wsa;
 	WSAStartup(MAKEWORD(2, 2), &wsa);
 
@@ -104,24 +102,19 @@ int PickFreePort() {
 // the same install) don't stomp each other's recovery record.
 // Filename embeds our own PID so each instance owns its own file.
 ibString PidFilePath() {
-	wxFileName fn(wxStandardPaths::Get().GetTempDir(),
-		ibString::Format(ibT("oes-fb-localserver-%ld.pid"),
-			(long)wxGetProcessId()));
-	return fn.GetFullPath();
+	std::error_code error;
+	return ibString((std::filesystem::temp_directory_path(error) / ibPathOf(ibString::Format(
+		ibT("oes-fb-localserver-%u.pid"), ibCrashGuard::CurrentPidPortable()))).wstring());
 }
 
 // Record the PID + port so a recovery tool can find / kill the
 // child after a crash. Best-effort — failure to write isn't fatal.
 void WritePidFile(long pid, int port) {
 	const ibString p = PidFilePath();
-	wxTextFile f(p);
-	if (f.Exists()) f.Open(); else f.Create();
-	f.Clear();
-	f.AddLine(ibString::Format(ibT("pid=%ld"), pid));
-	f.AddLine(ibString::Format(ibT("port=%d"), port));
-	f.AddLine(ibString::Format(ibT("parent=%ld"), (long)wxGetProcessId()));
-	f.Write();
-	f.Close();
+	std::ofstream f(ibPathOf(p), std::ios::trunc);
+	f << "pid=" << pid << "\n"
+	  << "port=" << port << "\n"
+	  << "parent=" << ibCrashGuard::CurrentPidPortable() << "\n";
 }
 
 void RemovePidFile() {
@@ -134,7 +127,7 @@ void RemovePidFile() {
 // Tries connecting every 100 ms for up to `timeoutMs`. Returns
 // true on success.
 bool WaitForListenReady(int port, int timeoutMs) {
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 	WSADATA wsa;
 	WSAStartup(MAKEWORD(2, 2), &wsa);
 	bool ok = false;
@@ -170,7 +163,7 @@ void AtExitHook() {
 	ibFirebirdLocalServer::Stop();
 }
 
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 // Job Object for hard-binding firebird.exe to our process lifetime.
 // `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` means: when the last handle to
 // the job is closed (i.e. when OES process dies — even on crash /
@@ -234,7 +227,7 @@ bool AssignChildToJob(long pid) {
 	}
 	return true;
 }
-#endif // __WXMSW__
+#endif // __IBMSW__
 
 } // namespace
 
@@ -259,8 +252,7 @@ int ibFirebirdLocalServer::EnsureStarted() {
 		return 0;
 	}
 
-	wxFileName fbExeFn(fbDir, ibT("firebird.exe"));
-	const ibString fbExe = fbExeFn.GetFullPath();
+	const ibString fbExe = fbDir + ibFILE_SEP_PATH + ibT("firebird.exe");
 	if (!ibFileExists(fbExe)) {
 		ibJournalError(ibT("db.firebird"),ibT("ibFirebirdLocalServer: firebird.exe not found at %s. ")
 		           ibT("LocalServer mode requires the FB server binary in _fb/ ")
@@ -275,19 +267,15 @@ int ibFirebirdLocalServer::EnsureStarted() {
 		return 0;
 	}
 
-	// IMPORTANT: not using wxExecute. wxExecute asserts
-	// `wxThread::IsMain()` on BOTH Win32 and POSIX — it's a wx
-	// fundamental constraint, not a platform-specific one (uses
-	// the main event loop's pipe machinery to wait for the child).
-	// PromoteSelfToLeader → EnsureStarted runs from our heartbeat
-	// thread; a wxExecute path crashes there with "wxExecute() can
-	// be called only from the main thread". OS-level spawn APIs
-	// (CreateProcessW on Win32, posix_spawn on POSIX) have no such
-	// restriction. POSIX path is still stubbed below — Phase 6
+	// IMPORTANT: the OS spawn API, straight. PromoteSelfToLeader →
+	// EnsureStarted runs from our heartbeat thread, and a spawn that
+	// waits on the main event loop crashes there. CreateProcessW on
+	// Win32 and posix_spawn on POSIX have no such restriction.
+	// POSIX path is still stubbed below — Phase 6
 	// POSIX implementation deferred (would need posix_spawn +
 	// PR_SET_PDEATHSIG/kqueue EVFILT_PROC for kill-on-OES-crash).
 	long pid = 0;
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 	{
 		// Spawn: `firebird.exe -a -p <port>` — `-a` = standalone (no service manager required);
 		// `-p <port>` = bind to TCP port. Built HERE: the POSIX branch below is still a stub and
@@ -309,7 +297,7 @@ int ibFirebirdLocalServer::EnsureStarted() {
 			mutableCmd.data(),
 			nullptr, nullptr,
 			FALSE,                    // don't inherit handles
-			CREATE_NO_WINDOW,         // equivalent of wxEXEC_HIDE_CONSOLE
+			CREATE_NO_WINDOW,         // no console of its own
 			nullptr, nullptr,
 			&si, &pi);
 		if (!ok) {
@@ -336,7 +324,7 @@ int ibFirebirdLocalServer::EnsureStarted() {
 	if (!WaitForListenReady(port, 5000)) {
 		ibJournalError(ibT("db.firebird"),ibT("ibFirebirdLocalServer: child PID %ld did not bind to ")
 		           ibT("port %d within 5 s; killing"), pid, port);
-		wxKill(pid, wxSIGKILL);
+		ibKillProcess(pid);
 		return 0;
 	}
 
@@ -350,7 +338,7 @@ int ibFirebirdLocalServer::EnsureStarted() {
 	// the cost is paid once per OES process at first attach.
 	std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 	// Bind child to a Job Object so it dies with us — even on crash,
 	// TerminateProcess, OOM, or other hard exits where AtExitHook
 	// doesn't fire. AssignChildToJob best-effort: a failure is
@@ -372,7 +360,7 @@ int ibFirebirdLocalServer::EnsureStarted() {
 	}
 
 	// Info-only — visible to attached debugger only (OutputDebugString),
-	// not in user-facing Output Window. wxLogDebug would surface here
+	// not in user-facing Output Window. A debug log line would surface here
 	// in Debug builds and add startup noise without telling the user
 	// anything actionable.
 	ibFb::LogThreadSafe(ibString::Format(
@@ -387,18 +375,16 @@ int ibFirebirdLocalServer::GetPort() {
 void ibFirebirdLocalServer::Stop() {
 	const long pid = s_childPid.exchange(0);
 	if (pid > 0) {
-		// SIGTERM equivalent — wxSIGTERM on POSIX; on Windows wxKill
-		// maps SIGKILL to TerminateProcess, SIGTERM to a graceful
-		// console-close. FB server traps console-close and shuts
-		// down cleanly; fall back to SIGKILL if it doesn't exit
-		// within 2 s.
-		wxKill(pid, wxSIGTERM);
+		// A request to close first — SIGTERM on POSIX, WM_CLOSE to its windows on
+		// Windows. FB server traps it and shuts down cleanly; fall back to
+		// ibKillProcess (TerminateProcess / SIGKILL) if it doesn't exit within 2 s.
+		ibStopProcess(pid);
 		for (int waited = 0; waited < 2000; waited += 100) {
-			if (!wxProcess::Exists(pid)) break;
+			if (!ibProcessExists(pid)) break;
 			std::this_thread::sleep_for(std::chrono::milliseconds(100));
 		}
-		if (wxProcess::Exists(pid)) {
-			wxKill(pid, wxSIGKILL);
+		if (ibProcessExists(pid)) {
+			ibKillProcess(pid);
 		}
 	}
 	s_port.store(0);

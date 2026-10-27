@@ -1,20 +1,6 @@
 #ifndef __DATABASE_LAYER_H__
 #define __DATABASE_LAYER_H__
 
-// For compilers that support precompilation, includes "wx.h".
-#include <wx/wxprec.h>
-
-#ifdef __BORLANDC__
-#pragma hdrstop
-#endif
-
-#ifndef WX_PRECOMP
-#include <wx/wx.h>
-#endif
-
-#include <wx/arrstr.h>
-#include <wx/variant.h>
-
 #include <atomic>
 #include <map>
 #include <memory>
@@ -958,62 +944,6 @@ public:
 	/// If multiple records are returned from the query, a DATABASE_LAYER_NON_UNIQUE_RESULTSET exception
 	///  is thrown unless bRequireUniqueResult is false
 	virtual int GetSingleResultInt(const ibString& strSQL, int nField, bool bRequireUniqueResult = true);
-	virtual int GetSingleResultInt(const ibString& strSQL, const ibString& strField, bool bRequireUniqueResult = true);
-
-	/// Retrieve a single string value from a query
-	/// If multiple records are returned from the query, a DATABASE_LAYER_NON_UNIQUE_RESULTSET exception
-	///  is thrown unless bRequireUniqueResult is false
-	virtual ibString GetSingleResultString(const ibString& strSQL, int nField, bool bRequireUniqueResult = true);
-	virtual ibString GetSingleResultString(const ibString& strSQL, const ibString& strField, bool bRequireUniqueResult = true);
-
-	/// Retrieve a single long value from a query
-	/// If multiple records are returned from the query, a DATABASE_LAYER_NON_UNIQUE_RESULTSET exception
-	///  is thrown unless bRequireUniqueResult is false
-	virtual long GetSingleResultLong(const ibString& strSQL, int nField, bool bRequireUniqueResult = true);
-	virtual long GetSingleResultLong(const ibString& strSQL, const ibString& strField, bool bRequireUniqueResult = true);
-
-	/// Retrieve a single bool value from a query
-	/// If multiple records are returned from the query, a DATABASE_LAYER_NON_UNIQUE_RESULTSET exception
-	///  is thrown unless bRequireUniqueResult is false
-	virtual bool GetSingleResultBool(const ibString& strSQL, int nField, bool bRequireUniqueResult = true);
-	virtual bool GetSingleResultBool(const ibString& strSQL, const ibString& strField, bool bRequireUniqueResult = true);
-
-	/// Retrieve a single date/time value from a query
-	/// If multiple records are returned from the query, a DATABASE_LAYER_NON_UNIQUE_RESULTSET exception
-	///  is thrown unless bRequireUniqueResult is false
-	virtual ibDateTime GetSingleResultDate(const ibString& strSQL, int nField, bool bRequireUniqueResult = true);
-	virtual ibDateTime GetSingleResultDate(const ibString& strSQL, const ibString& strField, bool bRequireUniqueResult = true);
-
-	/// Retrieve a single Blob value from a query
-	/// If multiple records are returned from the query, a DATABASE_LAYER_NON_UNIQUE_RESULTSET exception
-	///  is thrown unless bRequireUniqueResult is false
-	virtual void* GetSingleResultBlob(const ibString& strSQL, int nField, ibMemoryBuffer& buffer, bool bRequireUniqueResult = true);
-	virtual void* GetSingleResultBlob(const ibString& strSQL, const ibString& strField, ibMemoryBuffer& buffer, bool bRequireUniqueResult = true);
-
-	/// Retrieve a single double value from a query
-	/// If multiple records are returned from the query, a DATABASE_LAYER_NON_UNIQUE_RESULTSET exception
-	///  is thrown unless bRequireUniqueResult is false
-	virtual double GetSingleResultDouble(const ibString& strSQL, int nField, bool bRequireUniqueResult = true);
-	virtual double GetSingleResultDouble(const ibString& strSQL, const ibString& strField, bool bRequireUniqueResult = true);
-
-	/// Retrieve a single number value from a query
-	/// If multiple records are returned from the query, a DATABASE_LAYER_NON_UNIQUE_RESULTSET exception
-	///  is thrown unless bRequireUniqueResult is false
-	virtual ibNumber GetSingleResultNumber(const ibString& strSQL, int nField, bool bRequireUniqueResult = true);
-	virtual ibNumber GetSingleResultNumber(const ibString& strSQL, const ibString& strField, bool bRequireUniqueResult = true);
-
-	/// Retrieve all the values of one field in a result set
-	virtual std::vector<int> GetResultsArrayInt(const ibString& strSQL, int nField);
-	virtual std::vector<int> GetResultsArrayInt(const ibString& strSQL, const ibString& Field);
-
-	virtual std::vector<ibString> GetResultsArrayString(const ibString& strSQL, int nField);
-	virtual std::vector<ibString> GetResultsArrayString(const ibString& strSQL, const ibString& Field);
-
-	virtual std::vector<long> GetResultsArrayLong(const ibString& strSQL, int nField);
-	virtual std::vector<long> GetResultsArrayLong(const ibString& strSQL, const ibString& Field);
-
-	virtual std::vector<double> GetResultsArrayDouble(const ibString& strSQL, int nField);
-	virtual std::vector<double> GetResultsArrayDouble(const ibString& strSQL, const ibString& Field);
 
 	virtual int GetDatabaseLayerType() const = 0;
 
@@ -1202,19 +1132,6 @@ protected:
 	// the argument for doing it properly rather than patching around it.
 
 private:
-
-	int GetSingleResultInt(const ibString& strSQL, const wxVariant* field, bool bRequireUniqueResult = true);
-	ibString GetSingleResultString(const ibString& strSQL, const wxVariant* field, bool bRequireUniqueResult = true);
-	long GetSingleResultLong(const ibString& strSQL, const wxVariant* field, bool bRequireUniqueResult = true);
-	bool GetSingleResultBool(const ibString& strSQL, const wxVariant* field, bool bRequireUniqueResult = true);
-	ibDateTime GetSingleResultDate(const ibString& strSQL, const wxVariant* field, bool bRequireUniqueResult = true);
-	void* GetSingleResultBlob(const ibString& strSQL, const wxVariant* field, ibMemoryBuffer& buffer, bool bRequireUniqueResult = true);
-	double GetSingleResultDouble(const ibString& strSQL, const wxVariant* field, bool bRequireUniqueResult = true);
-	ibNumber GetSingleResultNumber(const ibString& strSQL, const wxVariant* field, bool bRequireUniqueResult = true);
-	std::vector<int> GetResultsArrayInt(const ibString& strSQL, const wxVariant* field);
-	std::vector<ibString> GetResultsArrayString(const ibString& strSQL, const wxVariant* field);
-	std::vector<long> GetResultsArrayLong(const ibString& strSQL, const wxVariant* field);
-	std::vector<double> GetResultsArrayDouble(const ibString& strSQL, const wxVariant* field);
 
 	DatabaseResultSetHashSet m_ResultSets;
 	DatabaseStatementHashSet m_Statements;

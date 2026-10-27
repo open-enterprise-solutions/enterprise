@@ -1,17 +1,6 @@
 #ifndef __DATABASE_RESULT_SET_H__
 #define __DATABASE_RESULT_SET_H__
 
-// For compilers that support precompilation, includes "wx.h".
-#include <wx/wxprec.h>
-
-#ifdef __BORLANDC__
-#pragma hdrstop
-#endif
-
-#ifndef WX_PRECOMP
-#include <wx/wx.h>
-#endif
-
 #include <unordered_map>   // StringToIntMap — the field-name index
 #include <unordered_set>   // MetaDataHashSet
 
@@ -31,9 +20,7 @@
 inline wchar_t ibFieldNameFold(wchar_t c) { return (c >= L'a' && c <= L'z') ? static_cast<wchar_t>(c - (L'a' - L'A')) : c; }
 struct ibFieldNameHash {
 	size_t operator()(const ibString& name) const {
-		// `auto`: a pointer into the string where wxString holds wide characters, a buffer that must
-		// outlive the loop where it holds UTF-8 — held either way, read the same way.
-		const auto chars = name.wc_str();
+		const wchar_t* const chars = name.wc_str();
 		size_t h = static_cast<size_t>(2166136261u);   // FNV-1a over the folded characters
 		for (const wchar_t* p = chars; *p != 0; ++p)
 			h = (h ^ static_cast<size_t>(ibFieldNameFold(*p))) * static_cast<size_t>(16777619u);
@@ -44,8 +31,8 @@ struct ibFieldNameEqual {
 	bool operator()(const ibString& a, const ibString& b) const {
 		if (a.length() != b.length())
 			return false;
-		const auto ac = a.wc_str();
-		const auto bc = b.wc_str();
+		const wchar_t* const ac = a.wc_str();
+		const wchar_t* const bc = b.wc_str();
 		// The characters as they are first; the case is looked at only where they differ.
 		for (const wchar_t *p = ac, *q = bc; *p != 0; ++p, ++q)
 			if (*p != *q && ibFieldNameFold(*p) != ibFieldNameFold(*q))

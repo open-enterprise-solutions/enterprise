@@ -39,8 +39,6 @@
 
 #include "backend/backend.h"
 
-#include <wx/string.h>
-
 class BACKEND_API ibFirebirdLocalServer {
 public:
 	// Ensure a local FB server child process is running. Idempotent —
@@ -51,7 +49,7 @@ public:
 	//
 	// Returns the TCP port the server is listening on, or 0 on
 	// failure (firebird.exe missing, port grab failed, etc.). On
-	// failure, error details surface via wxLogError.
+	// failure, error details go to the journal (db.firebird).
 	static int EnsureStarted();
 
 	// Current port if `EnsureStarted` succeeded; 0 otherwise.

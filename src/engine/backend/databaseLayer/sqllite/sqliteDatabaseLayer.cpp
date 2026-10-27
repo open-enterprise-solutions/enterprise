@@ -246,9 +246,7 @@ ibDatabaseLayerSQLite::ibDatabaseLayerSQLite(const ibDatabaseLayerSQLite& src)
 // dtor()
 ibDatabaseLayerSQLite::~ibDatabaseLayerSQLite()
 {
-	//wxPrintf(_("~ibDatabaseLayerSQLite()\n"));
 	Close();
-	//wxDELETE(m_pDatabase);
 }
 
 // How long a statement waits for the file lock — given at Open, and put back when a noWait
@@ -275,9 +273,9 @@ bool ibDatabaseLayerSQLite::Open(const ibString& strDatabase)
 
 	m_strDatabasePath = strDatabase;
 
-	wxCharBuffer databaseNameBuffer = ConvertToUnicodeStream(strDatabase);
+	std::string databaseNameBuffer = ConvertToUnicodeStream(strDatabase);
 	sqlite3* pDbPtr = (sqlite3*)m_pDatabase;
-	int nReturn = sqlite3_open(databaseNameBuffer, &pDbPtr);
+	int nReturn = sqlite3_open(databaseNameBuffer.c_str(), &pDbPtr);
 	{
 		std::lock_guard<std::mutex> guard(m_cancelGuard);   // what Cancel reads
 		m_pDatabase = pDbPtr;
@@ -417,8 +415,8 @@ int ibDatabaseLayerSQLite::DoRunQuery(const ibString& strQuery, bool bParseQuery
 	{
 		char* szErrorMessage = nullptr;
 		ibString strErrorMessage = ibEmptyString;
-		wxCharBuffer sqlBuffer = ConvertToUnicodeStream(*start);
-		int nReturn = sqlite3_exec((sqlite3*)m_pDatabase, sqlBuffer, 0, 0, &szErrorMessage);
+		std::string sqlBuffer = ConvertToUnicodeStream(*start);
+		int nReturn = sqlite3_exec((sqlite3*)m_pDatabase, sqlBuffer.c_str(), 0, 0, &szErrorMessage);
 
 		if (szErrorMessage != nullptr)
 		{
@@ -452,8 +450,8 @@ ibDatabaseResultSet* ibDatabaseLayerSQLite::DoRunQueryWithResults(const ibString
 		{
 			char* szErrorMessage = nullptr;
 			ibString strErrorMessage = ibEmptyString;
-			wxCharBuffer sqlBuffer = ConvertToUnicodeStream(QueryArray[i]);
-			int nReturn = sqlite3_exec((sqlite3*)m_pDatabase, sqlBuffer, 0, 0, &szErrorMessage);
+			std::string sqlBuffer = ConvertToUnicodeStream(QueryArray[i]);
+			int nReturn = sqlite3_exec((sqlite3*)m_pDatabase, sqlBuffer.c_str(), 0, 0, &szErrorMessage);
 
 			if (szErrorMessage != nullptr)
 			{
@@ -508,14 +506,14 @@ ibPreparedStatement* ibDatabaseLayerSQLite::DoPrepareStatement(const ibString& s
 		while (start != stop)
 		{
 			const char* szTail = 0;
-			wxCharBuffer sqlBuffer;
+			std::string sqlBuffer;
 			do
 			{
 				sqlite3_stmt* pStatement;
 				ibString strSQL;
 				if (szTail != 0)
 				{
-					strSQL = (ibChar*)szTail;
+					strSQL = ConvertFromUnicodeStream(szTail);   // the rest of the text, UTF-8 bytes as sqlite left them
 				}
 				else
 				{
@@ -523,11 +521,11 @@ ibPreparedStatement* ibDatabaseLayerSQLite::DoPrepareStatement(const ibString& s
 				}
 				sqlBuffer = ConvertToUnicodeStream(strSQL);
 #if SQLITE_VERSION_NUMBER>=3047002
-				int nReturn = sqlite3_prepare_v3((sqlite3*)m_pDatabase, sqlBuffer, -1, SQLITE_PREPARE_PERSISTENT, &pStatement, &szTail);
+				int nReturn = sqlite3_prepare_v3((sqlite3*)m_pDatabase, sqlBuffer.c_str(), -1, SQLITE_PREPARE_PERSISTENT, &pStatement, &szTail);
 #elif SQLITE_VERSION_NUMBER>=3003009
-				int nReturn = sqlite3_prepare_v2((sqlite3*)m_pDatabase, sqlBuffer, -1, &pStatement, &szTail);
+				int nReturn = sqlite3_prepare_v2((sqlite3*)m_pDatabase, sqlBuffer.c_str(), -1, &pStatement, &szTail);
 #else
-				int nReturn = sqlite3_prepare((sqlite3*)m_pDatabase, sqlBuffer, -1, &pStatement, &szTail);
+				int nReturn = sqlite3_prepare((sqlite3*)m_pDatabase, sqlBuffer.c_str(), -1, &pStatement, &szTail);
 #endif
 
 				if (nReturn != SQLITE_OK)
@@ -540,11 +538,7 @@ ibPreparedStatement* ibDatabaseLayerSQLite::DoPrepareStatement(const ibString& s
 				}
 				pReturnStatement->AddPreparedStatement(pStatement);
 
-#if wxUSE_UNICODE
 			} while (strlen(szTail) > 0);
-#else
-		} while (wxStrlen(szTail) > 0);
-#endif    
 
 			start++;
 		}
@@ -737,7 +731,7 @@ std::vector<ibString> ibDatabaseLayerSQLite::GetColumns(const ibString& table)
 	ibResultSetMetaData* pMetaData = nullptr;
 
 	try {
-		wxCharBuffer tableNameBuffer = ConvertToUnicodeStream(table);
+		std::string tableNameBuffer = ConvertToUnicodeStream(table);
 		ibString query = ibString::Format(ibT("SELECT * FROM '%s' LIMIT 0;"), table.c_str());
 		pResult = ExecuteQuery(query);
 		pResult->Next();

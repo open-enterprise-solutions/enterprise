@@ -176,7 +176,7 @@ struct ibMaterializeSpec
 	ibQueryExprPtr m_periodIsDateIR;
 };
 
-// One rendered statement. A distinct TYPE rather than a bare wxString, so the schema door can
+// One rendered statement. A distinct TYPE rather than a bare ibString, so the schema door can
 // accept "something L2-2 produced" and nothing else — a plain string would make the applier look
 // like a general-purpose SQL channel, and the rule that only this renderer may feed it would rest
 // on a comment. Only RenderMaterialization can mint one (the ctor is private to it), which turns

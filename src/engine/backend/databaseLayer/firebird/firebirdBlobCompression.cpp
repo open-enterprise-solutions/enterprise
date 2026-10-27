@@ -2,10 +2,7 @@
 
 #include "backend/backend_exception.h"
 #include "core/diagnostics/journal.h"   // ibJournal — this TU does not pull in backend_core.h
-
-#include <wx/log.h>
-#include <wx/mstream.h>
-#include <wx/zstream.h>
+#include "core/memory/compression.h"   // ibZlibDeflate / ibZlibInflate
 
 #include <cstring>
 
@@ -44,40 +41,19 @@ ibMemoryBuffer ibFirebirdBlobCompression::Wrap(const void* data, size_t size) {
 	//      ZIP). Storing raw avoids the per-read decompression hit.
 	bool stored = false;
 	if (size >= kCompressThresholdBytes) {
-		wxMemoryOutputStream zStream;
-		{
-			// Default zlib compression level (6). FB's BLOB sub-system
-			// charges per-segment overhead; tight zlib output saves
-			// segments too, so default level is the right trade-off
-			// between compression ratio and CPU.
-			wxZlibOutputStream zOut(zStream, wxZ_DEFAULT_COMPRESSION,
-			                        wxZLIB_ZLIB);
-			zOut.Write(data, size);
-			// zOut closes when leaving scope; flushes the deflate state.
+		// Header flag = zlib, then the deflated body, packed straight into `out`.
+		out.AppendByte(kFlagZlib);
+		const size_t bodyAt = out.GetDataLen();
+		if (ibZlibDeflate(data, size, out)) {
+			const size_t compressedSize = out.GetDataLen() - bodyAt;
+			stored = compressedSize > 0 && static_cast<double>(compressedSize)
+			    < static_cast<double>(size) * kAcceptableRatio;
 		}
-		const size_t compressedSize = zStream.GetSize();
-		if (compressedSize > 0 && static_cast<double>(compressedSize)
-		    < static_cast<double>(size) * kAcceptableRatio) {
-			// Worth keeping. Header flag = zlib, then deflated body.
-			// Append directly into `out` via GetAppendBuf — skips the
-			// intermediate copy through a temp ibMemoryBuffer.
-			out.AppendByte(kFlagZlib);
-			void* dst = out.GetAppendBuf(compressedSize);
-			const size_t copied = zStream.CopyTo(dst, compressedSize);
-			out.UngetAppendBuf(copied);
-			if (copied != compressedSize) {
-				// Stream reported a different size than we just queried —
-				// internal inconsistency, refuse to write a half-baked
-				// body. Fall through to raw branch below.
-				ibJournalWarning(ibT("db.firebird"),ibT("ibFirebirdBlobCompression::Wrap: zStream ")
-				             ibT("CopyTo copied %zu/%zu bytes; falling back ")
-				             ibT("to raw"), copied, compressedSize);
-				// Truncate the partial body + flag byte back off.
-				out.SetDataLen(out.GetDataLen() - copied - /*flag=*/1);
-			} else {
-				stored = true;
-			}
+		else {
+			ibJournalWarning(ibT("db.firebird"), ibT("ibFirebirdBlobCompression::Wrap: deflate failed; falling back to raw"));
 		}
+		if (!stored)
+			out.SetDataLen(bodyAt - /*flag=*/1);   // the flag byte and whatever was packed come back off
 	}
 
 	if (!stored) {
@@ -120,40 +96,17 @@ ibMemoryBuffer ibFirebirdBlobCompression::Unwrap(const void* data, size_t size) 
 		return out;
 	}
 
-	// kFlagZlib — inflate via wxZlibInputStream.
-	wxMemoryInputStream inStream(body, bodyN);
-	wxZlibInputStream zIn(inStream, wxZLIB_ZLIB);
-
-	ibMemoryBuffer out;
-	// Read in 64 KB chunks until EOF. Inflated size is unknown ahead of
-	// time; AppendData grows the buffer geometrically.
-	constexpr size_t kChunk = 64 * 1024;
-	ibMemoryBuffer chunk(kChunk);
-	while (true) {
-		zIn.Read(chunk.GetWriteBuf(kChunk), kChunk);
-		chunk.UngetWriteBuf(kChunk);
-		const size_t n = zIn.LastRead();
-		if (n == 0)
-			break;
-		out.AppendData(chunk.GetData(), n);
-		if (zIn.Eof())
-			break;
-	}
-
-	// zlib stream errors (corrupt header / truncated body / bad
-	// checksum) are reported through GetLastError(); LastRead() alone
-	// just returns 0 and we'd silently return the partial inflate.
-	// Surface this — caller treats as I/O error.
+	// kFlagZlib — a corrupt header, a truncated body or a bad checksum is a false here.
 	// ⭐ RAISES, and used to only log — while STILL RETURNING the partial inflate. The comment here
 	// said "caller treats as I/O error", but nothing made that true: the caller got a short buffer
 	// and no failure, so a corrupt blob read back as a SHORTER, PERFECTLY VALID-LOOKING one. There
 	// is no answer to give here. Half of a value is not a value, and handing it back is worse than
 	// refusing, because refusing is visible.
-	if (zIn.GetLastError() != wxSTREAM_NO_ERROR
-	 && zIn.GetLastError() != wxSTREAM_EOF) {
+	ibMemoryBuffer out;
+	if (!ibZlibInflate(body, bodyN, out)) {
 		ibBackendCoreException::Error(
-			_("Firebird: the compressed value is corrupt (zlib error %d after %llu bytes)"),
-			(int)zIn.GetLastError(), (unsigned long long)out.GetDataLen());
+			_("Firebird: the compressed value is corrupt (%llu bytes read before the error)"),
+			(unsigned long long)out.GetDataLen());
 	}
 
 	return out;

@@ -1,21 +1,7 @@
 #ifndef __POSTGRESQL_PARAMETER_H__
 #define __POSTGRESQL_PARAMETER_H__
 
-// For compilers that support precompilation, includes "wx.h".
-#include <wx/wxprec.h>
-
-#ifdef __BORLANDC__
-#pragma hdrstop
-#endif
-
-#ifndef WX_PRECOMP
-#include <wx/wx.h>
-#endif
-
-#include <wx/datetime.h>
 #include "backend/databaseLayer/databaseStringConverter.h"
-
-
 
 class ibDatabaseParameterPostgres : public ibDatabaseStringConverter
 {
@@ -61,7 +47,7 @@ private:
 	
 	ibString m_strDateValue;
 	ibMemoryBuffer m_BufferValue;
-	wxCharBuffer m_CharBufferValue;
+	std::string m_CharBufferValue;
 	
 	long m_nBufferLength;
 };

@@ -1244,8 +1244,8 @@ msgstr "В этой СУБД нет предложения RETURNING, а его 
 
 #: src/engine/backend/databaseLayer/firebird/firebirdBlobCompression.cpp:155
 #, c-format
-msgid "Firebird: the compressed value is corrupt (zlib error %d after %llu bytes)"
-msgstr "Firebird: сжатое значение повреждено (ошибка zlib %d после %llu байт)"
+msgid "Firebird: the compressed value is corrupt (%llu bytes read before the error)"
+msgstr "Firebird: сжатое значение повреждено (до ошибки прочитано %llu байт)"
 
 #: src/engine/backend/databaseLayer/firebird/firebirdParameter.cpp:11
 msgid "Firebird: parameter buffer is not allocated (the prepared statement has no such parameter) - the table structure is likely out of date"

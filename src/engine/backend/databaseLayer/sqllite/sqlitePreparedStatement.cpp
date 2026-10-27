@@ -42,11 +42,10 @@ void ibPreparedStatementSQLite::Close()
 		{
 			sqlite3_finalize((sqlite3_stmt*)(*start));
 			(*start) = nullptr;
-			//wxDELETE(*start);
 		}
 		start++;
 	}
-	m_Statements.Clear();
+	m_Statements.clear();
 }
 /*
 void ibPreparedStatementSQLite::AddPreparedStatement(CppSQLite3Statement* pStatement)
@@ -143,8 +142,8 @@ void ibPreparedStatementSQLite::SetParamString(int nPosition, const ibString& st
 	if (nIndex > -1)
 	{
 		sqlite3_reset(m_Statements[nIndex]);
-		wxCharBuffer valueBuffer = ConvertToUnicodeStream(strValue);
-		int nReturn = sqlite3_bind_text(m_Statements[nIndex], nPosition, valueBuffer, -1, SQLITE_TRANSIENT);
+		std::string valueBuffer = ConvertToUnicodeStream(strValue);
+		int nReturn = sqlite3_bind_text(m_Statements[nIndex], nPosition, valueBuffer.c_str(), -1, SQLITE_TRANSIENT);
 		if (nReturn != SQLITE_OK)
 		{
 			SetErrorCode(ibDatabaseLayerSQLite::TranslateErrorCode(nReturn), ibDatabaseLayerSQLite::ClassifyDatabaseError(nReturn));
@@ -205,9 +204,9 @@ void ibPreparedStatementSQLite::SetParamDate(int nPosition, const ibDateTime& da
 		sqlite3_reset(m_Statements[nIndex]);
 		ibDateTimeParts p;
 		dateValue.ToParts(p);
-		wxCharBuffer valueBuffer = ConvertToUnicodeStream(ibString::Format(ibT("%04d-%02u-%02u %02u:%02u:%02u"),
+		std::string valueBuffer = ConvertToUnicodeStream(ibString::Format(ibT("%04d-%02u-%02u %02u:%02u:%02u"),
 			p.m_year, p.m_month, p.m_day, p.m_hour, p.m_minute, p.m_second));
-		int nReturn = sqlite3_bind_text(m_Statements[nIndex], nPosition, valueBuffer, -1, SQLITE_TRANSIENT);
+		int nReturn = sqlite3_bind_text(m_Statements[nIndex], nPosition, valueBuffer.c_str(), -1, SQLITE_TRANSIENT);
 		if (nReturn != SQLITE_OK)
 		{
 			SetErrorCode(ibDatabaseLayerSQLite::TranslateErrorCode(nReturn), ibDatabaseLayerSQLite::ClassifyDatabaseError(nReturn));

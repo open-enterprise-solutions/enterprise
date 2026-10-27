@@ -50,11 +50,9 @@
 
 #include "backend/backend.h"
 
-#include <wx/string.h>
-
 #include <cstdint>
 
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 #include <windows.h>
 #endif
 
@@ -152,7 +150,7 @@ private:
 	ibString m_leasePath;
 	bool     m_holdsLock = false;
 
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 	HANDLE   m_hFile = INVALID_HANDLE_VALUE;
 #else
 	int      m_fd = -1;

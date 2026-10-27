@@ -1,19 +1,7 @@
 #ifndef __POSTGRESQL_PREPARED_STATEMENT_H__
 #define __POSTGRESQL_PREPARED_STATEMENT_H__
 
-// For compilers that support precompilation, includes "wx.h".
-#include <wx/wxprec.h>
-
-#ifdef __BORLANDC__
-#pragma hdrstop
-#endif
-
-#ifndef WX_PRECOMP
-#include <wx/wx.h>
-#endif
-
-#include <wx/arrstr.h>
-#include <wx/dynarray.h>
+#include <vector>
 
 #include "backend/databaseLayer/preparedStatement.h"
 
@@ -21,7 +9,7 @@
 #include "postgresPreparedStatementWrapper.h"
 #include "postgresInterface.h"
 
-WX_DECLARE_OBJARRAY(ibPreparedStatementPostgresWrapper, ArrayOfPostgresPreparedStatementWrappers);
+typedef std::vector<ibPreparedStatementPostgresWrapper> ArrayOfPostgresPreparedStatementWrappers;
 
 class ibPreparedStatementPostgres : public ibPreparedStatement
 {

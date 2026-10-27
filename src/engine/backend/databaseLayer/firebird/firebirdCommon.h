@@ -7,13 +7,12 @@
 // same wall-clock millisecond reading. Centralising avoids the
 // three identical copies that drifted independently before.
 
-#include <wx/string.h>
 
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
 
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 #include <windows.h>
 #endif
 
@@ -46,7 +45,7 @@ inline uint64_t NowUnixMs() {
 // debugger / DebugView.
 // POSIX: fputs to stderr — atomic per-line on most libc's.
 inline void LogThreadSafe(const ibString& msg) {
-#ifdef __WXMSW__
+#ifdef __IBMSW__
 	const ibString line = msg + ibT("\n");
 	::OutputDebugStringW(line.wc_str());
 #else

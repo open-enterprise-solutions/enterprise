@@ -144,6 +144,7 @@
       <Filter>fiber</Filter>
     </ClCompile>
     <ClCompile Include="fileKind.cpp" />
+    <ClCompile Include="dynamicLibrary.cpp" />
     <ClCompile Include="fileSystem.cpp" />
     <ClCompile Include="fnumber.cpp" />
     <ClCompile Include="formatString.cpp" />
@@ -167,6 +168,9 @@
     <ClCompile Include="localization.cpp" />
     <ClCompile Include="memory\lz\lzhuf.cpp">
       <Filter>memory\lz</Filter>
+    </ClCompile>
+    <ClCompile Include="memory\compression.cpp">
+      <Filter>memory</Filter>
     </ClCompile>
     <ClCompile Include="memory\memoryBuffer.cpp">
       <Filter>memory</Filter>
@@ -381,6 +385,7 @@
     </ClInclude>
     <ClInclude Include="guid.h" />
     <ClInclude Include="fileKind.h" />
+    <ClInclude Include="dynamicLibrary.h" />
     <ClInclude Include="fileSystem.h" />
     <ClInclude Include="job\jobSchedule.h">
       <Filter>job</Filter>
@@ -394,6 +399,9 @@
     </ClInclude>
     <ClInclude Include="memory\lz\lzhuf.h">
       <Filter>memory\lz</Filter>
+    </ClInclude>
+    <ClInclude Include="memory\compression.h">
+      <Filter>memory</Filter>
     </ClInclude>
     <ClInclude Include="memory\memoryBuffer.h">
       <Filter>memory</Filter>

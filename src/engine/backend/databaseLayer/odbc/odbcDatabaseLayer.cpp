@@ -129,20 +129,14 @@ bool ibDatabaseLayerODBC::Open()
 
 	if (!m_strDSN.IsEmpty())
 	{
-#ifdef wxUSE_UNICODE
-		wxCharBuffer dsnCharBuffer = ConvertToUnicodeStream(m_strDSN);
-		wxCharBuffer userCharBuffer = ConvertToUnicodeStream(m_strUser);
-		wxCharBuffer passwordCharBuffer = ConvertToUnicodeStream(m_strPassword);
-#else
-		void* dsnCharBuffer = (void*)m_strDSN.c_str();
-		void* userCharBuffer = (void*)m_strUser.c_str();
-		void* passwordCharBuffer = (void*)m_strPassword.c_str();
-#endif
+		std::string dsnCharBuffer = ConvertToUnicodeStream(m_strDSN);
+		std::string userCharBuffer = ConvertToUnicodeStream(m_strUser);
+		std::string passwordCharBuffer = ConvertToUnicodeStream(m_strPassword);
 
 		SQLRETURN nRet;
-		nRet = m_pInterface->GetSQLConnect()((SQLHDBC)m_sqlHDBC, (SQLTCHAR FAR*)(const char*)dsnCharBuffer,
-			SQL_NTS, (SQLTCHAR FAR*)(const char*)userCharBuffer, SQL_NTS,
-			(SQLTCHAR FAR*)(const char*)passwordCharBuffer, SQL_NTS);
+		nRet = m_pInterface->GetSQLConnect()((SQLHDBC)m_sqlHDBC, (SQLTCHAR FAR*)dsnCharBuffer.c_str(),
+			SQL_NTS, (SQLTCHAR FAR*)userCharBuffer.c_str(), SQL_NTS,
+			(SQLTCHAR FAR*)passwordCharBuffer.c_str(), SQL_NTS);
 		if (nRet != SQL_SUCCESS && nRet != SQL_SUCCESS_WITH_INFO)
 		{
 			InterpretErrorCodes(nRet);
@@ -158,9 +152,9 @@ bool ibDatabaseLayerODBC::Open()
 
 		// The text in the same bytes as the DSN's above. This passed the ADDRESS of the temporary c_str() returns —
 		// the driver was handed a pointer's bytes for a connection string; strict C++20 refused to take it.
-		const wxCharBuffer connectionCharBuffer = ConvertToUnicodeStream(m_strConnection);
+		const std::string connectionCharBuffer = ConvertToUnicodeStream(m_strConnection);
 
-		SQLRETURN nRet = m_pInterface->GetSQLDriverConnect()((SQLHDBC)m_sqlHDBC, nullptr, (SQLTCHAR*)(const char*)connectionCharBuffer,
+		SQLRETURN nRet = m_pInterface->GetSQLDriverConnect()((SQLHDBC)m_sqlHDBC, nullptr, (SQLTCHAR*)connectionCharBuffer.c_str(),
 			SQL_NTS, (SQLTCHAR*)buff, 8192, &iLen, SQL_DRIVER_NOPROMPT);
 
 		if (nRet != SQL_SUCCESS && nRet != SQL_SUCCESS_WITH_INFO)
@@ -302,7 +296,6 @@ int ibDatabaseLayerODBC::DoRunQuery(const ibString& strQuery, bool bParseQuery)
 {
 	ResetErrorCodes();
 
-	//wxPrintf("Running: '%s'\n", strQuery.c_str());
 	ibPreparedStatementODBC* pStatement = (ibPreparedStatementODBC*)DoPrepareStatement(strQuery, bParseQuery);
 
 	if (pStatement)
@@ -390,15 +383,10 @@ ibPreparedStatement* ibDatabaseLayerODBC::DoPrepareStatement(const ibString& str
 
 	for (unsigned int i = 0; i < (QueryArray.size()); i++)
 	{
-		//#if wxUSE_UNICODE
-		//        void* sqlBuffer = (void*)(QueryArray[i].c_str());
-		//#else
-		wxCharBuffer sqlBuffer = ConvertToUnicodeStream(QueryArray[i]);
-		//#endif
-				//wxPrintf(_("Preparing statement: '%s'\n"), sqlBuffer);
+		std::string sqlBuffer = ConvertToUnicodeStream(QueryArray[i]);
 
 		SQLHSTMT pSqlStatement = allocStmth();
-		SQLRETURN nRet = m_pInterface->GetSQLPrepare()(pSqlStatement, (SQLTCHAR*)(const char*)sqlBuffer, SQL_NTS);
+		SQLRETURN nRet = m_pInterface->GetSQLPrepare()(pSqlStatement, (SQLTCHAR*)sqlBuffer.c_str(), SQL_NTS);
 		if (nRet != SQL_SUCCESS && nRet != SQL_SUCCESS_WITH_INFO)
 		{
 			InterpretErrorCodes(nRet);
@@ -419,15 +407,15 @@ bool ibDatabaseLayerODBC::TableExists(const ibString& table)
 	bool bReturn = false;
 	// Use SQLTables
 	SQLHSTMT pStatement = allocStmth();
-	wxCharBuffer tableBuffer = ConvertToUnicodeStream(table);
+	std::string tableBuffer = ConvertToUnicodeStream(table);
 	ibString tableType = ibT("TABLE");
-	wxCharBuffer tableTypeBuffer = ConvertToUnicodeStream(tableType);
+	std::string tableTypeBuffer = ConvertToUnicodeStream(tableType);
 	int tableTypeBufferLength = GetEncodedStreamLength(tableType);
 	SQLRETURN nRet = m_pInterface->GetSQLTables()(pStatement,
 		nullptr, 0,
 		nullptr, 0,
-		(SQLTCHAR*)(const char*)tableBuffer, SQL_NTS,
-		(SQLTCHAR*)(const char*)tableTypeBuffer, tableTypeBufferLength);
+		(SQLTCHAR*)tableBuffer.c_str(), SQL_NTS,
+		(SQLTCHAR*)tableTypeBuffer.c_str(), tableTypeBufferLength);
 
 	if (nRet != SQL_SUCCESS)
 	{
@@ -451,15 +439,15 @@ bool ibDatabaseLayerODBC::ViewExists(const ibString& view)
 	bool bReturn = false;
 	// Use SQLTables
 	SQLHSTMT pStatement = allocStmth();
-	wxCharBuffer viewBuffer = ConvertToUnicodeStream(view);
+	std::string viewBuffer = ConvertToUnicodeStream(view);
 	ibString tableType = ibT("VIEW");
-	wxCharBuffer tableTypeBuffer = ConvertToUnicodeStream(tableType);
+	std::string tableTypeBuffer = ConvertToUnicodeStream(tableType);
 	int tableTypeBufferLength = GetEncodedStreamLength(tableType);
 	SQLRETURN nRet = m_pInterface->GetSQLTables()(pStatement,
 		nullptr, 0,
 		nullptr, 0,
-		(SQLTCHAR*)(const char*)viewBuffer, SQL_NTS,
-		(SQLTCHAR*)(const char*)tableTypeBuffer, tableTypeBufferLength);
+		(SQLTCHAR*)viewBuffer.c_str(), SQL_NTS,
+		(SQLTCHAR*)tableTypeBuffer.c_str(), tableTypeBufferLength);
 
 	if (nRet != SQL_SUCCESS)
 	{
@@ -483,13 +471,13 @@ std::vector<ibString> ibDatabaseLayerODBC::GetTables()
 	std::vector<ibString> returnArray;
 	SQLHSTMT pStatement = allocStmth();
 	ibString tableType = ibT("TABLE");
-	wxCharBuffer tableTypeBuffer = ConvertToUnicodeStream(tableType);
+	std::string tableTypeBuffer = ConvertToUnicodeStream(tableType);
 	int tableTypeBufferLength = GetEncodedStreamLength(tableType);
 	SQLRETURN nRet = m_pInterface->GetSQLTables()(pStatement,
 		nullptr, 0,
 		nullptr, 0,
 		nullptr, 0,
-		(SQLTCHAR*)(const char*)tableTypeBuffer, tableTypeBufferLength);
+		(SQLTCHAR*)tableTypeBuffer.c_str(), tableTypeBufferLength);
 
 	if (nRet != SQL_SUCCESS)
 	{
@@ -538,13 +526,13 @@ std::vector<ibString> ibDatabaseLayerODBC::GetViews()
 	std::vector<ibString> returnArray;
 	SQLHSTMT pStatement = allocStmth();
 	ibString tableType = ibT("VIEW");
-	wxCharBuffer tableTypeBuffer = ConvertToUnicodeStream(tableType);
+	std::string tableTypeBuffer = ConvertToUnicodeStream(tableType);
 	int tableTypeBufferLength = GetEncodedStreamLength(tableType);
 	SQLRETURN nRet = m_pInterface->GetSQLTables()(pStatement,
 		nullptr, 0,
 		nullptr, 0,
 		nullptr, 0,
-		(SQLTCHAR*)(const char*)tableTypeBuffer, tableTypeBufferLength);
+		(SQLTCHAR*)tableTypeBuffer.c_str(), tableTypeBufferLength);
 
 	if (nRet != SQL_SUCCESS)
 	{
@@ -594,12 +582,12 @@ std::vector<ibString> ibDatabaseLayerODBC::GetColumns(const ibString& table)
 	std::vector<ibString> returnArray;
 	// Use SQLColumns
 	SQLHSTMT pStatement = allocStmth();
-	wxCharBuffer tableBuffer = ConvertToUnicodeStream(table);
+	std::string tableBuffer = ConvertToUnicodeStream(table);
 	int tableBufferLength = GetEncodedStreamLength(table);
 	SQLRETURN nRet = m_pInterface->GetSQLColumns()(pStatement,
 		nullptr, 0,
 		nullptr, 0,
-		(SQLTCHAR*)(const char*)tableBuffer, tableBufferLength,
+		(SQLTCHAR*)tableBuffer.c_str(), tableBufferLength,
 		nullptr, 0);
 
 	if (nRet != SQL_SUCCESS)
@@ -669,7 +657,6 @@ void ibDatabaseLayerODBC::InterpretErrorCodes(long nCode, void* stmth_ptr)
 
 		const ibString strSqlState = ConvertFromUnicodeStream((char*)strState);
 		SetErrorCode(TranslateErrorCode((int)iNativeCode, strSqlState), ClassifySqlState(strSqlState, (int)iNativeCode));
-		//SetErrorMessage(wxString((wxChar*)strBuffer));
 		SetErrorMessage(ConvertFromUnicodeStream((char*)strBuffer));
 		// Stash the 5-char SQLSTATE for the exception's GetSqlState().
 		SetLastSqlState(strSqlState);
