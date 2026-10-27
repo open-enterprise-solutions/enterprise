@@ -157,7 +157,7 @@ void FeedNode(ibSHA256& sha, const ibDataNode& node)
 void FeedText(ibSHA256& sha, const ibString& text)
 {
 	if (!text.IsEmpty())
-		sha.Update(reinterpret_cast<const unsigned char*>(text.wc_str()), text.length() * sizeof(wchar_t));
+		sha.Update(reinterpret_cast<const unsigned char*>(text.c_str()), text.length() * sizeof(ibChar));
 }
 
 void FeedValue(ibSHA256& sha, const ibDataValue& value)

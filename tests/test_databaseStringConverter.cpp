@@ -73,15 +73,10 @@ TEST(DatabaseStringConverter, ThreeByteSequence) {
 
 TEST(DatabaseStringConverter, FourByteSequenceIsOneCharacter) {
     const ibString s = Read("\xF0\x9F\x98\x80");   // U+1F600, past the BMP
-    const wchar_t* w = s.wc_str();
-    if (sizeof(wchar_t) == 2) {
-        ASSERT_EQ(s.length(), 2u);   // a surrogate pair where wchar_t is sixteen bits
-        EXPECT_EQ(static_cast<unsigned>(w[0]), 0xD83Du);
-        EXPECT_EQ(static_cast<unsigned>(w[1]), 0xDE00u);
-    } else {
-        ASSERT_EQ(s.length(), 1u);
-        EXPECT_EQ(static_cast<unsigned>(w[0]), 0x1F600u);
-    }
+    const ibChar* w = s.c_str();
+    ASSERT_EQ(s.length(), 2u);   // a surrogate pair: the string is UTF-16 on every OS
+    EXPECT_EQ(static_cast<unsigned>(w[0]), 0xD83Du);
+    EXPECT_EQ(static_cast<unsigned>(w[1]), 0xDE00u);
 }
 
 // Ill-formed input — a cut-off tail, an overlong form, a stray continuation byte — is not decoded
