@@ -7,7 +7,7 @@
 
 // The variant of a calculation register's schedule — it holds an ibCalcScheduleDescription, as
 // ibPropertyValueAttribute holds an ibTypeDescription.
-class BACKEND_API ibPropertyValueCalcSchedule : public ibPropertyValue {
+class BACKEND_API ibPropertyValueCalcSchedule : public ibPropertyValue {
 public:
 
 	ibPropertyValueCalcSchedule(const ibPropertyObject* prop, const ibCalcScheduleDescription& scheduleDesc = ibCalcScheduleDescription())
@@ -19,7 +19,7 @@ public:
 	const ibPropertyObject* GetOwnerProperty() const { return m_ownerProperty; }
 
 	virtual bool CompareValueEQ(const ibPropertyValue& data) const override {
-		const const ibPropertyValueCalcSchedule* other = dynamic_cast<const ibPropertyValueCalcSchedule*>(data.GetRef());
+		const ibPropertyValueCalcSchedule* other = dynamic_cast<const ibPropertyValueCalcSchedule*>(data.GetRef());
 		return other != nullptr && m_scheduleDesc == other->m_scheduleDesc;
 	}
 

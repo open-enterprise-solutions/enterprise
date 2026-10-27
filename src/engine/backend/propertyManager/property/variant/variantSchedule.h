@@ -15,7 +15,7 @@
 
 #include <wx/variant.h>
 
-class BACKEND_API ibPropertyValueSchedule : public ibPropertyValue {
+class BACKEND_API ibPropertyValueSchedule : public ibPropertyValue {
 public:
 
 	ibJobScheduleDescription& GetSchedule() { return m_schedule; }
@@ -34,7 +34,7 @@ public:
 	// Value equality, straight through the description — this is what the configuration
 	// compare reads (docs/private/property-system.md § 6.1).
 	virtual bool CompareValueEQ(const ibPropertyValue& data) const override {
-		const const ibPropertyValueSchedule* src = dynamic_cast<const ibPropertyValueSchedule*>(data.GetRef());
+		const ibPropertyValueSchedule* src = dynamic_cast<const ibPropertyValueSchedule*>(data.GetRef());
 		return src != nullptr && src->m_schedule == m_schedule;
 	}
 

@@ -4,7 +4,7 @@
 #include "backend/metaCollection/partial/commonObject.h"
 #include "backend/propertyManager/property/variant/variantMetaDesc.h"
 
-class BACKEND_API ibPropertyValueOwner : public ibPropertyValueMetaDesc {
+class BACKEND_API ibPropertyValueOwner : public ibPropertyValueMetaDesc {
 public:
 
 	ibValue GetDataValue() const;
@@ -42,7 +42,7 @@ inline ibPropertyChoiceMode CreateValueList(ibPropertyObject* owner, ibPropertyC
 {
 	// The cast is at HOME here — this file is about this variant and knows what fills it. What was
 	// wrong was the same cast in a generic tool that had no business knowing.
-	const const ibValueMetaObjectGenericData* factory = dynamic_cast<const ibValueMetaObjectGenericData*>(owner);
+	const ibValueMetaObjectGenericData* factory = dynamic_cast<const ibValueMetaObjectGenericData*>(owner);
 	if (factory == nullptr)
 		return ibPropertyChoiceMode::None;
 

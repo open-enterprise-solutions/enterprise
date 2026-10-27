@@ -10,7 +10,7 @@
 
 // The variant of a link by type — it holds an ibChoiceTypeLinkDescription, as ibPropertyValueCalcSchedule
 // holds a schedule and ibPropertyValueAttribute holds a type description.
-class BACKEND_API ibPropertyValueChoiceLink : public ibPropertyValue {
+class BACKEND_API ibPropertyValueChoiceLink : public ibPropertyValue {
 public:
 
 	ibPropertyValueChoiceLink(const ibPropertyObject* prop, const ibChoiceTypeLinkDescription& linkDesc = ibChoiceTypeLinkDescription())
@@ -26,7 +26,7 @@ public:
 	const ibPropertyObject* GetOwnerProperty() const { return m_ownerProperty; }
 
 	virtual bool CompareValueEQ(const ibPropertyValue& data) const override {
-		const const ibPropertyValueChoiceLink* other = dynamic_cast<const ibPropertyValueChoiceLink*>(data.GetRef());
+		const ibPropertyValueChoiceLink* other = dynamic_cast<const ibPropertyValueChoiceLink*>(data.GetRef());
 		return other != nullptr && GetLinkDesc() == other->GetLinkDesc();
 	}
 
@@ -54,7 +54,7 @@ protected:
 
 // The variant of the choice parameters — the table beside the link by type, in the same shape. Kept in
 // this file because it is the same subject: what narrows the choice of a field.
-class BACKEND_API ibPropertyValueChoiceParameters : public ibPropertyValue {
+class BACKEND_API ibPropertyValueChoiceParameters : public ibPropertyValue {
 public:
 
 	ibPropertyValueChoiceParameters(const ibPropertyObject* prop, const ibChoiceParametersDescription& paramsDesc = ibChoiceParametersDescription())
@@ -70,7 +70,7 @@ public:
 	const ibPropertyObject* GetOwnerProperty() const { return m_ownerProperty; }
 
 	virtual bool CompareValueEQ(const ibPropertyValue& data) const override {
-		const const ibPropertyValueChoiceParameters* other = dynamic_cast<const ibPropertyValueChoiceParameters*>(data.GetRef());
+		const ibPropertyValueChoiceParameters* other = dynamic_cast<const ibPropertyValueChoiceParameters*>(data.GetRef());
 		return other != nullptr && GetParametersDesc() == other->GetParametersDesc();
 	}
 

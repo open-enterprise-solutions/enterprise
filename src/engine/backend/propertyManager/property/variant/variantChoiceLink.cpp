@@ -41,7 +41,7 @@ std::vector<ibValueMetaObjectAttributeBase*> HolderAttributes(const ibPropertyOb
 {
 	const ibValueMetaObjectAttributeBase* self = SelfAttribute(owner);
 	const ibValueMetaObject* holder = self != nullptr ? self->GetParent() : nullptr;
-	const const ibValueMetaObjectCompositeData* fields = dynamic_cast<const ibValueMetaObjectCompositeData*>(holder);
+	const ibValueMetaObjectCompositeData* fields = dynamic_cast<const ibValueMetaObjectCompositeData*>(holder);
 	if (fields == nullptr)
 		return std::vector<ibValueMetaObjectAttributeBase*>();
 

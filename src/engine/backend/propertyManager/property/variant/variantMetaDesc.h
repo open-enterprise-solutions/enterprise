@@ -38,7 +38,7 @@ public:
 	// are still not the same value.
 	virtual bool CompareValueEQ(const ibPropertyValue& data) const override
 	{
-		const const ibPropertyValueMetaDesc* other = dynamic_cast<const ibPropertyValueMetaDesc*>(data.GetRef());
+		const ibPropertyValueMetaDesc* other = dynamic_cast<const ibPropertyValueMetaDesc*>(data.GetRef());
 		return other != nullptr
 			&& GetType() == other->GetType()
 			&& m_metaDesc.m_listMetaClass == other->m_metaDesc.m_listMetaClass;
