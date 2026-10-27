@@ -14,26 +14,26 @@ public:
 	}
 
 	bool GetValueAsString(ibString& result) const {
-		if (m_propValue.IsNull())
+		if (m_propValue.GetType() == ibValueTypes::TYPE_EMPTY)
 			return false;
-		result = m_propValue.MakeString();
+		result = m_propValue.GetString();
 		return true;
 	}
 
-	void SetValue(const ibString& strValue) { m_propValue = strValue; }
+	void SetValue(const ibString& strValue) { m_propValue = ibPropertyValue(strValue); }
 
 	ibPropertyStringBase(ibPropertyCategory* cat, const ibString& name,
-		const ibString& value) : ibProperty(cat, name, value.wc_str())
+		const ibString& value) : ibProperty(cat, name, ibPropertyValue(value))
 	{
 	}
 
 	ibPropertyStringBase(ibPropertyCategory* cat, const ibString& name, const ibString& label,
-		const ibString& value) : ibProperty(cat, name, label, value.wc_str())
+		const ibString& value) : ibProperty(cat, name, label, ibPropertyValue(value))
 	{
 	}
 
 	ibPropertyStringBase(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString,
-		const ibString& value) : ibProperty(cat, name, label, helpString, value.wc_str())
+		const ibString& value) : ibProperty(cat, name, label, helpString, ibPropertyValue(value))
 	{
 	}
 
@@ -128,7 +128,7 @@ class BACKEND_API ibPropertyTString : public ibProperty {
 	// in one run (2026-09-22). It never needed `this`: it builds a variant out of its argument.
 	// ⚠ The same shape lives in the other property headers of this family - they are not converted
 	// here, because only the one the tests exercise has been measured.
-	static wxVariantData* CreateVariantData(const ibTranslateString& translate);
+	static ibPropertyValue CreateVariantData(const ibTranslateString& translate);
 public:
 
 	ibTranslateString& GetValueAsTranslate() const;

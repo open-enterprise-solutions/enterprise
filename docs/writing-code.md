@@ -252,9 +252,11 @@ sessions read at once. A mutex covers only what still races. No shared `static` 
 **What a base needs comes up in `Open`, not at the first login.** An "is it up yet?" guard
 (`EnsureStarted…`, `if (!m_started)`) is a check-then-act race in a host with many users.
 
-**Everything about a property lives in its variant (`ibVariantData…`).** Derived data is generated
-from the variant, and the owning object keeps no parallel member: `m_sourceDescriptor` became
-`ibVariantDataSource`.
+**Everything about a property lives in its value (`ibPropertyValue…`).** The value is made as the
+runtime's `ibValue` is — a primitive in place, or a counted reference to a LIVE value that keeps itself
+current (a type refreshes against its configuration), so every holder sees it change. Derived data is
+generated from the value, and the owning object keeps no parallel member: `m_sourceDescriptor` became
+`ibPropertyValueSource`.
 
 **Ask the object whether it is empty** (`IsEmptyProperty()`); never work it out from a projection
 outside it. If the predicate is missing, declare it on that entity.

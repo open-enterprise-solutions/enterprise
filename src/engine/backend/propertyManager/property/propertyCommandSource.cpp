@@ -1,5 +1,5 @@
 #include "propertyCommandSource.h"
-#include "backend/propertyManager/property/variant/variantCommandSource.h"   // ibVariantDataCommandSource (holds the hop path)
+#include "backend/propertyManager/property/variant/variantCommandSource.h"   // ibPropertyValueCommandSource (holds the hop path)
 #include "backend/backend_command.h"          // ibBackendCommandReceiver — the factory the variant casts to (+ dtor anchor)
 #include "core/serialize/dataBuilder.h"   // ibDataValue — node value (Binary blob of the hop path)
 
@@ -9,24 +9,24 @@ ibBackendCommandReceiver::~ibBackendCommandReceiver() {}
 
 ////////////////////////////////////////////////////////////////////////
 
-wxVariantData* ibPropertyCommandSource::CreateVariantData(const ibPropertyObject* property, const ibCommandDescription& desc, const ibString& display)
+ibPropertyValue ibPropertyCommandSource::CreateVariantData(const ibPropertyObject* property, const ibCommandDescription& desc, const ibString& display)
 {
 	// The owning button / bar item IS-A command-source factory (WalkCommand validates the binding) — the variant keeps
-	// it and checks existence SERVER-SIDE (runtime too), exactly as ibVariantDataSource keeps its source factory.
+	// it and checks existence SERVER-SIDE (runtime too), exactly as ibPropertyValueSource keeps its source factory.
 	const ibBackendCommandReceiver* owner = dynamic_cast<const ibBackendCommandReceiver*>(property);
-	return new ibVariantDataCommandSource(owner, desc, display);
+	return ibPropertyValue(new ibPropertyValueCommandSource(owner, desc, display));
 }
 
 ////////////////////////////////////////////////////////////////////////
 
 ibCommandDescription& ibPropertyCommandSource::GetValueAsCommandDesc() const
 {
-	return get_cell_variant<ibVariantDataCommandSource>()->GetCommandDesc();
+	return get_cell_variant<ibPropertyValueCommandSource>()->GetCommandDesc();
 }
 
 ibString ibPropertyCommandSource::GetValueAsString() const
 {
-	return m_propValue.MakeString();
+	return m_propValue.GetString();
 }
 
 void ibPropertyCommandSource::SetValue(const ibCommandDescription& desc, const ibString& display)
@@ -38,7 +38,7 @@ void ibPropertyCommandSource::SetValue(const ibCommandDescription& desc, const i
 
 bool ibPropertyCommandSource::IsEmptyProperty() const
 {
-	return get_cell_variant<ibVariantDataCommandSource>()->IsEmptyCommand();
+	return get_cell_variant<ibPropertyValueCommandSource>()->IsEmptyCommand();
 }
 
 bool ibPropertyCommandSource::SetDataValue(const ibValue& /*varPropVal*/)
@@ -71,7 +71,7 @@ bool ibPropertyCommandSource::GetProtocolValue(ibDataNode& row, ibReader reader)
 {
 	if (!ibProperty::GetProtocolValue(row, reader))
 		return false;
-	if (const ibBackendCommandReceiver* const receiver = get_cell_variant<ibVariantDataCommandSource>()->GetOwner())
+	if (const ibBackendCommandReceiver* const receiver = get_cell_variant<ibPropertyValueCommandSource>()->GetOwner())
 		receiver->WriteCommandTree(row.Child(ibProtocol::ibSchema::ibProperties::CommandTree));
 	return true;
 }

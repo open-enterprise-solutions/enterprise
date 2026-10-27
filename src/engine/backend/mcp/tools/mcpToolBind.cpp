@@ -73,7 +73,7 @@ struct Binding {
 // register are wired with.
 //
 // Now the question goes to the VARIANT, which is what actually holds the relationship, and every one
-// of them is an ibVariantDataMetaDesc. A property joins the family by holding such a value — there is
+// of them is an ibPropertyValueMetaDesc. A property joins the family by holding such a value — there is
 // no list here, and nothing to add when a sixth appears.
 Binding AsBinding(ibProperty* property)
 {
@@ -81,7 +81,7 @@ Binding AsBinding(ibProperty* property)
 
 	// `find_`, not `get_`: BindingNamed walks every property of the object asking "are you a
 	// binding", and most answer no. The raising form is for a shape that is already known.
-	if (ibVariantDataMetaDesc* held = property->find_cell_variant<ibVariantDataMetaDesc>()) {
+	if (ibPropertyValueMetaDesc* held = property->find_cell_variant<ibPropertyValueMetaDesc>()) {
 		found.property = property;
 		found.held = &held->GetMetaDesc();
 	}
@@ -291,7 +291,7 @@ public:
 		//
 		// 🛑 WHAT THIS REPLACED, because the shape of the mistake is worth keeping: the tool reached
 		// past the list, edited the metadescription held INSIDE the property's own variant, and then
-		// announced the change. `wxVariant` is reference-counted, so the "old value" every
+		// announced the change. A property value holds its live value by reference, so the "old value" every
 		// notification path reads pointed at the very object just edited — old and new were one
 		// description, the difference was empty, and ibValueMetaObjectDocument::OnPropertyChanged,
 		// which puts the document's reference into the register's Recorder, walked an empty list. The
@@ -332,9 +332,9 @@ public:
 			// alive until this call ends. The one thing that must never be touched is the variant the
 			// PROPERTY holds: editing that is editing the old value and the new one at once, which is
 			// how the second end of the binding stopped being made.
-			wxVariant placing = choices.GetValue(index);
+			ibPropertyValue placing = choices.GetValue(index);
 
-			ibVariantDataMetaDesc* carried = binding.property->find_cell_variant<ibVariantDataMetaDesc>(placing);
+			ibPropertyValueMetaDesc* carried = binding.property->find_cell_variant<ibPropertyValueMetaDesc>(placing);
 			if (carried == nullptr) {
 				refusal = ibString::Format(
 					ibMcpText("'%s' offered a value this tool cannot read."), binding.property->GetName());

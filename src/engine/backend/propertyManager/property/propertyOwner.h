@@ -6,7 +6,7 @@
 
 //base property for "generation"
 class BACKEND_API ibPropertyOwner : public ibProperty {
-	static wxVariantData* CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc = ibMetaDescription());
+	static ibPropertyValue CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc = ibMetaDescription());
 public:
 	ibMetaDescription& GetValueAsMetaDesc() const;
 	void SetValue(const ibMetaDescription& val);
@@ -27,9 +27,9 @@ public:
 protected:
 
 	// The family rule, kept here too: a relationship arrives in whichever wrapper the caller was
-	// handed - CreateValueList builds every candidate as ibVariantDataOwner - and a property that
+	// handed - CreateValueList builds every candidate as ibPropertyValueOwner - and a property that
 	// stores a neighbour's wrapper raises on every later read. See propertyRecord.h.
-	virtual void DoSetValue(const wxVariant& val) override;
+	virtual void DoSetValue(const ibPropertyValue& val) override;
 
 public:
 

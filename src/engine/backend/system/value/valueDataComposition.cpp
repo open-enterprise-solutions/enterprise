@@ -1150,7 +1150,7 @@ void ibValueDataComposition::OnPropertyRefresh()
 	// removed — what they hold still serialises, and the settings window still edits the query.
 	HideProperty(m_propertySource, true);
 }
-void ibValueDataComposition::OnPropertyChanged(ibProperty* property, const wxVariant& /*oldValue*/, const wxVariant& /*newValue*/)
+void ibValueDataComposition::OnPropertyChanged(ibProperty* property, const ibPropertyValue& /*oldValue*/, const ibPropertyValue& /*newValue*/)
 {
 	if (m_propertySource == property)
 		RebuildSource();
@@ -1169,7 +1169,7 @@ bool ibValueDataComposition::ReadProperty(const ibDataNode& node)
 	// ⭐⭐ AND NOT A WORD ABOUT WHAT IT MEANS. Reading stores what the composition IS; working out what
 	// its query means is the OTHER act (ApplySource — see SetQueryText, where the two were separated
 	// for the editor), and it belongs to whoever ASKS for the composition. The cell it lives in makes
-	// that the rule: ibVariantDataComposition refreshes on GetComposition() and never on a load.
+	// that the rule: ibPropertyValueComposition refreshes on GetComposition() and never on a load.
 	//
 	// 🛑 A COMPOSER IS READ WITH THE TREE. Since it became a metaobject of its own, a composition is
 	// read in the LOAD pass — while the tables its query names announce themselves in the RUN pass

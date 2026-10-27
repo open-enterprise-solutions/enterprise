@@ -191,8 +191,8 @@ public:
 	* Property events
 	*/
 	virtual void OnPropertyCreated(ibProperty* property);
-	virtual bool OnPropertyChanging(ibProperty* property, const wxVariant& newValue);
-	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue);
+	virtual bool OnPropertyChanging(ibProperty* property, const ibPropertyValue& newValue);
+	virtual void OnPropertyChanged(ibProperty* property, const ibPropertyValue& oldValue, const ibPropertyValue& newValue);
 
 	// Declares this chart's tables AND attaches the analytics-ceiling rule to the kinds section, so the
 	// differ can refuse a lowering the data cannot survive before it touches anything. Body in

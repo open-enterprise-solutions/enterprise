@@ -6,7 +6,7 @@
 
 //base property for "size"
 class BACKEND_API ibPropertySize : public ibProperty {
-	static wxVariantData* CreateVariantData(const ibSize& val);
+	static ibPropertyValue CreateVariantData(const ibSize& val);
 public:
 	ibSize GetValueAsSize() const;
 	ibString GetValueAsString() const { return GetValueAsSize().ToString(); }

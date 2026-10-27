@@ -284,8 +284,8 @@ public:
 	* Property events
 	*/
 	virtual void OnPropertyCreated(ibProperty* property);
-	virtual bool OnPropertyChanging(ibProperty* property, const wxVariant& newValue);
-	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue);
+	virtual bool OnPropertyChanging(ibProperty* property, const ibPropertyValue& newValue);
+	virtual void OnPropertyChanged(ibProperty* property, const ibPropertyValue& oldValue, const ibPropertyValue& newValue);
 
 	//load & save object in control
 	virtual bool ReadData(const ibDataNode& node);
@@ -637,7 +637,7 @@ public:
 
 	// The column's bound source as a composer FIELD — its dotted NAME (e.g. "Product.SKU"), row-relative to
 	// the bound table. Universal: whatever addresses a column by field (sort, filter, group) uses it. Straight
-	// off m_propertySource. MakeString renders the FULL form-rooted path; the composer's queryable is the bound
+	// off m_propertySource. GetString renders the FULL form-rooted path; the composer's queryable is the bound
 	// TABLE, so drop the tablebox's own prefix (one name segment per prefix id) to make it row-relative — the
 	// same seam ResolveCellValue uses. prefix 0 (model bound directly) drops nothing.
 	ibString GetSourceFieldName() const {
@@ -782,7 +782,7 @@ public:
 	*/
 	virtual void OnPropertyCreated(ibProperty* property);
 	virtual void OnPropertyRefresh() override;
-	virtual bool OnPropertyChanging(ibProperty* property, const wxVariant& newValue);
+	virtual bool OnPropertyChanging(ibProperty* property, const ibPropertyValue& newValue);
 
 	//load & save object in control
 	virtual bool ReadData(const ibDataNode& node);

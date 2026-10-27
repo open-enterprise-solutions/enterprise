@@ -6,15 +6,15 @@
 
 ////////////////////////////////////////////////////////////////////////
 
-wxVariantData* ibPropertyDynamicList::CreateVariantData(ibPropertyObject* property, const ibCompositionDescription& desc)
+ibPropertyValue ibPropertyDynamicList::CreateVariantData(ibPropertyObject* property, const ibCompositionDescription& desc)
 {
-	return new ibVariantDataComposition(property, desc);
+	return ibPropertyValue(new ibPropertyValueComposition(property, desc));
 }
 
 ////////////////////////////////////////////////////////////////////////
 
 ibCompositionDescription& ibPropertyDynamicList::GetValueAsCompositionDesc() const {
-	return get_cell_variant<ibVariantDataComposition>()->GetCompositionDesc();
+	return get_cell_variant<ibPropertyValueComposition>()->GetCompositionDesc();
 }
 
 void ibPropertyDynamicList::SetValue(const ibCompositionDescription& val) {

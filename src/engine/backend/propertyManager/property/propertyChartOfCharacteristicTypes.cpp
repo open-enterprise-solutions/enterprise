@@ -3,14 +3,14 @@
 #include "backend/propertyManager/property/variant/variantOwner.h"
 
 
-wxVariantData* ibPropertyChartOfCharacteristicTypes::CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc)
+ibPropertyValue ibPropertyChartOfCharacteristicTypes::CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc)
 {
 	// No cast: the variant needs the owner only to reach GetMetaData, which ibPropertyObject answers.
-	return new ibVariantDataOwner(property, typeDesc);
+	return ibPropertyValue(new ibPropertyValueOwner(property, typeDesc));
 }
 
 ibMetaDescription& ibPropertyChartOfCharacteristicTypes::GetValueAsMetaDesc() const {
-	return get_cell_variant<ibVariantDataMetaDesc>()->GetMetaDesc();
+	return get_cell_variant<ibPropertyValueMetaDesc>()->GetMetaDesc();
 }
 
 void ibPropertyChartOfCharacteristicTypes::SetValue(const ibMetaDescription& val)
@@ -19,9 +19,9 @@ void ibPropertyChartOfCharacteristicTypes::SetValue(const ibMetaDescription& val
 }
 
 // The family rule - see propertyRecord.cpp.
-void ibPropertyChartOfCharacteristicTypes::DoSetValue(const wxVariant& val)
+void ibPropertyChartOfCharacteristicTypes::DoSetValue(const ibPropertyValue& val)
 {
-	if (const ibVariantDataMetaDesc* carried = find_cell_variant<ibVariantDataMetaDesc>(val)) {
+	if (const ibPropertyValueMetaDesc* carried = find_cell_variant<ibPropertyValueMetaDesc>(val)) {
 		SetValue(carried->GetMetaDesc());
 		return;
 	}
@@ -40,7 +40,7 @@ bool ibPropertyChartOfCharacteristicTypes::SetDataValue(const ibValue& varPropVa
 
 bool ibPropertyChartOfCharacteristicTypes::GetDataValue(ibValue& pvarPropVal) const
 {
-	const ibVariantDataOwner* owner = get_cell_variant<ibVariantDataOwner>();
+	const ibPropertyValueOwner* owner = get_cell_variant<ibPropertyValueOwner>();
 	wxASSERT(owner);
 	pvarPropVal = owner->GetDataValue();
 	return true;

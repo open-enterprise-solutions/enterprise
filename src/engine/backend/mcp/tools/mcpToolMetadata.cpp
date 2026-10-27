@@ -27,7 +27,7 @@
 #include "backend/objCtor.h"                          // ibCtorMetaValueType — a reference type by name
 #include "backend/propertyManager/property/propertyList.h"   // a form is asked WHICH KIND — the owner fills the list
 #include "backend/propertyManager/propertyObject.h"   // GetProperty(idx) — what can be set
-#include "backend/propertyManager/property/variant/variantType.h"   // ibVariantDataAttribute — a value that hides a type description
+#include "backend/propertyManager/property/variant/variantType.h"   // ibPropertyValueAttribute — a value that hides a type description
 #include "backend/propertyManager/property/propertyCalcSchedule.h"          // a calculation register's schedule — and what each part of it may be
 #include "backend/propertyManager/property/variant/variantCalcSchedule.h"   // …and the value that carries it
 #include "backend/propertyManager/property/propertyChoiceLink.h"            // how a field is chosen — and what each part of THAT may be
@@ -2026,12 +2026,12 @@ public:
 		// lives in the value, so the value answers.
 		// `find_`, not `get_`: this walks every property of the object asking "are you the type
 		// one", and all but one answer no. The raising form is for a shape already known.
-		auto typeValueOf = [](ibProperty* candidate) -> ibVariantDataAttribute* {
-			return candidate != nullptr ? candidate->find_cell_variant<ibVariantDataAttribute>() : nullptr;
+		auto typeValueOf = [](ibProperty* candidate) -> ibPropertyValueAttribute* {
+			return candidate != nullptr ? candidate->find_cell_variant<ibPropertyValueAttribute>() : nullptr;
 		};
 
 		ibProperty*              typeProperty = object->GetProperty(ibT("Type"));
-		ibVariantDataAttribute*  typeValue    = typeValueOf(typeProperty);
+		ibPropertyValueAttribute*  typeValue    = typeValueOf(typeProperty);
 
 		if (typeValue == nullptr) {
 
@@ -2040,7 +2040,7 @@ public:
 
 			for (unsigned int idx = 0; idx < object->GetPropertyCount(); idx++) {
 				ibProperty* candidate = object->GetProperty(idx);
-				if (ibVariantDataAttribute* carried = typeValueOf(candidate)) {
+				if (ibPropertyValueAttribute* carried = typeValueOf(candidate)) {
 					typeProperty = candidate;
 					typeValue    = carried;
 					found.push_back(candidate->GetName());
@@ -2130,14 +2130,14 @@ public:
 			}
 
 			typeValue->SetFromTypeDesc(described);
-			if (!ibMcpApplyByHand(typeProperty, wxVariant(typeValue->Clone()), refusal))
+			if (!ibMcpApplyByHand(typeProperty, ibPropertyValue(typeValue->Clone()), refusal))
 				return false;
 
 			metaData->Modify(true);
 
 			ibDataValue placed;
 			if (!ibTypeDescriptionMemory::WriteNode(placed,
-					typeProperty->get_cell_variant<ibVariantDataAttribute>()->GetTypeDesc())) {
+					typeProperty->get_cell_variant<ibPropertyValueAttribute>()->GetTypeDesc())) {
 				refusal = ibMcpText("The description was placed, but could not be read back to confirm it.");
 				return false;
 			}
@@ -2222,7 +2222,7 @@ public:
 		// read out is the property's live data: mutating it and handing it back as "the new value"
 		// is a write nobody was told about.
 		typeValue->SetFromTypeDesc(description);
-		if (!ibMcpApplyByHand(typeProperty, wxVariant(typeValue->Clone()), refusal))
+		if (!ibMcpApplyByHand(typeProperty, ibPropertyValue(typeValue->Clone()), refusal))
 			return false;
 
 		metaData->Modify(true);
@@ -2245,7 +2245,7 @@ public:
 		// The same shape the answer now carries is the shape metadata_set takes back, so a caller
 		// can read a type and place it somewhere else without translating anything.
 		const ibTypeDescription& now =
-			typeProperty->get_cell_variant<ibVariantDataAttribute>()->GetTypeDesc();
+			typeProperty->get_cell_variant<ibPropertyValueAttribute>()->GetTypeDesc();
 
 		// ⚠ ASKED WHETHER IT COULD SAY ITSELF. The family answers that, and a dropped answer here
 		// would report a type that was never written as an empty one.
@@ -2449,7 +2449,7 @@ public:
 			}
 		}
 
-		if (!ibMcpApplyByHand(property, wxVariant(new ibVariantDataCalcSchedule(object, scheduleDesc)), refusal))
+		if (!ibMcpApplyByHand(property, ibPropertyValue(new ibPropertyValueCalcSchedule(object, scheduleDesc)), refusal))
 			return false;
 
 		metaData->Modify(true);
@@ -2751,9 +2751,9 @@ public:
 
 		// ⭐ THROUGH THE DOOR A MOUSE CLICK USES — the gate needs an old value and a new one to offer the
 		// owner, which is why each half is edited on a copy above and handed over whole.
-		if (!ibMcpApplyByHand(linkProperty, wxVariant(new ibVariantDataChoiceLink(object, linkDesc)), refusal))
+		if (!ibMcpApplyByHand(linkProperty, ibPropertyValue(new ibPropertyValueChoiceLink(object, linkDesc)), refusal))
 			return false;
-		if (!ibMcpApplyByHand(paramsProperty, wxVariant(new ibVariantDataChoiceParameters(object, paramsDesc)), refusal))
+		if (!ibMcpApplyByHand(paramsProperty, ibPropertyValue(new ibPropertyValueChoiceParameters(object, paramsDesc)), refusal))
 			return false;
 
 		metaData->Modify(true);

@@ -9,7 +9,7 @@ class ibQueryableSourceDescriptor;
 
 // ---------------------------------------------------------------------------
 // ibPropertyDynamicSource — the "Source" property of a dynamic list. The chosen
-// source queryable lives in the property's VARIANT (ibVariantDataDynamicSource),
+// source queryable lives in the property's VARIANT (ibPropertyValueDynamicSource),
 // not on the dynamic list: the list is a pure facade (GetSourceQueryable -> GetQueryable()).
 // Modelled on ibPropertyType (data in a variant), but with no hard type check — the
 // variant just holds the queryable. The property serializes the source itself
@@ -20,25 +20,25 @@ class BACKEND_API ibPropertyDynamicSource : public ibProperty {
 public:
 
 	ibPropertyDynamicSource(ibPropertyCategory* cat, const ibString& name)
-		: ibProperty(cat, name, new ibVariantDataDynamicSource()) {}
+		: ibProperty(cat, name, new ibPropertyValueDynamicSource()) {}
 	ibPropertyDynamicSource(ibPropertyCategory* cat, const ibString& name, const ibString& label)
-		: ibProperty(cat, name, label, new ibVariantDataDynamicSource()) {}
+		: ibProperty(cat, name, label, new ibPropertyValueDynamicSource()) {}
 	ibPropertyDynamicSource(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString)
-		: ibProperty(cat, name, label, helpString, new ibVariantDataDynamicSource()) {}
+		: ibProperty(cat, name, label, helpString, new ibPropertyValueDynamicSource()) {}
 
 	// The selected source queryable — data lives in the variant; the dynamic list reads it
 	// through here (facade). The setter stores it into the variant.
 	const ibBackendQueryable* GetQueryable() const {
-		return get_cell_variant<ibVariantDataDynamicSource>()->GetQueryable();
+		return get_cell_variant<ibPropertyValueDynamicSource>()->GetQueryable();
 	}
 
 	// The source's DESCRIPTOR (holder) — parallel to GetQueryable(); the dynamic list reaches the
 	// command interface through it. Live-resolved by the variant, never cached.
 	const ibQueryableSourceDescriptor* GetDescriptor() const {
-		return get_cell_variant<ibVariantDataDynamicSource>()->GetDescriptor();
+		return get_cell_variant<ibPropertyValueDynamicSource>()->GetDescriptor();
 	}
 	void SetQueryable(const ibBackendQueryable* queryable) {
-		m_propValue = new ibVariantDataDynamicSource(queryable, m_owner);   // owner → re-resolve through ITS config factory
+		m_propValue = new ibPropertyValueDynamicSource(queryable, m_owner);   // owner → re-resolve through ITS config factory
 	}
 
 	// ⭐ THE SOURCE AS THE ID IT IS — see the variant. Reading and writing both go through this, so a
@@ -50,12 +50,12 @@ public:
 	// no configuration at all: after a reopen the number was there, the list's query was there, and
 	// the Source showed nothing, because the id was asked of the empty global factory (Max, 2026-10-13).
 	void SetTableId(const ibMetaID& tableId) {
-		ibVariantDataDynamicSource* source = new ibVariantDataDynamicSource(nullptr, m_owner);
+		ibPropertyValueDynamicSource* source = new ibPropertyValueDynamicSource(nullptr, m_owner);
 		source->SetTableId(tableId);
 		m_propValue = source;
 	}
 	ibMetaID GetTableId() const {
-		return get_cell_variant<ibVariantDataDynamicSource>()->GetTableId();
+		return get_cell_variant<ibPropertyValueDynamicSource>()->GetTableId();
 	}
 
 	// Choose the source by its registered identity — resolves the queryable into the variant.

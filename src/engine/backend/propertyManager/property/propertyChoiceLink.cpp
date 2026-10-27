@@ -1,18 +1,18 @@
 #include "propertyChoiceLink.h"
 #include "backend/propertyManager/property/variant/variantChoiceLink.h"   // the value — and everything known about it
 
-// ⭐ THE PROPERTY HOLDS THE VALUE, THE VALUE KNOWS ITSELF — as ibPropertyType holds an ibVariantDataAttribute.
+// ⭐ THE PROPERTY HOLDS THE VALUE, THE VALUE KNOWS ITSELF — as ibPropertyType holds an ibPropertyValueAttribute.
 // What a link or a row may name, how it is spelled and what is gone from it are the variant's
 // (variantChoiceLink.cpp); the property makes it, hands it over and asks it for its lists.
 
-wxVariantData* ibPropertyChoiceLink::CreateVariantData(ibPropertyObject* property, const ibChoiceTypeLinkDescription& linkDesc)
+ibPropertyValue ibPropertyChoiceLink::CreateVariantData(ibPropertyObject* property, const ibChoiceTypeLinkDescription& linkDesc)
 {
-	return new ibVariantDataChoiceLink(property, linkDesc);
+	return ibPropertyValue(new ibPropertyValueChoiceLink(property, linkDesc));
 }
 
 ibChoiceTypeLinkDescription& ibPropertyChoiceLink::GetValueAsLinkDesc() const
 {
-	return get_cell_variant<ibVariantDataChoiceLink>()->GetLinkDesc();
+	return get_cell_variant<ibPropertyValueChoiceLink>()->GetLinkDesc();
 }
 
 void ibPropertyChoiceLink::SetValue(const ibChoiceTypeLinkDescription& val)
@@ -21,9 +21,9 @@ void ibPropertyChoiceLink::SetValue(const ibChoiceTypeLinkDescription& val)
 }
 
 // The family rule — see propertyRecord.cpp.
-void ibPropertyChoiceLink::DoSetValue(const wxVariant& val)
+void ibPropertyChoiceLink::DoSetValue(const ibPropertyValue& val)
 {
-	if (const ibVariantDataChoiceLink* carried = find_cell_variant<ibVariantDataChoiceLink>(val)) {
+	if (const ibPropertyValueChoiceLink* carried = find_cell_variant<ibPropertyValueChoiceLink>(val)) {
 		SetValue(carried->GetLinkDesc());
 		return;
 	}
@@ -33,14 +33,14 @@ void ibPropertyChoiceLink::DoSetValue(const wxVariant& val)
 
 ibPropertyChoiceMode ibPropertyChoiceLink::GetValueList(ibPropertyChoiceList& list)
 {
-	return get_cell_variant<ibVariantDataChoiceLink>()->GetValueList(list);
+	return get_cell_variant<ibPropertyValueChoiceLink>()->GetValueList(list);
 }
 
 bool ibPropertyChoiceLink::SetDataValue(const ibValue& varPropVal) { return false; }
 
 bool ibPropertyChoiceLink::GetDataValue(ibValue& pvarPropVal) const
 {
-	const ibString name = m_propValue.MakeString();
+	const ibString name = m_propValue.GetString();
 	pvarPropVal = ibValue(name);
 	return true;
 }
@@ -59,14 +59,14 @@ bool ibPropertyChoiceLink::WriteNodeValue(ibDataValue& value) const
 //*                             The choice parameters — the table                                 *
 //*************************************************************************************************
 
-wxVariantData* ibPropertyChoiceParameters::CreateVariantData(ibPropertyObject* property, const ibChoiceParametersDescription& paramsDesc)
+ibPropertyValue ibPropertyChoiceParameters::CreateVariantData(ibPropertyObject* property, const ibChoiceParametersDescription& paramsDesc)
 {
-	return new ibVariantDataChoiceParameters(property, paramsDesc);
+	return ibPropertyValue(new ibPropertyValueChoiceParameters(property, paramsDesc));
 }
 
 ibChoiceParametersDescription& ibPropertyChoiceParameters::GetValueAsParametersDesc() const
 {
-	return get_cell_variant<ibVariantDataChoiceParameters>()->GetParametersDesc();
+	return get_cell_variant<ibPropertyValueChoiceParameters>()->GetParametersDesc();
 }
 
 void ibPropertyChoiceParameters::SetValue(const ibChoiceParametersDescription& val)
@@ -74,9 +74,9 @@ void ibPropertyChoiceParameters::SetValue(const ibChoiceParametersDescription& v
 	m_propValue = CreateVariantData(m_owner, val);
 }
 
-void ibPropertyChoiceParameters::DoSetValue(const wxVariant& val)
+void ibPropertyChoiceParameters::DoSetValue(const ibPropertyValue& val)
 {
-	if (const ibVariantDataChoiceParameters* carried = find_cell_variant<ibVariantDataChoiceParameters>(val)) {
+	if (const ibPropertyValueChoiceParameters* carried = find_cell_variant<ibPropertyValueChoiceParameters>(val)) {
 		SetValue(carried->GetParametersDesc());
 		return;
 	}
@@ -86,19 +86,19 @@ void ibPropertyChoiceParameters::DoSetValue(const wxVariant& val)
 
 void ibPropertyChoiceParameters::GetParameterList(const ibClassID& ofType, ibPropertyChoiceList& list) const
 {
-	get_cell_variant<ibVariantDataChoiceParameters>()->GetParameterList(ofType, list);
+	get_cell_variant<ibPropertyValueChoiceParameters>()->GetParameterList(ofType, list);
 }
 
 void ibPropertyChoiceParameters::GetSourceList(ibPropertyChoiceList& list) const
 {
-	get_cell_variant<ibVariantDataChoiceParameters>()->GetSourceList(list);
+	get_cell_variant<ibPropertyValueChoiceParameters>()->GetSourceList(list);
 }
 
 bool ibPropertyChoiceParameters::SetDataValue(const ibValue& varPropVal) { return false; }
 
 bool ibPropertyChoiceParameters::GetDataValue(ibValue& pvarPropVal) const
 {
-	const ibString names = m_propValue.MakeString();
+	const ibString names = m_propValue.GetString();
 	pvarPropVal = ibValue(names);
 	return true;
 }

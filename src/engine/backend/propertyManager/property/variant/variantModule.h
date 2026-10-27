@@ -2,38 +2,26 @@
 #define __MODULE_VARIANT_H__
 
 #include "backend/backend_core.h"
+#include "backend/propertyManager/propertyValue.h"
 
-class BACKEND_API ibVariantDataModule : public wxVariantData {
-	wxString MakeString() const;
+class BACKEND_API ibPropertyValueModule : public ibPropertyValue {
 public:
 
 	//set module code 
 	void SetModuleText(const ibString& moduleText) { m_moduleData = moduleText; }
 	const ibString& GetModuleText() const { return m_moduleData; }
 
-	ibVariantDataModule(const ibString& moduleData = ibEmptyString) : m_moduleData(moduleData) {}
+	ibPropertyValueModule(const ibString& moduleData = ibEmptyString) : ibPropertyValue(ibValueTypes::TYPE_VALUE), m_moduleData(moduleData) {}
 
-	virtual bool Eq(wxVariantData& data) const {
-		ibVariantDataModule* srcData = dynamic_cast<ibVariantDataModule*>(&data);
+	virtual bool CompareValueEQ(const ibPropertyValue& data) const override {
+		const ibPropertyValueModule* srcData = dynamic_cast<const ibPropertyValueModule*>(data.GetRef());
 		if (srcData != nullptr) {
 			return m_moduleData == srcData->GetModuleText();
 		}
 		return false;
 	}
 
-#if wxUSE_STD_IOSTREAM
-	virtual bool Write(wxSTD ostream& str) const {
-		str << MakeString();
-		return true;
-	}
-#endif
-
-	virtual bool Write(wxString& str) const {
-		str = MakeString();
-		return true;
-	}
-
-	virtual wxString GetType() const { return ibT("ibVariantDataModule"); }
+	virtual ibString GetString() const override;
 
 protected:
 	ibString m_moduleData;

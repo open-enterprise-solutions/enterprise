@@ -6,7 +6,7 @@
 
 //base property for "number"
 class BACKEND_API ibPropertyNumber : public ibProperty {
-	static wxVariantData* CreateVariantData(const ibNumber& val);
+	static ibPropertyValue CreateVariantData(const ibNumber& val);
 public:
 
 	ibNumber& GetValueAsNumber() const;
@@ -44,11 +44,11 @@ public:
 
 //base property for "integer"
 class BACKEND_API ibPropertyInteger : public ibProperty {
-	static wxVariant CreateVariantData(const int& val) { return wxVariant((long)val); }   // WXVARIANT<int> IS wxVariant((long)v) — propgriddefs.h
+	static ibPropertyValue CreateVariantData(const int& val) { return ibPropertyValue(val); }
 public:
 
 	void SetValue(const int& val) { m_propValue = CreateVariantData(val); }
-	int GetValueAsInteger() const { return m_propValue.GetLong(); }
+	int GetValueAsInteger() const { return m_propValue.GetNumber().ToInt(); }
 
 	ibPropertyInteger(ibPropertyCategory* cat, const ibString& name,
 		const int& value = 0) : ibProperty(cat, name, CreateVariantData(value))
@@ -94,11 +94,11 @@ public:
 
 //base property for "unsigned integer"
 class BACKEND_API ibPropertyUInteger : public ibProperty {
-	static wxVariant CreateVariantData(const unsigned int& val) { return wxVariant((long)val); }
+	static ibPropertyValue CreateVariantData(const unsigned int& val) { return ibPropertyValue(val); }
 public:
 
 	void SetValue(const unsigned int& val) { m_propValue = CreateVariantData(val); }
-	unsigned int GetValueAsUInteger() const { return m_propValue.GetLong(); }
+	unsigned int GetValueAsUInteger() const { return m_propValue.GetNumber().ToUInt(); }
 
 	ibPropertyUInteger(ibPropertyCategory* cat, const ibString& name,
 		const unsigned int& value = 0) : ibProperty(cat, name, CreateVariantData(value))

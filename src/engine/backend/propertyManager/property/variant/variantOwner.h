@@ -4,31 +4,20 @@
 #include "backend/metaCollection/partial/commonObject.h"
 #include "backend/propertyManager/property/variant/variantMetaDesc.h"
 
-class BACKEND_API ibVariantDataOwner : public ibVariantDataMetaDesc {
-	wxString MakeString() const;
+class BACKEND_API ibPropertyValueOwner : public ibPropertyValueMetaDesc {
 public:
 
 	ibValue GetDataValue() const;
 
-	ibVariantDataOwner(const ibPropertyObject* prop, const ibMetaDescription& typeDesc) : ibVariantDataMetaDesc(prop, typeDesc) {}
-	ibVariantDataOwner(const ibVariantDataOwner& src) : ibVariantDataMetaDesc(src.m_ownerProperty, src.m_metaDesc) {}
+	ibPropertyValueOwner(const ibPropertyObject* prop, const ibMetaDescription& typeDesc) : ibPropertyValueMetaDesc(prop, typeDesc) {}
+	ibPropertyValueOwner(const ibPropertyValueOwner& src) : ibPropertyValueMetaDesc(src.m_ownerProperty, src.m_metaDesc) {}
 
-	virtual ibVariantDataOwner* Clone() const {
-		return new ibVariantDataOwner(*this);
+	virtual ibPropertyValueOwner* Clone() const {
+		return new ibPropertyValueOwner(*this);
 	}
 
-#if wxUSE_STD_IOSTREAM
-	virtual bool Write(wxSTD ostream& str) const {
-		str << MakeString();
-		return true;
-	}
-#endif
-	virtual bool Write(wxString& str) const {
-		str = MakeString();
-		return true;
-	}
+	virtual ibString GetString() const override;
 
-	virtual wxString GetType() const { return ibT("ibVariantDataOwner"); }
 };
 
 // ⭐⭐ THE CANDIDATES FOR A RELATIONSHIP — every metaobject of the classes that may fill it, each
@@ -53,7 +42,7 @@ inline ibPropertyChoiceMode CreateValueList(ibPropertyObject* owner, ibPropertyC
 {
 	// The cast is at HOME here — this file is about this variant and knows what fills it. What was
 	// wrong was the same cast in a generic tool that had no business knowing.
-	const ibValueMetaObjectGenericData* factory = dynamic_cast<const ibValueMetaObjectGenericData*>(owner);
+	const const ibValueMetaObjectGenericData* factory = dynamic_cast<const ibValueMetaObjectGenericData*>(owner);
 	if (factory == nullptr)
 		return ibPropertyChoiceMode::None;
 
@@ -70,7 +59,7 @@ inline ibPropertyChoiceMode CreateValueList(ibPropertyObject* owner, ibPropertyC
 		// work out: it places this. A single metaID, because one choice is one relationship — a
 		// Mult-mode property composes the set from the ones that were picked.
 		list.Add((long)object->GetMetaID(), object->GetName(), object->GetSynonym(),
-			wxVariant(new ibVariantDataOwner(factory, ibMetaDescription(object->GetMetaID()))),
+			ibPropertyValue(new ibPropertyValueOwner(factory, ibMetaDescription(object->GetMetaID()))),
 			object->GetClassType());
 	}
 

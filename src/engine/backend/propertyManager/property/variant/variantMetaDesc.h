@@ -1,10 +1,11 @@
 #ifndef __METADESC_VARIANT_H__
 #define __METADESC_VARIANT_H__
 
+#include "backend/propertyManager/propertyValue.h"
 #include "backend/metaData.h"
 
 // ==========================================================================
-// ibVariantDataMetaDesc — THE VALUE OF A RELATIONSHIP.
+// ibPropertyValueMetaDesc — THE VALUE OF A RELATIONSHIP.
 //
 // Three variant classes carried a metadescription and an owner: Owner, Record, Generation (the
 // charts of accounts and of characteristic types reuse Owner's). They were the same class written
@@ -19,7 +20,7 @@
 // ibPropertyObject answers virtually — the narrower ibValueMetaObjectGenericData* it used to take
 // forced a dynamic_cast at every callsite for nothing.
 // ==========================================================================
-class BACKEND_API ibVariantDataMetaDesc : public wxVariantData {
+class BACKEND_API ibPropertyValueMetaDesc : public ibPropertyValue {
 public:
 
 	ibMetaDescription& GetMetaDesc() { return m_metaDesc; }
@@ -35,9 +36,9 @@ public:
 	// The value IS the metadescription: the same metaIDs in the same order is the same relationship.
 	// GetType() is compared too, so an owner binding and a generation binding holding the same ids
 	// are still not the same value.
-	virtual bool Eq(wxVariantData& data) const override
+	virtual bool CompareValueEQ(const ibPropertyValue& data) const override
 	{
-		const ibVariantDataMetaDesc* other = dynamic_cast<const ibVariantDataMetaDesc*>(&data);
+		const const ibPropertyValueMetaDesc* other = dynamic_cast<const ibPropertyValueMetaDesc*>(data.GetRef());
 		return other != nullptr
 			&& GetType() == other->GetType()
 			&& m_metaDesc.m_listMetaClass == other->m_metaDesc.m_listMetaClass;
@@ -45,8 +46,8 @@ public:
 
 protected:
 
-	ibVariantDataMetaDesc(const ibPropertyObject* prop, const ibMetaDescription& typeDesc)
-		: wxVariantData(), m_ownerProperty(prop), m_metaDesc(typeDesc) {}
+	ibPropertyValueMetaDesc(const ibPropertyObject* prop, const ibMetaDescription& typeDesc)
+		: ibPropertyValue(ibValueTypes::TYPE_VALUE), m_ownerProperty(prop), m_metaDesc(typeDesc) {}
 
 	const ibPropertyObject* m_ownerProperty;
 	ibMetaDescription       m_metaDesc;

@@ -5,16 +5,16 @@
 
 ////////////////////////////////////////////////////////////////////////
 
-wxVariantData* ibPropertySpreadsheet::CreateVariantData(const ibSpreadsheetDescription& val)
+ibPropertyValue ibPropertySpreadsheet::CreateVariantData(const ibSpreadsheetDescription& val)
 {
-	return new ibVariantDataSpreadsheet(val);
+	return ibPropertyValue(new ibPropertyValueSpreadsheet(val));
 }
 
 ////////////////////////////////////////////////////////////////////////
 
 ibSpreadsheetDescription& ibPropertySpreadsheet::GetValueAsSpreadsheetDesc() const
 {
-	return get_cell_variant<ibVariantDataSpreadsheet>()->GetSpreadsheetDesc();
+	return get_cell_variant<ibPropertyValueSpreadsheet>()->GetSpreadsheetDesc();
 }
 
 void ibPropertySpreadsheet::SetValue(const ibSpreadsheetDescription& val)
@@ -26,7 +26,7 @@ void ibPropertySpreadsheet::SetValue(const ibSpreadsheetDescription& val)
 
 bool ibPropertySpreadsheet::IsEmptyProperty() const
 {
-	return get_cell_variant<ibVariantDataSpreadsheet>()->IsEmptySpreadsheet();
+	return get_cell_variant<ibPropertyValueSpreadsheet>()->IsEmptySpreadsheet();
 }
 
 ////////////////////////////////////////////////////////////////////////

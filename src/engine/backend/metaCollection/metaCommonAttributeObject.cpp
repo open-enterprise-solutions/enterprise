@@ -128,7 +128,7 @@ std::vector<ibValueMetaObjectCommonAttributeColumn*> ibValueMetaObjectCommonAttr
 }
 
 void ibValueMetaObjectCommonAttribute::OnPropertyChanged(
-	ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue)
+	ibProperty* property, const ibPropertyValue& oldValue, const ibPropertyValue& newValue)
 {
 	// A TYPE CHANGE REACHES EVERY CARRIER. The copies never held a type of their own —
 	// they ask this declaration — so the value is already right the moment this returns.

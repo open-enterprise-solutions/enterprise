@@ -170,7 +170,7 @@ const ibValueMetaObjectCommandGroup* ibValueMetaObjectCommand::GetCommandGroup()
 {
 	if (m_metaData == nullptr)
 		return nullptr;
-	const long key = m_propertyGroup->GetValue();
+	const long key = m_propertyGroup->GetValue().GetInteger();
 	// A platform group — the usual case — is answered without looking anything up.
 	for (const ibInterfaceCommandSection area : g_platformCommandGroups)
 		if (key == area)
@@ -182,7 +182,7 @@ const ibValueMetaObjectCommandGroup* ibValueMetaObjectCommand::GetCommandGroup()
 
 ibInterfaceCommandSection ibValueMetaObjectCommand::GetCommandSection() const
 {
-	const long key = m_propertyGroup->GetValue();
+	const long key = m_propertyGroup->GetValue().GetInteger();
 	for (const ibInterfaceCommandSection area : g_platformCommandGroups)
 		if (key == area)
 			return area;

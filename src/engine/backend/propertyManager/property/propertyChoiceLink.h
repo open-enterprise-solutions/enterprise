@@ -26,7 +26,7 @@ class ibMetaData;
 // nobody can satisfy is not a safeguard. The one thing with nothing to give is an empty declaration
 // (ibChoiceLinkResolver::CanGovern).
 class BACKEND_API ibPropertyChoiceLink : public ibProperty {
-	static wxVariantData* CreateVariantData(ibPropertyObject* property, const ibChoiceTypeLinkDescription& linkDesc = ibChoiceTypeLinkDescription());
+	static ibPropertyValue CreateVariantData(ibPropertyObject* property, const ibChoiceTypeLinkDescription& linkDesc = ibChoiceTypeLinkDescription());
 public:
 
 	ibChoiceTypeLinkDescription& GetValueAsLinkDesc() const;
@@ -48,7 +48,7 @@ public:
 protected:
 
 	// The family rule — a value arrives in whichever wrapper the caller was handed. See propertyRecord.h.
-	virtual void DoSetValue(const wxVariant& val) override;
+	virtual void DoSetValue(const ibPropertyValue& val) override;
 
 public:
 
@@ -70,7 +70,7 @@ public:
 // ⭐ THE OWNER IS A ROW OF THIS TABLE (choiceLinkDescription.h): a catalog declaring `ListOwner` gets
 // one written for it, which is why there is no property for the owner anywhere.
 class BACKEND_API ibPropertyChoiceParameters : public ibProperty {
-	static wxVariantData* CreateVariantData(ibPropertyObject* property, const ibChoiceParametersDescription& paramsDesc = ibChoiceParametersDescription());
+	static ibPropertyValue CreateVariantData(ibPropertyObject* property, const ibChoiceParametersDescription& paramsDesc = ibChoiceParametersDescription());
 public:
 
 	ibChoiceParametersDescription& GetValueAsParametersDesc() const;
@@ -97,7 +97,7 @@ public:
 
 protected:
 
-	virtual void DoSetValue(const wxVariant& val) override;
+	virtual void DoSetValue(const ibPropertyValue& val) override;
 
 public:
 

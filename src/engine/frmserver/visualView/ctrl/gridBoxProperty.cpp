@@ -10,7 +10,7 @@
 //
 // (No "refill the columns?" question here: a gridbox has no columns to refill. What a sheet contains
 //  is the designer's own and no source dictates it.)
-void ibValueGridBox::OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue)
+void ibValueGridBox::OnPropertyChanged(ibProperty* property, const ibPropertyValue& oldValue, const ibPropertyValue& newValue)
 {
 	if (property == m_propertySource)
 		RefreshModel();

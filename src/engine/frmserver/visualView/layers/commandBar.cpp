@@ -744,7 +744,7 @@ ibValueFrame* ibValueCommandBarItem::GetOwnerFrame() const
 	return m_bar != nullptr ? m_bar->GetOwnerFrame() : nullptr;
 }
 
-bool ibValueCommandBarItem::OnPropertyChanging(ibProperty* property, const wxVariant& newValue)
+bool ibValueCommandBarItem::OnPropertyChanging(ibProperty* property, const ibPropertyValue& newValue)
 {
 	// Name must stay unique among the bar's items.
 	if (property == m_propertyName && m_bar != nullptr && m_bar->HasItemName(newValue.GetString(), this))

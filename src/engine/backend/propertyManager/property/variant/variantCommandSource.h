@@ -1,30 +1,16 @@
 #ifndef __COMMAND_SOURCE_DATA_VARIANT_H__
 #define __COMMAND_SOURCE_DATA_VARIANT_H__
 
+#include "backend/propertyManager/propertyValue.h"
 #include "backend/propertyManager/property/variant/variantType.h"
 #include "core/description/commandDescription.h"
 #include "backend/backend_command.h"   // ibBackendCommandReceiver — the factory the variant WALKS to validate the binding
 
-// The variant behind a command-source property — the command-door twin of ibVariantDataSource. Where the
+// The variant behind a command-source property — the command-door twin of ibPropertyValueSource. Where the
 // source variant holds an ibSourceDescription (the address of a VALUE inside a data source), this holds an
 // ibCommandDescription (the address of a COMMAND: a hop path own / main / table / general). It is the ONLY
 // stored state — serialised by the property and fed to the button, exactly like the source variant's path.
-class BACKEND_API ibVariantDataCommandSource : public wxVariantData {
-
-	// The string the cell shows — SERVER-SIDE and live, exactly like ibVariantDataSource::MakeString asks its source
-	// factory. The owner (a button / a bar item) is cast to ibBackendCommandReceiver; WalkCommand WALKS the bound hops
-	// and returns valid / invalid. Can't walk to the end (a hop gone) -> "<not found>", the guarantee the path broke;
-	// this runs at RUNTIME too, so a deleted command reads "<not found>" everywhere, not just in the designer cell.
-	// Only with no owner wired (a detached temp) does it fall back to the picker-set display.
-	wxString MakeString() const {
-		if (!m_commandDesc.IsOk())
-			return ibT("<not selected>");                        // nothing bound
-		ibString text;
-		if (m_owner != nullptr)
-			return m_owner->WalkCommand(m_commandDesc, &text) ? text : ibString(ibT("<not found>"));
-		return m_display.IsEmpty() ? ibString(ibT("<not selected>")) : m_display;   // no owner to walk -> cached picker name
-	}
-
+class BACKEND_API ibPropertyValueCommandSource : public ibPropertyValue {
 public:
 
 	bool IsEmptyCommand() const { return !m_commandDesc.IsOk(); }
@@ -33,7 +19,7 @@ public:
 	const ibBackendCommandReceiver* GetOwner() const { return m_owner; }
 
 	// The binding address — a command-hop path (own object / main attribute / table / general command). The
-	// variant's only stored state; the property serialises THIS (mirrors ibVariantDataSource::GetSourceDesc).
+	// variant's only stored state; the property serialises THIS (mirrors ibPropertyValueSource::GetSourceDesc).
 	ibCommandDescription& GetCommandDesc() { return m_commandDesc; }
 	const ibCommandDescription& GetCommandDesc() const { return m_commandDesc; }
 	void SetCommandDesc(const ibCommandDescription& desc) { m_commandDesc = desc; }
@@ -42,25 +28,32 @@ public:
 	const ibString& GetDisplay() const { return m_display; }
 	void SetDisplay(const ibString& display) { m_display = display; }
 
-	ibVariantDataCommandSource() : wxVariantData() {}
-	ibVariantDataCommandSource(const ibBackendCommandReceiver* owner, const ibCommandDescription& desc, const ibString& display = ibEmptyString)
-		: wxVariantData(), m_owner(owner), m_commandDesc(desc), m_display(display) {}
-	ibVariantDataCommandSource(const ibVariantDataCommandSource& src)
-		: wxVariantData(), m_owner(src.m_owner), m_commandDesc(src.m_commandDesc), m_display(src.m_display) {}
+	ibPropertyValueCommandSource() : ibPropertyValue(ibValueTypes::TYPE_VALUE) {}
+	ibPropertyValueCommandSource(const ibBackendCommandReceiver* owner, const ibCommandDescription& desc, const ibString& display = ibEmptyString)
+		: ibPropertyValue(ibValueTypes::TYPE_VALUE), m_owner(owner), m_commandDesc(desc), m_display(display) {}
+	ibPropertyValueCommandSource(const ibPropertyValueCommandSource& src)
+		: ibPropertyValue(ibValueTypes::TYPE_VALUE), m_owner(src.m_owner), m_commandDesc(src.m_commandDesc), m_display(src.m_display) {}
 
-	virtual ibVariantDataCommandSource* Clone() const { return new ibVariantDataCommandSource(*this); }
+	virtual ibPropertyValueCommandSource* Clone() const { return new ibPropertyValueCommandSource(*this); }
 
-	virtual bool Eq(wxVariantData& data) const {
-		ibVariantDataCommandSource* cmdData = dynamic_cast<ibVariantDataCommandSource*>(&data);
+	virtual bool CompareValueEQ(const ibPropertyValue& data) const override {
+		const ibPropertyValueCommandSource* cmdData = dynamic_cast<const ibPropertyValueCommandSource*>(data.GetRef());
 		return cmdData != nullptr && m_commandDesc == cmdData->m_commandDesc;   // full identity (path AND form name)
 	}
 
-#if wxUSE_STD_IOSTREAM
-	virtual bool Write(wxSTD ostream& str) const { str << MakeString(); return true; }
-#endif
-	virtual bool Write(wxString& str) const { str = MakeString(); return true; }
-
-	virtual wxString GetType() const { return ibT("ibVariantDataCommandSource"); }
+	// The string the cell shows — SERVER-SIDE and live, exactly like ibPropertyValueSource::GetString asks its source
+	// factory. The owner (a button / a bar item) is cast to ibBackendCommandReceiver; WalkCommand WALKS the bound hops
+	// and returns valid / invalid. Can't walk to the end (a hop gone) -> "<not found>", the guarantee the path broke;
+	// this runs at RUNTIME too, so a deleted command reads "<not found>" everywhere, not just in the designer cell.
+	// Only with no owner wired (a detached temp) does it fall back to the picker-set display.
+	virtual ibString GetString() const override {
+		if (!m_commandDesc.IsOk())
+			return ibT("<not selected>");                        // nothing bound
+		ibString text;
+		if (m_owner != nullptr)
+			return m_owner->WalkCommand(m_commandDesc, &text) ? text : ibString(ibT("<not found>"));
+		return m_display.IsEmpty() ? ibString(ibT("<not selected>")) : m_display;   // no owner to walk -> cached picker name
+	}
 
 protected:
 

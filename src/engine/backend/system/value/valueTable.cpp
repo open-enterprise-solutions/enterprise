@@ -332,7 +332,7 @@ const ibSourceDataObject::ibSourceExplorer* ibValueModelTable::GetSourceExplorer
 
 // The value-table exposes no editable ibProperty of its own (its config IS its columns, edited through the
 // tablebox) — nothing to recompute when a property changes.
-void ibValueModelTable::OnPropertyChanged(ibProperty* /*property*/, const wxVariant& /*oldValue*/, const wxVariant& /*newValue*/)
+void ibValueModelTable::OnPropertyChanged(ibProperty* /*property*/, const ibPropertyValue& /*oldValue*/, const ibPropertyValue& /*newValue*/)
 {
 }
 
@@ -520,7 +520,7 @@ const ibMetaData* ibValueModelTable::ibValueModelTableColumnCollection::ibValueM
 	return ibApplicationInstance::GetActiveMetaData();
 }
 
-void ibValueModelTable::ibValueModelTableColumnCollection::ibValueModelTableColumnInfo::OnPropertyChanged(ibProperty* /*property*/, const wxVariant& /*oldValue*/, const wxVariant& /*newValue*/)
+void ibValueModelTable::ibValueModelTableColumnCollection::ibValueModelTableColumnInfo::OnPropertyChanged(ibProperty* /*property*/, const ibPropertyValue& /*oldValue*/, const ibPropertyValue& /*newValue*/)
 {
 	// Nothing to sync: the property variants ARE the storage, so an inspector edit is already the live value
 	// every reader (GetColumnType / GetTypeDesc / GetSynonym / the source explorer) returns. A TYPE change is

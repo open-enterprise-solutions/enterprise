@@ -7,15 +7,15 @@
 
 ////////////////////////////////////////////////////////////////////////
 
-wxVariantData* ibPropertyComposition::CreateVariantData(ibPropertyObject* property, const ibCompositionDescription& val)
+ibPropertyValue ibPropertyComposition::CreateVariantData(ibPropertyObject* property, const ibCompositionDescription& val)
 {
-	return new ibVariantDataComposition(property, val);
+	return ibPropertyValue(new ibPropertyValueComposition(property, val));
 }
 
 ////////////////////////////////////////////////////////////////////////
 
 ibCompositionDescription& ibPropertyComposition::GetValueAsCompositionDesc() const {
-	return get_cell_variant<ibVariantDataComposition>()->GetCompositionDesc();
+	return get_cell_variant<ibPropertyValueComposition>()->GetCompositionDesc();
 }
 
 // A NEW CELL, WHICH IS WHAT A VARIANT IS FOR. The data is reference-counted, so whoever is looking

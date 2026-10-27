@@ -474,7 +474,7 @@ bool ibValueFrame::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 		ibProperty* property = GetPropertyByIndex(idx);
 		if (property != nullptr) {
 			// Through the property's change, as the inspector and MCP write it: the control hears it (OnPropertyChanged).
-			const wxVariant oldValue = property->GetValue();
+			const ibPropertyValue oldValue = property->GetValue();
 			property->SetDataValue(varPropVal);
 			OnPropertyChanged(property, oldValue, property->GetValue());
 		}
@@ -491,7 +491,7 @@ bool ibValueFrame::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 			unsigned int idx = m_members.GetPropData(lPropNum);
 			ibProperty* property = sizerItem->GetPropertyByIndex(idx);
 			if (property != nullptr) {
-				const wxVariant oldValue = property->GetValue();
+				const ibPropertyValue oldValue = property->GetValue();
 				property->SetDataValue(varPropVal);
 				sizerItem->OnPropertyChanged(property, oldValue, property->GetValue());
 			}

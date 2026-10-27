@@ -7,21 +7,21 @@
 
 ////////////////////////////////////////////////////////////////////////
 
-wxVariantData* ibPropertyModule::CreateVariantData()
+ibPropertyValue ibPropertyModule::CreateVariantData()
 {
-	return new ibVariantDataModule();
+	return ibPropertyValue(new ibPropertyValueModule());
 }
 
 ////////////////////////////////////////////////////////////////////////
 
 ibString ibPropertyModule::GetValueAsString() const
 {
-	return get_cell_variant<ibVariantDataModule>()->GetModuleText();
+	return get_cell_variant<ibPropertyValueModule>()->GetModuleText();
 }
 
 void ibPropertyModule::SetValue(const ibString& val)
 {
-	get_cell_variant<ibVariantDataModule>()->SetModuleText(val);
+	get_cell_variant<ibPropertyValueModule>()->SetModuleText(val);
 }
 
 ////////////////////////////////////////////////////////////////////////

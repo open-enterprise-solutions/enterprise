@@ -6,38 +6,38 @@
 
 ////////////////////////////////////////////////////////////////////////
 
-wxVariantData* ibPropertyType::CreateVariantData(ibPropertyObject* property, const ibValueTypes type)
+ibPropertyValue ibPropertyType::CreateVariantData(ibPropertyObject* property, const ibValueTypes type)
 {
 	const ibBackendTypeConfigFactory* propFactory = dynamic_cast<const ibBackendTypeConfigFactory*>(property);
 	if (propFactory == nullptr)
-		return nullptr;
-	return new ibVariantDataAttribute(propFactory, type);
+		return ibPropertyValue();
+	return ibPropertyValue(new ibPropertyValueAttribute(propFactory, type));
 }
 
-wxVariantData* ibPropertyType::CreateVariantData(ibPropertyObject* property, const ibClassID& clsid)
+ibPropertyValue ibPropertyType::CreateVariantData(ibPropertyObject* property, const ibClassID& clsid)
 {
 	const ibBackendTypeConfigFactory* propFactory = dynamic_cast<const ibBackendTypeConfigFactory*>(property);
 	if (propFactory == nullptr)
-		return nullptr;
-	return new ibVariantDataAttribute(propFactory, clsid);
+		return ibPropertyValue();
+	return ibPropertyValue(new ibPropertyValueAttribute(propFactory, clsid));
 }
 
-wxVariantData* ibPropertyType::CreateVariantData(ibPropertyObject* property, const ibTypeDescription& typeDesc)
+ibPropertyValue ibPropertyType::CreateVariantData(ibPropertyObject* property, const ibTypeDescription& typeDesc)
 {
 	const ibBackendTypeConfigFactory* propFactory = dynamic_cast<const ibBackendTypeConfigFactory*>(property);
 	if (propFactory == nullptr)
-		return nullptr;
-	return new ibVariantDataAttribute(propFactory, typeDesc);
+		return ibPropertyValue();
+	return ibPropertyValue(new ibPropertyValueAttribute(propFactory, typeDesc));
 }
 
 ////////////////////////////////////////////////////////////////////////
 
 ibTypeDescription& ibPropertyType::GetValueAsTypeDesc() const {
-	return get_cell_variant<ibVariantDataAttribute>()->GetTypeDesc();
+	return get_cell_variant<ibPropertyValueAttribute>()->GetTypeDesc();
 }
 
 ibTypeDescription& ibPropertyType::GetValueAsTypeValueDesc() const {
-	return get_cell_variant<ibVariantDataAttribute>()->GetTypeValueDesc();
+	return get_cell_variant<ibPropertyValueAttribute>()->GetTypeValueDesc();
 }
 
 void ibPropertyType::SetValue(const ibTypeDescription& val) {
@@ -47,7 +47,7 @@ void ibPropertyType::SetValue(const ibTypeDescription& val) {
 ////////////////////////////////////////////////////////////////////////
 
 ibSelectorDataType ibPropertyType::GetFilterDataType() const {
-	return get_cell_variant<ibVariantDataAttribute>()->GetFilterDataType();
+	return get_cell_variant<ibPropertyValueAttribute>()->GetFilterDataType();
 }
 
 ////////////////////////////////////////////////////////////////////////

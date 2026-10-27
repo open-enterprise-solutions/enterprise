@@ -26,7 +26,7 @@ bool ibFormCommandValue::IsEditable() const
 	return m_ownerForm != nullptr ? m_ownerForm->IsEditable() : true;
 }
 
-bool ibFormCommandValue::OnPropertyChanging(ibProperty* property, const wxVariant& newValue)
+bool ibFormCommandValue::OnPropertyChanging(ibProperty* property, const ibPropertyValue& newValue)
 {
 	// Name must stay UNIQUE among the form's commands — the inspector edits m_propertyName directly (bypassing
 	// RenameFormCommand), so reject a collision here, exactly as ibValueCommandBarItem guards its own Name.

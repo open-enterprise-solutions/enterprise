@@ -33,12 +33,12 @@ void ibValueMetaObjectChartOfAccounts::OnPropertyCreated(ibProperty* property)
 	ibValueMetaObjectRecordDataMutableRef::OnPropertyCreated(property);
 }
 
-bool ibValueMetaObjectChartOfAccounts::OnPropertyChanging(ibProperty* property, const wxVariant& newValue)
+bool ibValueMetaObjectChartOfAccounts::OnPropertyChanging(ibProperty* property, const ibPropertyValue& newValue)
 {
 	return ibValueMetaObjectRecordDataMutableRef::OnPropertyChanging(property, newValue);
 }
 
-void ibValueMetaObjectChartOfAccounts::OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue)
+void ibValueMetaObjectChartOfAccounts::OnPropertyChanged(ibProperty* property, const ibPropertyValue& oldValue, const ibPropertyValue& newValue)
 {
 	ibValueMetaObjectRecordDataMutableRef::OnPropertyChanged(property, oldValue, newValue);
 

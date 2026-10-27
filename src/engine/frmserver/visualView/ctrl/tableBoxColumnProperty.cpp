@@ -21,7 +21,7 @@ void ibValueModelTableBoxColumn::OnPropertyRefresh()
 	HideProperty(m_propertyChoiceForm, !hasChoice);
 }
 
-bool ibValueModelTableBoxColumn::OnPropertyChanging(ibProperty* property, const wxVariant& newValue)
+bool ibValueModelTableBoxColumn::OnPropertyChanging(ibProperty* property, const ibPropertyValue& newValue)
 {
 	return ibValueControl::OnPropertyChanging(property, newValue);
 }

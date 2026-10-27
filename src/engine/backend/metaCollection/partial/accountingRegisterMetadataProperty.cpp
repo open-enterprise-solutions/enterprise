@@ -2,7 +2,7 @@
 #include "backend/metaData.h"
 #include "backend/objCtor.h"
 
-void ibValueMetaObjectAccountingRegister::OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue)
+void ibValueMetaObjectAccountingRegister::OnPropertyChanged(ibProperty* property, const ibPropertyValue& oldValue, const ibPropertyValue& newValue)
 {
 	// When Chart of Accounts binding changes, update the Account field type.
 	//

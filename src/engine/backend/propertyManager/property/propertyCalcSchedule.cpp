@@ -3,14 +3,14 @@
 #include "backend/metaData.h"
 #include "backend/metaCollection/partial/commonObject.h"   // the registers: their resources, dimensions and attributes
 
-wxVariantData* ibPropertyCalcSchedule::CreateVariantData(ibPropertyObject* property, const ibCalcScheduleDescription& scheduleDesc)
+ibPropertyValue ibPropertyCalcSchedule::CreateVariantData(ibPropertyObject* property, const ibCalcScheduleDescription& scheduleDesc)
 {
-	return new ibVariantDataCalcSchedule(property, scheduleDesc);
+	return ibPropertyValue(new ibPropertyValueCalcSchedule(property, scheduleDesc));
 }
 
 ibCalcScheduleDescription& ibPropertyCalcSchedule::GetValueAsScheduleDesc() const
 {
-	return get_cell_variant<ibVariantDataCalcSchedule>()->GetScheduleDesc();
+	return get_cell_variant<ibPropertyValueCalcSchedule>()->GetScheduleDesc();
 }
 
 void ibPropertyCalcSchedule::SetValue(const ibCalcScheduleDescription& val)
@@ -19,9 +19,9 @@ void ibPropertyCalcSchedule::SetValue(const ibCalcScheduleDescription& val)
 }
 
 // The family rule — see propertyRecord.cpp.
-void ibPropertyCalcSchedule::DoSetValue(const wxVariant& val)
+void ibPropertyCalcSchedule::DoSetValue(const ibPropertyValue& val)
 {
-	if (const ibVariantDataCalcSchedule* carried = find_cell_variant<ibVariantDataCalcSchedule>(val)) {
+	if (const ibPropertyValueCalcSchedule* carried = find_cell_variant<ibPropertyValueCalcSchedule>(val)) {
 		SetValue(carried->GetScheduleDesc());
 		return;
 	}
@@ -44,7 +44,7 @@ ibPropertyChoiceMode ibPropertyCalcSchedule::GetValueList(ibPropertyChoiceList& 
 		ibCalcScheduleDescription scheduleDesc;
 		scheduleDesc.SetSchedule(schedule->GetMetaID(), 0, 0);
 		list.Add(schedule->GetMetaID(), schedule->GetName(), schedule->GetSynonym(),
-			wxVariant(new ibVariantDataCalcSchedule(owner, scheduleDesc)),
+			ibPropertyValue(new ibPropertyValueCalcSchedule(owner, scheduleDesc)),
 			schedule->GetClassType());
 	}
 
@@ -66,7 +66,7 @@ void ibPropertyCalcSchedule::GetScheduleValueList(const ibCalcScheduleDescriptio
 	if (const ibValueMetaObjectRegisterData* schedule = GetScheduleRegister(scheduleDesc)) {
 		for (const ibValueMetaObjectResource* resource : schedule->GetResourceArrayObject()) {
 			if (!resource->IsDeleted() && resource->GetTypeDesc().ContainType(g_valueNumberCLSID))
-				list.Add(resource->GetMetaID(), resource->GetName(), resource->GetSynonym(), wxVariant(resource->GetMetaID()), resource->GetClassType());
+				list.Add(resource->GetMetaID(), resource->GetName(), resource->GetSynonym(), ibPropertyValue(resource->GetMetaID()), resource->GetClassType());
 		}
 	}
 }
@@ -76,7 +76,7 @@ void ibPropertyCalcSchedule::GetScheduleDateList(const ibCalcScheduleDescription
 	if (const ibValueMetaObjectRegisterData* schedule = GetScheduleRegister(scheduleDesc)) {
 		for (const ibValueMetaObjectDimension* dimension : schedule->GetDimensionArrayObject()) {
 			if (!dimension->IsDeleted() && dimension->GetTypeDesc().ContainType(g_valueDateCLSID))
-				list.Add(dimension->GetMetaID(), dimension->GetName(), dimension->GetSynonym(), wxVariant(dimension->GetMetaID()), dimension->GetClassType());
+				list.Add(dimension->GetMetaID(), dimension->GetName(), dimension->GetSynonym(), ibPropertyValue(dimension->GetMetaID()), dimension->GetClassType());
 		}
 	}
 }
@@ -86,7 +86,7 @@ void ibPropertyCalcSchedule::GetScheduleLinkList(const ibCalcScheduleDescription
 	if (const ibValueMetaObjectRegisterData* schedule = GetScheduleRegister(scheduleDesc)) {
 		for (const ibValueMetaObjectDimension* dimension : schedule->GetDimensionArrayObject()) {
 			if (!dimension->IsDeleted() && dimension->GetMetaID() != scheduleDesc.GetDate())
-				list.Add(dimension->GetMetaID(), dimension->GetName(), dimension->GetSynonym(), wxVariant(dimension->GetMetaID()), dimension->GetClassType());
+				list.Add(dimension->GetMetaID(), dimension->GetName(), dimension->GetSynonym(), ibPropertyValue(dimension->GetMetaID()), dimension->GetClassType());
 		}
 	}
 }
@@ -107,7 +107,7 @@ void ibPropertyCalcSchedule::GetScheduleFieldList(ibMetaID dimension, ibProperty
 			return;
 		for (const ibClassID& clsid : field->GetTypeDesc().GetClsidList()) {
 			if (wanted.ContainType(clsid)) {
-				list.Add(field->GetMetaID(), field->GetName(), field->GetSynonym(), wxVariant(field->GetMetaID()), field->GetClassType());
+				list.Add(field->GetMetaID(), field->GetName(), field->GetSynonym(), ibPropertyValue(field->GetMetaID()), field->GetClassType());
 				return;
 			}
 		}
@@ -122,7 +122,7 @@ bool ibPropertyCalcSchedule::SetDataValue(const ibValue& varPropVal) { return fa
 
 bool ibPropertyCalcSchedule::GetDataValue(ibValue& pvarPropVal) const
 {
-	const ibString name = m_propValue.MakeString();
+	const ibString name = m_propValue.GetString();
 	pvarPropVal = ibValue(name);
 	return true;
 }

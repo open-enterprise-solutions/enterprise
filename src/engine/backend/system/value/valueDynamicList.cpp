@@ -771,7 +771,7 @@ bool ibValueDynamicList::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue
 
 // The form edits the list's OWN properties; when one changes (source / settings) the
 // list re-applies it. The "hook" is a virtual on the property-object, not a function ptr.
-void ibValueDynamicList::OnPropertyChanged(ibProperty* property, const wxVariant& /*oldValue*/, const wxVariant& /*newValue*/)
+void ibValueDynamicList::OnPropertyChanged(ibProperty* property, const ibPropertyValue& /*oldValue*/, const ibPropertyValue& /*newValue*/)
 {
 	// (The source and the settings are rebuilt in OnChildChanged — the change of a child is what
 	//  starts the update, and it travels on up to the holder from there.)

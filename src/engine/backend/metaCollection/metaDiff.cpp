@@ -14,31 +14,21 @@
 #include <wx/translation.h>
 
 namespace {
-// Convert a property's wxVariant value to a display string. wxVariant::
-// MakeString() returns raw bytes for non-string variant types (object
-// refs, binary blobs, custom types), which the dataview renders as
-// garbled characters in the left/right columns. Branch on the variant
-// type for the safe cases; for everything else, strip control
-// characters and cap the length so the row stays readable.
+// Convert a property's value to a display string. A live value's text
+// (a module, a binary blob) can carry control characters, which render as
+// garbage in the left/right columns: strip them and cap the length so the
+// row stays readable.
 ibString StringifyPropertyValue(const ibProperty* prop) {
 	if (prop == nullptr) return ibString();
 
-	const wxVariant& val = prop->GetValue();
-	if (val.IsNull()) return ibString();
+	const ibPropertyValue& val = prop->GetValue();
+	if (val.GetType() == ibValueTypes::TYPE_EMPTY) return ibString();
+	if (val.GetType() == ibValueTypes::TYPE_STRING) return val.GetString();
 
-	const ibString type = val.GetType();
-	if (type == ibT("string"))     return val.GetString();
-	if (type == ibT("long"))       return ibString::Format(ibT("%ld"), val.GetLong());
-	if (type == ibT("longlong"))   return ibString::Format(ibT("%lld"),
-		static_cast<long long>(val.GetLongLong().GetValue()));
-	if (type == ibT("double"))     return ibString::Format(ibT("%g"), val.GetDouble());
-	if (type == ibT("bool"))       return val.GetBool() ? ibT("true") : ibT("false");
-	if (type == ibT("datetime"))   return val.GetDateTime().FormatISOCombined();
-
-	// Unknown variant type — try MakeString and strip control bytes
-	// so the row stays printable. Truncate so a runaway blob doesn't
-	// push the right-side columns off-screen.
-	ibString raw = val.MakeString();
+	// Anything else — its text, control bytes stripped so the row stays
+	// printable, truncated so a runaway blob does not push the right-side
+	// columns off-screen.
+	ibString raw = val.GetString();
 	ibString clean;
 	clean.reserve(raw.length());
 	for (ibString::const_iterator it = raw.begin(); it != raw.end(); ++it) {
@@ -207,9 +197,8 @@ void ibMetaDiffWalker::WalkPair(
 				const ibString& propName = propLeft->GetName();
 				const ibProperty* propRight = right->GetProperty(propName);
 
-				// Safe stringifier — wxVariant::MakeString() on non-
-				// string types produces binary garbage that renders as
-				// kr akozyabry in the value columns.
+				// Safe stringifier — a live value's text can carry control
+				// bytes that render as garbage in the value columns.
 				const ibString leftStr = StringifyPropertyValue(propLeft);
 				const ibString rightStr = StringifyPropertyValue(propRight);
 

@@ -8,93 +8,93 @@
 
 ////////////////////////////////////////////////////////////////////////
 
-wxVariantData* ibPropertySource::CreateVariantData(const ibPropertyObject* property, const ibValueTypes& type)
+ibPropertyValue ibPropertySource::CreateVariantData(const ibPropertyObject* property, const ibValueTypes& type)
 {
 	return CreateVariantData(property, ibTypeDescription(ibValue::GetIDByVT(type)));
 }
 
-wxVariantData* ibPropertySource::CreateVariantData(const ibPropertyObject* property, const ibClassID& clsid)
+ibPropertyValue ibPropertySource::CreateVariantData(const ibPropertyObject* property, const ibClassID& clsid)
 {
 	return CreateVariantData(property, ibTypeDescription(clsid));
 }
 
-wxVariantData* ibPropertySource::CreateVariantData(const ibPropertyObject* property, const ibTypeDescription& typeDesc)
+ibPropertyValue ibPropertySource::CreateVariantData(const ibPropertyObject* property, const ibTypeDescription& typeDesc)
 {
 	const ibBackendTypeSourceFactory* propFactory = dynamic_cast<const ibBackendTypeSourceFactory*>(property);
 	if (propFactory == nullptr)
-		return nullptr;
-	return new ibVariantDataSource(propFactory, typeDesc);
+		return ibPropertyValue();
+	return ibPropertyValue(new ibPropertyValueSource(propFactory, typeDesc));
 }
 
-wxVariantData* ibPropertySource::CreateVariantData(const ibPropertyObject* property, const ibMetaID& id)
+ibPropertyValue ibPropertySource::CreateVariantData(const ibPropertyObject* property, const ibMetaID& id)
 {
 	const ibBackendTypeSourceFactory* propFactory = dynamic_cast<const ibBackendTypeSourceFactory*>(property);
 	if (propFactory == nullptr)
-		return nullptr;
-	return new ibVariantDataSource(propFactory, id);
+		return ibPropertyValue();
+	return ibPropertyValue(new ibPropertyValueSource(propFactory, id));
 }
 
-wxVariantData* ibPropertySource::CreateVariantData(const ibPropertyObject* property, const ibGuid& id, bool fillTypeDesc)
+ibPropertyValue ibPropertySource::CreateVariantData(const ibPropertyObject* property, const ibGuid& id, bool fillTypeDesc)
 {
 	const ibBackendTypeSourceFactory* propFactory = dynamic_cast<const ibBackendTypeSourceFactory*>(property);
 	if (propFactory == nullptr)
-		return nullptr;
-	return new ibVariantDataSource(propFactory, id, fillTypeDesc);
+		return ibPropertyValue();
+	return ibPropertyValue(new ibPropertyValueSource(propFactory, id, fillTypeDesc));
 }
 
-wxVariantData* ibPropertySource::CreateVariantData(const ibPropertyObject* property, const ibSourceDescription& desc)
+ibPropertyValue ibPropertySource::CreateVariantData(const ibPropertyObject* property, const ibSourceDescription& desc)
 {
 	const ibBackendTypeSourceFactory* propFactory = dynamic_cast<const ibBackendTypeSourceFactory*>(property);
 	if (propFactory == nullptr)
-		return nullptr;
-	return new ibVariantDataSource(propFactory, desc);
+		return ibPropertyValue();
+	return ibPropertyValue(new ibPropertyValueSource(propFactory, desc));
 }
 
 ////////////////////////////////////////////////////////////////////////
-ibMetaID ibPropertySource::GetValueAsSource() const { return get_cell_variant<ibVariantDataSource>()->GetSource(); }
-ibGuid ibPropertySource::GetValueAsSourceGuid() const { return get_cell_variant<ibVariantDataSource>()->GetSourceGuid(); }
-ibTypeDescription& ibPropertySource::GetValueAsTypeDesc(bool fillTypeDesc) const { return get_cell_variant<ibVariantDataSource>()->GetSourceTypeDesc(fillTypeDesc); }
+ibMetaID ibPropertySource::GetValueAsSource() const { return get_cell_variant<ibPropertyValueSource>()->GetSource(); }
+ibGuid ibPropertySource::GetValueAsSourceGuid() const { return get_cell_variant<ibPropertyValueSource>()->GetSourceGuid(); }
+ibTypeDescription& ibPropertySource::GetValueAsTypeDesc(bool fillTypeDesc) const { return get_cell_variant<ibPropertyValueSource>()->GetSourceTypeDesc(fillTypeDesc); }
 void ibPropertySource::SetValue(const ibMetaID& val) { m_propValue = CreateVariantData(m_owner, val); }
 void ibPropertySource::SetValue(const ibGuid& val, bool fillTypeDesc) { m_propValue = CreateVariantData(m_owner, val, fillTypeDesc); }
 void ibPropertySource::SetValue(const ibTypeDescription& val) { m_propValue = CreateVariantData(m_owner, val); }
 void ibPropertySource::SetValue(const ibSourceDescription& val) { m_propValue = CreateVariantData(m_owner, val); }
 ////////////////////////////////////////////////////////////////////////
 
-ibSourceDescription& ibPropertySource::GetValueAsSourceDesc() const { return get_cell_variant<ibVariantDataSource>()->GetSourceDesc(); }
-const std::vector<ibSourceHop>& ibPropertySource::GetValueAsPath() const { return get_cell_variant<ibVariantDataSource>()->GetSourceDesc().GetPath(); }
-ibString ibPropertySource::GetValueAsString() const { return m_propValue.MakeString(); }
+ibSourceDescription& ibPropertySource::GetValueAsSourceDesc() const { return get_cell_variant<ibPropertyValueSource>()->GetSourceDesc(); }
+const std::vector<ibSourceHop>& ibPropertySource::GetValueAsPath() const { return get_cell_variant<ibPropertyValueSource>()->GetSourceDesc().GetPath(); }
+ibString ibPropertySource::GetValueAsString() const { return m_propValue.GetString(); }
 ////////////////////////////////////////////////////////////////////////
 
 bool ibPropertySource::IsDotWalk() const
 {
 	// Cheap: the variant just measures the stored path length.
-	return get_cell_variant<ibVariantDataSource>()->IsDotWalk();
+	return get_cell_variant<ibPropertyValueSource>()->IsDotWalk();
 }
 ////////////////////////////////////////////////////////////////////////
 
 const ibBackendSourceColumn* ibPropertySource::GetSourceAttributeObject() const {
-	return get_cell_variant<ibVariantDataSource>()->GetSourceAttributeObject();
+	return get_cell_variant<ibPropertyValueSource>()->GetSourceAttributeObject();
 }
 
 std::vector<ibBackendFormAttributeValue*> ibPropertySource::GetSourceList() const {
 	// Via the variant (which holds the owning control's type factory) — same path
 	// as GetSourceAttributeObject; no dependency on the frontend control type.
 	std::vector<ibBackendFormAttributeValue*> out;
-	get_cell_variant<ibVariantDataSource>()->GetSourceList(out);
+	get_cell_variant<ibPropertyValueSource>()->GetSourceList(out);
 	return out;
 }
 
 ////////////////////////////////////////////////////////////////////////
 
 bool ibPropertySource::IsEmptyProperty() const {
-	return get_cell_variant<ibVariantDataSource>()->IsEmptySource();
+	return get_cell_variant<ibPropertyValueSource>()->IsEmptySource();
 }
 
 bool ibPropertySource::IsAvailable() const {
 	const ibPropertyObject* owner = m_owner;   // CONST overload — the non-const one returns null (see propertyObject.h)
 	if (owner == nullptr || !ibFunctionalOptionGate::AnyUnavailable(owner->GetMetaData()))
 		return true;
-	return get_cell_variant<ibVariantDataSource>()->IsSourceAvailable();
+	return get_cell_variant<ibPropertyValueSource>()->IsSourceAvailable();
 }
 
 ////////////////////////////////////////////////////////////////////////
@@ -134,7 +134,7 @@ static const unsigned char kTypeRaw = 0, kTypeMeta = 1;
 
 bool ibPropertySource::CopyNodeValue(ibDataValue& value) const
 {
-	const ibVariantDataSource* variant = get_cell_variant<ibVariantDataSource>();
+	const ibPropertyValueSource* variant = get_cell_variant<ibPropertyValueSource>();
 	const std::vector<ibSourceHop>& path = GetValueAsPath();
 	ibWriterMemory writer;
 	writer.w_u32((unsigned int)path.size());
@@ -161,7 +161,7 @@ bool ibPropertySource::PasteNodeValue(const ibDataValue& value)
 	const ibMemoryBuffer& data = value.AsBinary();
 	if (data.GetDataLen() == 0)
 		return true;
-	const ibVariantDataSource* variant = get_cell_variant<ibVariantDataSource>();
+	const ibPropertyValueSource* variant = get_cell_variant<ibPropertyValueSource>();
 	ibSourceDescription& desc = GetValueAsSourceDesc();
 	desc.ClearSource();
 	ibReaderMemory reader(data);
@@ -287,7 +287,7 @@ void AppendExplorerColumns(ibDataNode& parent, const ibSourceExplorer& explorer,
 
 bool ibPropertySource::GetProtocolValue(ibDataNode& row, ibReader reader)
 {
-	const ibBackendTypeSourceFactory* const factory = get_cell_variant<ibVariantDataSource>()->GetSourceFactory();
+	const ibBackendTypeSourceFactory* const factory = get_cell_variant<ibPropertyValueSource>()->GetSourceFactory();
 	const ibPropertyObject* const owner = m_owner;   // CONST: the non-const GetMetaData wxFAILs
 	const ibMetaData* const metaData = owner != nullptr ? owner->GetMetaData() : nullptr;
 
@@ -308,7 +308,7 @@ bool ibPropertySource::GetProtocolValue(ibDataNode& row, ibReader reader)
 			ibDataNode& sourceType = row.Child(ibProtocol::ibSchema::ibProperties::Value).Child(ibProtocol::ibSchema::ibProperties::SourceType);
 			sourceType.SetProperty(ibProtocol::ibSchema::ibProperties::Value, typeDesc);
 			sourceType.SetValue(ibProtocol::ibSchema::ibProperties::Presentation,
-				ibString(wxVariant(get_cell_variant<ibVariantDataSource>()->CloneSourceAttribute()).MakeString()));
+				ibPropertyValue(get_cell_variant<ibPropertyValueSource>()->CloneSourceAttribute()).GetString());
 			sourceType.SetValue(ibProtocol::ibSchema::ibProperties::Multiple, shape != ibSelectorDataType::ibSelectorDataType_table);
 
 			// …and the classes the desktop's Type row offered (GetTypesByFilter by the control's shape, with what it

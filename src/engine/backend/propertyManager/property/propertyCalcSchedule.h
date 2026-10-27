@@ -14,7 +14,7 @@ class ibValueMetaObjectRegisterData;
 // ⭐ WHAT EACH PART MAY BE IS ANSWERED HERE, and nowhere else: the inspector's rows and metadata_set_schedule both
 // ask. The fields a link may name are the owner register's own (GetScheduleFieldList).
 class BACKEND_API ibPropertyCalcSchedule : public ibProperty {
-	static wxVariantData* CreateVariantData(ibPropertyObject* property, const ibCalcScheduleDescription& scheduleDesc = ibCalcScheduleDescription());
+	static ibPropertyValue CreateVariantData(ibPropertyObject* property, const ibCalcScheduleDescription& scheduleDesc = ibCalcScheduleDescription());
 	const ibValueMetaObjectRegisterData* GetScheduleRegister(const ibCalcScheduleDescription& scheduleDesc) const;
 public:
 
@@ -46,7 +46,7 @@ public:
 protected:
 
 	// The family rule — a value arrives in whichever wrapper the caller was handed. See propertyRecord.h.
-	virtual void DoSetValue(const wxVariant& val) override;
+	virtual void DoSetValue(const ibPropertyValue& val) override;
 
 public:
 

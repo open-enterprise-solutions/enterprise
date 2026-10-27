@@ -7,12 +7,12 @@ void ibValueMetaObjectChartOfCalculationTypes::OnPropertyCreated(ibProperty* pro
 	ibValueMetaObjectRecordDataMutableRef::OnPropertyCreated(property);
 }
 
-bool ibValueMetaObjectChartOfCalculationTypes::OnPropertyChanging(ibProperty* property, const wxVariant& newValue)
+bool ibValueMetaObjectChartOfCalculationTypes::OnPropertyChanging(ibProperty* property, const ibPropertyValue& newValue)
 {
 	return ibValueMetaObjectRecordDataMutableRef::OnPropertyChanging(property, newValue);
 }
 
-void ibValueMetaObjectChartOfCalculationTypes::OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue)
+void ibValueMetaObjectChartOfCalculationTypes::OnPropertyChanged(ibProperty* property, const ibPropertyValue& oldValue, const ibPropertyValue& newValue)
 {
 	// The list edited in the designer types the sections now, not at the next run — see TypeBaseAndLeading.
 	if (property == m_propertyBaseCharts)

@@ -180,7 +180,7 @@ public:
 	*/
 	virtual void OnPropertyCreated(ibProperty* property);
 	virtual void OnPropertySelected(ibProperty* property);
-	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue);
+	virtual void OnPropertyChanged(ibProperty* property, const ibPropertyValue& oldValue, const ibPropertyValue& newValue);
 
 	//events:
 	virtual bool OnCreateMetaObject(ibMetaData* metaData, int flags);

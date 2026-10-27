@@ -210,8 +210,8 @@ bool ibFormDesignView::SetProperty(ibPropertyObject* object, const ibDataNode& r
 	// An event — the handler a form command runs (Action): its owner asked and told by the event's pair.
 	if (ibEvent* const event = object->GetEvent(name)) {
 		ibPropertyObject* const owner = event->GetPropertyObject();
-		const wxVariant oldValue = event->GetValue();
-		if (value->Kind() == ibDataKind::String && !owner->OnEventChanging(event, wxVariant(value->AsString().ToWxString())))
+		const ibPropertyValue oldValue = event->GetValue();
+		if (value->Kind() == ibDataKind::String && !owner->OnEventChanging(event, ibPropertyValue(value->AsString())))
 			return false;
 		if (!event->SetNodeValue(*value))
 			return false;
@@ -225,8 +225,8 @@ bool ibFormDesignView::SetProperty(ibPropertyObject* object, const ibDataNode& r
 	if (property == nullptr)
 		return false;
 	ibPropertyObject* const owner = property->GetPropertyObject();
-	const wxVariant oldValue = property->GetValue();
-	if (value->Kind() == ibDataKind::String && !owner->OnPropertyChanging(property, wxVariant(value->AsString().ToWxString())))
+	const ibPropertyValue oldValue = property->GetValue();
+	if (value->Kind() == ibDataKind::String && !owner->OnPropertyChanging(property, ibPropertyValue(value->AsString())))
 		return false;
 	if (!property->SetNodeValue(*value))
 		return false;

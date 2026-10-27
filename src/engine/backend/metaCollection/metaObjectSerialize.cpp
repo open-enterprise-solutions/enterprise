@@ -270,7 +270,7 @@ bool ibValueMetaObject::RunSubtree(int flags, ibRunPhase phase)
 	// ⭐ WHAT A PROPERTY DERIVES IS DERIVED HERE, ONCE — the choices of a list, the types a type description stands
 	// for, the fields a choice link names — in the resolve phase, its children resolved too, and the load sequential.
 	// Every session of the base reads this object; from now on such a read only reads (ibPropertyList,
-	// ibVariantDataAttribute, ibVariantDataChoiceLink).
+	// ibPropertyValueAttribute, ibPropertyValueChoiceLink).
 	if (phase == ibRunPhase::After) {
 		for (unsigned int idx = 0; idx < GetPropertyCount(); idx++) {
 			ibProperty* const property = GetPropertyByIndex(idx);

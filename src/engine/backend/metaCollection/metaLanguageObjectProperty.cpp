@@ -1,6 +1,6 @@
 #include "metaLanguageObject.h"
 
-bool ibValueMetaObjectLanguage::OnPropertyChanging(ibProperty* property, const wxVariant& newValue)
+bool ibValueMetaObjectLanguage::OnPropertyChanging(ibProperty* property, const ibPropertyValue& newValue)
 {
 	//if (m_propertyCode == property && m_propertyCode->IsEmptyProperty())
 	//	return false;

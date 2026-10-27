@@ -12,12 +12,12 @@ void ibValueModelTableBox::OnPropertyCreated(ibProperty* property)
 	//}
 }
 
-bool ibValueModelTableBox::OnPropertyChanging(ibProperty* property, const wxVariant& newValue)
+bool ibValueModelTableBox::OnPropertyChanging(ibProperty* property, const ibPropertyValue& newValue)
 {
 	return ibValueWindow::OnPropertyChanging(property, newValue);
 }
 
-void ibValueModelTableBox::OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue)
+void ibValueModelTableBox::OnPropertyChanged(ibProperty* property, const ibPropertyValue& oldValue, const ibPropertyValue& newValue)
 {
 	// A NEW SOURCE, A NEW MODEL. Whether the columns are refilled from it is the person's to answer — the
 	// columns may be hand-made — so it is not decided here: the question is the client's to put, and a yes

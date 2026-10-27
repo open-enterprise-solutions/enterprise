@@ -2,37 +2,25 @@
 #define __NUMBER_VARIANT_H__
 
 #include "backend/backend_core.h"
+#include "backend/propertyManager/propertyValue.h"
 
-class BACKEND_API ibVariantDataNumber : public wxVariantData {
-	wxString MakeString() const;
+class BACKEND_API ibPropertyValueNumber : public ibPropertyValue {
 public:
 
 	void SetNumber(const ibNumber& number) { m_number = number; }
 	ibNumber& GetNumber() { return m_number; }
 
-	ibVariantDataNumber(const ibNumber& number = 0.0f) : m_number(number) {}
+	ibPropertyValueNumber(const ibNumber& number = 0.0f) : ibPropertyValue(ibValueTypes::TYPE_VALUE), m_number(number) {}
 
-	virtual bool Eq(wxVariantData& data) const {
-		ibVariantDataNumber* srcData = dynamic_cast<ibVariantDataNumber*>(&data);
+	virtual bool CompareValueEQ(const ibPropertyValue& data) const override {
+		const ibPropertyValueNumber* srcData = dynamic_cast<const ibPropertyValueNumber*>(data.GetRef());
 		if (srcData != nullptr) {
-			return m_number == srcData->GetNumber();
+			return m_number == srcData->m_number;
 		}
 		return false;
 	}
 
-#if wxUSE_STD_IOSTREAM
-	virtual bool Write(wxSTD ostream& str) const {
-		str << MakeString();
-		return true;
-	}
-#endif
-
-	virtual bool Write(wxString& str) const {
-		str = MakeString();
-		return true;
-	}
-
-	virtual wxString GetType() const { return ibT("ibVariantDataNumber"); }
+	virtual ibString GetString() const override;
 
 private:
 	ibNumber m_number;

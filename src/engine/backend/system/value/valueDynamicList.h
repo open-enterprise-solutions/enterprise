@@ -276,7 +276,7 @@ public:
 	virtual ibString GetClassName() const override { return ibValue::GetClassName(); }
 	virtual ibString GetObjectTypeName() const override { return GetClassName(); }
 	virtual bool IsEditable() const override { return true; }
-	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue) override;
+	virtual void OnPropertyChanged(ibProperty* property, const ibPropertyValue& oldValue, const ibPropertyValue& newValue) override;
 	virtual void OnChildChanged() override;   // a source / settings change rebuilds the columns, then tells the holder
 	virtual bool ReadProperty(const ibDataNode& node) override;
 	virtual bool WriteProperty(ibDataNode& node) const override;

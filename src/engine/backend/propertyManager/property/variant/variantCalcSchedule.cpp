@@ -2,7 +2,7 @@
 
 #include "backend/metaData.h"
 
-wxString ibVariantDataCalcSchedule::MakeString() const
+ibString ibPropertyValueCalcSchedule::GetString() const
 {
 	if (!m_scheduleDesc.IsOk() || m_ownerProperty == nullptr)
 		return ibEmptyString;

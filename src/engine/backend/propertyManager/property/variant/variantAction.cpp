@@ -1,6 +1,6 @@
 #include "variantAction.h"
 
-wxString ibVariantDataAction::MakeString() const
+ibString ibPropertyValueAction::GetString() const
 {
 	return m_actionData.GetCustomAction();
 }

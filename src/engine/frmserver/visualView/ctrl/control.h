@@ -28,8 +28,8 @@ class FRMSERVER_API ibValueControl : public ibValueFrame {
 	/**
 	* Property events
 	*/
-	virtual bool OnPropertyChanging(ibProperty* property, const wxVariant& newValue);
-	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue);
+	virtual bool OnPropertyChanging(ibProperty* property, const ibPropertyValue& newValue);
+	virtual void OnPropertyChanged(ibProperty* property, const ibPropertyValue& oldValue, const ibPropertyValue& newValue);
 
 	/**
 	* Support form

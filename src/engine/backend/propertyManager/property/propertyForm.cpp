@@ -8,31 +8,31 @@
 
 ////////////////////////////////////////////////////////////////////////
 
-wxVariantData* ibPropertyForm::CreateVariantData()
+ibPropertyValue ibPropertyForm::CreateVariantData()
 {
-	return new ibVariantDataForm();
+	return ibPropertyValue(new ibPropertyValueForm());
 }
 
 ////////////////////////////////////////////////////////////////////////
 
 ibString ibPropertyForm::GetValueAsString() const
 {
-	return get_cell_variant<ibVariantDataForm>()->GetModuleText();
+	return get_cell_variant<ibPropertyValueForm>()->GetModuleText();
 }
 
 ibMemoryBuffer& ibPropertyForm::GetValueAsMemoryBuffer() const
 {
-	return get_cell_variant<ibVariantDataForm>()->GetFormData();
+	return get_cell_variant<ibPropertyValueForm>()->GetFormData();
 }
 
 void ibPropertyForm::SetValue(const ibString& val)
 {
-	get_cell_variant<ibVariantDataForm>()->SetModuleText(val);
+	get_cell_variant<ibPropertyValueForm>()->SetModuleText(val);
 }
 
 void ibPropertyForm::SetValue(const ibMemoryBuffer& val)
 {
-	get_cell_variant<ibVariantDataForm>()->SetFormData(val);
+	get_cell_variant<ibPropertyValueForm>()->SetFormData(val);
 }
 
 ////////////////////////////////////////////////////////////////////////

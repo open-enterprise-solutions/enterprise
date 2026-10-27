@@ -3,22 +3,21 @@
 
 #include "variantModule.h"
 
-class BACKEND_API ibVariantDataForm : public ibVariantDataModule {
-	wxString MakeString() const;
+class BACKEND_API ibPropertyValueForm : public ibPropertyValueModule {
 public:
 
 	//set form code 
 	void SetFormData(const ibMemoryBuffer& formData) { m_formData = formData; }
 	ibMemoryBuffer& GetFormData() { return m_formData; }
 
-	ibVariantDataForm(
+	ibPropertyValueForm(
 		const ibMemoryBuffer& memory = ibMemoryBuffer(),
 		const ibString& moduleData = ibEmptyString
-	) : ibVariantDataModule(moduleData), m_formData(memory) {
+	) : ibPropertyValueModule(moduleData), m_formData(memory) {
 	}
 
-	virtual bool Eq(wxVariantData& data) const {
-		ibVariantDataForm* srcData = dynamic_cast<ibVariantDataForm*>(&data);
+	virtual bool CompareValueEQ(const ibPropertyValue& data) const override {
+		const ibPropertyValueForm* srcData = dynamic_cast<const ibPropertyValueForm*>(data.GetRef());
 		if (srcData != nullptr) {
 			return m_moduleData == srcData->m_moduleData &&
 				std::memcmp(m_formData.GetData(), srcData->m_formData.GetData(), m_formData.GetDataLen()) == 0 && 
@@ -27,19 +26,7 @@ public:
 		return false;
 	}
 
-#if wxUSE_STD_IOSTREAM
-	virtual bool Write(wxSTD ostream& str) const {
-		str << MakeString();
-		return true;
-	}
-#endif
-
-	virtual bool Write(wxString& str) const {
-		str = MakeString();
-		return true;
-	}
-
-	virtual wxString GetType() const { return ibT("ibVariantDataForm"); }
+	virtual ibString GetString() const override;
 
 private:
 	ibMemoryBuffer m_formData;

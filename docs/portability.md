@@ -500,6 +500,7 @@ observer:
 | `CheckIndex` declared `inline`, defined in a `.cpp`, called from a header | a promise no TU could keep |
 | three `SetPropVal` overrides missing the base's `const` | not overrides at all — they HID the virtual |
 | `wxVariant(m_selected[idx])` over a `std::vector<bool>` | indexing yields a PROXY; libc++ finds the conversion ambiguous |
+| `(cat, name, _(label), _(help))` beside a `(cat, name, label, bool)` constructor | a wxString converts to a pointer and a pointer to a bool: GCC and Clang call it ambiguous, MSVC picks one — the flag as an `ibBoolean` drops out |
 | two `wxCharts` include guards checking one macro and defining another | the header is not guarded at all |
 
 **The noise mattered as much as the findings.** The first macOS run produced 67,318 warning

@@ -177,7 +177,7 @@ public:
 	// Single interception point (the holder is what the inspector selects): forward the change
 	// to the property's REAL owner (attribute / value — each reacts to its own), and on the
 	// attribute's Type change re-materialise the value + re-accumulate.
-	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue) override;
+	virtual void OnPropertyChanged(ibProperty* property, const ibPropertyValue& oldValue, const ibPropertyValue& newValue) override;
 	// A nested value (a value-table column-info) changed — the holder is the frontend end of the attach
 	// chain, so it re-renders the bound control live.
 	virtual void OnChildChanged() override;

@@ -5,9 +5,9 @@
 
 //////////////////////////////////////////////////////////////////
 
-wxVariantData* ibEventAction::CreateVariantData(const ibPropertyObject* property, const ibStandardCommandDescription& act)
+ibPropertyValue ibEventAction::CreateVariantData(const ibPropertyObject* property, const ibStandardCommandDescription& act)
 {
-	return new ibVariantDataAction(act);
+	return ibPropertyValue(new ibPropertyValueAction(act));
 }
 
 ////////////////////////////////////////////////////////////////////////
@@ -31,7 +31,7 @@ ibString ibEventAction::GetValueAsString() const
 
 ibStandardCommandDescription& ibEventAction::GetValueAsActionDesc() const
 {
-	return get_cell_variant<ibVariantDataAction>()->GetValueAsActionDesc();
+	return get_cell_variant<ibPropertyValueAction>()->GetValueAsActionDesc();
 }
 
 void ibEventAction::SetValue(const ibStandardCommandDescription& val)

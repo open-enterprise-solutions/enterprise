@@ -6,9 +6,9 @@
 
 //base property for "type"
 class BACKEND_API ibPropertyType : public ibProperty {
-	static wxVariantData* CreateVariantData(ibPropertyObject* property, const ibValueTypes type);
-	static wxVariantData* CreateVariantData(ibPropertyObject* property, const ibClassID& clsid);
-	static wxVariantData* CreateVariantData(ibPropertyObject* property, const ibTypeDescription& typeDesc);
+	static ibPropertyValue CreateVariantData(ibPropertyObject* property, const ibValueTypes type);
+	static ibPropertyValue CreateVariantData(ibPropertyObject* property, const ibClassID& clsid);
+	static ibPropertyValue CreateVariantData(ibPropertyObject* property, const ibTypeDescription& typeDesc);
 public:
 
 	ibTypeDescription& GetValueAsTypeDesc() const;

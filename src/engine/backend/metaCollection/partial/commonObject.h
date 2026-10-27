@@ -1055,8 +1055,8 @@ protected:
 	*/
 	virtual void OnPropertyCreated(ibProperty* property);
 	virtual void OnPropertyRefresh() override;
-	virtual bool OnPropertyChanging(ibProperty* property, const wxVariant& newValue);
-	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue);
+	virtual bool OnPropertyChanging(ibProperty* property, const ibPropertyValue& newValue);
+	virtual void OnPropertyChanged(ibProperty* property, const ibPropertyValue& oldValue, const ibPropertyValue& newValue);
 
 	// Declare the record's main table + its tabular-section tables into the structure snapshot.
 	virtual void ContributeTables(ibSchemaSnapshot& out) const override;
@@ -1586,7 +1586,7 @@ class BACKEND_API ibValueMetaObjectRecordDataHierarchyMutableRef :
 
 protected:
 
-	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue) override;
+	virtual void OnPropertyChanged(ibProperty* property, const ibPropertyValue& oldValue, const ibPropertyValue& newValue) override;
 
 	// Declare the main table (via the base) + the predefined values as its SEED rows (cells keyed by
 	// column id; the builder diffs by uuid + cells).

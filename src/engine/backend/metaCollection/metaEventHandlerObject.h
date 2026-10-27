@@ -88,7 +88,7 @@ public:
 	virtual bool CollectContextMenu(std::vector<ibMetaMenuItem>& items) override;
 
 	// A new source or a new event prepares the module for the procedure that now applies.
-	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue) override;
+	virtual void OnPropertyChanged(ibProperty* property, const ibPropertyValue& oldValue, const ibPropertyValue& newValue) override;
 
 	//lifecycle — forward to the inner module (its own registration)
 	virtual bool OnCreateMetaObject(ibMetaData* metaData, int flags);

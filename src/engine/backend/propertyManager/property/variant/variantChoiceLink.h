@@ -1,20 +1,20 @@
 #ifndef __CHOICE_LINK_VARIANT_H__
 #define __CHOICE_LINK_VARIANT_H__
 
+#include "backend/propertyManager/propertyValue.h"
 #include "backend/propertyManager/propertyObject.h"
 #include "core/description/choiceLinkDescription.h"
 
 #include <atomic>
 #include <mutex>
 
-// The variant of a link by type — it holds an ibChoiceTypeLinkDescription, as ibVariantDataCalcSchedule
-// holds a schedule and ibVariantDataAttribute holds a type description.
-class BACKEND_API ibVariantDataChoiceLink : public wxVariantData {
-	wxString MakeString() const;
+// The variant of a link by type — it holds an ibChoiceTypeLinkDescription, as ibPropertyValueCalcSchedule
+// holds a schedule and ibPropertyValueAttribute holds a type description.
+class BACKEND_API ibPropertyValueChoiceLink : public ibPropertyValue {
 public:
 
-	ibVariantDataChoiceLink(const ibPropertyObject* prop, const ibChoiceTypeLinkDescription& linkDesc = ibChoiceTypeLinkDescription())
-		: wxVariantData(), m_ownerProperty(prop), m_linkDesc(linkDesc) {}
+	ibPropertyValueChoiceLink(const ibPropertyObject* prop, const ibChoiceTypeLinkDescription& linkDesc = ibChoiceTypeLinkDescription())
+		: ibPropertyValue(ibValueTypes::TYPE_VALUE), m_ownerProperty(prop), m_linkDesc(linkDesc) {}
 
 	ibChoiceTypeLinkDescription& GetLinkDesc() { RefreshLinkDesc(); return m_linkDesc; }
 	const ibChoiceTypeLinkDescription& GetLinkDesc() const { RefreshLinkDesc(); return m_linkDesc; }
@@ -25,52 +25,40 @@ public:
 
 	const ibPropertyObject* GetOwnerProperty() const { return m_ownerProperty; }
 
-	virtual bool Eq(wxVariantData& data) const override {
-		const ibVariantDataChoiceLink* other = dynamic_cast<const ibVariantDataChoiceLink*>(&data);
+	virtual bool CompareValueEQ(const ibPropertyValue& data) const override {
+		const const ibPropertyValueChoiceLink* other = dynamic_cast<const ibPropertyValueChoiceLink*>(data.GetRef());
 		return other != nullptr && GetLinkDesc() == other->GetLinkDesc();
 	}
 
-	virtual ibVariantDataChoiceLink* Clone() const override {
-		return new ibVariantDataChoiceLink(m_ownerProperty, GetLinkDesc());
+	virtual ibPropertyValueChoiceLink* Clone() const {
+		return new ibPropertyValueChoiceLink(m_ownerProperty, GetLinkDesc());
 	}
 
-#if wxUSE_STD_IOSTREAM
-	virtual bool Write(wxSTD ostream& str) const override {
-		str << MakeString();
-		return true;
-	}
-#endif
 	// The governing field's name — what the inspector shows on the row. Empty when nothing governs it.
-	virtual bool Write(wxString& str) const override {
-		str = MakeString();
-		return true;
-	}
-
-	virtual wxString GetType() const override { return ibT("ibVariantDataChoiceLink"); }
+	virtual ibString GetString() const override;
 
 protected:
 
 	// ⭐ A LINK TO A FIELD THAT IS GONE IS DROPPED BY THE VALUE ITSELF — the way a type description drops a
-	// type whose object is gone (ibVariantDataAttribute::GetTypeDesc), and asked on the same counter, so a
+	// type whose object is gone (ibPropertyValueAttribute::GetTypeDesc), and asked on the same counter, so a
 	// configuration that does not change pays once.
 	void RefreshLinkDesc() const;
 
 	const ibPropertyObject*              m_ownerProperty;
 	mutable ibChoiceTypeLinkDescription  m_linkDesc;
 	// One refresh at a time, the version asked again inside the lock — read by every session of the base
-	// (ibVariantDataAttribute, the same counter and the same race).
+	// (ibPropertyValueAttribute, the same counter and the same race).
 	mutable std::atomic<unsigned int>    m_object_version { 0 };
 	mutable std::mutex                   m_refreshMutex;
 };
 
 // The variant of the choice parameters — the table beside the link by type, in the same shape. Kept in
 // this file because it is the same subject: what narrows the choice of a field.
-class BACKEND_API ibVariantDataChoiceParameters : public wxVariantData {
-	wxString MakeString() const;
+class BACKEND_API ibPropertyValueChoiceParameters : public ibPropertyValue {
 public:
 
-	ibVariantDataChoiceParameters(const ibPropertyObject* prop, const ibChoiceParametersDescription& paramsDesc = ibChoiceParametersDescription())
-		: wxVariantData(), m_ownerProperty(prop), m_paramsDesc(paramsDesc) {}
+	ibPropertyValueChoiceParameters(const ibPropertyObject* prop, const ibChoiceParametersDescription& paramsDesc = ibChoiceParametersDescription())
+		: ibPropertyValue(ibValueTypes::TYPE_VALUE), m_ownerProperty(prop), m_paramsDesc(paramsDesc) {}
 
 	ibChoiceParametersDescription& GetParametersDesc() { RefreshParametersDesc(); return m_paramsDesc; }
 	const ibChoiceParametersDescription& GetParametersDesc() const { RefreshParametersDesc(); return m_paramsDesc; }
@@ -81,27 +69,16 @@ public:
 
 	const ibPropertyObject* GetOwnerProperty() const { return m_ownerProperty; }
 
-	virtual bool Eq(wxVariantData& data) const override {
-		const ibVariantDataChoiceParameters* other = dynamic_cast<const ibVariantDataChoiceParameters*>(&data);
+	virtual bool CompareValueEQ(const ibPropertyValue& data) const override {
+		const const ibPropertyValueChoiceParameters* other = dynamic_cast<const ibPropertyValueChoiceParameters*>(data.GetRef());
 		return other != nullptr && GetParametersDesc() == other->GetParametersDesc();
 	}
 
-	virtual ibVariantDataChoiceParameters* Clone() const override {
-		return new ibVariantDataChoiceParameters(m_ownerProperty, GetParametersDesc());
+	virtual ibPropertyValueChoiceParameters* Clone() const {
+		return new ibPropertyValueChoiceParameters(m_ownerProperty, GetParametersDesc());
 	}
 
-#if wxUSE_STD_IOSTREAM
-	virtual bool Write(wxSTD ostream& str) const override {
-		str << MakeString();
-		return true;
-	}
-#endif
-	virtual bool Write(wxString& str) const override {
-		str = MakeString();
-		return true;
-	}
-
-	virtual wxString GetType() const override { return ibT("ibVariantDataChoiceParameters"); }
+	virtual ibString GetString() const override;
 
 protected:
 

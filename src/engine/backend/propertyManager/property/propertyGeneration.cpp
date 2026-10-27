@@ -5,14 +5,14 @@
 
 /////////////////////////////////////////////////////////////////////
 
-wxVariantData* ibPropertyGeneration::CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc)
+ibPropertyValue ibPropertyGeneration::CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc)
 {
 	// No cast: the variant needs the owner only to reach GetMetaData, which ibPropertyObject answers.
-	return new ibVariantDataGeneration(property, typeDesc);
+	return ibPropertyValue(new ibPropertyValueGeneration(property, typeDesc));
 }
 
 ibMetaDescription& ibPropertyGeneration::GetValueAsMetaDesc() const {
-	return get_cell_variant<ibVariantDataMetaDesc>()->GetMetaDesc();
+	return get_cell_variant<ibPropertyValueMetaDesc>()->GetMetaDesc();
 }
 
 void ibPropertyGeneration::SetValue(const ibMetaDescription& val)
@@ -22,13 +22,13 @@ void ibPropertyGeneration::SetValue(const ibMetaDescription& val)
 
 // See propertyRecord.cpp: the description is right and the wrapper is the neighbour's, so it is
 // taken apart and re-wrapped here, where the class this property holds is known.
-void ibPropertyGeneration::DoSetValue(const wxVariant& val)
+void ibPropertyGeneration::DoSetValue(const ibPropertyValue& val)
 {
 	// Unconditionally, and that is the point: "is this already mine" is a question worth not
 	// asking. A relationship IS its description, so taking it out and wrapping it in this
 	// property's own class is right whichever wrapper it arrived in - and costs one copy of a
 	// short list of ids.
-	if (const ibVariantDataMetaDesc* carried = find_cell_variant<ibVariantDataMetaDesc>(val)) {
+	if (const ibPropertyValueMetaDesc* carried = find_cell_variant<ibPropertyValueMetaDesc>(val)) {
 		SetValue(carried->GetMetaDesc());
 		return;
 	}
@@ -58,7 +58,7 @@ bool ibPropertyGeneration::SetDataValue(const ibValue& varPropVal)
 
 bool ibPropertyGeneration::GetDataValue(ibValue& pvarPropVal) const
 {
-	const ibVariantDataGeneration* gen = get_cell_variant<ibVariantDataGeneration>();
+	const ibPropertyValueGeneration* gen = get_cell_variant<ibPropertyValueGeneration>();
 	wxASSERT(gen);
 	pvarPropVal = gen->GetDataValue();
 	return true;

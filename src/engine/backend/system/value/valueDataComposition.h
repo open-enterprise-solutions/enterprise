@@ -375,7 +375,7 @@ public:
 	virtual ibString GetClassName() const override { return ibValue::GetClassName(); }
 	virtual ibString GetObjectTypeName() const override { return GetClassName(); }
 	virtual bool IsEditable() const override { return true; }
-	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue) override;
+	virtual void OnPropertyChanged(ibProperty* property, const ibPropertyValue& oldValue, const ibPropertyValue& newValue) override;
 	// ⭐ ONLY THE SETTINGS SHOW IN THE INSPECTOR (Max, 2026-08-19: "a composer has nothing but its
 	// settings"). The SOURCE and the QUERY TEXT stay as properties — they are serialised, and a
 	// generated report form sets them — but they are not offered beside "Settings...", because a
@@ -392,7 +392,7 @@ public:
 	// two only carry the pieces across. Public because a composition is also SAVED TO A FILE: describe
 	// it, hand the node to a provider (ibJsonProvider for JSON, ibBinaryProvider for bytes), and read
 	// it back the same way.
-	// ⚠ BY REFERENCE, always — the shape ibVariantDataAttribute::GetTypeDesc has. The description is
+	// ⚠ BY REFERENCE, always — the shape ibPropertyValueAttribute::GetTypeDesc has. The description is
 	// what this composition IS, not a copy made on request: a caller edits it in place and saves it,
 	// and a returned copy would be a second answer going stale the moment it was handed over.
 	// …AND IT LIVES IN THE "Settings" PROPERTY, exactly as a list's does in its own — the value is got

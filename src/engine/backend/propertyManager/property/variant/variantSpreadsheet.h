@@ -1,39 +1,27 @@
 #ifndef __TEMPLATE_VARIANT_H__
 #define __TEMPLATE_VARIANT_H__
 
+#include "backend/propertyManager/propertyValue.h"
 #include "backend/propertyManager/propertyObject.h"
 #include "core/description/spreadsheetDescription.h"
 
-class BACKEND_API ibVariantDataSpreadsheet : public wxVariantData {
-	wxString MakeString() const;
+class BACKEND_API ibPropertyValueSpreadsheet : public ibPropertyValue {
 public:
 
 	bool IsEmptySpreadsheet() const { return m_spreadsheetDesc.IsEmptySpreadsheet(); }
 
 	ibSpreadsheetDescription& GetSpreadsheetDesc() { return m_spreadsheetDesc; }
 
-	ibVariantDataSpreadsheet(const ibSpreadsheetDescription& val) : wxVariantData(), m_spreadsheetDesc(val) {}
+	ibPropertyValueSpreadsheet(const ibSpreadsheetDescription& val) : ibPropertyValue(ibValueTypes::TYPE_VALUE), m_spreadsheetDesc(val) {}
 
-	virtual bool Eq(wxVariantData& data) const {
-		ibVariantDataSpreadsheet* srcData = dynamic_cast<ibVariantDataSpreadsheet*>(&data);
+	virtual bool CompareValueEQ(const ibPropertyValue& data) const override {
+		const ibPropertyValueSpreadsheet* srcData = dynamic_cast<const ibPropertyValueSpreadsheet*>(data.GetRef());
 		if (srcData != nullptr)
 			return srcData->m_spreadsheetDesc == m_spreadsheetDesc;
 		return false;
 	}
 
-#if wxUSE_STD_IOSTREAM
-	virtual bool Write(wxSTD ostream& str) const {
-		str << MakeString();
-		return true;
-	}
-#endif
-
-	virtual bool Write(wxString& str) const {
-		str = MakeString();
-		return true;
-	}
-
-	virtual wxString GetType() const { return ibT("ibVariantDataSpreadsheet"); }
+	virtual ibString GetString() const override;
 
 private:
 	ibSpreadsheetDescription m_spreadsheetDesc;

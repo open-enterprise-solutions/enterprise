@@ -26,7 +26,7 @@ class BACKEND_API ibValueMetaObjectLanguage : public ibValueMetaObject {
 	/**
 	* Property events
 	*/
-	virtual bool OnPropertyChanging(ibProperty* property, const wxVariant& newValue);
+	virtual bool OnPropertyChanging(ibProperty* property, const ibPropertyValue& newValue);
 
 protected:
 

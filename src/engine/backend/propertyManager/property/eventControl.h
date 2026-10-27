@@ -11,17 +11,17 @@ class BACKEND_API ibEventControl : public ibEvent {
 public:
 
 	ibEventControl(ibPropertyCategory* cat, const ibString& name, const std::vector<ibString>& args)
-		: ibEvent(cat, name, args, ibT(""))
+		: ibEvent(cat, name, args, ibPropertyValue(ibString()))
 	{
 	}
 
 	ibEventControl(ibPropertyCategory* cat, const ibString& name, const ibString& label, const std::vector<ibString>& args)
-		: ibEvent(cat, name, label, args, ibT(""))
+		: ibEvent(cat, name, label, args, ibPropertyValue(ibString()))
 	{
 	}
 
 	ibEventControl(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString, const std::vector<ibString>& args)
-		: ibEvent(cat, name, label, helpString, args, ibT(""))
+		: ibEvent(cat, name, label, helpString, args, ibPropertyValue(ibString()))
 	{
 	}
 
@@ -42,7 +42,7 @@ public:
 
 protected:
 	// A value (name) edit drops the cached dispatcher so GetDispatcher rebuilds the named one from the new name.
-	virtual void DoSetValue(const wxVariant& val) override;
+	virtual void DoSetValue(const ibPropertyValue& val) override;
 
 	// The held dispatcher value: an ibValueEvent (named, materialised from the name) or an ibValueFunction (a lambda
 	// assigned from script). Mutable — GetDispatcher materialises the named one lazily. Kept alive here for its facet.

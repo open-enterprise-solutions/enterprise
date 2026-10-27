@@ -77,6 +77,8 @@
 #include "backend/session/session.h"           // DISABLED_CallCost — what a frame asks for
 #include "backend/system/value/valueArray.h"   // DISABLED_TypeCheckCost
 #include "backend/system/value/valueJson.h"    // JsonBench
+#include "backend/metadataConfiguration.h"     // MetadataBench — a configuration in memory
+#include "backend/metaCollection/metaObject.h" // MetadataBench — g_metaCatalogCLSID, GetName
 #include <nlohmann/json.hpp>                   // JsonBench - the native baseline
 
 namespace {
@@ -512,6 +514,49 @@ TEST(RuntimeBench, DISABLED_DateLoop) {
     volatile int64_t u = 0;
     const double baseTot = BestTotalNs(5, [&]{ u = start.GetValue(); for (long i = 0; i < n; ++i) u += 60000; g_sink += (uint64_t)u; });
     Row("date shift (ns/iter)", oesTot / double(n), baseTot / double(n), "ns", oesTot, baseTot);
+    SUCCEED();
+}
+
+// --- a metadata object's name, and a configuration read back ---------------
+//
+// What the wxVariant inside a property costs: GetName() turns the variant into a wxString and that into an ibString,
+// every call. The native column is a name held as an ibString and read by reference — what the property gives back
+// once it holds its value itself. The load reads 200 catalogs of 10 attributes from a buffer: the configuration's
+// opening without a base.
+//
+//   oes_tests --gtest_also_run_disabled_tests --gtest_filter=MetadataBench.*
+TEST(MetadataBench, DISABLED_GetNameAndLoad) {
+    ibMetaDataConfigurationFile cfg;
+    ibValueMetaObjectConfiguration* root = cfg.GetCommonMetaObject();
+    ASSERT_NE(nullptr, root);
+    for (int c = 0; c < 200; ++c) {
+        ibValueMetaObject* catalog = cfg.CreateMetaObject(g_metaCatalogCLSID, root, /*runObject*/ false);
+        ASSERT_NE(nullptr, catalog);
+        cfg.RenameMetaObject(catalog, ibString::Format(wxT("Catalog%d"), c));
+        for (int a = 0; a < 10; ++a) {
+            ibValueMetaObject* attribute = cfg.CreateMetaObject(g_metaAttributeCLSID, catalog, /*runObject*/ false);
+            ASSERT_NE(nullptr, attribute);
+            cfg.RenameMetaObject(attribute, ibString::Format(wxT("Attribute%d"), a));
+        }
+    }
+    ibValueMetaObject* const named = root->GetChild(root->GetChildCount() - 1);
+    const ibString held = named->GetName();
+
+    const long n = 1000000;
+    const double oes = TimeNsPerOp(n, [&](long) { g_sink += (uint64_t)named->GetName().length(); });
+    const double base = TimeNsPerOp(n, [&](long) { const ibString& name = held; g_sink += (uint64_t)name.length(); });
+    Row("GetName (ns/call)", oes, base, "ns");
+    RowOes("GetName == name (ns)", TimeNsPerOp(n, [&](long) { g_sink += (uint64_t)(named->GetName() == held); }), "ns");
+
+    ibMemoryBuffer saved;
+    ASSERT_TRUE(cfg.SaveConfigToBuffer(saved));
+    const double load = BestTotalNs(5, [&] {
+        ibMetaDataConfigurationFile loaded;
+        if (!loaded.LoadConfigFromBuffer(saved))
+            ADD_FAILURE() << "the configuration did not load back";
+        g_sink += (uint64_t)loaded.GetCommonMetaObject()->GetChildCount();
+    });
+    RowOes("load 200x10 (ms)", load / 1e6, "ms", load);
     SUCCEED();
 }
 

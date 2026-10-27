@@ -2,7 +2,7 @@
 
 #include <wx/filename.h>
 
-wxString ibVariantDataExternalPicture::MakeString() const
+ibString ibPropertyValueExternalPicture::GetString() const
 {
 	if (IsEmptyPicture())
 		return ibEmptyString;
@@ -11,17 +11,17 @@ wxString ibVariantDataExternalPicture::MakeString() const
 	return fn.GetFullName();
 }
 
-ibString ibVariantDataExternalPicture::GetPictureFileName() const
+ibString ibPropertyValueExternalPicture::GetPictureFileName() const
 {
 	return ibString::FromUTF8(m_pictureExternalFile.m_img_name);
 }
 
-ibPicture ibVariantDataExternalPicture::GetPicture(const ibSize& size) const
+ibPicture ibPropertyValueExternalPicture::GetPicture(const ibSize& size) const
 {
 	return ibBackendPicture::CreatePicture(m_pictureExternalFile, size);
 }
 
-wxString ibVariantDataPicture::MakeString() const
+ibString ibPropertyValuePicture::GetString() const
 {
 	if (m_pictureDesc.m_type == ibPictureType::eFromBackend)
 		return _("Backend picture");
@@ -33,7 +33,7 @@ wxString ibVariantDataPicture::MakeString() const
 	return ibEmptyString;
 }
 
-ibPicture ibVariantDataPicture::GetPicture(const ibSize& size) const
+ibPicture ibPropertyValuePicture::GetPicture(const ibSize& size) const
 {
 	return ibBackendPicture::CreatePicture(m_pictureDesc,
 		m_ownerProperty != nullptr ? m_ownerProperty->GetMetaData() : nullptr, size);

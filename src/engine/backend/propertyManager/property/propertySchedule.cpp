@@ -2,14 +2,14 @@
 #include "core/serialize/dataBuilder.h"
 #include "backend/propertyManager/property/variant/variantSchedule.h"
 
-wxVariantData* ibPropertySchedule::CreateVariantData(const ibJobScheduleDescription& schedule)
+ibPropertyValue ibPropertySchedule::CreateVariantData(const ibJobScheduleDescription& schedule)
 {
-	return new ibVariantDataSchedule(schedule);
+	return ibPropertyValue(new ibPropertyValueSchedule(schedule));
 }
 
 ibJobScheduleDescription& ibPropertySchedule::GetValueAsSchedule() const
 {
-	return get_cell_variant<ibVariantDataSchedule>()->GetSchedule();
+	return get_cell_variant<ibPropertyValueSchedule>()->GetSchedule();
 }
 
 void ibPropertySchedule::SetValue(const ibJobScheduleDescription& schedule)

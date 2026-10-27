@@ -2,6 +2,7 @@
 #define __POINT_VARIANT_H__
 
 #include "backend/backend_core.h"
+#include "backend/propertyManager/propertyValue.h"
 #include "core/graphics/geometry.h"   // ibPoint — the point, as data
 
 // A point in a variant, our own.
@@ -9,38 +10,25 @@
 // wxWidgets does ship one — WX_PG_DECLARE_VARIANT_DATA_EXPORTED(wxPoint) in
 // wx/propgrid/propgriddefs.h, reachable through `variant << point`. But it belongs to
 // PROPGRID: using it made the backend property layer depend on the editor library for a
-// pair of ints. Same shape as ibVariantDataNumber — data in the variant, Eq for change
+// pair of ints. Same shape as ibPropertyValueNumber — data in the variant, Eq for change
 // detection and diff (docs/private/property-system.md §3, §6.1).
-class BACKEND_API ibVariantDataPoint : public wxVariantData {
-	wxString MakeString() const;
+class BACKEND_API ibPropertyValuePoint : public ibPropertyValue {
 public:
 
 	void SetPoint(const ibPoint& point) { m_point = point; }
 	ibPoint& GetPoint() { return m_point; }
 
-	ibVariantDataPoint(const ibPoint& point = ibDefaultPosition) : m_point(point) {}
+	ibPropertyValuePoint(const ibPoint& point = ibDefaultPosition) : ibPropertyValue(ibValueTypes::TYPE_VALUE), m_point(point) {}
 
-	virtual bool Eq(wxVariantData& data) const {
-		ibVariantDataPoint* srcData = dynamic_cast<ibVariantDataPoint*>(&data);
+	virtual bool CompareValueEQ(const ibPropertyValue& data) const override {
+		const ibPropertyValuePoint* srcData = dynamic_cast<const ibPropertyValuePoint*>(data.GetRef());
 		if (srcData != nullptr) {
-			return m_point == srcData->GetPoint();
+			return m_point == srcData->m_point;
 		}
 		return false;
 	}
 
-#if wxUSE_STD_IOSTREAM
-	virtual bool Write(wxSTD ostream& str) const {
-		str << MakeString();
-		return true;
-	}
-#endif
-
-	virtual bool Write(wxString& str) const {
-		str = MakeString();
-		return true;
-	}
-
-	virtual wxString GetType() const { return ibT("ibVariantDataPoint"); }
+	virtual ibString GetString() const override;
 
 private:
 	ibPoint m_point;

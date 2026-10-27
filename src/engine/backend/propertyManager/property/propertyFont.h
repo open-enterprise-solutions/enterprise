@@ -10,21 +10,21 @@ public:
 
 	ibFont GetValueAsFont() const { ibFont font; font.FromString(m_propValue.GetString()); return font; }
 	ibString GetValueAsString() const { return m_propValue.GetString(); }
-	void SetValue(const ibFont& val) { m_propValue = ibString(val.ToString()); }
-	void SetValue(const ibString& val) { m_propValue = val; }
+	void SetValue(const ibFont& val) { m_propValue = ibPropertyValue(ibString(val.ToString())); }
+	void SetValue(const ibString& val) { m_propValue = ibPropertyValue(val); }
 
 	ibPropertyFont(ibPropertyCategory* cat, const ibString& name, const ibFont& f = ibFont())
-		: ibProperty(cat, name, f.ToString().wc_str())
+		: ibProperty(cat, name, ibPropertyValue(ibString(f.ToString())))
 	{
 	}
 
 	ibPropertyFont(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibFont& f = ibFont())
-		: ibProperty(cat, name, label, f.ToString().wc_str())
+		: ibProperty(cat, name, label, ibPropertyValue(ibString(f.ToString())))
 	{
 	}
 
 	ibPropertyFont(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString, const ibFont& f = ibFont())
-		: ibProperty(cat, name, label, helpString, f.ToString().wc_str())
+		: ibProperty(cat, name, label, helpString, ibPropertyValue(ibString(f.ToString())))
 	{
 	}
 

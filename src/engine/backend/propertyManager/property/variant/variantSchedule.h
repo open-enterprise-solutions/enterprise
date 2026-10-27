@@ -9,47 +9,36 @@
 // Eq() is what makes the diff work, and it is one line because the description already has value
 // semantics — two schedules are equal when every field is.
 
+#include "backend/propertyManager/propertyValue.h"
 #include "backend/backend.h"
 #include "core/job/jobSchedule.h"
 
 #include <wx/variant.h>
 
-class BACKEND_API ibVariantDataSchedule : public wxVariantData {
-	wxString MakeString() const;
+class BACKEND_API ibPropertyValueSchedule : public ibPropertyValue {
 public:
 
 	ibJobScheduleDescription& GetSchedule() { return m_schedule; }
 	const ibJobScheduleDescription& GetSchedule() const { return m_schedule; }
 
-	ibVariantDataSchedule() : wxVariantData() {}
-	explicit ibVariantDataSchedule(const ibJobScheduleDescription& schedule)
-		: wxVariantData(), m_schedule(schedule) {}
-	ibVariantDataSchedule(const ibVariantDataSchedule& src)
-		: wxVariantData(), m_schedule(src.m_schedule) {}
+	ibPropertyValueSchedule() : ibPropertyValue(ibValueTypes::TYPE_VALUE) {}
+	explicit ibPropertyValueSchedule(const ibJobScheduleDescription& schedule)
+		: ibPropertyValue(ibValueTypes::TYPE_VALUE), m_schedule(schedule) {}
+	ibPropertyValueSchedule(const ibPropertyValueSchedule& src)
+		: ibPropertyValue(ibValueTypes::TYPE_VALUE), m_schedule(src.m_schedule) {}
 
-	virtual ibVariantDataSchedule* Clone() const {
-		return new ibVariantDataSchedule(*this);
+	virtual ibPropertyValueSchedule* Clone() const {
+		return new ibPropertyValueSchedule(*this);
 	}
 
 	// Value equality, straight through the description — this is what the configuration
 	// compare reads (docs/private/property-system.md § 6.1).
-	virtual bool Eq(wxVariantData& data) const {
-		const ibVariantDataSchedule* src = dynamic_cast<const ibVariantDataSchedule*>(&data);
+	virtual bool CompareValueEQ(const ibPropertyValue& data) const override {
+		const const ibPropertyValueSchedule* src = dynamic_cast<const ibPropertyValueSchedule*>(data.GetRef());
 		return src != nullptr && src->m_schedule == m_schedule;
 	}
 
-#if wxUSE_STD_IOSTREAM
-	virtual bool Write(wxSTD ostream& str) const {
-		str << MakeString();
-		return true;
-	}
-#endif
-	virtual bool Write(wxString& str) const {
-		str = MakeString();
-		return true;
-	}
-
-	virtual wxString GetType() const { return ibT("ibVariantDataSchedule"); }
+	virtual ibString GetString() const override;
 
 protected:
 	ibJobScheduleDescription m_schedule;

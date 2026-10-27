@@ -137,7 +137,7 @@ public:
 
 			// --- Property events (fired by the inspector on an edit) — grouped last, per convention. Nothing
 			// to sync (the property variants ARE the storage); see the .cpp. ------------------------------------
-			virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue) override;
+			virtual void OnPropertyChanged(ibProperty* property, const ibPropertyValue& oldValue, const ibPropertyValue& newValue) override;
 
 			// --- Serialization — through the UNIFIED property mechanism (each property's GetNodeValue /
 			// ReadNodeValue, exactly like ibFormAttribute), plus the non-property id / width. The value-table
@@ -508,7 +508,7 @@ public:
 	virtual ibString GetClassName() const override { return ibValue::GetClassName(); }
 	virtual ibString GetObjectTypeName() const override { return GetClassName(); }
 	virtual bool IsEditable() const override { return true; }
-	virtual void OnPropertyChanged(ibProperty* property, const wxVariant& oldValue, const wxVariant& newValue) override;
+	virtual void OnPropertyChanged(ibProperty* property, const ibPropertyValue& oldValue, const ibPropertyValue& newValue) override;
 	virtual void OnChildChanged() override;
 
 	// The columns changed — added, removed, or one of them edited: the rows' names and the empty row a new row copies

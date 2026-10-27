@@ -2,7 +2,7 @@
 #include "backend/metaData.h"
 #include "backend/objCtor.h"   // ibCtorMetaValueType — the configuration's references a barrier stands for
 
-wxString ibVariantDataAttribute::MakeString() const
+ibString ibPropertyValueAttribute::GetString() const
 {
 	ibString strDescr;
 	if (m_ownerProperty != nullptr) {
@@ -20,12 +20,12 @@ wxString ibVariantDataAttribute::MakeString() const
 	return strDescr;
 }
 
-void ibVariantDataAttribute::DoSetDefaultMetaType() {
+void ibPropertyValueAttribute::DoSetDefaultMetaType() {
 	if (m_ownerProperty != nullptr)
 		m_typeDesc.SetDefaultMetaType(ibBackendTypeConfigFactory::GetDefaultTypeByFilter(m_ownerProperty->GetFilterDataType()));
 }
 
-void ibVariantDataAttribute::DoSetFromMetaId(const ibMetaID& id)
+void ibPropertyValueAttribute::DoSetFromMetaId(const ibMetaID& id)
 {
 	if (m_ownerProperty != nullptr && id != wxNOT_FOUND) {
 
@@ -52,14 +52,14 @@ void ibVariantDataAttribute::DoSetFromMetaId(const ibMetaID& id)
 	}
 }
 
-void ibVariantDataAttribute::DoSetFromTypeId(const ibTypeDescription& td)
+void ibPropertyValueAttribute::DoSetFromTypeId(const ibTypeDescription& td)
 {
 	m_typeDesc = td;
 	m_object_version = 0;   // a new declaration is refreshed as a new value is — its barriers derived again
 	RefreshTypeDesc();
 }
 
-void ibVariantDataAttribute::DoRefreshTypeDesc()
+void ibPropertyValueAttribute::DoRefreshTypeDesc()
 {
 	if (m_ownerProperty != nullptr) {
 

@@ -1,14 +1,14 @@
 #ifndef __TYPE_VARIANT_H__
 #define __TYPE_VARIANT_H__
 
+#include "backend/propertyManager/propertyValue.h"
 #include "backend/metaCollection/metaObject.h"
 #include "backend/backend_type.h"
 
 #include <atomic>
 #include <mutex>
 
-class BACKEND_API ibVariantDataAttribute : public wxVariantData {
-	wxString MakeString() const;
+class BACKEND_API ibPropertyValueAttribute : public ibPropertyValue {
 protected:
 	virtual void DoSetDefaultMetaType();
 	virtual void DoSetFromMetaId(const ibMetaID& id);
@@ -46,41 +46,28 @@ public:
 
 	/////////////////////////////////////////////////////////////////////////////////////////
 
-	ibVariantDataAttribute(const ibBackendTypeConfigFactory* prop) : wxVariantData(), m_ownerProperty(prop) {}
+	ibPropertyValueAttribute(const ibBackendTypeConfigFactory* prop) : ibPropertyValue(ibValueTypes::TYPE_VALUE), m_ownerProperty(prop) {}
 
-	ibVariantDataAttribute(const ibBackendTypeConfigFactory* prop, const ibValueTypes type) : wxVariantData(), m_ownerProperty(prop) { m_typeDesc.SetDefaultMetaType(type); }
-	ibVariantDataAttribute(const ibBackendTypeConfigFactory* prop, const ibClassID& clsid) : wxVariantData(), m_ownerProperty(prop) { m_typeDesc.SetDefaultMetaType(clsid); }
+	ibPropertyValueAttribute(const ibBackendTypeConfigFactory* prop, const ibValueTypes type) : ibPropertyValue(ibValueTypes::TYPE_VALUE), m_ownerProperty(prop) { m_typeDesc.SetDefaultMetaType(type); }
+	ibPropertyValueAttribute(const ibBackendTypeConfigFactory* prop, const ibClassID& clsid) : ibPropertyValue(ibValueTypes::TYPE_VALUE), m_ownerProperty(prop) { m_typeDesc.SetDefaultMetaType(clsid); }
 
-	ibVariantDataAttribute(const ibBackendTypeConfigFactory* prop, const ibMetaID& id) : wxVariantData(), m_ownerProperty(prop) { DoSetFromMetaId(id); }
-	ibVariantDataAttribute(const ibBackendTypeConfigFactory* prop, const ibTypeDescription& typeDesc) : wxVariantData(), m_ownerProperty(prop), m_typeDesc(typeDesc) {}
+	ibPropertyValueAttribute(const ibBackendTypeConfigFactory* prop, const ibMetaID& id) : ibPropertyValue(ibValueTypes::TYPE_VALUE), m_ownerProperty(prop) { DoSetFromMetaId(id); }
+	ibPropertyValueAttribute(const ibBackendTypeConfigFactory* prop, const ibTypeDescription& typeDesc) : ibPropertyValue(ibValueTypes::TYPE_VALUE), m_ownerProperty(prop), m_typeDesc(typeDesc) {}
 
-	ibVariantDataAttribute(const ibVariantDataAttribute& list) : wxVariantData(), m_ownerProperty(list.m_ownerProperty), m_typeDesc(list.m_typeDesc) {}
+	ibPropertyValueAttribute(const ibPropertyValueAttribute& list) : ibPropertyValue(ibValueTypes::TYPE_VALUE), m_ownerProperty(list.m_ownerProperty), m_typeDesc(list.m_typeDesc) {}
 
-	virtual ibVariantDataAttribute* Clone() const {
-		return new ibVariantDataAttribute(*this);
+	virtual ibPropertyValueAttribute* Clone() const {
+		return new ibPropertyValueAttribute(*this);
 	}
 
-	virtual bool Eq(wxVariantData& data) const {
-		ibVariantDataAttribute* srcAttr = dynamic_cast<ibVariantDataAttribute*>(&data);
+	virtual bool CompareValueEQ(const ibPropertyValue& data) const override {
+		const ibPropertyValueAttribute* srcAttr = dynamic_cast<const ibPropertyValueAttribute*>(data.GetRef());
 		if (srcAttr != nullptr)
 			return srcAttr->m_typeDesc == m_typeDesc;
 		return false;
 	}
 
-#if wxUSE_STD_IOSTREAM
-	virtual bool Write(wxSTD ostream& str) const {
-		str << MakeString();
-		return true;
-	}
-#endif
-	virtual bool Write(wxString& str) const {
-		str = MakeString();
-		return true;
-	}
-
-	virtual wxString GetType() const {
-		return ibT("ibVariantDataAttribute");
-	}
+	virtual ibString GetString() const override;
 
 protected:
 

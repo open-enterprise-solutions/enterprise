@@ -41,7 +41,7 @@ std::vector<ibValueMetaObjectAttributeBase*> HolderAttributes(const ibPropertyOb
 {
 	const ibValueMetaObjectAttributeBase* self = SelfAttribute(owner);
 	const ibValueMetaObject* holder = self != nullptr ? self->GetParent() : nullptr;
-	const ibValueMetaObjectCompositeData* fields = dynamic_cast<const ibValueMetaObjectCompositeData*>(holder);
+	const const ibValueMetaObjectCompositeData* fields = dynamic_cast<const ibValueMetaObjectCompositeData*>(holder);
 	if (fields == nullptr)
 		return std::vector<ibValueMetaObjectAttributeBase*>();
 
@@ -206,7 +206,7 @@ ibString ibChoiceTargetFieldName(const ibPropertyObject* owner, const ibMetaID& 
 void ibFieldReferenceTypes(const ibPropertyObject* owner, ibPropertyChoiceList& list)
 {
 	for (const ibValueMetaObject* named : ReferencedObjects<ibValueMetaObject>(owner))
-		list.Add(named->GetMetaID(), named->GetName(), named->GetSynonym(), wxVariant(named->GetMetaID()), named->GetClassType());
+		list.Add(named->GetMetaID(), named->GetName(), named->GetSynonym(), ibPropertyValue(named->GetMetaID()), named->GetClassType());
 }
 
 // ⭐ THE OWNER'S ROW — the whole of "link by owner", and the reason there is no property for it. Three
@@ -249,12 +249,12 @@ bool ibChoiceOwnerRow(const ibPropertyObject* owner, ibChoiceParameterRowDescrip
 //*                                   The link by type                                            *
 //*************************************************************************************************
 
-// Asked on the counter a type description is asked on (ibVariantDataAttribute::DoRefreshTypeDesc): it moves when
+// Asked on the counter a type description is asked on (ibPropertyValueAttribute::DoRefreshTypeDesc): it moves when
 // a type comes or goes and when anything is removed, so a configuration that stands still is judged once. What is
 // gone is asked with the questions already here — a source by its neighbour's name, empty only when the field is
 // genuinely gone; a parameter by the resolver's own deep find. A field standing in no holder has no neighbours to
 // ask about, and is left as it is.
-void ibVariantDataChoiceLink::RefreshLinkDesc() const
+void ibPropertyValueChoiceLink::RefreshLinkDesc() const
 {
 	const ibMetaData* metaData = m_ownerProperty != nullptr ? m_ownerProperty->GetMetaData() : nullptr;
 	if (!m_linkDesc.IsOk() || metaData == nullptr || ibChoiceHolderName(m_ownerProperty).IsEmpty())
@@ -280,7 +280,7 @@ void ibVariantDataChoiceLink::RefreshLinkDesc() const
 //
 // ⚠ AND A LINK THAT NAMES SOMETHING GONE SAYS SO. Leaving the row empty there would make a broken link
 // look exactly like no link at all, which is the one thing a summary must never do.
-wxString ibVariantDataChoiceLink::MakeString() const
+ibString ibPropertyValueChoiceLink::GetString() const
 {
 	const ibChoiceTypeLinkDescription& linkDesc = GetLinkDesc();
 	if (!linkDesc.IsOk())
@@ -293,7 +293,7 @@ wxString ibVariantDataChoiceLink::MakeString() const
 // ⚠ THE METADATA COMES FROM THE PROPERTY'S OWNER, never from the active configuration: several are open
 // at once, and the one that matters is the one this property was created inside. Taking the active one
 // answers plausibly and wrongly.
-ibPropertyChoiceMode ibVariantDataChoiceLink::GetValueList(ibPropertyChoiceList& list) const
+ibPropertyChoiceMode ibPropertyValueChoiceLink::GetValueList(ibPropertyChoiceList& list) const
 {
 	const ibPropertyObject* owner = m_ownerProperty;
 	const ibMetaData* metaData = owner != nullptr ? owner->GetMetaData() : nullptr;
@@ -316,7 +316,7 @@ ibPropertyChoiceMode ibVariantDataChoiceLink::GetValueList(ibPropertyChoiceList&
 		linkDesc.m_source.AppendSource(field->GetMetaID());
 
 		list.Add(field->GetMetaID(), NeighbourName(owner, field), field->GetSynonym(),
-			wxVariant(new ibVariantDataChoiceLink(owner, linkDesc)),
+			ibPropertyValue(new ibPropertyValueChoiceLink(owner, linkDesc)),
 			field->GetClassType());
 	}
 
@@ -327,7 +327,7 @@ ibPropertyChoiceMode ibVariantDataChoiceLink::GetValueList(ibPropertyChoiceList&
 //*                             The choice parameters — the table                                 *
 //*************************************************************************************************
 
-void ibVariantDataChoiceParameters::RefreshParametersDesc() const
+void ibPropertyValueChoiceParameters::RefreshParametersDesc() const
 {
 	const ibMetaData* metaData = m_ownerProperty != nullptr ? m_ownerProperty->GetMetaData() : nullptr;
 	if (!m_paramsDesc.IsOk() || metaData == nullptr || ibChoiceHolderName(m_ownerProperty).IsEmpty())
@@ -357,7 +357,7 @@ void ibVariantDataChoiceParameters::RefreshParametersDesc() const
 // configuration at large that was EVERY predefined field — so a property with rows in it read as an
 // empty property. A row that cannot be named is now shown as unnamed: "something is set here" is the
 // fact the row exists to carry (Max, 2026-09-23).
-wxString ibVariantDataChoiceParameters::MakeString() const
+ibString ibPropertyValueChoiceParameters::GetString() const
 {
 	const ibChoiceParametersDescription& paramsDesc = GetParametersDesc();
 	if (!paramsDesc.IsOk())
@@ -384,7 +384,7 @@ wxString ibVariantDataChoiceParameters::MakeString() const
 // ⭐ THE FIELDS OF WHAT THIS ONE REFERS TO — asked PER TYPE, because a composite field refers to more
 // than one thing and they do not have the same fields. A row belongs to one type; offering the union
 // would let an author fill a parameter that half the list has never heard of.
-void ibVariantDataChoiceParameters::GetParameterList(const ibClassID& ofType, ibPropertyChoiceList& list) const
+void ibPropertyValueChoiceParameters::GetParameterList(const ibClassID& ofType, ibPropertyChoiceList& list) const
 {
 	const ibValueMetaObjectRecordData* target = m_ownerProperty != nullptr
 		? ReferencedObject<ibValueMetaObjectRecordData>(m_ownerProperty->GetMetaData(), ofType) : nullptr;
@@ -393,7 +393,7 @@ void ibVariantDataChoiceParameters::GetParameterList(const ibClassID& ofType, ib
 
 	for (const ibValueMetaObjectAttributeBase* field : target->GetGenericAttributeArrayObject()) {
 		if (!field->IsDeleted())
-			list.Add(field->GetMetaID(), field->GetName(), field->GetSynonym(), wxVariant(field->GetMetaID()), field->GetClassType());
+			list.Add(field->GetMetaID(), field->GetName(), field->GetSynonym(), ibPropertyValue(field->GetMetaID()), field->GetClassType());
 	}
 }
 
@@ -403,7 +403,7 @@ void ibVariantDataChoiceParameters::GetParameterList(const ibClassID& ofType, ib
 // ⚠ NOT NARROWED, and that is the difference from the link by type. A link needs a field that CARRIES a
 // type; a parameter needs a VALUE, and any field has one. Narrowing this list would refuse the ordinary
 // case of a date or a number standing in a condition.
-void ibVariantDataChoiceParameters::GetSourceList(ibPropertyChoiceList& list) const
+void ibPropertyValueChoiceParameters::GetSourceList(ibPropertyChoiceList& list) const
 {
 	const ibPropertyObject* owner = m_ownerProperty;
 	const ibMetaID selfId = SelfId(owner);
@@ -411,6 +411,6 @@ void ibVariantDataChoiceParameters::GetSourceList(ibPropertyChoiceList& list) co
 	for (const ibValueMetaObjectAttributeBase* field : HolderAttributes(owner)) {
 		if (field->GetMetaID() == selfId)
 			continue;   // a field does not narrow itself
-		list.Add(field->GetMetaID(), NeighbourName(owner, field), field->GetSynonym(), wxVariant(field->GetMetaID()), field->GetClassType());
+		list.Add(field->GetMetaID(), NeighbourName(owner, field), field->GetSynonym(), ibPropertyValue(field->GetMetaID()), field->GetClassType());
 	}
 }

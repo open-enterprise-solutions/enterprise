@@ -791,7 +791,7 @@ bool ibValueReferenceDataObject::CoerceHopType(const ibSourceHop& hop, ibValue& 
 // ⭐ AN "ANY" IS SEEN AS ITS FACADE — `CatalogRef` as every catalog's reference, `AnyRef` as every reference —
 // the way a characteristic is seen as its chart's types: a filter, a field tree, a picker offers what can be
 // CHOSEN, and nothing is ever "a CatalogRef". Read off its bits (clsid_admits), so a catalog added later is in
-// it. A field declared with one stores the same members (ibVariantDataAttribute::DoRefreshTypeDesc); this
+// it. A field declared with one stores the same members (ibPropertyValueAttribute::DoRefreshTypeDesc); this
 // answers for a type handed in on its own.
 std::vector<ibMetaID> ibValueReferenceDataObject::ConvertToMetaIds(const std::vector<ibClassID>& clsids, const ibMetaData* metaData)
 {
