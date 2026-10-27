@@ -54,8 +54,6 @@ public:
 
 	// Representation via the (live) queryable — the source's name.
 
-	virtual ibVariant CloneValue() const override { return ibVariant(new ibVariantDynamicSource(*this)); }
-
 	// Compare the chosen source by its stable id — same source means equal.
 	virtual bool CompareValueEQ(const ibVariant& data) const override {
 		const ibVariantDynamicSource* src = dynamic_cast<const ibVariantDynamicSource*>(data.GetRef());

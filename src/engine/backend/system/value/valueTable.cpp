@@ -62,7 +62,7 @@ m_tableColumnCollection(new ibValueModelTableColumnCollection(this))
 // had asked). The columns are declared again - name, type, caption, width, index - and each row's
 // cells are carried across by the column they stand in; the values themselves are copied as values, so a
 // reference in a cell is the same reference in both.
-ibVariant ibValueModelTable::CloneValue() const
+ibValuePtr<ibValueModelTable> ibValueModelTable::Clone() const
 {
 	ibValuePtr<ibValueModelTable> copy(new ibValueModelTable());
 
@@ -170,7 +170,7 @@ bool ibValueModelTable::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue,
 		pvarRetValue = GetRowAt(AppendRow());
 		return true;
 	case enClone:
-		pvarRetValue = ibValue(CloneValue());
+		pvarRetValue = Clone();
 		return true;
 	case enFind:
 	{

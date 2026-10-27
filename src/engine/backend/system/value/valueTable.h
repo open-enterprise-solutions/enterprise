@@ -426,9 +426,6 @@ public:
 	//check is empty (single final overrider for BOTH ibValueModel::IsEmpty and ibSourceDataObject::IsEmpty)
 	virtual bool IsEmpty() const override { return GetRowCount() == 0; }
 
-	// A COPY OF ITS OWN, stated rather than packed — the same columns and the same rows, nothing shared.
-	virtual ibVariant CloneValue() const override;
-
 	// A table-of-values is fully composer-driven (filter / sort / group live on the RAM composer), so it exposes
 	// the whole List-settings affordance — including GROUP, which folds the flat value-table into a tree "with one easy move".
 	virtual Features GetFeatures() const override {
@@ -469,6 +466,11 @@ public:
 	// (MoveRow / SortRows are NOT here — they live on ibValueModelStorage: ordering rows is something every
 	//  table that owns its rows can do, and the script's Sort() reaches the very same one.)
 
+	// A fresh table object built from the live one — `Clone` in the ordinary C++ sense, the same
+	// sense a database layer or a drag item uses it in. It no longer collides with anything: the
+	// root's packed-form copy is `ibValue::CloneValue`, which is a different operation and now
+	// carries a different name (see value.h). The same columns and the same rows, nothing shared.
+	ibValuePtr<ibValueModelTable> Clone() const;
 	unsigned int Count() { return GetRowCount(); }
 	void Clear();
 

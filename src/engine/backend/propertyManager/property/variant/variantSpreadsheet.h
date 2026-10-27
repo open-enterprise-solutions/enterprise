@@ -15,8 +15,6 @@ public:
 	ibVariantSpreadsheet(const ibSpreadsheetDescription& val) : ibVariant(ibValueTypes::TYPE_VALUE), m_spreadsheetDesc(val) {}
 	ibVariantSpreadsheet(const ibVariantSpreadsheet& src) : ibVariant(ibValueTypes::TYPE_VALUE), m_spreadsheetDesc(src.m_spreadsheetDesc) {}
 
-	virtual ibVariant CloneValue() const override { return ibVariant(new ibVariantSpreadsheet(*this)); }
-
 	virtual bool CompareValueEQ(const ibVariant& data) const override {
 		const ibVariantSpreadsheet* srcData = dynamic_cast<const ibVariantSpreadsheet*>(data.GetRef());
 		if (srcData != nullptr)

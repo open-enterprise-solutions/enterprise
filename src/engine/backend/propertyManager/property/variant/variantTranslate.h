@@ -15,8 +15,6 @@ public:
 	ibVariantTranslate(const ibTranslateString& translate = ibTranslateString()) : ibVariant(ibValueTypes::TYPE_VALUE), m_translate(translate) {}
 	ibVariantTranslate(const ibVariantTranslate& src) : ibVariant(ibValueTypes::TYPE_VALUE), m_translate(src.m_translate) {}
 
-	virtual ibVariant CloneValue() const override { return ibVariant(new ibVariantTranslate(*this)); }
-
 	virtual bool CompareValueEQ(const ibVariant& data) const override {
 		const ibVariantTranslate* srcData = dynamic_cast<const ibVariantTranslate*>(data.GetRef());
 		if (srcData != nullptr) {

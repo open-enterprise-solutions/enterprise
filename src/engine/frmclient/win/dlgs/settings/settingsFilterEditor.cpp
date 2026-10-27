@@ -284,7 +284,7 @@ public:
 		const ibValueTypes vt = ibValue::GetVTByID(selValue.GetClassType());
 		if (vt == ibValueTypes::TYPE_NUMBER || vt == ibValueTypes::TYPE_DATE)
 			return true;
-		std::vector<ibVariant> offered;
+		std::vector<ibValue> offered;
 		return selValue.FindValue(wxEmptyString, offered);
 	}
 

@@ -21,8 +21,6 @@ public:
 	ibVariantPoint(const ibPoint& point = ibDefaultPosition) : ibVariant(ibValueTypes::TYPE_VALUE), m_point(point) {}
 	ibVariantPoint(const ibVariantPoint& src) : ibVariant(ibValueTypes::TYPE_VALUE), m_point(src.m_point) {}
 
-	virtual ibVariant CloneValue() const override { return ibVariant(new ibVariantPoint(*this)); }
-
 	virtual bool CompareValueEQ(const ibVariant& data) const override {
 		const ibVariantPoint* srcData = dynamic_cast<const ibVariantPoint*>(data.GetRef());
 		if (srcData != nullptr) {

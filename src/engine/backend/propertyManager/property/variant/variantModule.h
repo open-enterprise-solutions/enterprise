@@ -14,8 +14,6 @@ public:
 	ibVariantModule(const ibString& moduleData = ibEmptyString) : ibVariant(ibValueTypes::TYPE_VALUE), m_moduleData(moduleData) {}
 	ibVariantModule(const ibVariantModule& src) : ibVariant(ibValueTypes::TYPE_VALUE), m_moduleData(src.m_moduleData) {}
 
-	virtual ibVariant CloneValue() const override { return ibVariant(new ibVariantModule(*this)); }
-
 	virtual bool CompareValueEQ(const ibVariant& data) const override {
 		const ibVariantModule* srcData = dynamic_cast<const ibVariantModule*>(data.GetRef());
 		if (srcData != nullptr) {

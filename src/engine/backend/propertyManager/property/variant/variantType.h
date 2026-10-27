@@ -56,8 +56,6 @@ public:
 
 	ibVariantAttribute(const ibVariantAttribute& list) : ibVariant(ibValueTypes::TYPE_VALUE), m_ownerProperty(list.m_ownerProperty), m_typeDesc(list.m_typeDesc) {}
 
-	virtual ibVariant CloneValue() const override { return ibVariant(new ibVariantAttribute(*this)); }
-
 	virtual bool CompareValueEQ(const ibVariant& data) const override {
 		const ibVariantAttribute* srcAttr = dynamic_cast<const ibVariantAttribute*>(data.GetRef());
 		if (srcAttr != nullptr)

@@ -15,8 +15,6 @@ public:
 	ibVariantCalcSchedule(const ibVariantCalcSchedule& src)
 		: ibVariant(ibValueTypes::TYPE_VALUE), m_ownerProperty(src.m_ownerProperty), m_scheduleDesc(src.m_scheduleDesc) {}
 
-	virtual ibVariant CloneValue() const override { return ibVariant(new ibVariantCalcSchedule(*this)); }
-
 	ibCalcScheduleDescription& GetScheduleDesc() { return m_scheduleDesc; }
 	const ibCalcScheduleDescription& GetScheduleDesc() const { return m_scheduleDesc; }
 

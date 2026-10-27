@@ -101,12 +101,12 @@ public:
 			&& value.GetInteger() == static_cast<long>(m_member);
 	}
 
-	virtual bool FindValue(const ibString& findData, std::vector<ibVariant>& foundedObjects) const override {
+	virtual bool FindValue(const ibString& findData, std::vector<ibValue>& foundedObjects) const override {
 		if (m_members == nullptr)
 			return false;
 		for (const auto& [member, word] : *m_members) {
 			if (findData.IsEmpty() || word.Lower().StartsWith(findData.Lower()))
-				foundedObjects.push_back(ibVariant(new ibValueEnumerationVariant(GetClassType(), member, word, m_members)));
+				foundedObjects.push_back(new ibValueEnumerationVariant(GetClassType(), member, word, m_members));
 		}
 		return true;
 	}

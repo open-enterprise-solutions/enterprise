@@ -262,16 +262,6 @@ void ibVariant::Move(ibVariant&& cOld)
 	cOld.Reset();
 }
 
-ibVariant ibVariant::CloneValue() const
-{
-	if (m_pRef != nullptr && IsReference())
-		return m_pRef->CloneValue();
-	if (m_typeClass < ibValueTypes::TYPE_REFFER)
-		return *this;   // the payload IS the value
-	ibCoreException::Error(_("The value has no copy of its own"));
-	return ibVariant();
-}
-
 void ibVariant::operator = (bool cParam)
 {
 	Reset();
@@ -541,40 +531,6 @@ bool ibVariant::SetString(ibString&& strString)
 	m_sData = std::move(strString);
 
 	return true;
-}
-
-bool ibVariant::FindValue(const ibString& findData, std::vector<ibVariant>& listValue) const
-{
-	if (m_pRef != nullptr && IsReference())
-		return m_pRef->FindValue(findData, listValue);
-
-	try {
-		if (m_typeClass == ibValueTypes::TYPE_BOOLEAN) {
-			ibVariant cFounded;
-			cFounded.SetBoolean(findData);
-			listValue.emplace_back(cFounded);
-			if (cFounded.GetBoolean()) listValue.emplace_back(false);
-			else listValue.emplace_back(true);
-			return true;
-		}
-		else if (m_typeClass == ibValueTypes::TYPE_NUMBER) {
-			listValue.emplace_back().SetNumber(findData);
-			return true;
-		}
-		else if (m_typeClass == ibValueTypes::TYPE_DATE) {
-			listValue.emplace_back().SetDate(findData);
-			return true;
-		}
-		else if (m_typeClass == ibValueTypes::TYPE_STRING) {
-			listValue.emplace_back().SetString(findData);
-			return true;
-		}
-	}
-	catch (...) {
-		return false;
-	}
-
-	return false;
 }
 
 void ibVariant::SetData(const ibVariant& varValue)

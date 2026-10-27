@@ -11,6 +11,7 @@
 #include <map>
 #include "backend/system/value/valueMap.h"
 #include "backend/backend_exception.h"
+#include "backend/propertyManager/property/variant/variantNumber.h"
 
 namespace {
 ibValue Field(const wxChar* k) { return ibValue(ibString(k)); }
@@ -238,7 +239,7 @@ TEST(ValueStructure, StructuresShareOneMethodTable) {
 
 TEST(ValueClone, APrimitiveIsItsOwnCopy) {
 	const ibValue num(42);
-	const ibValue copy(num.CloneValue());
+	const ibValue copy = num.CloneValue();
 	EXPECT_EQ(copy.GetInteger(), 42);
 
 	const ibValue str(ibString(wxT("text")));
@@ -254,7 +255,7 @@ TEST(ValueClone, AStructureCopiesAndTheCopyIsIndependent) {
 	ibValueStructure src;
 	src.Insert(Field(wxT("Count")), ibValue(ibNumber(1)));
 
-	const ibValue copy(src.CloneValue());
+	const ibValue copy = src.CloneValue();
 	ASSERT_FALSE(copy.IsEmpty()) << "a structure has a packed form and must copy";
 	EXPECT_NE(copy.GetRef(), &src) << "a copy that is the same object is not a copy";
 
@@ -289,9 +290,25 @@ TEST(ValueClone, ATypeMayStateItsOwnCopy) {
 	// CloneValue is virtual precisely so this is possible.
 	class ibValueOwnCopy : public ibValue {
 	public:
-		virtual ibVariant CloneValue() const override { return ibValue(7); }
+		virtual ibValue CloneValue() const override { return ibValue(7); }
 	};
 
 	ibValueOwnCopy value;
 	EXPECT_EQ(value.CloneValue().GetInteger(), 7);
+}
+
+// A PROPERTY'S VARIANT IS COPIED AS ITSELF. Copying a TYPE_VALUE object through the base makes a reference to the
+// source, so a variant class without a copy constructor of its own would share its state with the original, silently.
+TEST(PropertyVariantCopy, ACopyIsItsOwnObject) {
+	ibVariantNumber source(ibNumber(5));
+	ibVariantNumber copy(source);
+	EXPECT_EQ(copy.GetType(), ibValueTypes::TYPE_VALUE);
+	source.SetNumber(ibNumber(6));
+	EXPECT_EQ(copy.GetNumber(), ibNumber(5));
+}
+
+// The runtime holds its own values only: a property's variant handed to it is refused aloud, not left empty.
+TEST(PropertyVariantCopy, TheRuntimeRefusesAPropertysVariant) {
+	const ibVariant property(new ibVariantNumber(ibNumber(5)));
+	EXPECT_THROW((void)ibValue(property), ibBackendException);
 }

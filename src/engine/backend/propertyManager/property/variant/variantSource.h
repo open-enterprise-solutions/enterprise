@@ -30,8 +30,6 @@ public:
 		RefreshTypeDesc();
 	}
 
-	virtual ibVariant CloneValue() const override { return ibVariant(new ibVariantAttributeSource(*this)); }
-
 	friend class ibVariantSource;
 
 protected:
@@ -180,8 +178,6 @@ public:
 	}
 
 	virtual ~ibVariantSource() { m_attributeSource->DecrRef(); }
-
-	virtual ibVariant CloneValue() const override { return ibVariant(new ibVariantSource(*this)); }
 
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

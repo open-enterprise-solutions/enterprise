@@ -605,12 +605,12 @@ bool ibTypeControlFactory::QuickChoice(ibControlFrame* ownerValue, const ibClass
 
 	if (ownerValue != nullptr) {
 		ibValue cValue; ownerValue->GetControlValue(cValue);
-		std::vector<ibVariant> listValue;
+		std::vector<ibValue> listValue;
 		if (cValue.FindValue(wxEmptyString, listValue)) {
 			wxPopupQuickSelectWindow* popup =
 				new wxPopupQuickSelectWindow(ownerValue, parent);
 			for (auto selObj : listValue)
-				popup->AppendItem(ibValue(selObj), selObj == cValue);
+				popup->AppendItem(selObj, selObj == cValue);
 			popup->Popup();
 			return true;
 		}

@@ -17,8 +17,6 @@ public:
 	}
 	ibVariantForm(const ibVariantForm& src) : ibVariantModule(src), m_formData(src.m_formData) {}
 
-	virtual ibVariant CloneValue() const override { return ibVariant(new ibVariantForm(*this)); }
-
 	virtual bool CompareValueEQ(const ibVariant& data) const override {
 		const ibVariantForm* srcData = dynamic_cast<const ibVariantForm*>(data.GetRef());
 		if (srcData != nullptr) {

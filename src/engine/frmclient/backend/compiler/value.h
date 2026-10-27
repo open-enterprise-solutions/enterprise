@@ -77,6 +77,9 @@ public:
 	// The engine's own picture of a value (value_res.cpp) — what a field of a settings window wears.
 	static wxIcon GetIconGroup();
 
+	// THE VALUES THIS ONE IS PICKED AMONG — a quick choice: a flag's two, a text read as this kind, an enumeration's members.
+	virtual bool FindValue(const ibString& findData, std::vector<ibValue>& listValue) const;
+
 	// Opened — a cell's details drilled into: the server's to do (the grid box sends the cell it was asked on).
 	void ShowValue() const {}
 };

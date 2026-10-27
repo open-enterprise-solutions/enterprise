@@ -27,8 +27,6 @@ public:
 	ibVariantSchedule(const ibVariantSchedule& src)
 		: ibVariant(ibValueTypes::TYPE_VALUE), m_schedule(src.m_schedule) {}
 
-	virtual ibVariant CloneValue() const override { return ibVariant(new ibVariantSchedule(*this)); }
-
 	// Value equality, straight through the description — this is what the configuration
 	// compare reads (docs/private/property-system.md § 6.1).
 	virtual bool CompareValueEQ(const ibVariant& data) const override {

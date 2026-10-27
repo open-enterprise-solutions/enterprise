@@ -12,8 +12,6 @@ public:
 	ibVariantOwner(const ibPropertyObject* prop, const ibMetaDescription& typeDesc) : ibVariantMetaDesc(prop, typeDesc) {}
 	ibVariantOwner(const ibVariantOwner& src) : ibVariantMetaDesc(src.m_ownerProperty, src.m_metaDesc) {}
 
-	virtual ibVariant CloneValue() const override { return ibVariant(new ibVariantOwner(*this)); }
-
 	virtual ibString GetString() const override;
 
 };

@@ -58,7 +58,7 @@ const ibChar* const kFieldData  = kValueFieldData;
 // to write a refusal, because not being transferable already is one.
 //////////////////////////////////////////////////////////////////////
 
-ibVariant ibValue::CloneValue() const
+ibValue ibValue::CloneValue() const
 {
 	switch (m_typeClass) {
 	case ibValueTypes::TYPE_EMPTY:

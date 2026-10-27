@@ -2130,7 +2130,7 @@ public:
 			}
 
 			typeValue->SetFromTypeDesc(described);
-			if (!ibMcpApplyByHand(typeProperty, typeValue->CloneValue(), refusal))
+			if (!ibMcpApplyByHand(typeProperty, ibVariant(new ibVariantAttribute(*typeValue)), refusal))
 				return false;
 
 			metaData->Modify(true);
@@ -2222,7 +2222,7 @@ public:
 		// read out is the property's live data: mutating it and handing it back as "the new value"
 		// is a write nobody was told about.
 		typeValue->SetFromTypeDesc(description);
-		if (!ibMcpApplyByHand(typeProperty, typeValue->CloneValue(), refusal))
+		if (!ibMcpApplyByHand(typeProperty, ibVariant(new ibVariantAttribute(*typeValue)), refusal))
 			return false;
 
 		metaData->Modify(true);

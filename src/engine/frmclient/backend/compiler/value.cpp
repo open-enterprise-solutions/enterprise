@@ -56,6 +56,42 @@ ibValue ibValue::FromNode(const ibDataNode& node)
 		node.GetValue<ibString>(ibProtocol::ibRequest::ibListSettings::Presentation)));
 }
 
+bool ibValue::FindValue(const ibString& findData, std::vector<ibValue>& listValue) const
+{
+	if (m_pRef != nullptr && IsReference()) {
+		const ibValue* held = dynamic_cast<const ibValue*>(GetRef());   // an object held here is the client's own value
+		return held != nullptr && held->FindValue(findData, listValue);
+	}
+
+	try {
+		if (m_typeClass == ibValueTypes::TYPE_BOOLEAN) {
+			ibValue cFounded;
+			cFounded.SetBoolean(findData);
+			listValue.emplace_back(cFounded);
+			if (cFounded.GetBoolean()) listValue.emplace_back(false);
+			else listValue.emplace_back(true);
+			return true;
+		}
+		else if (m_typeClass == ibValueTypes::TYPE_NUMBER) {
+			listValue.emplace_back().SetNumber(findData);
+			return true;
+		}
+		else if (m_typeClass == ibValueTypes::TYPE_DATE) {
+			listValue.emplace_back().SetDate(findData);
+			return true;
+		}
+		else if (m_typeClass == ibValueTypes::TYPE_STRING) {
+			listValue.emplace_back().SetString(findData);
+			return true;
+		}
+	}
+	catch (...) {
+		return false;
+	}
+
+	return false;
+}
+
 namespace {
 std::map<ibClassID, std::unique_ptr<ibCtorAbstractType>>& NamedTypes()
 {

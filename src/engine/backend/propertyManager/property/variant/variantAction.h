@@ -13,8 +13,6 @@ public:
 	ibVariantAction(const ibStandardCommandDescription& act) : ibVariant(ibValueTypes::TYPE_VALUE), m_actionData(act) {}
 	ibVariantAction(const ibVariantAction& src) : ibVariant(ibValueTypes::TYPE_VALUE), m_actionData(src.m_actionData) {}
 
-	virtual ibVariant CloneValue() const override { return ibVariant(new ibVariantAction(*this)); }
-
 	virtual bool CompareValueEQ(const ibVariant& data) const override { 
 		const ibVariantAction* srcData = dynamic_cast<const ibVariantAction*>(data.GetRef());
 		if (srcData != nullptr) return m_actionData == srcData->m_actionData;

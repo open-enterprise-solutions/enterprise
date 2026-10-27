@@ -13,8 +13,6 @@ public:
 	ibVariantNumber(const ibNumber& number = 0.0f) : ibVariant(ibValueTypes::TYPE_VALUE), m_number(number) {}
 	ibVariantNumber(const ibVariantNumber& src) : ibVariant(ibValueTypes::TYPE_VALUE), m_number(src.m_number) {}
 
-	virtual ibVariant CloneValue() const override { return ibVariant(new ibVariantNumber(*this)); }
-
 	virtual bool CompareValueEQ(const ibVariant& data) const override {
 		const ibVariantNumber* srcData = dynamic_cast<const ibVariantNumber*>(data.GetRef());
 		if (srcData != nullptr) {

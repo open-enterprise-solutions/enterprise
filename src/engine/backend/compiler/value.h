@@ -1161,8 +1161,7 @@ public:
 
 	virtual ibValue GetValue(bool getThis = false) const;
 
-	// A FRESH, INDEPENDENT COPY — the verb behind `Val`, the variant's (core/variant.h), and this is the runtime's road
-	// for it. The answer is the holder of the copy; a caller that wants a runtime value takes ibValue(copy).
+	// A FRESH, INDEPENDENT COPY — the verb behind `Val`.
 	//
 	// VIRTUAL, because copying is a type's own business: anything deriving from
 	// ibValue must be able to state how it duplicates itself, and some types have
@@ -1182,18 +1181,18 @@ public:
 	// value that legitimately is empty. `Val form` is a mistake and is told so at
 	// the call, rather than compiling, running and quietly aliasing until the day
 	// it matters.
-	// NOT `Clone`. `Clone` is the name a C++ class conventionally gives "make me another object like
-	// this one", and half the tree uses it that way (a database layer, a drag item, a grid attr). A
-	// base method of that name on the root every value derives from turns each of those into a
-	// HIDDEN overload instead of an unrelated method. So the root takes the name that says what it
-	// actually does: copy the VALUE, beside GetValue/SetValue — and a property's live value, a
-	// variant too, states its copy under the same name.
+	// NOT `Clone`, and NOT virtual. `Clone` is the name a C++ class conventionally gives "make me
+	// another object like this one", and half the tree uses it that way (a database layer, a drag
+	// item, a grid attr, a table of values). A base method of that name on ibValue — the root every
+	// value derives from — turns each of those into a HIDDEN overload instead of an unrelated
+	// method, and which copy you get is then decided by the static type of the expression. So the
+	// root takes the name that says what it actually does: copy the VALUE, beside GetValue/SetValue.
 	//
 	// STILL VIRTUAL. The default road is "pack, then create from what was packed", and both halves
 	// are extension points already (DoSerialize / DoDeserialize) with IsTransferable as the refusal
 	// — so most types never touch this. But a type is allowed to state a copy of its own, and that
 	// is a declared contract with a test behind it (ValueClone.ATypeMayStateItsOwnCopy).
-	virtual ibVariant CloneValue() const override;
+	virtual ibValue CloneValue() const;
 
 	// (GetBoolean / GetNumber / GetDate / GetInteger / GetDouble are the variant's.)
 

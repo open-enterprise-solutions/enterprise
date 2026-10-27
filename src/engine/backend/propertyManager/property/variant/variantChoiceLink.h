@@ -18,8 +18,6 @@ public:
 	ibVariantChoiceLink(const ibVariantChoiceLink& src)
 		: ibVariant(ibValueTypes::TYPE_VALUE), m_ownerProperty(src.m_ownerProperty), m_linkDesc(src.GetLinkDesc()) {}
 
-	virtual ibVariant CloneValue() const override { return ibVariant(new ibVariantChoiceLink(*this)); }
-
 	ibChoiceTypeLinkDescription& GetLinkDesc() { RefreshLinkDesc(); return m_linkDesc; }
 	const ibChoiceTypeLinkDescription& GetLinkDesc() const { RefreshLinkDesc(); return m_linkDesc; }
 
@@ -61,8 +59,6 @@ public:
 		: ibVariant(ibValueTypes::TYPE_VALUE), m_ownerProperty(prop), m_paramsDesc(paramsDesc) {}
 	ibVariantChoiceParameters(const ibVariantChoiceParameters& src)
 		: ibVariant(ibValueTypes::TYPE_VALUE), m_ownerProperty(src.m_ownerProperty), m_paramsDesc(src.GetParametersDesc()) {}
-
-	virtual ibVariant CloneValue() const override { return ibVariant(new ibVariantChoiceParameters(*this)); }
 
 	ibChoiceParametersDescription& GetParametersDesc() { RefreshParametersDesc(); return m_paramsDesc; }
 	const ibChoiceParametersDescription& GetParametersDesc() const { RefreshParametersDesc(); return m_paramsDesc; }

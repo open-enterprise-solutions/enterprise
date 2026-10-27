@@ -1912,7 +1912,7 @@ start_label:
 						// `someFunc(3, 5)`. Mirrors OPER_CALL_METHOD and OPER_CALL_LAMBDA.
 						if (index2 == 1) {
 							// `Val` — a real copy, or a raise if the type has none.
-							CopyValue(cRunContext.m_pLocVars[i], ibValue(cvariable1.CloneValue()));
+							CopyValue(cRunContext.m_pLocVars[i], cvariable1.CloneValue());
 						}
 						else if (cvariable1.m_bReadOnly) {
 							// A constant is independent already — nothing to clone.
@@ -1948,7 +1948,7 @@ start_label:
 					}
 					else {
 						if (index2 == 1) {
-							CopyValue(heapCtx->m_pLocVars[i], ibValue(cvariable1.CloneValue()));
+							CopyValue(heapCtx->m_pLocVars[i], cvariable1.CloneValue());
 						}
 						else if (cvariable1.m_bReadOnly) {
 							CopyValue(heapCtx->m_pLocVars[i], cvariable1);
@@ -2308,7 +2308,7 @@ start_label:
 					}
 					else if (curCode.m_numOper == OPER_SET) {
 						if (index2 == 1) {
-							CopyValue(pNewCtx->m_pLocVars[i], ibValue(cvariable1.CloneValue()));
+							CopyValue(pNewCtx->m_pLocVars[i], cvariable1.CloneValue());
 						}
 						else if (cvariable1.m_bReadOnly) {
 							CopyValue(pNewCtx->m_pLocVars[i], cvariable1);

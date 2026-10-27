@@ -39,8 +39,6 @@ public:
 	ibVariantComposition(const ibVariantComposition& src)
 		: ibVariant(ibValueTypes::TYPE_VALUE), m_ownerProperty(src.m_ownerProperty), m_description(src.m_description) {}
 
-	virtual ibVariant CloneValue() const override { return ibVariant(new ibVariantComposition(*this)); }
-
 	// EQUAL WHEN THEY DESCRIBE THE SAME THING — the family's own comparison (a type compares its
 	// clsid list, a source its id path). What a property is worth is what it stores.
 	virtual bool CompareValueEQ(const ibVariant& data) const override {

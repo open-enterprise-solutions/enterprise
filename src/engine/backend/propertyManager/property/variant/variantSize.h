@@ -16,8 +16,6 @@ public:
 	ibVariantSize(const ibSize& size = ibDefaultSize) : ibVariant(ibValueTypes::TYPE_VALUE), m_size(size) {}
 	ibVariantSize(const ibVariantSize& src) : ibVariant(ibValueTypes::TYPE_VALUE), m_size(src.m_size) {}
 
-	virtual ibVariant CloneValue() const override { return ibVariant(new ibVariantSize(*this)); }
-
 	virtual bool CompareValueEQ(const ibVariant& data) const override {
 		const ibVariantSize* srcData = dynamic_cast<const ibVariantSize*>(data.GetRef());
 		if (srcData != nullptr) {

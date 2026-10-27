@@ -11,8 +11,6 @@ public:
 	ibVariantRecord(const ibPropertyObject* prop, const ibMetaDescription& typeDesc) : ibVariantMetaDesc(prop, typeDesc) {}
 	ibVariantRecord(const ibVariantRecord &src) : ibVariantMetaDesc(src.m_ownerProperty, src.m_metaDesc) {}
 
-	virtual ibVariant CloneValue() const override { return ibVariant(new ibVariantRecord(*this)); }
-
 	virtual ibString GetString() const override;
 
 };

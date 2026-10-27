@@ -35,8 +35,6 @@ public:
 	{
 	}
 
-	virtual ibVariant CloneValue() const override { return ibVariant(new ibVariantExternalPicture(*this)); }
-
 	virtual bool CompareValueEQ(const ibVariant& data) const override {
 		const ibVariantExternalPicture* srcData = dynamic_cast<const ibVariantExternalPicture*>(data.GetRef());
 		if (srcData != nullptr)
@@ -106,7 +104,6 @@ public:
 	}
 
 	virtual ~ibVariantPicture() { m_externalPicture->DecrRef(); }
-	virtual ibVariant CloneValue() const override { return ibVariant(new ibVariantPicture(*this)); }
 
 	virtual bool CompareValueEQ(const ibVariant& data) const override {
 		const ibVariantPicture* srcData = dynamic_cast<const ibVariantPicture*>(data.GetRef());

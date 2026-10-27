@@ -34,8 +34,6 @@ public:
 	ibVariantCommandSource(const ibVariantCommandSource& src)
 		: ibVariant(ibValueTypes::TYPE_VALUE), m_owner(src.m_owner), m_commandDesc(src.m_commandDesc), m_display(src.m_display) {}
 
-	virtual ibVariant CloneValue() const override { return ibVariant(new ibVariantCommandSource(*this)); }
-
 	virtual bool CompareValueEQ(const ibVariant& data) const override {
 		const ibVariantCommandSource* cmdData = dynamic_cast<const ibVariantCommandSource*>(data.GetRef());
 		return cmdData != nullptr && m_commandDesc == cmdData->m_commandDesc;   // full identity (path AND form name)

@@ -25,7 +25,6 @@
 #include <atomic>
 #include <string>
 #include <type_traits>   // the pointer catch-all below (enable_if / is_base_of / is_same)
-#include <vector>
 
 class ibDataNode;
 
@@ -225,12 +224,6 @@ public:
 	// Its class — a primitive's by its kind, an object's its own (0 when it names none).
 	virtual ibClassID GetClassType() const;
 
-	// A FRESH, INDEPENDENT COPY — the verb behind `Val`, answered with its holder (typed, it is taken as ibVariantPtr<T>).
-	// A primitive is its own copy, a reference copies what it holds, an object states its own (a property's live value),
-	// and one that states none is refused: handing back a share would look exactly like a copy until the day it is
-	// written. The runtime's road for its objects — pack, then create from what was packed — is ibValue's override.
-	virtual ibVariant CloneValue() const;
-
 	virtual bool Init() {
 		if (m_pRef != nullptr && m_typeClass == ibValueTypes::TYPE_REFFER)
 			return m_pRef->Init();
@@ -246,9 +239,6 @@ public:
 	virtual bool SetString(ibString&& strValue);
 	bool SetString(const char* sParam) { return SetString(ibString(sParam)); }
 	bool SetString(const wchar_t* sParam) { return SetString(ibString(sParam)); }
-
-	// THE VALUES THIS ONE IS PICKED AMONG — a quick choice: a flag's two, a text read as this kind.
-	virtual bool FindValue(const ibString& findData, std::vector<ibVariant>& listValue) const;
 
 	void SetData(const ibVariant& varValue); //setting the value without changing the type
 

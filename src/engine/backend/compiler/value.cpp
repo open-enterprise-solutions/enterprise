@@ -150,9 +150,12 @@ ibValue::ibValue(ibString&& cParam)   // native — takes the text over (runtime
 ibValue::ibValue(const ibVariant& variant)
 	: ibVariant()
 {
+	// Refused aloud, not left empty: a property's variant that reached the runtime is a mistake on the road that
+	// brought it, and an empty value would carry that mistake on unseen. GetRef() is a static_cast on this.
 	const ibVariant* held = variant.GetRef();
-	if (held->m_typeClass < ibValueTypes::TYPE_REFFER || dynamic_cast<const ibValue*>(held) != nullptr)
-		Copy(variant);
+	if (held->m_typeClass >= ibValueTypes::TYPE_REFFER && dynamic_cast<const ibValue*>(held) == nullptr)
+		ibBackendCoreException::Error(_("The value is not a value of the runtime"));
+	Copy(variant);
 	DEBUG_VALUE_CREATE();
 }
 
