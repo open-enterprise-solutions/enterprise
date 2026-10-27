@@ -8,7 +8,7 @@
 
 #include <gtest/gtest.h>
 #include "backend/compiler/value.h"
-#include "frmclient/win/typeconv.h"   // DateTimeToWxDateTime / WxDateTimeToDateTime — a date across to wx and back
+#include "frmclient/win/dateconv.h"   // DateTimeToWxDateTime / WxDateTimeToDateTime — a date across to wx and back
 #include "backend/compiler/procUnitLambda.h"   // CopyValue — the LET road a script's `r = …` takes
 #include "backend/system/value/valueArray.h"   // ValueHashContract — composite keys
 #include "backend/system/systemManager.h"      // ibValueSystemFunction::Date — the script's door to a date

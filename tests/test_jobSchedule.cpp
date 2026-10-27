@@ -14,7 +14,7 @@
 #include <gtest/gtest.h>
 
 #include "core/job/jobSchedule.h"
-#include "frmclient/win/typeconv.h"   // DateTimeToWxDateTime / WxDateTimeToDateTime — a date across to wx and back
+#include "frmclient/win/dateconv.h"   // DateTimeToWxDateTime / WxDateTimeToDateTime — a date across to wx and back
 #include "core/serialize/dataBuilder.h"
 
 #include <wx/datetime.h>   // wxDateTime::Month, the months the cases are written with

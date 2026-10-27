@@ -728,6 +728,9 @@
     <ClInclude Include="win\ctrls\treelistctrl.h">
       <Filter>win\ctrls</Filter>
     </ClInclude>
+    <ClInclude Include="win\dateconv.h">
+      <Filter>win</Filter>
+    </ClInclude>
     <ClInclude Include="win\typeconv.h">
       <Filter>win</Filter>
     </ClInclude>

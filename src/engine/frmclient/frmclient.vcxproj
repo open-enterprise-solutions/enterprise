@@ -636,6 +636,7 @@
     <ClInclude Include="win\ctrls\floatingNotebook.h" />
     <ClInclude Include="win\ctrls\toolBar.h" />
     <ClInclude Include="win\ctrls\treelistctrl.h" />
+    <ClInclude Include="win\dateconv.h" />
     <ClInclude Include="win\typeconv.h" />
     <ClInclude Include="visualView\commandBar.h" />
     <ClInclude Include="visualView\tableModel.h" />
