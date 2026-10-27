@@ -9,9 +9,8 @@ routine the desktop window always kept — menus, toolbars, what may be pressed,
 preview — so the server is not asked for it on every move.
 
 **Status.** The thin runtime is done: it does what the desktop runtime does. The thin designer is started: its window
-logs in as the designer and has the document/view skeleton; the designer's own panes and editors come next. Once it
-works, the desktop `frontend` and the thick applications built on it are removed; until then nothing new is built on
-them.
+logs in as the designer and has the document/view skeleton; the designer's own panes and editors come next. The desktop
+`frontend` and the thick applications built on it were removed on 2026-10-27 (branch `oes/thick_client`).
 
 ## Parts
 

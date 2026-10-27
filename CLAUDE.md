@@ -12,18 +12,16 @@ This file gives an AI assistant (Claude Code or similar) the context needed to w
 language and its compiler, the bytecode interpreter, the query engine, the database layer and the
 form layer — builds from one code base and runs an **identical suite** under three toolchains on
 two architectures: MSVC on Windows x64, GCC on Linux x64, and Apple Clang on macOS 14 **arm64**.
-Every application (`enterprise`, `designer`, `appserver`, `launcher`, `codeRunner`, `simplePlugin`)
+Every application (`enterprise-thin`, `designer-thin`, `appserver`, `launcher`, `codeRunner`, `simplePlugin`)
 links on every platform.
 
 The suite GROWS, so the number here is a reading and not a property: **919** on 2026-08-03 when
 the three jobs first agreed, **1166** on 2026-08-07 (1197 `TEST` cases live in `tests/`; CI's
-`ctest -E` holds back the two targets that need a display or a live PostgreSQL, and runs them in
-jobs of their own — the GUI suite is 38). Locally, with nothing excluded, `ctest` reports 1208.
+`ctest -E` holds back the target that needs a live PostgreSQL, and runs it in a job of its own).
+Locally, with nothing excluded, `ctest` reports 1208.
 Read the current figure off the last run rather than from here.
 
-Two boundaries, so the claim is not read wider than it is: the old **web** frontend
-(`wfrontend`) builds under CMake only with `-DOES_BUILD_WEB=ON`, which CI does
-not set — so a break in it keeps CI green; and of the five drivers, all compile everywhere and
+One boundary, so the claim is not read wider than it is: of the five drivers, all compile everywhere and
 **SQLite executes** in every job — Firebird and PostgreSQL load their clients at run time, which the
 general runners do not have, so each executes in a job of its own: `tests-firebird` (the pinned
 Firebird 5 kit laid out as `_fb/`, the embedded engine) and `tests-postgres` (a live PostgreSQL 16).
@@ -43,7 +41,7 @@ The runtime executes compiled bytecode, renders forms through wxWidgets, and sto
 | Build (cross-platform) | CMake — `CMakeLists.txt` at repo root; macOS / Linux build supported, Windows uses MSBuild |
 | Primary database | Firebird (embedded) |
 | Other databases | PostgreSQL (production), ODBC (CMake `OES_USE_*` opt-in, and the base an MSSQL layer derives from); SQLite is always embedded but is for **tests and logging only, never production** |
-| License | PolyForm Noncommercial 1.0.0 — source-available, **not** open source (LICENSE.md). Noncommercial use and evaluation (a business trying it before deciding) are free; commercial use needs a license from the licensor, and that license covers the licensor's own builds only. Releases up to 2026-08-22 stay under the LGPL 2.1 they were published with. The wxWidgets-derived widget sources keep the wxWindows Library Licence — see NOTICE.md |
+| License | PolyForm Noncommercial 1.0.0 — source-available, **not** open source (LICENSE.md). Noncommercial use and evaluation (a business trying it before deciding) are free; commercial use needs a license from the licensor, and that license covers the licensor's own builds only. The wxWidgets-derived widget sources keep the wxWindows Library Licence — see NOTICE.md |
 
 ---
 
@@ -51,7 +49,7 @@ The runtime executes compiled bytecode, renders forms through wxWidgets, and sto
 
 ```
 enterprise/
-├── enterprise.sln           # MSBuild solution (17 C++ projects; folders: services / exec / plugins / 3rdparty)
+├── enterprise.sln           # MSBuild solution (18 C++ projects; folders: services / exec / plugins / 3rdparty)
 ├── Common.props             # Shared output paths and macros
 ├── ConfigurationDefs.props  # Per-configuration preprocessor defines
 ├── CLAUDE.md                # This file
@@ -130,16 +128,13 @@ enterprise/
         │                    #   ibDateTime/ibGuid, fileSystem, serialize (dataBuilder, JSON), ibCoreException,
         │                    #   ibLocalization, build stamp; wx base only
         ├── backend/         # backend.dll  — engine, compiler, DB, metadata, debugger; links core
-        ├── frontend/        # frontend.dll (desktop UI) + wfrontend.dll (web) projects
         ├── protocol/        # protocol.dll — the client protocol: protocol.h (names/numbers, no deps) + the talking side
         ├── frmserver/       # frmserver.dll — server-side forms, the client host; includes protocol.h only
         ├── frmclient/       # frmclient.dll — the thin client's graphics library; links core and protocol
         ├── fileserver/      # fileserver.dll — a file base loaded into the thin client's process
         ├── enterprise-thin/ # enterprise-thin.exe (thin client)
-        ├── enterprise/      # enterprise.exe (thick client)
         ├── webserver/       # webserver.exe (the bases' transport for browsers: the site + the client protocol)
         ├── designer-thin/   # designer-thin.exe (thin designer)
-        ├── designer/        # designer.exe  (IDE)
         ├── launcher/        # launcher.exe  (connection chooser)
         ├── appserver/       # appserver.exe (the application server)
         ├── appcluster/      # appcluster.exe (servers per base, the port and routing, restarts; console or a service)
@@ -185,9 +180,9 @@ The compiler is a single-pass recursive descent parser with a deferred-call-reso
 
 ### 4. Two-DLL Architecture
 
-`backend.dll` has zero UI code. `frontend.dll` owns all wxWidgets code. Communication is through abstract C++ interfaces exported by `backend.dll`. This allows the backend to run headless (daemon, codeRunner, service mode).
+`backend.dll` has zero UI code. The wxWidgets GUI is the clients': `frmclient.dll` under `enterprise-thin` and `designer-thin`, and `launcher` / `codeRunner` on wx directly. The forms are `frmserver.dll`'s, which reaches the engine through abstract C++ interfaces exported by `backend.dll` and a client through the protocol. This allows the backend to run headless (daemon, codeRunner, service mode).
 
-Under both sits **`core.dll`** (`src/engine/core/`, `CORE_API` / `CORE_EXPORTS`, wx base only): what the engine and its clients mean by the same words — ids and `ibValueTypes` (`core/types.h`), `ibAnyValue` (the interface every value answers — the engine's and the client's `ibValue` derive from it, each storing its own way), `clsid.h`, `ibString` (+ pool), `ibNumber`, `ibDateTime`, `ibGuid`, `ibFormatString`, `fileSystem/` (`ibReader`/`ibWriter`, lz), `serialize/` (`ibDataNode`, binary + JSON providers), `ibCoreException`, `ibLocalization`, `diagnostics/` (the technology journal — one per process — and the crash guard), `description/` (the schemas both sides share — source path, command path, calc schedule, choice link, home page; ids and nodes, never a value), `query/` (the query language's words: keywords, scalar calls, unfold, balance role), `graphics/` (`ibPicture`, `ibFont`, `ibColour`, `ibPoint`/`ibSize`/`ibRect` — data; the conversion to wx is each side's), `ibProgramFolder` (`programFolder.h` — where `backend.conf`, `lang/`, `plugins/`, `_fb/` and the other programs are looked for: the executable's folder, or on macOS the one that holds the `.app`, never `Contents/MacOS`) and `ibDiagnosticFolder` (where the journal, the dumps and `oes-debug.log` go: the same folder, except `~/Library/Logs/OES` for a program running from a macOS bundle), `GetBuildId`/`GetBuildStamp`. It reads no base, runs no script, draws no window.
+Under both sits **`core.dll`** (`src/engine/core/`, `CORE_API` / `CORE_EXPORTS` and the platform `__IBMSW__` / `__IBOSX__` / `__IBGTK__` in `coreApi.h`; its text is `ibString` throughout, and of wx it keeps the base for `ibString`'s conversion, `_()`, `wxFileConfig`, zip and zlib): what the engine and its clients mean by the same words — ids and `ibValueTypes` (`core/types.h`), `ibAnyValue` (the interface every value answers — the engine's and the client's `ibValue` derive from it, each storing its own way), `clsid.h`, `ibString` (+ pool), `ibNumber`, `ibDateTime`, `ibGuid`, `ibFormatString`, `fileSystem/` (`ibReader`/`ibWriter`, lz), `serialize/` (`ibDataNode`, binary + JSON providers), `ibCoreException`, `ibLocalization`, `diagnostics/` (the technology journal — one per process — and the crash guard), `description/` (the schemas both sides share — source path, command path, calc schedule, choice link, home page; ids and nodes, never a value), `query/` (the query language's words: keywords, scalar calls, unfold, balance role), `graphics/` (`ibPicture`, `ibFont`, `ibColour`, `ibPoint`/`ibSize`/`ibRect` — data; the conversion to wx is each side's), `ibProgramFolder` (`fileSystem.h` — where `backend.conf`, `lang/`, `plugins/`, `_fb/` and the other programs are looked for: the executable's folder, or on macOS the one that holds the `.app`, never `Contents/MacOS`) and `ibDiagnosticFolder` (where the journal, the dumps and `oes-debug.log` go: the same folder, except `~/Library/Logs/OES` for a program running from a macOS bundle), `GetBuildId`/`GetBuildStamp`. It reads no base, runs no script, draws no window.
 
 - Chain: core → backend → frmserver ⇄ protocol ⇄ frmclient → enterprise-thin; fileserver = backend + frmserver inside the client process.
 - backend links core PUBLIC; every project that links `backend.lib` also links `core.lib`; protocol links core; frmclient links core + protocol. `protocol.h` itself stays dependency-free.
@@ -368,20 +363,24 @@ also written into the technology journal with the accepted list beside it.
 ### Start a client on a folder base
 
 ```cmd
-bin\Win32\Debug\designer.exe   --file=F:\projects\oes-bin\examples\fb_test301
-bin\Win32\Debug\enterprise.exe --file=F:\projects\oes-bin\examples\fb_test301
+bin\Win32\Debug\designer-thin.exe   --file=F:\projects\oes-bin\examples\fb_test301
+bin\Win32\Debug\enterprise-thin.exe --file=F:\projects\oes-bin\examples\fb_test301
 ```
 
-`--file=` is the **folder**, not a `.fdb`. Started with no `--file` and no `--srv`, the designer asks
-for the folder with a picker. Server bases take `--srv` / `--db` / `--usr` / `--pwd` instead; the
-full list is `OnInitCmdLine` in each `mainApp.cpp` (`file`, `srv`, `dbport`, `db`, `user`,
+`--file=` is the **folder**, not a `.fdb`. Started with no `--file`, no `--srv` and no `--address`, the
+designer asks for the folder with a picker. Server bases take `--srv` / `--db` / `--usr` / `--pwd`
+instead, a base an application server serves `--address=oes://server[:port]/<base>`; the full list is
+`OnInitCmdLine` in each `mainApp.cpp` (`address`, `trusted`, `file`, `srv`, `dbport`, `db`, `user`,
 `password`, `ibuser`, `ibpwd`, `locale`).
 
 ### The MCP server — how an assistant reaches the platform
 
-**It lives INSIDE `designer.exe`.** Nothing answers until the designer is running with a
-configuration open — a refused connection means the process is not up, not that the feature is
-missing. It listens on `http://127.0.0.1:3737/` (default; the address, the port and the token are
+**It is the base's (`backend/mcp`, held by `ibApplicationInstance`), so it lives in the process that
+opens the base:** `designer-thin.exe` on a file base (fileserver opens the base in the designer's own
+process), `appserver.exe` for a base it serves when the base's settings switch it on (its port is
+`McpPort` in `server.conf`). Nothing answers until that process is running with a configuration
+open — a refused connection means the process is not up, not that the feature is missing. The
+designer's listens on `http://127.0.0.1:7374/` (default; the address, the port and the token are
 in the designer's own MCP settings, kept per user in the base). The token is minted once, on first
 enable, and never regenerated behind anyone's back.
 
@@ -391,7 +390,7 @@ window that would otherwise stay silent while their configuration is read and ch
 text says exactly this, so the rule teaches itself.
 
 Then the ones worth knowing before starting: `platform_state` (what is open, which dialect),
-`metadata_tree` (the map), `app_run` (start the application; **`restart: true`** after changing a
+`metadata_tree` (the map), `app_run` (start the application — `enterprise-thin` by default, or `webserver`; **`restart: true`** after changing a
 module — a running client keeps the bytecode it came up with), `debug_sandbox` (run statements
 inside a stopped runtime, always rolled back; answers with `microseconds`), and the two journals —
 `journal_read` for what the INSTALLATION did (logins, writes, postings: the accountant's record)
@@ -417,7 +416,7 @@ All feature work happens on branches cut from `develop`. Pull requests target `d
 | Element | Convention | Example |
 |---|---|---|
 | Public classes (backend) | `ib` prefix | `ibDatabaseLayer`, `ibValueMetaObject` |
-| Public classes (frontend) | `ib` prefix | `ibValueForm`, `ibVisualHost` |
+| Public classes (frmserver / frmclient) | `ib` prefix | `ibValueForm`, `ibVisualHost` |
 | Member variables | `m_` prefix | `m_pByteCode`, `m_strName` |
 | Static members | `s_` prefix | `s_instance`, `s_listKeyWord` |
 | Compile-time constants | `g_` prefix | `g_metaCatalogCLSID` |

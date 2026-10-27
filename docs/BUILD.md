@@ -180,16 +180,12 @@ bin\
     Debug\      or  Release\
       core.dll
       backend.dll
-      frontend.dll
-      wfrontend.dll
       protocol.dll
       frmserver.dll
       frmclient.dll
       fileserver.dll
       enterprise-thin.exe
-      enterprise.exe
       designer-thin.exe
-      designer.exe
       launcher.exe
       appserver.exe
       appcluster.exe
@@ -209,8 +205,7 @@ product, copyright, and the version, which is the platform's (`OES_VERSION_MAJOR
 the same three `version_oes_last` is made of). Every program also merges `core/program.manifest` into the manifest
 the linker makes: Windows 10 and later, long paths. The linker adds asInvoker, wx the common controls 6 (its
 `defs.h`); per-monitor DPI awareness is not declared — wx's default. The vcxproj compiles them; CMake does not.
-`webserver.exe` is the web server: the site and the client protocol for browsers. `wfrontend.dll` is the old web
-frontend; no program loads it. `protocol.dll`, `frmserver.dll`, `frmclient.dll`, `fileserver.dll`, `enterprise-thin.exe` and
+`webserver.exe` is the web server: the site and the client protocol for browsers. `protocol.dll`, `frmserver.dll`, `frmclient.dll`, `fileserver.dll`, `enterprise-thin.exe` and
 `designer-thin.exe` are the thin client and its server side ([thin-client.md](public/thin-client.md)). `simplePlugin.dll` is the plugin example; it builds into
 `bin\<Platform>\<Configuration>\plugins\` — the directory the plugin manager scans at
 startup.
@@ -232,7 +227,7 @@ startup.
 > `SaveAs()` and building incrementally crashed the client in `InitDocument`.
 >
 > Two rules follow. **Rebuild the solution** (`/t:Rebuild`) after touching a virtual in
-> `backend`/`frontend` public headers — MSBuild tracks header dependencies, but nothing checks
+> `backend`/`frmserver`/`frmclient` public headers — MSBuild tracks header dependencies, but nothing checks
 > that a stale `.dll` from an earlier run is still in `bin\`. And when the addition is optional,
 > **put it at the END of the class**, where it only grows the table instead of renumbering it.
 
@@ -321,7 +316,6 @@ The root `CMakeLists.txt` adds fifteen engine subdirectories, each with its own
 |---|---|
 | core | shared lib (`CORE_EXPORTS`; of wx, `wx::base` only; plus libuuid / CoreFoundation for `guid.cpp`) |
 | backend | shared lib (`BACKEND_EXPORTS`, links `core` PUBLIC) |
-| frontend | shared lib (`FRONTEND_EXPORTS`, links wx GUI) |
 | protocol | shared lib (`PROTOCOL_EXPORTS`) — does not link `core` |
 | frmserver | shared lib (`FRMSERVER_EXPORTS`) |
 | fileserver | shared lib (`FILESERVER_EXPORTS`) |
@@ -329,16 +323,12 @@ The root `CMakeLists.txt` adds fifteen engine subdirectories, each with its own
 | appserver | executable (console) — the application server; `daemon` is kept as an alias target |
 | appcluster | executable (console, or a service) — one or more servers per base of the folder; links `core` alone |
 | appcluster-tray | executable (GUI) — the cluster's tray; links `core` alone |
-| enterprise | executable (GUI) |
+| webserver | executable (console) — the web server |
 | enterprise-thin | executable (GUI) — the thin client |
-| designer | executable (GUI) |
 | designer-thin | executable (GUI) — the thin designer |
 | launcher | executable (GUI) |
-| codeRunner | executable (GUI) |
+| codeRunner | executable (GUI) — links `backend` and wx, as `launcher` does |
 | simplePlugin | shared lib (plugin example) |
-
-The old web frontend (`wfrontend`) builds under CMake with `-DOES_BUILD_WEB=ON` (default OFF) and
-under the MSBuild solution. CI does not set the option, so it is not built there.
 
 ### macOS-specific Notes
 
@@ -346,11 +336,11 @@ under the MSBuild solution. CI does not set the option, so it is not built there
 - Core, protocol, backend and frmserver link against `wx::base` (and the backend `wx::xml`) only, compiled with
   `wxUSE_GUI=0` — a GUI type there is a compile error; not `wx::net` either: every socket is the core's (`core/net`)
 - Firebird embedded is not available via Homebrew; use SQLite for local development
-- App bundles (`designer.app`, `enterprise.app`) are created automatically by CMake, and this
-  path is **exercised, not merely declared**: they have been built on a real Mac, with the
-  icon placed into `Resources` and `Info.plist` filled in (`CFBundleIdentifier`,
-  `CFBundleExecutable`, icon name). Treat the `if(APPLE)` branches in the designer /
-  enterprise / launcher CMake files as working code, not scaffolding
+- App bundles (`designer-thin.app`, `enterprise-thin.app`, `launcher.app`) are created automatically
+  by CMake, and this path is **exercised, not merely declared**: the desktop front's bundles were
+  built on a real Mac, with the icon placed into `Resources` and `Info.plist` filled in
+  (`CFBundleIdentifier`, `CFBundleExecutable`, icon name). Treat the `if(APPLE)` branches in the
+  designer-thin / enterprise-thin / launcher CMake files as working code, not scaffolding
 - **Inside a bundle, the program folder is the one that holds the `.app`** (`core/fileSystem.h`).
   A program running from `X.app/Contents/MacOS/` looks beside the bundle for everything a Windows
   or Linux build keeps beside its executable: `backend.conf`, `lang/`, `help/`, `plugins/`, `_fb/`,
@@ -464,7 +454,6 @@ Paths use the `oesPlatform` macro (`Win32` for `x86`, `Win64` for `x64`):
 | **Firebird (Linux, Debug)** | ubuntu-22.04 | Firebird actually executes. The pinned Firebird 5 kit (`.github/firebird-kit-linux.sh`, the one the nightly package ships) is laid out as `_fb/` beside `oes_tests`, and the `Firebird*` tests run through the embedded engine — no server. The tests skip where no client loads; here a skip FAILS the job, since a kit that stopped loading would otherwise leave it green. Added 2026-09-22. |
 | **Tests (Linux, ASan + UBSan)** | ubuntu-22.04 | The suite of *Tests (Linux, Debug)* built with `-DOES_SANITIZE=address,undefined`: no use after free, no overflow, no undefined behaviour, and — LeakSanitizer rides in with ASan on Linux — no leak at exit. Leak detection is off while BUILDING, because `gtest_discover_tests` runs each binary then. **Not blocking yet** (`continue-on-error`): the first runs are a harvest; the job becomes blocking once it is fixed. Added 2026-09-22. |
 | **Tests (Linux, TSan)** | ubuntu-24.04 | No data race in the code a fiber can race. `oes_tests` built with `-DOES_SANITIZE=thread` and run on the suites that park a fiber, share a session, pool a connection, take a lock or run the job manager (`WorkerPool*`, `Fiber*`, `SessionHolder`, `SessionDbLayer`, `ConnectionPool`, `SocketLockFix`, `JobManager`, `JobSchedule`) — not the whole backend. The fiber switch is assembly TSan cannot see, so `ibFiber` tells it which fiber runs (`__tsan_switch_to_fiber`). **Blocking**: a race in our code fails the job; `.github/tsan-suppressions.txt` takes third-party code only, each line with its reason. GCC 13, hence the newer runner: GCC 11's libtsan reports a double lock of a destroyed mutex when a fiber locks a mutex on the calling thread's stack, and GCC 13 does not. Added 2026-10-10. |
-| **GUI tests (Linux, Xvfb)** | ubuntu-22.04 | `oes_frontend_runtime_test` — links `frontend.dll`, needs a live wxApp. Separate job: its failure mode (a modal on an assert, or a process that passes every test and then does not exit) is unlike a backend test's. Xvfb is started by the step itself rather than through `xvfb-run`, so `$!` is the process under test — see the § below on what the wrapper cost. |
 | **Tests (macOS 14, arm64, Debug)** | macos-14 | The third toolchain, and a different CPU with it: AArch64 (unsigned `char`, a weaker memory model, its own alignment), Apple libc++ rather than libstdc++, and wx against Cocoa instead of GTK — including the `APPLE` branch of `guid.cpp` (CFUUID) that nothing else compiles. Added 2026-08-03. |
 | **Benchmarks (Linux, Release) — record only** | ubuntu-22.04 | The only job that builds Release. It runs on `develop` and `master` (and on demand), never on a PR, and **gates nothing** — `|| true`, no threshold: a benchmark that fails CI on a shared runner becomes a flaky test nobody trusts. A performance figure is worth what it is worth next to the commit it belongs to, so develop pays the ~16 minutes of building wx from scratch. |
 
@@ -472,8 +461,8 @@ The three general jobs (Linux, Windows, macOS) each also run a **Build the appli
 Until 2026-08-03 CI built only test
 targets, so `enterprise` / `designer` / `daemon` / `launcher` / `codeRunner` / `simplePlugin`
 were never compiled by it at all — a break in an executable's own sources reached a developer
-before it reached the pipeline. The step is cheap: backend and frontend are already built by
-the steps above it.
+before it reached the pipeline. The step is cheap: the libraries are already built by the steps
+above it.
 
 State on 2026-08-03, the day the matrix first agreed (job logs): **all four jobs green.** Linux
 **919/919** (96.6 s, job ~33 min), Windows **919/919** (132 s, ~37 min), macOS arm64 **919/919**
@@ -484,7 +473,8 @@ State on 2026-08-07: the suite has grown to **1166** and the GUI job to **38**, 
 general jobs still report the same number as each other — which is the property being watched;
 919 was never the property. That run was **red on all three at once** (1157/1166): nine
 `JobManager` cases, one cause in the engine rather than in any toolchain, fixed the same day
-(ROADMAP § 1b). The GUI job did not exit — see below.
+(ROADMAP § 1b). The GUI job did not exit — [portability.md § 4](portability.md); the job went with
+the desktop front on 2026-10-27.
 
 Three toolchains, three standard libraries, two CPU architectures, one identical test count.
 The six defects the macOS toolchain surfaced on its first runs — and what the warning noise was
@@ -492,14 +482,14 @@ hiding — are in [portability.md § 3](portability.md).
 
 **The macOS job is not a first compile.** A colleague has been building the tree on a Mac locally
 — which is why [portability.md § 3](portability.md) listed macOS as "not in CI" rather than as
-unbuilt — and the `APPLE` branches in the launcher / enterprise / designer CMake files are
-worked out, not placeholders. What the job adds is not the first build but the *standing* one:
+unbuilt — and the `APPLE` branches in the launcher / enterprise-thin / designer-thin CMake files
+are worked out, not placeholders. What the job adds is not the first build but the *standing* one:
 the platform stops depending on a single machine and on someone remembering to try it before a
 release. Anything it does surface belongs in [portability.md](portability.md) as a rule.
 
 Five notes on why it is shaped this way — each one paid for by a wasted round:
 
-- **Everything goes through the CMake presets, including Windows.** `enterprise.sln` carries 10
+- **Everything goes through the CMake presets, including Windows.** `enterprise.sln` carries 18
   C++ projects and none is wxWidgets, so MSBuild cannot bootstrap a clean runner — it expects wx
   libraries to exist already. The preset path builds wx from the submodule. So CI never builds
   `enterprise.sln`: a step only the solution runs — `backend.vcxproj`'s call to
@@ -515,7 +505,7 @@ Five notes on why it is shaped this way — each one paid for by a wasted round:
   enabling them costs no dependency and stops CI from testing a configuration nobody builds.
   ODBC stays off because nothing
   exercises it.
-- **Build every non-GUI test target, not just `oes_tests`.** `ctest` registers them all, so
+- **Build every test target, not just `oes_tests`.** `ctest` registers them all, so
   building one reports the rest as `<name>_NOT_BUILT` failures.
 - **A failing `bin/…tests.exe` step is often the LISTING, not a test.** `gtest_discover_tests`
   runs each freshly linked executable to enumerate its cases, and CMake allows it 5 seconds by
@@ -525,7 +515,7 @@ Five notes on why it is shaped this way — each one paid for by a wasted round:
   locally, and 0.09–0.37 s for the backend-linking suite — so `tests/CMakeLists.txt` registers
   every suite through one `oes_discover_tests()` wrapper carrying `DISCOVERY_TIMEOUT 120`. Add a
   new suite through that wrapper, not through `gtest_discover_tests` directly.
-- **The solution compiles no tests.** `enterprise.sln` carries the 17 shipping projects and nothing
+- **The solution compiles no tests.** `enterprise.sln` carries the 18 shipping projects and nothing
   from `tests/` — the test tree is reached through CMake only. So a rename or a header move that a
   local `Debug|x86` build accepts can still leave test sources naming a file that no longer exists,
   and CI is what says so. Three did, on 2026-08-20
@@ -565,8 +555,9 @@ reads a row back** — Firebird's own `isql` put into the kit for that minute �
 are not a working engine: the engine plugin, the character sets and ICU are loaded at run time.
 
 It is a separate workflow from `ci.yml`: no tests (CI runs them on every push), Release built from
-scratch, only the programs' own targets (`enterprise designer launcher codeRunner appserver simplePlugin`;
-the nightly that master still runs names `daemon`, which CMake keeps as an alias of `appserver`).
+scratch, only the programs' own targets (`enterprise-thin fileserver designer-thin launcher codeRunner appserver
+appcluster appcluster-tray webserver simplePlugin`; fileserver is named because the thin client loads it
+and nothing links it).
 The release is published only when **all three** packed, so it never offers one platform from tonight
 beside another from last week. Each packing script under `.github/nightly/` **refuses** a tree that
 would not start — a missing piece, or a library that does not resolve from the unpacked folder — and
@@ -625,7 +616,7 @@ General > Platform Toolset** and install the VS 2022 C++ toolset if missing.
 
 ### Linker error: unresolved external symbol in `backend.dll`
 
-**Symptom:** `LNK2001` errors when building frontend or executables.
+**Symptom:** `LNK2001` errors when building frmserver, fileserver or executables.
 
 **Fix:** Build `backend` first. In the solution, right-click the failing project, select **Project Dependencies**, and ensure `backend` is checked.
 
@@ -662,5 +653,5 @@ git submodule update --init --recursive
 
 **Symptom:** `LNK1168: cannot open <name>.exe for writing` during link.
 
-**Fix:** Close any running OES processes (`enterprise.exe`, `designer.exe`,
+**Fix:** Close any running OES processes (`enterprise-thin.exe`, `designer-thin.exe`,
 `launcher.exe`, `appserver.exe`) before linking — they hold the output file open.

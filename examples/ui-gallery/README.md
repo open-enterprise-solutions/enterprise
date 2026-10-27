@@ -10,10 +10,11 @@ here as a worked example of what that looks like, plus a record of what it found
 
 OES has two layers that could be called "the UI kit":
 
-- `src/engine/frontend/uikit/` — a wxUniversal-fork, desktop-only renderer (the
-  "Luna" theme). Unfinished, and the web client never calls into it at all.
-- `src/engine/frontend/visualView/ctrl/` — the 19 form-control types a developer
-  actually places from the Designer's palette. This is the layer a form's
+- `src/engine/frmclient/uikit/` — a wxUniversal-fork renderer of the thin client
+  (the "Luna" theme). Unfinished, and the web client never calls into it at all.
+- `src/engine/frmserver/visualView/ctrl/` — the form-control types a developer
+  actually places from the Designer's palette (drawn by the thin client's
+  `src/engine/frmclient/visualView/ctrl/`). This is the layer a form's
   metadata is built from, and the only one with any chance of reaching the web
   client — see the gap below for how much of a chance that actually is.
 
@@ -73,18 +74,18 @@ fills the sample values, the table rows and the HTML page.
 
 ### `Choice`, `ComboBox`, the unregistered `ListBox` variant
 
-These exist as C++ classes under `visualView/ctrl/` but are never passed through
-`CONTROL_TYPE_REGISTER`, so they cannot appear in this gallery, or in any form on
-either client, until someone separately verifies their rendering and registers
-them. The gallery's 20th page names this gap instead of silently omitting them.
+These were C++ classes of the old desktop front, never passed through
+`CONTROL_TYPE_REGISTER`, and went with it (as did `Toolbar`), so they cannot
+appear in this gallery, or in any form on either client. The gallery's 20th page
+names this gap instead of silently omitting them.
 
 ### The web client
 
 The browser client is `webserver`'s: it draws the forms the server sends over the
 client protocol (`docs/public/client-protocol.md`), the same the thin client
 draws. List and document forms draw today; the rest of the controls, this
-gallery's among them, are arriving. The old web frontend (`wfrontend`, the
-`OES_USE_WEB` widgets) drew almost none of them, and no program starts it any more.
+gallery's among them, are arriving. The old web front (the `OES_USE_WEB`
+widgets) drew almost none of them, and was removed.
 
 ### Desktop: a page-selection bug and a tab-rendering bug
 
@@ -92,11 +93,11 @@ Both are fixed in a separate change (PR #528, "Notebook: inactive tabs vanish on
 macOS when a control's Font is empty"); without it this gallery opens on an
 arbitrary page and shows only the active tab.
 
-Opening this gallery in `enterprise.exe` (or the Designer's own form editor) used
-to show only one `NotebookPage` at a time, picking a different, seemingly
-arbitrary page on every fresh run — with the visible tab's own label sometimes
-not even matching what was drawn under it. Two distinct bugs were involved, both
-in `src/engine/frontend/visualView/ctrl/notebook.cpp`:
+Opening this gallery in the old desktop front (branch `oes/thick_client`), or its
+Designer's form editor, used to show only one `NotebookPage` at a time, picking a
+different, seemingly arbitrary page on every fresh run — with the visible tab's
+own label sometimes not even matching what was drawn under it. Two distinct bugs
+were involved, both in that front's notebook control:
 
 1. **Selection — fixed.** A notebook built wholesale in one pass (every
    `NotebookPage::OnCreated` calls `AddPage(..., select=false)`, since no page
@@ -170,8 +171,8 @@ Still open:
 
 ## Opening it
 
-- Desktop: `designer.exe --file=examples/ui-gallery` /
-  `enterprise.exe --file=examples/ui-gallery`, then Operations → Data processors
+- Desktop: `designer-thin.exe --file=examples/ui-gallery` /
+  `enterprise-thin.exe --file=examples/ui-gallery`, then Operations → Data processors
   → UI Component Gallery.
 - Web: `webserver --file=examples/ui-gallery`, then the publication's address it
   prints (`http://127.0.0.1:8080/ui-gallery/`). Per the section above, expect what

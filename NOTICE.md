@@ -28,15 +28,6 @@ contributor stays the author of their own commits, and the repository's contribu
 GitHub names them. It is not copied here by hand, because a copy kept by hand drifts from the
 record it copies.
 
-## The change of terms, 2026-08-23
-
-Until 2026-08-23 this software was published under the GNU LGPL 2.1. From that date the
-terms are the PolyForm Noncommercial License 1.0.0 — see [LICENSE.md](LICENSE.md).
-
-The change applies **going forward only**. Anything already released under the LGPL 2.1
-stays available under it to whoever obtained it; a license already granted cannot be
-withdrawn.
-
 ## Third-party components
 
 These keep their own licenses. Nothing in LICENSE.md changes or overrides them.
@@ -53,7 +44,6 @@ These keep their own licenses. Nothing in LICENSE.md changes or overrides them.
 | NanoSVG | `src/3rdparty/nanosvg` (submodule) | zlib |
 | SQLite | `src/engine/backend/databaseLayer/sqllite/engine` | public domain |
 | Firebird client headers | `src/engine/backend/databaseLayer/firebird/engine` | InterBase Public License 1.0 / IDPL, per file header |
-| wxCharts (Xavier Leclercq) | `src/engine/frontend/win/ctrls/charts` | MIT |
 
 ## wxWidgets-derived sources inside the engine
 
@@ -71,12 +61,12 @@ They live in:
 
 | Directory | Files |
 |---|---|
-| `src/engine/frontend/win/ctrls/grid`, `src/engine/frmclient/win/ctrls/grid` | 9 + 9 |
-| `src/engine/frontend/win/ctrls/dataview`, `src/engine/frmclient/win/ctrls/dataview` | 8 + 8 |
-| `src/engine/frontend/win/ctrls`, `src/engine/frmclient/win/ctrls` (treelistctrl) | 2 + 2 |
-| `src/engine/frontend/docView`, `src/engine/frmclient/docView`, `src/engine/frmserver/docView` | 2 + 2 + 2 |
-| `src/engine/frontend/uikit`, `src/engine/frmclient/uikit` (with `ctrl`, `theme`) | 70 + 70 |
-| `src/engine/frontend/propertyManager/property/advprop`, `src/engine/frmclient/propertyManager/property/advprop` (advpropFont, advpropSize) | 2 + 2 |
+| `src/engine/frmclient/win/ctrls/grid` | 9 |
+| `src/engine/frmclient/win/ctrls/dataview` | 8 |
+| `src/engine/frmclient/win/ctrls` (treelistctrl) | 2 |
+| `src/engine/frmclient/docView`, `src/engine/frmserver/docView` | 2 + 2 |
+| `src/engine/frmclient/uikit` (with `ctrl`, `theme`) | 70 |
+| `src/engine/frmclient/propertyManager/property/advprop` (advpropFont, advpropSize) | 2 |
 
 The per-file notices are authoritative; the table is a map, not a substitute. See
 `docs/private/wx-fork.md` (private) for what was changed and why.

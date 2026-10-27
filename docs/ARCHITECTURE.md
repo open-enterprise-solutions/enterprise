@@ -20,19 +20,16 @@
 ## System Overview
 
 ```
-  THICK DESKTOP                THIN CLIENTS                              SERVERS
-  designer · enterprise        designer-thin · enterprise-thin           appserver
-  launcher · codeRunner                  │                                       │
-                                         ▼                                       ▼
+  TOOLS                        THIN CLIENTS                              SERVERS
+  launcher · codeRunner        designer-thin · enterprise-thin           appserver
+            │                            │                                       │
+            │                            ▼                                       ▼
             │                  ┌───────────────────┐  client protocol  ┌───────────────────┐
             │                  │  frmclient.dll    │  WS / POST,       │  frmserver.dll    │
             │                  │  protocol.dll     │◄─────────────────►│  fileserver.dll — │
             │                  └───────────────────┘  OES-RPC          │  a file base, in  │
-            ▼                                                          │  the client       │
-  ┌───────────────────┐                                                └─────────┬─────────┘
-  │  frontend.dll     │                                                          │
-  │  wfrontend.dll    │                                                          │
-  └─────────┬─────────┘                                                          │
+            │                                                          │  the client       │
+            │                                                          └─────────┬─────────┘
             ▼                                                                    ▼
   ┌────────────────────────────────────────────────────────────────────────────────────┐
   │  backend.dll — ibApplicationHost → its bases · ibMetaDataConfiguration ·           │
@@ -48,9 +45,8 @@
                  appcluster and appcluster-tray link it alone
 ```
 
-Three roads lead into one engine. The **thick desktop** draws its forms in its own process: `frontend.dll` talks
-to `backend.dll` through abstract C++ interfaces exported from `backend.dll`, and never reaches a database driver or
-the compiler directly. A **thin client** draws only: its forms live in `frmserver.dll` beside the engine, and the two
+Two roads lead into one engine, and two tools sit on it directly (`launcher` and `codeRunner` link `backend` and wx,
+with no form). A **thin client** draws only: its forms live in `frmserver.dll` beside the engine, and the two
 talk the [client protocol](public/client-protocol.md) — across the network to an application server, or inside the
 client's own process to a file base (`fileserver.dll`, loaded for it). The **servers** hold bases for clients who come
 over that protocol. Under all of them sits `core.dll` — see [Core Layer](#core-layer-coredll).
@@ -62,15 +58,13 @@ over that protocol. Under all of them sits `core.dll` — see [Core Layer](#core
 ### Application Layer (executables)
 
 Each executable provides a `wxApp` (a console one, `wxAppConsole`) subclass. What it links decides what it is: the
-thick ones and the servers link `backend` and pick the run mode and the kind of their own session; the thin ones link
+tools and the servers link `backend` and pick the run mode and the kind of their own session; the thin ones link
 `frmclient` + `protocol` and hold no base — unless they open a file base, when `fileserver`, loaded for it, brings the
 engine into their process; the cluster and its tray link `core` alone:
 
 | Executable | Run Mode (`ibRunMode`) | Own session (`ibSessionKind`) | Purpose |
 |---|---|---|---|
 | `launcher.exe` | `eLAUNCHER_MODE` | — | Connection chooser; creates/selects database |
-| `designer.exe` | `eFILE_MODE` | `Designer` | Full IDE — metadata editor, form designer, debugger client |
-| `enterprise.exe` | `eFILE_MODE` | `Enterprise` | Desktop thick-client runtime (GUI, single user session per process) |
 | `designer-thin.exe` | its host's | `ThinDesigner` (on the server) | The designer as a thin client: an application server's base by its address (`oes://host:port/base`, `oess://` over TLS), or a file base opened in its own process |
 | `enterprise-thin.exe` | its host's | `ThinClient` (on the server) | The runtime as a thin client, by the same two roads; holds no base of its own and runs no code |
 | `appserver.exe` | `eSERVER_MODE` | `Service` | The application server: serves one base of its server folder for the cluster, headless; protocol clients are `ThinClient` / `ThinDesigner` |
@@ -89,16 +83,17 @@ factories, no checks: a schema stores ids and structure.
 
 | Unit | Holds |
 |---|---|
-| `core.h` | `CORE_API` / `CORE_EXPORTS`, `IB_FORCEINLINE` / `IB_NOINLINE`; id typedefs (`ibRoleID`, `ibMetaID`, `ibSourceId`, `ibFormID`, `ibActionID`, `ibPictureID`, `ibVersionID`), `ibValueTypes`, `ibDateFractions`, `ibCtorObjectType`, the primitives' class ids (`g_valueUndefinedCLSID`, `g_valueBooleanCLSID` … `g_valueNullCLSID`) and `GetIDByVT`, `COMPONENT_TYPE_*`, the packed value node's field names `kValueFieldClsid` "t" / `kValueFieldData` "v" |
+| `coreApi.h` | what every header of the core stands on, with no include of its own: `IB_EXPORT` / `IB_IMPORT` (every module's API macro is spelled with them), `CORE_API` / `CORE_EXPORTS`, `IB_FORCEINLINE` / `IB_NOINLINE`, the platform — `__IBMSW__` / `__IBOSX__` / `__IBGTK__` — and the string's character and literal, `ibChar` / `ibT("…")` |
+| `core.h` | `coreApi.h`, and id typedefs (`ibRoleID`, `ibMetaID`, `ibSourceId`, `ibFormID`, `ibActionID`, `ibPictureID`, `ibVersionID`), `ibValueTypes`, `ibDateFractions`, `ibCtorObjectType`, the primitives' class ids (`g_valueUndefinedCLSID`, `g_valueBooleanCLSID` … `g_valueNullCLSID`) and `GetIDByVT`, `COMPONENT_TYPE_*`, the packed value node's field names `kValueFieldClsid` "t" / `kValueFieldData` "v" |
 | `anyValue` | `ibAnyValue` — the INTERFACE every value answers (`GetType`, `IsEmpty`, `GetBoolean`, `GetNumber`, `GetDate`, `GetString`). The engine's `ibValue` and the client's derive from it and hold the value each its own way; what only asks these takes either |
-| `clsid.h`, `fstring`, `fnumber`, `fdatetime`, `fboolean`, `guid`, `stringUtils.h` | `ibClassID`, `ibString` (+ pool), `ibNumber`, `ibDateTime`, `ibBoolean`, `ibGuid` |
+| `clsid.h`, `fstring`, `fnumber`, `fdatetime`, `fboolean`, `guid`, `stringUtils.h` | `ibClassID`, `ibString` (+ pool, `ibEmptyString`), `ibNumber`, `ibDateTime`, `ibBoolean`, `ibGuid`. The core's text is `ibString` throughout; `wxString` meets it only in `fstring.h`, the conversion both ways |
 | `compiler/` | the script language's words and its text: `codeDef.h` (opcodes, keywords), `ibTranslateCode` (the lexer — `s_listKeyWord`), `ibLiteral` (a value a text writes: the lexer's constant), `ibParseCode` (what a module text declares, read without compiling it — the procedures window, autocomplete, the module outline), `ibFoldCode` (where a module's text folds — both code editors'), `ibLinqBlock` (LINQ's block syntax as parts). The compiler and the interpreter are the backend's |
 | `formatString` | `ibFormatString` — the `Format` string as a value: `Parse` / `Render`, `Apply(const ibAnyValue&)`, `FromTypeDesc` (the format a type description gives, over either side's description) |
 | `memory/` | `ibMemoryBuffer` (bytes: shared until written, the string's shape, no wx), `ibMemoryPool` (the per-thread block pool of strings and buffers), `ibWriterMemory` / `ibReaderMemory` (chunked byte streams over a buffer), lz block compression. A read, seek or advance past the end of a block, or a zero-terminated string with no terminator inside it, is refused (`ibCoreException`) in every build |
 | `serialize/` | `ibDataNode` / `ibDataValue`, binary provider, `ibJsonProvider`, JSON text. A type is named only by the injected resolver (`SetTypeResolver`). The JSON reader refuses nesting deeper than 256 objects and arrays (`kMaxNesting`, the root counted) |
 | `exception` | `ibCoreException : std::exception` — the base of every refusal (see [Exception taxonomy](#exception-taxonomy)) |
 | `description/` | the schemas both sides read and write the same way: `ibSourceDescription` (a binding path as hops), `ibCommandDescription` (a command path as hops), `ibCalcScheduleDescription`, `ibChoiceLinkDescription`, `ibCompositionDescription` (what a list and a report are: filter, sort, grouping, structure, parameters, variants — every value in it packed as a node, restored by the side's `backend_composition.h` against its configuration, which also holds the check `ibValidateSettings`), `ibHomePageDescription`, `ibJobScheduleDescription` (when a job is due, as fields and masks — what they mean, and whether they are well formed, is `ibJobScheduleRules`, `job/`), `ibPictureDescription` (an engine picture's id, a configuration's Guid or the image bytes — whether the engine has that id is asked by whoever reads it), `ibSpreadsheetDescription`, `ibStandardCommandDescription` (the action a tool runs — a system id or a handler's name), `ibTypeDescription` / `ibMetaDescription` (a type as clsids + qualifiers; a binding as metaIDs — the ids alone, no names: an id that names nothing is dropped by whoever reads it). A schema holds ids and nodes, never a value |
-| `graphics/` | a picture, a font, a colour, a point, a size, a rect — as DATA, for both sides and for a page: `ibPicture` (a PNG's bytes; its size, scaled and read from a master's Base-64 by LodePNG, drawn from SVG and said as SVG by NanoSVG), `ibFont` (face, style, weight, fractional size, family, underlined, struck through), `ibColour` (RGBA or none), `ibPoint` / `ibSize` / `ibRect` (wx's, byte for byte). The conversion to wx is each window's (the desktop: `ToBitmap` / `ToIcon` in `frontend/win/picture.h`; the thin client: `ibProtocolImage`); the backend and frmserver have no wx image. The backend and frmserver hold fonts, colours, points and sizes only as these (property cells, form defaults, sheet cells); `typeConv` (`Font`/`Colour`/`Point`/`Size` ⇄ wx) lives in `frontend/win/typeconv.h`, with a copy in frmclient |
+| `graphics/` | a picture, a font, a colour, a point, a size, a rect — as DATA, for both sides and for a page: `ibPicture` (a PNG's bytes; its size, scaled and read from a master's Base-64 by LodePNG, drawn from SVG and said as SVG by NanoSVG), `ibFont` (face, style, weight, fractional size, family, underlined, struck through), `ibColour` (RGBA or none), `ibPoint` / `ibSize` / `ibRect` (wx's, byte for byte). The conversion to wx is each window's (the thin client: `ibProtocolImage`; codeRunner: `ToBitmap` / `ToIcon` in its `win/picture.h`); the backend and frmserver have no wx image. The backend and frmserver hold fonts, colours, points and sizes only as these (property cells, form defaults, sheet cells); `typeConv` (`Font`/`Colour`/`Point`/`Size` ⇄ wx) lives in `frmclient/win/typeconv.h` |
 | `tabular/` | `tabularModelView` — the table's model view, ONE for the server's tables and the thin client's: `ibDataViewModel` (values, hierarchy, the paged fetch, the notifier, `SubmitFetchAsync` — a thread of the model's own, bare: no session, no base), `ibDataViewItem` / `ibDataViewObject`, `ibDataViewItemAttr` (a row's look — colours as `ibColour`; the font it lays over a view's is the side's, `ibEffectiveFont` beside each data view), `ibFetchDirection`, `s_constIgnoreParent`. The server's models bind the fetch thread to the asker's base in `ibDataViewModelProvider` (`backend/tabularModel.h`) |
 | `query/` | the query language's words: `ibQueryKeyword` + the keyword and scalar-call tables (`queryKeywords`), `ibQueryDimUnfold` (`queryUnfold.h`), `ibBalanceRole` (`queryBalanceRole.h`), the period units (`queryPeriodUnits.h`). `ibQueryAggregatesFor` / `ibQueryAggregateCallsFor` — the aggregates a type admits: the lowering refuses by it, every window offers by it. `ibQueryConstructorField` — a field a source or a text offers (name, caption, type, picture, available). `ibQueryAstExpr` declared. The lexer stays in the backend and matches against them |
 | `job/` | `ibJobScheduleRules` — what a schedule means at a moment: allowed, the next one, its sentence, well formed |
@@ -113,7 +108,7 @@ factories, no checks: a schema stores ids and structure.
 | `logger/`, `mcp/`, `settings/` | the journal's question and row (`ibLogFilter`, `ibLogRow`; the reader is the server's), `ibMcpSettings`, the settings shelf's words (`ibSettingsCategory`, `ibComposerSettingsEntry`; the storage is the server's) |
 | `roleCompositionMode.h`, `selectorDataType.h`, `propertyChoiceMode.h` | one vocabulary each: how a role combines, what shape a type is picked in, how many of a property's choices are held |
 | `localization` | `ibLocalization` — template (`ibLocalizationEntryArray` or `en = '…'; ru = '…';`) + a language in, that language's text out; missing language → the first written. The owner passes the language |
-| `diagnostics/` | the technology journal (`ibTechJournal`, `ibJournal*`) — ONE per process, the engine's, the protocol's and the client's lines in one file; `ibCrashGuard` (idempotent `Install`), leak tracker, `debugTrace.h` |
+| `diagnostics/` | the technology journal (`ibTechJournal`, `ibJournal*`) — ONE per process, the engine's, the protocol's and the client's lines in one file; `ibCrashGuard` (idempotent `Install`), leak tracker, `debugTrace.h`; the header-only app bases `oesApp.h` / `oesConsole.h` ([Entry-point helpers](#entry-point-helpers)) |
 | `build` | `GetBuildId` / `GetBuildStamp`, the program version (`OES_VERSION_MAJOR` / `_MINOR` / `_RELEASE` — every version resource reads them too) |
 | `version.rc2`, `program.manifest` | what every program's and library's resources share: the version block (company, product, copyright, the version from `build.h`) and the manifest merged into every executable's (supported OS, long paths) |
 | `programFolder` | `ibProgramFolder` — where the files a program shares are looked for (`backend.conf`, `lang/`, `help/`, `plugins/`, `_fb/`, `web/`, `server/`, the other programs): the executable's folder, or on macOS the folder that holds the `.app`. `ibDiagnosticFolder` — where `journal/`, `crashdumps/` and `oes-debug.log` go: the program folder, except for a program running from a macOS bundle, which writes under `~/Library/Logs/OES` |
@@ -122,7 +117,7 @@ factories, no checks: a schema stores ids and structure.
 - Links: backend → core (PUBLIC); protocol → core; frmclient → core + protocol; enterprise-thin, designer-thin → core;
   webserver → protocol + core; appcluster, appcluster-tray → core alone.
 - Not in core: `typeconv` (fonts/colours/GDI; in the GUI sides only, not in backend since 2026-10-13), frmclient's `dataProtocol` seam, the value's storage (each side's own),
-  the data view controls (frmclient's and frontend's).
+  the data view controls (frmclient's).
 - Every executable and library carries a version resource: its `<name>.rc` beside the project names the file and its
   kind and includes `core/version.rc2`; a program with a window adds its icon. Every executable merges
   `core/program.manifest`; wx adds the common-controls one by itself.
@@ -132,25 +127,19 @@ factories, no checks: a schema stores ids and structure.
 The backend is the core engine. It is self-contained — no GUI dependencies. Key objects:
 
 - **`ibApplicationHost`** (`src/engine/backend/appHost.h`) — the PROCESS: the bases it holds, and what belongs to the process rather than to any base — the plugins, the platform locale and the syntax-helper corpus, the one worker pool, the limits read from `backend.conf`. See [Processes and bases](#processes-and-bases).
-- **`ibApplicationInstance`** (`src/engine/backend/appData.h`) — ONE BASE: its connection pool, lock manager, session registry, job manager, MCP server, settings storage, logger and metadata. A process holds one (every desktop host, the web host, the tests) or several (the application server). Reached through the `appData` macro, which answers the base of the session the thread works for — there is no global current base. Per-session state (user info, ProcUnits, frame) lives on `ibSession`; sys_user on `ibUserInfo`; the sys_session snapshot on `ibSessionSnapshot` produced by `ibSessionRegistry`.
+- **`ibApplicationInstance`** (`src/engine/backend/appData.h`) — ONE BASE: its connection pool, lock manager, session registry, job manager, MCP server, settings storage, logger and metadata. A process holds one (a thin client's file base, the web host, the tests) or several (the application server). Reached through the `appData` macro, which answers the base of the session the thread works for — there is no global current base. Per-session state (user info, ProcUnits, frame) lives on `ibSession`; sys_user on `ibUserInfo`; the sys_session snapshot on `ibSessionSnapshot` produced by `ibSessionRegistry`.
 - **`ibMetaDataConfiguration`** (`src/engine/backend/metadataConfiguration.h`) — loads, saves, and manages the metadata tree (all business objects). Accessed via `activeMetaData` — the calling session's own configuration. Stores compile cache (compiled bytecode) per module descriptor; runtime instances live in sessions.
 - **`ibSession` / `ibSessionRegistry`** (`src/engine/backend/session/`) — per-session state and the base's session manager (one registry per base). The session is reachable via `ibSession::Current()`: the calling thread's own binding, else the base's fallback — the process's own session in that base (never a job's or a web tab's). `ibSessionScope` and `ibSessionThreadBinding` are the RAII helpers that bind a session to the calling thread. See [Sessions and Runtime Ownership](#sessions-and-runtime-ownership).
 - **`ibDebuggerServer`** (`src/engine/backend/debugger/debugServer.h`) — TCP server that accepts designer connections and relays debugger events.
 
-### Frontend Layer (`frontend.dll`, `wfrontend.dll`)
-
-Two sibling DLLs share the same form/view/control code paths through `OES_USE_WEB` ifdefs and `ibFrontendWindow` typedef (`wxWindow` for desktop, `ibWebWindow` for web):
-
-- **`frontend.dll`** — wxWidgets GUI. Used by `enterprise.exe`, `designer.exe`, `codeRunner.exe`. (`launcher.exe` links `backend` alone; `appserver.exe` links `backend` and `frmserver`.)
-- **`wfrontend.dll`** — the old web UI (HTML serialisation of form control trees via `ToJSON()`). No program loads it since `wenterprise-server` was removed; the browser client is `webserver`'s (`webserver/www`), over the client protocol.
-
 ### Thin client layer (`protocol.dll`, `frmserver.dll`, `frmclient.dll`, `fileserver.dll`)
 
-`frontend.dll` carries two functions at once — the forms' logic and their drawing. The thin client splits them, with the
+The desktop front (`frontend.dll`, the thick `designer.exe` / `enterprise.exe`, the old web `wfrontend.dll`) was removed
+on 2026-10-27; it is kept on the branch `oes/thick_client`. It carried two functions at once — the forms' logic and
+their drawing. The thin client splits them, with the
 [client protocol](public/client-protocol.md) between: **`frmserver`** holds the forms on the server and answers clients;
 **`frmclient`** draws them (main window, document/view, controls, editors) for **`enterprise-thin.exe`** and
-**`designer-thin.exe`**, on `frmclient/uikit` — the interface kit, a copy of frontend's while the desktop stays (no
-process loads both); **`protocol`** is
+**`designer-thin.exe`**, on `frmclient/uikit` — the interface kit; **`protocol`** is
 the contract both keep (`protocol.h`, no dependencies — `frmserver` includes it only) and the talking side's library
 (`frmclient` and the web server link it). **`fileserver`** puts `backend` + `frmserver` into the client's process for a
 file base. `frmclient` does not link `backend`; it links `core` (node and JSON, string, number, date, guid, exception,
@@ -163,11 +152,11 @@ meeting the wire at `frmclient/backend/serialize/dataProtocol.h`; its `backend_c
 designer-thin. The thin designer keeps beside it what only a designer's windows need (`designer-thin/backend/`: its
 debugger client among them). See [thin-client.md](public/thin-client.md).
 
-Shared frontend objects:
-- **`ibValueForm`** — the runtime representation of an open form; holds the control tree and responds to user events. Same class on both builds.
-- **`ibVisualHost` / `ibVisualHostClient`** — render and input routing surface. Desktop = wxWindow; web = `ibWebWindow` tree serialised to JSON.
-- **Doc-view frames** — backend-facing interface `ibBackendDocFrame` (`backend/backend_mainFrame.h`); concrete implementations are `ibFrontendMainFrame` (desktop, `frontend/mainFrame/mainFrame.h`: `public ibBackendDocFrame, public wxAuiMDIParentFrame, public ibDocParentFrameAnyBase`) and `ibWebFrame` (web). Child frames are `ibAuiDocChildFrame` / `ibDialogDocChildFrame` on desktop (`frontend/mainFrame/mainFrameChild.h`) and `ibWebDocChildFrame` on web. The frame is owned by the `ibSession` that created it (no process-level singleton on the backend side); the legacy `mainFrame` macro still exists in `frontend/mainFrame/mainFrame.h` as a frontend-local accessor for the GUI singleton, but new backend code reaches the frame through `ibSession::Current()->GetFrame()` or `ibSession::CurrentFrame()`.
-- **`ibCodeEditor`** (`frontend/win/editor/codeEditor/`) — the Scintilla-based script editor. Lives in `frontend.dll` so any GUI host can use it: `designer.exe` (its module/form editors), `codeRunner.exe` (sessionless scratch runner). Highlighter, fold parser (core's `ibFoldCode`, the thin editor's too), auto-indent on Enter, format / increase / decrease indent, comment add/remove, Ctrl-Space autocomplete, GotoLine + ProceduresAndFunctions dialogs all live here. Debugger integration is a designer-only concern, kept out of the base via six virtual hooks (`IsDebuggerEnterLoop`, `OnEditDebugPoint`, `OnPatchModule`, `OnEvaluateAutocomplete`, `OnEvaluateToolTip`, `RefreshBreakpointMarkers`); designer's `ibCodeEditorDesigner` (`designer/win/editor/codeEditor/codeEditorDesigner.{h,cpp}`) overrides them with `debugClient->…` calls. Document-less / sessionless mode: passing `nullptr` for the `ibMetaDocument*` skips metadata-driven autocomplete and breakpoint markers but keeps everything else functional — codeRunner uses this to embed the same editor without any DB / metadata / debug infrastructure.
+Form objects:
+- **`ibValueForm`** — an open form, on each side of the wire: the server's (`frmserver/visualView/ctrl/form.h`) holds the control tree and answers user events; the client's (`frmclient/visualView/ctrl/form.h`) draws it.
+- **`ibVisualHost` / `ibVisualHostClient`** — who holds a form and takes its controls through their life (`frmserver/visualView/visualHost.h`, no window: the frame it draws), and the client's view of a tab drawn from that frame (`frmclient/visualView/visualHostClient.h`).
+- **Doc-view frames** — backend-facing interface `ibBackendDocFrame` (`backend/backend_mainFrame.h`); the server's implementation is `ibClientFrame` (`frmserver/client/clientFrame.h`: the frame of one client, held on the server — a script's `OpenForm`, `Message`, `Question` land there). The client's window is `ibFrontendMainFrame` (`frmclient/mainFrame/mainFrame.h`); codeRunner has `ibFrameCodeRunner`. The frame is owned by the `ibSession` that created it (no process-level singleton on the backend side); backend code reaches it through `ibSession::Current()->GetFrame()` or `ibSession::CurrentFrame()`.
+- **`ibCodeEditor`** (`frmclient/win/editor/codeEditor/`) — the Scintilla-based script editor of the thin designer. Highlighter, fold parser (core's `ibFoldCode`), auto-indent on Enter, format / increase / decrease indent, comment add/remove, Ctrl-Space autocomplete, GotoLine + ProceduresAndFunctions dialogs all live here. Debugger integration is a designer-only concern, kept out of the base via virtual hooks (`IsDebuggerEnterLoop`, `OnEditDebugPoint`, `OnPatchModule`, `OnEvaluateToolTip`, `RefreshBreakpointMarkers`, …); `ibCodeEditorDesigner` (`designer-thin/win/editor/codeEditor/codeEditorDesigner.h`) overrides them. `codeRunner` carries its own copy of the old desktop editor (`codeRunner/win/editor/codeEditor/`, with its `artProvider/`, dialogs and `win/picture.*`), with no document behind it.
 
 ---
 
@@ -175,7 +164,7 @@ Shared frontend objects:
 
 ### Processes and bases
 
-A process holds **one base or several**. `ibApplicationHost` (`backend/appHost.h`) is the process: it owns its bases (`std::unique_ptr<ibApplicationInstance>`, in the order they were opened) and whatever is the process's rather than a base's. `ibApplicationInstance` (`backend/appData.h`) is one base and owns that base's subsystems. Every desktop host, a thin client's file base (`fileserver`), the web hosts and the tests hold one base; the application server (`appserver.exe`) holds every base of its server folder — or, started by the cluster (`appcluster.exe`), one: a base per process, so a fault in one does not take the others. Design and decisions: `docs/private/multi-base-process.md`.
+A process holds **one base or several**. `ibApplicationHost` (`backend/appHost.h`) is the process: it owns its bases (`std::unique_ptr<ibApplicationInstance>`, in the order they were opened) and whatever is the process's rather than a base's. `ibApplicationInstance` (`backend/appData.h`) is one base and owns that base's subsystems. A thin client's file base (`fileserver`), the web hosts and the tests hold one base; the application server (`appserver.exe`) holds every base of its server folder — or, started by the cluster (`appcluster.exe`), one: a base per process, so a fault in one does not take the others. Design and decisions: `docs/private/multi-base-process.md`.
 
 There is **no global current base**. A thread reaches a base through a chain of owners: its session → the session's registry → the base → the process. `ibApplicationInstance::Get()` (the `appData` macro) answers the base of the session the thread works for, else the base the thread is bound to (`ibApplicationInstanceScope`: the thread opening or closing a base, a model's read thread, the web server's HTTP threads). A thread with neither is refused with an exception; `Get(false)` answers null instead, for destructors and teardown. A base's own service threads (the registry, the job tick) do not bind — they hold their base and ask it. Every `Get*()` returns `nullptr` before the first base opens and after the last one closes.
 
@@ -306,11 +295,11 @@ A transport between browsers and bases: it holds no forms and runs no code of it
 
 ### Entry-point helpers
 
-Two header-only helpers in `frontend/diagnostics/` cover the boilerplate a binary needs at startup. Header-only = no link-time `frontend.dll` dependency; both helpers only call `CORE_API ibCrashGuard::*` plus wx primitives the binary already links. The programs that do not include them — the thin clients, `appcluster`, `appcluster-tray` — derive from `wxApp` / `wxAppConsole` and call `ibCrashGuard::Install` in their own `OnInit`.
+Two header-only helpers in `core/diagnostics/`, beside the guard they wire, cover the boilerplate a binary needs at startup. Header-only = the core itself never compiles them (it has wx base only); both helpers only call `CORE_API ibCrashGuard::*` plus wx primitives the binary already links. The programs that do not include them — the thin clients, `appcluster`, `appcluster-tray` — derive from `wxApp` / `wxAppConsole` and call `ibCrashGuard::Install` in their own `OnInit`.
 
 | Binary type | Helper | What it wires |
 |---|---|---|
-| GUI (`enterprise` / `designer` / `codeRunner` / `launcher`) | `ibWxApp` base class (`oesApp.h`) | `wxApp::OnInit` → `ibCrashGuard::Install` + `DoOnInit()`; `OnRun` → try/catch around `DoOnRun()`; 3 exception overrides (main-loop / unhandled / fatal). Subclass overrides only `GetExeName()` + optional `DoOnRun()`. |
+| GUI (`codeRunner` / `launcher`) | `ibWxApp` base class (`oesApp.h`) | `wxApp::OnInit` → `ibCrashGuard::Install` + `DoOnInit()`; `OnRun` → try/catch around `DoOnRun()`; 3 exception overrides (main-loop / unhandled / fatal) — the refusal it says and goes on is `ibCoreException`, nothing above the core. Subclass overrides only `GetExeName()` + optional `DoOnRun()`. |
 | Console (`appserver` / `webserver`) | `ibOesConsoleBoot` RAII (`oesConsole.h`) | Single object that holds a `wxInitializer` and calls `ibCrashGuard::Install`. `IsOk()` checks the wx init result. |
 
 ### Crash plumbing layers
@@ -323,12 +312,12 @@ Two header-only helpers in `frontend/diagnostics/` cover the boilerplate a binar
                                               MessageBoxW (Win) | fprintf+stderr (POSIX)
                                               No wx UI, no main loop required.
 
-  frontend/diagnostics/oesApp.h           ─── Header-only. wxApp pipeline:
+  core/diagnostics/oesApp.h               ─── Header-only. wxApp pipeline:
                                               wxDebugReportPreviewStd, wxMessageBox,
                                               wxLogError, wxTheApp->CallAfter. Delegates
                                               logging to crashGuard.
 
-  frontend/diagnostics/oesConsole.h       ─── Header-only. RAII boot helper for
+  core/diagnostics/oesConsole.h           ─── Header-only. RAII boot helper for
                                               console binaries. Wraps wxInitializer +
                                               crashGuard::Install.
 ```
@@ -386,8 +375,8 @@ ibCoreException : std::exception          ─── core/exception.h. The base o
 ```
 
 A handler that only tells a person what went wrong catches `ibCoreException`. The script runtime's `Try` meets a core
-refusal as the engine's own (re-raised as `ibBackendCoreException`, then the same `Try` / `ProcessError` path); the
-desktop's main-loop handler shows it and continues.
+refusal as the engine's own (re-raised as `ibBackendCoreException`, then the same `Try` / `ProcessError` path);
+`ibWxApp`'s main-loop handler shows it and continues.
 
 ⭐ **Each subsystem owns its exception TYPE; `Kind` says what went wrong inside it.** One type
 plus a string would make every handler match on message TEXT. The division is by WHO refused,
@@ -504,7 +493,7 @@ declaring the rule that guards it are the same statement, so they cannot drift a
 | File | Class | Role |
 |---|---|---|
 | `debugServer.h/cpp` | `ibDebuggerServer` | The debuggee's port — a WebSocket at `/debugger` on the core's HTTP, one designer at a time; owned by the running configuration |
-| `debugClient.h/cpp`, `debugClientAsync.cpp`, `debugClientQuery.cpp` | `ibDebuggerClient` | The designer's end (the desktop designer's, or a thin designer's session on the server): the connection, the events told every bridge, the breakpoints kept in the base |
+| `debugClient.h/cpp`, `debugClientAsync.cpp`, `debugClientQuery.cpp` | `ibDebuggerClient` | The designer's end (a thin designer's session on the server): the connection, the events told every bridge, the breakpoints kept in the base |
 | `debugClientBridge.h/cpp` | `ibDebuggerClientBridge` | Bridge between client socket and UI |
 | `debugDefs.h`, `debugEvent.h` | enums | `CommandId`, `EventId`, `ConnectionType`, the events |
 
@@ -515,16 +504,17 @@ declaring the rule that guards it are the same statement, so they cannot drift a
 | `systemManager.h/cpp` | `ibSystemManager` | Built-in function dispatcher; registers 92 functions + 6 procedures = 98 built-ins as of 2026-08-08 (count drifts as features land; grep `AppendFunc\|AppendProc` for the live total) |
 | `systemEnum.h` | enums | System-level enumeration constants |
 
-### `src/engine/frontend/visualView/`
+### `src/engine/frmserver/visualView/`
 
 | File/Dir | Content |
 |---|---|
 | `ctrl/form.h/cpp` | `ibValueForm`, form control collection, action wiring |
-| `ctrl/control.h/cpp` | `ibControlFrame` base class for all controls |
+| `ctrl/frame.h/cpp` | `ibControlFrame` base class for all controls |
 | `ctrl/widgets.h` | Declarations for all control types |
-| `visualHost.h/cpp` | `ibVisualHost` — wxWindow rendering surface |
-| `visualHostClient.h/cpp` | Client-side form binding |
+| `visualHost.h/cpp` | `ibVisualHost` — who holds the form; no window, the frame it draws |
 | `ctrl/` | Individual control implementations (see Form System) |
+
+The client's side is `frmclient/visualView/` (`visualHostClient.h/cpp` — the tab's view drawn from that frame).
 
 ---
 
@@ -734,7 +724,7 @@ an **account dimension** whose KIND is a characteristic. Only the opaque CLSID b
 | ChartOfAccounts | `MD_CHOA` | Chart of accounts with AccountType (Active/Passive/AP), OffBalance, the accounting kinds it declares (two branches of its own: `MD_ACKD` — a boolean field of every account; `MD_ADKD` — a tick-box column of the account's kinds table), the maximum dimension count, and the predefined `AccountDimensionKinds` tabular section |
 | AccountingRegister | `MD_AREG` | Double-entry register. One-sided: RecordType (Debit/Credit) + Account + N *(kind, value)* AccountDimension slots; correspondence: AccountDr / AccountCr + N slots per side, and a dimension or resource with `Balance` cleared kept per side as hidden `<Field>Dr` / `<Field>Cr` attributes. Totals per side at two grains (per account and breakdown, per account). Balance / Turnovers / DrCrTurnovers / BalanceAndTurnovers / RecordsWithAccountDimensions |
 
-Bindings: AccountingRegister → ChartOfAccounts (via `ibPropertyChartOfAccounts`), ChartOfAccounts → ChartOfCharacteristicTypes (via `ibPropertyChartOfCharacteristicTypes`). Each binding has its own property class. Since 2026-09-10 (committed 2026-09-11) every chart binding is edited by ONE designer editor, `ibPGChartBindingProperty` (`frontend/propertyManager/property/advprop/advpropChartBinding.cpp`), which replaced a copy per chart: the candidates and whether one chart or a set may be ticked are the property's own answer (`GetValueList` → `ibPropertyChoiceMode`), and only an accepted dialog changes the value.
+Bindings: AccountingRegister → ChartOfAccounts (via `ibPropertyChartOfAccounts`), ChartOfAccounts → ChartOfCharacteristicTypes (via `ibPropertyChartOfCharacteristicTypes`). Each binding has its own property class. Since 2026-09-10 (committed 2026-09-11) every chart binding is edited by ONE designer editor, `ibPGChartBindingProperty` (`frmclient/propertyManager/property/advprop/advpropChartBinding.cpp`), which replaced a copy per chart: the candidates and whether one chart or a set may be ticked are the property's own answer (`GetValueList` → `ibPropertyChoiceMode`), and only an accepted dialog changes the value.
 
 ### Calculation Objects
 
@@ -773,7 +763,7 @@ OES distinguishes between **metadata** (compile-time, process-wide, shared) and 
 - **Translate state** — `ibTranslateState`: explicit override, the user's language, the configuration's own, and the resolved code (`override || user || configuration`). Selects which metadata synonym / form-label translation is shown. Per-session, so concurrent web tabs each render their own user's language and two bases in one process each keep their own. Distinct from the platform's wxLocale (UI gettext, process-wide). Read through `ibBackendLocalization::GetUserLanguage()`.
 - **Compile state** — `ibCompileState`: the code style (CES / VES) the session's modules compile in, taken from its base's configuration. Like the interpreter's `ibProcUnitState`, a thread with no session (codeRunner, tests) has its own `thread_local` one.
 - **Root module manager** — `m_root : ibValuePtr<ibValueModuleManagerRuntimeConfiguration>`. Created via `EnsureRoot()` in `ibSessionRegistry::NotifyAuthenticated`, right after `AcquireMetaData` and before the `OnAuthenticated` listeners. Stays nullptr for sessions that never run scripts — **the Designer never creates a root** (`EnsureRoot` is gated on `DesignerMode()`; it uses the lightweight `ibValueModuleManagerDesigner` in the compile cache instead), and likewise WebServer technical / Launcher. Objects/records/modules reach the right manager through the `ibSession::GetEditModuleManager(metaData)` seam (Designer → compile-cache designer manager; runtime → `m_root`). See `module-manager-split.md`.
-- **Frame** — `virtual ibBackendDocFrame* GetFrame() const { return nullptr; }` on base `ibSession`. Frame storage lives on derived sessions that have a GUI surface (e.g. `ibWebClientSession::SetFrame(ibWebFrame*)`; `ibGUISession` desktop variants). Base has no `m_frame` field — null means "no frame on this session" (codeRunner, a server's technical session). The frame belongs to the session that created it, not to a process-wide singleton.
+- **Frame** — `virtual ibBackendDocFrame* GetFrame() const { return nullptr; }` on base `ibSession`. Frame storage lives on derived sessions that have one (`ibClientSession::SetFrame(ibClientFrame*)`, `frmserver/client/clientSession.h` — a protocol client's). Base has no `m_frame` field — null means "no frame on this session" (codeRunner, a server's technical session). The frame belongs to the session that created it, not to a process-wide singleton.
 - **Per-session debug** — optional `ibDebugSession` (CV/mutex + per-session watch expressions + run context) so concurrent web sessions can each enter their own debug loop without blocking.
 - **Exclusive (monopoly) mode** — `m_exclusive`. At most one session in the registry holds it; while held, every other Connect parks until release.
 - **Server back-link** — `m_server : weak_ptr<ibSession>` from a server-spawned client to the session that hosts it (e.g., a WebClient → its WebServer). Used by shutdown logic, cluster topology, and admin UI.
@@ -793,11 +783,11 @@ Runtime ProcUnits live on per-session descriptors. The session's root `ibValueMo
 
 - **Single-consumer queue + priority** — one registry thread processes `Add / Attach / Detach / Remove / SetActivity` requests (Urgent → Normal → Low → Background). All DB mutation for `sys_session` happens on this thread.
 - **Liveness via heartbeat on `lastActive`** — each process's `JobHeartbeatOwn` UPDATEs `lastActive` on its own `sys_session` rows every ~1s. Any row trailing `now` by more than `kStaleCutoffSec` (10s, in `sessionRegistry.cpp`) is treated as a zombie and DELETEd by another process's sweep. The earlier row-lock-as-source-of-truth design (a long-running `SELECT ... WITH LOCK` over own-session rows, probed via `TryProbeRowLock`) was **rolled back** — it self-deadlocked (see `session-registry.md §4`); only retirement comments remain in code. Record write protection is a separate concern — optimistic `DataVersion` check + the `sys_lock` table, see [record-locks.md](private/record-locks.md).
-- **Connect/Disconnect API** — desktop `ibApplicationInstance::CreateSession` and web `ibWebSession::Login` both call `registry.Connect(req)` which returns an `ibSessionTicket` (RAII, dtor submits Remove@Urgent).
+- **Connect/Disconnect API** — `ibApplicationInstance::CreateSession` calls `registry.Connect(req)` which returns an `ibSessionTicket` (RAII, dtor submits Remove@Urgent).
 - **Single mutator of session state.** `ibSession`'s state-machine mutators (`Transition`, `TransitionAuth`, `SetIdentity`, `SetInserted`, `WaitForState`, `WaitForAuth`) and auth-flow setters (`SetUserInfo`, `SetSessionRawPassword`) are private under `friend ibSessionRegistry`. The public façade `ibSessionRegistry::InstallUser(s, info, pwd)` is the only entry point for auth bring-up — `appData` and login dialogs route through it, never poke session internals directly.
 - **Cluster snapshot** — `ibSessionRegistry::GetClusterSnapshot()` returns `ibSessionSnapshot` (formerly `ibApplicationDataSessionArray` on `appData`), refreshed every ~3s by `JobRefreshSnapshot`. Snapshot now lives in `backend/session/sessionSnapshot.{h,cpp}`.
 
-The registry supports multiple concurrent sessions (N on web, 1 on desktop) through the same mechanism. See `project_session_registry_refactor` memory entry for the current implementation status.
+The registry supports multiple concurrent sessions (a server's clients, a file base's connections) through the same mechanism. See `project_session_registry_refactor` memory entry for the current implementation status.
 
 ### Runtime ownership
 
@@ -822,9 +812,9 @@ ibSession::m_root  →  ibValueModuleManagerRuntimeConfiguration  (per-session r
 
 **`m_runtimeMutex` guards bring-up vs teardown, not execution.** `ibValueModuleManager::AttachRuntime(session)` (called from `ibSession::CompileRoot` at login, on every run mode; a configuration that does not start throws there and the login is refused) builds the runtime tree under the lock. `DetachRuntime(session)` drops it under the same lock. Per-session script execution does NOT take this lock — different sessions execute in parallel on their own descriptors.
 
-**Worker pool dispatch.** Script execution runs on a worker thread leased via `ibWorkerPool` (`backend/session/workerPool.h` + headless impl). Each request leases a session into `tl_currentLease` for the call's duration; `ibSession::Current()` resolves through this slot. Desktop has N=1 session on the wx main thread; the web host and the application server have N sessions, each request leased onto a worker of the process's one pool; a script that waits parks a fiber (`core/fiber`) on its thread, which goes on serving other sessions until `Wake` resumes it. The script interpreter never touches global `thread_local` state directly — `ibProcUnitState` lives under `ibSession`, the one `thread_local` fallback in `session.cpp` exists only for sessionless callers (codeRunner sandbox / system bootstrap).
+**Worker pool dispatch.** Script execution runs on a worker thread leased via `ibWorkerPool` (`backend/session/workerPool.h` + headless impl). Each request leases a session into `tl_currentLease` for the call's duration; `ibSession::Current()` resolves through this slot. Every host but the launcher runs it (`appHost.cpp`) — a thin client's file base, the web host and the application server alike — each request leased onto a worker of the process's one pool; a script that waits parks a fiber (`core/fiber`) on its thread, which goes on serving other sessions until `Wake` resumes it. The script interpreter never touches global `thread_local` state directly — `ibProcUnitState` lives under `ibSession`, the one `thread_local` fallback in `session.cpp` exists only for sessionless callers (codeRunner sandbox / system bootstrap).
 
-**Same model for desktop and web** — the only difference is session count and entry threading. The `ibSessionRegistry + ibSession + ibSessionScope + per-session runtime tree + worker pool` stack is identical across all run modes.
+**Same model for every host** — the only difference is session count. The `ibSessionRegistry + ibSession + ibSessionScope + per-session runtime tree + worker pool` stack is identical across all run modes.
 
 **Bytecode self-contained.** `ibByteCode` holds its own moduleName, rootContext, parent-bytecode ref, and dependency manifest. There is no `byteCode->m_compileModule` back-pointer; runtime lifetime is decoupled from `ibCompileCode` lifetime, so metadata reload can drop compile state while running sessions hold their bytecode through their shared_ptr.
 
@@ -896,10 +886,10 @@ phase, schema settings must serialise) are in
 - `ibBackendControlFrame` — the abstract control interface (any control, including a form root, presents this).
 - `ibBackendValueForm` — the abstract form interface.
 
-The concrete `ibValueForm` (`frontend/visualView/ctrl/form.h`) multiply-inherits both (plus `ibRuntimeModuleDataObject` for its per-instance ProcUnit):
+The concrete `ibValueForm` (`frmserver/visualView/ctrl/form.h`) multiply-inherits both (plus `ibRuntimeModuleDataObject` for its per-instance ProcUnit):
 
 ```
-ibValueForm  (concrete — frontend/visualView/ctrl/form.h)
+ibValueForm  (concrete — frmserver/visualView/ctrl/form.h)
   : public ibValueFrame
   , public ibBackendValueForm        (abstract — backend_form.h)
   , public ibRuntimeModuleDataObject (per-instance compile module + ProcUnit)
@@ -915,32 +905,22 @@ metaId **PATH** whose head selects an attribute (the gate), resolved through one
 `Get/SetValueByAttributePath` pair. The source object passed on open lands in the MAIN
 attribute. See `docs/form-attribute-binding.md` (Blocker A of the ERP roadmap).
 
-### Visual controls — 19 registered + 7 system-kind children
+### Visual controls — 18 registered + 5 system-kind children
 
-Implemented in `src/engine/frontend/visualView/ctrl/`. Two corrections to the table below,
-verified 2026-07-29 by grepping `CONTROL_TYPE_REGISTER`:
-
-- **Choice, ComboBox and ListBox carry NO registration.** The classes exist (~55 lines each,
-  `Create()` only) but no CLSID is registered, so they cannot be placed from the palette or
-  instantiated from metadata — on either desktop or web. Treat the rows below as "class exists,
-  control does not".
-- **StaticBoxSizer and WrapSizer are missing from the table** and *are* registered
-  (`staticboxsizer.cpp`, `CT_SSZER`; `wrapsizer.cpp`), as are the seven system-kind children
-  registered via `S_CONTROL_TYPE_REGISTER`: SizerItem, NotebookPage, TableboxColumn,
-  TableboxColumnGroup (added with column groups, 2026-08-17), Tool, ToolSeparator, ClientForm.
+Implemented in `src/engine/frmserver/visualView/ctrl/` (drawn by `frmclient/visualView/ctrl/`), verified 2026-10-27
+by grepping `CONTROL_TYPE_REGISTER`. The five system-kind children are registered via `S_CONTROL_TYPE_REGISTER`:
+ClientForm, SizerItem, NotebookPage, TableboxColumn, TableboxColumnGroup (added with column groups, 2026-08-17).
+Choice, ComboBox, ListBox and ToolBar (with Tool / ToolSeparator) were the desktop front's only and went with it.
 
 | Control | File |
 |---|---|
 | Button | `button.cpp` |
 | CheckBox | `checkbox.cpp` |
-| Choice | `choice.cpp` |
-| ComboBox | `combobox.cpp` |
 | Form (root) | `form.cpp` |
 | Frame | `frame.cpp` |
 | Gauge | `gauge.cpp` |
 | GridBox | `gridBox.cpp/.h` |
 | HtmlBox | `htmlBox.cpp/.h` |
-| ListBox | `listbox.cpp` |
 | Notebook | `notebook.cpp/.h` |
 | RadioButton | `radiobutton.cpp` |
 | Slider | `slider.cpp` |
@@ -949,14 +929,17 @@ verified 2026-07-29 by grepping `CONTROL_TYPE_REGISTER`:
 | TableBox | `tableBox.cpp/.h` |
 | TextBox | `textBox.cpp/.h` |
 | TextCtrl | `textctrl.cpp` |
-| ToolBar | `toolBar.cpp/.h` |
 | BoxSizer | `boxsizer.cpp` |
 | GridSizer | `gridsizer.cpp` |
+| StaticBoxSizer | `staticboxsizer.cpp` |
+| WrapSizer | `wrapsizer.cpp` |
 | ChartBox | `chartBox.cpp/.h` |
 
 ### Form Rendering
 
-`ibVisualHost` is the wxWindow that owns the visual surface. It receives layout instructions from `ibValueForm` and positions wxWidgets controls. `ibVisualHostClient` handles the reverse channel: user input events travel from wxWidgets up through the host into the form's script event handlers.
+`ibVisualHost` (frmserver) holds the form and writes it as a frame — no window. The client draws that frame:
+`ibVisualHostClient` (frmclient) builds the wx controls from it, and what the person does goes back over the
+[client protocol](public/client-protocol.md) to the form's script event handlers.
 
 ---
 
@@ -966,9 +949,8 @@ verified 2026-07-29 by grepping `CONTROL_TYPE_REGISTER`:
 
 ```
 the debuggee — whatever runs the configuration       the designer
-(enterprise.exe, appserver, webserver,               designer.exe — the client in its own process
- a thin client's file base)                          designer-thin.exe — the client in its session
-      │                                              on the server, reached over the client protocol
+(appserver, webserver,                               designer-thin.exe — the client in its session
+ a thin client's file base)                          on the server, reached over the client protocol
       │                                                     │
 ibDebuggerServer ◄──── WebSocket /debugger ────────► ibDebuggerClient
 (backend/debugger/, on core/net)                     (backend/debugger/)
@@ -1022,19 +1004,18 @@ The port's I/O threads only move bytes: each command is one binary WebSocket mes
 
 ## Key Data Flows
 
-### User Login (desktop)
+### User Login (file base)
 
 ```
-launcher.exe (or direct enterprise.exe with CLI creds)
+enterprise-thin.exe / designer-thin.exe --file=… (a file base: fileserver, in the client's process)
   └─ ibApplicationInstance::CreateAppDataEnv(ibFileInstanceRequest{ server, port, user, pwd, db, locale })
        └─ ibDatabaseLayer::Open(server, port, db, ibUser, ibPwd)   # DB-level admin connection
-            └─ appData->CreateSession<ibEnterpriseSession>()        # phased session lifecycle
+            └─ ibClientInstance::Login (frmserver) — on the client's login over the protocol
+                 └─ appData->CreateSession<ibClientSession>(ThinClient | ThinDesigner, …)
                  # registry runs Connect(req) under the session factory:
                  #   - Submit(Add, Normal), waits state Added
                  #   - Add handler INSERTs the sys_session row
-                 #   - OnCreateSession() fires on the main thread
-                 #     (ibGUISession overrides — builds the wx frame here)
-                 └─ session->Open(user, password)                   # auth orchestration
+                 └─ session->Open(user, password), on the session's own worker   # auth orchestration
                       └─ ticket.Attach(user, pwd) — Submit(Attach, Normal)
                            └─ ibApplicationInstance::AuthenticateUser
                                   (PBKDF2 preferred, MD5 silent-upgrade path)
@@ -1049,7 +1030,7 @@ launcher.exe (or direct enterprise.exe with CLI creds)
                                                              + mm->AttachRuntime(s)
                                                                 — main ProcUnit + Execute top-level
                                                                 — StartMainModule: BeforeStart / OnStart
-                                                                — wx main loop handles UI
+                                                                — the client draws what the protocol answers
 ```
 
 ### Form Open
@@ -1059,15 +1040,15 @@ launcher.exe (or direct enterprise.exe with CLI creds)
 > one-screen version.
 
 ```
-Script (desktop) / HTTP POST /open?metaID=N (web):
+Script, or a client's command over the protocol:
 OpenForm("Catalog.Products.ListForm")
   └─ ibValueMetaObjectFormBase::CreateAndBuildForm(request, metaForm, owner, srcObj)
        └─ ibSession::CurrentFrame()->CreateNewForm(request, metaFormObject, ownerControl, srcObject)
-              # session-owned frame; desktop = ibFrontendMainFrame, web = ibWebFrame
+              # session-owned frame: ibClientFrame (frmserver)
             └─ ibValueForm constructed (per-instance compileModule + ProcUnit)
                  └─ LoadFormData / BuildForm — control tree built from metadata
-                      └─ frame creates the doc-view child (ibAuiDocChildFrame / ibWebDocChildFrame)
-                           └─ ibVisualHost created (wxWindow on desktop, ibWebWindow on web)
+                      └─ frame creates the doc-view child (ibClientChildFrame)
+                           └─ ibVisualHost created (no window: the frame the client draws)
                                 └─ controls instantiated and laid out
                                      └─ OnOpen() script handler via ibProcUnit::CallAsProc()
 ```
@@ -1085,20 +1066,18 @@ Script: Write()   (or user presses Save)
                                 └─ OnWrite() script handler called
 ```
 
-### Session Teardown (web — /logout or pagehide beacon)
+### Session Teardown (a protocol client)
 
 ```
-HTTP: POST /w/<dbalias>/logout?sid=<tabSid>  (sendBeacon from browser pagehide)
-  └─ Sessions().Destroy(sid)
-       └─ shared_ptr<ibWebSession> dropped from sessions map
-            └─ ~ibWebSession → OnExit
-                 └─ RunOnWorker DeleteAllViews of open tabs (form dtors)
-                      └─ ExitMainModule (BeforeExit / OnExit events, under m_runtimeMutex)
-                           └─ mm->DetachRuntime(s) — release descriptor ProcUnits
+ibClientInstance::OnExit (frmserver) — the client logs out, or its connection is gone
+  └─ session->WakeDebugLoop(); session->Cancel()   # a parked or waiting script unwinds first
+       └─ on the session's worker: frame->CloseDocuments() (form dtors)
+            └─ ExitMainModule (BeforeExit / OnExit events, under m_runtimeMutex)
+                 └─ session->ClearRoot() → mm->DetachRuntime(s) — release descriptor ProcUnits
                                                      bound to this session
-                                └─ delete frame
-                                     └─ ticket.reset → Submit(Remove, Urgent)
-                                          └─ registry DELETE sys_session row
+                      └─ m_frame.reset — the frame releases the session's holder
+                           └─ ticket.reset → Submit(Remove, Urgent)
+                                └─ registry DELETE sys_session row
 ```
 
 ---

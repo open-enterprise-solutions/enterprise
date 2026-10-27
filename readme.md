@@ -54,7 +54,7 @@ tree, forms, the language, queries and reports, and the pitfalls.
   literal the caret is in, a spreadsheet template editor, configuration compare, and a git panel.
   Every property carries its own help text.
 - **Debugger** — remote, over TCP (port 1650): breakpoints with conditions, stepping, watches,
-  evaluation in the stopped frame; the designer attaches to a desktop application, to a thin
+  evaluation in the stopped frame; the designer attaches to a client on a file base, to a thin
   client's session on its server, or to the web runtime.
 - **Access control** — rights per object and operation, folded across a user's roles. A role either
   *permits* (adds rights) or *restricts* (subtracts them, whatever the others grant), so a data
@@ -66,7 +66,7 @@ tree, forms, the language, queries and reports, and the pitfalls.
 - **Jobs** — scheduled and background jobs in sessions of their own, with a cross-process claim so a
   job runs once across a cluster; the platform's own housekeeping (totals folding and verification,
   Firebird sweep and backup) runs on the same manager.
-- **AI access over MCP** — an MCP server inside the designer, 127 tools across the platform: read and
+- **AI access over MCP** — an MCP server inside the designer (and per base on the application server), 127 tools across the platform: read and
   edit metadata, forms and modules; apply the configuration with a rehearsal; run code on the
   application; ask the data questions and compose reports; drive the debugger; read and write the
   registration journal. Protected by a token, listening on loopback by default; every call is
@@ -84,9 +84,8 @@ tree, forms, the language, queries and reports, and the pitfalls.
 - **Thin client** — `enterprise-thin` runs no code of the configuration: the server holds the session,
   its forms and documents, the client draws what it is answered and sends what the person did. One
   [client protocol](docs/public/client-protocol.md) — JSON-RPC 2.0 over WebSocket or HTTP to an
-  application server; a file base is the same protocol in the client's own process. The thin
-  designer, `designer-thin`, is started on the same protocol and replaces the desktop designer once
-  it does what it does. See [thin-client.md](docs/public/thin-client.md).
+  application server; a file base is the same protocol in the client's own process. The
+  designer, `designer-thin`, works on the same protocol. See [thin-client.md](docs/public/thin-client.md).
 - **Databases** — Firebird (embedded, shipped with the distribution) and PostgreSQL for production;
   ODBC; SQLite for tests and logging.
 - **Localisation** — the whole interface in English, Russian and Ukrainian; every caption of a
@@ -124,10 +123,10 @@ On a copy of a 40 000-employee payroll base (Release, x86): a month's payroll re
 4. Select configuration `Debug|Win32` or `Release|x64`.
 5. Build the solution (`Ctrl+Shift+B`). Binaries are placed in `bin\<Platform>\<Configuration>\`
    (`Win32` or `Win64`).
-6. Run `designer.exe` to build a configuration, `enterprise.exe` to work in it — or `launcher.exe`
-   to pick a base first. `appserver.exe` serves the bases of a server folder with no window,
-   `appcluster.exe` the same folder with a process per base (`appcluster-tray.exe` shows and steers
-   it); `enterprise-thin.exe` works in a base they serve, or in a file base.
+6. Run `designer-thin.exe` to build a configuration, `enterprise-thin.exe` to work in it — or
+   `launcher.exe` to pick a base first (it starts the same two programs). `appserver.exe` serves the bases of a server folder with no
+   window, `appcluster.exe` the same folder with a process per base (`appcluster-tray.exe` shows and
+   steers it); both clients work in a base they serve, or in a file base.
 
 ### macOS
 
@@ -191,7 +190,6 @@ cmake --build build --parallel
 
 wxWidgets is built from its submodule as part of the tree; nothing has to be installed for it.
 
-The old web frontend (`wfrontend`) builds with `-DOES_BUILD_WEB=ON` (default OFF).
 The unit tests (Google Test) build with the same tree: `-DBUILD_TESTING=ON`.
 
 ### wxWidgets Submodule
@@ -208,12 +206,12 @@ git submodule update --init --recursive
 
 ```
 enterprise/
-├── enterprise.sln            # MSBuild solution (23 projects, Mbed TLS, llhttp and LodePNG among them)
+├── enterprise.sln            # MSBuild solution (18 projects, Mbed TLS, llhttp and LodePNG among them)
 ├── CMakeLists.txt            # the cross-platform build, tests included
 ├── Common.props              # Shared MSBuild properties (paths, platforms)
 ├── ConfigurationDefs.props   # Preprocessor definitions per configuration
 ├── LICENSE.md                # PolyForm Noncommercial 1.0.0 (source-available)
-├── NOTICE.md                 # third-party licenses, the wx fork, the LGPL past
+├── NOTICE.md                 # third-party licenses, the wx fork
 ├── locale/                   # interface translations (ru, uk): the template and the catalogs
 ├── lang/                     # the compiled catalogs the programs read at run time
 ├── tests/                    # Google Test suites (built by CMake)
@@ -241,25 +239,18 @@ enterprise/
         │   ├── moduleManager/
         │   ├── propertyManager/
         │   └── system/       # Built-in functions and values
-        ├── frontend/         # UI DLL (wxWidgets controls, form renderer)
-        │   ├── visualView/   # Forms and their controls
-        │   ├── web/          # The same controls for the browser (wfrontend)
-        │   ├── docView/      # Document/view framework wrappers
-        │   └── win/          # Editors, dialogs and custom widgets
         ├── protocol/         # The client protocol: its contract (protocol.h) and connections
         ├── frmserver/        # The server side of the thin client: sessions, forms, the client host
         ├── frmclient/        # The thin client's window, document/view and controls
         ├── fileserver/       # A file base in the thin client's process
-        ├── enterprise/       # Enterprise runtime executable
         ├── enterprise-thin/  # The thin client runtime executable
         ├── designer-thin/    # The thin designer executable
-        ├── designer/         # Designer/IDE executable
         ├── webserver/        # The bases' transport for browsers (links protocol alone)
         ├── launcher/         # Launcher (connection chooser)
         ├── appserver/        # The application server
         ├── appcluster/       # The application cluster: a server process per base, the port, restarts; a service
         ├── appcluster-tray/  # The cluster's tray: its servers and their verbs, starting the cluster
-        ├── codeRunner/       # Script runner
+        ├── codeRunner/       # Script runner (its own code editor, no document behind it)
         └── simplePlugin/     # Example plugin
 ```
 
@@ -333,7 +324,6 @@ and the implementer decides whether and when to take them. Its own features on t
 sells besides the brand — are its own, because it wrote them. We own the land; what you cook
 on it is yours.
 
-Two things the terms above do not cover, both in [NOTICE.md](NOTICE.md): releases up to
-2026-08-22 went out under the **LGPL 2.1** and stay available under it — a license already
-granted cannot be withdrawn — and the wxWidgets-derived widget sources remain under the
-**wxWindows Library Licence**.
+What the terms above do not cover is in [NOTICE.md](NOTICE.md): third-party components keep
+their own licenses, and the wxWidgets-derived widget sources remain under the **wxWindows
+Library Licence**.

@@ -84,15 +84,12 @@ idea. That work is yours: it owes us nothing and needs no permission.
 
 Take the understanding. Leave the source.
 
-## Two things these terms do not cover
+## What these terms do not cover
 
 **Third-party components keep their own licenses.** See [NOTICE.md](NOTICE.md). In
-particular, the wxWidgets-derived sources under `src/engine/frontend` remain under the
-wxWindows Library Licence, and wxWidgets itself is a submodule under its own terms.
-
-**Earlier releases stay as they were published.** Everything released before 2026-08-23
-was published under the GNU LGPL 2.1 and remains available under it to whoever obtained
-it. The terms below apply from 2026-08-23 onward.
+particular, the wxWidgets-derived sources under `src/engine/frmclient` and
+`src/engine/frmserver` remain under the wxWindows Library Licence, and wxWidgets itself is
+a submodule under its own terms.
 
 ---
 

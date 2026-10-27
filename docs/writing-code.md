@@ -532,8 +532,8 @@ acts.
 
 **A port copies the original whole:** files, classes, members, order, handlers, menus. Where the
 original touched the backend, a client class of the same name hides the protocol call. Port from
-the desktop original, never from an already thin sibling. `tools/thin-parity/thin-parity.ps1` lists
-what is missing, and the result is judged by running it beside the original. A protocol door is the
+the desktop original (since 2026-10-27 only on the branch `oes/thick_client`), never from an already
+thin sibling, and the result is judged by running it beside the original. A protocol door is the
 original's door, traced before it is written.
 
 **A child application is started by the client, locally,** from the database parameters it holds:

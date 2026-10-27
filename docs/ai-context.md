@@ -46,7 +46,7 @@ embedded by default; PostgreSQL also supported for production, ODBC as the MSSQL
                        merges to develop
             │
             ▼
-   End user — runs enterprise.exe / web client
+   End user — runs enterprise-thin.exe / web client
 ```
 
 Your job is to translate the analyst's intent into **valid OES
@@ -511,8 +511,8 @@ Mapping common ERP / business-application concepts to their OES form:
 | What becomes of a document's movements when it is posted again or its posting undone | the document's property `RegisterRecordsDeletion` | `Automatically` (default) — cleared before the posting handler runs and when the posting is undone; `OnUndoPosting` — kept when posted again (a set the handler fills replaces its own), cleared on undo; `Never` — the platform clears nothing on either, the configuration does. A deleted document takes its movements with it whatever the property says. A write is a clearing and a writing: nothing compares the old movements with the new |
 | Document date | `document.Date` | `ibDateTime` type |
 | Data-composition / pivot system | L5 data composer | Declarative filter/sort/grouping rendered into a query; see `docs/data-composer.md` |
-| Form model | Form / VisualHost | Single form layer; same form runs in Desktop and Web |
-| Client tier | Desktop frontend / Web frontend | Two parallel DLLs (`frontend.dll` / `wfrontend.dll`) |
+| Form model | Form / VisualHost | Single form layer, on the server (`frmserver.dll`); the same form is drawn by the thin client and the browser |
+| Client tier | Thin client / browser client | `frmclient.dll` under `enterprise-thin` / `designer-thin`; the browser client served by `webserver` — both over the client protocol |
 
 ---
 
@@ -538,7 +538,7 @@ Drill into these only when the task touches the specific area.
 | Lists / trees / paging | `docs/paging-design.md`, `docs/dynamic-list.md` |
 | Forms architecture | `docs/backend-frontend-split.md`, `docs/ARCHITECTURE.md` §Form System |
 | Form attribute binding (dot-path sources) | `docs/form-attribute-binding.md` |
-| Doc/View subsystem (desktop + web fork) | `docs/docview-fork.md` |
+| Doc/View subsystem (wx fork, client + server) | `docs/docview-fork.md` |
 | Copy / paste across the object model | `docs/copy-paste.md` |
 | UI palette / colours | `docs/ui-palette.md` |
 | Web frontend | `docs/web/` |
@@ -553,7 +553,7 @@ Drill into these only when the task touches the specific area.
 Before declaring "done", verify your generated configuration:
 
 ```
-1. Load the config (designer.exe / enterprise.exe)
+1. Load the config (designer-thin.exe / enterprise-thin.exe)
      — metadata consistency: bindings resolve, no orphan refs,
        attribute types valid, predefined-attribute subclass lists
        are additive.
@@ -564,9 +564,9 @@ Before declaring "done", verify your generated configuration:
        computations / language constructs. It cannot reference your
        config's metaobjects.
 
-3. designer.exe <config-path>
+3. designer-thin.exe --file=<config-path>
      — open in Designer for visual review and live debugging.
-       Press F5 to launch Enterprise mode against the same DB; run
+       Press F5 to start the thin client (enterprise-thin.exe) against the same DB; run
        postings / reports there against test data.
 
 4. (If accounting touched) — verify Balance / Turnovers in

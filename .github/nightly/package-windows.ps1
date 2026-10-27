@@ -1,6 +1,6 @@
 # Pack a CMake Release tree for Windows x64 into the nightly zip.
 #
-# What goes in: everything the build put beside the executables (the programs, backend / frontend, the
+# What goes in: everything the build put beside the executables (the programs, backend / frmclient, the
 # wxWidgets DLLs, help/, plugins/, and the database clients the backend's post-build step copies: _fb/ and
 # libpq with OpenSSL), plus what no build step places — the interface translations (lang/) and the MSVC
 # runtime, which Common.props copies for a Visual Studio Release build and nothing does for CMake. The
@@ -34,9 +34,9 @@ foreach ($dll in 'msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll') {
 }
 
 $required = @(
-    'enterprise.exe', 'enterprise-thin.exe', 'designer.exe', 'designer-thin.exe', 'launcher.exe', 'codeRunner.exe', 'appserver.exe',
+    'enterprise-thin.exe', 'designer-thin.exe', 'launcher.exe', 'codeRunner.exe', 'appserver.exe',
     'appcluster.exe', 'appcluster-tray.exe', 'webserver.exe', 'web\www.wpk',
-    'core.dll', 'backend.dll', 'frontend.dll', 'protocol.dll', 'frmclient.dll', 'frmserver.dll', 'fileserver.dll',
+    'core.dll', 'backend.dll', 'protocol.dll', 'frmclient.dll', 'frmserver.dll', 'fileserver.dll',
     'backend.conf',
     '_fb\fbclient.dll', '_fb\firebird.msg', '_fb\firebird.conf', '_fb\plugins\engine13.dll', '_fb\intl\fbintl.dll',
     'libpq.dll', 'libssl-3-x64.dll', 'libcrypto-3-x64.dll',
