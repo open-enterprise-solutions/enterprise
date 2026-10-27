@@ -85,6 +85,12 @@ bool ibAppEnterprise::OnInit()
 	// and a file base's engine's lines in it alike.
 	ibCrashGuard::Install(wxT("enterprise-thin"));
 
+	// THE APPLICATION IS LIGHT — the desktop's (ibWxApp::OnInit, frontend/diagnostics/oesApp.h, says why at length):
+	// every surface is painted from a fixed light palette and the text is left to the system, so under a dark macOS
+	// appearance the metadata tree was white on cream and Messages black among light panels (2026-10-27). Before any
+	// window, as wx wants it; CannotChange is not a failure.
+	SetAppearance(Appearance::Light);
+
 	// THE COMMAND LINE FIRST, then the connection: wx calls OnExit only after an OnInit that succeeded, so nothing is
 	// opened before a refusal here could leave it behind (the codeRunner exit crash, 2026-10-07).
 	if (!wxApp::OnInit())

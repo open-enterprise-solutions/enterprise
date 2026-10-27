@@ -261,7 +261,7 @@ bool ibGridEditorPrintout::DrawPage(wxDC* dc, int page)
 				wxRect rect(countWidth, countHeight, colSize, rowSize);
 				
 				const ibColour backgroundColour = m_doc->GetCellBackgroundColour(row, col);
-				dc->SetBrush(backgroundColour.IsOk() ? typeConv::ColourToWxColour(backgroundColour) : wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW));
+				dc->SetBrush(backgroundColour.IsOk() ? typeConv::ColourToWxColour(backgroundColour) : typeConv::ColourToWxColour(ibDefaultSpreadsheetBackgroundColour()));
 				dc->SetPen(*wxTRANSPARENT_PEN);
 				dc->DrawRectangle(rect.x + 1, rect.y, rect.width - 1, rect.height);
 				
@@ -272,7 +272,7 @@ bool ibGridEditorPrintout::DrawPage(wxDC* dc, int page)
 				DrawTextInRectangle(*dc, CellText(row, col),
 					rect,
 					typeConv::FontToWxFont(m_doc->GetCellFont(row, col)),
-					textColour.IsOk() ? typeConv::ColourToWxColour(textColour) : wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT),
+					textColour.IsOk() ? typeConv::ColourToWxColour(textColour) : typeConv::ColourToWxColour(ibDefaultSpreadsheetTextColour()),
 					horz, vert,
 					m_doc->GetCellTextOrient(row, col),
 					m_doc->GetCellFitMode(row, col) == ibSpreadsheetCellDescription::ibFitMode::Mode_Wrap
@@ -283,7 +283,7 @@ bool ibGridEditorPrintout::DrawPage(wxDC* dc, int page)
 				wxRect rect(countWidth, countHeight, m_doc->GetColSize(col), RowSize(row));
 				
 				const ibColour backgroundColour = m_doc->GetCellBackgroundColour(row, col);
-				dc->SetBrush(backgroundColour.IsOk() ? typeConv::ColourToWxColour(backgroundColour) : wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW));
+				dc->SetBrush(backgroundColour.IsOk() ? typeConv::ColourToWxColour(backgroundColour) : typeConv::ColourToWxColour(ibDefaultSpreadsheetBackgroundColour()));
 				dc->SetPen(*wxTRANSPARENT_PEN);
 				dc->DrawRectangle(rect.x + 1, rect.y, rect.width - 1, rect.height);
 				
@@ -294,7 +294,7 @@ bool ibGridEditorPrintout::DrawPage(wxDC* dc, int page)
 				DrawTextInRectangle(*dc, CellText(row, col),
 					rect,
 					typeConv::FontToWxFont(m_doc->GetCellFont(row, col)),
-					textColour.IsOk() ? typeConv::ColourToWxColour(textColour) : wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT),
+					textColour.IsOk() ? typeConv::ColourToWxColour(textColour) : typeConv::ColourToWxColour(ibDefaultSpreadsheetTextColour()),
 					horz, vert,
 					m_doc->GetCellTextOrient(row, col),
 					m_doc->GetCellFitMode(row, col) == ibSpreadsheetCellDescription::ibFitMode::Mode_Wrap
