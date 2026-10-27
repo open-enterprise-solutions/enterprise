@@ -156,7 +156,7 @@ namespace {
 // A locale directory holding one bucket, in a folder of its own under the temp directory.
 ibString WriteHelpBucket(const std::string& bucket)
 {
-	const ibString root = wxStandardPaths::Get().GetTempDir() + ibFILE_SEP_PATH
+	const ibString root = ibString(wxStandardPaths::Get().GetTempDir()) + ibFILE_SEP_PATH
 		+ ibString::Format(wxT("oes_help_classid_%ld"), (long)wxGetProcessId());
 	const ibString locale = root + ibFILE_SEP_PATH + wxT("en");
 	wxFileName::Mkdir(locale, wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);

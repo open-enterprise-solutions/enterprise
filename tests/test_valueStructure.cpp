@@ -243,7 +243,7 @@ TEST(ValueClone, APrimitiveIsItsOwnCopy) {
 	EXPECT_EQ(copy.GetInteger(), 42);
 
 	const ibValue str(ibString(wxT("text")));
-	EXPECT_STREQ(str.CloneValue().GetString().c_str(), wxT("text"));
+	EXPECT_EQ(str.CloneValue().GetString(), ibT("text"));
 
 	const ibValue empty;
 	EXPECT_TRUE(empty.CloneValue().IsEmpty()) << "an empty value copies to an empty one";

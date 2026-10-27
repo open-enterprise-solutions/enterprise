@@ -32,8 +32,8 @@ TEST(FormatString, EachCodeLandsInItsField)
 
 	EXPECT_EQ(10, format.m_number.m_digits.value_or(-1));
 	EXPECT_EQ(2, format.m_number.m_fractionDigits.value_or(-1));
-	EXPECT_EQ(wxUniChar(','), format.m_number.m_decimalSeparator.value_or(wxUniChar('?')));
-	EXPECT_EQ(wxUniChar(' '), format.m_number.m_groupSeparator.value_or(wxUniChar('?')));   // all space is a space
+	EXPECT_EQ(ibT(','), format.m_number.m_decimalSeparator.value_or(ibT('?')));
+	EXPECT_EQ(ibT(' '), format.m_number.m_groupSeparator.value_or(ibT('?')));   // all space is a space
 	EXPECT_EQ(4, format.m_number.m_groupSize.value_or(-1));
 	EXPECT_EQ(wxT("-"), format.m_number.m_zero.value_or(wxT("?")));
 	EXPECT_EQ(wxT("dd.mm.yyyy"), format.m_date.m_pattern.value_or(wxT("?")));
@@ -192,6 +192,6 @@ TEST(FormatString, APresetIsItsPattern)
 	EXPECT_EQ(ibDatePreset::Custom, ibFormatString::PresetOf(wxT("d/m/yy")));
 	EXPECT_EQ(wxT("dd.mm.yyyy"), ibFormatString::PresetPattern(ibDatePreset::Date));
 	EXPECT_TRUE(ibFormatString::PresetPattern(ibDatePreset::Custom).IsEmpty());
-	EXPECT_STREQ(wxT("NFD"), ibFormatString::CodeName(ibFormatCode::NumberFractionDigits));
+	EXPECT_EQ(ibString(ibT("NFD")), ibFormatString::CodeName(ibFormatCode::NumberFractionDigits));
 	EXPECT_EQ(ibFormatKind::Date, ibFormatString::KindOf(ibFormatCode::DateEmpty));
 }

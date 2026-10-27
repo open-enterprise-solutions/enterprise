@@ -447,7 +447,7 @@ TEST(CompileTree, ADeclaredFunctionIsRegisteredSoACallResolves) {
 
 	const ibByteCode& bc = compiler.m_cByteCode;
 	ASSERT_EQ(bc.m_listFunc.size(), 1u);
-	EXPECT_STREQ(bc.m_listFunc[0].m_strRealName.c_str(), wxT("Twice"));
+	EXPECT_EQ(bc.m_listFunc[0].m_strRealName, ibT("Twice"));
 	EXPECT_TRUE(bc.m_listFunc[0].m_bCodeRet);
 	EXPECT_EQ(bc.m_listFunc[0].m_listParam.size(), 1u);
 	EXPECT_GT(CountOpcode(bc, OPER_CALL) + CountOpcode(bc, OPER_CALL_CLOSURE), 0u)

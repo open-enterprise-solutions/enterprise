@@ -195,7 +195,7 @@ TEST_F(TabularEnumPersist, GridCommit_ActuallySetsTheChosenMember) {
 
 	// What the dataview grid calls when a person commits an edited cell.
 	bool committed = false;
-	ASSERT_NO_THROW(committed = node.SetValue(kCellCol, ibVariant(wxT("Vat10")), /*notify*/ false))
+	ASSERT_NO_THROW(committed = node.SetValue(kCellCol, ibVariant(ibT("Vat10")), /*notify*/ false))
 		<< "committing a reference/enum pick in a tabular grid must not throw (#482)";
 	EXPECT_TRUE(committed);
 

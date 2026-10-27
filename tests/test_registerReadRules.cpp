@@ -480,7 +480,7 @@ TEST(RegisterSurface, EveryFigureWordHasACaption) {
     // The point is not WHICH words come back (they are translated), it is that every figure the
     // registers publish is IN the list. A figure that is not answers with its own name — legible,
     // and the signal that the list has fallen behind the vocabulary.
-    const wxChar* const figures[] = {
+    const ibChar* const figures[] = {
         ibRegFigure::Turnover, ibRegFigure::Receipt, ibRegFigure::Expense,
         ibRegFigure::Balance,  ibRegFigure::OpeningBalance, ibRegFigure::ClosingBalance,
     };

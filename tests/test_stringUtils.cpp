@@ -153,8 +153,8 @@ TEST(StringUtils, TrimVariants) {
     EXPECT_EQ(TrimAll(wxT("  hi  ")), wxT("hi"));
     ibString l = wxT("xxhi");
     ibString r = wxT("hixx");
-    EXPECT_EQ(TrimLeft(l, wxUniChar('x')), wxT("hi"));    // in-place (wxString&) overload
-    EXPECT_EQ(TrimRight(r, wxUniChar('x')), wxT("hi"));
+    EXPECT_EQ(TrimLeft(l, ibT('x')), wxT("hi"));    // in-place (wxString&) overload
+    EXPECT_EQ(TrimRight(r, ibT('x')), wxT("hi"));
 }
 
 // Regression guard: the const-ref TrimRight overload used to return the original
@@ -162,7 +162,7 @@ TEST(StringUtils, TrimVariants) {
 // lvalue binds to that overload, so this fails if the bug ever returns.
 TEST(StringUtils, TrimRightConstOverloadTrims) {
     const ibString src = wxT("hixx");
-    EXPECT_EQ(TrimRight(src, wxUniChar('x')), wxT("hi"));
+    EXPECT_EQ(TrimRight(src, ibT('x')), wxT("hi"));
 }
 
 // ---------------------------------------------------------------------------
@@ -182,12 +182,12 @@ TEST(StringUtils, NumericConversions) {
 // ---------------------------------------------------------------------------
 
 TEST(StringUtils, CharPredicates) {
-    EXPECT_TRUE(IsDigit(wxUniChar('5')));
-    EXPECT_FALSE(IsDigit(wxUniChar('a')));
-    EXPECT_TRUE(IsSpace(wxUniChar(' ')));
-    EXPECT_FALSE(IsSpace(wxUniChar('a')));
-    EXPECT_TRUE(IsSymbol(wxUniChar('!')));
-    EXPECT_FALSE(IsSymbol(wxUniChar('_')));   // '_' is explicitly not a symbol
-    EXPECT_FALSE(IsSymbol(wxUniChar('a')));
-    EXPECT_TRUE(IsWord(wxUniChar('a')));
+    EXPECT_TRUE(IsDigit(ibT('5')));
+    EXPECT_FALSE(IsDigit(ibT('a')));
+    EXPECT_TRUE(IsSpace(ibT(' ')));
+    EXPECT_FALSE(IsSpace(ibT('a')));
+    EXPECT_TRUE(IsSymbol(ibT('!')));
+    EXPECT_FALSE(IsSymbol(ibT('_')));   // '_' is explicitly not a symbol
+    EXPECT_FALSE(IsSymbol(ibT('a')));
+    EXPECT_TRUE(IsWord(ibT('a')));
 }

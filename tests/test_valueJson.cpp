@@ -412,10 +412,10 @@ TEST(JsonText, OneSpellingForTheWholeBackend) {
 
 	const ibString be = U("\xD0\x91");
 	std::string utf8;
-	ibJsonText::AppendQuoted(utf8, be.wc_str(), be.length());
+	ibJsonText::AppendQuoted(utf8, be.c_str(), be.length());
 	EXPECT_EQ(utf8, std::string("\"\xD0\x91\""));
 	std::string empty;
-	ibJsonText::AppendQuoted(empty, L"", 0);
+	ibJsonText::AppendQuoted(empty, ibT(""), 0);
 	EXPECT_EQ(empty, std::string("\"\""));
 }
 

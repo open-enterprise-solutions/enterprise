@@ -237,9 +237,9 @@ TEST_F(TranslationFix, TwoThreadsSpeakTwoLanguagesAtOnce)
 TEST(Translations, ANameIsCanonicalByAnyOfItsSpellings)
 {
 	for (const ibChar* spelling : { ibT("uk_UA"), ibT("uk-UA"), ibT("UK_ua"), ibT("uk_UA.UTF-8") })
-		EXPECT_EQ(ibString(ibT("uk_UA")), ibDictionary::CanonicalLanguage(spelling)) << spelling;
+		EXPECT_EQ(ibString(ibT("uk_UA")), ibDictionary::CanonicalLanguage(spelling)) << ibString(spelling);
 	EXPECT_EQ(ibString(ibT("uk")), ibDictionary::CanonicalLanguage(ibT("UK")));
 	EXPECT_EQ(ibString(ibT("xx_YY")), ibDictionary::CanonicalLanguage(ibT("xx_yy"))) << "the shape is checked, not a table";
 	for (const ibChar* nothing : { ibT(""), ibT("u"), ibT("Ukrainian"), ibT("uk_U"), ibT("uk_UAA"), ibT("u1") })
-		EXPECT_TRUE(ibDictionary::CanonicalLanguage(nothing).IsEmpty()) << nothing;
+		EXPECT_TRUE(ibDictionary::CanonicalLanguage(nothing).IsEmpty()) << ibString(nothing);
 }

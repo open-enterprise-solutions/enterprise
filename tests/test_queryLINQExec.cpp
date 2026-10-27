@@ -286,7 +286,7 @@ int DepthOf(const ibQueryPredicatePtr& p)
 // engine's own IN — however long it is.
 TEST_F(LinqExecFix, In_AThousandValuesAreOneLeaf)
 {
-	std::vector<ibVariant> values{ ibVariant(wxT("North")), ibVariant(wxT("East")) };
+	std::vector<ibVariant> values{ ibVariant(ibT("North")), ibVariant(ibT("East")) };
 	for (int i = 0; i < 1000; ++i)
 		values.push_back(ibVariant(ibString::Format(wxT("Nowhere%d"), i)));
 
@@ -302,7 +302,7 @@ TEST_F(LinqExecFix, In_AThousandValuesAreOneLeaf)
 TEST_F(LinqExecFix, NotIn_ParityWithSql)
 {
 	const auto p = ibQueryLowering::LowerLambdaPredicate(&src,
-		*InList(wxT("region"), { ibVariant(wxT("North")), ibVariant(wxT("East")) }, /*negated*/ true), {});
+		*InList(wxT("region"), { ibVariant(ibT("North")), ibVariant(ibT("East")) }, /*negated*/ true), {});
 	ASSERT_TRUE(p != nullptr);
 	EXPECT_EQ(p->m_kind, ibQueryPredicateKind::Not);
 	EXPECT_EQ(RamCount(p.get()), SqlCount(db, wxT("region NOT IN ('North', 'East')")));   // South alone
@@ -311,7 +311,7 @@ TEST_F(LinqExecFix, NotIn_ParityWithSql)
 // One value is an equality, as it always was — nothing that rides an Equal leaf loses it to a set of one.
 TEST_F(LinqExecFix, In_ASingleValueStaysAnEquality)
 {
-	const auto p = ibQueryLowering::LowerLambdaPredicate(&src, *InList(wxT("region"), { ibVariant(wxT("North")) }), {});
+	const auto p = ibQueryLowering::LowerLambdaPredicate(&src, *InList(wxT("region"), { ibVariant(ibT("North")) }), {});
 	ASSERT_TRUE(p != nullptr);
 	ASSERT_EQ(p->m_kind, ibQueryPredicateKind::Leaf);
 	EXPECT_EQ(p->m_leaf.m_op, ibQueryFilterOp::Equal);
@@ -323,7 +323,7 @@ TEST_F(LinqExecFix, In_ASingleValueStaysAnEquality)
 // chain comes back.
 TEST_F(LinqExecFix, In_APairwiseFoldIsBalancedNotChained)
 {
-	std::vector<ibVariant> values{ ibVariant(wxT("North")), ibVariant(ibValueTypes::TYPE_NULL) };
+	std::vector<ibVariant> values{ ibVariant(ibT("North")), ibVariant(ibValueTypes::TYPE_NULL) };
 	for (int i = 0; i < 1000; ++i)
 		values.push_back(ibVariant(ibString::Format(wxT("Nowhere%d"), i)));
 

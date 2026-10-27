@@ -161,7 +161,7 @@ ibString ScriptFingerprint(const ibString& substituteRel, const ibString& substi
 		if (at == wxNOT_FOUND)
 			continue;
 		const ibString rest = line.Mid(at + marker.length());
-		const int end = rest.Find(wxUniChar('"'));
+		const int end = rest.Find(ibT('"'));
 		if (end == wxNOT_FOUND)
 			continue;
 		hash = rest.Left(end);
