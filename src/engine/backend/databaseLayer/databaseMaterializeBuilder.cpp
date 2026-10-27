@@ -672,7 +672,8 @@ static ibQueryExprPtr BoundedByMoment(const ibQueryExprPtr& period, const ibValu
 namespace {
 
 // The predicate a conditional column is summed under. Unbounded sides simply drop out — an absent
-// interval start makes "before the start" empty, which is the honest reading of "no start given".
+// interval start makes "before the start" empty, which is the honest reading of "no start given";
+// the caller says that empty as a zero, since no condition here would mean every row.
 //
 // ⭐ A BOUNDARY IS A MOMENT, AND HERE TOO. The arm cut below compares a boundary as an instant AND the
 // document at it; this sorts a row BEFORE or INSIDE the interval, and when the movements carry the rows
@@ -906,7 +907,13 @@ ibQueryRelPtr RenderMaterializedRead(const ibMaterializeReadSpec& spec, const ib
 		// Conditioning turns "sum this column" into "sum it only for the rows that count" — which
 		// is how one pass yields an opening balance, an interval turnover and a closing balance
 		// side by side instead of three scans or a full outer join.
-		if (ibQueryExprPtr when = WhenPredicate(spec, c.m_when))
+		// …and "before an absent start" is no row at all. WhenPredicate answers an unbounded side with no
+		// condition, which for this one column would sum the whole history into the opening balance - the
+		// balance as it stands today, shown as what the interval began with (2026-10-28, a report by
+		// recorder with no period given).
+		if (c.m_when == ibMaterializeWhen::BeforeFrom && spec.m_from.GetType() != TYPE_DATE)
+			value = zero;
+		else if (ibQueryExprPtr when = WhenPredicate(spec, c.m_when))
 			value = ibCase({ { when, value } }, zero);
 
 		if (runningForm && periodised) {

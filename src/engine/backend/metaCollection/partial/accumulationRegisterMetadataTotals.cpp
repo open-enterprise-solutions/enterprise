@@ -559,12 +559,14 @@ ibQueryRamTable ibValueMetaObjectAccumulationRegister::ComputeBalanceAndTurnover
 	// its key and the report would look like a fresh start.
 
 	// --- 1. OPENING — the turnovers strictly before the interval, per key ----------------------
+	// No beginning given, nothing stands before it: the reading starts at the first movement. Read anyway,
+	// with no bound, the whole history came back as the seed - every key opened at today's balance and
+	// rolled its own movements on top of it (2026-10-28, a report by recorder with no period given).
 	ibBalanceOpening opening;
-	if (withSign) {
+	if (withSign && periodCol != nullptr && !cBegin.IsEmpty()) {
 		ibDataQueryBuilder b;
 		openRead(b);
-		if (periodCol != nullptr && !cBegin.IsEmpty())
-			b.WhereCompare(periodCol, ibQueryFilterOp::Less, cBegin);
+		b.WhereCompare(periodCol, ibQueryFilterOp::Less, cBegin);
 		for (const auto res : resources)
 			if (const ibBackendQueryColumn* col = source->ResolveColumnByName(res->GetName() + ibRegFigure::Turnover))
 				b.Aggregate(ibDataQueryBuilder::AggregateFn::Sum, col, res->GetName() + ibRegFigure::Turnover);

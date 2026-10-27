@@ -13,6 +13,8 @@
 #include "backend/databaseLayer/databaseErrorCodes.h"
 #include "core/serialize/dataBuilder.h"   // ibDataNode — universal structure bridge (BuildDataNode/ApplyDataNode)
 
+#include <algorithm>   // std::any_of — a field name written twice
+
 
 namespace {
 
@@ -79,7 +81,22 @@ bool ibValueMetaObject::SaveNode(ibDataNode& node) const
 		return false;
 	node.SetValue(kTagFunctionalOptions, functionalOptionWriter.buffer());
 
-	return WriteData(node);
+	if (!WriteData(node))
+		return false;
+
+	// ⭐ ONE NAME, ONE FIELD. A property is written into the same node as the intrinsics above, and a reader finds
+	// the FIRST field under a name: a property that shares one with an intrinsic reads the intrinsic's value back.
+	// A role's mode was named like the composition every object carries, so every configuration holding a role
+	// saved and then refused to load ("expected 2, got 5", 2026-10-28). Refused here, it is the writer that is named.
+	std::vector<ibString> names;
+	for (const auto& field : node.Fields()) {
+		if (std::any_of(names.begin(), names.end(), [&field](const ibString& name) { return name == field.first; }))
+			ibBackendCoreException::Error(
+				_("'%s' writes the field '%s' twice - a property named like one of the object's own fields "
+				  "reads the other one back"), GetName(), field.first);
+		names.push_back(field.first);
+	}
+	return true;
 }
 
 // LoadNode — read this object from a CONST node. Mirror of SaveNode.

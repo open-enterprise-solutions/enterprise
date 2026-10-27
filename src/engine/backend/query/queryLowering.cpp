@@ -3559,6 +3559,65 @@ static void StampDeclaredRoles(const ibQuerySelect& sel, std::vector<OutputColum
 	}
 }
 
+// ⭐ A MOMENT READ WITHOUT THE ONES ABOVE IT IS NO MOMENT. A register read by recorder publishes its period, its
+// recorder and its line as one moment, the senior first; a select that takes the recorder and leaves the period
+// hands on documents ordered by their reference, and a balance totalled over them opened at whichever document
+// sorted first rather than the earliest (2026-10-28, an item's opening 35 where nothing had come before it). So
+// the seniors it left out go along as outputs nobody reads, the way a level's field does (WithSelectOneLevelDown).
+// Null when nothing is missing - and where the select folds, DISTINCTs or says its roles itself, since an output
+// added there would change its rows or overrule its word.
+static ibQuerySelectPtr WithSeniorMomentsCarried(const ibQuerySelect& sel, const std::vector<ibSourceBinding>& sources)
+{
+	if (sel.m_selectAll || sel.m_distinct || !sel.m_groupBy.empty())
+		return nullptr;
+	for (const ibQueryProjection& p : sel.m_projections)
+		if (p.m_star || !p.m_expr || p.m_roleSaid || p.m_expr->m_kind == ibQueryAstExprKind::Func)
+			return nullptr;
+
+	ibQuerySelectPtr carried;
+	int index = 0;
+	for (const ibSourceBinding& s : sources) {
+		if (s.m_q == nullptr)
+			continue;
+		// What the select reads of this source, and the rank of the most junior moment among it.
+		std::vector<ibString> read;
+		int juniorRead = 0;
+		for (const ibQueryProjection& p : sel.m_projections) {
+			const ibQueryAstExpr& e = *p.m_expr;
+			if (e.m_kind != ibQueryAstExprKind::Column || e.m_arg)
+				continue;
+			ibString column;
+			if (e.m_path.size() == 2 && e.m_path[0].CmpNoCase(s.m_alias) == 0)
+				column = e.m_path[1];
+			else if (e.m_path.size() == 1 && sources.size() == 1)
+				column = e.m_path[0];
+			else
+				continue;
+			read.push_back(column);
+			if (const ibBackendQueryColumn* c = s.m_q->ResolveColumnByName(column))
+				if (c->GetBalanceRole() == ibBalanceRole::Moment)
+					juniorRead = std::max(juniorRead, c->GetPeriodRank());
+		}
+		if (juniorRead == 0)
+			continue;
+		for (const ibBackendQueryColumn* c : s.m_q->GetColumns()) {
+			if (c == nullptr || c->GetBalanceRole() != ibBalanceRole::Moment
+			    || c->GetPeriodRank() <= 0 || c->GetPeriodRank() >= juniorRead)
+				continue;
+			if (std::any_of(read.begin(), read.end(), [c](const ibString& name) { return name.CmpNoCase(c->GetName()) == 0; }))
+				continue;
+			if (!carried)
+				carried = std::make_shared<ibQuerySelect>(sel);
+			ibQueryProjection senior;
+			senior.m_expr = ibQueryAstExpr::Make(ibQueryAstExprKind::Column);
+			senior.m_expr->m_path = { s.m_alias, c->GetName() };
+			senior.m_alias = ibString::Format(ibT("q_moment%d"), index++);
+			carried->m_projections.push_back(std::move(senior));
+		}
+	}
+	return carried;
+}
+
 // ibSubqueryOwner owns the ibSubqueryQueryable instances built for a single Execute — they must outlive
 // the door's terminal call (declared above for IN-subquery). RAM-materialised on Execute, so a local
 // list living to the return statement is enough (no cross-call lifetime). (docs §22 / §23)
@@ -4899,8 +4958,10 @@ std::shared_ptr<ibSubqueryQueryable> WrapSelectAsQueryable(const ibQuerySelect& 
 	// the list (ibSubqueryQueryable::SetComputedOverRow) and the column is read back by its name. It was
 	// refused here ("cannot be read back"), so the outer query could not filter by a column it had typed.
 	std::vector<ibQueryColumnSelect> overRow;
-	PopulateBuilder(sel, params, innerSources, inner, innerSchema, /*asSubquery*/true, innerSourceConditions, &overRow);
-	StampDeclaredRoles(sel, innerSchema);   // what the select says its fields are, published with them
+	const ibQuerySelectPtr carried = WithSeniorMomentsCarried(sel, innerSources);
+	const ibQuerySelect& read = carried ? *carried : sel;
+	PopulateBuilder(read, params, innerSources, inner, innerSchema, /*asSubquery*/true, innerSourceConditions, &overRow);
+	StampDeclaredRoles(read, innerSchema);   // what the select says its fields are, published with them
 	// …and where it also DISTINCTs or groups by one, the statement road reads it whole (ibStatementRowsQueryable)
 	// and the wrapper stands over those rows, published as the statement names them. (No ORDER BY reaches here:
 	// the parser keeps it to a statement.)
@@ -5298,8 +5359,10 @@ std::shared_ptr<const ibBackendQueryable> DeclareNamedResultAsCte(ibDataQueryBui
 	// here, the rows road resolves it the same way and reports it there if it is one.
 	try {
 		BuildSourceTree(sel, params, owner, innerSources, inner, &innerSourceConditions);
-		PopulateBuilder(sel, params, innerSources, inner, innerSchema, /*asSubquery*/true, innerSourceConditions, &overRow);
-		StampDeclaredRoles(sel, innerSchema);   // what the select says its fields are, declared with them
+		const ibQuerySelectPtr carried = WithSeniorMomentsCarried(sel, innerSources);
+		const ibQuerySelect& read = carried ? *carried : sel;
+		PopulateBuilder(read, params, innerSources, inner, innerSchema, /*asSubquery*/true, innerSourceConditions, &overRow);
+		StampDeclaredRoles(read, innerSchema);   // what the select says its fields are, declared with them
 		// ⭐ AND THE AUTHOR'S LIMIT IS PUT ON THE DOOR, because a declaration has no terminal to put it
 		// on. An ordinary read carries TOP in its PAGE REQUEST — the limit is asked for at the moment
 		// the rows are fetched — and a declared query is never fetched: it is written into a `WITH` and

@@ -79,7 +79,7 @@ private:
 	ibPropertyCategory* m_categoryAccess = ibPropertyObject::CreatePropertyCategory(ibT("Access"), _("Access"));
 	ibPropertyEnum<ibValueEnumRoleCompositionMode>* m_propertyComposition =
 		ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumRoleCompositionMode>>(
-			m_categoryAccess, ibT("Composition"), _("Composition"),
+			m_categoryAccess, ibT("CompositionMode"), _("Composition"),
 			_("How the role combines with the user's other roles. Permitting (the default): the role adds rights, one permitting role granting is enough. Restricting: the role grants nothing and subtracts - what it denies stays denied whatever the others grant (a data separator such as organisation or division). Verdict: (permitting OR ...) AND restricting AND ...; role order never matters."),
 			ibRoleCompositionMode_Union);
 };
