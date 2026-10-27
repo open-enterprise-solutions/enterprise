@@ -4,7 +4,7 @@
 #include "backend/backend_core.h"
 #include "backend/propertyManager/propertyValue.h"
 
-class BACKEND_API ibPropertyValueNumber : public ibPropertyValue {
+class BACKEND_API ibPropertyValueNumber : public ibPropertyValue {
 public:
 
 	void SetNumber(const ibNumber& number) { m_number = number; }

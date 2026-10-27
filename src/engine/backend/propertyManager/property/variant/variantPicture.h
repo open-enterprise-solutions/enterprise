@@ -6,7 +6,7 @@
 #include "backend/propertyManager/propertyObject.h"
 #include "backend/backend_picture.h"
 
-class BACKEND_API ibPropertyValueExternalPicture : public ibPropertyValue {
+class BACKEND_API ibPropertyValueExternalPicture : public ibPropertyValue {
 public:
 
 	bool IsEmptyPicture() const { return m_pictureExternalFile.IsEmptyPicture(); }
@@ -52,7 +52,7 @@ protected:
 	ibGuid m_version;
 };
 
-class BACKEND_API ibPropertyValuePicture : public ibPropertyValue {
+class BACKEND_API ibPropertyValuePicture : public ibPropertyValue {
 public:
 
 	bool IsEmptyPicture() const { return m_pictureDesc.IsEmptyPicture(); }

@@ -8,7 +8,7 @@
 #include <atomic>
 #include <mutex>
 
-class BACKEND_API ibPropertyValueAttribute : public ibPropertyValue {
+class BACKEND_API ibPropertyValueAttribute : public ibPropertyValue {
 protected:
 	virtual void DoSetDefaultMetaType();
 	virtual void DoSetFromMetaId(const ibMetaID& id);

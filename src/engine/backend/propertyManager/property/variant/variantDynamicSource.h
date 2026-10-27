@@ -52,7 +52,7 @@ public:
 	// GetQueryable, so the dynamic list reaches the source's command interface. Null / never stale.
 	const ibQueryableSourceDescriptor* GetDescriptor() const;
 
-	// Representation via the (live) queryable — the source's name.
+	// Representation via the (live) queryable — the source's name.
 
 	virtual ibPropertyValueDynamicSource* Clone() const { return new ibPropertyValueDynamicSource(*this); }
 

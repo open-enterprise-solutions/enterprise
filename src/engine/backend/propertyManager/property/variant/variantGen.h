@@ -3,7 +3,7 @@
 
 #include "backend/propertyManager/property/variant/variantMetaDesc.h"
 
-class BACKEND_API ibPropertyValueGeneration : public ibPropertyValueMetaDesc {
+class BACKEND_API ibPropertyValueGeneration : public ibPropertyValueMetaDesc {
 public:
 
 	ibValue GetDataValue() const;

@@ -12,7 +12,7 @@
 // PROPGRID: using it made the backend property layer depend on the editor library for a
 // pair of ints. Same shape as ibPropertyValueNumber — data in the variant, Eq for change
 // detection and diff (docs/private/property-system.md §3, §6.1).
-class BACKEND_API ibPropertyValuePoint : public ibPropertyValue {
+class BACKEND_API ibPropertyValuePoint : public ibPropertyValue {
 public:
 
 	void SetPoint(const ibPoint& point) { m_point = point; }

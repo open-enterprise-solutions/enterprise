@@ -5,7 +5,7 @@
 #include "backend/propertyManager/propertyValue.h"
 #include "backend/standardCommand.h"
 
-class BACKEND_API ibPropertyValueAction : public ibPropertyValue {
+class BACKEND_API ibPropertyValueAction : public ibPropertyValue {
 public:
 
 	ibStandardCommandDescription& GetValueAsActionDesc() { return m_actionData; }

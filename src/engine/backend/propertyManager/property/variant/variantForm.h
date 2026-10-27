@@ -3,7 +3,7 @@
 
 #include "variantModule.h"
 
-class BACKEND_API ibPropertyValueForm : public ibPropertyValueModule {
+class BACKEND_API ibPropertyValueForm : public ibPropertyValueModule {
 public:
 
 	//set form code 

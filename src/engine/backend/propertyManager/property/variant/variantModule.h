@@ -4,7 +4,7 @@
 #include "backend/backend_core.h"
 #include "backend/propertyManager/propertyValue.h"
 
-class BACKEND_API ibPropertyValueModule : public ibPropertyValue {
+class BACKEND_API ibPropertyValueModule : public ibPropertyValue {
 public:
 
 	//set module code 

@@ -5,7 +5,7 @@
 #include "backend/propertyManager/propertyObject.h"
 #include "core/description/spreadsheetDescription.h"
 
-class BACKEND_API ibPropertyValueSpreadsheet : public ibPropertyValue {
+class BACKEND_API ibPropertyValueSpreadsheet : public ibPropertyValue {
 public:
 
 	bool IsEmptySpreadsheet() const { return m_spreadsheetDesc.IsEmptySpreadsheet(); }

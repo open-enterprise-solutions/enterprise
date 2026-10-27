@@ -7,7 +7,7 @@
 
 // A size in a variant, our own — see variantPoint.h for why propgrid's
 // WX_PG_DECLARE_VARIANT_DATA_EXPORTED(wxSize) / `variant << size` is not used.
-class BACKEND_API ibPropertyValueSize : public ibPropertyValue {
+class BACKEND_API ibPropertyValueSize : public ibPropertyValue {
 public:
 
 	void SetSize(const ibSize& size) { m_size = size; }
