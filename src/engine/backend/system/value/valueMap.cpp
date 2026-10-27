@@ -56,7 +56,7 @@ size_t ibValueContainer::HashOf(const ibValue& key) const
 		ibString held;
 		const ibString& text = KeyText(key, held);
 		std::uint64_t h = kIbHashBasis;
-		for (const wchar_t* p = text.wc_str(); *p != L'\0'; ++p)
+		for (const ibChar* p = text.c_str(); *p != ibT('\0'); ++p)
 			h = ibHashCombine(h, FoldChar(*p));
 		return (size_t)h;                                    // folded once, per lookup — not per candidate
 	}
@@ -72,9 +72,9 @@ static bool FoldedEquals(const ibString& a, const ibString& b)
 {
 	if (a.Len() != b.Len())
 		return false;
-	const wchar_t* pa = a.wc_str();
-	const wchar_t* pb = b.wc_str();
-	for (; *pa != L'\0'; ++pa, ++pb) {
+	const ibChar* pa = a.c_str();
+	const ibChar* pb = b.c_str();
+	for (; *pa != ibT('\0'); ++pa, ++pb) {
 		if (*pa == *pb)
 			continue;
 		if (FoldChar(*pa) != FoldChar(*pb))

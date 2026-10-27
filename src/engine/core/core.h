@@ -162,16 +162,16 @@ inline const ibChar* const kValueFieldData  = ibT("v");   // the payload
 // THE CLIPBOARD'S FORMATS — what a copied object is put on the system's clipboard under. Here, not with a designer,
 // because both designers and the client copy and paste by them: one window pastes what another copied, so the
 // name a copy goes under cannot part from the one a paste asks for.
-#define oes_clipboard_metadata	ibT("oes_clipboard_metadata")
-#define oes_clipboard_frame		ibT("oes_clipboard_frame")
-#define oes_clipboard_interface	ibT("oes_clipboard_interface")
-#define oes_clipboard_role		ibT("oes_clipboard_role")
-#define oes_clipboard_template	ibT("oes_clipboard_template")
-#define oes_clipboard_attribute	ibT("oes_clipboard_attribute")
-#define oes_clipboard_command	ibT("oes_clipboard_command")
+#define oes_clipboard_metadata	wxT("oes_clipboard_metadata")
+#define oes_clipboard_frame		wxT("oes_clipboard_frame")
+#define oes_clipboard_interface	wxT("oes_clipboard_interface")
+#define oes_clipboard_role		wxT("oes_clipboard_role")
+#define oes_clipboard_template	wxT("oes_clipboard_template")
+#define oes_clipboard_attribute	wxT("oes_clipboard_attribute")
+#define oes_clipboard_command	wxT("oes_clipboard_command")
 // A command of a control's command bar — on the system's clipboard as the others are: the desktop held it in its process
 // (commandBar.cpp's s_commandClipboard), out of reach of another window.
-#define oes_clipboard_command_bar_item	ibT("oes_clipboard_command_bar_item")
+#define oes_clipboard_command_bar_item	wxT("oes_clipboard_command_bar_item")
 
 //*******************************************************************************************
 

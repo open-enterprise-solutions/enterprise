@@ -1,5 +1,6 @@
 #include "core/fileSystem.h"
 
+#include <chrono>
 #include <cstdlib>
 #include <vector>
 
@@ -151,6 +152,19 @@ bool ibFileExists(const ibString& path)
 	return std::filesystem::is_regular_file(ibPathOf(path), error);
 }
 
+// The file clock counts from an epoch of its own (1601 on Windows), and C++20's clock_cast is not on every
+// library this builds with: the moment crosses as its distance from now, which both clocks agree on.
+ibDateTime ibFileModificationTime(const ibString& path)
+{
+	std::error_code error;
+	const std::filesystem::file_time_type written = std::filesystem::last_write_time(ibPathOf(path), error);
+	if (error)
+		return ibDateTime();
+	const auto instant = std::chrono::system_clock::now()
+		+ std::chrono::duration_cast<std::chrono::system_clock::duration>(written - std::filesystem::file_time_type::clock::now());
+	return ibDateTime::OfInstant(std::chrono::duration_cast<std::chrono::milliseconds>(instant.time_since_epoch()).count());
+}
+
 // A FILE: remove() alone would take an empty folder too.
 bool ibRemoveFile(const ibString& path)
 {
@@ -241,5 +255,5 @@ size_t ibDir::GetAllFiles(const ibString& dirname, std::vector<ibString>* files,
 
 std::filesystem::path ibPathOf(const ibString& text)
 {
-	return std::filesystem::path(text.wc_str(), text.wc_str() + text.Len());
+	return std::filesystem::path(text.c_str(), text.c_str() + text.Len());
 }

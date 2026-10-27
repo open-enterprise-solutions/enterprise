@@ -434,11 +434,11 @@ bool ibDateTime::FromString(const ibString& text)
 
 ibDateTime::DigitForm ibDateTime::FromDigits(const ibString& text) noexcept
 {
-	const wchar_t* const chars = text.wc_str();
+	const ibChar* const chars = text.c_str();
 	const size_t length = text.Len();
 	size_t at = 0;
-	const auto isDigit = [&](size_t i) { return i < length && chars[i] >= L'0' && chars[i] <= L'9'; };
-	const auto digitAt = [&](size_t i) { return static_cast<long long>(chars[i] - L'0'); };
+	const auto isDigit = [&](size_t i) { return i < length && chars[i] >= ibT('0') && chars[i] <= ibT('9'); };
+	const auto digitAt = [&](size_t i) { return static_cast<long long>(chars[i] - ibT('0')); };
 	// Up to `most` digits, at least `least`; the value read, the cursor past them.
 	const auto digits = [&](size_t least, size_t most, long long& value) -> bool {
 		size_t n = 0; value = 0;
@@ -448,7 +448,7 @@ ibDateTime::DigitForm ibDateTime::FromDigits(const ibString& text) noexcept
 		}
 		return n >= least;
 	};
-	const auto take = [&](wchar_t c) -> bool {
+	const auto take = [&](ibChar c) -> bool {
 		if (at < length && chars[at] == c) { ++at; return true; }
 		return false;
 	};
@@ -476,28 +476,28 @@ ibDateTime::DigitForm ibDateTime::FromDigits(const ibString& text) noexcept
 
 	// dd.mm.yyyy[ hh:mm:ss]
 	at = 0;
-	if (digits(1, 2, day) && take(L'.') && digits(1, 2, month) && take(L'.') && digits(4, 4, year)) {
+	if (digits(1, 2, day) && take(ibT('.')) && digits(1, 2, month) && take(ibT('.')) && digits(4, 4, year)) {
 		if (at == length)
 			return settle(year, month, day, 0, 0, 0, 0);
-		while (take(L' ')) {}
-		if (digits(1, 2, hour) && take(L':') && digits(1, 2, minute) && take(L':') && digits(1, 2, second) && at == length)
+		while (take(ibT(' '))) {}
+		if (digits(1, 2, hour) && take(ibT(':')) && digits(1, 2, minute) && take(ibT(':')) && digits(1, 2, second) && at == length)
 			return settle(year, month, day, hour, minute, second, 0);
 		return DigitForm::Refused;
 	}
 
 	// yyyy-mm-dd[ hh:mm[:ss[.fraction]]]  (ISO 8601, `T` or a space between the halves)
 	at = 0;
-	if (digits(4, 4, year) && take(L'-') && digits(2, 2, month) && take(L'-') && digits(2, 2, day)) {
+	if (digits(4, 4, year) && take(ibT('-')) && digits(2, 2, month) && take(ibT('-')) && digits(2, 2, day)) {
 		if (at == length)
 			return settle(year, month, day, 0, 0, 0, 0);
-		if (!(take(L' ') || take(L'T')))
+		if (!(take(ibT(' ')) || take(ibT('T'))))
 			return DigitForm::Refused;
-		if (!(digits(2, 2, hour) && take(L':') && digits(2, 2, minute)))
+		if (!(digits(2, 2, hour) && take(ibT(':')) && digits(2, 2, minute)))
 			return DigitForm::Refused;
-		if (take(L':')) {
+		if (take(ibT(':'))) {
 			if (!digits(2, 2, second))
 				return DigitForm::Refused;
-			if (take(L'.')) {
+			if (take(ibT('.'))) {
 				// The first three digits of the fraction are the milliseconds; the rest is finer than the reading.
 				size_t n = 0; long long fraction = 0;
 				while (isDigit(at)) { if (n < 3) fraction = fraction * 10 + digitAt(at); ++at; ++n; }

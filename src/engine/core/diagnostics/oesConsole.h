@@ -32,11 +32,10 @@
 #include "core/diagnostics/crashGuard.h"
 
 #include <wx/init.h>
-#include <wx/string.h>
 
 class ibOesConsoleBoot {
 public:
-	ibOesConsoleBoot(const wxString& exeName, int argc, char** argv)
+	ibOesConsoleBoot(const ibString& exeName, int argc, char** argv)
 		: m_wxInit(argc, argv)
 	{
 		if (!m_wxInit.IsOk()) return;

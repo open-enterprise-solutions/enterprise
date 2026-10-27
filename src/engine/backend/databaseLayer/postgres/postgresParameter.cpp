@@ -25,7 +25,7 @@ ibDatabaseParameterPostgres::ibDatabaseParameterPostgres(double dblValue) : m_nP
 
 ibDatabaseParameterPostgres::ibDatabaseParameterPostgres(const ibNumber &dblValue) : m_nParameterType(ibDatabaseParameterPostgres::PARAM_NUMBER)
 {
-	m_strValue = dblValue.ToWString();
+	m_strValue = dblValue.ToString();
 }
 
 ibDatabaseParameterPostgres::ibDatabaseParameterPostgres(bool bValue) : m_nParameterType(ibDatabaseParameterPostgres::PARAM_BOOL)

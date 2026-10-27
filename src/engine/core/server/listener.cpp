@@ -55,9 +55,9 @@ ibTlsFiles ibTlsFiles::FromConf(const wxConfigBase& conf, const ibString& folder
 {
 	ibTlsFiles files;
 	wxString value;   // wxConfigBase's own string: the value is written into it
-	if (conf.Read(ibT("Certificate"), &value))
+	if (conf.Read(wxT("Certificate"), &value))
 		files.m_certificate = Resolved(value, folder);
-	if (conf.Read(ibT("PrivateKey"), &value))
+	if (conf.Read(wxT("PrivateKey"), &value))
 		files.m_privateKey = Resolved(value, folder);
 	return files;
 }
@@ -67,7 +67,7 @@ ibTlsFiles ibTlsFiles::FromConf(const ibString& path)
 	if (path.IsEmpty() || !ibFileExists(path))
 		return ibTlsFiles();
 	// Read as the host reads it (ibApplicationHost::ReadBackendConf).
-	const wxFileConfig conf(ibT(""), ibT(""), path, ibT(""), wxCONFIG_USE_LOCAL_FILE | wxCONFIG_USE_NO_ESCAPE_CHARACTERS);
+	const wxFileConfig conf(wxT(""), wxT(""), path, wxT(""), wxCONFIG_USE_LOCAL_FILE | wxCONFIG_USE_NO_ESCAPE_CHARACTERS);
 	return FromConf(conf, ibString(ibPathOf(path).parent_path().wstring()));
 }
 

@@ -23,7 +23,7 @@ public:
 	// …AND READ BACK — `length` characters at `text` decoded into `out`; false, `out` as it was, when one is not
 	// base64, the padding stands where it may not, or the text does not end on a whole quartet. Whitespace is not
 	// skipped: what is written above has none.
-	static bool Read(const wchar_t* text, size_t length, ibMemoryBuffer& out);
+	static bool Read(const ibChar* text, size_t length, ibMemoryBuffer& out);
 	static bool Read(const ibString& text, ibMemoryBuffer& out);
 };
 

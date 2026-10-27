@@ -328,7 +328,7 @@ void ibValueTextWriter::Open(const ibString& fileName, ibTextEncoding encoding, 
 	auto file = std::make_unique<wxFFile>();
 	{
 		wxLogNull quiet;
-		file->Open(fileName, append ? ibT("ab") : ibT("wb"));
+		file->Open(fileName, append ? wxT("ab") : wxT("wb"));
 	}
 	if (!file->IsOpened())
 		ibBackendCoreException::Error(_("TextWriter: cannot open the file '%s' for writing"), fileName);
@@ -354,7 +354,7 @@ void ibValueTextWriter::Write(const ibString& text)
 		return;
 
 	size_t length = 0;
-	const wxCharBuffer bytes = m_conv->cWC2MB(text.wc_str(), text.length(), &length);
+	const wxCharBuffer bytes = m_conv->cWC2MB(text.wc_str(), wxNO_LEN, &length);
 	if (length == 0 || length == wxCONV_FAILED)
 		ibBackendCoreException::Error(_("TextWriter: the text cannot be written to '%s' in the encoding given"), m_fileName);
 	if (m_file->Write(bytes.data(), length) != length)

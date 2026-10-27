@@ -289,8 +289,7 @@ int ibFirebirdLocalServer::EnsureStarted() {
 
 		// CreateProcessW may modify the command-line buffer in place;
 		// make a mutable copy. Sized to cover quoted path + flags.
-		std::vector<wchar_t> mutableCmd(cmd.wc_str(),
-			cmd.wc_str() + cmd.length() + 1);
+		std::vector<wchar_t> mutableCmd(cmd.wc_str(), cmd.wc_str() + cmd.Len() + 1);
 
 		const BOOL ok = ::CreateProcessW(
 			nullptr,                  // application name — taken from cmdline[0]

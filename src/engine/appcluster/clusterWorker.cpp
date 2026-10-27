@@ -24,9 +24,9 @@ constexpr std::chrono::seconds kLongestWait(60);
 // The application server beside the cluster.
 ibString ServerProgram()
 {
-	wxFileName program(ibProgramFolder(), ibT("appserver"));
+	wxFileName program(ibProgramFolder(), wxT("appserver"));
 #ifdef __WXMSW__
-	program.SetExt(ibT("exe"));
+	program.SetExt(wxT("exe"));
 #endif
 	return program.GetFullPath();
 }

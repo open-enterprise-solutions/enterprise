@@ -150,7 +150,7 @@ public:
 			// The keys array is built lock-step with this one (LINQ `orderby`), so a
 			// length mismatch is an emitter bug, not runtime data. Catch it in Debug;
 			// stay graceful in Release rather than sort against a short key array.
-			wxFAIL_MSG(ibT("SortByKeys: keys length does not match the array"));
+			wxFAIL_MSG(wxT("SortByKeys: keys length does not match the array"));
 			return;
 		}
 		std::vector<size_t> idx(n);

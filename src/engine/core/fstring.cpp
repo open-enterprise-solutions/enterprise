@@ -14,7 +14,7 @@
 #include <cerrno>        // ToLong & co read ERANGE, as wx does
 #include <climits>       // ToInt's range
 #include <cstdarg>       // Print — the arguments Format hands on
-#include <cwchar>        // vswprintf; wmemcpy / wmemmove / wmemset — the characters in their block
+#include <cwchar>        // vswprintf, wcstol & co, wcslen — the C library's wide side, at the boundary
 #include <functional>    // std::less — is an appended piece inside this very text
 #include <locale>
 #if defined(__IBOSX__)
@@ -23,6 +23,10 @@
 #include <new>
 #include <sstream>       // ToCDouble — the classic locale, whatever the process has set
 #include <stdexcept>     // std::out_of_range — insert past the end, as basic_string refused it
+
+namespace {
+using Traits = std::char_traits<ibChar>;   // copy / move / assign / length — the characters in their block
+} // namespace
 
 // --- the text and its owners ------------------------------------------------------
 //
@@ -36,7 +40,7 @@ struct ibString::Impl : ibString::Shared
 {
 	explicit Impl(size_t cap) noexcept : Shared(1, cap) { Chars()[0] = ibT('\0'); }
 
-	static size_t BytesFor(size_t cap) noexcept { return sizeof(Shared) + (cap + 1) * sizeof(wchar_t); }
+	static size_t BytesFor(size_t cap) noexcept { return sizeof(Shared) + (cap + 1) * sizeof(ibChar); }
 
 	// Room for `cap` characters at least — and for as many more as the pool's block holds anyway. The class is
 	// counted once: it says which block and how big it is.
@@ -45,11 +49,11 @@ struct ibString::Impl : ibString::Shared
 		const int c = ibMemoryPool::detail::ClassOf(asked);
 		const size_t bytes = c < 0 ? asked : ibMemoryPool::detail::kClasses[c];
 		void* const place = c < 0 ? ::operator new(bytes) : ibMemoryPool::AllocateClass(c);
-		return new (place) Impl((bytes - sizeof(Shared)) / sizeof(wchar_t) - 1);
+		return new (place) Impl((bytes - sizeof(Shared)) / sizeof(ibChar) - 1);
 	}
-	static Impl* Copy(const wchar_t* text, size_t len, size_t cap) {
+	static Impl* Copy(const ibChar* text, size_t len, size_t cap) {
 		Impl* const impl = Make(cap < len ? len : cap);
-		if (len != 0) std::wmemcpy(impl->Chars(), text, len);
+		if (len != 0) Traits::copy(impl->Chars(), text, len);
 		impl->SetLength(len);
 		return impl;
 	}
@@ -70,7 +74,7 @@ void ibString::Free(Shared* shared) noexcept
 // A text somebody else holds is copied first, with exactly the room asked for — which is what a concatenation
 // asks, so `a + b` is one block; one of its own without room grows by half again, so a string appended to in a
 // loop is copied a logarithmic number of times.
-wchar_t* ibString::Own(size_t room)
+ibChar* ibString::Own(size_t room)
 {
 	Impl* const held = m_impl != nullptr ? Impl::Of(m_impl) : nullptr;
 	const size_t len = held != nullptr ? held->m_len : 0;
@@ -90,16 +94,16 @@ void ibString::SetLength(size_t length) noexcept { Impl::Of(m_impl)->SetLength(l
 
 namespace {
 
-bool IsSpace(wchar_t c) noexcept {
+bool IsSpace(ibChar c) noexcept {
 	return c == ibT(' ') || c == ibT('\t') || c == ibT('\n') || c == ibT('\r') || c == ibT('\f') || c == ibT('\v');
 }
 
 // A piece of a text, made a text of its own — one block, the characters copied once.
-ibString Slice(std::wstring_view piece) { return ibString(piece.data(), piece.size()); }
+ibString Slice(std::u16string_view piece) { return ibString(piece.data(), piece.size()); }
 
 // Two texts the same, a case-insensitive pair folded only where the characters differ — matching
 // characters need no folding, and names that are the same usually match exactly.
-bool SameText(const wchar_t* a, size_t an, const wchar_t* b, size_t bn, bool caseSensitive) noexcept {
+bool SameText(const ibChar* a, size_t an, const ibChar* b, size_t bn, bool caseSensitive) noexcept {
 	if (an != bn) return false;
 	for (size_t i = 0; i < an; ++i) {
 		if (a[i] == b[i]) continue;
@@ -108,23 +112,64 @@ bool SameText(const wchar_t* a, size_t an, const wchar_t* b, size_t bn, bool cas
 	return true;
 }
 
-void EncodeUtf8(uint32_t cp, std::string& out) {
-	if (cp < 0x80) {
-		out.push_back(static_cast<char>(cp));
-	} else if (cp < 0x800) {
-		out.push_back(static_cast<char>(0xC0 | (cp >> 6)));
-		out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
-	} else if (cp < 0x10000) {
-		out.push_back(static_cast<char>(0xE0 | (cp >> 12)));
-		out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
-		out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
-	} else {
-		out.push_back(static_cast<char>(0xF0 | (cp >> 18)));
-		out.push_back(static_cast<char>(0x80 | ((cp >> 12) & 0x3F)));
-		out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
-		out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+// The code point at `i` — a surrogate pair read as the one character it is, `i` left on its second half.
+uint32_t CodePoint(std::u16string_view text, size_t& i) noexcept {
+	const uint32_t unit = text[i];
+	if (unit >= 0xD800 && unit <= 0xDBFF && i + 1 < text.size()) {
+		const uint32_t low = text[i + 1];
+		if (low >= 0xDC00 && low <= 0xDFFF) {
+			++i;
+			return 0x10000u + ((unit - 0xD800u) << 10) + (low - 0xDC00u);
+		}
 	}
+	return unit;
 }
+
+size_t Utf8Length(uint32_t cp) noexcept {
+	return cp < 0x80 ? 1 : cp < 0x800 ? 2 : cp < 0x10000 ? 3 : 4;
+}
+
+char* EncodeUtf8(uint32_t cp, char* at) noexcept {
+	if (cp < 0x80) {
+		*at++ = static_cast<char>(cp);
+	} else if (cp < 0x800) {
+		*at++ = static_cast<char>(0xC0 | (cp >> 6));
+		*at++ = static_cast<char>(0x80 | (cp & 0x3F));
+	} else if (cp < 0x10000) {
+		*at++ = static_cast<char>(0xE0 | (cp >> 12));
+		*at++ = static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
+		*at++ = static_cast<char>(0x80 | (cp & 0x3F));
+	} else {
+		*at++ = static_cast<char>(0xF0 | (cp >> 18));
+		*at++ = static_cast<char>(0x80 | ((cp >> 12) & 0x3F));
+		*at++ = static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
+		*at++ = static_cast<char>(0x80 | (cp & 0x3F));
+	}
+	return at;
+}
+
+// A wide text as UTF-16 units. Where wchar_t is two bytes (Windows) it IS UTF-16, read where it lies; where it
+// is four (Linux, macOS) it is UTF-32, and a character past the basic plane becomes a surrogate pair.
+#if WCHAR_MAX <= 0xFFFF
+std::u16string_view Utf16(const wchar_t* s, size_t n) noexcept {
+	return std::u16string_view(reinterpret_cast<const ibChar*>(s), n);
+}
+#else
+std::u16string Utf16(const wchar_t* s, size_t n) {
+	std::u16string units;
+	units.reserve(n);
+	for (size_t i = 0; i < n; ++i) {
+		uint32_t cp = static_cast<uint32_t>(s[i]);
+		if (cp > 0xFFFF) {
+			cp -= 0x10000;
+			units.push_back(static_cast<ibChar>(0xD800 + (cp >> 10)));
+			units.push_back(static_cast<ibChar>(0xDC00 + (cp & 0x3FF)));
+		}
+		else units.push_back(static_cast<ibChar>(cp));
+	}
+	return units;
+}
+#endif
 
 // wx's ToNumeric: nothing parsed → false and *val untouched; parsed but not to the end → *val set,
 // false; out of range → false.
@@ -139,53 +184,78 @@ bool ToNumeric(const wchar_t* start, T* val, R (*convert)(const wchar_t*, wchar_
 	errno = saved;
 	if (end == start || range) return false;
 	*val = static_cast<T>(result);
-	return *end == ibT('\0');
+	return *end == L'\0';
 }
 
 } // namespace
 
 // --- construction / copy / move ---------------------------------------------------
 
-ibString::ibString(const wchar_t* ws)
+ibString::ibString(const ibChar* s)
 {
-	if (ws != nullptr && *ws != ibT('\0')) { const size_t n = std::wcslen(ws); m_impl = Impl::Copy(ws, n, n); }
+	if (s != nullptr && *s != ibT('\0')) { const size_t n = Traits::length(s); m_impl = Impl::Copy(s, n, n); }
 }
-ibString::ibString(const wchar_t* ws, size_t n) { if (ws != nullptr && n != 0) m_impl = Impl::Copy(ws, n, n); }
-ibString::ibString(wchar_t c, size_t count)
+ibString::ibString(const ibChar* s, size_t n) { if (s != nullptr && n != 0) m_impl = Impl::Copy(s, n, n); }
+ibString::ibString(ibChar c, size_t count)
 {
 	if (count == 0) return;
 	Impl* const impl = Impl::Make(count);
-	std::wmemset(impl->Chars(), c, count);
+	Traits::assign(impl->Chars(), count, c);
 	impl->SetLength(count);
 	m_impl = impl;
 }
-ibString::ibString(const std::wstring& ws) { if (!ws.empty()) m_impl = Impl::Copy(ws.c_str(), ws.size(), ws.size()); }
+ibString::ibString(const wchar_t* ws) : ibString(ws, ws != nullptr ? std::wcslen(ws) : 0) {}
+ibString::ibString(const wchar_t* ws, size_t n)
+{
+	if (ws == nullptr || n == 0) return;
+	const auto units = Utf16(ws, n);
+	m_impl = Impl::Copy(units.data(), units.size(), units.size());
+}
+ibString::ibString(const std::wstring& ws) : ibString(ws.data(), ws.size()) {}
 ibString::ibString(const char* utf8) { if (utf8) SetUtf8(utf8, std::char_traits<char>::length(utf8)); }
-ibString::ibString(const wxString& s) { if (!s.empty()) m_impl = Impl::Copy(s.wc_str(), s.length(), s.length()); }
+ibString::ibString(const wxString& s)
+{
+	if (s.empty()) return;
+	const auto& wide = s.ToStdWstring();   // wx's own wide storage, by reference where the build keeps one
+	const auto units = Utf16(wide.data(), wide.size());
+	m_impl = Impl::Copy(units.data(), units.size(), units.size());
+}
 
 // --- conversions -----------------------------------------------------------------
 
-wxString ibString::ToWxString() const { return wxString(wc_str(), Len()); }
-std::wstring ibString::ToStdWString() const { return std::wstring(wc_str(), Len()); }
+wxString ibString::ToWxString() const
+{
+#if WCHAR_MAX <= 0xFFFF
+	return wxString(wc_str(), Len());
+#else
+	return wxString(wc_str());
+#endif
+}
 
+#if WCHAR_MAX > 0xFFFF
+ibWideBuffer ibString::wc_str() const
+{
+	const std::u16string_view text = View();
+	ibWideBuffer wide;
+	wide.reserve(text.size());
+	for (size_t i = 0; i < text.size(); ++i)
+		wide.push_back(static_cast<wchar_t>(CodePoint(text, i)));
+	return wide;
+}
+#endif
+
+// Counted, then laid down through a pointer: appended a byte at a time, a Debug build paid a call for every one,
+// and a script's JSON text runs to tens of megabytes.
 std::string ibString::ToUtf8() const
 {
-	const std::wstring_view text = View();
-	std::string out;
-	out.reserve(text.size());
-	for (size_t i = 0; i < text.size(); ++i) {
-		uint32_t cp = static_cast<uint32_t>(static_cast<std::make_unsigned<wchar_t>::type>(text[i]));
-		if constexpr (sizeof(wchar_t) == 2) {           // UTF-16: combine surrogate pairs
-			if (cp >= 0xD800 && cp <= 0xDBFF && i + 1 < text.size()) {
-				const uint32_t lo = static_cast<uint16_t>(text[i + 1]);
-				if (lo >= 0xDC00 && lo <= 0xDFFF) {
-					cp = 0x10000u + ((cp - 0xD800u) << 10) + (lo - 0xDC00u);
-					++i;
-				}
-			}
-		}
-		EncodeUtf8(cp, out);
-	}
+	const std::u16string_view text = View();
+	size_t bytes = 0;
+	for (size_t i = 0; i < text.size(); ++i)
+		bytes += Utf8Length(CodePoint(text, i));
+	std::string out(bytes, '\0');
+	char* at = &out[0];
+	for (size_t i = 0; i < text.size(); ++i)
+		at = EncodeUtf8(CodePoint(text, i), at);
 	return out;
 }
 
@@ -200,7 +270,7 @@ void ibString::SetUtf8(const char* p, size_t n)
 {
 	Clear();
 	if (n == 0) return;
-	wchar_t* const chars = Own(n);
+	ibChar* const chars = Own(n);
 	size_t len = 0;
 	for (size_t i = 0; i < n; ) {
 		const unsigned char b = static_cast<unsigned char>(p[i++]);
@@ -216,15 +286,13 @@ void ibString::SetUtf8(const char* p, size_t n)
 			cp = (cp << 6) | (cb & 0x3F);
 			++i;
 		}
-		if constexpr (sizeof(wchar_t) == 2) {            // UTF-16: split astral to surrogate pair
-			if (cp > 0xFFFF) {
-				cp -= 0x10000;
-				chars[len++] = static_cast<wchar_t>(0xD800 + (cp >> 10));
-				chars[len++] = static_cast<wchar_t>(0xDC00 + (cp & 0x3FF));
-				continue;
-			}
+		if (cp > 0xFFFF) {                                       // past the basic plane: a surrogate pair
+			cp -= 0x10000;
+			chars[len++] = static_cast<ibChar>(0xD800 + (cp >> 10));
+			chars[len++] = static_cast<ibChar>(0xDC00 + (cp & 0x3FF));
+			continue;
 		}
-		chars[len++] = static_cast<wchar_t>(cp);
+		chars[len++] = static_cast<ibChar>(cp);
 	}
 	SetLength(len);
 	// …and a text of characters longer than a byte has room for its BYTES: Cyrillic twice what it takes, CJK
@@ -232,8 +300,8 @@ void ibString::SetUtf8(const char* p, size_t n)
 	// A LONG one moves to a block of its own size, once: its block is past the pool (a plain allocation of
 	// exactly what was asked), so the room is real memory. A short one stays: inside the pool the slack is one
 	// size class at most and the block goes back to be reused, while the move is a second allocation and a
-	// copy on every decode - "Privet" x4 on a 4-byte wchar_t asks 256 bytes by its bytes and 128 by its
-	// characters, and moving it cost the decode about 30% (2026-09-29). An ASCII text never moves either.
+	// copy on every decode - "Privet" x4 asks twice the room by its bytes as by its characters, and moving it
+	// cost the decode about 30% (2026-09-29, measured on a 4-byte character). An ASCII text never moves either.
 	if (len < n && Impl::BytesFor(Impl::Of(m_impl)->m_cap) > ibMemoryPool::detail::kClasses[ibMemoryPool::detail::kNum - 1])
 		*this = ibString(chars, len);
 }
@@ -247,22 +315,20 @@ ibString ibString::FromUTF8(const char* s, size_t n)
 
 void ibString::AppendCodepoint(uint32_t cp)
 {
-	if constexpr (sizeof(wchar_t) == 2) {            // UTF-16: split astral to surrogate pair
-		if (cp > 0xFFFF) {
-			cp -= 0x10000;
-			push_back(static_cast<wchar_t>(0xD800 + (cp >> 10)));
-			push_back(static_cast<wchar_t>(0xDC00 + (cp & 0x3FF)));
-			return;
-		}
+	if (cp > 0xFFFF) {                                           // past the basic plane: a surrogate pair
+		cp -= 0x10000;
+		push_back(static_cast<ibChar>(0xD800 + (cp >> 10)));
+		push_back(static_cast<ibChar>(0xDC00 + (cp & 0x3FF)));
+		return;
 	}
-	push_back(static_cast<wchar_t>(cp));
+	push_back(static_cast<ibChar>(cp));
 }
 
 // --- query / element access ---------------------------------------------------------
 
 bool ibString::IsBlank() const noexcept
 {
-	for (wchar_t c : View()) if (!IsSpace(c)) return false;
+	for (ibChar c : View()) if (!IsSpace(c)) return false;
 	return true;
 }
 
@@ -272,12 +338,12 @@ void ibString::Clear() noexcept
 	else { Release(m_impl); m_impl = nullptr; }
 }
 
-wchar_t& ibString::operator[](size_t i)      { return Own()[i]; }
-void    ibString::SetChar(size_t i, wchar_t c) { Own()[i] = c; }
-wchar_t* ibString::begin() { return IsEmpty() ? nullptr : Own(); }
-wchar_t* ibString::end()   { return IsEmpty() ? nullptr : Own() + Len(); }
+ibChar& ibString::operator[](size_t i)       { return Own()[i]; }
+void      ibString::SetChar(size_t i, ibChar c) { Own()[i] = c; }
+ibChar* ibString::begin() { return IsEmpty() ? nullptr : Own(); }
+ibChar* ibString::end()   { return IsEmpty() ? nullptr : Own() + Len(); }
 
-// --- the std::wstring spelling ----------------------------------------------------------
+// --- the std::basic_string spelling ----------------------------------------------------
 
 size_t ibString::find_first_of(const ibString& set, size_t start) const { return View().find_first_of(set.View(), start); }
 size_t ibString::find_last_of(const ibString& set, size_t start) const  { return View().find_last_of(set.View(), start); }
@@ -290,8 +356,8 @@ ibString& ibString::erase(size_t pos, size_t count)
 	if (pos >= len) return *this;
 	if (count > len - pos) count = len - pos;
 	if (count == 0) return *this;
-	wchar_t* const chars = Own();
-	std::wmemmove(chars + pos, chars + pos + count, len - pos - count);
+	ibChar* const chars = Own();
+	Traits::move(chars + pos, chars + pos + count, len - pos - count);
 	SetLength(len - count);
 	return *this;
 }
@@ -303,48 +369,48 @@ ibString& ibString::insert(size_t pos, const ibString& s)
 	if (pos > len) throw std::out_of_range("ibString::insert");
 	const ibString piece(s);   // `s` may be this very string: held, the text is copied before it is written
 	const size_t n = piece.Len();
-	wchar_t* const chars = Own(len + n);
-	std::wmemmove(chars + pos + n, chars + pos, len - pos);
-	std::wmemcpy(chars + pos, piece.wc_str(), n);
+	ibChar* const chars = Own(len + n);
+	Traits::move(chars + pos + n, chars + pos, len - pos);
+	Traits::copy(chars + pos, piece.c_str(), n);
 	SetLength(len + n);
 	return *this;
 }
 
-// The characters may lie in this very text (`s.append(s.wc_str(), n)`), which may have to move: then they are
+// The characters may lie in this very text (`s.append(s.c_str(), n)`), which may have to move: then they are
 // taken out first.
-ibString& ibString::append(const wchar_t* s, size_t n)
+ibString& ibString::append(const ibChar* s, size_t n)
 {
 	if (n == 0) return *this;
 	const size_t len = Len();
 	if (m_impl != nullptr) {
-		const wchar_t* const own = Impl::Of(m_impl)->Chars();
-		if (std::less_equal<const wchar_t*>()(own, s) && std::less<const wchar_t*>()(s, own + len + 1)) {
-			const std::wstring piece(s, n);
+		const ibChar* const own = Impl::Of(m_impl)->Chars();
+		if (std::less_equal<const ibChar*>()(own, s) && std::less<const ibChar*>()(s, own + len + 1)) {
+			const std::u16string piece(s, n);
 			return append(piece.data(), n);
 		}
 	}
-	wchar_t* const chars = Own(len + n);
-	std::wmemcpy(chars + len, s, n);
+	ibChar* const chars = Own(len + n);
+	Traits::copy(chars + len, s, n);
 	SetLength(len + n);
 	return *this;
 }
 
-void ibString::push_back(wchar_t c)
+void ibString::push_back(ibChar c)
 {
 	const size_t len = Len();
-	wchar_t* const chars = Own(len + 1);
+	ibChar* const chars = Own(len + 1);
 	chars[len] = c;
 	SetLength(len + 1);
 }
 
 void ibString::reserve(size_t n) { if (n > Len()) Own(n); }
 
-void ibString::resize(size_t n, wchar_t c)
+void ibString::resize(size_t n, ibChar c)
 {
 	const size_t len = Len();
 	if (n == len) return;
-	wchar_t* const chars = Own(n);
-	if (n > len) std::wmemset(chars + len, c, n - len);
+	ibChar* const chars = Own(n);
+	if (n > len) Traits::assign(chars + len, n - len, c);
 	SetLength(n);
 }
 
@@ -352,22 +418,22 @@ void ibString::resize(size_t n, wchar_t c)
 
 ibString ibString::Mid(size_t first, size_t count) const
 {
-	const std::wstring_view text = View();
+	const std::u16string_view text = View();
 	if (first >= text.size()) return ibString();
 	return Slice(text.substr(first, count));
 }
 ibString ibString::Left(size_t count) const { return Slice(View().substr(0, count)); }
 ibString ibString::Right(size_t count) const
 {
-	const std::wstring_view text = View();
+	const std::u16string_view text = View();
 	return count >= text.size() ? *this : Slice(text.substr(text.size() - count));
 }
-size_t ibString::Freq(wchar_t c) const { size_t n = 0; for (wchar_t x : View()) if (x == c) ++n; return n; }
+size_t ibString::Freq(ibChar c) const { size_t n = 0; for (ibChar x : View()) if (x == c) ++n; return n; }
 
 // `rest` may be this very string: what is returned is made before it is written.
 bool ibString::StartsWith(const ibString& p, ibString* rest) const
 {
-	const std::wstring_view text = View(), prefix = p.View();
+	const std::u16string_view text = View(), prefix = p.View();
 	if (text.size() < prefix.size() || text.compare(0, prefix.size(), prefix) != 0) return false;
 	if (rest != nullptr) *rest = Slice(text.substr(prefix.size()));
 	return true;
@@ -375,15 +441,15 @@ bool ibString::StartsWith(const ibString& p, ibString* rest) const
 
 bool ibString::EndsWith(const ibString& s, ibString* rest) const
 {
-	const std::wstring_view text = View(), suffix = s.View();
+	const std::u16string_view text = View(), suffix = s.View();
 	if (text.size() < suffix.size() || text.compare(text.size() - suffix.size(), suffix.size(), suffix) != 0) return false;
 	if (rest != nullptr) *rest = Slice(text.substr(0, text.size() - suffix.size()));
 	return true;
 }
 
-ibString ibString::BeforeFirst(wchar_t c, ibString* rest) const
+ibString ibString::BeforeFirst(ibChar c, ibString* rest) const
 {
-	const std::wstring_view text = View();
+	const std::u16string_view text = View();
 	const size_t at = text.find(c);
 	// The answer is taken BEFORE `rest` is touched: `rest` may be this very string (s.BeforeFirst(c, &s), the walk
 	// along a list), and clearing it first answered an empty string for the list's last item.
@@ -393,16 +459,16 @@ ibString ibString::BeforeFirst(wchar_t c, ibString* rest) const
 	return before;
 }
 
-ibString ibString::AfterFirst(wchar_t c) const
+ibString ibString::AfterFirst(ibChar c) const
 {
-	const std::wstring_view text = View();
+	const std::u16string_view text = View();
 	const size_t at = text.find(c);
 	return at == npos ? ibString() : Slice(text.substr(at + 1));
 }
 
-ibString ibString::BeforeLast(wchar_t c, ibString* rest) const
+ibString ibString::BeforeLast(ibChar c, ibString* rest) const
 {
-	const std::wstring_view text = View();
+	const std::u16string_view text = View();
 	const size_t at = text.rfind(c);
 	if (at == npos) { if (rest != nullptr) *rest = *this; return ibString(); }
 	ibString before = Slice(text.substr(0, at));
@@ -410,19 +476,19 @@ ibString ibString::BeforeLast(wchar_t c, ibString* rest) const
 	return before;
 }
 
-ibString ibString::AfterLast(wchar_t c) const
+ibString ibString::AfterLast(ibChar c) const
 {
-	const std::wstring_view text = View();
+	const std::u16string_view text = View();
 	const size_t at = text.rfind(c);
 	return at == npos ? *this : Slice(text.substr(at + 1));
 }
 
 bool ibString::Matches(const ibString& maskText) const
 {
-	const wchar_t* mask = maskText.wc_str();
-	const wchar_t* text = wc_str();
-	const wchar_t* lastStarInText = nullptr;   // where '*' last matched, to backtrack to
-	const wchar_t* lastStarInMask = nullptr;
+	const ibChar* mask = maskText.c_str();
+	const ibChar* text = c_str();
+	const ibChar* lastStarInText = nullptr;   // where '*' last matched, to backtrack to
+	const ibChar* lastStarInMask = nullptr;
 match:
 	for (; *mask != ibT('\0'); ++mask, ++text) {
 		switch (*mask) {
@@ -434,12 +500,12 @@ match:
 			lastStarInMask = mask;
 			while (*mask == ibT('*') || *mask == ibT('?')) ++mask;   // metacharacters right after it add nothing
 			if (*mask == ibT('\0')) return true;
-			const wchar_t* const nextMeta = std::wcspbrk(mask, ibT("*?"));
-			const size_t run = nextMeta != nullptr ? size_t(nextMeta - mask) : std::wcslen(mask);
-			const std::wstring piece(mask, run);
-			const wchar_t* const found = std::wcsstr(text, piece.c_str());
-			if (found == nullptr) return false;
-			text = found + run - 1;   // -1: the loop steps past it
+			const std::u16string_view rest(mask);
+			const size_t nextMeta = rest.find_first_of(ibT("*?"));
+			const size_t run = nextMeta != npos ? nextMeta : rest.size();
+			const size_t found = std::u16string_view(text).find(rest.substr(0, run));
+			if (found == npos) return false;
+			text += found + run - 1;   // -1: the loop steps past it
 			mask += run - 1;
 			break;
 		}
@@ -460,13 +526,13 @@ match:
 
 // --- case ------------------------------------------------------------------------------------
 
-ibString ibString::Lower() const { ibString r(wc_str(), Len()); r.MakeLower(); return r; }
-ibString ibString::Upper() const { ibString r(wc_str(), Len()); r.MakeUpper(); return r; }
+ibString ibString::Lower() const { ibString r(c_str(), Len()); r.MakeLower(); return r; }
+ibString ibString::Upper() const { ibString r(c_str(), Len()); r.MakeUpper(); return r; }
 
 ibString& ibString::MakeLower()
 {
 	if (IsEmpty()) return *this;
-	wchar_t* const chars = Own();
+	ibChar* const chars = Own();
 	for (size_t i = 0, n = Len(); i < n; ++i) chars[i] = ibToLower(chars[i]);
 	return *this;
 }
@@ -474,7 +540,7 @@ ibString& ibString::MakeLower()
 ibString& ibString::MakeUpper()
 {
 	if (IsEmpty()) return *this;
-	wchar_t* const chars = Own();
+	ibChar* const chars = Own();
 	for (size_t i = 0, n = Len(); i < n; ++i) chars[i] = ibToUpper(chars[i]);
 	return *this;
 }
@@ -483,7 +549,7 @@ ibString& ibString::MakeUpper()
 
 ibString& ibString::Trim(bool fromRight)
 {
-	const std::wstring_view text = View();
+	const std::u16string_view text = View();
 	size_t b = 0, e = text.size();
 	if (fromRight) { while (e > b && IsSpace(text[e - 1])) --e; }
 	else           { while (b < e && IsSpace(text[b]))     ++b; }
@@ -493,7 +559,7 @@ ibString& ibString::Trim(bool fromRight)
 
 ibString ibString::TrimAll() const
 {
-	const std::wstring_view text = View();
+	const std::u16string_view text = View();
 	size_t b = 0, e = text.size();
 	while (b < e && IsSpace(text[b]))     ++b;
 	while (e > b && IsSpace(text[e - 1])) --e;
@@ -508,14 +574,14 @@ ibString ibString::Strip(int how) const
 	return s;
 }
 
-ibString& ibString::Pad(size_t count, wchar_t c, bool fromRight)
+ibString& ibString::Pad(size_t count, ibChar c, bool fromRight)
 {
 	if (count == 0) return *this;
 	if (fromRight) return Append(c, count);
 	const size_t len = Len();
-	wchar_t* const chars = Own(len + count);
-	std::wmemmove(chars + count, chars, len);
-	std::wmemset(chars, c, count);
+	ibChar* const chars = Own(len + count);
+	Traits::move(chars + count, chars, len);
+	Traits::assign(chars, count, c);
 	SetLength(len + count);
 	return *this;
 }
@@ -523,11 +589,11 @@ ibString& ibString::Pad(size_t count, wchar_t c, bool fromRight)
 ibString& ibString::Truncate(size_t len)     { if (len < Len()) erase(len); return *this; }
 ibString& ibString::RemoveLast(size_t n)     { if (n != 0 && !IsEmpty()) erase(n < Len() ? Len() - n : 0); return *this; }
 
-// --- numbers (ported from wxString) -------------------------------------------------------------
+// --- numbers (ported from wxString) — the C library reads them wide -------------------------------
 
 bool ibString::IsNumber() const
 {
-	const std::wstring_view text = View();
+	const std::u16string_view text = View();
 	size_t i = (!text.empty() && (text[0] == ibT('-') || text[0] == ibT('+'))) ? 1 : 0;
 	for (; i < text.size(); ++i) if (text[i] < ibT('0') || text[i] > ibT('9')) return false;
 	return true;
@@ -554,7 +620,7 @@ bool ibString::ToDouble(double* val) const {
 }
 bool ibString::ToCDouble(double* val) const {
 	if (val == nullptr) return false;
-	std::wistringstream in(ToStdWString());
+	std::wistringstream in(wc_str());
 	in.imbue(std::locale::classic());
 	double result = 0;
 	in >> result;
@@ -569,19 +635,30 @@ ibString& ibString::operator+=(const ibString& o)
 {
 	if (o.IsEmpty()) return *this;
 	if (IsEmpty()) return *this = o;
-	return append(o.wc_str(), o.Len());   // `o` may be this very string — append takes it out first
+	return append(o.c_str(), o.Len());   // `o` may be this very string — append takes it out first
 }
 
-ibString& ibString::operator+=(const wchar_t* s)  { if (s != nullptr && *s != ibT('\0')) append(s, std::wcslen(s)); return *this; }
-ibString& ibString::operator+=(wchar_t c)         { push_back(c); return *this; }
-ibString& ibString::operator+=(const wxString& s) { if (!s.empty()) append(s.wc_str(), s.length()); return *this; }
+ibString& ibString::operator+=(const ibChar* s) { if (s != nullptr && *s != ibT('\0')) append(s, Traits::length(s)); return *this; }
+ibString& ibString::operator+=(const wchar_t* s)
+{
+	if (s != nullptr && *s != L'\0') { const auto units = Utf16(s, std::wcslen(s)); append(units.data(), units.size()); }
+	return *this;
+}
+ibString& ibString::operator+=(ibChar c) { push_back(c); return *this; }
+ibString& ibString::operator+=(const wxString& s)
+{
+	if (s.empty()) return *this;
+	const auto& wide = s.ToStdWstring();   // wx's own wide storage, by reference where the build keeps one
+	const auto units = Utf16(wide.data(), wide.size());
+	return append(units.data(), units.size());
+}
 
-ibString& ibString::Append(wchar_t c, size_t count)
+ibString& ibString::Append(ibChar c, size_t count)
 {
 	if (count == 0) return *this;
 	const size_t len = Len();
-	wchar_t* const chars = Own(len + count);
-	std::wmemset(chars + len, c, count);
+	ibChar* const chars = Own(len + count);
+	Traits::assign(chars + len, count, c);
 	SetLength(len + count);
 	return *this;
 }
@@ -591,7 +668,7 @@ ibString& ibString::Append(wchar_t c, size_t count)
 size_t ibString::Replace(const ibString& fromText, const ibString& toText, bool replaceAll)
 {
 	const ibString from(fromText), to(toText);
-	const std::wstring_view what = from.View(), with = to.View(), text = View();
+	const std::u16string_view what = from.View(), with = to.View(), text = View();
 	if (what.empty()) return 0;
 	size_t at = text.find(what);
 	if (at == npos) return 0;
@@ -611,14 +688,33 @@ size_t ibString::Replace(const ibString& fromText, const ibString& toText, bool 
 
 // --- comparison ----------------------------------------------------------------------------------------
 
-bool ibString::operator==(const wxString& s) const { return View().compare(0, npos, s.wc_str(), s.length()) == 0; }
+bool ibString::operator==(const wchar_t* s) const
+{
+	if (s == nullptr) s = L"";
+	const auto units = Utf16(s, std::wcslen(s));
+	return View() == std::u16string_view(units);
+}
+
+bool ibString::operator==(const wxString& s) const
+{
+	const auto& wide = s.ToStdWstring();
+	const auto units = Utf16(wide.data(), wide.size());
+	return View() == std::u16string_view(units);
+}
+
+bool operator==(const wxString& a, const ibChar* b)
+{
+	const auto& wide = a.ToStdWstring();   // wx's own wide storage, by reference where the build keeps one
+	const auto units = Utf16(wide.data(), wide.size());
+	return std::u16string_view(units) == std::u16string_view(b != nullptr ? b : ibT(""));
+}
 
 // Decoded as SetUtf8 decodes — the text the bytes would make — and compared a character at a time; an ASCII word, every
 // protocol's, is a byte against a character.
 bool ibString::operator==(const char* utf8) const noexcept
 {
-	const wchar_t* chars = wc_str();
-	const wchar_t* const end = chars + Len();
+	const ibChar* chars = c_str();
+	const ibChar* const end = chars + Len();
 	const unsigned char* p = reinterpret_cast<const unsigned char*>(utf8 != nullptr ? utf8 : "");
 	while (*p != 0) {
 		const unsigned char b = *p++;
@@ -632,17 +728,15 @@ bool ibString::operator==(const char* utf8) const noexcept
 			if ((*p >> 6) != 0x2) break;                       // invalid continuation
 			cp = (cp << 6) | (*p++ & 0x3F);
 		}
-		if constexpr (sizeof(wchar_t) == 2) {            // UTF-16: an astral character is a surrogate pair
-			if (cp > 0xFFFF) {
-				cp -= 0x10000;
-				if (end - chars < 2 || chars[0] != static_cast<wchar_t>(0xD800 + (cp >> 10))
-					|| chars[1] != static_cast<wchar_t>(0xDC00 + (cp & 0x3FF)))
-					return false;
-				chars += 2;
-				continue;
-			}
+		if (cp > 0xFFFF) {                                     // past the basic plane: a surrogate pair
+			cp -= 0x10000;
+			if (end - chars < 2 || chars[0] != static_cast<ibChar>(0xD800 + (cp >> 10))
+				|| chars[1] != static_cast<ibChar>(0xDC00 + (cp & 0x3FF)))
+				return false;
+			chars += 2;
+			continue;
 		}
-		if (chars == end || *chars != static_cast<wchar_t>(cp))
+		if (chars == end || *chars != static_cast<ibChar>(cp))
 			return false;
 		++chars;
 	}
@@ -652,24 +746,32 @@ bool ibString::operator==(const char* utf8) const noexcept
 bool ibString::IsSameAs(const ibString& o, bool caseSensitive) const
 {
 	if (m_impl == o.m_impl) return true;   // one text
-	return SameText(wc_str(), Len(), o.wc_str(), o.Len(), caseSensitive);
+	return SameText(c_str(), Len(), o.c_str(), o.Len(), caseSensitive);
+}
+
+bool ibString::IsSameAs(const ibChar* s, bool caseSensitive) const
+{
+	if (s == nullptr) s = ibT("");
+	return SameText(c_str(), Len(), s, Traits::length(s), caseSensitive);
 }
 
 bool ibString::IsSameAs(const wchar_t* s, bool caseSensitive) const
 {
-	if (s == nullptr) s = ibT("");
-	return SameText(wc_str(), Len(), s, std::wcslen(s), caseSensitive);
+	if (s == nullptr) s = L"";
+	const auto units = Utf16(s, std::wcslen(s));
+	return SameText(c_str(), Len(), units.data(), units.size(), caseSensitive);
 }
 
 bool ibString::IsSameAs(const wxString& s, bool caseSensitive) const
 {
 	const auto& wide = s.ToStdWstring();   // wx's own wide storage, by reference where the build keeps one
-	return SameText(wc_str(), Len(), wide.data(), wide.length(), caseSensitive);
+	const auto units = Utf16(wide.data(), wide.size());
+	return SameText(c_str(), Len(), units.data(), units.size(), caseSensitive);
 }
 
-bool ibString::IsSameAs(wchar_t c, bool caseSensitive) const
+bool ibString::IsSameAs(ibChar c, bool caseSensitive) const
 {
-	const std::wstring_view text = View();
+	const std::u16string_view text = View();
 	return text.size() == 1 && (caseSensitive ? text[0] == c : ibToLower(text[0]) == ibToLower(c));
 }
 
@@ -678,11 +780,11 @@ bool ibString::IsSameAs(wchar_t c, bool caseSensitive) const
 int ibString::CmpNoCase(const ibString& o) const
 {
 	if (m_impl == o.m_impl) return 0;   // one text
-	const std::wstring_view a = View(), b = o.View();
+	const std::u16string_view a = View(), b = o.View();
 	const size_t n = a.size() < b.size() ? a.size() : b.size();
 	for (size_t i = 0; i < n; ++i) {
 		if (a[i] == b[i]) continue;
-		const wint_t x = ibToLower(a[i]), y = ibToLower(b[i]);
+		const ibChar x = ibToLower(a[i]), y = ibToLower(b[i]);
 		if (x != y) return x < y ? -1 : 1;
 	}
 	return a.size() == b.size() ? 0 : (a.size() < b.size() ? -1 : 1);
@@ -690,7 +792,7 @@ int ibString::CmpNoCase(const ibString& o) const
 
 bool ibString::IsAscii() const noexcept
 {
-	for (wchar_t c : View()) if (static_cast<unsigned>(c) > 0x7F) return false;
+	for (ibChar c : View()) if (c > 0x7F) return false;
 	return true;
 }
 
@@ -699,22 +801,23 @@ bool ibString::IsAscii() const noexcept
 namespace ibFStringFormat {
 
 namespace {
-bool IsDigit(wchar_t c) noexcept { return c >= ibT('0') && c <= ibT('9'); }
+bool IsDigit(wchar_t c) noexcept { return c >= L'0' && c <= L'9'; }
 bool IsOneOf(wchar_t c, const wchar_t* set) noexcept {
 	for (; *set != 0; ++set) if (*set == c) return true;
 	return false;
 }
 } // namespace
 
-// The format as swprintf reads it. Each conversion is re-spelled for the argument that is actually
-// there — `ls` / `lc` for text and characters (the one wide spelling every C library agrees on: MSVC's
-// bare `%s` is wide, glibc's is narrow), `ll` for a 64-bit number, nothing for an int — so what is
-// written decides only HOW a value prints: flags, width, precision, the conversion letter. A conversion
-// its argument cannot answer, `%n`, a positional `%1$s`, or a count that does not agree is refused.
+// The format as swprintf reads it — wide, as the C library has it. Each conversion is re-spelled for the
+// argument that is actually there — `ls` / `lc` for text and characters (the one wide spelling every C
+// library agrees on: MSVC's bare `%s` is wide, glibc's is narrow), `ll` for a 64-bit number, nothing for an
+// int — so what is written decides only HOW a value prints: flags, width, precision, the conversion letter.
+// A conversion its argument cannot answer, `%n`, a positional `%1$s`, or a count that does not agree is
+// refused.
 bool Prepare(const ibString& formatText, const Kind* given, size_t count, std::wstring& spec)
 {
-	const wchar_t* const format = formatText.wc_str();
-	const size_t n = formatText.Len();
+	const std::wstring format = formatText.wc_str();
+	const size_t n = format.size();
 	spec.clear();
 	spec.reserve(n + 8);
 	size_t next = 0;   // the argument the next conversion reads
@@ -725,45 +828,45 @@ bool Prepare(const ibString& formatText, const Kind* given, size_t count, std::w
 	};
 	for (size_t i = 0; i < n; ++i) {
 		spec.push_back(format[i]);
-		if (format[i] != ibT('%'))
+		if (format[i] != L'%')
 			continue;
-		if (i + 1 < n && format[i + 1] == ibT('%')) { spec.push_back(ibT('%')); ++i; continue; }
+		if (i + 1 < n && format[i + 1] == L'%') { spec.push_back(L'%'); ++i; continue; }
 
 		size_t j = i + 1;
 		Kind kind;
-		while (j < n && IsOneOf(format[j], ibT("-+ #0"))) spec.push_back(format[j++]);
-		if (j < n && format[j] == ibT('*')) { if (!take(kind) || kind != Kind::Int) return false; spec.push_back(format[j++]); }
+		while (j < n && IsOneOf(format[j], L"-+ #0")) spec.push_back(format[j++]);
+		if (j < n && format[j] == L'*') { if (!take(kind) || kind != Kind::Int) return false; spec.push_back(format[j++]); }
 		else while (j < n && IsDigit(format[j])) spec.push_back(format[j++]);
-		if (j < n && format[j] == ibT('.')) {
+		if (j < n && format[j] == L'.') {
 			spec.push_back(format[j++]);
-			if (j < n && format[j] == ibT('*')) { if (!take(kind) || kind != Kind::Int) return false; spec.push_back(format[j++]); }
+			if (j < n && format[j] == L'*') { if (!take(kind) || kind != Kind::Int) return false; spec.push_back(format[j++]); }
 			else while (j < n && IsDigit(format[j])) spec.push_back(format[j++]);
 		}
 		// The length as WRITTEN is dropped — the argument decides it (MSVC's `I64` included).
-		while (j < n && IsOneOf(format[j], ibT("hlLqjzt"))) ++j;
-		if (j < n && format[j] == ibT('I')) { ++j; while (j < n && IsDigit(format[j])) ++j; }
+		while (j < n && IsOneOf(format[j], L"hlLqjzt")) ++j;
+		if (j < n && format[j] == L'I') { ++j; while (j < n && IsDigit(format[j])) ++j; }
 		if (j >= n || !take(kind))
 			return false;
 
 		switch (const wchar_t conversion = format[j]) {
-		case ibT('s'):
+		case L's':
 			if (kind != Kind::Text) return false;
-			spec += ibT("ls");
+			spec += L"ls";
 			break;
-		case ibT('c'):
+		case L'c':
 			if (kind != Kind::Int) return false;
-			spec += ibT("lc");
+			spec += L"lc";
 			break;
-		case ibT('d'): case ibT('i'): case ibT('u'): case ibT('o'): case ibT('x'): case ibT('X'):
-			if (kind == Kind::Int64) spec += ibT("ll");
+		case L'd': case L'i': case L'u': case L'o': case L'x': case L'X':
+			if (kind == Kind::Int64) spec += L"ll";
 			else if (kind != Kind::Int) return false;
 			spec.push_back(conversion);
 			break;
-		case ibT('f'): case ibT('F'): case ibT('e'): case ibT('E'): case ibT('g'): case ibT('G'): case ibT('a'): case ibT('A'):
+		case L'f': case L'F': case L'e': case L'E': case L'g': case L'G': case L'a': case L'A':
 			if (kind != Kind::Real) return false;
 			spec.push_back(conversion);
 			break;
-		case ibT('p'):
+		case L'p':
 			if (kind != Kind::Pointer) return false;
 			spec.push_back(conversion);
 			break;
@@ -809,20 +912,19 @@ bool Print(std::wstring& out, const wchar_t* spec, ...)
 	return fits;
 }
 
-ibString Plain(const ibString& formatText)
+ibString Plain(const ibString& format)
 {
-	const wchar_t* const format = formatText.wc_str();
-	const size_t n = formatText.Len();
-	if (std::wcschr(format, ibT('%')) == nullptr)
-		return formatText;   // nothing to read — the same text, shared
-	std::wstring text;
+	if (format.find(ibT('%')) == ibString::npos)
+		return format;   // nothing to read — the same text, shared
+	const size_t n = format.Len();
+	ibString text;
 	text.reserve(n);
 	for (size_t i = 0; i < n; ++i) {
 		text.push_back(format[i]);
 		if (format[i] == ibT('%') && i + 1 < n && format[i + 1] == ibT('%'))
 			++i;
 	}
-	return ibString(text);
+	return text;
 }
 
 } // namespace ibFStringFormat

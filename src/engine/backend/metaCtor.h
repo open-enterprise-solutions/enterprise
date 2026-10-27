@@ -83,7 +83,7 @@ private:
 inline ibCtorMetaAnyKind* ib_find_meta_any_kind(const ibString& metaClassName, ibCtorObjectMetaType memberKind) {
 	// A kind none is kept for (a selection, a tabular section) is not looked up: its name would be the
 	// metaclass's own.
-	if (wxIsEmpty(ibCtorMetaAnyKind::PrefixOf(memberKind)))
+	if (*ibCtorMetaAnyKind::PrefixOf(memberKind) == 0)
 		return nullptr;
 	return dynamic_cast<ibCtorMetaAnyKind*>(
 		ibValue::GetAvailableCtor(ibCtorMetaAnyKind::NameOf(metaClassName, memberKind)));

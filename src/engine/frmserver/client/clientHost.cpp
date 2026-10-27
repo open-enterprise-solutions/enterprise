@@ -7,8 +7,6 @@
 #include <string>
 #include <vector>
 
-#include <wx/datetime.h>
-
 #include <cstring>
 
 #include "backend/appData.h"
@@ -17,6 +15,7 @@
 #include "backend/backend_localization.h"   // the session's language — said with the frame
 #include "backend/backend_picture.h"   // ibBackendPicture::GetServerPicture — a picture asked for by its id
 #include "core/exception.h"
+#include "core/fdatetime.h"           // ibDateTime — a detached session's end, as this clock reads it
 #include "core/formatString.h"        // ibFormatString — a value presented through Format()'s codes
 #include "backend/mcp/mcpServer.h"      // the base's assistant access — where it listens, with the frame
 #include "backend/metadataConfiguration.h"
@@ -93,9 +92,8 @@ bool MayCall(bool connectionless, const void* bound, std::int64_t deadline, cons
 // "detached until 15:04:07" — what Active users shows for the window, fitted to currentActivity.
 ibString DetachedUntil(std::int64_t deadlineMs)
 {
-	// time_t is UTC. Active users reads a local clock.
-	const wxDateTime local = wxDateTime(static_cast<time_t>(deadlineMs / 1000)).ToTimezone(wxDateTime::Local);
-	return ibString::Format(_("detached until %s"), local.Format(ibT("%H:%M:%S")));
+	// The instant read by this machine's zone: Active users reads a local clock.
+	return ibString::Format(_("detached until %s"), ibDateTime::OfInstant(deadlineMs).Format(ibT("%H:%M:%S")));
 }
 
 bool AskedResume(const ibDataNode& params)

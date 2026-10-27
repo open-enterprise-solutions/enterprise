@@ -15,6 +15,7 @@
 #include <ostream>
 #include <stdexcept>
 #include <string>
+#include <type_traits>   // std::conditional — the digits' character, by the text written
 #include <vector>
 
 // Carry/borrow primitives.
@@ -435,10 +436,11 @@ namespace
 	// optional [eE][+-]?digits. Returns true if at least one digit was consumed.
 	// On failure leaves `out` zeroed.
 	//
-	// Walks the string's wchar_t buffer directly, to its terminator — no UTF-8 conversion,
-	// since digits, sign, decimal point and exponent marker are all ASCII and
-	// fit in single wchar_t code units.
-	bool TryParseString(const wchar_t* p, ibNumber::BigImpl& out)
+	// Walks the string's buffer directly, to its terminator — ours or a wxString's — no UTF-8
+	// conversion, since digits, sign, decimal point and exponent marker are all ASCII and fit in a
+	// single code unit of either.
+	template <class Char>
+	bool TryParseString(const Char* p, ibNumber::BigImpl& out)
 	{
 		out.limbs.clear();
 		out.negative = false;
@@ -652,7 +654,7 @@ ibNumber::ibNumber(double v)
 	strDigits.Replace(ibT(","), ibT("."));
 
 	BigImpl big;
-	if (TryParseString(strDigits.wc_str(), big))
+	if (TryParseString(strDigits.c_str(), big))
 		StoreBig(std::move(big));
 }
 
@@ -660,7 +662,7 @@ ibNumber::ibNumber(const ibString& s)
 	: m_payload(PackImmediate(0, 0))
 {
 	BigImpl big;
-	if (TryParseString(s.wc_str(), big)) StoreBig(std::move(big));
+	if (TryParseString(s.c_str(), big)) StoreBig(std::move(big));
 }
 
 // A heap-tier number is SHARED: one more owner of its BigImpl, nothing copied.
@@ -1330,11 +1332,6 @@ int ibNumber::ToInt(unsigned long long& out) const
 	return rc;
 }
 
-std::wstring ibNumber::ToWString() const
-{
-	return ToString().ToStdWstring();
-}
-
 ibNumber ibNumber::Pow(int n) const
 {
 	if (n == 0) return ibNumber(1);
@@ -1573,38 +1570,34 @@ double ibNumber::ToDouble() const
 //
 // Scientific notation is the same value in a form whose length is bounded by the DIGITS, never by the
 // exponent, and FromString reads it back.
+
 template<class Text>
-static void ScientificText(Text& out, const wchar_t* digits, size_t magLen, bool negative, int32_t exp)
+static void ScientificText(Text& out, const ibChar* digits, size_t magLen, bool negative, int32_t exp)
 {
-	if (negative) out += L'-';
+	if (negative) out += '-';
 	out.append(digits, 1);
 	if (magLen > 1) {
-		out += L'.';
+		out += '.';
 		out.append(digits + 1, magLen - 1);
 	}
-	wchar_t power[16];
-	const int n = std::swprintf(power, sizeof(power) / sizeof(power[0]), L"E%+d",
-	                            static_cast<int>(exp) + static_cast<int>(magLen) - 1);
-	out.append(power, n > 0 ? static_cast<size_t>(n) : 0u);
+	char power[16];
+	const int n = std::snprintf(power, sizeof(power), "E%+d", static_cast<int>(exp) + static_cast<int>(magLen) - 1);
+	for (int i = 0; i < n; ++i)
+		out += power[i];
 }
 
-// Zeros — a whole number's shifted exponent, a fraction's leading ones — a stack's worth at a time.
+// Zeros — a whole number's shifted exponent, a fraction's leading ones.
 template<class Text>
 static void AppendZeros(Text& out, size_t count)
 {
-	static const wchar_t s_zeros[] = L"0000000000000000000000000000000000000000000000000000000000000000";
-	const size_t chunk = sizeof(s_zeros) / sizeof(s_zeros[0]) - 1;
-	while (count != 0) {
-		const size_t k = count < chunk ? count : chunk;
-		out.append(s_zeros, k);
-		count -= k;
-	}
+	if (count != 0)
+		out.Append('0', count);
 }
 
 // The text of digits × 10^exp: the sign, the digits with the point where the exponent puts it — zeros before them
 // when the fraction is the longer — and past the ceiling the scientific form (ScientificText above).
 template<class Text>
-static void AppendDecimal(Text& out, const wchar_t* p, size_t magLen, bool negative, int32_t exp)
+static void AppendDecimal(Text& out, const ibChar* p, size_t magLen, bool negative, int32_t exp)
 {
 	if (exp > ibNumber::kMaxDecodedExp10 || exp < -ibNumber::kMaxDecodedExp10) {
 		ScientificText(out, p, magLen, negative, exp);
@@ -1613,11 +1606,11 @@ static void AppendDecimal(Text& out, const wchar_t* p, size_t magLen, bool negat
 	// Zeros after the point say nothing (5.00 == 5; 0.50 == 0.5), and a division leaves thirty of them even on an
 	// integer-valued quotient — without the trim Message(15/5) prints 30 zeros. Only the fraction's: a whole number
 	// with a shifted exponent (1000000 = mantissa 1, exp +6) keeps its zeros, they are significant.
-	while (exp < 0 && magLen > 1 && p[magLen - 1] == L'0') {
+	while (exp < 0 && magLen > 1 && p[magLen - 1] == '0') {
 		--magLen;
 		++exp;
 	}
-	if (negative) out += L'-';
+	if (negative) out += '-';
 	if (exp >= 0) {
 		out.append(p, magLen);
 		AppendZeros(out, static_cast<size_t>(exp));
@@ -1626,11 +1619,12 @@ static void AppendDecimal(Text& out, const wchar_t* p, size_t magLen, bool negat
 	const size_t fracLen = static_cast<size_t>(-exp);
 	if (magLen > fracLen) {
 		out.append(p, magLen - fracLen);
-		out += L'.';
+		out += '.';
 		out.append(p + magLen - fracLen, fracLen);
 	}
 	else {
-		out.append(L"0.", 2);
+		out += '0';
+		out += '.';
 		AppendZeros(out, fracLen - magLen);
 		out.append(p, magLen);
 	}
@@ -1644,15 +1638,15 @@ void ibNumber::AppendText(Text& out) const
 	if (IsImmediate()) {
 		const int64_t mantissa = ImmMantissa();
 		if (mantissa == 0) {
-			out += L'0';
+			out += '0';
 			return;
 		}
 		const bool negative = mantissa < 0;
 		uint64_t magnitude = negative ? static_cast<uint64_t>(-mantissa) : static_cast<uint64_t>(mantissa);
-		wchar_t digits[24];
-		wchar_t* const end = digits + 24;
-		wchar_t* p = end;
-		do { *--p = static_cast<wchar_t>(L'0' + magnitude % 10); magnitude /= 10; } while (magnitude != 0);
+		ibChar digits[24];
+		ibChar* const end = digits + 24;
+		ibChar* p = end;
+		do { *--p = static_cast<ibChar>('0' + magnitude % 10); magnitude /= 10; } while (magnitude != 0);
 		AppendDecimal(out, p, static_cast<size_t>(end - p), negative, ImmExp());
 		return;
 	}
@@ -1660,28 +1654,28 @@ void ibNumber::AppendText(Text& out) const
 	BigImpl b;
 	LoadBig(b);
 	if (b.IsZero()) {
-		out += L'0';
+		out += '0';
 		return;
 	}
 
-	// Build digit string directly into a back-filled wchar_t buffer.
+	// Build digit string directly into a back-filled buffer of the text's characters.
 	// No prepend, no per-char Append, no string-conversion.
 	const size_t cap = b.limbs.size() * 10 + 32;
-	std::vector<wchar_t> buf(cap);
-	wchar_t* end = buf.data() + cap;
-	wchar_t* p   = end;
+	std::vector<ibChar> buf(cap);
+	ibChar* end = buf.data() + cap;
+	ibChar* p   = end;
 
 	std::vector<uint32_t> tmp = b.limbs;
 	while (!BigImpl::IsZeroMag(tmp)) {
 		uint32_t rem = BigImpl::DivMagSmall(tmp, 1000000000u);
 		// 9 digits LSB-first, walking backwards.
 		for (int i = 0; i < 9; ++i) {
-			*--p = static_cast<wchar_t>(L'0' + (rem % 10));
+			*--p = static_cast<ibChar>('0' + (rem % 10));
 			rem /= 10;
 		}
 	}
 	// Trim leading zeros from the top 9-digit chunk.
-	while (p < end - 1 && *p == L'0') ++p;
+	while (p < end - 1 && *p == '0') ++p;
 
 	AppendDecimal(out, p, static_cast<size_t>(end - p), b.negative, b.exp);
 }
@@ -1736,17 +1730,17 @@ void ibNumber::ToString(const Format& fmt, ibString& out) const
 			fracCount = static_cast<size_t>(fmt.fracDigits);
 		}
 
-		wchar_t digits[24];
-		wchar_t* const end = digits + 24;
-		wchar_t* p = end;
+		ibChar digits[24];
+		ibChar* const end = digits + 24;
+		ibChar* p = end;
 		uint64_t remaining = magnitude;
-		do { *--p = static_cast<wchar_t>(L'0' + remaining % 10); remaining /= 10; } while (remaining != 0);
+		do { *--p = static_cast<ibChar>(ibT('0') + remaining % 10); remaining /= 10; } while (remaining != 0);
 		const size_t magLen = static_cast<size_t>(end - p);
 
 		// The general branch's layout: the integer digits, then the fraction — leading zeros where the
 		// magnitude is shorter than the fraction, then as many zeros as NFD still asks for.
 		size_t intDigitsAtP = magLen, fracLeading = 0, fracDigitsAtP = 0;
-		const wchar_t* fracStart = p;
+		const ibChar* fracStart = p;
 		if (fracCount > 0) {
 			if (magLen > fracCount) {
 				intDigitsAtP  = magLen - fracCount;
@@ -1795,7 +1789,7 @@ void ibNumber::ToString(const Format& fmt, ibString& out) const
 		return;
 	}
 
-	// Single-pass formatter: generates the magnitude digits once into a wchar_t
+	// Single-pass formatter: generates the magnitude digits once into a ibChar
 	// scratch buffer, then walks it forward emitting sign, int part with group
 	// separators, custom decimal separator, fraction part with leading zeros.
 	// No std::string, no intermediate wxString splits, no Find/Mid.
@@ -1814,22 +1808,22 @@ void ibNumber::ToString(const Format& fmt, ibString& out) const
 
 	// Materialise magnitude digits LSB-first → walk back-to-front.
 	const size_t cap = b.limbs.size() * 10 + 32;
-	std::vector<wchar_t> buf(cap);
-	wchar_t* end = buf.data() + cap;
-	wchar_t* p   = end;
+	std::vector<ibChar> buf(cap);
+	ibChar* end = buf.data() + cap;
+	ibChar* p   = end;
 
 	if (b.IsZero()) {
-		*--p = L'0';
+		*--p = ibT('0');
 	} else {
 		std::vector<uint32_t> tmp = b.limbs;
 		while (!BigImpl::IsZeroMag(tmp)) {
 			uint32_t rem = BigImpl::DivMagSmall(tmp, 1000000000u);
 			for (int i = 0; i < 9; ++i) {
-				*--p = static_cast<wchar_t>(L'0' + (rem % 10));
+				*--p = static_cast<ibChar>(ibT('0') + (rem % 10));
 				rem /= 10;
 			}
 		}
-		while (p < end - 1 && *p == L'0') ++p;
+		while (p < end - 1 && *p == ibT('0')) ++p;
 	}
 	const size_t magLen = static_cast<size_t>(end - p);
 
@@ -1850,7 +1844,7 @@ void ibNumber::ToString(const Format& fmt, ibString& out) const
 	size_t intTrailingZeros = 0; // for exp > 0
 	size_t fracLeadingZeros = 0;
 	size_t fracDigitsAtP    = 0;
-	const wchar_t* fracStart = p;
+	const ibChar* fracStart = p;
 
 	bool hasFraction = false;
 	if (b.exp >= 0) {
@@ -1891,7 +1885,7 @@ void ibNumber::ToString(const Format& fmt, ibString& out) const
 			}
 		}
 		// Trim trailing zeros from fraction.
-		while (fracDigitsEmit > 0 && fracStart[fracDigitsEmit - 1] == L'0') --fracDigitsEmit;
+		while (fracDigitsEmit > 0 && fracStart[fracDigitsEmit - 1] == ibT('0')) --fracDigitsEmit;
 		if (fracDigitsEmit == 0 && fracLeadingEmit == 0) hasFraction = false;
 	}
 
@@ -1971,7 +1965,7 @@ void ibNumber::ToString(const Format& fmt, ibString& out) const
 bool ibNumber::FromString(const ibString& s)
 {
 	BigImpl big;
-	if (!TryParseString(s.wc_str(), big)) {
+	if (!TryParseString(s.c_str(), big)) {
 		Clear();
 		return false;
 	}
@@ -2054,7 +2048,7 @@ bool ibNumber::SetBuffer(const void* data, size_t len)
 	// kMaxDecodedExp10. Out of range, this is not a number and never was; saying so HERE keeps the
 	// fault at the cell that produced it instead of at whoever later asks for its text.
 	if (b.exp > kMaxDecodedExp10 || b.exp < -kMaxDecodedExp10) {
-		wxASSERT_MSG(false, ibT("ibNumber::SetBuffer - exponent out of range (corrupt blob)"));
+		wxASSERT_MSG(false, wxT("ibNumber::SetBuffer - exponent out of range (corrupt blob)"));
 		return false;
 	}
 
@@ -2228,9 +2222,4 @@ std::ostream& operator<<(std::ostream& os, const ibNumber& n)
 	const ibString s = n.ToString();
 	const std::string utf = s.ToUtf8();
 	return os << utf.data();
-}
-
-std::wostream& operator<<(std::wostream& os, const ibNumber& n)
-{
-	return os << n.ToString().ToStdWstring();
 }

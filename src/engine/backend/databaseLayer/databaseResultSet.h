@@ -17,12 +17,12 @@
 // name's own characters where they lie (no copy, no library call per character), so a name is looked up
 // exactly as it was written. A field name is an identifier: folding the ASCII letters is the whole of
 // the case it has.
-inline wchar_t ibFieldNameFold(wchar_t c) { return (c >= L'a' && c <= L'z') ? static_cast<wchar_t>(c - (L'a' - L'A')) : c; }
+inline ibChar ibFieldNameFold(ibChar c) { return (c >= ibT('a') && c <= ibT('z')) ? static_cast<ibChar>(c - (ibT('a') - ibT('A'))) : c; }
 struct ibFieldNameHash {
 	size_t operator()(const ibString& name) const {
-		const wchar_t* const chars = name.wc_str();
+		const ibChar* const chars = name.c_str();
 		size_t h = static_cast<size_t>(2166136261u);   // FNV-1a over the folded characters
-		for (const wchar_t* p = chars; *p != 0; ++p)
+		for (const ibChar* p = chars; *p != 0; ++p)
 			h = (h ^ static_cast<size_t>(ibFieldNameFold(*p))) * static_cast<size_t>(16777619u);
 		return h;
 	}
@@ -31,10 +31,10 @@ struct ibFieldNameEqual {
 	bool operator()(const ibString& a, const ibString& b) const {
 		if (a.length() != b.length())
 			return false;
-		const wchar_t* const ac = a.wc_str();
-		const wchar_t* const bc = b.wc_str();
+		const ibChar* const ac = a.c_str();
+		const ibChar* const bc = b.c_str();
 		// The characters as they are first; the case is looked at only where they differ.
-		for (const wchar_t *p = ac, *q = bc; *p != 0; ++p, ++q)
+		for (const ibChar *p = ac, *q = bc; *p != 0; ++p, ++q)
 			if (*p != *q && ibFieldNameFold(*p) != ibFieldNameFold(*q))
 				return false;
 		return true;

@@ -19,7 +19,7 @@ bool ibLocalization::CreateLocalizationArray(const ibString& strRawLocale, ibLoc
 	// POD scalar — no need for thread_local static; zero-init is free.
 	size_t reserve_count = 0;
 
-	for (const auto& c : strRawLocale.ToStdWstring()) {
+	for (const ibChar c : strRawLocale) {
 
 		if ((!open_text && (c == ibT(' ') || c == ibT('\n'))) || c == ibT('\'')) {
 			if (open_text && c == ibT('\''))
@@ -70,9 +70,9 @@ bool ibLocalization::CreateLocalizationArray(const ibString& strRawLocale, ibLoc
 		entry.m_data.Clear();
 	};
 
-	const std::wstring raw = strRawLocale.ToStdWstring();
+	const ibString& raw = strRawLocale;
 	for (size_t i = 0; i < raw.size(); ++i) {
-		const wchar_t c = raw[i];
+		const ibChar c = raw[i];
 
 		// ⭐ A DOUBLED QUOTE INSIDE THE TEXT IS AN APOSTROPHE — `en = 'the document''s movements';`.
 		// Read as two toggles it closed the text and opened it again, and the apostrophe vanished from
@@ -142,7 +142,7 @@ bool ibLocalization::IsLocalizationString(const ibString& strRawLocale)
 	bool success = false;
 	bool closed  = false;   // the current language's text has been closed by its quote
 
-	for (const auto& c : strRawLocale.ToStdWstring()) {
+	for (const ibChar c : strRawLocale) {
 
 		if ((!open_text && (c == ibT(' ') || c == ibT('\n'))) || c == ibT('\'')) {
 			if (open_text && c == ibT('\'')) {

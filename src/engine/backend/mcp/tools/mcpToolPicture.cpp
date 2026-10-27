@@ -456,7 +456,7 @@ public:
 			else {
 				ibMemoryBuffer bytes;
 
-				if (!ibBase64::Read(fromData.wc_str(), fromData.length(), bytes) || bytes.GetDataLen() == 0) {
+				if (!ibBase64::Read(fromData, bytes) || bytes.GetDataLen() == 0) {
 					refusal = ibMcpText("`data` did not decode as base64, or decoded to nothing. "
 						"Nothing was set.");
 					return false;

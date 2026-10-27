@@ -5433,7 +5433,7 @@ long ibDbTableProvider::ExecuteWrite(const ibDataQuerySpec& spec, ibDataQueryBui
 					// Arithmetic has no meaning on a spread column (a reference is two fields), so
 					// this is single-field only. Falls through to a plain assignment rather than
 					// emitting something wrong if that is ever violated.
-					wxASSERT_MSG(fields.size() == 1, ibT("AddValue: additive write needs a single-field numeric column"));
+					wxASSERT_MSG(fields.size() == 1, wxT("AddValue: additive write needs a single-field numeric column"));
 					if (fields.size() == 1) {
 						upd.SetParamAccumulate(p++, wv.second.GetNumber());
 						continue;

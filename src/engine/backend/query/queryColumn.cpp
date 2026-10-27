@@ -69,7 +69,7 @@ ibColumnType RawTypeOf(const ibBackendQueryColumn* col)
 {
 	const ibBackendColumnRawDB* const raw = col != nullptr ? col->AsRawColumn() : nullptr;
 	wxASSERT_MSG(raw != nullptr,
-		ibT("RawTypeOf asked of a column that does not carry its own physical type"));
+		wxT("RawTypeOf asked of a column that does not carry its own physical type"));
 	if (raw == nullptr)
 		return ibTypeString(255);
 	switch (raw->GetRawType()) {

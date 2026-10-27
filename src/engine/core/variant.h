@@ -80,7 +80,7 @@ public:
 	ibVariant(const ibDateTime& cParam); //date
 	ibVariant(int nYear, int nMonth, int nDay, unsigned short nHour = 0, unsigned short nMinute = 0, unsigned short nSecond = 0); //date
 	ibVariant(const char* sParam); //string
-	ibVariant(const wchar_t* sParam); //string
+	ibVariant(const ibChar* sParam); //string
 	ibVariant(const std::wstring& sParam); //string
 	ibVariant(const ibString& sParam); //string
 	ibVariant(ibString&& sParam); //string — native move
@@ -92,7 +92,7 @@ public:
 	// pointer would arrive as TRUE. Only an object (derived from this class) and a text are taken.
 	template <class T, class = typename std::enable_if<
 		!std::is_same<typename std::remove_cv<T>::type, char>::value &&
-		!std::is_same<typename std::remove_cv<T>::type, wchar_t>::value &&
+		!std::is_same<typename std::remove_cv<T>::type, ibChar>::value &&
 		!std::is_base_of<ibVariant, T>::value>::type>
 	ibVariant(T*) = delete;
 
@@ -121,7 +121,7 @@ public:
 	void operator = (const ibString& cParam);
 	void operator = (const wxString& cParam);
 	void operator = (const char* cParam);
-	void operator = (const wchar_t* cParam);
+	void operator = (const ibChar* cParam);
 	void operator = (ibString&& cParam);
 	void operator = (ibValueTypes cParam);
 	void operator = (ibVariant* pParam);
@@ -238,7 +238,7 @@ public:
 	virtual bool SetString(const ibString& strValue);
 	virtual bool SetString(ibString&& strValue);
 	bool SetString(const char* sParam) { return SetString(ibString(sParam)); }
-	bool SetString(const wchar_t* sParam) { return SetString(ibString(sParam)); }
+	bool SetString(const ibChar* sParam) { return SetString(ibString(sParam)); }
 
 	void SetData(const ibVariant& varValue); //setting the value without changing the type
 

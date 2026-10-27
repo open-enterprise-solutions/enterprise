@@ -210,24 +210,24 @@ bool ibWebConfig::Read(const ibString& folder, ibString& error)
 		return true;
 	};
 
-	m_host = ibString(conf.Read(ibT("Host"), m_host)).Strip(ibString::both);
+	m_host = ibString(conf.Read(wxT("Host"), m_host)).Strip(ibString::both);
 	if (!port(ibT("HttpPort"), m_httpPort) || !port(ibT("HttpsPort"), m_httpsPort))
 		return false;
-	m_certificate = Beside(folder, ibString(conf.Read(ibT("Certificate"), ibEmptyString)).Strip(ibString::both));
-	m_privateKey = Beside(folder, ibString(conf.Read(ibT("PrivateKey"), ibEmptyString)).Strip(ibString::both));
+	m_certificate = Beside(folder, ibString(conf.Read(wxT("Certificate"), ibEmptyString)).Strip(ibString::both));
+	m_privateKey = Beside(folder, ibString(conf.Read(wxT("PrivateKey"), ibEmptyString)).Strip(ibString::both));
 	// A certificate named and no HTTPS port said: HTTPS on the web's own (ibPort::WebSecure). Written empty — none.
-	if (!conf.HasEntry(ibT("HttpsPort")) && !m_certificate.IsEmpty())
+	if (!conf.HasEntry(wxT("HttpsPort")) && !m_certificate.IsEmpty())
 		m_httpsPort = ibPort::WebSecure.m_first;
-	const ibString root = ibString(conf.Read(ibT("Root"), ibEmptyString)).Strip(ibString::both);
+	const ibString root = ibString(conf.Read(wxT("Root"), ibEmptyString)).Strip(ibString::both);
 	if (!root.IsEmpty())
 		m_root = Beside(folder, root);
-	ibStringTokenizer origins(conf.Read(ibT("Origins"), ibEmptyString), ibT(","));
+	ibStringTokenizer origins(conf.Read(wxT("Origins"), ibEmptyString), ibT(","));
 	while (origins.HasMoreTokens()) {
 		const ibString origin = origins.GetNextToken().Strip(ibString::both);
 		if (!origin.IsEmpty())
 			m_origins.push_back(origin);
 	}
-	conf.Read(ibT("Workers"), &m_workers, 0L);
+	conf.Read(wxT("Workers"), &m_workers, 0L);
 
 	wxString group;   // wxFileConfig's own: it writes the group's name into it
 	long cookie = 0;
@@ -238,15 +238,15 @@ bool ibWebConfig::Read(const ibString& folder, ibString& error)
 		conf.SetPath(ibT("/") + name);
 		ibWebPublication publication;
 		publication.m_name = name;
-		publication.m_kind = ibString(conf.Read(ibT("Kind"), ibEmptyString)).Strip(ibString::both).Lower();
-		publication.m_directory = Beside(folder, ibString(conf.Read(ibT("Directory"), ibEmptyString)).Strip(ibString::both));
-		publication.m_locale = ibString(conf.Read(ibT("Locale"), ibEmptyString)).Strip(ibString::both);
-		conf.Read(ibT("Debug"), &publication.m_debug, false);
-		publication.m_address = ibString(conf.Read(ibT("Address"), ibEmptyString)).Strip(ibString::both);
-		const ibString trusted = ibString(conf.Read(ibT("Trusted"), ibEmptyString)).Strip(ibString::both);
+		publication.m_kind = ibString(conf.Read(wxT("Kind"), ibEmptyString)).Strip(ibString::both).Lower();
+		publication.m_directory = Beside(folder, ibString(conf.Read(wxT("Directory"), ibEmptyString)).Strip(ibString::both));
+		publication.m_locale = ibString(conf.Read(wxT("Locale"), ibEmptyString)).Strip(ibString::both);
+		conf.Read(wxT("Debug"), &publication.m_debug, false);
+		publication.m_address = ibString(conf.Read(wxT("Address"), ibEmptyString)).Strip(ibString::both);
+		const ibString trusted = ibString(conf.Read(wxT("Trusted"), ibEmptyString)).Strip(ibString::both);
 		if (!trusted.IsEmpty())
 			publication.m_trusted = Beside(folder, trusted);
-		conf.SetPath(ibT("/"));
+		conf.SetPath(wxT("/"));
 		if (publication.m_kind != ibT("firebird") && publication.m_kind != ibT("server")) {
 			error = ibString::Format(ibT("%s: [%s] Kind=%s - a publication is firebird (a file base) or server"),
 				path, name, publication.m_kind);

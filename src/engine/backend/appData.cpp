@@ -248,11 +248,11 @@ static void WriteInfobaseConf(const ibString& folder)
 	const ibString path = folder + ibFILE_SEP_PATH + ibT("infobase.conf");
 	if (folder.IsEmpty() || ibFileExists(path))
 		return;
-	wxFFile file(path, ibT("w"));
+	wxFFile file(path, wxT("w"));
 	if (!file.IsOpened() || !file.Write(
-			ibT("; This base's own settings - read when the base is opened.\n")
-			ibT("; Connections - connections to its DBMS at most; 0 - the default (backend.conf, else 32).\n")
-			ibT("Connections = 0\n"))) {
+			wxT("; This base's own settings - read when the base is opened.\n")
+			wxT("; Connections - connections to its DBMS at most; 0 - the default (backend.conf, else 32).\n")
+			wxT("Connections = 0\n"))) {
 		ibTechJournal::Print(ibJournalMark::Warning, ibT("appdata"),
 			ibT("%s cannot be written - the base runs on the defaults"), path);
 	}
@@ -268,7 +268,7 @@ static std::size_t ReadInfobaseConnections(const ibString& folder, std::size_t b
 	if (folder.IsEmpty() || !ibFileExists(path))
 		return byDefault;
 
-	const wxFileConfig conf(ibT(""), ibT(""), path, ibT(""), wxCONFIG_USE_LOCAL_FILE | wxCONFIG_USE_NO_ESCAPE_CHARACTERS);
+	const wxFileConfig conf(wxT(""), wxT(""), path, wxT(""), wxCONFIG_USE_LOCAL_FILE | wxCONFIG_USE_NO_ESCAPE_CHARACTERS);
 	return ibApplicationHost::ReadCount(conf, path, ibT("Connections"), 2, byDefault);
 }
 
@@ -1541,7 +1541,7 @@ bool ibApplicationInstance::SaveDatabase(wxOutputStream& out)
 	wxZipOutputStream zip(out);
 
 	// PutNextEntry sets up the new entry in the archive
-	if (zip.PutNextEntry(ibT("config"))) {
+	if (zip.PutNextEntry(wxT("config"))) {
 		//save configuration — a backup without it restores nothing, so it is not written
 		ibMemoryBuffer bufferConfig;
 		if (!activeMetaData->SaveConfigToBuffer(bufferConfig))
@@ -1551,7 +1551,7 @@ bool ibApplicationInstance::SaveDatabase(wxOutputStream& out)
 		zip.Write(contentStream); // Write the data from the content stream
 	}
 
-	if (zip.PutNextEntry(ibT("user"))) {
+	if (zip.PutNextEntry(wxT("user"))) {
 		//save users 
 		ibMemoryBuffer bufferUser;
 		if (!SaveUserInfoToBuffer(bufferUser))
@@ -1561,7 +1561,7 @@ bool ibApplicationInstance::SaveDatabase(wxOutputStream& out)
 		zip.Write(contentStream); // Write the data from the content stream
 	}
 
-	if (zip.PutNextEntry(ibT("data"))) {
+	if (zip.PutNextEntry(wxT("data"))) {
 		//save data
 		ibMemoryBuffer bufferData;
 		if (!activeMetaData->DumpDataToBuffer(bufferData))

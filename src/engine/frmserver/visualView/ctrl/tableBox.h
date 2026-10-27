@@ -866,7 +866,7 @@ private:
 		_("Whether the column is shown. A hidden column keeps its data and can be shown again from code."), true);
 	ibPropertyBoolean* m_propertyResizable = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryStyle, ibT("Resizable"), _("Resizable"),
 		_("Whether the user can change the column's width by dragging its header edge. On by default."), true);
-	//ibPropertyBoolean* m_propertySortable = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryStyle, wxT("Sortable"), _("Sortable"), false);
+	//ibPropertyBoolean* m_propertySortable = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryStyle, ibT("Sortable"), _("Sortable"), false);
 	ibPropertyBoolean* m_propertyReorderable = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryStyle, ibT("Reorderable"), _("Reorderable"),
 		_("Whether the user can move the column to another place by dragging its header. On by default."), true);
 

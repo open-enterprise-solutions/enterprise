@@ -127,16 +127,14 @@ void ibValueForm::ResolveNameConflict(ibValueFrame* control)
 	// Normalise to upper case, matching stringUtils::IsSameAs's
 	// case-insensitive semantics, so set lookups are exact comparisons.
 	const auto toKey = [](const ibString& name) {
-		std::wstring key = name.ToStdWstring();
-		std::transform(key.begin(), key.end(), key.begin(), ::towupper);
-		return key;
+		return name.Upper();
 	};
 
 	// Collect the names already taken by the other controls once, so each
 	// candidate is probed in O(1). The old do/while rescanned the whole
 	// control list for every candidate index — O(controls * candidates)
 	// per call and O(N^3) when laying out N like-named controls.
-	std::unordered_set<std::wstring> takenNames;
+	std::unordered_set<ibString> takenNames;
 	ibString strControlName;
 	for (const auto valueControl : control->GetOwnerForm()->GetControlList()) {
 

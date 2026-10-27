@@ -30,7 +30,7 @@ ibGitService::ibGitService(const ibString& workdir)
 
 bool ibGitService::IsGitAvailable() {
 	wxArrayString out, err;   // wxExecute's own: it writes the lines into them
-	const long rc = wxExecute(ibT("git --version"), out, err, wxEXEC_SYNC | wxEXEC_NODISABLE);
+	const long rc = wxExecute(wxT("git --version"), out, err, wxEXEC_SYNC | wxEXEC_NODISABLE);
 	return rc == 0;
 }
 

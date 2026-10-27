@@ -162,8 +162,8 @@ Fix it at the DECLARATION, never at the callsite. Declaring the pointer forms ma
 exact match and the ambiguity cannot recur for any future caller:
 
 ```cpp
-bool SetString(const char* sParam)    { return SetString(wxString(sParam)); }
-bool SetString(const wchar_t* sParam) { return SetString(wxString(sParam)); }
+bool SetString(const char* sParam)   { return SetString(ibString(sParam)); }
+bool SetString(const ibChar* sParam) { return SetString(ibString(sParam)); }
 ```
 
 `ibValue`'s constructors and `operator=` already carried these forms — for the neighbouring trap,
@@ -172,6 +172,26 @@ user-defined one to `wxString`, and `ibValue v = wxEmptyString` became Boolean T
 the same in both directions: **a type that accepts strings must accept character pointers
 explicitly.** The hazard is the CLASS — any overload set holding two string-constructible
 parameter types — not the one spelling `SetString`.
+
+### 1.5b′ The engine's character is `char16_t`; `wchar_t` is the boundary (2026-10-28)
+
+`wchar_t` is two bytes on Windows and four on Linux and macOS. `ibChar` is `char16_t` everywhere
+(`coreApi.h`): one length and one index for a text on every OS, the browser's UTF-16 included, and
+OES-RPC's text as it lies in memory.
+
+- **Two literals, by who reads them.** `ibT("…")` (`u"…"`) for the engine's own calls; `wxT("…")`
+  for a wx call — `wxCmdLineParser`, `wxFileConfig`, `wxFileName`, `wxDataFormat`, `wxDateTime::Format`,
+  the `wxASSERT` / `wxFAIL_MSG` messages. A `char16_t` literal does not convert to `wxString`.
+- **One door to wide text: `ibString::wc_str()`.** Where `wchar_t` is two bytes it is the characters
+  as they lie (`const wchar_t*`); where it is four, `ibWideBuffer` — the text converted, held to the
+  end of the expression, read as `const wchar_t*`. `f(s.wc_str())` is the same call on every OS. A
+  length taken from `Len()` is the engine's: give a wide call `wxNO_LEN`, not `s.Len()`.
+- **A character is `ibChar`, not `wxChar` or `wchar_t`**, in the engine's code. A char loop over an
+  `ibString` reads `c_str()` / `operator[]`; it never takes a wide copy to walk.
+- `ibString + '.'` with both a `wchar_t` and an `ibChar` overload is ambiguous (`char` converts to
+  either): the `wchar_t` character overloads are gone.
+- MSVC compiles only the two-byte branch of `wc_str()`. The four-byte one is checked by the Linux and
+  macOS jobs alone.
 
 ### 1.5c A cast to its own type is an LVALUE to MSVC — and a template that meets it only in a test
 

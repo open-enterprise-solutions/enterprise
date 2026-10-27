@@ -69,7 +69,7 @@ void ibValueBinaryData::ReadWholeFile(const ibString& fileName, const ibString& 
 	wxFFile file;
 	{
 		wxLogNull quiet;   // a missing file is said in the platform's words, not in the library's log
-		file.Open(fileName, ibT("rb"));
+		file.Open(fileName, wxT("rb"));
 	}
 	if (!file.IsOpened())
 		ibBackendCoreException::Error(_("%s: cannot open the file '%s' for reading"), who, fileName);
@@ -114,7 +114,7 @@ void ibValueBinaryData::WriteFile(const ibString& fileName) const
 	wxFFile file;
 	{
 		wxLogNull quiet;
-		file.Open(fileName, ibT("wb"));
+		file.Open(fileName, wxT("wb"));
 	}
 	if (!file.IsOpened())
 		ibBackendCoreException::Error(_("BinaryData: cannot open the file '%s' for writing"), fileName);

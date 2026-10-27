@@ -54,7 +54,7 @@ private:
 	struct ibCharRow {
 		wxCheckBox*            m_on = nullptr;
 		wxChoice*              m_value = nullptr;
-		std::vector<wxUniChar> m_chars;   // the character behind each item of m_value
+		std::vector<ibChar>   m_chars;   // the character behind each item of m_value
 	};
 	// A code with a text.
 	struct ibTextRow {
@@ -69,7 +69,7 @@ private:
 	ibNumberRow AddNumberRow(wxWindow* page, wxSizer* grid, const wxString& label, ibFormatCode code,
 		const std::optional<int>& value, int defaultValue, int min, int max);
 	ibCharRow AddCharRow(wxWindow* page, wxSizer* grid, const wxString& label, ibFormatCode code,
-		const std::optional<wxUniChar>& value, const std::vector<std::pair<wxUniChar, wxString>>& chars);
+		const std::optional<ibChar>& value, const std::vector<std::pair<ibChar, wxString>>& chars);
 	ibTextRow AddTextRow(wxWindow* page, wxSizer* grid, const wxString& label, ibFormatCode code,
 		const std::optional<wxString>& value);
 

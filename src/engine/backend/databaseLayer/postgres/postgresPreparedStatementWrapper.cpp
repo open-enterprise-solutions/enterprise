@@ -84,17 +84,9 @@ int ibPreparedStatementPostgresWrapper::GetParameterCount()
 
 	unsigned int len = m_strSQL.length();
 
-#ifndef _WXSTRING_COMPARE_STRING_
-	const auto& stl_strSQL = m_strSQL.ToStdWstring();
-#endif // !_WXSTRING_COMPARE_STRING_
-
 	for (unsigned int i = 0; i < len; i++)
 	{
-#ifndef _WXSTRING_COMPARE_STRING_
-		const auto& c = stl_strSQL.at(i);
-#else
-		const auto& c = m_strSQL.at(i);
-#endif
+		const ibChar c = m_strSQL[i];
 
 		if (ibT('\'') == c) {
 			// Signify that we are inside a string literal inside the SQL
@@ -107,11 +99,7 @@ int ibPreparedStatementPostgresWrapper::GetParameterCount()
 			int nNumber = 0;
 			unsigned int j = i + 1;
 			for (; j < len; j++) {
-#ifndef _WXSTRING_COMPARE_STRING_
-				const auto& d = stl_strSQL.at(j);
-#else
-				const auto& d = m_strSQL.at(j);
-#endif
+				const ibChar d = m_strSQL[j];
 				if (d < ibT('0') || d > ibT('9'))
 					break;
 				nNumber = nNumber * 10 + static_cast<int>(d - ibT('0'));

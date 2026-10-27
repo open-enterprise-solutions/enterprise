@@ -70,7 +70,7 @@ public:
 	ibMetaID GetId() const { return m_commandId; }
 
 	void SetCommandName(const ibString& name) { m_propertyName->SetValue(name); }
-	void SetProcedure(const ibString& proc)   { m_eventCommand->SetValue(proc.wc_str()); }
+	void SetProcedure(const ibString& proc)   { m_eventCommand->SetValue(proc); }
 	void SetCommandId(const ibMetaID& id)     { m_commandId = id; }
 
 	// Serialize the properties + the Action event (base ibPropertyObject::WriteProperty covers only ATTACHED

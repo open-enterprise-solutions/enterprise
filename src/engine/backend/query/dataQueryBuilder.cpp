@@ -605,7 +605,7 @@ ibDataQueryBuilder& ibDataQueryBuilder::TotalBy(const std::vector<const ibBacken
 	// A dot-walk dimension without a synthetic column would project the leaf under its own physical name and
 	// CLASH with the main table on a self-reference (Parent.Code). The lowering must route through
 	// TotalByDotWalk with a synthetic column; reaching here with a raw path is a programming error.
-	wxASSERT_MSG(false, ibT("dot-walk TOTALS dimension must go through TotalByDotWalk (synthetic column)"));
+	wxASSERT_MSG(false, wxT("dot-walk TOTALS dimension must go through TotalByDotWalk (synthetic column)"));
 	return *this;
 }
 

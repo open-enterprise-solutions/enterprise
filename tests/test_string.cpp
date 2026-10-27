@@ -56,7 +56,7 @@ TEST(IbString, RoundTripFromWxCyrillic) {
 TEST(IbString, FromWcharLiteral) {
     ibString s(L"abc");
     EXPECT_TRUE(s.ToWxString() == wxT("abc"));
-    EXPECT_EQ(s.ToStdWString(), std::wstring(L"abc"));
+    EXPECT_STREQ(s.wc_str(), L"abc");
 }
 
 // A text decoded from UTF-8 got room for its BYTES - Cyrillic two to a character - and kept it for as long as it

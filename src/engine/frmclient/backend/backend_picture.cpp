@@ -57,7 +57,7 @@ wxBitmap ibBackendPicture::CreatePicture(const ibExternalPictureDescription& pic
 wxImage ibBackendPicture::GetImageFromBase64(const ibString& src, const wxSize& size)
 {
 	ibMemoryBuffer png;
-	const wxImage image = ibBase64::Read(src.wc_str(), src.length(), png) ? ibProtocolImage(png) : wxImage();
+	const wxImage image = ibBase64::Read(src, png) ? ibProtocolImage(png) : wxImage();
 	return size != wxDefaultSize && image.IsOk() && size != image.GetSize() ? image.Scale(size.x, size.y, wxIMAGE_QUALITY_HIGH) : image;
 }
 

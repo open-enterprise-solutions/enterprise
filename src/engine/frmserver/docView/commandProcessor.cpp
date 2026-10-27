@@ -41,7 +41,7 @@ bool ibCommandProcessor::UndoCommand(ibCommand& cmd)
 // unless storeIt is false.
 bool ibCommandProcessor::Submit(ibCommand* command, bool storeIt)
 {
-	wxCHECK_MSG(command, false, ibT("no command in ibCommandProcessor::Submit"));
+	wxCHECK_MSG(command, false, wxT("no command in ibCommandProcessor::Submit"));
 
 	// the user code expects the command to be deleted anyhow
 	std::unique_ptr<ibCommand> owned(command);
@@ -55,7 +55,7 @@ bool ibCommandProcessor::Submit(ibCommand* command, bool storeIt)
 
 void ibCommandProcessor::Store(ibCommand* command)
 {
-	wxCHECK_RET(command, ibT("no command in ibCommandProcessor::Store"));
+	wxCHECK_RET(command, wxT("no command in ibCommandProcessor::Store"));
 
 	// We must chop off the current 'branch' so that we're at the end of the command list.
 	if (m_currentCommand == m_commands.end())

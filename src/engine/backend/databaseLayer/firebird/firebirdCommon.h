@@ -46,7 +46,7 @@ inline uint64_t NowUnixMs() {
 // POSIX: fputs to stderr — atomic per-line on most libc's.
 inline void LogThreadSafe(const ibString& msg) {
 #ifdef __IBMSW__
-	const ibString line = msg + ibT("\n");
+	const ibString line = msg + wxT("\n");
 	::OutputDebugStringW(line.wc_str());
 #else
 	const auto utf8 = msg.utf8_str();

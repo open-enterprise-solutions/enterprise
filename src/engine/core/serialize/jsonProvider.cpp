@@ -19,11 +19,11 @@ namespace {
 void Put(std::string& out, const char* ascii, size_t n) { out.append(ascii, n); }
 void Put(ibString& out, const char* ascii, size_t n)
 {
-	wchar_t chunk[64];
+	ibChar chunk[64];
 	while (n != 0) {
 		const size_t k = n < 64 ? n : 64;
 		for (size_t i = 0; i < k; ++i)
-			chunk[i] = static_cast<wchar_t>(static_cast<unsigned char>(ascii[i]));
+			chunk[i] = static_cast<ibChar>(static_cast<unsigned char>(ascii[i]));
 		out.append(chunk, k);
 		ascii += k;
 		n -= k;
@@ -31,16 +31,16 @@ void Put(ibString& out, const char* ascii, size_t n)
 }
 template<class Text> void Put(Text& out, const char* ascii) { Put(out, ascii, std::strlen(ascii)); }
 // …and a decimal's text, in characters: a character a byte to bytes, as they are to the engine's text.
-void Put(std::string& out, const wchar_t* ascii, size_t n)
+void Put(std::string& out, const ibChar* ascii, size_t n)
 {
 	for (size_t i = 0; i < n; ++i)
 		out += static_cast<char>(ascii[i]);
 }
-void Put(ibString& out, const wchar_t* ascii, size_t n) { out.append(ascii, n); }
+void Put(ibString& out, const ibChar* ascii, size_t n) { out.append(ascii, n); }
 
 // A text quoted — the value's own, or a resolved type's name. HOW is said in one place for the whole backend
 // (ibJsonText) - the same rule the script's JSONWriter writes by.
-template<class Text> void Quote(Text& out, const ibString& s) { ibJsonText::AppendQuoted(out, s.wc_str(), s.length()); }
+template<class Text> void Quote(Text& out, const ibString& s) { ibJsonText::AppendQuoted(out, s.c_str(), s.length()); }
 
 template<class Text> void PutInteger(Text& out, long long value)
 {
@@ -66,7 +66,7 @@ template<class Text> void PutNumber(Text& out, const ibNumber& number)
 	}
 	ibString text;
 	number.ToString(text);   // digits, a sign and a point — ASCII
-	Put(out, text.wc_str(), text.length());
+	Put(out, text.c_str(), text.length());
 }
 
 // A binary as the view writes it — "base64:<...>", ASCII all through.
@@ -152,7 +152,7 @@ void ibJsonProvider::EmitNode(const ibDataNode& node, Text& out, int depth) cons
 	bool first = true;
 	const int inner = depth + 1;
 
-	auto key = [&](const char* keyLiteral) {
+	auto key =[&](const char* keyLiteral) {
 		if (!first) Put(out, m_compact ? "," : ",\n");
 		first = false;
 		Pad(out, inner);
@@ -292,7 +292,7 @@ namespace {
 
 // A decimal the fast road does not take, as the decimal reads it.
 ibString NumberText(const char* p, size_t n) { return ibString::FromUTF8(p, n); }
-ibString NumberText(const wchar_t* p, size_t n) { return ibString(p, n); }
+ibString NumberText(const ibChar* p, size_t n) { return ibString(p, n); }
 
 // A small recursive-descent JSON reader over a contiguous buffer — of bytes (UTF-8, a socket's) or of the engine's
 // characters (a text that never left the process): the same reading over either, and a text with no escape in it is
@@ -541,7 +541,7 @@ bool ibJsonProvider::Read(const ibString& text, ibDataNode& root) const
 	if (text.IsEmpty())
 		return false;
 
-	ibJsonReader<wchar_t> parser(*this, text.wc_str(), text.length());
+	ibJsonReader<ibChar> parser(*this, text.c_str(), text.length());
 	if (!parser.ParseNode(root)) {
 		ibCoreException::Error(_("ibJsonProvider: malformed JSON at character %d"),
 			(int)parser.Offset());
@@ -600,7 +600,7 @@ ibDataValue ibJsonProvider::ReadString(const ibString& text)
 	static const ibString kB64 = ibT("base64:");
 	if (text.StartsWith(kB64)) {
 		ibMemoryBuffer bytes;
-		if (ibBase64::Read(text.wc_str() + kB64.length(), text.length() - kB64.length(), bytes))
+		if (ibBase64::Read(text.c_str() + kB64.length(), text.length() - kB64.length(), bytes))
 			return ibDataValue::Binary(bytes);
 	}
 	return ibDataValue::String(text);

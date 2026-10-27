@@ -260,6 +260,7 @@ enterprise/
 | Layer | Technology |
 |---|---|
 | Language | C++20 |
+| Text | UTF-16 (`char16_t`) on every OS — one length and one index for a text everywhere, the browser's included; OES-RPC carries it as it lies |
 | GUI framework | wxWidgets 3.3.4 |
 | Primary database | Firebird (embedded) |
 | Production alternative | PostgreSQL |

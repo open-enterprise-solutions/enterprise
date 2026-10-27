@@ -88,7 +88,7 @@ bool ibServerConfig::LoadKey(ibString& error)
 		ibString text = ibString::FromUTF8(read.data(), read.size());
 		text.Trim().Trim(false);
 		ibMemoryBuffer raw;
-		if (!ibBase64::Read(text.wc_str(), text.Len(), raw) || raw.GetDataLen() != ibFieldCipher::kKeySize) {
+		if (!ibBase64::Read(text, raw) || raw.GetDataLen() != ibFieldCipher::kKeySize) {
 			error = ibString::Format(ibT("the key %s is not a key"), path);
 			return false;
 		}
@@ -189,19 +189,19 @@ std::vector<ibConfiguredInstance> ibServerConfig::ReadInstances() const
 
 		ibConfiguredInstance instance;
 		instance.m_name       = group;
-		instance.m_id         = conf.Read(at + ibT("Id"));
-		instance.m_kind       = conf.Read(at + ibT("Kind")).Lower();
-		instance.m_path       = conf.Read(at + ibT("Path"));
-		instance.m_server     = conf.Read(at + ibT("Server"));
-		instance.m_port       = conf.Read(at + ibT("Port"));
-		instance.m_database   = conf.Read(at + ibT("Database"));
-		instance.m_user       = conf.Read(at + ibT("User"));
-		instance.m_password   = conf.Read(at + ibT("Password"));
-		instance.m_ibUser     = conf.Read(at + ibT("IbUser"));
-		instance.m_ibPassword = conf.Read(at + ibT("IbPassword"));
-		instance.m_mcpPort    = conf.Read(at + ibT("McpPort"));
+		instance.m_id         = conf.Read(at + wxT("Id"));
+		instance.m_kind       = conf.Read(at + wxT("Kind")).Lower();
+		instance.m_path       = conf.Read(at + wxT("Path"));
+		instance.m_server     = conf.Read(at + wxT("Server"));
+		instance.m_port       = conf.Read(at + wxT("Port"));
+		instance.m_database   = conf.Read(at + wxT("Database"));
+		instance.m_user       = conf.Read(at + wxT("User"));
+		instance.m_password   = conf.Read(at + wxT("Password"));
+		instance.m_ibUser     = conf.Read(at + wxT("IbUser"));
+		instance.m_ibPassword = conf.Read(at + wxT("IbPassword"));
+		instance.m_mcpPort    = conf.Read(at + wxT("McpPort"));
 		long processes = 1;
-		conf.Read(at + ibT("Processes"), &processes, 1L);
+		conf.Read(at + wxT("Processes"), &processes, 1L);
 		instance.m_processes  = processes > 1 ? static_cast<unsigned>(processes) : 1;
 
 		instances.push_back(instance);
@@ -212,13 +212,13 @@ std::vector<ibConfiguredInstance> ibServerConfig::ReadInstances() const
 ibString ibServerConfig::ReadHost() const
 {
 	wxFileConfig conf(ibEmptyString, ibEmptyString, m_confPath, ibEmptyString, kConfStyle);
-	return conf.Read(ibT("/Host"), ibT("127.0.0.1"));
+	return conf.Read(wxT("/Host"), wxT("127.0.0.1"));
 }
 
 bool ibServerConfig::ReadPort(unsigned short& port, ibString& error) const
 {
 	wxFileConfig conf(ibEmptyString, ibEmptyString, m_confPath, ibEmptyString, kConfStyle);
-	ibString written = conf.Read(ibT("/Port"));
+	ibString written = conf.Read(wxT("/Port"));
 	written.Trim().Trim(false);
 
 	port = 0;
@@ -237,7 +237,7 @@ bool ibServerConfig::ReadPort(unsigned short& port, ibString& error) const
 void ibServerConfig::WritePort(unsigned short port) const
 {
 	wxFileConfig conf(ibEmptyString, ibEmptyString, m_confPath, ibEmptyString, kConfStyle);
-	conf.Write(ibT("/Port"), static_cast<long>(port));
+	conf.Write(wxT("/Port"), static_cast<long>(port));
 	if (!conf.Flush())
 		ibAppServerSay(ibJournalMark::Warning, ibT("the config %s cannot be written - port %u is not kept"),
 			m_confPath, static_cast<unsigned>(port));
@@ -251,7 +251,7 @@ void ibServerConfig::AssignIds(std::vector<ibConfiguredInstance>& instances) con
 	for (ibConfiguredInstance& instance : instances) {
 		if (!ibGuid(instance.m_id).isValid()) {
 			instance.m_id = ibGuid(ibGuid::newGuid()).str();
-			conf.Write(ibT("/") + instance.m_name + ibT("/Id"), static_cast<wxString>(instance.m_id));
+			conf.Write(wxT("/") + instance.m_name + wxT("/Id"), static_cast<wxString>(instance.m_id));
 			assigned = true;
 		}
 		if (instance.m_path.IsEmpty())
@@ -288,7 +288,7 @@ void ibServerConfig::AssignMcpPorts(std::vector<ibConfiguredInstance>& instances
 			continue;
 		}
 		instance.m_mcpPort = ibString::Format(ibT("%lu"), next);
-		conf.Write(ibT("/") + instance.m_name + ibT("/McpPort"), static_cast<long>(next));
+		conf.Write(wxT("/") + instance.m_name + wxT("/McpPort"), static_cast<long>(next));
 		taken.insert(next);
 		assigned = true;
 	}
@@ -313,7 +313,7 @@ bool ibServerConfig::OpenSecret(const ibString& base, const ibString& name, cons
 	}
 
 	ibMemoryBuffer raw;
-	const bool decoded = ibBase64::Read(sealed.wc_str(), sealed.Len(), raw);
+	const bool decoded = ibBase64::Read(sealed, raw);
 	const unsigned char* bytes = static_cast<const unsigned char*>(raw.GetData());
 	std::vector<unsigned char> plain;
 	if (!decoded || !ibFieldCipher::Decrypt(std::vector<unsigned char>(bytes, bytes + raw.GetDataLen()),
@@ -340,7 +340,7 @@ bool ibServerConfig::SealSecret(const ibString& base, const ibString& name, cons
 	wxFileConfig conf(ibEmptyString, ibEmptyString, m_confPath, ibEmptyString, kConfStyle);
 	ibString text(kSealed);
 	ibBase64::Append(text, sealed.data(), sealed.size());
-	conf.Write(ibT("/") + base + ibT("/") + name, static_cast<wxString>(text));
+	conf.Write(wxT("/") + base + wxT("/") + name, static_cast<wxString>(text));
 	if (!conf.Flush()) {
 		error = ibString::Format(ibT("the config %s cannot be written"), m_confPath);
 		return false;

@@ -47,7 +47,7 @@ ibGuid GuidOf(const ibValue& value)
 	// over in a form it does not hold, and the invalid guid it becomes travels on to be looked up,
 	// found nowhere, and reported as a missing object far from here — which is exactly the distance
 	// this assert removes.
-	wxASSERT_MSG(parsed.isValid() || text.IsEmpty(), ibT("GuidOf: the value carries no guid"));
+	wxASSERT_MSG(parsed.isValid() || text.IsEmpty(), wxT("GuidOf: the value carries no guid"));
 
 	return parsed;
 }

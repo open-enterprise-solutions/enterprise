@@ -232,11 +232,11 @@ template<> struct ibDataCodec<ibDataValue> {      // a value whose kind it says 
 ////////////////////////////////////////////////////////////////////////////
 struct CORE_API ibDataKey {
 	ibDataKey(const char* ascii) noexcept;
-	ibDataKey(const wchar_t* text) noexcept;
-	ibDataKey(const ibString& text) noexcept : m_wide(text.wc_str()), m_length(text.length()) {}
+	ibDataKey(const ibChar* text) noexcept;
+	ibDataKey(const ibString& text) noexcept : m_utf16(text.c_str()), m_length(text.length()) {}
 
 	const char*    m_ascii = nullptr;   // one of the two
-	const wchar_t* m_wide = nullptr;
+	const ibChar*  m_utf16 = nullptr;
 	std::size_t    m_length = 0;
 };
 

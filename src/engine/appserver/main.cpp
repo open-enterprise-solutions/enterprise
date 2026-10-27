@@ -126,20 +126,20 @@ int main(int argc, char** argv)
 	wxCmdLineParser parser(s_cmdLineDesc, argc, argv);
 	if (parser.Parse() != 0)
 		return 1;
-	if (parser.Found(ibT("again")))
+	if (parser.Found(wxT("again")))
 		ibTechJournal::SkipErrorDump();
 
 	// The locale left out is the platform's own: a base's, then backend.conf's Locale, then the system's (InitLocale).
 	// wxCmdLineParser's own: it writes what it found into wx strings.
 	wxString folder = ibServerConfig::DefaultFolder(), locale, sealTarget, workerBase;
-	parser.Found(ibT("dir"), &folder);
-	parser.Found(ibT("locale"), &locale);
-	parser.Found(ibT("worker"), &workerBase);
+	parser.Found(wxT("dir"), &folder);
+	parser.Found(wxT("locale"), &locale);
+	parser.Found(wxT("worker"), &workerBase);
 	long route = 0;
-	parser.Found(ibT("route"), &route);
+	parser.Found(wxT("route"), &route);
 	ibServerConfig config(folder);
 
-	if (parser.Found(ibT("set-password"), &sealTarget))
+	if (parser.Found(wxT("set-password"), &sealTarget))
 		return SetPassword(config, sealTarget);
 
 #ifdef __WXMSW__

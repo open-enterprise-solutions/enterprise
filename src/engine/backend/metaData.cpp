@@ -404,9 +404,7 @@ ibString ibMetaData::GetNewName(ibValueMetaObject* parent, const ibNameRequest& 
 	// Normalise to upper case, matching stringUtils::IsSameAs's
 	// case-insensitive semantics, so set lookups are exact comparisons.
 	const auto toKey = [](const ibString& name) {
-		std::wstring key = name.ToStdWstring();
-		std::transform(key.begin(), key.end(), key.begin(), ::towupper);
-		return key;
+		return name.Upper();
 	};
 
 	// Collect the sibling names already taken by objects of this class
@@ -415,7 +413,7 @@ ibString ibMetaData::GetNewName(ibValueMetaObject* parent, const ibNameRequest& 
 	// per call. FilterChild(clsid) is invariant here (every surviving
 	// child has class == clsid), so it is hoisted out of the scan. The
 	// object the name is for is skipped: its own entry is no collision.
-	std::unordered_set<std::wstring> takenNames;
+	std::unordered_set<ibString> takenNames;
 	if (parent != nullptr && parent->FilterChild(request.m_clsid)) {
 
 		for (unsigned int idx = 0; idx < parent->GetChildCount(); idx++) {

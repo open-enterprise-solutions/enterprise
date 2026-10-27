@@ -21,7 +21,7 @@ namespace {
 wxString ReadHandler(const wxVariant& value)
 {
 	const auto node = ibVariantDataSerializable::GetNodeValue(value).AsChild();
-	return node ? node->GetValue<ibString>(wxT("Value")) : ibString();
+	return node ? node->GetValue<ibString>(ibT("Value")) : ibString();
 }
 
 // …and the value naming another: the same event's (its name is its own), read as the handler.

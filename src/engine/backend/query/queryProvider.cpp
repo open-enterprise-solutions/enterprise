@@ -1965,7 +1965,7 @@ ibValue EvalColumnExprRow(const ibQueryColumnExpr* e, const ibQueryRow& row, con
 			// expression is built per field precisely to be pushed to the server; if one reaches this
 			// evaluator, the read took the join / multi-source road and the reading has to be split
 			// differently, which is a defect to be told about rather than a case to fake.
-			wxASSERT_MSG(e->m_field.IsEmpty(), ibT("a per-field column expression cannot be evaluated over a RAM row"));
+			wxASSERT_MSG(e->m_field.IsEmpty(), wxT("a per-field column expression cannot be evaluated over a RAM row"));
 			return e->m_col != nullptr && e->m_field.IsEmpty() ? row.Get(e->m_col) : ibValue();
 		case ibQueryColumnExprKind::Const:  return e->m_const;
 		case ibQueryColumnExprKind::Arith: {
@@ -2087,7 +2087,7 @@ ibValue EvalColumnExprRow(const ibQueryColumnExpr* e, const ibQueryRow& row, con
 				return it->second[static_cast<size_t>(win->m_row)];
 			// Still a defect worth being told about: a window node reached the evaluator without
 			// anybody having folded it, which means the caller composed rows and did not ask.
-			wxFAIL_MSG(ibT("a window aggregate reached the evaluator unfolded - RamComputeWindows was not run over these rows"));
+			wxFAIL_MSG(wxT("a window aggregate reached the evaluator unfolded - RamComputeWindows was not run over these rows"));
 			return ibValue();
 		}
 	}

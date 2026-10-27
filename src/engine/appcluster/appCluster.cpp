@@ -73,13 +73,13 @@ ibAppCluster::~ibAppCluster() = default;
 
 void ibAppCluster::OnInitCmdLine(wxCmdLineParser& parser)
 {
-	parser.AddOption(ibT("d"),  ibT("dir"),       "Server folder: server.conf, server.key and a folder per base (default: server beside the executable)",
+	parser.AddOption(wxT("d"),  wxT("dir"),       "Server folder: server.conf, server.key and a folder per base (default: server beside the executable)",
 		wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL);
-	parser.AddOption(ibT("lc"), ibT("locale"),    "The platform's locale every server is started with",
+	parser.AddOption(wxT("lc"), wxT("locale"),    "The platform's locale every server is started with",
 		wxCMD_LINE_VAL_STRING, wxCMD_LINE_PARAM_OPTIONAL);
-	parser.AddSwitch(ibT("s"),  ibT("service"),   "Run under the system's service manager (Windows: installed by --install; elsewhere: a systemd unit's ExecStart)");
-	parser.AddSwitch(ibT("i"),  ibT("install"),   "Install the cluster of the server folder as a service, started with the system (an administrator's)");
-	parser.AddSwitch(ibT("u"),  ibT("uninstall"), "Remove the cluster's service, stopped first (an administrator's)");
+	parser.AddSwitch(wxT("s"),  wxT("service"),   "Run under the system's service manager (Windows: installed by --install; elsewhere: a systemd unit's ExecStart)");
+	parser.AddSwitch(wxT("i"),  wxT("install"),   "Install the cluster of the server folder as a service, started with the system (an administrator's)");
+	parser.AddSwitch(wxT("u"),  wxT("uninstall"), "Remove the cluster's service, stopped first (an administrator's)");
 
 	wxAppConsole::OnInitCmdLine(parser);
 }
@@ -88,13 +88,13 @@ bool ibAppCluster::OnCmdLineParsed(wxCmdLineParser& parser)
 {
 	// wxCmdLineParser's own: it writes what it found into wx strings.
 	wxString folder = ibServerConfig::DefaultFolder(), locale;
-	parser.Found(ibT("dir"), &folder);
-	parser.Found(ibT("locale"), &locale);
+	parser.Found(wxT("dir"), &folder);
+	parser.Found(wxT("locale"), &locale);
 	m_folder = folder;
 	m_locale = locale;
-	m_mode = parser.Found(ibT("install")) ? ibMode::Install
-		: parser.Found(ibT("uninstall")) ? ibMode::Uninstall
-		: parser.Found(ibT("service")) ? ibMode::Service
+	m_mode = parser.Found(wxT("install")) ? ibMode::Install
+		: parser.Found(wxT("uninstall")) ? ibMode::Uninstall
+		: parser.Found(wxT("service")) ? ibMode::Service
 		: ibMode::Console;
 
 	return wxAppConsole::OnCmdLineParsed(parser);

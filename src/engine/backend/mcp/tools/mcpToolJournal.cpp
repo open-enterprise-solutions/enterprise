@@ -41,15 +41,16 @@
 #include "backend/logger/logger.h"
 #include "backend/logger/loggerReader.h"
 #include "backend/metadataConfiguration.h"   // activeMetaData - the door that knows configuration types
+#include "core/fdatetime.h"           // ibDateTime - a line's moment
 #include "core/fileSystem.h"          // the journal lives in the diagnostic folder
 #include "core/serialize/dataBuilder.h"   // ibDataNode + ibBinaryProvider - the details payload
 
-#include <wx/datetime.h>
 #include <wx/ffile.h>
 #include <wx/filename.h>
 #include "core/stringTokenizer.h"
 
 #include <algorithm>
+#include <chrono>
 #include <map>
 #include <vector>
 
@@ -131,7 +132,7 @@ int TraceLevelOfName(const ibString& name)
 // One parsed line. The app is not IN the file - it is the file's own name - and it is carried on
 // every row because the whole point of the tool is that two processes are being read at once.
 struct ibTraceRow {
-	wxDateTime m_when;
+	ibDateTime m_when;
 	ibString   m_app;
 	ibString   m_level;
 	ibString   m_thread;
@@ -159,17 +160,19 @@ ibString TraceAppOfFile(const ibString& fileName) { return fileName.BeforeFirst(
 // ⭐ THE FILE'S NAME CARRIES THE DATE THE LINES DO NOT. A line is stamped `03:01:57.450` and no
 // further — time of day is what a person compares — so the day comes from the start stamp, and a
 // run that crosses midnight is caught by the clock going BACKWARDS between two lines.
-wxDateTime TraceStartOfFile(const wxFileName& file)
+ibDateTime TraceStartOfFile(const wxFileName& file)
 {
+	// `yyyymmddThhmmss`: the fourteen digits without the T are one of the date's own forms.
 	const ibString middle = file.GetName().AfterFirst(ibT('_')).BeforeLast(ibT('_'));
 
-	wxDateTime stamp;
-	if (!middle.IsEmpty() && stamp.ParseFormat(middle, ibT("%Y%m%dT%H%M%S")))
+	ibDateTime stamp;
+	if (middle.length() == 15 && middle[8] == ibT('T') && stamp.FromString(middle.Left(8) + middle.Mid(9)))
 		return stamp;
 
 	// A name that does not follow the convention still has a file behind it, and its last write is
 	// a better day than no day at all.
-	return file.FileExists() ? file.GetModificationTime() : wxDateTime::Now();
+	const ibDateTime written = ibFileModificationTime(file.GetFullPath());
+	return written.IsEmpty() ? ibDateTime::Now() : written;
 }
 
 // The newest file of each application. ⚠ ONE ibDir DRIVES ONE TRAVERSAL - nothing here may open a
@@ -177,7 +180,7 @@ wxDateTime TraceStartOfFile(const wxFileName& file)
 std::map<ibString, wxFileName> TraceNewestPerApp(const ibString& directory)
 {
 	std::map<ibString, wxFileName> newest;
-	std::map<ibString, wxDateTime> newestTime;
+	std::map<ibString, ibDateTime> newestTime;
 
 	ibDir dir(directory);
 	if (!dir.IsOpened())
@@ -191,10 +194,10 @@ std::map<ibString, wxFileName> TraceNewestPerApp(const ibString& directory)
 		if (file.FileExists()) {
 
 			const ibString app = TraceAppOfFile(name);
-			const wxDateTime when = file.GetModificationTime();
+			const ibDateTime when = ibFileModificationTime(file.GetFullPath());
 
 			const auto it = newestTime.find(app);
-			if (it == newestTime.end() || when.IsLaterThan(it->second)) {
+			if (it == newestTime.end() || when > it->second) {
 				newest[app]     = file;
 				newestTime[app] = when;
 			}
@@ -263,7 +266,7 @@ std::map<ibString, ibString> TraceDumpsByPid(const ibString& journalDirectory)
 // refused or, worse, loaded whole.
 ibString TraceReadTail(const wxFileName& file, wxFileOffset maxBytes)
 {
-	wxFFile handle(file.GetFullPath(), ibT("rb"));
+	wxFFile handle(file.GetFullPath(), wxT("rb"));
 	if (!handle.IsOpened())
 		return ibEmptyString;
 
@@ -295,10 +298,8 @@ void TraceParseInto(const wxFileName& file, const ibString& app, std::vector<ibT
 	if (text.IsEmpty())
 		return;
 
-	wxDateTime day = TraceStartOfFile(file);
-	day.ResetTime();
-
-	wxDateTime previous = wxDefaultDateTime;
+	ibDateTime day = TraceStartOfFile(file).GetDayStart();
+	ibDateTime previous;
 	const size_t firstRow = rows.size();
 
 	ibStringTokenizer lines(text, ibT("\n"), ibTOKEN_RET_EMPTY);
@@ -343,19 +344,19 @@ void TraceParseInto(const wxFileName& file, const ibString& app, std::vector<ibT
 			clock.Mid(9, 3).ToLong(&milli);
 
 		if (clockRead) {
-			wxDateTime when = day + wxTimeSpan(hour, minute, second, milli);
+			ibDateTime when = day.AddMilliseconds(((hour * 60 + minute) * 60 + second) * 1000LL + milli);
 
 			// Midnight. The clock only ever moves forward inside one run, so a step backwards is
 			// the day turning over - not a line out of order.
-			if (previous.IsValid() && when.IsEarlierThan(previous)) {
-				day += wxTimeSpan::Day();
-				when += wxTimeSpan::Day();
+			if (!previous.IsEmpty() && when < previous) {
+				day = day.AddDays(1);
+				when = when.AddDays(1);
 			}
 			previous  = when;
 			row.m_when = when;
 		}
 		else {
-			row.m_when = previous.IsValid() ? previous : day;
+			row.m_when = !previous.IsEmpty() ? previous : day;
 		}
 
 		rows.push_back(row);
@@ -425,7 +426,8 @@ public:
 
 		const std::int32_t sinceMinutes = (std::int32_t)ArgSinceMinutes().Whole(params);
 		if (sinceMinutes > 0) {
-			const long long now = wxDateTime::UNow().GetValue().GetValue();
+			const long long now = std::chrono::duration_cast<std::chrono::milliseconds>(
+				std::chrono::system_clock::now().time_since_epoch()).count();
 			filter.from_ms = now - (long long)sinceMinutes * 60000;
 		}
 
@@ -457,8 +459,7 @@ public:
 
 			std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
 
-			const wxDateTime stamp((wxLongLong)row.ts_ms);
-			entry->SetValue(ibT("time"), ibString(stamp.Format(ibMcpText("%Y-%m-%d %H:%M:%S"))));
+			entry->SetValue(ibT("time"), ibDateTime::OfInstant(row.ts_ms).Format(ibT("%Y-%m-%d %H:%M:%S")));
 
 			// The level goes back as the WORD it was asked for by, never the number
 			// it is stored as - a reader should not have to hold the mapping.
@@ -640,9 +641,9 @@ public:
 		const ibString wantContains = ArgContains().Text(params);
 		const std::int32_t sinceMinutes      = (std::int32_t)ArgSinceMinutes().Whole(params);
 
-		wxDateTime from = wxDefaultDateTime;
+		ibDateTime from;
 		if (sinceMinutes > 0)
-			from = wxDateTime::Now() - wxTimeSpan::Minutes(sinceMinutes);
+			from = ibDateTime::Now().AddMilliseconds(-(long long)sinceMinutes * 60000);
 
 		std::vector<ibTraceRow> rows;
 		std::vector<ibDataValue> read;
@@ -655,7 +656,7 @@ public:
 
 			// A file untouched since before the window cannot hold a line inside it, and reading it
 			// is the difference between an answer and a wait when a dozen runs are on disk.
-			if (from.IsValid() && entry.second.GetModificationTime().IsEarlierThan(from))
+			if (!from.IsEmpty() && ibFileModificationTime(entry.second.GetFullPath()) < from)
 				continue;
 
 			const size_t before = rows.size();
@@ -684,7 +685,7 @@ public:
 		// Newest first, across every file at once - two processes' lines interleave by the clock,
 		// which is what makes "what did the engine do when I asked" answerable in one read.
 		std::stable_sort(rows.begin(), rows.end(),
-			[](const ibTraceRow& l, const ibTraceRow& r) { return r.m_when.IsEarlierThan(l.m_when); });
+			[](const ibTraceRow& l, const ibTraceRow& r) { return r.m_when < l.m_when; });
 
 		const std::int32_t limitArg = (std::int32_t)ArgLimit().Whole(params);
 		const size_t limit = (limitArg > 0) ? (size_t)limitArg : 50;
@@ -694,7 +695,7 @@ public:
 
 		for (const ibTraceRow& row : rows) {
 
-			if (from.IsValid() && row.m_when.IsEarlierThan(from))
+			if (!from.IsEmpty() && row.m_when < from)
 				continue;
 			if (TraceLevelOfName(row.m_level) < minLevel)
 				continue;
@@ -712,7 +713,7 @@ public:
 				continue;
 
 			std::shared_ptr<ibDataNode> entry = std::make_shared<ibDataNode>();
-			entry->SetValue(ibT("time"), ibString(row.m_when.Format(ibT("%Y-%m-%d %H:%M:%S.%l"))));
+			entry->SetValue(ibT("time"), row.m_when.Format(ibT("%Y-%m-%d %H:%M:%S.%l")));
 			entry->SetValue(ibT("app"), row.m_app);
 			entry->SetValue(ibT("level"), row.m_level);
 			entry->SetValue(ibT("thread"), row.m_thread);

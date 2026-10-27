@@ -487,7 +487,7 @@ public:
 			static_assert(std::is_base_of<M, C>::value || std::is_same<M, C>::value,
 				"Bind: the filler's class must be the object's class or a base of it");
 			wxASSERT_MSG(static_cast<const void*>(static_cast<const ibValue*>(obj)) == static_cast<const void*>(obj),
-				ibT("ibValue must be the FIRST base (offset 0) of a member-binding class - see PROJECT INVARIANT above; make the ibValue-holding base first"));
+				wxT("ibValue must be the FIRST base (offset 0) of a member-binding class - see PROJECT INVARIANT above; make the ibValue-holding base first"));
 			AddBinder(ibBoundNames{ static_cast<const ibValue*>(obj), nullptr, static_cast<ibNameFiller>(fn) });
 		}
 		template<class C, class M>
@@ -888,7 +888,7 @@ public:
 	// is a STANDARD conversion and beats the user-defined one to wxString — and the value
 	// became Boolean TRUE. Same trap, same shape, as the const ibValue* overload below.
 	ibValue(const char* sParam); //string
-	ibValue(const wchar_t* sParam); //string
+	ibValue(const ibChar* sParam); //string
 	ibValue(const std::wstring& sParam); //string
 	ibValue(const ibString& sParam); //string
 	ibValue(ibString&& sParam); //string — native move (runtime string functions)
@@ -910,13 +910,13 @@ public:
 	// so the answer is a compile error naming the callsite.
 	//
 	// What still passes, and why each is exempt:
-	//   * `char*` / `wchar_t*` — a STRING, and the overloads above take them;
+	//   * `char*` / `ibChar*` — a STRING, and the overloads above take them;
 	//   * anything derived from ibValue or ibBackendValue — the two pointer constructors above are
 	//     for exactly those, and a DERIVED pointer would otherwise match this template exactly and
 	//     lose the base overload it was meant for.
 	template <class T, class = typename std::enable_if<
 		!std::is_same<typename std::remove_cv<T>::type, char>::value &&
-		!std::is_same<typename std::remove_cv<T>::type, wchar_t>::value &&
+		!std::is_same<typename std::remove_cv<T>::type, ibChar>::value &&
 		!std::is_base_of<ibValue, T>::value &&
 		!std::is_base_of<ibBackendValue, T>::value>::type>
 	ibValue(T*) = delete;
@@ -967,7 +967,7 @@ public:
 	// on the right-hand side has no wxString overload to bind to without these, and
 	// pointer-to-bool wins the resolution.
 	void operator = (const char* cParam);
-	void operator = (const wchar_t* cParam);
+	void operator = (const ibChar* cParam);
 	void operator = (ibString&& cParam);   // native string assign — the text taken over, no wxString round-trip
 
 	void operator = (ibValueTypes cParam);
@@ -1464,8 +1464,8 @@ public:
 	// resolver, no parallel list in the autocomplete loader.
 	struct ibLinqMethodInfo {
 		ibLinqMethod   id;
-		const wchar_t* name;
-		const wchar_t* helper;
+		const ibChar*  name;
+		const ibChar*  helper;
 	};
 	static const std::vector<ibLinqMethodInfo>& GetLinqMethodTable();
 

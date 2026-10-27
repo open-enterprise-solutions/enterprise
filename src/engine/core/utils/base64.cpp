@@ -46,14 +46,14 @@ void AppendEncoded(Text& out, const void* data, size_t size)
 constexpr unsigned char kPad = 64;
 constexpr unsigned char kNone = 65;
 
-unsigned char ValueOf(wchar_t c)
+unsigned char ValueOf(ibChar c)
 {
-	if (c >= L'A' && c <= L'Z') return static_cast<unsigned char>(c - L'A');
-	if (c >= L'a' && c <= L'z') return static_cast<unsigned char>(c - L'a' + 26);
-	if (c >= L'0' && c <= L'9') return static_cast<unsigned char>(c - L'0' + 52);
-	if (c == L'+') return 62;
-	if (c == L'/') return 63;
-	if (c == L'=') return kPad;
+	if (c >= ibT('A') && c <= ibT('Z')) return static_cast<unsigned char>(c - ibT('A'));
+	if (c >= ibT('a') && c <= ibT('z')) return static_cast<unsigned char>(c - ibT('a') + 26);
+	if (c >= ibT('0') && c <= ibT('9')) return static_cast<unsigned char>(c - ibT('0') + 52);
+	if (c == ibT('+')) return 62;
+	if (c == ibT('/')) return 63;
+	if (c == ibT('=')) return kPad;
 	return kNone;
 }
 
@@ -61,7 +61,7 @@ unsigned char ValueOf(wchar_t c)
 
 void ibBase64::Append(ibString& out, const void* data, size_t size)
 {
-	AppendEncoded<wchar_t>(out, data, size);
+	AppendEncoded<ibChar>(out, data, size);
 }
 
 void ibBase64::Append(std::string& out, const void* data, size_t size)
@@ -69,7 +69,7 @@ void ibBase64::Append(std::string& out, const void* data, size_t size)
 	AppendEncoded<char>(out, data, size);
 }
 
-bool ibBase64::Read(const wchar_t* text, size_t length, ibMemoryBuffer& out)
+bool ibBase64::Read(const ibChar* text, size_t length, ibMemoryBuffer& out)
 {
 	if (length % 4 != 0)
 		return false;
@@ -109,5 +109,5 @@ bool ibBase64::Read(const wchar_t* text, size_t length, ibMemoryBuffer& out)
 
 bool ibBase64::Read(const ibString& text, ibMemoryBuffer& out)
 {
-	return Read(text.wc_str(), text.length(), out);
+	return Read(text.c_str(), text.length(), out);
 }

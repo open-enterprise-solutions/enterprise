@@ -6,23 +6,18 @@
 
 #include "core/fstring.h"   // ibString — appended into
 
-#include <cstdio>   // std::snprintf — a \u escape in bytes
-#include <cwchar>   // std::swprintf — …and in characters
-
-namespace {
+#include <cstdio>   // std::snprintf — a \u escape
 
 // Over the character buffer, a RUN at a time: a checked build registers every string iterator under one global
-// lock, and a megabyte of text is a million of them and a million one-character appends. `Wide` — a wxString or the
-// engine's text: both append a run and a terminated text.
-template<class Wide>
-void AppendQuotedWide(Wide& out, const wchar_t* text, size_t length)
+// lock, and a megabyte of text is a million of them and a million one-character appends.
+void ibJsonText::AppendQuoted(ibString& out, const ibChar* text, size_t length)
 {
-	const wchar_t* const begin = text;
-	const wchar_t* const end = begin + length;
+	const ibChar* const begin = text;
+	const ibChar* const end = begin + length;
 
 	out += ibT("\"");
-	const wchar_t* run = begin;
-	for (const wchar_t* p = begin; p != end; ++p) {
+	const ibChar* run = begin;
+	for (const ibChar* p = begin; p != end; ++p) {
 		const unsigned long c = static_cast<unsigned long>(*p);
 		const ibChar* escape = nullptr;
 		switch (c) {
@@ -43,22 +38,16 @@ void AppendQuotedWide(Wide& out, const wchar_t* text, size_t length)
 			out += escape;
 		}
 		else {
-			wchar_t unit[8];
-			std::swprintf(unit, sizeof(unit) / sizeof(unit[0]), L"\\u%04x", static_cast<unsigned>(c));
-			out += unit;
+			char unit[8];
+			std::snprintf(unit, sizeof(unit), "\\u%04x", static_cast<unsigned>(c));
+			for (const char* u = unit; *u != 0; ++u)
+				out += static_cast<ibChar>(*u);
 		}
 		run = p + 1;
 	}
 	if (end != run)
 		out.append(run, static_cast<size_t>(end - run));
 	out += ibT("\"");
-}
-
-} // namespace
-
-void ibJsonText::AppendQuoted(ibString& out, const wchar_t* text, size_t length)
-{
-	AppendQuotedWide(out, text, length);
 }
 
 namespace {
@@ -89,17 +78,17 @@ void AppendUtf8(std::string& out, unsigned long c)
 
 // The same escapes as the wide writer above; what goes out as itself is encoded on the way. A run of ASCII — most
 // of what a protocol says — is appended whole.
-void ibJsonText::AppendQuoted(std::string& out, const wchar_t* text, size_t length)
+void ibJsonText::AppendQuoted(std::string& out, const ibChar* text, size_t length)
 {
-	const wchar_t* const end = text + length;
+	const ibChar* const end = text + length;
 
 	out += '"';
-	const wchar_t* run = text;
-	auto flush = [&out, &run](const wchar_t* upto) {
+	const ibChar* run = text;
+	auto flush = [&out, &run](const ibChar* upto) {
 		for (; run != upto; ++run)
 			out += static_cast<char>(*run);
 	};
-	for (const wchar_t* p = text; p != end; ++p) {
+	for (const ibChar* p = text; p != end; ++p) {
 		unsigned long c = static_cast<unsigned long>(*p);
 		const char* escape = nullptr;
 		switch (c) {
@@ -126,13 +115,13 @@ void ibJsonText::AppendQuoted(std::string& out, const wchar_t* text, size_t leng
 			out += unit;
 			continue;
 		}
-		// A UTF-16 pair is one character (wchar_t is UTF-16 on Windows, a whole character elsewhere).
+		// A UTF-16 pair is one character.
 		if (c >= 0xD800 && c <= 0xDBFF && p + 1 != end
 			&& static_cast<unsigned long>(p[1]) >= 0xDC00 && static_cast<unsigned long>(p[1]) <= 0xDFFF) {
 			c = 0x10000 + ((c - 0xD800) << 10) + (static_cast<unsigned long>(p[1]) - 0xDC00);
 			run = ++p + 1;
 		}
-		else if ((c >= 0xD800 && c <= 0xDFFF) || c > 0x10FFFF) {
+		else if (c >= 0xD800 && c <= 0xDFFF) {
 			c = 0xFFFD;
 		}
 		AppendUtf8(out, c);
@@ -145,21 +134,21 @@ namespace {
 
 // A text of the source, as the engine's: bytes decoded straight into it, characters copied once.
 void Assign(ibString& out, const char* p, size_t n) { out.SetUtf8(p, n); }
-void Assign(ibString& out, const wchar_t* p, size_t n) { out = ibString(p, n); }
+void Assign(ibString& out, const ibChar* p, size_t n) { out = ibString(p, n); }
 
 // A character an escape names, added to a text of the source's own kind.
 void AppendCodePoint(std::string& text, unsigned long cp)
 {
 	AppendUtf8(text, cp);
 }
-void AppendCodePoint(std::wstring& text, unsigned long cp)
+void AppendCodePoint(std::u16string& text, unsigned long cp)
 {
-	if (sizeof(wchar_t) == 2 && cp > 0xFFFF) {
-		text += static_cast<wchar_t>(0xD800 + ((cp - 0x10000) >> 10));
-		text += static_cast<wchar_t>(0xDC00 + ((cp - 0x10000) & 0x3FF));
+	if (cp > 0xFFFF) {
+		text += static_cast<ibChar>(0xD800 + ((cp - 0x10000) >> 10));
+		text += static_cast<ibChar>(0xDC00 + ((cp - 0x10000) & 0x3FF));
 	}
 	else {
-		text += static_cast<wchar_t>(cp);
+		text += static_cast<ibChar>(cp);
 	}
 }
 
@@ -236,7 +225,7 @@ bool ReadQuotedOf(const Char*& at, const Char* end, ibString& out)
 
 } // namespace
 
-bool ibJsonText::ReadQuoted(const wchar_t*& at, const wchar_t* end, ibString& text)
+bool ibJsonText::ReadQuoted(const ibChar*& at, const ibChar* end, ibString& text)
 {
 	return ReadQuotedOf(at, end, text);
 }

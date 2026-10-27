@@ -60,13 +60,13 @@ class ibCtorRegistry {
 	//
 	// mutable: rebuilding is not a change of STATE, it is bringing the cache up to date with what
 	// the ctors already say, so a const lookup may do it.
-	mutable std::unordered_map<std::wstring, std::shared_ptr<T>> m_byName;   // hot — every `New <Name>` a script runs
+	mutable std::unordered_map<ibString, std::shared_ptr<T>> m_byName;   // hot — every `New <Name>` a script runs
 	mutable bool m_namesStale = false;
 
 	// Names are matched case-insensitively, so the index is keyed on the folded
 	// form and both sides fold the same way. One conversion per lookup, against
 	// the ~180 comparisons (each allocating twice) the linear scan performed.
-	static std::wstring NameKey(const ibString& name) { return name.Upper().ToStdWstring(); }
+	static ibString NameKey(const ibString& name) { return name.Upper(); }
 
 	// Drop the name entry that points AT this identity, whatever string it is filed under. Linear,
 	// and deliberately so: it runs on unregister and on rename — never on a lookup — while the
@@ -136,7 +136,7 @@ private:
 	// nothing for the next metatype to forget, and no way for a stale name to survive pointing at
 	// the wrong type.
 	void RebuildNames() const {
-		std::unordered_map<std::wstring, std::shared_ptr<T>> rebuilt;
+		std::unordered_map<ibString, std::shared_ptr<T>> rebuilt;
 		rebuilt.reserve(m_byClsid.size());
 		for (const auto& entry : m_byClsid)
 			rebuilt.emplace(NameKey(entry.second->GetClassName()), entry.second);

@@ -1,9 +1,8 @@
 #include "docViewAssistant.h"
 
+#include "core/fdatetime.h"                  // ibDateTime — a line's time
 #include "core/serialize/dataBuilder.h"
 #include "frmserver/client/clientFrame.h"   // the client told its frame changed (RefreshFrame)
-
-#include <wx/datetime.h>
 
 wxIMPLEMENT_DYNAMIC_CLASS(ibAssistantTranscriptDocument, ibDocument);
 wxIMPLEMENT_DYNAMIC_CLASS(ibAssistantTranscriptView, ibView);
@@ -104,7 +103,7 @@ void ibAssistantTranscriptView::OnMcpExchange(const ibString& method, const ibSt
 
 		// A TRANSCRIPT, NOT A WIRE LOG — the desktop's notifier's three shapes: what a person said, what the assistant
 		// answered, and a single line for anything the assistant DID along the way, each with the time.
-		const ibString at = wxDateTime::Now().FormatISOTime().Left(5);   // HH:MM
+		const ibString at = ibDateTime::Now().Format(ibT("%H:%M"));
 
 		// The dot after the time, by its code point: this file has no BOM, and MSVC reads such a file in the system
 		// codepage — the desktop's literal (its file has one) arrived here as two letters.

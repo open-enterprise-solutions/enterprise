@@ -195,7 +195,7 @@ void ibValueJsonReader::SetText(const ibString& text)
 	// build than ibString::ToUtf8, which appends a character at a time. A text it cannot convert is an empty
 	// buffer, as before - and an empty text is not JSON.
 	size_t length = 0;
-	const wxCharBuffer converted = wxMBConvUTF8().cWC2MB(text.wc_str(), text.length(), &length);
+	const wxCharBuffer converted = wxMBConvUTF8().cWC2MB(text.wc_str(), wxNO_LEN, &length);
 	const char* const utf8 = converted.data() != nullptr ? converted.data() : "";
 
 	std::vector<ibToken> tokens;
@@ -545,7 +545,7 @@ void ibValueJsonWriter::WritePropertyName(const ibString& name)
 		m_text += ibT(',');
 	top.m_hasMembers = true;
 	NewLine(m_open.size());
-	ibJsonText::AppendQuoted(m_text, name.wc_str(), name.length());
+	ibJsonText::AppendQuoted(m_text, name);
 	m_text += m_formatting == ibJsonFormatting_Indented ? ibT(": ") : ibT(":");
 	top.m_nameWritten = true;
 }
@@ -640,7 +640,7 @@ void ibValueJsonWriter::WriteAny(const ibValue& value, int depth)
 		BeginValue();
 		{
 			const ibString text = target->GetString();   // escaped where it lies, not copied into a wxString
-			ibJsonText::AppendQuoted(m_text, text.wc_str(), text.length());
+			ibJsonText::AppendQuoted(m_text, text);
 		}
 		return;
 	default:

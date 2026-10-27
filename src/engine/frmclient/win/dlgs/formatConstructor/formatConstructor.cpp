@@ -124,8 +124,8 @@ ibDialogFormatConstructor::ibNumberRow ibDialogFormatConstructor::AddNumberRow(w
 }
 
 ibDialogFormatConstructor::ibCharRow ibDialogFormatConstructor::AddCharRow(wxWindow* page, wxSizer* grid,
-	const wxString& label, ibFormatCode code, const std::optional<wxUniChar>& value,
-	const std::vector<std::pair<wxUniChar, wxString>>& chars)
+	const wxString& label, ibFormatCode code, const std::optional<ibChar>& value,
+	const std::vector<std::pair<ibChar, wxString>>& chars)
 {
 	ibCharRow row;
 	row.m_on = new wxCheckBox(page, wxID_ANY, RowLabel(label, code));
@@ -143,7 +143,7 @@ ibDialogFormatConstructor::ibCharRow ibDialogFormatConstructor::AddCharRow(wxWin
 		for (size_t i = 0; i < row.m_chars.size(); ++i)
 			if (row.m_chars[i] == *value) selection = static_cast<int>(i);
 		if (selection == wxNOT_FOUND) {
-			selection = static_cast<int>(row.m_value->Append(wxString::Format(wxT("'%s'"), wxString(*value))));
+			selection = static_cast<int>(row.m_value->Append(ibString::Format(ibT("'%s'"), ibString(*value))));
 			row.m_chars.push_back(*value);
 		}
 	}
@@ -200,11 +200,11 @@ void ibDialogFormatConstructor::BuildNumberPage(wxNotebook* notebook)
 		ibFormatCode::NumberDigits, number.m_digits, 15, 1, 40);
 	m_decimalSeparator = AddCharRow(page, grid, _("Decimal separator"),
 		ibFormatCode::NumberDecimalSeparator, number.m_decimalSeparator,
-		{ { wxUniChar('.'), _("Point") }, { wxUniChar(','), _("Comma") } });
+		{ { ibT('.'), _("Point") }, { ibT(','), _("Comma") } });
 	m_groupSeparator = AddCharRow(page, grid, _("Group separator"),
 		ibFormatCode::NumberGroupSeparator, number.m_groupSeparator,
-		{ { wxUniChar(' '), _("Space") }, { wxUniChar(0x00A0), _("Non-breaking space") },
-		  { wxUniChar(','), _("Comma") }, { wxUniChar('.'), _("Point") }, { wxUniChar('\''), _("Apostrophe") } });
+		{ { ibT(' '), _("Space") }, { ibChar(0x00A0), _("Non-breaking space") },
+		  { ibT(','), _("Comma") }, { ibT('.'), _("Point") }, { ibT('\''), _("Apostrophe") } });
 	m_groupSize = AddNumberRow(page, grid, _("Digits in a group"),
 		ibFormatCode::NumberGroupSize, number.m_groupSize, 3, 1, 9);
 	m_zero = AddTextRow(page, grid, _("A zero prints as"), ibFormatCode::NumberZero, number.m_zero);
@@ -316,7 +316,7 @@ ibFormatString ibDialogFormatConstructor::Collect() const
 	const auto character = [](const ibCharRow& row) {
 		const int selection = row.m_value->GetSelection();
 		return row.m_on->IsChecked() && selection != wxNOT_FOUND
-			? std::optional<wxUniChar>(row.m_chars[selection]) : std::nullopt;
+			? std::optional<ibChar>(row.m_chars[selection]) : std::nullopt;
 	};
 	const auto text = [](const ibTextRow& row) {
 		return row.m_on->IsChecked() ? std::optional<wxString>(row.m_value->GetValue()) : std::nullopt;

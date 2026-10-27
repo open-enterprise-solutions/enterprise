@@ -407,12 +407,12 @@ void ibTechJournal::Write(ibJournalMark mark, const ibString& source, const ibSt
 		switch (mark) {
 		case ibJournalMark::Error:
 			if (wxLOG_IS_ENABLED(Error))
-				wxMAKE_LOGGER(Error).Store(kEchoKey, wxUIntPtr(1)).Log(ibT("%s"), message);
+				wxMAKE_LOGGER(Error).Store(kEchoKey, wxUIntPtr(1)).Log(wxT("%s"), message);
 			break;
 		default:
 #if wxUSE_LOG_DEBUG
 			if (wxLOG_IS_ENABLED(Debug))
-				wxMAKE_LOGGER(Debug).Store(kEchoKey, wxUIntPtr(1)).Log(ibT("%s"), line.Left(line.Len() - 1));
+				wxMAKE_LOGGER(Debug).Store(kEchoKey, wxUIntPtr(1)).Log(wxT("%s"), line.Left(line.Len() - 1));
 #endif
 			break;
 		}

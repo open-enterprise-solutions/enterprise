@@ -228,7 +228,6 @@ public:
 	static constexpr int32_t kMaxDivFracDigits = 100;
 
 	ibString     ToString()  const;
-	std::wstring ToWString() const;
 	// …the same text, written into the engine's string — no wxString on the way.
 	void ToString(ibString& out) const;
 
@@ -472,6 +471,5 @@ static_assert(sizeof(uint64_t) == 8, "ibNumber assumes uint64_t is 8 bytes");
 // Stream insertion — writes via ToString(); used by code that builds messages
 // or query fragments through std::stringstream.
 CORE_API std::ostream&  operator<<(std::ostream&  os, const ibNumber& n);
-CORE_API std::wostream& operator<<(std::wostream& os, const ibNumber& n);
 
 #endif

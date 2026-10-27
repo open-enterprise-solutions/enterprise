@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "core/core.h"
+#include "core/fstring.h"   // ibString — the base64 text a picture is read from
 #include "core/graphics/picture.h"   // ibPicture — a picture as data
 
 // A PICTURE BY ITS NUMBER — its name, its number, the picture.

@@ -13,11 +13,11 @@
 
 #include <climits>                       // LLONG_MAX — an unsigned number past it is no whole one
 #include <cstring>                       // std::memcpy / memmove / memcmp — the bytes, read and moved
-#include <cwchar>                        // std::wcslen — a key's length
+#include <string>                        // std::char_traits — a key's length
 
 namespace {
 
-static_assert(sizeof(char16_t) == 2, "a name's and a text's character is two bytes");
+static_assert(sizeof(ibChar) == 2, "a name's and a text's character is two bytes");
 
 // The bytes are little-endian, as every platform the engine builds for is — said where it would break.
 #if defined(__BYTE_ORDER__) && defined(__ORDER_BIG_ENDIAN__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
@@ -91,69 +91,18 @@ inline std::uint32_t ChildrenOf(const unsigned char* b, std::uint32_t node) noex
 	return FieldsOf(b, node) + Rd<std::uint32_t>(b, node + kFieldsLength);
 }
 
-// --- characters: the engine's (wchar_t) and the bytes' (UTF-16LE) ---------------------------------------------------
+// --- characters: the engine's are the bytes' (UTF-16LE) -------------------------------------------------------------
 
-// How many UTF-16 units the engine's characters are: the same count where wchar_t is UTF-16, and a code point past
-// the basic plane two of them where it is UTF-32.
-std::size_t Utf16Length(const wchar_t* text, std::size_t length) noexcept
+// A text's characters into the bytes, as they are.
+void ToUtf16(const ibString& text, unsigned char* to) noexcept
 {
-	if constexpr (sizeof(wchar_t) == 2) {
-		return length;
-	}
-	else {
-		std::size_t units = 0;
-		for (std::size_t i = 0; i < length; ++i)
-			units += static_cast<std::uint32_t>(text[i]) > 0xFFFFu ? 2 : 1;
-		return units;
-	}
-}
-
-void ToUtf16(const wchar_t* text, std::size_t length, unsigned char* to) noexcept
-{
-	if constexpr (sizeof(wchar_t) == 2) {
-		if (length != 0)
-			std::memcpy(to, text, length * 2);
-	}
-	else {
-		for (std::size_t i = 0; i < length; ++i) {
-			std::uint32_t point = static_cast<std::uint32_t>(text[i]);
-			if (point > 0xFFFFu) {
-				point -= 0x10000u;
-				Wr(to, 0, static_cast<std::uint16_t>(0xD800u + (point >> 10)));
-				Wr(to, 2, static_cast<std::uint16_t>(0xDC00u + (point & 0x3FFu)));
-				to += 4;
-			}
-			else {
-				Wr(to, 0, static_cast<std::uint16_t>(point));
-				to += 2;
-			}
-		}
-	}
+	if (!text.IsEmpty())
+		std::memcpy(to, text.c_str(), text.length() * 2);
 }
 
 ibString FromUtf16(const unsigned char* at, std::uint32_t units)
 {
-	if (units == 0)
-		return ibString();
-	if constexpr (sizeof(wchar_t) == 2) {
-		return ibString(reinterpret_cast<const wchar_t*>(at), units);   // the characters as they lie, at an even place
-	}
-	else {
-		std::wstring wide;
-		wide.reserve(units);
-		for (std::uint32_t i = 0; i < units; ++i) {
-			std::uint32_t unit = Rd<std::uint16_t>(at, 2 * i);
-			if (unit >= 0xD800u && unit < 0xDC00u && i + 1 < units) {
-				const std::uint32_t low = Rd<std::uint16_t>(at, 2 * (i + 1));
-				if (low >= 0xDC00u && low < 0xE000u) {
-					unit = 0x10000u + ((unit - 0xD800u) << 10) + (low - 0xDC00u);
-					++i;
-				}
-			}
-			wide.push_back(static_cast<wchar_t>(unit));
-		}
-		return ibString(wide.c_str(), wide.size());
-	}
+	return ibString(reinterpret_cast<const ibChar*>(at), units);   // the characters as they lie, at an even place
 }
 
 // A field's name, the key it is asked by: the same characters, compared where they lie.
@@ -170,27 +119,7 @@ bool NameIs(const unsigned char* b, std::uint32_t field, const ibDataKey& key) n
 		}
 		return true;
 	}
-	if constexpr (sizeof(wchar_t) == 2) {
-		return units == key.m_length && (units == 0 || std::memcmp(name, key.m_wide, 2 * units) == 0);
-	}
-	else {
-		if (units != Utf16Length(key.m_wide, key.m_length))
-			return false;
-		std::uint32_t i = 0;
-		for (std::size_t k = 0; k < key.m_length; ++k) {
-			std::uint32_t point = static_cast<std::uint32_t>(key.m_wide[k]);
-			if (point > 0xFFFFu) {
-				point -= 0x10000u;
-				if (Rd<std::uint16_t>(name, 2 * i) != 0xD800u + (point >> 10)
-					|| Rd<std::uint16_t>(name, 2 * (i + 1)) != 0xDC00u + (point & 0x3FFu))
-					return false;
-				i += 2;
-			}
-			else if (Rd<std::uint16_t>(name, 2 * i++) != point)
-				return false;
-		}
-		return true;
-	}
+	return units == key.m_length && (units == 0 || std::memcmp(name, key.m_utf16, 2 * units) == 0);
 }
 
 // A field made of nothing but its value — a value's own bytes: its kind, no name, and `size` bytes to fill.
@@ -239,7 +168,8 @@ void PacketHeader(unsigned char* at, std::uint32_t length) noexcept
 ////////////////////////////////////////////////////////////////////////////
 
 ibDataKey::ibDataKey(const char* ascii) noexcept : m_ascii(ascii != nullptr ? ascii : ""), m_length(std::strlen(m_ascii)) {}
-ibDataKey::ibDataKey(const wchar_t* text) noexcept : m_wide(text != nullptr ? text : L""), m_length(std::wcslen(m_wide)) {}
+ibDataKey::ibDataKey(const ibChar* text) noexcept
+	: m_utf16(text != nullptr ? text : ibT("")), m_length(std::char_traits<ibChar>::length(m_utf16)) {}
 
 ////////////////////////////////////////////////////////////////////////////
 // ibDataValue
@@ -372,10 +302,10 @@ std::size_t ibDataValue::Weight() const
 ibDataValue ibDataValue::String(const ibString& text)
 {
 	ibDataValue v;
-	const std::size_t units = Utf16Length(text.wc_str(), text.length());
+	const std::size_t units = text.length();
 	unsigned char* const value = NewField(v.m_bytes, static_cast<unsigned char>(ibDataKind::String), 4 + 2 * static_cast<std::uint32_t>(units));
 	Wr(value, 0, static_cast<std::uint32_t>(units));
-	ToUtf16(text.wc_str(), text.length(), value + 4);
+	ToUtf16(text, value + 4);
 	return v;
 }
 
@@ -806,12 +736,12 @@ void ibDataNode::AddField(const ibString& name, const ibDataValue& value)
 	const std::uint32_t from = source.IsEmpty() ? 0 : value.ValueAt();
 	const std::uint32_t size = source.IsEmpty() ? 0 : ValueSize(value.Base(), kind, from);
 
-	const std::uint32_t units = static_cast<std::uint32_t>(Utf16Length(name.wc_str(), name.length()));
+	const std::uint32_t units = static_cast<std::uint32_t>(name.length());
 	unsigned char* const field = Insert(ChildrenOf(Base(), m_at), 4 + 2 * units + size, true);
 	field[0] = kind;
 	field[1] = 0;
 	Wr(field, 2, static_cast<std::uint16_t>(units));
-	ToUtf16(name.wc_str(), name.length(), field + 4);
+	ToUtf16(name, field + 4);
 	if (size != 0)
 		std::memcpy(field + 4 + 2 * units, static_cast<const unsigned char*>(source.GetData()) + from, size);
 
@@ -908,13 +838,13 @@ ibDataNode& ibDataNode::Child(const ibString& name)
 			field = NextField(b, field);
 		}
 	}
-	const std::uint32_t units = static_cast<std::uint32_t>(Utf16Length(name.wc_str(), name.length()));
+	const std::uint32_t units = static_cast<std::uint32_t>(name.length());
 	const std::uint32_t at = ChildrenOf(Base(), m_at);
 	unsigned char* const field = Insert(at, 4 + 2 * units + kNodeHeader, true);
 	field[0] = static_cast<unsigned char>(ibDataKind::Child);
 	field[1] = 0;
 	Wr(field, 2, static_cast<std::uint16_t>(units));
-	ToUtf16(name.wc_str(), name.length(), field + 4);
+	ToUtf16(name, field + 4);
 	EmptyNode(field + 4 + 2 * units);
 	unsigned char* const base = static_cast<unsigned char*>(Root().m_bytes.GetData());
 	Wr(base, m_at + kFieldCount, Rd<std::uint32_t>(base, m_at + kFieldCount) + 1);
@@ -1056,49 +986,49 @@ struct ibPacketCheck {
 	const unsigned char* m_base;
 
 	// Throws (ibCoreException::Error) — nothing past it runs.
-	void Refuse(const wchar_t* why, std::uint32_t at) const
+	void Refuse(const ibChar* why, std::uint32_t at) const
 	{
-		ibCoreException::Error(_("ibBinaryProvider: the bytes are no OES-RPC packet: %s at byte %u"), why, at);
+		ibCoreException::Error(_("ibBinaryProvider: the bytes are no OES-RPC packet: %s at byte %u"), ibString(why), at);
 	}
 
 	void Node(std::uint32_t node, std::uint32_t end, int depth) const
 	{
 		if (depth > ibBinaryProvider::kMaxNesting)
-			Refuse(L"nesting too deep", node);
+			Refuse(ibT("nesting too deep"), node);
 		// …and a reserve that runs out first is the reader's, not the bytes': the packet may be a sound one.
 		if (ibFiber::StackLow())
 			ibCoreException::Error(_("ibBinaryProvider: the packet is nested deeper than the stack allows"));
 		if (std::uint64_t(node) + kNodeHeader > end)
-			Refuse(L"a node's header past its container", node);
+			Refuse(ibT("a node's header past its container"), node);
 		const std::uint32_t length = Rd<std::uint32_t>(m_base, node + kLength);
 		if (length < kNodeHeader || (length & 1u) != 0 || std::uint64_t(node) + length > end)
-			Refuse(L"a node's length out of its container", node);
+			Refuse(ibT("a node's length out of its container"), node);
 		const std::uint32_t stop = node + length;
 		const std::uint64_t fields = std::uint64_t(node) + kNodeHeader + Even(Rd<std::uint32_t>(m_base, node + kRawLength));
 		const std::uint64_t children = fields + Rd<std::uint32_t>(m_base, node + kFieldsLength);
 		if (children > stop)
-			Refuse(L"a node's parts past its length", node);
+			Refuse(ibT("a node's parts past its length"), node);
 		std::uint32_t at = static_cast<std::uint32_t>(fields);
 		for (std::uint32_t i = Rd<std::uint32_t>(m_base, node + kFieldCount); i != 0; --i)
 			at = Field(at, static_cast<std::uint32_t>(children), depth);
 		if (at != children)
-			Refuse(L"a node's fields not what their length says", node);
+			Refuse(ibT("a node's fields not what their length says"), node);
 		for (std::uint32_t i = Rd<std::uint32_t>(m_base, node + kChildCount); i != 0; --i) {
 			Node(at, stop, depth + 1);
 			at += Rd<std::uint32_t>(m_base, at + kLength);
 		}
 		if (at != stop)
-			Refuse(L"a node's children not what its length says", node);
+			Refuse(ibT("a node's children not what its length says"), node);
 	}
 
 	// The field at `field`, inside `end`; the place past it.
 	std::uint32_t Field(std::uint32_t field, std::uint32_t end, int depth) const
 	{
 		if (std::uint64_t(field) + 4 > end)
-			Refuse(L"a field past its container", field);
+			Refuse(ibT("a field past its container"), field);
 		const unsigned char kind = m_base[field];
 		if (kind > kWhole)
-			Refuse(L"an unknown kind", field);
+			Refuse(ibT("an unknown kind"), field);
 		const std::uint64_t value = std::uint64_t(field) + 4 + 2ull * NameLength(m_base, field);
 		std::uint64_t size = 0;
 		switch (kind) {
@@ -1109,12 +1039,12 @@ struct ibPacketCheck {
 		case static_cast<unsigned char>(ibDataKind::Number):
 		case static_cast<unsigned char>(ibDataKind::Binary):
 			if (value + 4 > end)
-				Refuse(L"a length past its container", field);
+				Refuse(ibT("a length past its container"), field);
 			size = 4 + Even(Rd<std::uint32_t>(m_base, static_cast<std::uint32_t>(value)));
 			break;
 		case static_cast<unsigned char>(ibDataKind::String):
 			if (value + 4 > end)
-				Refuse(L"a length past its container", field);
+				Refuse(ibT("a length past its container"), field);
 			size = 4 + 2ull * Rd<std::uint32_t>(m_base, static_cast<std::uint32_t>(value));
 			break;
 		case static_cast<unsigned char>(ibDataKind::Child):
@@ -1123,23 +1053,23 @@ struct ibPacketCheck {
 			break;
 		case static_cast<unsigned char>(ibDataKind::Array): {
 			if (value + 8 > end)
-				Refuse(L"a list's header past its container", field);
+				Refuse(ibT("a list's header past its container"), field);
 			if (depth + 1 > ibBinaryProvider::kMaxNesting)
-				Refuse(L"nesting too deep", field);
+				Refuse(ibT("nesting too deep"), field);
 			size = Rd<std::uint32_t>(m_base, static_cast<std::uint32_t>(value));
 			if (size < 8 || value + size > end)
-				Refuse(L"a list's length out of its container", field);
+				Refuse(ibT("a list's length out of its container"), field);
 			const std::uint32_t stop = static_cast<std::uint32_t>(value + size);
 			std::uint32_t at = static_cast<std::uint32_t>(value) + 8;
 			for (std::uint32_t i = Rd<std::uint32_t>(m_base, static_cast<std::uint32_t>(value) + 4); i != 0; --i)
 				at = Field(at, stop, depth + 1);
 			if (at != stop)
-				Refuse(L"a list's items not what its length says", field);
+				Refuse(ibT("a list's items not what its length says"), field);
 			break;
 		}
 		}
 		if (value + size > end)
-			Refuse(L"a value past its container", field);
+			Refuse(ibT("a value past its container"), field);
 		return static_cast<std::uint32_t>(value + size);
 	}
 };

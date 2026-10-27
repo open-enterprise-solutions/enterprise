@@ -232,7 +232,7 @@ bool ibPasswordHash::Verify(const ibString& password, const ibString& storedHash
 		return false;
 
 	ibMemoryBuffer salt, stored;
-	if (!ibBase64::Read(saltB64.wc_str(), saltB64.length(), salt) || !ibBase64::Read(hashB64.wc_str(), hashB64.length(), stored)
+	if (!ibBase64::Read(saltB64, salt) || !ibBase64::Read(hashB64, stored)
 		|| salt.GetDataLen() == 0 || stored.GetDataLen() == 0)
 		return false;
 

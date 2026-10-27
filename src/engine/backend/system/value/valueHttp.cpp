@@ -67,7 +67,7 @@ std::string ibHttpEncode(const ibString& text, ibTextEncoding encoding)
 	// over a temporary `wxString(text)` it was gone before it was read — "ab" in UTF-16 came back as two other
 	// letters (2026-10-27).
 	size_t length = 0;
-	const wxCharBuffer bytes = conv->cWC2MB(text.wc_str(), text.Len(), &length);
+	const wxCharBuffer bytes = conv->cWC2MB(text.wc_str(), wxNO_LEN, &length);
 	if (length == 0 || length == wxCONV_FAILED)
 		ibBackendCoreException::Error(_("HTTPRequest: the text cannot be written in this encoding"));
 	return std::string(bytes.data(), length);
@@ -195,7 +195,7 @@ bool ibHttpReadPem(const ibString& path, std::string& text)
 	// wxFFile says a file it cannot open through wxLog, which in the designer is a pane that pops up; the refusal
 	// is the caller's sentence.
 	wxLogNull quiet;
-	wxFFile in(path, ibT("rb"));
+	wxFFile in(path, wxT("rb"));
 	const wxFileOffset length = in.IsOpened() ? in.Length() : wxInvalidOffset;
 	if (length < 0 || static_cast<unsigned long long>(length) > kMostPemBytes)
 		return false;

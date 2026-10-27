@@ -2,6 +2,7 @@
 #define __FILE_SYSTEM_H__
 
 #include "core/core.h"
+#include "core/fdatetime.h"
 #include "core/fstring.h"
 
 #include <filesystem>
@@ -51,6 +52,9 @@ CORE_API ibString ibBackendConfPath();
 // written into the log on the way, as wx did.
 CORE_API bool ibDirExists(const ibString& path);
 CORE_API bool ibFileExists(const ibString& path);
+// …and when it was last written, as this machine's clock reads it (wxFileName::GetModificationTime); the empty
+// date when there is no file to ask.
+CORE_API ibDateTime ibFileModificationTime(const ibString& path);
 CORE_API bool ibRemoveFile(const ibString& path);
 CORE_API bool ibRenameFile(const ibString& from, const ibString& to);   // replaces what `to` names
 CORE_API bool ibCopyFile(const ibString& from, const ibString& to);     // replaces what `to` names

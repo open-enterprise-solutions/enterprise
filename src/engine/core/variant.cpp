@@ -95,7 +95,7 @@ ibVariant::ibVariant(const char* cParam)
 	if (cParam && *cParam) m_sData = ibString(cParam);
 }
 
-ibVariant::ibVariant(const wchar_t* cParam)
+ibVariant::ibVariant(const ibChar* cParam)
 	: m_typeClass(ibValueTypes::TYPE_STRING), m_bReadOnly(false), m_refCount(0), m_dData()
 {
 	m_sData = ibString(cParam);
@@ -355,7 +355,7 @@ void ibVariant::operator = (const char* cParam)
 	if (cParam && *cParam) m_sData = ibString(cParam);
 }
 
-void ibVariant::operator = (const wchar_t* cParam)
+void ibVariant::operator = (const ibChar* cParam)
 {
 	Reset();
 	m_typeClass = ibValueTypes::TYPE_STRING;

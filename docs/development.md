@@ -253,7 +253,8 @@ on every call, so hash once per event, not once per handler.
   now refuses (C4172 is an error, see [portability.md](portability.md) §1.9).
 - **A `wxString`'s `mb_str()` is not a buffer of its own** — it points into the string it came from. Over
   a temporary (`wxString(text).mb_str(conv)`) it is gone before it is read. Text into bytes goes
-  through the converter itself: `conv.cWC2MB(text.wc_str(), text.Len(), &length)`.
+  through the converter itself: `conv.cWC2MB(text.wc_str(), wxNO_LEN, &length)` — the wide text's
+  own length, which is not `Len()` where `wchar_t` is four bytes ([portability.md](portability.md) §1.5b′).
 
 ---
 

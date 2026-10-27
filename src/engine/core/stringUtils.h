@@ -199,14 +199,12 @@ namespace stringUtils
 // folds to itself in every locale, so it decides as it stands, and the answer is still the one IsSameAs gives.
 struct ibCaseFoldLess {
 	bool operator()(const ibString& lhs, const ibString& rhs) const noexcept {
-		const auto& stl_lhs = lhs.ToStdWstring();
-		const auto& stl_rhs = rhs.ToStdWstring();
-		const wchar_t* const l = stl_lhs.data();
-		const wchar_t* const r = stl_rhs.data();
-		const size_t length = stl_lhs.length() < stl_rhs.length() ? stl_lhs.length() : stl_rhs.length();
+		const ibChar* const l = lhs.c_str();
+		const ibChar* const r = rhs.c_str();
+		const size_t length = lhs.length() < rhs.length() ? lhs.length() : rhs.length();
 		for (size_t idx = 0; idx < length; ++idx) {
-			const wchar_t& c1 = l[idx];
-			const wchar_t& c2 = r[idx];
+			const ibChar c1 = l[idx];
+			const ibChar c2 = r[idx];
 			if (c1 == c2)
 				continue;
 			if (c1 < 0x80 && c2 < 0x80 && !IsLatinLetter(c1) && !IsLatinLetter(c2))
@@ -216,11 +214,11 @@ struct ibCaseFoldLess {
 			if (f1 != f2)
 				return f1 < f2;
 		}
-		return stl_lhs.length() < stl_rhs.length();   // one ran out first: the shorter is the lesser
+		return lhs.length() < rhs.length();   // one ran out first: the shorter is the lesser
 	}
 
 private:
-	static bool IsLatinLetter(wchar_t c) noexcept { return (c >= L'a' && c <= L'z') || (c >= L'A' && c <= L'Z'); }
+	static bool IsLatinLetter(ibChar c) noexcept { return (c >= ibT('a') && c <= ibT('z')) || (c >= ibT('A') && c <= ibT('Z')); }
 };
 
 // …and the same order for the ENGINE'S OWN STRING — the index of a member table. A separate order

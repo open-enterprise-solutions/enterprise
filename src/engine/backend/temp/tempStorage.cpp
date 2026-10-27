@@ -304,7 +304,7 @@ bool ibTempFile::Write(const ibString& str, const wxMBConv& conv)
 	// The converter's own buffer: a wxString's mb_str() points into that string, here a temporary (valueHttp.cpp,
 	// ibHttpEncode, says what it cost).
 	size_t length = 0;
-	const wxCharBuffer bytes = conv.cWC2MB(str.wc_str(), str.Len(), &length);
+	const wxCharBuffer bytes = conv.cWC2MB(str.wc_str(), wxNO_LEN, &length);
 	if (length == wxCONV_FAILED || (!str.IsEmpty() && length == 0))
 		return false;   // `str` cannot be said in `conv`
 	return Write(bytes.data(), length);

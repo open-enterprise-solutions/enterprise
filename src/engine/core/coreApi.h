@@ -32,9 +32,10 @@
 
 // THE ENGINE'S CHARACTER — what an ibString (fstring.h) is made of, and what wx calls wxChar. Here, not in
 // fstring.h, because headers under it (core.h, the number's separators, the boolean's words) name it too.
-#define ibChar wchar_t
+// UTF-16 on every OS: one length and one index for a text wherever it is read, and the wire's bytes as they lie.
+#define ibChar char16_t
 // …and a literal of it, as wxT is wx's: ibT("text"), ibT('c'). The literal itself, never a macro's name.
-#define ibT(text) L ## text
+#define ibT(text) u ## text
 
 // `inline` IS A HINT AND THE INLINER DECLINES IT under a size budget — which it
 // does exactly where it hurts, inside the big dispatch functions. procUnit.cpp

@@ -133,7 +133,7 @@ CVALUE_BYTYPE(const ibNumber&);
 CVALUE_BYTYPE(const ibDateTime&);
 
 CVALUE_BYTYPE(const char*);
-CVALUE_BYTYPE(const wchar_t*);
+CVALUE_BYTYPE(const ibChar*);
 CVALUE_BYTYPE(const std::wstring&);
 CVALUE_BYTYPE(const ibString&);
 
@@ -177,7 +177,7 @@ void ibValue::operator = (const ibNumber& cParam) { ibVariant::operator=(cParam)
 void ibValue::operator = (const ibDateTime& cParam) { ibVariant::operator=(cParam); }
 void ibValue::operator = (const ibString& cParam) { ibVariant::operator=(cParam); }
 void ibValue::operator = (const char* cParam) { ibVariant::operator=(cParam); }
-void ibValue::operator = (const wchar_t* cParam) { ibVariant::operator=(cParam); }
+void ibValue::operator = (const ibChar* cParam) { ibVariant::operator=(cParam); }
 void ibValue::operator = (ibString&& cParam) { ibVariant::operator=(std::move(cParam)); }
 void ibValue::operator = (const ibValue& cParam) { ibVariant::operator=(cParam); }
 void ibValue::operator = (ibValue&& cParam) { ibVariant::operator=(std::move(cParam)); }
@@ -390,7 +390,7 @@ size_t ibValue::GetValueHash() const
 		ibString built;
 		const ibString& text = m_typeClass == ibValueTypes::TYPE_STRING ? m_sData : (built = GetString());   // a string's own text, read in place
 		std::uint64_t h = kIbHashBasis;
-		for (const wchar_t* p = text.wc_str(); *p != L'\0'; ++p)
+		for (const ibChar* p = text.c_str(); *p != ibT('\0'); ++p)
 			h = ibHashCombine(h, *p);
 		return (size_t)h;
 	}
@@ -485,7 +485,7 @@ bool ibValue::SetPropVal(const long lPropNum, const ibValue& varPropVal)
 	// A plain (owned) reference still delegates — it may be a transparent
 	// read-only wrapper over a mutable object. The assert catches a future
 	// caller loudly in Debug; the Error keeps Release graceful.
-	wxASSERT_MSG(!IsConstReference(), ibT("SetPropVal on a const reference (TYPE_CONST_REFFER)"));
+	wxASSERT_MSG(!IsConstReference(), wxT("SetPropVal on a const reference (TYPE_CONST_REFFER)"));
 	if (m_typeClass == ibValueTypes::TYPE_CONST_REFFER)
 		ibBackendCoreException::Error(_("Attempt to write to a field of a read-only (const) object"));
 	if (m_pRef != nullptr && m_typeClass == ibValueTypes::TYPE_REFFER)

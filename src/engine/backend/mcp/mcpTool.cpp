@@ -263,7 +263,7 @@ void ibRegisterMcpTool(const ibMcpTool* tool)
 	const ibString name = tool->GetName();
 	for (const ibMcpTool* registered : Store()) {
 		if (registered->GetName() == name) {
-			wxASSERT_MSG(false, ibT("an MCP tool is registered twice under one name"));
+			wxASSERT_MSG(false, wxT("an MCP tool is registered twice under one name"));
 			return;
 		}
 	}

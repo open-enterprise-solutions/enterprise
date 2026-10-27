@@ -597,52 +597,52 @@ class FRMCLIENT_API ibGridEditor : public ibGrid {
 
 	private:
 
-		ibPropertyCategory* m_categoryGeneral = ibPropertyObject::CreatePropertyCategory(wxT("General"), _("General"));
-		ibPropertyUString* m_propertyName = ibPropertyObject::CreateProperty<ibPropertyUString>(m_categoryGeneral, wxT("Name"), _("Name"),
-			_("The address of the selected cell or range, in row-column form (R1C1, or R1C1:R3C4 for a range). Shown for orientation; named areas are made from rows and columns, not here."), wxEmptyString);
-		ibPropertyTString* m_propertyText = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryGeneral, wxT("Text"), _("Text"),
-			_("The cell's text: fixed text for a Text cell, or the pattern with [Name] placeholders for a Template cell. Can be written per language."), wxEmptyString);
-		ibPropertyBoolean* m_propertyReadOnly = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryGeneral, wxT("ReadOnly"), _("Read only"),
+		ibPropertyCategory* m_categoryGeneral = ibPropertyObject::CreatePropertyCategory(ibT("General"), _("General"));
+		ibPropertyUString* m_propertyName = ibPropertyObject::CreateProperty<ibPropertyUString>(m_categoryGeneral, ibT("Name"), _("Name"),
+			_("The address of the selected cell or range, in row-column form (R1C1, or R1C1:R3C4 for a range). Shown for orientation; named areas are made from rows and columns, not here."), ibEmptyString);
+		ibPropertyTString* m_propertyText = ibPropertyObject::CreateProperty<ibPropertyTString>(m_categoryGeneral, ibT("Text"), _("Text"),
+			_("The cell's text: fixed text for a Text cell, or the pattern with [Name] placeholders for a Template cell. Can be written per language."), ibEmptyString);
+		ibPropertyBoolean* m_propertyReadOnly = ibPropertyObject::CreateProperty<ibPropertyBoolean>(m_categoryGeneral, ibT("ReadOnly"), _("Read only"),
 			_("Whether the user can edit the cell when the document is shown editable. Off by default."), false);
 
-		ibPropertyCategory* m_categoryTemplate = ibPropertyObject::CreatePropertyCategory(wxT("Template"), _("Template"));
-		ibPropertyEnum<ibValueEnumSpreadsheetFillType>* m_propertyFillType = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumSpreadsheetFillType>>(m_categoryTemplate, wxT("FillType"), _("Fill type"),
+		ibPropertyCategory* m_categoryTemplate = ibPropertyObject::CreatePropertyCategory(ibT("Template"), _("Template"));
+		ibPropertyEnum<ibValueEnumSpreadsheetFillType>* m_propertyFillType = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumSpreadsheetFillType>>(m_categoryTemplate, ibT("FillType"), _("Fill type"),
 			_("What the cell holds when its area is put into a document. Text (the default): the text as written. Parameter: the value of the parameter named in Parameter. Template: the text with each [Name] replaced by that parameter's value."),
 			ibSpreadsheetFillType::ibSpreadsheetFillType_StrText);
-		ibPropertyUEString* m_propertyParameter = ibPropertyObject::CreateProperty<ibPropertyUEString>(m_categoryTemplate, wxT("Parameter"), _("Parameter"),
-			_("For a Parameter cell: the name of the area parameter whose value fills the cell. Code sets it through the area's Parameters before putting the area into a document."), wxEmptyString);
-		ibPropertyUEString* m_propertyDetailsParameter = ibPropertyObject::CreateProperty<ibPropertyUEString>(m_categoryTemplate, wxT("DetailsParameter"), _("Details parameter"),
-			_("The name of an area parameter whose value the cell carries as its details: when the user opens the cell in the finished document, the details processing handler receives that value (a document, an employee) to open or drill into."), wxEmptyString);
+		ibPropertyUEString* m_propertyParameter = ibPropertyObject::CreateProperty<ibPropertyUEString>(m_categoryTemplate, ibT("Parameter"), _("Parameter"),
+			_("For a Parameter cell: the name of the area parameter whose value fills the cell. Code sets it through the area's Parameters before putting the area into a document."), ibEmptyString);
+		ibPropertyUEString* m_propertyDetailsParameter = ibPropertyObject::CreateProperty<ibPropertyUEString>(m_categoryTemplate, ibT("DetailsParameter"), _("Details parameter"),
+			_("The name of an area parameter whose value the cell carries as its details: when the user opens the cell in the finished document, the details processing handler receives that value (a document, an employee) to open or drill into."), ibEmptyString);
 
-		ibPropertyCategory* m_categoryAlignment = ibPropertyObject::CreatePropertyCategory(wxT("Alignment"), _("Alignment"));
-		ibPropertyEnum<ibValueEnumSpreadsheetFitMode>* m_propertyFitMode = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumSpreadsheetFitMode>>(m_categoryAlignment, wxT("Git_mode"), _("Fit mode"),
+		ibPropertyCategory* m_categoryAlignment = ibPropertyObject::CreatePropertyCategory(ibT("Alignment"), _("Alignment"));
+		ibPropertyEnum<ibValueEnumSpreadsheetFitMode>* m_propertyFitMode = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumSpreadsheetFitMode>>(m_categoryAlignment, ibT("Git_mode"), _("Fit mode"),
 			_("What happens to text longer than the cell. Overflow (the default): it runs on into empty neighbouring cells. Clip: it is cut at the cell's edge. Wrap: it breaks into lines within the cell."),
 			ibSpreadsheetFitMode::ibFitMode_Overflow);
-		ibPropertyEnum<ibValueEnumSpreadsheetHorizontalAlignment>* m_propertyAlignHorz = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumSpreadsheetHorizontalAlignment>>(m_categoryAlignment, wxT("Align_horz"), _("Horizontal"),
+		ibPropertyEnum<ibValueEnumSpreadsheetHorizontalAlignment>* m_propertyAlignHorz = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumSpreadsheetHorizontalAlignment>>(m_categoryAlignment, ibT("Align_horz"), _("Horizontal"),
 			_("How the text is aligned across the cell: left (the default), center or right."), ibSpreadsheetAlignmentHorz::ibAlignmentHorz_Left);
-		ibPropertyEnum<ibValueEnumSpreadsheetVerticalAlignment>* m_propertyAlignVert = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumSpreadsheetVerticalAlignment>>(m_categoryAlignment, wxT("Align_vert"), _("Vertical"),
+		ibPropertyEnum<ibValueEnumSpreadsheetVerticalAlignment>* m_propertyAlignVert = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumSpreadsheetVerticalAlignment>>(m_categoryAlignment, ibT("Align_vert"), _("Vertical"),
 			_("How the text is aligned up and down the cell: top, center (the default) or bottom."), ibSpreadsheetAlignmentVert::ibAlignmentVert_Center);
-		ibPropertyEnum<ibValueEnumSpreadsheetOrient>* m_propertyOrient = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumSpreadsheetOrient>>(m_categoryAlignment, wxT("Orient_text"), _("Orientation text"),
+		ibPropertyEnum<ibValueEnumSpreadsheetOrient>* m_propertyOrient = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumSpreadsheetOrient>>(m_categoryAlignment, ibT("Orient_text"), _("Orientation text"),
 			_("The direction the cell's text runs: horizontal or vertical."), ibSpreadsheetOrientation::ibOrient_Vertical);
 
-		ibPropertyCategory* m_categoryAppearance = ibPropertyObject::CreatePropertyCategory(wxT("Appearance"), _("Appearance"));
-		ibPropertyFont* m_propertyFont = ibPropertyObject::CreateProperty<ibPropertyFont>(m_categoryAppearance, wxT("Font"), _("Font"),
+		ibPropertyCategory* m_categoryAppearance = ibPropertyObject::CreatePropertyCategory(ibT("Appearance"), _("Appearance"));
+		ibPropertyFont* m_propertyFont = ibPropertyObject::CreateProperty<ibPropertyFont>(m_categoryAppearance, ibT("Font"), _("Font"),
 			_("The font of the cell's text. Unset: the document's default font."), wxNullFont);
-		ibPropertyColour* m_propertyBackgroundColour = ibPropertyObject::CreateProperty<ibPropertyColour>(m_categoryAppearance, wxT("Background_colour"), _("Background colour"),
+		ibPropertyColour* m_propertyBackgroundColour = ibPropertyObject::CreateProperty<ibPropertyColour>(m_categoryAppearance, ibT("Background_colour"), _("Background colour"),
 			_("The cell's fill colour, on screen and in print. Unset: no fill."), wxNullColour);
-		ibPropertyColour* m_propertyTextColour = ibPropertyObject::CreateProperty<ibPropertyColour>(m_categoryAppearance, wxT("Text_colour"), _("Text colour"),
+		ibPropertyColour* m_propertyTextColour = ibPropertyObject::CreateProperty<ibPropertyColour>(m_categoryAppearance, ibT("Text_colour"), _("Text colour"),
 			_("The colour of the cell's text. Unset: the default text colour."), wxNullColour);
 
-		ibPropertyCategory* m_categoryBorder = ibPropertyObject::CreatePropertyCategory(wxT("Border"), _("Border"));
-		ibPropertyEnum<ibValueEnumSpreadsheetBorder>* m_propertyLeftBorder = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumSpreadsheetBorder>>(m_categoryBorder, wxT("Left_border"), _("Left"),
+		ibPropertyCategory* m_categoryBorder = ibPropertyObject::CreatePropertyCategory(ibT("Border"), _("Border"));
+		ibPropertyEnum<ibValueEnumSpreadsheetBorder>* m_propertyLeftBorder = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumSpreadsheetBorder>>(m_categoryBorder, ibT("Left_border"), _("Left"),
 			_("The line drawn along the cell's left edge: none (the default), solid, dotted or dashed. Printed as shown."), ibSpreadsheetPenStyle::ibPenStyle_Transparent);
-		ibPropertyEnum<ibValueEnumSpreadsheetBorder>* m_propertyRightBorder = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumSpreadsheetBorder>>(m_categoryBorder, wxT("Right_border"), _("Right"),
+		ibPropertyEnum<ibValueEnumSpreadsheetBorder>* m_propertyRightBorder = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumSpreadsheetBorder>>(m_categoryBorder, ibT("Right_border"), _("Right"),
 			_("The line drawn along the cell's right edge: none (the default), solid, dotted or dashed. Printed as shown."), ibSpreadsheetPenStyle::ibPenStyle_Transparent);
-		ibPropertyEnum<ibValueEnumSpreadsheetBorder>* m_propertyTopBorder = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumSpreadsheetBorder>>(m_categoryBorder, wxT("Top_border"), _("Top"),
+		ibPropertyEnum<ibValueEnumSpreadsheetBorder>* m_propertyTopBorder = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumSpreadsheetBorder>>(m_categoryBorder, ibT("Top_border"), _("Top"),
 			_("The line drawn along the cell's top edge: none (the default), solid, dotted or dashed. Printed as shown."), ibSpreadsheetPenStyle::ibPenStyle_Transparent);
-		ibPropertyEnum<ibValueEnumSpreadsheetBorder>* m_propertyBottomBorder = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumSpreadsheetBorder>>(m_categoryBorder, wxT("Bottom_border"), _("Bottom"),
+		ibPropertyEnum<ibValueEnumSpreadsheetBorder>* m_propertyBottomBorder = ibPropertyObject::CreateProperty<ibPropertyEnum<ibValueEnumSpreadsheetBorder>>(m_categoryBorder, ibT("Bottom_border"), _("Bottom"),
 			_("The line drawn along the cell's bottom edge: none (the default), solid, dotted or dashed. Printed as shown."), ibSpreadsheetPenStyle::ibPenStyle_Transparent);
-		ibPropertyColour* m_propertyColourBorder = ibPropertyObject::CreateProperty<ibPropertyColour>(m_categoryBorder, wxT("Border_colour"), _("Colour"),
+		ibPropertyColour* m_propertyColourBorder = ibPropertyObject::CreateProperty<ibPropertyColour>(m_categoryBorder, ibT("Border_colour"), _("Colour"),
 			_("The colour of the cell's border lines. Unset: the default line colour."), wxNullColour);
 	};
 

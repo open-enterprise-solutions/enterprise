@@ -262,7 +262,7 @@ ibSchemaTable& ibSchemaSnapshot::Shared(ibMetaID id, const ibString& name)
 			// as a duplicate field or an index over columns nobody added. Ids derived from a metaID
 			// must use a HIGH bit: metaIDs are small sequential integers, so a low-bit tweak IS the
 			// neighbouring metaobject's id.
-			wxASSERT_MSG(t.m_name.IsSameAs(name, false), ibT("schema table id collision: ") + t.m_name + ibT(" vs ") + name);
+			wxASSERT_MSG(t.m_name.IsSameAs(name, false), wxT("schema table id collision: ") + t.m_name + wxT(" vs ") + name);
 			return t;
 		}
 	ibSchemaTable t;

@@ -449,7 +449,7 @@ bool ibValueMetaObjectRecordDataRef::GenerateDataDesc(const ibValueDataObject* o
 	const ibString& first = field.GetString();
 	out = parameter.m_prefix;
 	out.reserve(parameter.m_prefix.length() + first.Len() + parameter.m_separator.length());
-	out.append(first.wc_str(), first.Len());
+	out.append(first.c_str(), first.Len());
 	if (parameter.m_second == nullptr)
 		return true;
 	if (!objValue->GetValueByMetaID(parameter.m_second->GetMetaID(), field)) {
@@ -457,7 +457,7 @@ bool ibValueMetaObjectRecordDataRef::GenerateDataDesc(const ibValueDataObject* o
 		return false;
 	}
 	const ibString& second = field.GetString();
-	out.append(parameter.m_separator).append(second.wc_str(), second.Len());
+	out.append(parameter.m_separator).append(second.c_str(), second.Len());
 	return true;
 }
 

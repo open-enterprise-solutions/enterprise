@@ -319,12 +319,12 @@ ibDatabaseResultSet* ibPreparedStatementFirebirdWrapper::DoRunQueryWithResults()
 // 2026-09-12, Debug). Same answer: leading white space skipped, then "SELECT " in any case.
 bool ibPreparedStatementFirebirdWrapper::IsSelectQuery()
 {
-	static const wchar_t kSelect[] = L"SELECT ";
-	const std::wstring& text = m_strSQL.ToStdWstring();
+	static const ibChar kSelect[] = ibT("SELECT ");
+	const ibString& text = m_strSQL;
 	size_t at = 0;
 	while (at < text.size() && ibIsSpace(text[at]))
 		++at;
-	for (size_t i = 0; kSelect[i] != L'\0'; ++i, ++at)
+	for (size_t i = 0; kSelect[i] != 0; ++i, ++at)
 		if (at >= text.size() || ibToUpper(text[at]) != kSelect[i])
 			return false;
 	return true;

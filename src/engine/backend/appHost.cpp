@@ -337,9 +337,9 @@ void ibApplicationHost::ReadBackendConf()
 	const ibString strConfigFile = ibBackendConfPath();
 
 	// Read as written, as infobase.conf is: a Windows path keeps its backslashes (the \t of C:\tls\server.key is not a tab).
-	wxFileConfig fc(ibT(""), ibT(""), ibT(""), strConfigFile,
+	wxFileConfig fc(wxT(""), wxT(""), wxT(""), strConfigFile,
 		wxCONFIG_USE_LOCAL_FILE | wxCONFIG_USE_GLOBAL_FILE | wxCONFIG_USE_NO_ESCAPE_CHARACTERS);
-	m_configLocale = fc.Read(ibT("Locale"), m_configLocale.wc_str());   // what was there, when the file says nothing
+	m_configLocale = fc.Read(wxT("Locale"), m_configLocale);   // what was there, when the file says nothing
 
 	// HOW MUCH THE PROCESS MAY CONSUME — said by whoever runs it, not compiled in. Workers and Bases are the most there
 	// may be: left out, or 0, no limit.
@@ -355,7 +355,7 @@ void ibApplicationHost::ReadBackendConf()
 	m_configConnections = ReadCount(fc, BACKEND_CONF, ibT("Connections"), 2, 0);
 	// Resume is not ReadCount: there 0 means the default, and here 0 means the window is off.
 	long resume = 0;
-	const bool resumePresent = fc.Read(ibT("Resume"), &resume);
+	const bool resumePresent = fc.Read(wxT("Resume"), &resume);
 	m_configResume = ResumeSeconds(resumePresent, resume);
 	// The certificate the listeners speak TLS over, named relative to this file's folder (core/server/listener.h).
 	m_configTls = ibTlsFiles::FromConf(fc, wxFileName(strConfigFile).GetPath());
@@ -440,7 +440,7 @@ bool ibApplicationHost::InitLocale(const ibString& locale)
 			wish->GetCanonicalWithRegion(), m_locale.GetCanonicalName());
 
 	// Initialize the catalogs we'll be using.
-	m_locale.AddCatalog(kEngineDomain);
+	m_locale.AddCatalog(ibString(kEngineDomain));
 	// THE ENGINE'S OWN WORDS come through its own catalogs (core/localization/dictionary.h): one set per
 	// language, chosen per thread by the base it works for; the process's language is this one. wxLocale keeps its copy of the catalog above for wx's own
 	// windows.
@@ -453,7 +453,7 @@ bool ibApplicationHost::InitLocale(const ibString& locale)
 	// about two thirds of the application server's busy threads waiting on that one lock (2026-10-06, Debug, cdb).
 	// Without the object, `_()` hands the string back at once.
 	if (wxTranslations* const translations = wxTranslations::Get())
-		if (!translations->IsLoaded(kEngineDomain))
+		if (!translations->IsLoaded(ibString(kEngineDomain)))
 			wxTranslations::Set(nullptr);
 
 	// Initialize localization engine

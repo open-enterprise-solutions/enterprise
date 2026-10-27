@@ -48,7 +48,7 @@ namespace {
 ibString DefaultWebDir()
 {
 	wxFileName fn = wxFileName::DirName(ibProgramFolder());
-	fn.AppendDir(ibT("web"));
+	fn.AppendDir(wxT("web"));
 	return fn.GetPath();
 }
 
@@ -72,8 +72,8 @@ bool ReadPublication(const wxCmdLineParser& parser, ibWebConfig& config)
 	ibWebPublication publication;
 	// wxCmdLineParser's own: it writes what it found into wx strings.
 	wxString file, server, value;
-	const bool isFile = parser.Found(ibT("file"), &file);
-	const bool isServer = parser.Found(ibT("server"), &server);
+	const bool isFile = parser.Found(wxT("file"), &file);
+	const bool isServer = parser.Found(wxT("server"), &server);
 	if (isFile && isServer) {
 		ibWebServerSay(ibJournalMark::Error, ibT("--file and --server name a publication each - web.conf holds more than one"));
 		return false;
@@ -87,9 +87,9 @@ bool ReadPublication(const wxCmdLineParser& parser, ibWebConfig& config)
 		publication.m_kind = ibT("firebird");
 		publication.m_directory = folder.GetPath();
 		publication.m_name = folder.GetDirCount() > 0 ? ibString(folder.GetDirs().Last()) : ibString();
-		if (parser.Found(ibT("locale"), &value))
+		if (parser.Found(wxT("locale"), &value))
 			publication.m_locale = value;
-		publication.m_debug = parser.Found(ibT("debug"));
+		publication.m_debug = parser.Found(wxT("debug"));
 	}
 	else {
 		ibString host, base;
@@ -99,13 +99,13 @@ bool ReadPublication(const wxCmdLineParser& parser, ibWebConfig& config)
 		publication.m_address = server;
 		if (ibProtocolConnectionServer::ParseAddress(server, host, port, base, secure))
 			publication.m_name = base;
-		if (parser.Found(ibT("trusted"), &value)) {
+		if (parser.Found(wxT("trusted"), &value)) {
 			wxFileName file(value);
 			file.MakeAbsolute();
 			publication.m_trusted = file.GetFullPath();
 		}
 	}
-	if (parser.Found(ibT("name"), &value))
+	if (parser.Found(wxT("name"), &value))
 		publication.m_name = value;
 	config.m_publications.push_back(publication);
 	return true;
@@ -134,16 +134,16 @@ int main(int argc, char** argv)
 
 	// wxCmdLineParser's own: it writes what it found into wx strings.
 	wxString folder = DefaultWebDir(), value;
-	parser.Found(ibT("dir"), &folder);
+	parser.Found(wxT("dir"), &folder);
 	ibWebConfig config;
 	ibString error;
 	if (!config.Read(folder, error)) {
 		ibWebServerSay(ibJournalMark::Error, ibT("%s"), error);
 		return 1;
 	}
-	if (parser.Found(ibT("host"), &value))
+	if (parser.Found(wxT("host"), &value))
 		config.m_host = value;
-	if (parser.Found(ibT("manifest"), &value))
+	if (parser.Found(wxT("manifest"), &value))
 		config.m_manifest = value;
 	if (!ReadPort(parser, ibT("port"), config.m_httpPort) || !ReadPort(parser, ibT("https-port"), config.m_httpsPort)
 		|| !ReadPublication(parser, config))

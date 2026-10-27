@@ -1278,7 +1278,7 @@ void ibDocManager::ActivateView(ibView *view, bool activate)
 bool ibTransferFileToStream(const ibString& filename, std::ostream& stream)
 {
 #if wxUSE_FFILE
-    wxFFile file(filename, ibT("rb"));
+    wxFFile file(filename, wxT("rb"));
 #elif wxUSE_FILE
     wxFile file(filename, wxFile::read);
 #endif
@@ -1305,7 +1305,7 @@ bool ibTransferFileToStream(const ibString& filename, std::ostream& stream)
 bool ibTransferStreamToFile(std::istream& stream, const ibString& filename)
 {
 #if wxUSE_FFILE
-    wxFFile file(filename, ibT("wb"));
+    wxFFile file(filename, wxT("wb"));
 #elif wxUSE_FILE
     wxFile file(filename, wxFile::write);
 #endif
@@ -1332,7 +1332,7 @@ bool ibTransferStreamToFile(std::istream& stream, const ibString& filename)
 bool ibTransferFileToStream(const ibString& filename, wxOutputStream& stream)
 {
 #if wxUSE_FFILE
-    wxFFile file(filename, ibT("rb"));
+    wxFFile file(filename, wxT("rb"));
 #elif wxUSE_FILE
     wxFile file(filename, wxFile::read);
 #endif
@@ -1360,7 +1360,7 @@ bool ibTransferFileToStream(const ibString& filename, wxOutputStream& stream)
 bool ibTransferStreamToFile(wxInputStream& stream, const ibString& filename)
 {
 #if wxUSE_FFILE
-    wxFFile file(filename, ibT("wb"));
+    wxFFile file(filename, wxT("wb"));
 #elif wxUSE_FILE
     wxFile file(filename, wxFile::write);
 #endif
