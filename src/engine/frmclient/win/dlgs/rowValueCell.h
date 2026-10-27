@@ -131,15 +131,15 @@ public:
 	//
 	// Nothing to read back on the way out: a chosen value was written when it was CHOSEN, and typed
 	// text is written on the keystroke (see OnTyped) rather than at whichever door the editor left by.
-	virtual bool GetValueFromEditorCtrl(wxWindow*, wxVariant&) override { return false; }
+	virtual bool GetValueFromEditorCtrl(wxWindow*, ibVariant&) override { return false; }
 
-	virtual wxWindow* CreateEditorCtrl(wxWindow* dv, wxRect labelRect, const wxVariant& value) override {
+	virtual wxWindow* CreateEditorCtrl(wxWindow* dv, wxRect labelRect, const ibVariant& value) override {
 		m_row = m_item;   // the row this editor belongs to — never the grid's selection
 
 		ibControlTextEditor* editor = new ibControlTextEditor;
 		editor->SetDVCMode(true);
 		editor->Show(false);
-		if (!editor->Create(dv, wxID_ANY, value, labelRect.GetPosition(), labelRect.GetSize()))
+		if (!editor->Create(dv, wxID_ANY, value.GetString().ToWxString(), labelRect.GetPosition(), labelRect.GetSize()))
 			return nullptr;
 
 		editor->ShowSelectButton(true);

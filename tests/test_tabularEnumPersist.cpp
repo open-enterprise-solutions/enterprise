@@ -11,7 +11,7 @@
 // (commonObjectSchema.cpp: `t.Add(object->GetQueryColumn())` for both).
 //
 // The actual defect is in how a GRID commits an edited cell:
-// ibComposerNode::SetValue(unsigned int col, const wxVariant& variant, bool)
+// ibComposerNode::SetValue(unsigned int col, const ibVariant& variant, bool)
 // (tabularModel.h) resolves the editor's committed text to a real value via
 // FindValue, then called `cValue.SetValue(cFoundedValue)` to store it. For a
 // reference-kind cell (TYPE_REFFER — any EnumRef/CatalogRef/DocumentRef),
@@ -182,7 +182,7 @@ TEST_F(TabularEnumPersist, ResolveQueryConstant_FindsTheMemberDirectly) {
 
 // The crux: an EMPTY, PROPERLY-TYPED cell (what a freshly-added tabular row starts
 // with, same as object->CreateValue() would hand it) committed through the GRID's
-// generic wxVariant path. Before the fix this THREW ("Attempt to assign a value to
+// generic ibValue path. Before the fix this THREW ("Attempt to assign a value to
 // a write-denied variable") instead of silently no-opping, because the cell's
 // referenced object is read-only by construction and the old code tried to mutate
 // it in place rather than repoint the wrapper — see the file header.
@@ -195,7 +195,7 @@ TEST_F(TabularEnumPersist, GridCommit_ActuallySetsTheChosenMember) {
 
 	// What the dataview grid calls when a person commits an edited cell.
 	bool committed = false;
-	ASSERT_NO_THROW(committed = node.SetValue(kCellCol, wxVariant(wxT("Vat10")), /*notify*/ false))
+	ASSERT_NO_THROW(committed = node.SetValue(kCellCol, ibVariant(wxT("Vat10")), /*notify*/ false))
 		<< "committing a reference/enum pick in a tabular grid must not throw (#482)";
 	EXPECT_TRUE(committed);
 

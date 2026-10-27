@@ -74,7 +74,7 @@ public:
 	// The variant is reference-counted, so a holder keeps its own alive: the store swaps in a new
 	// cell, the window goes on editing the one it opened, and that one dies quietly when it closes
 	// (Max, 2026-09-02). Handed over BY VALUE for that reason — the copy IS the grip.
-	ibPropertyValue GetCompositionValue() const { return m_propertyComposition->GetValue(); }
+	ibVariant GetCompositionValue() const { return m_propertyComposition->GetValue(); }
 
 	// ⚠ TWO BASES ANSWER THESE, so the metaobject's answers are named as the ones. A composer is a
 	// metaobject that ALSO wears a column face; its name, its synonym and whether it is allowed are

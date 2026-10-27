@@ -21,7 +21,7 @@ namespace {
 ibString StringifyPropertyValue(const ibProperty* prop) {
 	if (prop == nullptr) return ibString();
 
-	const ibPropertyValue& val = prop->GetValue();
+	const ibVariant& val = prop->GetValue();
 	if (val.GetType() == ibValueTypes::TYPE_EMPTY) return ibString();
 	if (val.GetType() == ibValueTypes::TYPE_STRING) return val.GetString();
 

@@ -6,7 +6,7 @@
 
 //base property for "chart of accounts" selection
 class BACKEND_API ibPropertyChartOfAccounts : public ibProperty {
-	static ibPropertyValue CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc = ibMetaDescription());
+	static ibVariant CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc = ibMetaDescription());
 public:
 
 	ibMetaDescription& GetValueAsMetaDesc() const;
@@ -31,9 +31,9 @@ public:
 protected:
 
 	// The family rule, kept here too: a relationship arrives in whichever wrapper the caller was
-	// handed - CreateValueList builds every candidate as ibPropertyValueOwner - and a property that
+	// handed - CreateValueList builds every candidate as ibVariantOwner - and a property that
 	// stores a neighbour's wrapper raises on every later read. See propertyRecord.h.
-	virtual void DoSetValue(const ibPropertyValue& val) override;
+	virtual void DoSetValue(const ibVariant& val) override;
 
 public:
 

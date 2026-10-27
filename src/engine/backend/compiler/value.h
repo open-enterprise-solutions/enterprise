@@ -13,7 +13,7 @@
 #include <thread>
 
 #include "backend/backend_core.h"   // + ibCtorObjectType — the registry surface below names it
-#include "core/anyValue.h"          // ibAnyValue — what every value answers, the engine's and the client's
+#include "core/variant.h"            // ibVariant — the value itself: its word, its count; this class adds the runtime
 
 // The registry's ctor type — its definition (compiler/typeCtor.h) is built on a complete ibValue,
 // so it is included at the end of this file.
@@ -94,42 +94,9 @@ public:
 // (The primitives' class ids — g_valueBooleanCLSID … g_valueNullCLSID — are the core's too: core/core.h.)
 
 //simple type date
-class BACKEND_API ibValue : public ibAnyValue {
-public:
-	//ATTRIBUTES:
-	ibValueTypes m_typeClass;  // 1 byte (enum : unsigned char)
-	bool m_bReadOnly;          // 1 byte
-private:
-	// ⭐ THE COUNT FILLS THE HOLE BEFORE THE UNION. The two bytes above leave the rest of their word
-	// empty (the union is 8-aligned); declared at the end of the class the count took a word of its
-	// own there, so x64 paid 8 bytes of padding on every value: vptr 8 + 1 + 1 + 6 empty + union 8 +
-	// count 4 + 4 empty = 32. Here it is 8 + 1 + 1 + 2 + 4 + 8 = 24 (x86 stays 24 either way).
-	// std::atomic (not wxAtomicInt) — same 4 bytes, but a defined memory model. Never copied / moved:
-	// ibValue's copy/move ctors value-init it to 0, Copy/Move only touch the payload.
-	std::atomic<unsigned int> m_refCount;
-public:
-	// ⭐ ONE WORD FOR EVERY KIND. A string and a number live IN the union beside the pointers:
-	// each is one handle whose heap part (the text, a heap-tier BigImpl) counts its owners, so a
-	// copy of a value is a count and not a copy — and the number no longer takes 8 bytes of its own.
-	//
-	// 🛑 THE UNION'S EMPTY STATE IS ALL-ZERO BITS, and it is a valid value of EVERY member: a null
-	// pointer, a false, the empty date (fdatetime.h: count 0), the empty string (no text) and the number
-	// 0 (fnumber.h: tag 0 = immediate). The constructors zero the whole word (m_dData() — 8 bytes on x86
-	// as well, where a pointer is 4); Reset() ends the life of a string or a number — letting go of its text — and
-	// zeroes it again. So whatever member is written next writes over a valid empty one. Never write
-	// a string or a number member over a non-zero word of another kind: its old text would be kept.
-	union {
-		ibBoolean     m_bData;  //TYPE_BOOLEAN — one byte
-		ibDateTime    m_dData;  //TYPE_DATE — one word, the count of a wall-clock reading
-		ibValue*      m_pRef;   //TYPE_REFFER (+ VALUE/ENUM/OLE/... aliased)
-		// TYPE_CONST_REFFER — read-only view of a NON-owned object (const
-		// ibValueMetaObject* from the metadata tree). Aliases m_pRef in storage
-		// (same 8 bytes), but the const type documents intent and Reset()/dtor
-		// must NEVER ref-count or delete through it — the tree owns the object.
-		const ibValue* m_pConstRef;
-		ibString      m_sData;  //TYPE_STRING — a handle on a shared text; empty = no text
-		ibNumber      m_fData;  //TYPE_NUMBER — one tagged word; a heap tier is shared
-	};
+// THE VALUE ITSELF IS THE VARIANT'S (core/variant.h): the kind, the read-only flag, the count and the one word, with
+// their lifecycle. What this class adds is the runtime — the factory, the members, the calls.
+class BACKEND_API ibValue : public ibVariant {
 public:
 
 	class BACKEND_API ibMemberTable {
@@ -926,9 +893,10 @@ public:
 	ibValue(const ibString& sParam); //string
 	ibValue(ibString&& sParam); //string — native move (runtime string functions)
 
-	// A CONSTANT AS THE TRANSLATOR READ IT (ibLexem::m_valData) — the door through which the compiler
-	// puts one into the bytecode. Explicit: a lexem's value is not an engine value until it is asked to be.
-	explicit ibValue(const class ibLiteral& literal);
+	// A VARIANT AS IT IS — a constant as the translator read it (ibLexem::m_valData), the door through which the
+	// compiler puts one into the bytecode; a property's value; a cell or a sheet's parameter read back. Explicit: a
+	// variant is not a runtime value until it is asked to be.
+	explicit ibValue(const ibVariant& variant);
 
 	// ⭐⭐ ANY OTHER POINTER IS A MISTAKE, AND IT USED TO BECOME `TRUE`.
 	//
@@ -954,23 +922,6 @@ public:
 	ibValue(T*) = delete;
 
 	virtual ~ibValue();
-
-	//clear values
-	void Reset();
-
-	//ref counter
-	virtual void IncrRef() override { m_refCount.fetch_add(1, std::memory_order_relaxed); }
-	virtual void DecrRef() override {
-		wxASSERT_MSG(m_refCount.load(std::memory_order_relaxed) > 0, "invalid ref data count");
-		if (m_refCount.fetch_sub(1, std::memory_order_acq_rel) == 1) delete this;
-	}
-
-	// ⭐ THIS VALUE WHERE THE CORE KEEPS ONE (a sheet's parameters) — a copy of it, counted by its own count —
-	// and the value read back out of it: ours, since only we put one in (empty when nothing is held).
-	ibAnyValuePtr<ibValue> ToAnyValue() const { return ibAnyValuePtr<ibValue>(new ibValue(*this)); }
-	static ibValue FromAnyValue(const ibAnyValuePtr<ibAnyValue>& value) {
-		return value ? ibValue(static_cast<const ibValue&>(*value)) : ibValue();
-	}
 
 	// 🛑⭐⭐ THIS OWNERSHIP CANNOT BE FENCED OFF BY ACCESS CONTROL, and the reason is not a detail of
 	// which member to hide — it is what ibValue IS. Three attempts, 2026-09-06, kept so that nobody
@@ -1028,28 +979,12 @@ public:
 	// operator=(bool) (const ptr → bool) and the object became a Boolean.
 	void operator = (const ibValue* pParam);
 
-	//Implementation of comparison operators:
-	bool operator > (const ibValue& cParam) const { return CompareValueGT(cParam) > 0; }
-	bool operator >= (const ibValue& cParam) const { return CompareValueGE(cParam); }
-	bool operator < (const ibValue& cParam) const { return CompareValueLS(cParam) < 0; }
-	bool operator <= (const ibValue& cParam) const { return CompareValueLE(cParam); }
-	bool operator == (const ibValue& cParam) const { return CompareValueEQ(cParam); }
-	bool operator != (const ibValue& cParam) const { return CompareValueNE(cParam); }
-
 	const ibValue& operator+(const ibValue& cParam);
 	const ibValue& operator-(const ibValue& cParam);
 
-	// Comparison. CompareValueLS / CompareValueGT are the two three-way ordering primitives (<0 / 0 / >0,
-	// NULL = smallest, SQL-aligned — see value.cpp): one hook per direction so a class can retune `<` and
-	// `>` independently. By default GT follows LS (same total order), GE derives from GT and LE from LS, so
-	// a class normally overrides ONE method (CompareValueLS) to change the whole order, yet can still tune
-	// an individual operator. EQ/NE stay separate (type-strict equality, distinct from order-equal).
-	virtual int  CompareValueLS(const ibValue& cParam) const;
-	virtual int  CompareValueGT(const ibValue& cParam) const;
-	virtual bool CompareValueGE(const ibValue& cParam) const;
-	virtual bool CompareValueLE(const ibValue& cParam) const;
-	virtual bool CompareValueEQ(const ibValue& cParam) const;
-	virtual bool CompareValueNE(const ibValue& cParam) const;
+	// Comparison — the variant's family (core/variant.h: '<' the three-way primitive, '==' type-strict); an object
+	// of the runtime is equal by its presentation AND its class, which only the factory knows.
+	virtual bool CompareValueEQ(const ibVariant& cParam) const override;
 
 	// GetValueHash — declared with GetHashKey, near GetString: the two are the
 	// value's two IDENTITIES and belong together. See the note there.
@@ -1077,38 +1012,7 @@ public:
 		return enumValue ? enumValue->GetEnumValue() : enumType();
 	}
 
-	//convert to value
-	template <typename T> inline bool ConvertToValue(T*& ptr) const {
-		if (IsReference()) {
-			ibValue* non_const_value = GetRef();
-			ptr = dynamic_cast<T*>(non_const_value);
-			return ptr != nullptr;
-		}
-		else if (m_typeClass != ibValueTypes::TYPE_EMPTY) {
-			ptr = dynamic_cast<T*>(const_cast<ibValue*>(this));
-			return ptr != nullptr;
-		}
-		return false;
-	}
-
-	// True for both an owned object reference (TYPE_REFFER) and a non-owned
-	// read-only reference (TYPE_CONST_REFFER). Read paths that resolve through
-	// the referenced object (GetRef / GetPMethods / method dispatch / ConvertTo)
-	// must treat both alike; only ownership (ref-count / delete) and write paths
-	// distinguish them. m_pRef and m_pConstRef alias the same union pointer.
-	inline bool IsReference() const {
-		return m_typeClass == ibValueTypes::TYPE_REFFER
-			|| m_typeClass == ibValueTypes::TYPE_CONST_REFFER;
-	}
-
-	// True only for the non-owned, read-only reference. Use to guard object-
-	// mutating delegates (SetType / SetPropVal): a const reference must never
-	// retype or write a field of the object it does not own. The union aliases
-	// const/non-const, so the compiler can't catch this — these runtime checks
-	// (+ a Debug wxASSERT) are the only protection.
-	inline bool IsConstReference() const {
-		return m_typeClass == ibValueTypes::TYPE_CONST_REFFER;
-	}
+	// (ConvertToValue is the variant's.)
 
 public:
 
@@ -1166,8 +1070,8 @@ public:
 
 	static ibString GetNameObjectFromID(const ibClassID& clsid, bool upper = false);
 	static ibString GetNameObjectFromVT(ibValueTypes valueType, bool upper = false);
+	// A class's kind — an enumeration's or an object's, which only the factory tells apart (GetIDByVT is the variant's).
 	static ibValueTypes GetVTByID(const ibClassID& clsid);
-	static ibClassID GetIDByVT(const ibValueTypes& valueType);
 
 	static ibCtorAbstractType* GetAvailableCtor(const ibString& className);
 	static ibCtorAbstractType* GetAvailableCtor(const ibClassID& clsid);
@@ -1193,10 +1097,6 @@ public:
 	static unsigned int GetFactoryCountChanges();
 
 public:
-
-	//special copy & move function
-	inline void Copy(const ibValue& cOld);
-	inline void Move(ibValue&& cOld);
 
 #pragma region serialization
 
@@ -1236,94 +1136,33 @@ public:
 	static ibValue FromNode(const class ibDataNode& node);
 #pragma endregion
 
-	//Virtual methods:
-	virtual void SetType(ibValueTypes type);
-	virtual ibValueTypes GetType() const override;
-
-	virtual bool IsEmpty() const override;
-
-	// SQL / explicit NULL: the `Null` literal, and a NULL DB column (the driver yields ibValue(TYPE_NULL)).
-	// Distinct from IsEmpty (TYPE_EMPTY = Undefined — a COMPOSITE value with no type chosen yet). Only
-	// this is the SQL null the query layer keys on (three-valued filter, null ordering, join-key skip);
-	// an empty reference (type chosen, no guid) and Undefined are NOT it.
-	bool IsNull() const { return GetType() == ibValueTypes::TYPE_NULL; }
+	// (THE KIND, THE EMPTY AND THE NULL — SetType, GetType, IsEmpty, IsNull — are the variant's. IsNull is the SQL null
+	//  the query layer keys on: the `Null` literal and a NULL DB column, distinct from Undefined.)
 
 	virtual ibString GetClassName() const;
-	virtual ibClassID GetClassType() const;
+	virtual ibClassID GetClassType() const override;
 
-	// May this value cross into ANOTHER session?
-	//
-	// Everything the interpreter passes around within one session is fine; the
-	// question only arises at a session boundary — handing arguments to a
-	// background job, which runs on its own session and its own thread. Nothing
-	// is serialised on the way (one process, one address space), so what is being
-	// asked is about OWNERSHIP, not transport: is this value safe for a second
-	// session to hold and read?
-	//
-	// Default YES, because the overwhelming majority of values are — numbers,
-	// strings, dates, references, enumeration values: immutable, owned by nobody.
-	// A type says NO when it is either
-	//   - MUTABLE and owned by its session (a form, an open recordset, a live
-	//     object): two sessions mutating one object coordinate through nothing; or
-	//   - BOUND to its session's runtime (a lambda holds m_parentBc, a pointer
-	//     into the compiling session's bytecode — which is per-session, built by
-	//     CompileRoot; an iterator is a cursor over somebody else's collection; an
-	//     OLE handle belongs to the thread that created it).
-	//
-	// Answering here rather than switching on the tag at the boundary is what
-	// keeps the rule with the type: a new value kind states its own case, and the
-	// job layer never grows a list of what it knows about.
-	//
-	// TYPE_REFFER and TYPE_CONST_REFFER are ALIASES, not things of their own — both
-	// hop to the object they wrap and let IT answer. Without the hop the wrapper
-	// would say "yes" on behalf of whatever it points at, which is exactly the
-	// case that matters: a form, an object or a lambda is almost always reached
-	// through one. Const-ness is not the question either — a read-only alias to a
-	// mutable object still aliases a mutable object.
-	virtual bool IsTransferable() const {
-		if (m_pRef != nullptr
-		 && (m_typeClass == ibValueTypes::TYPE_REFFER
-		  || m_typeClass == ibValueTypes::TYPE_CONST_REFFER))
-			return m_pRef->IsTransferable();
-		return true;
-	}
-
-	virtual bool Init() {
+	// Beside its overload with parameters, which would hide the variant's otherwise.
+	virtual bool Init() override {
 		if (m_pRef != nullptr && m_typeClass == ibValueTypes::TYPE_REFFER)
-			return m_pRef->Init();
+			return GetRef()->Init();
 		return true;
 	}
 
 	virtual bool Init(ibValue** paParams, const long lSizeArray) {
 		if (m_pRef != nullptr && m_typeClass == ibValueTypes::TYPE_REFFER)
-			return m_pRef->Init(paParams, lSizeArray);
+			return GetRef()->Init(paParams, lSizeArray);
 		return true;
 	}
 
-	virtual void SetValue(const ibValue& varValue);
-
-	virtual bool SetBoolean(const ibString& strValue);
-	virtual bool SetNumber(const ibString& strValue);
-	virtual bool SetDate(const ibString& strValue);
-	virtual bool SetString(const ibString& strValue);
-	virtual bool SetString(ibString&& strValue);   // native — steals the buffer, no wxString round-trip
-	// Character pointers — the same trap the ctor note above describes, one door further along.
-	// With only the two overloads above visible, a string literal reaches EITHER of them through
-	// exactly one user-defined conversion, so `SetString(wxT("x"))` is AMBIGUOUS to GCC and Clang
-	// while MSVC ranks it and compiles — invisible to the local build by construction. The ctor
-	// and operator= closed this by declaring the pointer forms; the setter had not.
-	// Non-virtual on purpose: they forward to the virtual wxString overload, so a derived type
-	// still decides what a string assignment means.
-	bool SetString(const char* sParam) { return SetString(ibString(sParam)); }
-	bool SetString(const wchar_t* sParam) { return SetString(ibString(sParam)); }
+	// (SetValue, SetData and SetBoolean / SetNumber / SetDate / SetString — a text read as the kind — are the variant's.)
 
 	virtual bool FindValue(const ibString& findData, std::vector<ibValue>& listValue) const;
 
-	void SetData(const ibValue& varValue); //setting the value without changing the type
-
 	virtual ibValue GetValue(bool getThis = false) const;
 
-	// A FRESH, INDEPENDENT COPY — the verb behind `Val`.
+	// A FRESH, INDEPENDENT COPY — the verb behind `Val`, the variant's (core/variant.h), and this is the runtime's road
+	// for it. The answer is the holder of the copy; a caller that wants a runtime value takes ibValue(copy).
 	//
 	// VIRTUAL, because copying is a type's own business: anything deriving from
 	// ibValue must be able to state how it duplicates itself, and some types have
@@ -1343,27 +1182,23 @@ public:
 	// value that legitimately is empty. `Val form` is a mistake and is told so at
 	// the call, rather than compiling, running and quietly aliasing until the day
 	// it matters.
-	// NOT `Clone`, and NOT virtual. `Clone` is the name a C++ class conventionally gives "make me
-	// another object like this one", and half the tree uses it that way (a database layer, a drag
-	// item, a grid attr, a table of values). A base method of that name on ibValue — the root every
-	// value derives from — turns each of those into a HIDDEN overload instead of an unrelated
-	// method, and which copy you get is then decided by the static type of the expression. So the
-	// root takes the name that says what it actually does: copy the VALUE, beside GetValue/SetValue.
+	// NOT `Clone`. `Clone` is the name a C++ class conventionally gives "make me another object like
+	// this one", and half the tree uses it that way (a database layer, a drag item, a grid attr). A
+	// base method of that name on the root every value derives from turns each of those into a
+	// HIDDEN overload instead of an unrelated method. So the root takes the name that says what it
+	// actually does: copy the VALUE, beside GetValue/SetValue — and a property's live value, a
+	// variant too, states its copy under the same name.
 	//
 	// STILL VIRTUAL. The default road is "pack, then create from what was packed", and both halves
 	// are extension points already (DoSerialize / DoDeserialize) with IsTransferable as the refusal
 	// — so most types never touch this. But a type is allowed to state a copy of its own, and that
 	// is a declared contract with a test behind it (ValueClone.ATypeMayStateItsOwnCopy).
-	virtual ibValue CloneValue() const;
+	virtual ibVariant CloneValue() const override;
 
-	virtual bool GetBoolean() const override;
-	virtual int GetInteger() const { return GetNumber().ToInt(); }
-	virtual unsigned int GetUInteger() const { return GetNumber().ToUInt(); }
-	virtual double GetDouble() const { return GetNumber().ToDouble(); }
+	// (GetBoolean / GetNumber / GetDate / GetInteger / GetDouble are the variant's.)
 
-	virtual ibNumber GetNumber() const override;
-	// THE VALUE AS TEXT, in the engine's own string. A string value hands its text out SHARED — one
-	// more owner of it, no characters copied (fstring.h) — so a caller has no buffer to pass in.
+	// THE VALUE AS TEXT — the variant's, and an object of the runtime reads as its class's name, which only the
+	// factory knows.
 	virtual ibString GetString() const override;
 
 	// ============================ IDENTITY ==================================
@@ -1392,13 +1227,11 @@ public:
 	// counts as equal and leaves this behind puts equal values in different
 	// buckets, which no test of the comparator alone would catch.
 	virtual size_t GetValueHash() const;
-	// THE VALUE AS A DATE, in the engine's own date (fdatetime.h). A window that holds a wxDateTime
-	// crosses at its own edge: GetDate().ToWxDateTime().
-	virtual ibDateTime GetDate() const override;
 
 	/////////////////////////////////////////////////////////////////////////
 
-	virtual ibValue* GetRef() const;
+	// The object held — a runtime one, as everything a runtime value holds is.
+	virtual ibValue* GetRef() const override;
 
 	/////////////////////////////////////////////////////////////////////////
 
@@ -1436,7 +1269,7 @@ protected:
 	// referenced object's raw getter; GetPMethods() above does the build.
 	virtual ibMemberTable* DoGetPMethods() const {
 		return IsReference() && m_pRef != nullptr ?
-			m_pRef->DoGetPMethods() : nullptr;
+			GetRef()->DoGetPMethods() : nullptr;
 	}
 
 private:

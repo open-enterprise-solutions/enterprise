@@ -125,7 +125,7 @@ protected:
 	bool           IsNextKeyword(int keyword);
 	void           ExpectKeyword(int keyword);
 	ibString       ExpectIdentifier(bool strRealName = false);
-	ibLiteral      ExpectConstant();
+	ibVariant      ExpectConstant();
 
 public:
 

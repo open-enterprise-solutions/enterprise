@@ -9,32 +9,30 @@
 // Eq() is what makes the diff work, and it is one line because the description already has value
 // semantics — two schedules are equal when every field is.
 
-#include "backend/propertyManager/propertyValue.h"
+#include "core/variant.h"
 #include "backend/backend.h"
 #include "core/job/jobSchedule.h"
 
 #include <wx/variant.h>
 
-class BACKEND_API ibPropertyValueSchedule : public ibPropertyValue {
+class BACKEND_API ibVariantSchedule : public ibVariant {
 public:
 
 	ibJobScheduleDescription& GetSchedule() { return m_schedule; }
 	const ibJobScheduleDescription& GetSchedule() const { return m_schedule; }
 
-	ibPropertyValueSchedule() : ibPropertyValue(ibValueTypes::TYPE_VALUE) {}
-	explicit ibPropertyValueSchedule(const ibJobScheduleDescription& schedule)
-		: ibPropertyValue(ibValueTypes::TYPE_VALUE), m_schedule(schedule) {}
-	ibPropertyValueSchedule(const ibPropertyValueSchedule& src)
-		: ibPropertyValue(ibValueTypes::TYPE_VALUE), m_schedule(src.m_schedule) {}
+	ibVariantSchedule() : ibVariant(ibValueTypes::TYPE_VALUE) {}
+	explicit ibVariantSchedule(const ibJobScheduleDescription& schedule)
+		: ibVariant(ibValueTypes::TYPE_VALUE), m_schedule(schedule) {}
+	ibVariantSchedule(const ibVariantSchedule& src)
+		: ibVariant(ibValueTypes::TYPE_VALUE), m_schedule(src.m_schedule) {}
 
-	virtual ibPropertyValueSchedule* Clone() const {
-		return new ibPropertyValueSchedule(*this);
-	}
+	virtual ibVariant CloneValue() const override { return ibVariant(new ibVariantSchedule(*this)); }
 
 	// Value equality, straight through the description — this is what the configuration
 	// compare reads (docs/private/property-system.md § 6.1).
-	virtual bool CompareValueEQ(const ibPropertyValue& data) const override {
-		const ibPropertyValueSchedule* src = dynamic_cast<const ibPropertyValueSchedule*>(data.GetRef());
+	virtual bool CompareValueEQ(const ibVariant& data) const override {
+		const ibVariantSchedule* src = dynamic_cast<const ibVariantSchedule*>(data.GetRef());
 		return src != nullptr && src->m_schedule == m_schedule;
 	}
 

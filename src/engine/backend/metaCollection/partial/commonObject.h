@@ -1055,8 +1055,8 @@ protected:
 	*/
 	virtual void OnPropertyCreated(ibProperty* property);
 	virtual void OnPropertyRefresh() override;
-	virtual bool OnPropertyChanging(ibProperty* property, const ibPropertyValue& newValue);
-	virtual void OnPropertyChanged(ibProperty* property, const ibPropertyValue& oldValue, const ibPropertyValue& newValue);
+	virtual bool OnPropertyChanging(ibProperty* property, const ibVariant& newValue);
+	virtual void OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue);
 
 	// Declare the record's main table + its tabular-section tables into the structure snapshot.
 	virtual void ContributeTables(ibSchemaSnapshot& out) const override;
@@ -1586,7 +1586,7 @@ class BACKEND_API ibValueMetaObjectRecordDataHierarchyMutableRef :
 
 protected:
 
-	virtual void OnPropertyChanged(ibProperty* property, const ibPropertyValue& oldValue, const ibPropertyValue& newValue) override;
+	virtual void OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue) override;
 
 	// Declare the main table (via the base) + the predefined values as its SEED rows (cells keyed by
 	// column id; the builder diffs by uuid + cells).
@@ -3215,9 +3215,9 @@ public:
 	virtual void DeleteValue() {}
 
 	// implementation of base class virtuals to define model
-	virtual void GetValueByRow(wxVariant& variant,
+	virtual void GetValueByRow(ibVariant& variant,
 		const ibDataViewItem& row, unsigned int col) const override;
-	virtual bool SetValueByRow(const wxVariant& variant,
+	virtual bool SetValueByRow(const ibVariant& variant,
 		const ibDataViewItem& row, unsigned int col) override;
 
 	//support def. methods (in runtime)

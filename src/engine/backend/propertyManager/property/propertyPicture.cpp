@@ -5,21 +5,21 @@
 
 ////////////////////////////////////////////////////////////////////////
 
-ibPropertyValue ibPropertyPicture::CreateVariantData(ibPropertyObject* property, const ibPictureDescription& id)
+ibVariant ibPropertyPicture::CreateVariantData(ibPropertyObject* property, const ibPictureDescription& id)
 {
-	return ibPropertyValue(new ibPropertyValuePicture(property, id));
+	return ibVariant(new ibVariantPicture(property, id));
 }
 
 ////////////////////////////////////////////////////////////////////////
 
 ibPicture ibPropertyPicture::GetValueAsPicture() const
 {
-	return get_cell_variant<ibPropertyValuePicture>()->GetPicture();
+	return get_cell_variant<ibVariantPicture>()->GetPicture();
 }
 
 ibPictureDescription& ibPropertyPicture::GetValueAsPictureDesc() const
 {
-	return get_cell_variant<ibPropertyValuePicture>()->GetPictureDesc();
+	return get_cell_variant<ibVariantPicture>()->GetPictureDesc();
 }
 
 void ibPropertyPicture::SetValue(const ibPictureDescription& val)
@@ -30,7 +30,7 @@ void ibPropertyPicture::SetValue(const ibPictureDescription& val)
 ////////////////////////////////////////////////////////////////////////
 
 bool ibPropertyPicture::IsEmptyProperty() const {
-	return get_cell_variant<ibPropertyValuePicture>()->IsEmptyPicture();
+	return get_cell_variant<ibVariantPicture>()->IsEmptyPicture();
 }
 
 #include "backend/system/value/valuePicture.h"

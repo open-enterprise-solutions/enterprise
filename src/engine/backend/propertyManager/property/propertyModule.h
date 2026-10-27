@@ -5,7 +5,7 @@
 
 //base property for "module"
 class BACKEND_API ibPropertyModule : public ibProperty {
-	static ibPropertyValue CreateVariantData();
+	static ibVariant CreateVariantData();
 public:
 
 	ibString GetValueAsString() const;

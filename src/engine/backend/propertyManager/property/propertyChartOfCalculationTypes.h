@@ -6,7 +6,7 @@
 
 //base property for "chart of calculation types" selection
 class BACKEND_API ibPropertyChartOfCalculationTypes : public ibProperty {
-	static ibPropertyValue CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc = ibMetaDescription());
+	static ibVariant CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc = ibMetaDescription());
 public:
 
 	ibMetaDescription& GetValueAsMetaDesc() const;
@@ -36,9 +36,9 @@ public:
 protected:
 
 	// The family rule: a relationship arrives in whichever wrapper the caller was handed —
-	// CreateValueList builds every candidate as ibPropertyValueOwner — and a property that stores a
+	// CreateValueList builds every candidate as ibVariantOwner — and a property that stores a
 	// neighbour's wrapper raises on every later read. See propertyRecord.h.
-	virtual void DoSetValue(const ibPropertyValue& val) override;
+	virtual void DoSetValue(const ibVariant& val) override;
 
 public:
 

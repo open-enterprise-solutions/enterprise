@@ -106,7 +106,7 @@ struct InformationRegisterGet : ::testing::Test {
 			cfg->CreateMetaObject(g_metaInformationRegisterCLSID, root, false));
 		ASSERT_NE(reg, nullptr);
 		reg->SetName(wxT("Settings"));
-		reg->GetProperty(wxT("Periodicity"))->SetValue(ibPropertyValue(static_cast<long>(periodicity)));
+		reg->GetProperty(wxT("Periodicity"))->SetValue(ibVariant(static_cast<long>(periodicity)));
 		ASSERT_EQ(reg->GetPeriodicity(), periodicity);
 		key = dynamic_cast<ibValueMetaObjectDimension*>(cfg->CreateMetaObject(g_metaDimensionCLSID, reg, false));
 		resource = dynamic_cast<ibValueMetaObjectResource*>(cfg->CreateMetaObject(g_metaResourceCLSID, reg, false));

@@ -14,7 +14,7 @@ void ibValueMetaObject::OnPropertySelected(ibProperty* property)
 {
 }
 
-bool ibValueMetaObject::OnPropertyChanging(ibProperty* property, const ibPropertyValue& newValue)
+bool ibValueMetaObject::OnPropertyChanging(ibProperty* property, const ibVariant& newValue)
 {
 	// ⭐ ONE DOOR FOR THE RENAME. This used to ask the metadata for its tree and rename THROUGH it,
 	// falling back to the metadata when there was none — two roads to one state, and the tree's road
@@ -25,7 +25,7 @@ bool ibValueMetaObject::OnPropertyChanging(ibProperty* property, const ibPropert
 	return true;
 }
 
-void ibValueMetaObject::OnPropertyChanged(ibProperty* property, const ibPropertyValue& oldValue, const ibPropertyValue& newValue)
+void ibValueMetaObject::OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue)
 {
 	// THE RENAME IS COMPLETE AT THIS POINT — OnPropertyChanging ran before the value was applied,
 	// so from here every ctor of this metaobject computes a different name than before. Say so and

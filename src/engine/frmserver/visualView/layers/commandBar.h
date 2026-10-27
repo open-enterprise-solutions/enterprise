@@ -126,7 +126,7 @@ public:
 	virtual ibString GetObjectTypeName() const override { return ibT("CommandBarItem"); }
 	virtual bool IsEditable() const override { return true; }
 	// Reject a duplicate Name — unique among the bar's items (like a control's name).
-	virtual bool OnPropertyChanging(ibProperty* property, const ibPropertyValue& newValue) override;
+	virtual bool OnPropertyChanging(ibProperty* property, const ibVariant& newValue) override;
 
 	// Serialization — the item's own fields (mirrors a toolbar item's Read/WriteData).
 	bool WriteData(ibDataNode& node) const;

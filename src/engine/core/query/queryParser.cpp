@@ -122,21 +122,21 @@ ibQueryAstExprPtr ibQueryMakeCast(ibQueryAstExprPtr value, const ibTypeDescripti
 	auto cast = ibQueryAstExpr::Make(ibQueryAstExprKind::Cast);
 	cast->m_arg  = std::move(value);
 	cast->m_path = { GetNameObjectFromVT(vt) };
-	auto qualify = [&cast](const ibLiteral& q) {
+	auto qualify = [&cast](const ibVariant& q) {
 		auto literal = ibQueryAstExpr::Make(ibQueryAstExprKind::Literal);
 		literal->m_literal = q;
 		cast->m_args.push_back(literal);
 	};
 	// Only what limits something is written: `Number`, `String` and `Date` alone limit nothing (ReadCastPrimitive).
 	if (vt == ibValueTypes::TYPE_NUMBER && type.GetPrecision() > 0) {
-		qualify(ibLiteral(ibNumber(type.GetPrecision())));
-		if (type.GetScale() > 0) qualify(ibLiteral(ibNumber(type.GetScale())));
+		qualify(ibVariant(ibNumber(type.GetPrecision())));
+		if (type.GetScale() > 0) qualify(ibVariant(ibNumber(type.GetScale())));
 	}
 	else if (vt == ibValueTypes::TYPE_STRING && type.GetLength() > 0)
-		qualify(ibLiteral(ibNumber(type.GetLength())));
+		qualify(ibVariant(ibNumber(type.GetLength())));
 	else if (vt == ibValueTypes::TYPE_DATE && type.GetDateFraction() != ibDateFractions_DateTime) {
 		for (const std::pair<ibDateFractions, const ibChar*>& f : s_dateFractions)
-			if (f.first == type.GetDateFraction()) qualify(ibLiteral(ibString(f.second)));
+			if (f.first == type.GetDateFraction()) qualify(ibVariant(ibString(f.second)));
 	}
 	return cast;
 }
@@ -1377,7 +1377,7 @@ ibQueryAstExprPtr ibQueryParser::ParsePrimary()
 		if (!negate)
 			return operand;
 		auto zero = ibQueryAstExpr::Make(ibQueryAstExprKind::Literal);
-		zero->m_literal = ibLiteral(ibNumber(0));
+		zero->m_literal = ibVariant(ibNumber(0));
 		zero->m_line = line; zero->m_col = col;
 		auto neg = ibQueryAstExpr::Make(ibQueryAstExprKind::Arith);
 		neg->m_arith = ibQueryArithOp::Sub;
@@ -1433,19 +1433,19 @@ ibQueryAstExprPtr ibQueryParser::ParsePrimary()
 	if (tk.IsKeyword(ibQueryKeyword::True)) {
 		++m_pos;
 		auto e = ibQueryAstExpr::Make(ibQueryAstExprKind::Literal);
-		e->m_literal = ibLiteral(true);
+		e->m_literal = ibVariant(true);
 		return e;
 	}
 	if (tk.IsKeyword(ibQueryKeyword::False)) {
 		++m_pos;
 		auto e = ibQueryAstExpr::Make(ibQueryAstExprKind::Literal);
-		e->m_literal = ibLiteral(false);
+		e->m_literal = ibVariant(false);
 		return e;
 	}
 	if (tk.IsKeyword(ibQueryKeyword::Null)) {
 		++m_pos;
 		auto e = ibQueryAstExpr::Make(ibQueryAstExprKind::Literal);
-		e->m_literal = ibLiteral(ibValueTypes::TYPE_NULL);
+		e->m_literal = ibVariant(ibValueTypes::TYPE_NULL);
 		return e;
 	}
 	// ⭐ …AND `UNDEFINED` — THE RUNTIME'S OWN EMPTY VALUE, the same one a script writes by that name
@@ -1459,7 +1459,7 @@ ibQueryAstExprPtr ibQueryParser::ParsePrimary()
 	if (tk.IsKeyword(ibQueryKeyword::Undefined)) {
 		++m_pos;
 		auto e = ibQueryAstExpr::Make(ibQueryAstExprKind::Literal);
-		e->m_literal = ibLiteral(ibValueTypes::TYPE_EMPTY);
+		e->m_literal = ibVariant(ibValueTypes::TYPE_EMPTY);
 		return e;
 	}
 
@@ -1749,7 +1749,7 @@ ibQueryAstExprPtr ibQueryParser::ParseCast()
 				ThrowQueryException(q, _("expected a number or a word qualifying the cast type"));
 			auto qualifier = ibQueryAstExpr::Make(ibQueryAstExprKind::Literal);
 			qualifier->m_line = q.m_line; qualifier->m_col = q.m_col;
-			qualifier->m_literal = q.m_kind == ibQueryTokenKind::Number ? q.m_literal : ibLiteral(q.m_text);
+			qualifier->m_literal = q.m_kind == ibQueryTokenKind::Number ? q.m_literal : ibVariant(q.m_text);
 			cast->m_args.push_back(qualifier);
 			++m_pos;
 		} while (AcceptPunct(ibT(',')));

@@ -191,11 +191,11 @@ public:
 	virtual std::shared_ptr<ibValueIteratorState> CreateIterator() override;
 
 	// Identity — two Queryables over the same source compare equal.
-	virtual bool CompareValueEQ(const ibValue& cParam) const override {
+	virtual bool CompareValueEQ(const ibVariant& cParam) const override {
 		const ibValueQueryable* other = dynamic_cast<ibValueQueryable*>(cParam.GetRef());
 		return other != nullptr && other->m_queryable == m_queryable;
 	}
-	virtual bool CompareValueNE(const ibValue& cParam) const override {
+	virtual bool CompareValueNE(const ibVariant& cParam) const override {
 		return !CompareValueEQ(cParam);
 	}
 };
@@ -228,8 +228,8 @@ public:
 
 	// Type branch in a handler: `Source = "Document.Receipt"` compares the decorated source to its
 	// canonical full-name STRING ("<ClassName>.<Name>"), so a module can shape per source.
-	virtual bool CompareValueEQ(const ibValue& cParam) const override;
-	virtual bool CompareValueNE(const ibValue& cParam) const override { return !CompareValueEQ(cParam); }
+	virtual bool CompareValueEQ(const ibVariant& cParam) const override;
+	virtual bool CompareValueNE(const ibVariant& cParam) const override { return !CompareValueEQ(cParam); }
 };
 
 #endif

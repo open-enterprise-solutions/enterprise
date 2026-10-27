@@ -27,21 +27,44 @@
 	rest of the renderer classes.
  */
 
+#include "core/variant.h"   // ibVariant — what a cell holds
+
 class FRMCLIENT_API ibDataViewCustomRenderer;
 
 // ----------------------------------------------------------------------------
 // ibDataViewIconText: helper class used by ibDataViewIconTextRenderer
 // ----------------------------------------------------------------------------
 
-class FRMCLIENT_API ibDataViewIconText : public wxObject
+// A text with its picture, held in a cell as an object of the client's own (ibVariant(new ibDataViewIconText(…))),
+// read back by ConvertToType; what it shows as a text is its text.
+class FRMCLIENT_API ibDataViewIconText : public ibVariant
 {
 public:
 	ibDataViewIconText(const wxString& text = wxEmptyString,
 		const wxBitmapBundle& bitmap = wxBitmapBundle())
-		: m_text(text),
+		: ibVariant(ibValueTypes::TYPE_VALUE),
+		m_text(text),
 		m_bitmap(bitmap)
 	{
 	}
+
+	// A COPY IS ANOTHER OBJECT: its text and its picture, and a variant of its own. The variant's copy of an object
+	// is a reference to it (core/variant.h), and this one is copied by value — a renderer's member, a cell read out.
+	ibDataViewIconText(const ibDataViewIconText& other)
+		: ibVariant(ibValueTypes::TYPE_VALUE),
+		m_text(other.m_text),
+		m_bitmap(other.m_bitmap)
+	{
+	}
+
+	ibDataViewIconText& operator=(const ibDataViewIconText& other)
+	{
+		m_text = other.m_text;
+		m_bitmap = other.m_bitmap;
+		return *this;
+	}
+
+	virtual ibString GetString() const override { return m_text; }
 
 	void SetText(const wxString& text) { m_text = text; }
 	wxString GetText() const { return m_text; }
@@ -71,11 +94,7 @@ public:
 private:
 	wxString    m_text;
 	wxBitmapBundle m_bitmap;
-
-	wxDECLARE_DYNAMIC_CLASS(ibDataViewIconText);
 };
-
-DECLARE_VARIANT_OBJECT_EXPORTED(ibDataViewIconText, FRMCLIENT_API)
 
 // ----------------------------------------------------------------------------
 // ibDataViewCheckIconText: value class used by ibDataViewCheckIconTextRenderer
@@ -97,11 +116,7 @@ public:
 
 private:
 	wxCheckBoxState m_checkedState;
-
-	wxDECLARE_DYNAMIC_CLASS(ibDataViewCheckIconText);
 };
-
-DECLARE_VARIANT_OBJECT_EXPORTED(ibDataViewCheckIconText, FRMCLIENT_API)
 
 // ----------------------------------------------------------------------------
 // ibDataViewRendererBase
@@ -129,7 +144,7 @@ public:
 	virtual ~ibDataViewValueAdjuster() {}
 
 	// changes the value to have appearance suitable for highlighted rows
-	virtual wxVariant MakeHighlighted(const wxVariant& value) const { return value; }
+	virtual ibVariant MakeHighlighted(const ibVariant& value) const { return value; }
 };
 
 class FRMCLIENT_API ibDataViewRendererBase : public wxObject
@@ -140,7 +155,7 @@ public:
 		int alignment = wxDVR_DEFAULT_ALIGNMENT);
 	virtual ~ibDataViewRendererBase();
 
-	virtual bool Validate(wxVariant& WXUNUSED(value))
+	virtual bool Validate(ibVariant& WXUNUSED(value))
 	{
 		return true;
 	}
@@ -150,22 +165,13 @@ public:
 
 	// renderer value and attributes: SetValue() and SetAttr() are called
 	// before a cell is rendered using this renderer
-	virtual bool SetValue(const wxVariant& value) = 0;
-	virtual bool GetValue(wxVariant& value) const = 0;
+	virtual bool SetValue(const ibVariant& value) = 0;
+	virtual bool GetValue(ibVariant& value) const = 0;
 #if wxUSE_ACCESSIBILITY
 	virtual wxString GetAccessibleDescription() const = 0;
 #endif // wxUSE_ACCESSIBILITY
 
 	wxString GetVariantType() const { return m_variantType; }
-
-	// Check if the given variant type is compatible with the type expected by
-	// this renderer: by default, just compare it with GetVariantType(), but
-	// can be overridden to accept other types that can be converted to the
-	// type needed by the renderer.
-	virtual bool IsCompatibleVariantType(const wxString& variantType) const
-	{
-		return variantType == GetVariantType();
-	}
 
 	// Prepare for rendering the value of the corresponding item in the given
 	// column taken from the provided non-null model.
@@ -174,10 +180,9 @@ public:
 	// it is only passed to this method because the existing code already has
 	// it and should probably be removed in the future.
 	//
-	// Return true if this cell is non-empty or false otherwise (and also if
-	// the model returned a value of the wrong type, i.e. such that our
-	// IsCompatibleVariantType() returned false for it, in which case a debug
-	// error is also logged).
+	// Return true if this cell is non-empty or false otherwise. A value of
+	// another kind than the renderer shows is read as it reads (GetString,
+	// GetBoolean…) — a value answers for itself, there is no type to refuse.
 	bool PrepareForItem(const ibDataViewModel* model,
 		const ibDataViewItem& item,
 		unsigned column);
@@ -208,12 +213,12 @@ public:
 
 	virtual wxWindow* CreateEditorCtrl(wxWindow* WXUNUSED(parent),
 		wxRect WXUNUSED(labelRect),
-		const wxVariant& WXUNUSED(value))
+		const ibVariant& WXUNUSED(value))
 	{
 		return NULL;
 	}
 	virtual bool GetValueFromEditorCtrl(wxWindow* WXUNUSED(editor),
-		wxVariant& WXUNUSED(value))
+		ibVariant& WXUNUSED(value))
 	{
 		return false;
 	}
@@ -274,20 +279,20 @@ protected:
 	virtual bool IsHighlighted() const = 0;
 
 	// Helper of PrepareForItem() also used in StartEditing(): returns the
-	// value checking that its type matches our GetVariantType().
+	// value, empty where the model has none.
 	//
 	// VIRTUAL (fork power): the per-cell value fetch is the single front-side choke point that
 	// still carries (model, item, column). A renderer overrides it to resolve a dot-path column
 	// THROUGH the column's own binding — first hop via the (dumb) model, deeper hops on the front —
 	// without the model knowing about paths and without touching the provider / notifier.
-	virtual wxVariant CheckedGetValue(const ibDataViewModel* model,
+	virtual ibVariant CheckedGetValue(const ibDataViewModel* model,
 		const ibDataViewItem& item,
 		unsigned column) const;
 
 	// Validates the given value (if it is non-null) and sends (in any case)
 	// ITEM_EDITING_DONE event and, finally, updates the model with the value
 	// (f it is valid, of course) if the event wasn't vetoed.
-	bool DoHandleEditingDone(wxVariant* value);
+	bool DoHandleEditingDone(ibVariant* value);
 
 
 	wxString                m_variantType;
@@ -558,8 +563,8 @@ public:
 	void EnableMarkup(bool enable = true);
 #endif // wxUSE_MARKUP
 
-	virtual bool SetValue(const wxVariant& value) wxOVERRIDE;
-	virtual bool GetValue(wxVariant& value) const wxOVERRIDE;
+	virtual bool SetValue(const ibVariant& value) wxOVERRIDE;
+	virtual bool GetValue(ibVariant& value) const wxOVERRIDE;
 #if wxUSE_ACCESSIBILITY
 	virtual wxString GetAccessibleDescription() const wxOVERRIDE;
 #endif // wxUSE_ACCESSIBILITY
@@ -570,8 +575,8 @@ public:
 	// in-place editing
 	virtual bool HasEditorCtrl() const wxOVERRIDE;
 	virtual wxWindow* CreateEditorCtrl(wxWindow* parent, wxRect labelRect,
-		const wxVariant& value) wxOVERRIDE;
-	virtual bool GetValueFromEditorCtrl(wxWindow* editor, wxVariant& value) wxOVERRIDE;
+		const ibVariant& value) wxOVERRIDE;
+	virtual bool GetValueFromEditorCtrl(wxWindow* editor, ibVariant& value) wxOVERRIDE;
 
 protected:
 	wxString   m_text;
@@ -597,11 +602,8 @@ public:
 		ibDataViewCellMode mode = wxDATAVIEW_CELL_INERT,
 		int align = wxDVR_DEFAULT_ALIGNMENT);
 
-	virtual bool SetValue(const wxVariant& value) wxOVERRIDE;
-	virtual bool GetValue(wxVariant& value) const wxOVERRIDE;
-
-	virtual
-		bool IsCompatibleVariantType(const wxString& variantType) const wxOVERRIDE;
+	virtual bool SetValue(const ibVariant& value) wxOVERRIDE;
+	virtual bool GetValue(ibVariant& value) const wxOVERRIDE;
 
 #if wxUSE_ACCESSIBILITY
 	virtual wxString GetAccessibleDescription() const wxOVERRIDE;
@@ -632,8 +634,8 @@ public:
 
 	void ShowAsRadio() { m_radio = true; }
 
-	virtual bool SetValue(const wxVariant& value) wxOVERRIDE;
-	virtual bool GetValue(wxVariant& value) const wxOVERRIDE;
+	virtual bool SetValue(const ibVariant& value) wxOVERRIDE;
+	virtual bool GetValue(ibVariant& value) const wxOVERRIDE;
 #if wxUSE_ACCESSIBILITY
 	virtual wxString GetAccessibleDescription() const wxOVERRIDE;
 #endif // wxUSE_ACCESSIBILITY
@@ -669,8 +671,8 @@ public:
 		ibDataViewCellMode mode = wxDATAVIEW_CELL_INERT,
 		int align = wxDVR_DEFAULT_ALIGNMENT);
 
-	virtual bool SetValue(const wxVariant& value) wxOVERRIDE;
-	virtual bool GetValue(wxVariant& value) const wxOVERRIDE;
+	virtual bool SetValue(const ibVariant& value) wxOVERRIDE;
+	virtual bool GetValue(ibVariant& value) const wxOVERRIDE;
 #if wxUSE_ACCESSIBILITY
 	virtual wxString GetAccessibleDescription() const wxOVERRIDE;
 #endif // wxUSE_ACCESSIBILITY
@@ -699,8 +701,8 @@ public:
 		ibDataViewCellMode mode = wxDATAVIEW_CELL_INERT,
 		int align = wxDVR_DEFAULT_ALIGNMENT);
 
-	virtual bool SetValue(const wxVariant& value) wxOVERRIDE;
-	virtual bool GetValue(wxVariant& value) const wxOVERRIDE;
+	virtual bool SetValue(const ibVariant& value) wxOVERRIDE;
+	virtual bool GetValue(ibVariant& value) const wxOVERRIDE;
 #if wxUSE_ACCESSIBILITY
 	virtual wxString GetAccessibleDescription() const wxOVERRIDE;
 #endif // wxUSE_ACCESSIBILITY
@@ -710,8 +712,8 @@ public:
 
 	virtual bool HasEditorCtrl() const wxOVERRIDE { return true; }
 	virtual wxWindow* CreateEditorCtrl(wxWindow* parent, wxRect labelRect,
-		const wxVariant& value) wxOVERRIDE;
-	virtual bool GetValueFromEditorCtrl(wxWindow* editor, wxVariant& value) wxOVERRIDE;
+		const ibVariant& value) wxOVERRIDE;
+	virtual bool GetValueFromEditorCtrl(wxWindow* editor, ibVariant& value) wxOVERRIDE;
 
 private:
 	ibDataViewIconText   m_value;
@@ -733,12 +735,12 @@ public:
 		ibDataViewCellMode mode = wxDATAVIEW_CELL_EDITABLE,
 		int alignment = wxDVR_DEFAULT_ALIGNMENT);
 	virtual bool HasEditorCtrl() const wxOVERRIDE { return true; }
-	virtual wxWindow* CreateEditorCtrl(wxWindow* parent, wxRect labelRect, const wxVariant& value) wxOVERRIDE;
-	virtual bool GetValueFromEditorCtrl(wxWindow* editor, wxVariant& value) wxOVERRIDE;
+	virtual wxWindow* CreateEditorCtrl(wxWindow* parent, wxRect labelRect, const ibVariant& value) wxOVERRIDE;
+	virtual bool GetValueFromEditorCtrl(wxWindow* editor, ibVariant& value) wxOVERRIDE;
 	virtual bool Render(wxRect rect, wxDC* dc, int state) wxOVERRIDE;
 	virtual wxSize GetSize() const wxOVERRIDE;
-	virtual bool SetValue(const wxVariant& value) wxOVERRIDE;
-	virtual bool GetValue(wxVariant& value) const wxOVERRIDE;
+	virtual bool SetValue(const ibVariant& value) wxOVERRIDE;
+	virtual bool GetValue(ibVariant& value) const wxOVERRIDE;
 #if wxUSE_ACCESSIBILITY
 	virtual wxString GetAccessibleDescription() const wxOVERRIDE;
 #endif // wxUSE_ACCESSIBILITY
@@ -761,12 +763,12 @@ public:
 		ibDataViewCellMode mode = wxDATAVIEW_CELL_EDITABLE,
 		int alignment = wxDVR_DEFAULT_ALIGNMENT);
 	virtual bool HasEditorCtrl() const wxOVERRIDE { return true; }
-	virtual wxWindow* CreateEditorCtrl(wxWindow* parent, wxRect labelRect, const wxVariant& value) wxOVERRIDE;
-	virtual bool GetValueFromEditorCtrl(wxWindow* editor, wxVariant& value) wxOVERRIDE;
+	virtual wxWindow* CreateEditorCtrl(wxWindow* parent, wxRect labelRect, const ibVariant& value) wxOVERRIDE;
+	virtual bool GetValueFromEditorCtrl(wxWindow* editor, ibVariant& value) wxOVERRIDE;
 	virtual bool Render(wxRect rect, wxDC* dc, int state) wxOVERRIDE;
 	virtual wxSize GetSize() const wxOVERRIDE;
-	virtual bool SetValue(const wxVariant& value) wxOVERRIDE;
-	virtual bool GetValue(wxVariant& value) const wxOVERRIDE;
+	virtual bool SetValue(const ibVariant& value) wxOVERRIDE;
+	virtual bool GetValue(ibVariant& value) const wxOVERRIDE;
 #if wxUSE_ACCESSIBILITY
 	virtual wxString GetAccessibleDescription() const wxOVERRIDE;
 #endif // wxUSE_ACCESSIBILITY
@@ -790,11 +792,11 @@ public:
 		ibDataViewCellMode mode = wxDATAVIEW_CELL_EDITABLE,
 		int alignment = wxDVR_DEFAULT_ALIGNMENT);
 
-	virtual wxWindow* CreateEditorCtrl(wxWindow* parent, wxRect labelRect, const wxVariant& value) wxOVERRIDE;
-	virtual bool GetValueFromEditorCtrl(wxWindow* editor, wxVariant& value) wxOVERRIDE;
+	virtual wxWindow* CreateEditorCtrl(wxWindow* parent, wxRect labelRect, const ibVariant& value) wxOVERRIDE;
+	virtual bool GetValueFromEditorCtrl(wxWindow* editor, ibVariant& value) wxOVERRIDE;
 
-	virtual bool SetValue(const wxVariant& value) wxOVERRIDE;
-	virtual bool GetValue(wxVariant& value) const wxOVERRIDE;
+	virtual bool SetValue(const ibVariant& value) wxOVERRIDE;
+	virtual bool GetValue(ibVariant& value) const wxOVERRIDE;
 #if wxUSE_ACCESSIBILITY
 	virtual wxString GetAccessibleDescription() const wxOVERRIDE;
 #endif // wxUSE_ACCESSIBILITY
@@ -815,10 +817,10 @@ public:
 		int align = wxDVR_DEFAULT_ALIGNMENT);
 
 	virtual bool HasEditorCtrl() const wxOVERRIDE { return true; }
-	virtual wxWindow* CreateEditorCtrl(wxWindow* parent, wxRect labelRect, const wxVariant& value) wxOVERRIDE;
-	virtual bool GetValueFromEditorCtrl(wxWindow* editor, wxVariant& value) wxOVERRIDE;
-	virtual bool SetValue(const wxVariant& value) wxOVERRIDE;
-	virtual bool GetValue(wxVariant& value) const wxOVERRIDE;
+	virtual wxWindow* CreateEditorCtrl(wxWindow* parent, wxRect labelRect, const ibVariant& value) wxOVERRIDE;
+	virtual bool GetValueFromEditorCtrl(wxWindow* editor, ibVariant& value) wxOVERRIDE;
+	virtual bool SetValue(const ibVariant& value) wxOVERRIDE;
+	virtual bool GetValue(ibVariant& value) const wxOVERRIDE;
 #if wxUSE_ACCESSIBILITY
 	virtual wxString GetAccessibleDescription() const wxOVERRIDE;
 #endif // wxUSE_ACCESSIBILITY
@@ -856,8 +858,8 @@ public:
 	// this to happen.
 	void Allow3rdStateForUser(bool allow = true);
 
-	virtual bool SetValue(const wxVariant& value) wxOVERRIDE;
-	virtual bool GetValue(wxVariant& value) const wxOVERRIDE;
+	virtual bool SetValue(const ibVariant& value) wxOVERRIDE;
+	virtual bool GetValue(ibVariant& value) const wxOVERRIDE;
 
 #if wxUSE_ACCESSIBILITY
 	virtual wxString GetAccessibleDescription() const wxOVERRIDE;

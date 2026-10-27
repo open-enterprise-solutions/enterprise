@@ -28,7 +28,7 @@ class ibDialogPredefinedEditor : public wxDialog {
 
 
 		// and implement some others by forwarding them to our own ones
-		virtual void GetValue(wxVariant& variant,
+		virtual void GetValue(ibVariant& variant,
 			const ibDataViewItem& item, unsigned int col) const override;
 
 		// return true if the given item has a value to display in the given
@@ -41,7 +41,7 @@ class ibDialogPredefinedEditor : public wxDialog {
 			return true;
 		}
 
-		virtual bool SetValue(const wxVariant& variant,
+		virtual bool SetValue(const ibVariant& variant,
 			const ibDataViewItem& item, unsigned int col) override {
 			return false;
 		}

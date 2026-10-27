@@ -3,14 +3,14 @@
 #include "backend/propertyManager/property/variant/variantOwner.h"
 #include "backend/metaCollection/partial/chartOfAccounts.h"   // the chart whose kinds these are
 
-ibPropertyValue ibPropertyAccountingKind::CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc)
+ibVariant ibPropertyAccountingKind::CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc)
 {
-	return ibPropertyValue(new ibPropertyValueOwner(property, typeDesc));
+	return ibVariant(new ibVariantOwner(property, typeDesc));
 }
 
 ibMetaDescription& ibPropertyAccountingKind::GetValueAsMetaDesc() const
 {
-	return get_cell_variant<ibPropertyValueMetaDesc>()->GetMetaDesc();
+	return get_cell_variant<ibVariantMetaDesc>()->GetMetaDesc();
 }
 
 void ibPropertyAccountingKind::SetValue(const ibMetaDescription& val)
@@ -19,9 +19,9 @@ void ibPropertyAccountingKind::SetValue(const ibMetaDescription& val)
 }
 
 // The family rule — see propertyRecord.cpp.
-void ibPropertyAccountingKind::DoSetValue(const ibPropertyValue& val)
+void ibPropertyAccountingKind::DoSetValue(const ibVariant& val)
 {
-	if (const ibPropertyValueMetaDesc* carried = find_cell_variant<ibPropertyValueMetaDesc>(val)) {
+	if (const ibVariantMetaDesc* carried = find_cell_variant<ibVariantMetaDesc>(val)) {
 		SetValue(carried->GetMetaDesc());
 		return;
 	}
@@ -46,7 +46,7 @@ ibPropertyChoiceMode ibPropertyAccountingKind::GetValueList(ibPropertyChoiceList
 		if (kind == nullptr || kind->IsDeleted())
 			return;
 		list.Add((long)kind->GetMetaID(), kind->GetName(), kind->GetSynonym(),
-			ibPropertyValue(new ibPropertyValueOwner(owner, ibMetaDescription(kind->GetMetaID()))),
+			ibVariant(new ibVariantOwner(owner, ibMetaDescription(kind->GetMetaID()))),
 			kind->GetClassType());
 	};
 
@@ -66,7 +66,7 @@ bool ibPropertyAccountingKind::SetDataValue(const ibValue& varPropVal) { return 
 
 bool ibPropertyAccountingKind::GetDataValue(ibValue& pvarPropVal) const
 {
-	const ibPropertyValueOwner* owner = get_cell_variant<ibPropertyValueOwner>();
+	const ibVariantOwner* owner = get_cell_variant<ibVariantOwner>();
 	wxASSERT(owner);
 	pvarPropVal = owner->GetDataValue();
 	return true;

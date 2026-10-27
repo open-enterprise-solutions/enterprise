@@ -18,7 +18,7 @@
 
 #include "core/compiler/translateCode.h"   // ibTranslateCode (char primitives)
 #include "core/core.h"   // CORE_API
-#include "core/compiler/literal.h"   // ibLiteral — a constant as the text wrote it
+#include "core/variant.h"   // ibVariant — a constant as the text wrote it
 #include "core/query/queryKeywords.h"
 
 #include <vector>
@@ -32,13 +32,13 @@ enum class ibQueryTokenKind
 
 // One lexer token. Identifiers carry their ORIGINAL case in m_text (metaobject /
 // attribute name resolution is case-insensitive but the original is preserved);
-// literals carry a ready constant in m_literal (ibLiteral — the core's, so no runtime is under it).
+// literals carry a ready constant in m_literal (ibVariant — the core's, so no runtime is under it).
 struct ibQueryToken
 {
 	ibQueryTokenKind m_kind    = ibQueryTokenKind::End;
 	ibQueryKeyword   m_keyword = ibQueryKeyword::None;   // kind == Keyword
 	ibString         m_text;        // Ident / Param name (original case); Op / Punct text
-	ibLiteral        m_literal;     // Number / String / Date constant
+	ibVariant        m_literal;     // Number / String / Date constant
 	unsigned int     m_line    = 0; // 1-based source line (diagnostics)
 	unsigned int     m_col     = 0; // character offset of the token start (diagnostics)
 

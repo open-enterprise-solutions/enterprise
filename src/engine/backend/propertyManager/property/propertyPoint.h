@@ -6,7 +6,7 @@
 
 //base property for "point"
 class BACKEND_API ibPropertyPoint : public ibProperty {
-	static ibPropertyValue CreateVariantData(const ibPoint& val);
+	static ibVariant CreateVariantData(const ibPoint& val);
 public:
 
 	ibPoint GetValueAsPoint() const;

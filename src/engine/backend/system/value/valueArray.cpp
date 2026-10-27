@@ -403,7 +403,7 @@ bool ibValueArray::DoDeserialize(const ibDataNode& node)
 // id walks a registry. Both comparators below sit on the per-row path of a join
 // or a sort — and on the per-ELEMENT path for a nested array — so this is the
 // difference between a check that disappears and one that dominates.
-const ibValueArray* ibValueArray::AsArray(const ibValue& cParam) const
+const ibValueArray* ibValueArray::AsArray(const ibVariant& cParam) const
 {
 	return dynamic_cast<const ibValueArray*>(cParam.GetRef());
 }
@@ -414,7 +414,7 @@ const ibValueArray* ibValueArray::AsArray(const ibValue& cParam) const
 // vector's own comparison, handed the element comparator to use. Writing the
 // loop by hand would restate what those already say (common prefix first, then
 // length) and give the off-by-one somewhere to hide.
-int ibValueArray::CompareValueLS(const ibValue& cParam) const
+int ibValueArray::CompareValueLS(const ibVariant& cParam) const
 {
 	const ibValueArray* rhs = AsArray(cParam);
 	if (rhs == nullptr)
@@ -446,7 +446,7 @@ size_t ibValueArray::GetValueHash() const
 // Equality asks the elements for EQUALITY, not for order-equal: the EQ family is
 // type-strict where the order family is not, and an array must not quietly
 // upgrade its elements to the looser rule.
-bool ibValueArray::CompareValueEQ(const ibValue& cParam) const
+bool ibValueArray::CompareValueEQ(const ibVariant& cParam) const
 {
 	const ibValueArray* rhs = AsArray(cParam);
 	if (rhs == nullptr)

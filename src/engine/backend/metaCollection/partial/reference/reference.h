@@ -159,7 +159,7 @@ public:
 	// different target type order-equal — and EVERY empty reference has an all-zero guid, so type is the ONLY
 	// thing telling an empty ref of type A from one of type B. Keeping LS==0 in lockstep with CompareValueEQ
 	// (type + guid) is what dedup / merge rely on. Out-of-line (reference.cpp): m_metaObject is incomplete here.
-	virtual int CompareValueLS(const ibValue& cParam) const override;
+	virtual int CompareValueLS(const ibVariant& cParam) const override;
 
 	// ⭐⭐ EQUALITY IS THE ORDER'S OWN ANSWER, not a second opinion about it. The invariant this class is
 	// written to — `LS == 0` exactly when two references are the same one — was being kept by THREE
@@ -169,7 +169,7 @@ public:
 	//
 	// 🛑 That drift is not hypothetical — it is exactly the shape that cost 2026-08-29: the order said
 	// "equal" where it meant "not comparable", and every hash container in the house believed it.
-	virtual bool CompareValueEQ(const ibValue& cParam) const override { return CompareValueLS(cParam) == 0; }
+	virtual bool CompareValueEQ(const ibVariant& cParam) const override { return CompareValueLS(cParam) == 0; }
 
 	// Hashes by the GUID — the order's FIRST key, and the whole of identity for a
 	// reference that points at something. The type is deliberately left out: it
@@ -192,7 +192,7 @@ public:
 	}
 
 	//operator '!=' — the same one answer, negated. Never a third telling of it.
-	virtual bool CompareValueNE(const ibValue& cParam) const override { return CompareValueLS(cParam) != 0; }
+	virtual bool CompareValueNE(const ibVariant& cParam) const override { return CompareValueLS(cParam) != 0; }
 
 	virtual bool FindValue(const ibString& findData, std::vector<ibValue>& listValue) const;
 

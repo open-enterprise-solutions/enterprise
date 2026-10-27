@@ -77,10 +77,10 @@ public:
 	// derived classes should override these methods instead of
 	// {Get,Set}Value() and GetAttr() inherited from the base class
 
-	virtual void GetValueByRow(wxVariant& variant,
+	virtual void GetValueByRow(ibVariant& variant,
 		unsigned row, unsigned col) const = 0;
 
-	virtual bool SetValueByRow(const wxVariant& variant,
+	virtual bool SetValueByRow(const ibVariant& variant,
 		unsigned row, unsigned col) = 0;
 
 	virtual bool
@@ -118,13 +118,13 @@ public:
 	}
 
 	// and implement some others by forwarding them to our own ones
-	virtual void GetValue(wxVariant& variant,
+	virtual void GetValue(ibVariant& variant,
 		const ibDataViewItem& item, unsigned int col) const wxOVERRIDE
 	{
 		GetValueByRow(variant, GetRow(item), col);
 	}
 
-	virtual bool SetValue(const wxVariant& variant,
+	virtual bool SetValue(const ibVariant& variant,
 		const ibDataViewItem& item, unsigned int col) wxOVERRIDE
 	{
 		return SetValueByRow(variant, GetRow(item), col);
@@ -921,8 +921,8 @@ public:
 	int GetColumn() const { return m_col; }
 	ibDataViewModel* GetModel() const { return m_model; }
 
-	const wxVariant& GetValue() const { return m_value; }
-	void SetValue(const wxVariant& value) { m_value = value; }
+	const ibVariant& GetValue() const { return m_value; }
+	void SetValue(const ibVariant& value) { m_value = value; }
 
 	// for wxEVT_DATAVIEW_ITEM_EDITING_DONE only
 	bool IsEditCancelled() const { return m_editCancelled; }
@@ -990,7 +990,7 @@ protected:
 	ibDataViewItem      m_item;
 	int                 m_col;
 	ibDataViewModel* m_model;
-	wxVariant           m_value;
+	ibVariant           m_value;
 	ibDataViewColumn* m_column;
 	wxPoint             m_pos;
 	int                 m_cacheFrom;
@@ -1114,7 +1114,7 @@ public:
 		return m_data;
 	}
 
-	wxVector<wxVariant>  m_values;
+	wxVector<ibVariant>  m_values;
 
 private:
 	wxUIntPtr m_data;
@@ -1130,9 +1130,9 @@ public:
 	void InsertColumn(unsigned int pos, const wxString& varianttype);
 	void AppendColumn(const wxString& varianttype);
 
-	void AppendItem(const wxVector<wxVariant>& values, wxUIntPtr data = 0);
-	void PrependItem(const wxVector<wxVariant>& values, wxUIntPtr data = 0);
-	void InsertItem(unsigned int row, const wxVector<wxVariant>& values, wxUIntPtr data = 0);
+	void AppendItem(const wxVector<ibVariant>& values, wxUIntPtr data = 0);
+	void PrependItem(const wxVector<ibVariant>& values, wxUIntPtr data = 0);
+	void InsertItem(unsigned int row, const wxVector<ibVariant>& values, wxUIntPtr data = 0);
 	void DeleteItem(unsigned int pos);
 	void DeleteAllItems();
 	void ClearColumns();
@@ -1144,10 +1144,10 @@ public:
 
 	// override base virtuals
 
-	virtual void GetValueByRow(wxVariant& value,
+	virtual void GetValueByRow(ibVariant& value,
 		unsigned int row, unsigned int col) const wxOVERRIDE;
 
-	virtual bool SetValueByRow(const wxVariant& value,
+	virtual bool SetValueByRow(const ibVariant& value,
 		unsigned int row, unsigned int col) wxOVERRIDE;
 
 
@@ -1234,15 +1234,15 @@ public:
 		ibDataViewCellMode mode = wxDATAVIEW_CELL_INERT, int width = wxCOL_WIDTH_DEFAULT,
 		wxAlignment align = wxALIGN_LEFT, int flags = wxDATAVIEW_COL_RESIZABLE);
 
-	void AppendItem(const wxVector<wxVariant>& values, wxUIntPtr data = 0)
+	void AppendItem(const wxVector<ibVariant>& values, wxUIntPtr data = 0)
 	{
 		GetStore()->AppendItem(values, data);
 	}
-	void PrependItem(const wxVector<wxVariant>& values, wxUIntPtr data = 0)
+	void PrependItem(const wxVector<ibVariant>& values, wxUIntPtr data = 0)
 	{
 		GetStore()->PrependItem(values, data);
 	}
-	void InsertItem(unsigned int row, const wxVector<wxVariant>& values, wxUIntPtr data = 0)
+	void InsertItem(unsigned int row, const wxVector<ibVariant>& values, wxUIntPtr data = 0)
 	{
 		GetStore()->InsertItem(row, values, data);
 	}
@@ -1255,12 +1255,12 @@ public:
 		GetStore()->DeleteAllItems();
 	}
 
-	void SetValue(const wxVariant& value, unsigned int row, unsigned int col)
+	void SetValue(const ibVariant& value, unsigned int row, unsigned int col)
 	{
 		GetStore()->SetValueByRow(value, row, col);
 		GetStore()->RowValueChanged(row, col);
 	}
-	void GetValue(wxVariant& value, unsigned int row, unsigned int col)
+	void GetValue(ibVariant& value, unsigned int row, unsigned int col)
 	{
 		GetStore()->GetValueByRow(value, row, col);
 	}
@@ -1272,7 +1272,7 @@ public:
 	}
 	wxString GetTextValue(unsigned int row, unsigned int col) const
 	{
-		wxVariant value; GetStore()->GetValueByRow(value, row, col); return value.GetString();
+		ibVariant value; GetStore()->GetValueByRow(value, row, col); return value.GetString();
 	}
 
 	void SetToggleValue(bool value, unsigned int row, unsigned int col)
@@ -1282,7 +1282,7 @@ public:
 	}
 	bool GetToggleValue(unsigned int row, unsigned int col) const
 	{
-		wxVariant value; GetStore()->GetValueByRow(value, row, col); return value.GetBool();
+		ibVariant value; GetStore()->GetValueByRow(value, row, col); return value.GetBoolean();
 	}
 
 	void SetItemData(const ibDataViewItem& item, wxUIntPtr data)
@@ -1482,9 +1482,9 @@ public:
 
 	// implement base methods
 
-	virtual void GetValue(wxVariant& variant,
+	virtual void GetValue(ibVariant& variant,
 		const ibDataViewItem& item, unsigned int col) const wxOVERRIDE;
-	virtual bool SetValue(const wxVariant& variant,
+	virtual bool SetValue(const ibVariant& variant,
 		const ibDataViewItem& item, unsigned int col) wxOVERRIDE;
 	virtual ibDataViewItem GetParent(const ibDataViewItem& item) const wxOVERRIDE;
 	virtual bool IsContainer(const ibDataViewItem& item) const wxOVERRIDE;

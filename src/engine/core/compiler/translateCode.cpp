@@ -1190,7 +1190,7 @@ bool ibTranslateCode::Translate()
 				//undefined
 				if (k == KEY_UNDEFINED && !member) {
 					m_current_lex.m_lexType = CONSTANT;
-					m_current_lex.m_valData = ibLiteral();
+					m_current_lex.m_valData = ibVariant();
 				}
 				//boolean
 				else if ((k == KEY_TRUE || k == KEY_FALSE) && !member) {
@@ -1200,7 +1200,7 @@ bool ibTranslateCode::Translate()
 				//null
 				else if (k == KEY_NULL && !member) {
 					m_current_lex.m_lexType = CONSTANT;
-					m_current_lex.m_valData = ibLiteral(ibValueTypes::TYPE_NULL);
+					m_current_lex.m_valData = ibVariant(ibValueTypes::TYPE_NULL);
 				}
 				else {
 
@@ -1248,7 +1248,7 @@ bool ibTranslateCode::Translate()
 									m_listLexem[n].m_numData == ibT('='))) {
 								n++;
 								if (m_listLexem[n].m_numData == ibT('-'))
-									m_current_lex.m_valData = ibLiteral(-m_current_lex.m_valData.GetNumber());
+									m_current_lex.m_valData = ibVariant(-m_current_lex.m_valData.GetNumber());
 								m_listLexem[n] = m_current_lex;
 								continue;
 							}
@@ -1526,7 +1526,7 @@ void ibTranslateCode::Translate(const ibTextEdit& edit)
 				//undefined
 				if (k == KEY_UNDEFINED && !member) {
 					m_current_lex.m_lexType = CONSTANT;
-					m_current_lex.m_valData = ibLiteral();
+					m_current_lex.m_valData = ibVariant();
 				}
 				//boolean
 				else if ((k == KEY_TRUE || k == KEY_FALSE) && !member) {
@@ -1536,7 +1536,7 @@ void ibTranslateCode::Translate(const ibTextEdit& edit)
 				//null
 				else if (k == KEY_NULL && !member) {
 					m_current_lex.m_lexType = CONSTANT;
-					m_current_lex.m_valData = ibLiteral(ibValueTypes::TYPE_NULL);
+					m_current_lex.m_valData = ibVariant(ibValueTypes::TYPE_NULL);
 				}
 				else {
 
@@ -1568,7 +1568,7 @@ void ibTranslateCode::Translate(const ibTextEdit& edit)
 					auto prev = std::prev(hint, 1);
 					if (prev != m_listLexem.begin() && prev->m_lexType == DELIMITER && (prev->m_numData == '[' || prev->m_numData == '(' || prev->m_numData == ',' || prev->m_numData == '<' || prev->m_numData == '>' || prev->m_numData == '=')) {
 						if (hint->m_numData == '-')
-							m_current_lex.m_valData = ibLiteral(-m_current_lex.m_valData.GetNumber());
+							m_current_lex.m_valData = ibVariant(-m_current_lex.m_valData.GetNumber());
 						*hint = std::move(m_current_lex);
 						continue;
 					}

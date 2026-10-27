@@ -113,7 +113,7 @@ public:
 
 	virtual wxWindow* CreateEditorCtrl(wxWindow* dv,
 		wxRect labelRect,
-		const wxVariant& value) override {
+		const ibVariant& value) override {
 
 		if (m_editor != nullptr)
 			m_editor->SetEditedRow(m_item);   // the window holds it — see ibFilterEditor::SetEditedRow
@@ -124,7 +124,7 @@ public:
 		// create the window hidden to prevent flicker
 		textEditor->Show(false);
 
-		bool result = textEditor->Create(dv, wxID_ANY, value,
+		bool result = textEditor->Create(dv, wxID_ANY, value.GetString().ToWxString(),
 			labelRect.GetPosition(),
 			labelRect.GetSize());
 
@@ -172,7 +172,7 @@ public:
 		return textEditor;
 	}
 
-	virtual bool GetValueFromEditorCtrl(wxWindow* ctrl, wxVariant& value) override {
+	virtual bool GetValueFromEditorCtrl(wxWindow* ctrl, ibVariant& value) override {
 		ibControlTextEditor* textEditor = wxDynamicCast(ctrl, ibControlTextEditor);
 		if (textEditor == nullptr)
 			return false;
@@ -284,7 +284,7 @@ public:
 		const ibValueTypes vt = ibValue::GetVTByID(selValue.GetClassType());
 		if (vt == ibValueTypes::TYPE_NUMBER || vt == ibValueTypes::TYPE_DATE)
 			return true;
-		std::vector<ibValue> offered;
+		std::vector<ibVariant> offered;
 		return selValue.FindValue(wxEmptyString, offered);
 	}
 

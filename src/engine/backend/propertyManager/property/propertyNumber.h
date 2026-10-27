@@ -6,7 +6,7 @@
 
 //base property for "number"
 class BACKEND_API ibPropertyNumber : public ibProperty {
-	static ibPropertyValue CreateVariantData(const ibNumber& val);
+	static ibVariant CreateVariantData(const ibNumber& val);
 public:
 
 	ibNumber& GetValueAsNumber() const;
@@ -44,7 +44,7 @@ public:
 
 //base property for "integer"
 class BACKEND_API ibPropertyInteger : public ibProperty {
-	static ibPropertyValue CreateVariantData(const int& val) { return ibPropertyValue(val); }
+	static ibVariant CreateVariantData(const int& val) { return ibVariant(val); }
 public:
 
 	void SetValue(const int& val) { m_propValue = CreateVariantData(val); }
@@ -94,7 +94,7 @@ public:
 
 //base property for "unsigned integer"
 class BACKEND_API ibPropertyUInteger : public ibProperty {
-	static ibPropertyValue CreateVariantData(const unsigned int& val) { return ibPropertyValue(val); }
+	static ibVariant CreateVariantData(const unsigned int& val) { return ibVariant(val); }
 public:
 
 	void SetValue(const unsigned int& val) { m_propValue = CreateVariantData(val); }

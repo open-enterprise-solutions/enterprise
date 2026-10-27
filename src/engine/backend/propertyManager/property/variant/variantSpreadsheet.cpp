@@ -1,6 +1,6 @@
 #include "variantSpreadsheet.h"
 
-ibString ibPropertyValueSpreadsheet::GetString() const
+ibString ibVariantSpreadsheet::GetString() const
 {
 	return _("Template");
 }

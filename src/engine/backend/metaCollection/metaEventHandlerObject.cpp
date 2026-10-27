@@ -37,7 +37,7 @@ bool ibValueMetaObjectEventHandler::Handles(const ibClassID& sourceType, long ev
 {
 	// The number the property keeps, as it is kept: the door asks this on every event raised, and the
 	// property's own reading refills its list from the source first.
-	const ibPropertyValue& event = m_propertyEvent->GetValue();
+	const ibVariant& event = m_propertyEvent->GetValue();
 	if (event.GetType() == ibValueTypes::TYPE_EMPTY || event.GetInteger() != eventId)
 		return false;
 	return ibValueTypeDescription::AllowValue(GetSource(), sourceType, m_metaData);
@@ -117,7 +117,7 @@ void ibValueMetaObjectEventHandler::PrepareModule()
 	}
 }
 
-void ibValueMetaObjectEventHandler::OnPropertyChanged(ibProperty* property, const ibPropertyValue& oldValue, const ibPropertyValue& newValue)
+void ibValueMetaObjectEventHandler::OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue)
 {
 	if (property == m_propertySource || property == m_propertyEvent)
 		PrepareModule();

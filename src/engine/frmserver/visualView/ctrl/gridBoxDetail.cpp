@@ -38,9 +38,9 @@ void ibCollectCellContext(const ibSpreadsheetObject* document, int row, int col,
 
 	ibString bound;
 	document->GetCellDetailsParameter(row, col, bound);
-	ibAnyValuePtr<ibAnyValue> held;
+	ibVariant held;
 	if (!bound.IsEmpty() && document->GetParameter(bound, held)) {
-		const ibValue cellValue = ibValue::FromAnyValue(held);   // held, not a temporary — From returns a pointer INTO it
+		const ibValue cellValue(held);
 		if (ibValueSpreadsheetDetails* details = ibValueSpreadsheetDetails::From(cellValue))
 			details->CollectContext(into);
 	}

@@ -177,8 +177,8 @@ public:
 	const ibBackendQueryColumn* GetFolderDisplayColumn() const override { return m_folderColumn; }
 
 	// --- ibValueModel / ibValueModelCursor --------------------------------
-	virtual void GetValueByRow(wxVariant& variant, const ibDataViewItem& item, unsigned col) const override;
-	virtual bool SetValueByRow(const wxVariant& variant, const ibDataViewItem& item, unsigned col) override;
+	virtual void GetValueByRow(ibVariant& variant, const ibDataViewItem& item, unsigned col) const override;
+	virtual bool SetValueByRow(const ibVariant& variant, const ibDataViewItem& item, unsigned col) override;
 	virtual bool GetValueByMetaID(const ibDataViewItem& item, const ibMetaID& id, ibValue& pvarMetaVal) const override;
 	virtual bool SetValueByMetaID(const ibDataViewItem& item, const ibMetaID& id, const ibValue& varMetaVal) override { return false; }
 	
@@ -276,7 +276,7 @@ public:
 	virtual ibString GetClassName() const override { return ibValue::GetClassName(); }
 	virtual ibString GetObjectTypeName() const override { return GetClassName(); }
 	virtual bool IsEditable() const override { return true; }
-	virtual void OnPropertyChanged(ibProperty* property, const ibPropertyValue& oldValue, const ibPropertyValue& newValue) override;
+	virtual void OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue) override;
 	virtual void OnChildChanged() override;   // a source / settings change rebuilds the columns, then tells the holder
 	virtual bool ReadProperty(const ibDataNode& node) override;
 	virtual bool WriteProperty(ibDataNode& node) const override;

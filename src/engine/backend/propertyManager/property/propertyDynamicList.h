@@ -21,7 +21,7 @@
 class BACKEND_API ibPropertyDynamicList : public ibProperty {
 	// ONE maker with a default, the way ibPropertySpreadsheet has one over its description — a second
 	// overload for "no value yet" would be the empty description spelled twice.
-	static ibPropertyValue CreateVariantData(ibPropertyObject* property,
+	static ibVariant CreateVariantData(ibPropertyObject* property,
 	                                        const ibCompositionDescription& val = ibCompositionDescription());
 public:
 

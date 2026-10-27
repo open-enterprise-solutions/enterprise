@@ -240,7 +240,7 @@ TEST(SpreadsheetCompose, AFigureIsLinkedToItsHeading)
 	doc->GetCellDetailsParameter(1, 1, name);   // the figure's own cell
 	ASSERT_FALSE(name.IsEmpty());
 
-	ibValue bound = ibValue::FromAnyValue(doc->GetParameter(name));   // held: From returns a pointer INTO it
+	ibValue bound = ibValue(doc->GetParameter(name));
 	ibValueSpreadsheetDetails* figure = ibValueSpreadsheetDetails::From(bound);
 	ASSERT_TRUE(figure != nullptr);
 	EXPECT_EQ(wxT("Amount"), figure->GetPath());
@@ -278,7 +278,7 @@ TEST(SpreadsheetCompose, AHeadingIsItsOwnContext)
 	doc->GetCellDetailsParameter(1, 0, name);
 	ASSERT_FALSE(name.IsEmpty());
 
-	ibValue bound = ibValue::FromAnyValue(doc->GetParameter(name));
+	ibValue bound = ibValue(doc->GetParameter(name));
 	ibValueSpreadsheetDetails* heading = ibValueSpreadsheetDetails::From(bound);
 	ASSERT_TRUE(heading != nullptr);
 
@@ -648,7 +648,7 @@ TEST(SpreadsheetCross, ACellIsLinkedToBothItsHeadings)
 	doc->GetCellDetailsParameter(1, 1, name);   // where Alpha meets the North
 	ASSERT_FALSE(name.IsEmpty());
 
-	ibValue bound = ibValue::FromAnyValue(doc->GetParameter(name));
+	ibValue bound = ibValue(doc->GetParameter(name));
 	ibValueSpreadsheetDetails* cell = ibValueSpreadsheetDetails::From(bound);
 	ASSERT_TRUE(cell != nullptr);
 	EXPECT_EQ(size_t(2), cell->GetParents().size());

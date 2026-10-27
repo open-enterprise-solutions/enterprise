@@ -50,7 +50,7 @@ public:
 	// The line a row is — see ibSettingsListedLines.
 	size_t LineAt(size_t row) const { return m_listed.At(row); }
 	unsigned int GetListedCount() const { return m_listed.Count(); }
-	virtual void GetValueByRow(wxVariant& variant, unsigned row, unsigned col) const override {
+	virtual void GetValueByRow(ibVariant& variant, unsigned row, unsigned col) const override {
 		ibGroupDescription* g = GetGroup();
 		if (g == nullptr) return;
 		// BOUNDS FIRST. The view paints rows it has, the list may already have fewer
@@ -65,7 +65,7 @@ public:
 			variant = ibValue::CreateEnumObject<ibValueEnumGroupKind>(
 				g->m_lines[at].m_kind).GetString();
 	}
-	virtual bool SetValueByRow(const wxVariant&, unsigned, unsigned) override { return false; }
+	virtual bool SetValueByRow(const ibVariant&, unsigned, unsigned) override { return false; }
 };
 
 // ===========================================================================

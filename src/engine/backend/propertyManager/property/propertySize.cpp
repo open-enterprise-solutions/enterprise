@@ -6,14 +6,14 @@
 
 ////////////////////////////////////////////////////////////////////////
 
-ibPropertyValue ibPropertySize::CreateVariantData(const ibSize& val)
+ibVariant ibPropertySize::CreateVariantData(const ibSize& val)
 {
-	return ibPropertyValue(new ibPropertyValueSize(val));
+	return ibVariant(new ibVariantSize(val));
 }
 
 ibSize ibPropertySize::GetValueAsSize() const
 {
-	return get_cell_variant<ibPropertyValueSize>()->GetSize();
+	return get_cell_variant<ibVariantSize>()->GetSize();
 }
 
 ////////////////////////////////////////////////////////////////////////

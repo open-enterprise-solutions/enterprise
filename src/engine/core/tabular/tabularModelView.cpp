@@ -330,77 +330,8 @@ void ibDataViewModel::RemoveNotifier(ibDataViewModelNotifier* notifier)
 }
 
 int ibDataViewModel::Compare(const ibDataViewItem& item1, const ibDataViewItem& item2,
-	unsigned int column, bool ascending) const
+	unsigned int /*column*/, bool ascending) const
 {
-	wxVariant value1, value2;
-
-	// Avoid calling GetValue() for the cells that are not supposed to have any
-	// value, this might be unexpected.
-	if (HasValue(item1, column))
-		GetValue(value1, item1, column);
-	if (HasValue(item2, column))
-		GetValue(value2, item2, column);
-
-	if (!ascending)
-	{
-		wxVariant temp = value1;
-		value1 = value2;
-		value2 = temp;
-	}
-
-	if (value1.GetType() == ibT("string"))
-	{
-		ibString str1 = value1.GetString();
-		ibString str2 = value2.GetString();
-		int res = str1.Cmp(str2);
-		if (res)
-			return res;
-	}
-	else if (value1.GetType() == ibT("long"))
-	{
-		long l1 = value1.GetLong();
-		long l2 = value2.GetLong();
-		if (l1 < l2)
-			return -1;
-		else if (l1 > l2)
-			return 1;
-	}
-	else if (value1.GetType() == ibT("double"))
-	{
-		double d1 = value1.GetDouble();
-		double d2 = value2.GetDouble();
-		if (d1 < d2)
-			return -1;
-		else if (d1 > d2)
-			return 1;
-	}
-#if wxUSE_DATETIME
-	else if (value1.GetType() == ibT("datetime"))
-	{
-		wxDateTime dt1 = value1.GetDateTime();
-		wxDateTime dt2 = value2.GetDateTime();
-		if (dt1.IsEarlierThan(dt2))
-			return -1;
-		if (dt2.IsEarlierThan(dt1))
-			return 1;
-	}
-#endif // wxUSE_DATETIME
-	else if (value1.GetType() == ibT("bool"))
-	{
-		bool b1 = value1.GetBool();
-		bool b2 = value2.GetBool();
-
-		if (b1 != b2)
-			return b1 ? 1 : -1;
-	}
-	else
-	{
-		int res = DoCompareValues(value1, value2);
-		if (res != 0)
-			return res;
-	}
-
-
 	// items must be different
 	wxUIntPtr id1 = wxPtrToUInt(item1.GetID()),
 		id2 = wxPtrToUInt(item2.GetID());

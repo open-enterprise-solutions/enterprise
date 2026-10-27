@@ -32,7 +32,7 @@ bool ibBackendMetaDescriptionMemory::WriteNode(ibDataValue& value, const ibMetaD
 		// back, saved, reopened — and gone, with no error anywhere (found with probes over MCP,
 		// 2026-09-16). The rule this filter states — "an id that names no object is not written" —
 		// is about existence, and existence does not depend on depth. The READING side asks the
-		// same way (ibPropertyValueOwner), or a binding that was written is unreadable.
+		// same way (ibVariantOwner), or a binding that was written is unreadable.
 		const ibValueMetaObject* named = metaData->FindAnyObjectByFilter(id, /*use_child_filter*/ true);
 		if (named == nullptr || named->IsDeleted())
 			continue;
@@ -239,7 +239,7 @@ ibTypeDescription& ibBackendTypeConfigFactory::GetTypeValueDesc() const
 	return chart->GetTypesOfCharacteristics();
 }
 
-// The one filter-kind -> default value clsid mapping. Static so both ibPropertyValueAttribute::DoSetDefault-
+// The one filter-kind -> default value clsid mapping. Static so both ibVariantAttribute::DoSetDefault-
 // MetaType and ibValueControl::AutoBindNewSource resolve the SAME default type for a given filter kind.
 ibClassID ibBackendTypeConfigFactory::GetDefaultTypeByFilter(ibSelectorDataType filterDataType)
 {

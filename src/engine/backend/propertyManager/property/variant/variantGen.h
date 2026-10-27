@@ -3,17 +3,15 @@
 
 #include "backend/propertyManager/property/variant/variantMetaDesc.h"
 
-class BACKEND_API ibPropertyValueGeneration : public ibPropertyValueMetaDesc {
+class BACKEND_API ibVariantGeneration : public ibVariantMetaDesc {
 public:
 
 	ibValue GetDataValue() const;
 
-	ibPropertyValueGeneration(const ibPropertyObject* prop, const ibMetaDescription& typeDesc) : ibPropertyValueMetaDesc(prop, typeDesc) {}
-	ibPropertyValueGeneration(const ibPropertyValueGeneration& src) : ibPropertyValueMetaDesc(src.m_ownerProperty, src.m_metaDesc) {}
+	ibVariantGeneration(const ibPropertyObject* prop, const ibMetaDescription& typeDesc) : ibVariantMetaDesc(prop, typeDesc) {}
+	ibVariantGeneration(const ibVariantGeneration& src) : ibVariantMetaDesc(src.m_ownerProperty, src.m_metaDesc) {}
 
-	virtual ibPropertyValueGeneration* Clone() const {
-		return new ibPropertyValueGeneration(*this);
-	}
+	virtual ibVariant CloneValue() const override { return ibVariant(new ibVariantGeneration(*this)); }
 
 	virtual ibString GetString() const override;
 

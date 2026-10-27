@@ -7,11 +7,12 @@
 #include <mutex>
 #include <vector>
 
-#include <wx/variant.h>
+#include <wx/object.h>      // wxRefCounter — an item's count and the model's
 #include <wx/dynarray.h>
 #include <wx/itemid.h>
 
 #include "core/core.h"              // CORE_API, ibPictureID
+#include "core/variant.h"            // ibVariant — a cell's value, the same on either side
 #include "core/graphics/colour.h"   // ibColour — an item's colours as data; each side converts them to its own
 
 // ⭐ ONE MODEL VIEW FOR BOTH SIDES — the server's tables and the thin client's draw over the same one. The two
@@ -398,8 +399,8 @@ class CORE_API ibDataViewModel : public wxRefCounter
 public:
 	ibDataViewModel();
 
-	// get value into a wxVariant
-	virtual void GetValue(wxVariant& variant,
+	// ⭐ A CELL'S VALUE IS A VARIANT — the engine's ibValue is one and goes in as it is, the client's is one too.
+	virtual void GetValue(ibVariant& value,
 		const ibDataViewItem& item, unsigned int col) const = 0;
 
 	// return true if the given item has a value to display in the given
@@ -414,15 +415,15 @@ public:
 	// model to update the control, ChangeValue() does it on its own while
 	// SetValue() does not -- so while you will override SetValue(), you should
 	// be usually calling ChangeValue()
-	virtual bool SetValue(const wxVariant& variant,
+	virtual bool SetValue(const ibVariant& value,
 		const ibDataViewItem& item,
 		unsigned int col) = 0;
 
-	bool ChangeValue(const wxVariant& variant,
+	bool ChangeValue(const ibVariant& value,
 		const ibDataViewItem& item,
 		unsigned int col)
 	{
-		return SetValue(variant, item, col) && ValueChanged(item, col);
+		return SetValue(value, item, col) && ValueChanged(item, col);
 	}
 
 	// Get text attribute, return false of default attributes should be used
@@ -649,7 +650,8 @@ public:
 
 	int GetViewCount() const { return m_notifiers.size(); }
 
-	// default compare function
+	// The default order is the items' own: sorting by a value is the fetch's (the composer's ORDER BY), and the core
+	// reads no value to compare.
 	virtual int Compare(const ibDataViewItem& item1, const ibDataViewItem& item2,
 		unsigned int column, bool ascending) const;
 	virtual bool HasDefaultCompare() const { return false; }
@@ -678,15 +680,6 @@ protected:
 	// outlive the model it is reading.
 	virtual ~ibDataViewModel();
 
-
-	// Helper function used by the default Compare() implementation to compare
-	// values of types it is not aware about. Can be overridden in the derived
-	// classes that use columns of custom types.
-	virtual int DoCompareValues(const wxVariant& /*value1*/,
-		const wxVariant& /*value2*/) const
-	{
-		return 0;
-	}
 
 private:
 	ibDataViewModelNotifiers  m_notifiers;

@@ -152,7 +152,7 @@ public:
 protected:
 
 	// A source change re-takes the model — the one event this control answers.
-	virtual void OnPropertyChanged(ibProperty* property, const ibPropertyValue& oldValue, const ibPropertyValue& newValue) override;
+	virtual void OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue) override;
 
 private:
 

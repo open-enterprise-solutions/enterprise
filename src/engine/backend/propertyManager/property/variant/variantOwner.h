@@ -4,17 +4,15 @@
 #include "backend/metaCollection/partial/commonObject.h"
 #include "backend/propertyManager/property/variant/variantMetaDesc.h"
 
-class BACKEND_API ibPropertyValueOwner : public ibPropertyValueMetaDesc {
+class BACKEND_API ibVariantOwner : public ibVariantMetaDesc {
 public:
 
 	ibValue GetDataValue() const;
 
-	ibPropertyValueOwner(const ibPropertyObject* prop, const ibMetaDescription& typeDesc) : ibPropertyValueMetaDesc(prop, typeDesc) {}
-	ibPropertyValueOwner(const ibPropertyValueOwner& src) : ibPropertyValueMetaDesc(src.m_ownerProperty, src.m_metaDesc) {}
+	ibVariantOwner(const ibPropertyObject* prop, const ibMetaDescription& typeDesc) : ibVariantMetaDesc(prop, typeDesc) {}
+	ibVariantOwner(const ibVariantOwner& src) : ibVariantMetaDesc(src.m_ownerProperty, src.m_metaDesc) {}
 
-	virtual ibPropertyValueOwner* Clone() const {
-		return new ibPropertyValueOwner(*this);
-	}
+	virtual ibVariant CloneValue() const override { return ibVariant(new ibVariantOwner(*this)); }
 
 	virtual ibString GetString() const override;
 
@@ -59,7 +57,7 @@ inline ibPropertyChoiceMode CreateValueList(ibPropertyObject* owner, ibPropertyC
 		// work out: it places this. A single metaID, because one choice is one relationship — a
 		// Mult-mode property composes the set from the ones that were picked.
 		list.Add((long)object->GetMetaID(), object->GetName(), object->GetSynonym(),
-			ibPropertyValue(new ibPropertyValueOwner(factory, ibMetaDescription(object->GetMetaID()))),
+			ibVariant(new ibVariantOwner(factory, ibMetaDescription(object->GetMetaID()))),
 			object->GetClassType());
 	}
 

@@ -1,6 +1,6 @@
 #include "variantForm.h"
 
-ibString ibPropertyValueForm::GetString() const
+ibString ibVariantForm::GetString() const
 {
 	return _("Form");
 }

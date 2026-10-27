@@ -28,7 +28,7 @@
 #include "core/fnumber.h"
 #include "core/core.h"    // ibValueTypes, ibDateFractions — what a type description is asked
 
-class ibAnyValue;
+class ibVariant;
 
 // Which values a code applies to.
 enum class ibFormatKind {
@@ -141,15 +141,15 @@ public:
 	}
 
 	// What Format(value, this) prints: a number, a date and a boolean each by their own codes, any
-	// other value as its plain string. The value is either side's — the engine's ibValue, the client's —
-	// asked what every value answers (anyValue.h: its kind, its number, date, flag, emptiness and text).
-	ibString Apply(const ibAnyValue& value) const;
+	// other value as its plain string. The value is a variant — the engine's ibValue is one, the client's too —
+	// asked what every value answers (variant.h: its kind, its number, date, flag, emptiness and text).
+	ibString Apply(const ibVariant& value) const;
 
 	// …THE SAME TEXT, WRITTEN INTO `result` — the form a caller showing many values uses (a column of a
 	// report goes through here once per cell): a string reused row after row grows once, an ordinary
 	// amount is laid out on the stack (ibNumber::ToString) and a date straight from its pattern. False when
 	// the value shows as nothing.
-	bool Apply(const ibAnyValue& value, ibString& result) const;
+	bool Apply(const ibVariant& value, ibString& result) const;
 
 	// A value that can be written at all: `;` ends a pair and `=` is not kept in one, so neither
 	// can stand in a text.

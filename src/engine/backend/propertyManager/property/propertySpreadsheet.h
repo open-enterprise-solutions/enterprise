@@ -6,7 +6,7 @@
 
 //base property for "spreadsheet"
 class BACKEND_API ibPropertySpreadsheet : public ibProperty {
-	static ibPropertyValue CreateVariantData(const ibSpreadsheetDescription& val = ibSpreadsheetDescription());
+	static ibVariant CreateVariantData(const ibSpreadsheetDescription& val = ibSpreadsheetDescription());
 public:
 
 #pragma region _value_

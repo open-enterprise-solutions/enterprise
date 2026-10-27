@@ -75,7 +75,7 @@ public:
 	using IconReader = std::function<wxIcon(unsigned int row)>;
 	void SetIconReader(IconReader reader) { m_iconReader = std::move(reader); }
 
-	void GetValueByRow(wxVariant& variant, unsigned row, unsigned col) const override
+	void GetValueByRow(ibVariant& variant, unsigned row, unsigned col) const override
 	{
 		if (!m_reader)
 			return;
@@ -84,18 +84,18 @@ public:
 		if (col == m_iconColumn) {
 			const wxIcon icon = m_iconReader ? m_iconReader(row) : wxNullIcon;
 			if (icon.IsOk()) {
-				variant << ibDataViewIconText(text, icon);
+				variant = new ibDataViewIconText(text, icon);
 				return;
 			}
 			if (m_icon.IsOk()) {
-				variant << ibDataViewIconText(text, m_icon);
+				variant = new ibDataViewIconText(text, m_icon);
 				return;
 			}
 		}
 		variant = text;
 	}
 
-	bool SetValueByRow(const wxVariant& variant, unsigned row, unsigned col) override
+	bool SetValueByRow(const ibVariant& variant, unsigned row, unsigned col) override
 	{
 		if (!m_writer || !m_writer(row, col, variant.GetString()))
 			return false;
@@ -268,7 +268,7 @@ public:
 	// without this it came up as an EMPTY ROW that expanded (seen live, 2026-08-27).
 	bool HasContainerColumns(const ibDataViewItem& /*item*/) const override { return true; }
 
-	void GetValue(wxVariant& variant, const ibDataViewItem& item, unsigned int col) const override
+	void GetValue(ibVariant& variant, const ibDataViewItem& item, unsigned int col) const override
 	{
 		const ibQueryTotalsNode* node = static_cast<ibQueryTotalsNode*>(item.GetID());
 		if (node == nullptr || !m_reader)
@@ -277,8 +277,8 @@ public:
 		const wxString text = m_reader(node->At(), col);
 		if (col == m_iconColumn) {
 			const wxIcon icon = m_iconReader ? m_iconReader(node->At()) : wxNullIcon;
-			if (icon.IsOk())      { variant << ibDataViewIconText(text, icon); return; }
-			if (m_icon.IsOk())    { variant << ibDataViewIconText(text, m_icon); return; }
+			if (icon.IsOk())      { variant = new ibDataViewIconText(text, icon); return; }
+			if (m_icon.IsOk())    { variant = new ibDataViewIconText(text, m_icon); return; }
 		}
 		variant = text;
 	}
@@ -300,7 +300,7 @@ public:
 		return true;
 	}
 
-	bool SetValue(const wxVariant& variant, const ibDataViewItem& item, unsigned int col) override
+	bool SetValue(const ibVariant& variant, const ibDataViewItem& item, unsigned int col) override
 	{
 		const ibQueryTotalsNode* node = static_cast<ibQueryTotalsNode*>(item.GetID());
 		if (node == nullptr || !m_writer || !m_writer(node->At(), col, variant.GetString()))

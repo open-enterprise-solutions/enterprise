@@ -20,20 +20,20 @@ public:
 		return true;
 	}
 
-	void SetValue(const ibString& strValue) { m_propValue = ibPropertyValue(strValue); }
+	void SetValue(const ibString& strValue) { m_propValue = ibVariant(strValue); }
 
 	ibPropertyStringBase(ibPropertyCategory* cat, const ibString& name,
-		const ibString& value) : ibProperty(cat, name, ibPropertyValue(value))
+		const ibString& value) : ibProperty(cat, name, ibVariant(value))
 	{
 	}
 
 	ibPropertyStringBase(ibPropertyCategory* cat, const ibString& name, const ibString& label,
-		const ibString& value) : ibProperty(cat, name, label, ibPropertyValue(value))
+		const ibString& value) : ibProperty(cat, name, label, ibVariant(value))
 	{
 	}
 
 	ibPropertyStringBase(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString,
-		const ibString& value) : ibProperty(cat, name, label, helpString, ibPropertyValue(value))
+		const ibString& value) : ibProperty(cat, name, label, helpString, ibVariant(value))
 	{
 	}
 
@@ -128,7 +128,7 @@ class BACKEND_API ibPropertyTString : public ibProperty {
 	// in one run (2026-09-22). It never needed `this`: it builds a variant out of its argument.
 	// ⚠ The same shape lives in the other property headers of this family - they are not converted
 	// here, because only the one the tests exercise has been measured.
-	static ibPropertyValue CreateVariantData(const ibTranslateString& translate);
+	static ibVariant CreateVariantData(const ibTranslateString& translate);
 public:
 
 	ibTranslateString& GetValueAsTranslate() const;

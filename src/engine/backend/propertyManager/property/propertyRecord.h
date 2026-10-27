@@ -6,11 +6,11 @@
 
 //base property for "record"
 class BACKEND_API ibPropertyRecord : public ibProperty {
-	static ibPropertyValue CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc = ibMetaDescription());
+	static ibVariant CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc = ibMetaDescription());
 public:
 
 	ibMetaDescription& GetValueAsMetaDesc() const;
-	ibMetaDescription& GetValueAsMetaDesc(const ibPropertyValue& val) const;
+	ibMetaDescription& GetValueAsMetaDesc(const ibVariant& val) const;
 	void SetValue(const ibMetaDescription& val);
 
 	// WHICH REGISTERS A DOCUMENT POSTS TO — information, accumulation and accounting registers.
@@ -42,13 +42,13 @@ protected:
 	// and everything downstream raises "its value is not of the expected kind": the delete path,
 	// the diff, the save. One mis-set property made a whole configuration unsaveable.
 	//
-	// ⚠ AND IT ARRIVED THE HONEST WAY: CreateValueList builds every candidate as ibPropertyValueOwner,
+	// ⚠ AND IT ARRIVED THE HONEST WAY: CreateValueList builds every candidate as ibVariantOwner,
 	// so a caller that did the right thing — read GetValueList, pick, place the value it was
 	// offered — was handed the neighbour's wrapper by the property system itself.
 	//
 	// So the property TAKES THE DESCRIPTION AND WRAPS IT ITSELF. Anything of the family is accepted;
 	// anything else falls through to the base, which stores it as before.
-	virtual void DoSetValue(const ibPropertyValue& val) override;
+	virtual void DoSetValue(const ibVariant& val) override;
 
 public:
 

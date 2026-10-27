@@ -219,7 +219,7 @@ wxString ibFilterSideText(const ibFilterOperandDescription& side, const ibFilter
 	return side.IsField() ? ibFieldText(side) : ibFilterValueText(ibStoredValue(side.m_value, nullptr), other);
 }
 
-void ibFilterTreeModel::GetValue(wxVariant& variant, const ibDataViewItem& item, unsigned int col) const
+void ibFilterTreeModel::GetValue(ibVariant& variant, const ibDataViewItem& item, unsigned int col) const
 {
 	const ibFilterTreeNode* node = static_cast<const ibFilterTreeNode*>(item.GetID());
 	if (node == nullptr || m_filter == nullptr)
@@ -275,7 +275,7 @@ void ibFilterTreeModel::GetValue(wxVariant& variant, const ibDataViewItem& item,
 	}
 }
 
-bool ibFilterTreeModel::SetValue(const wxVariant& variant, const ibDataViewItem& item, unsigned int col)
+bool ibFilterTreeModel::SetValue(const ibVariant& variant, const ibDataViewItem& item, unsigned int col)
 {
 	const ibFilterTreeNode* node = static_cast<const ibFilterTreeNode*>(item.GetID());
 	if (node == nullptr || node->IsRoot())
@@ -293,14 +293,14 @@ bool ibFilterTreeModel::SetValue(const wxVariant& variant, const ibDataViewItem&
 		// drop-down, and routing the choice back as text would mean matching
 		// translated strings to put the kind back.
 		if (col == kFilterColUse) {
-			line->m_use = variant.GetBool();
+			line->m_use = variant.GetBoolean();
 			return true;
 		}
 		return false;
 	}
 
 	switch (col) {
-	case kFilterColUse: line->m_use = variant.GetBool(); return true;
+	case kFilterColUse: line->m_use = variant.GetBoolean(); return true;
 	case kFilterColPresentation: line->m_presentation = variant.GetString(); return true;
 	// TYPED-IN TEXT ON THE RIGHT is a legitimate way to fill a simple value (a
 	// number, a string, a date): the cell allows typing for exactly those, and

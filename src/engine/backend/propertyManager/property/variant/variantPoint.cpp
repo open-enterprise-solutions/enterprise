@@ -1,6 +1,6 @@
 #include "variantPoint.h"
 
-ibString ibPropertyValuePoint::GetString() const
+ibString ibVariantPoint::GetString() const
 {
 	return m_point.ToString();
 }

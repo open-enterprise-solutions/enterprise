@@ -67,7 +67,7 @@ public:
 	}
 	ibOutputParameter ParameterAt(unsigned row) const { return ibOutputParameters(m_editor->m_scope)[row]; }
 
-	void GetValueByRow(wxVariant& variant, unsigned row, unsigned col) const override {
+	void GetValueByRow(ibVariant& variant, unsigned row, unsigned col) const override {
 		if (!IsRow(row))
 			return;
 		const ibOutputParameter parameter = ParameterAt(row);
@@ -79,16 +79,16 @@ public:
 			variant = Presentation(*m_editor->m_parameters, parameter);
 	}
 
-	bool SetValueByRow(const wxVariant& variant, unsigned row, unsigned col) override {
+	bool SetValueByRow(const ibVariant& variant, unsigned row, unsigned col) override {
 		if (!IsRow(row) || m_editor->m_readOnly)
 			return false;
 		ibOutputParametersDescription& parameters = *m_editor->m_parameters;
 		const ibOutputParameter parameter = ParameterAt(row);
 		const ibValue kept = Kept(parameters, parameter);
 		if (col == kColUse) {
-			if (variant.GetBool() == IsTicked(parameters, parameter))
+			if (variant.GetBoolean() == IsTicked(parameters, parameter))
 				return false;
-			parameters.Say(parameter, variant.GetBool(), ibStoreValue(kept));
+			parameters.Say(parameter, variant.GetBoolean(), ibStoreValue(kept));
 			m_editor->Changed();
 			return true;
 		}

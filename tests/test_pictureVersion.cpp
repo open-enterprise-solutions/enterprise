@@ -48,7 +48,7 @@ struct PictureFixture {
 	// Through the door a person's edit goes through — the inspector's, the MCP server's.
 	static bool Set(ibValueMetaObjectPicture* picture, const ibExternalPictureDescription& image) {
 		ibProperty* const property = picture->GetProperty(wxT("Picture"));
-		return property != nullptr && ibPropertyGate::SetValue(picture, property, ibPropertyValue(new ibPropertyValueExternalPicture(image)));
+		return property != nullptr && ibPropertyGate::SetValue(picture, property, ibVariant(new ibVariantExternalPicture(image)));
 	}
 
 	static ibGuid Guid(const ibValueMetaObjectPicture* picture) {
@@ -74,12 +74,12 @@ TEST(ibValueMetaObjectPicture, GetValueAsVersion_EachPictureGiven_AnotherVersion
 	EXPECT_NE(f.first->GetValueAsVersion(), two);
 }
 
-TEST(ibPropertyValueExternalPicture, GetPictureVersion_Copy_SameVersion)
+TEST(ibVariantExternalPicture, GetPictureVersion_Copy_SameVersion)
 {
-	const ibPropertyValueExternalPicture given(Image("\x89PNG one", 16, 16));
-	const ibPropertyValueExternalPicture copy(given);
+	const ibVariantExternalPicture given(Image("\x89PNG one", 16, 16));
+	const ibVariantExternalPicture copy(given);
 	EXPECT_EQ(copy.GetPictureVersion(), given.GetPictureVersion());
-	EXPECT_NE(ibPropertyValueExternalPicture(Image("\x89PNG one", 16, 16)).GetPictureVersion(), given.GetPictureVersion());
+	EXPECT_NE(ibVariantExternalPicture(Image("\x89PNG one", 16, 16)).GetPictureVersion(), given.GetPictureVersion());
 }
 
 TEST(ibValueMetaObjectPicture, GetValueAsVersion_ReadFromItsNode_NewVersion)

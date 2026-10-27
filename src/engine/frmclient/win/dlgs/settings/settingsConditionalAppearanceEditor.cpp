@@ -160,7 +160,7 @@ public:
 		return rules != nullptr && row < rules->m_rules.size() ? &rules->m_rules[row] : nullptr;
 	}
 
-	void GetValueByRow(wxVariant& variant, unsigned row, unsigned col) const override {
+	void GetValueByRow(ibVariant& variant, unsigned row, unsigned col) const override {
 		const ibConditionalAppearanceRuleDescription* rule = RuleAt(row);
 		if (rule == nullptr)
 			return;
@@ -175,14 +175,14 @@ public:
 	}
 
 	// ONLY THE TICK IS WRITTEN HERE — every other part is edited in its own window, through the cell's "...".
-	bool SetValueByRow(const wxVariant& variant, unsigned row, unsigned col) override {
+	bool SetValueByRow(const ibVariant& variant, unsigned row, unsigned col) override {
 		if (m_editor->m_readOnly || col != kColUse || m_editor->m_rules == nullptr
 		 || row >= m_editor->m_rules->m_rules.size())
 			return false;
 		ibConditionalAppearanceRuleDescription& rule = m_editor->m_rules->m_rules[row];
-		if (rule.m_use == variant.GetBool())
+		if (rule.m_use == variant.GetBoolean())
 			return false;
-		rule.m_use = variant.GetBool();
+		rule.m_use = variant.GetBoolean();
 		m_editor->Changed();
 		return true;
 	}

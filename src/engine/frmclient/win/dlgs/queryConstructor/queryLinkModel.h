@@ -146,8 +146,8 @@ public:
 	//  keep in step, and the two would disagree the first time the language grew.)
 
 	// ---- ibDataViewListModel ----
-	void GetValueByRow(wxVariant& variant, unsigned row, unsigned col) const override;
-	bool SetValueByRow(const wxVariant& variant, unsigned row, unsigned col) override;
+	void GetValueByRow(ibVariant& variant, unsigned row, unsigned col) const override;
+	bool SetValueByRow(const ibVariant& variant, unsigned row, unsigned col) override;
 
 private:
 	// The name of the table on each side of a join. The RIGHT side is the joined source itself;

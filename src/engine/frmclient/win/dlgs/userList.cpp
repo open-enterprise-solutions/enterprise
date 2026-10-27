@@ -34,7 +34,7 @@ public:
 	// Implement base class pure virtual methods.
 	unsigned GetCount() const override { return m_aUsersData.size(); }
 
-	void GetValueByRow(wxVariant& val, unsigned row, unsigned col) const override {
+	void GetValueByRow(ibVariant& val, unsigned row, unsigned col) const override {
 		if (row >= m_aUsersData.size())
 			return;
 		if (col == colUserName)
@@ -43,7 +43,7 @@ public:
 			val = m_aUsersData[row].m_strUserFullName;
 	}
 
-	bool SetValueByRow(const wxVariant&, unsigned, unsigned) override {
+	bool SetValueByRow(const ibVariant&, unsigned, unsigned) override {
 		return false;
 	}
 

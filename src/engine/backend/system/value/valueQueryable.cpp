@@ -1031,7 +1031,7 @@ void ibValueQueryDecorator::DispatchLinqMethod(ibLinqMethod method, ibValue& ret
 	}
 }
 
-bool ibValueQueryDecorator::CompareValueEQ(const ibValue& cParam) const
+bool ibValueQueryDecorator::CompareValueEQ(const ibVariant& cParam) const
 {
 	// Source = "Document.Receipt" — a module identifies the source by its canonical FULL NAME
 	// string ("<ClassName>.<Name>", GetFullName), which the policy passes as m_sourceName.

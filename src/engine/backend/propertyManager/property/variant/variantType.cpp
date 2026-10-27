@@ -2,7 +2,7 @@
 #include "backend/metaData.h"
 #include "backend/objCtor.h"   // ibCtorMetaValueType — the configuration's references a barrier stands for
 
-ibString ibPropertyValueAttribute::GetString() const
+ibString ibVariantAttribute::GetString() const
 {
 	ibString strDescr;
 	if (m_ownerProperty != nullptr) {
@@ -20,12 +20,12 @@ ibString ibPropertyValueAttribute::GetString() const
 	return strDescr;
 }
 
-void ibPropertyValueAttribute::DoSetDefaultMetaType() {
+void ibVariantAttribute::DoSetDefaultMetaType() {
 	if (m_ownerProperty != nullptr)
 		m_typeDesc.SetDefaultMetaType(ibBackendTypeConfigFactory::GetDefaultTypeByFilter(m_ownerProperty->GetFilterDataType()));
 }
 
-void ibPropertyValueAttribute::DoSetFromMetaId(const ibMetaID& id)
+void ibVariantAttribute::DoSetFromMetaId(const ibMetaID& id)
 {
 	if (m_ownerProperty != nullptr && id != wxNOT_FOUND) {
 
@@ -52,14 +52,14 @@ void ibPropertyValueAttribute::DoSetFromMetaId(const ibMetaID& id)
 	}
 }
 
-void ibPropertyValueAttribute::DoSetFromTypeId(const ibTypeDescription& td)
+void ibVariantAttribute::DoSetFromTypeId(const ibTypeDescription& td)
 {
 	m_typeDesc = td;
 	m_object_version = 0;   // a new declaration is refreshed as a new value is — its barriers derived again
 	RefreshTypeDesc();
 }
 
-void ibPropertyValueAttribute::DoRefreshTypeDesc()
+void ibVariantAttribute::DoRefreshTypeDesc()
 {
 	if (m_ownerProperty != nullptr) {
 
@@ -100,7 +100,7 @@ void ibPropertyValueAttribute::DoRefreshTypeDesc()
 				}
 
 				std::vector<ibClassID> members;
-				if (IsReference(clsid) && clsid_is_any(clsid))
+				if (::IsReference(clsid) && clsid_is_any(clsid))   // the kind byte — a variant has an IsReference() of its own
 					for (const ibCtorMetaValueType* reference : metaData->GetListCtorsByType(ibCtorObjectMetaType::ibCtorObjectMetaType_Reference))
 						if (clsid_admits(clsid, reference->GetClassType()))
 							members.push_back(reference->GetClassType());

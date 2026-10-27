@@ -1,14 +1,14 @@
 #ifndef __TYPE_VARIANT_H__
 #define __TYPE_VARIANT_H__
 
-#include "backend/propertyManager/propertyValue.h"
+#include "core/variant.h"
 #include "backend/metaCollection/metaObject.h"
 #include "backend/backend_type.h"
 
 #include <atomic>
 #include <mutex>
 
-class BACKEND_API ibPropertyValueAttribute : public ibPropertyValue {
+class BACKEND_API ibVariantAttribute : public ibVariant {
 protected:
 	virtual void DoSetDefaultMetaType();
 	virtual void DoSetFromMetaId(const ibMetaID& id);
@@ -46,22 +46,20 @@ public:
 
 	/////////////////////////////////////////////////////////////////////////////////////////
 
-	ibPropertyValueAttribute(const ibBackendTypeConfigFactory* prop) : ibPropertyValue(ibValueTypes::TYPE_VALUE), m_ownerProperty(prop) {}
+	ibVariantAttribute(const ibBackendTypeConfigFactory* prop) : ibVariant(ibValueTypes::TYPE_VALUE), m_ownerProperty(prop) {}
 
-	ibPropertyValueAttribute(const ibBackendTypeConfigFactory* prop, const ibValueTypes type) : ibPropertyValue(ibValueTypes::TYPE_VALUE), m_ownerProperty(prop) { m_typeDesc.SetDefaultMetaType(type); }
-	ibPropertyValueAttribute(const ibBackendTypeConfigFactory* prop, const ibClassID& clsid) : ibPropertyValue(ibValueTypes::TYPE_VALUE), m_ownerProperty(prop) { m_typeDesc.SetDefaultMetaType(clsid); }
+	ibVariantAttribute(const ibBackendTypeConfigFactory* prop, const ibValueTypes type) : ibVariant(ibValueTypes::TYPE_VALUE), m_ownerProperty(prop) { m_typeDesc.SetDefaultMetaType(type); }
+	ibVariantAttribute(const ibBackendTypeConfigFactory* prop, const ibClassID& clsid) : ibVariant(ibValueTypes::TYPE_VALUE), m_ownerProperty(prop) { m_typeDesc.SetDefaultMetaType(clsid); }
 
-	ibPropertyValueAttribute(const ibBackendTypeConfigFactory* prop, const ibMetaID& id) : ibPropertyValue(ibValueTypes::TYPE_VALUE), m_ownerProperty(prop) { DoSetFromMetaId(id); }
-	ibPropertyValueAttribute(const ibBackendTypeConfigFactory* prop, const ibTypeDescription& typeDesc) : ibPropertyValue(ibValueTypes::TYPE_VALUE), m_ownerProperty(prop), m_typeDesc(typeDesc) {}
+	ibVariantAttribute(const ibBackendTypeConfigFactory* prop, const ibMetaID& id) : ibVariant(ibValueTypes::TYPE_VALUE), m_ownerProperty(prop) { DoSetFromMetaId(id); }
+	ibVariantAttribute(const ibBackendTypeConfigFactory* prop, const ibTypeDescription& typeDesc) : ibVariant(ibValueTypes::TYPE_VALUE), m_ownerProperty(prop), m_typeDesc(typeDesc) {}
 
-	ibPropertyValueAttribute(const ibPropertyValueAttribute& list) : ibPropertyValue(ibValueTypes::TYPE_VALUE), m_ownerProperty(list.m_ownerProperty), m_typeDesc(list.m_typeDesc) {}
+	ibVariantAttribute(const ibVariantAttribute& list) : ibVariant(ibValueTypes::TYPE_VALUE), m_ownerProperty(list.m_ownerProperty), m_typeDesc(list.m_typeDesc) {}
 
-	virtual ibPropertyValueAttribute* Clone() const {
-		return new ibPropertyValueAttribute(*this);
-	}
+	virtual ibVariant CloneValue() const override { return ibVariant(new ibVariantAttribute(*this)); }
 
-	virtual bool CompareValueEQ(const ibPropertyValue& data) const override {
-		const ibPropertyValueAttribute* srcAttr = dynamic_cast<const ibPropertyValueAttribute*>(data.GetRef());
+	virtual bool CompareValueEQ(const ibVariant& data) const override {
+		const ibVariantAttribute* srcAttr = dynamic_cast<const ibVariantAttribute*>(data.GetRef());
 		if (srcAttr != nullptr)
 			return srcAttr->m_typeDesc == m_typeDesc;
 		return false;

@@ -111,7 +111,7 @@ public:
 
 	// The default value type (clsid) for a filter kind: _boolean -> Boolean, _resource -> Number,
 	// _table -> value-table, _reference / else -> String. Static, keyed on the kind — the ONE mapping both
-	// ibPropertyValueAttribute::DoSetDefaultMetaType and ibValueControl::AutoBindNewSource use, so they cannot drift.
+	// ibVariantAttribute::DoSetDefaultMetaType and ibValueControl::AutoBindNewSource use, so they cannot drift.
 	static ibClassID GetDefaultTypeByFilter(ibSelectorDataType filterDataType);
 
 	// ⭐⭐ AND EVERY TYPE THAT KIND MAY TAKE — the same question as the default above, asked in full.

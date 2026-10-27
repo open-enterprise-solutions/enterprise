@@ -211,12 +211,12 @@ wxString ibDataViewMetaDiffModel::SideSummary(const ibValueMetaObject* obj)
 
 // --- ibDataViewModel overrides ----------------------------------------
 
-void ibDataViewMetaDiffModel::GetValue(wxVariant& variant,
+void ibDataViewMetaDiffModel::GetValue(ibVariant& variant,
 	const ibDataViewItem& item, unsigned int col) const
 {
 	const int idx = IndexFromItem(item);
 	if (idx < 0 || idx >= static_cast<int>(m_records.size())) {
-		variant.MakeNull();
+		variant = ibValue();
 		return;
 	}
 	const ibMetaDiffRecord& rec = m_records[idx];
@@ -231,13 +231,13 @@ void ibDataViewMetaDiffModel::GetValue(wxVariant& variant,
 		if (rec.IsMergeCandidate())
 			// static_cast, because m_selected is a std::vector<bool>: indexing it yields a
 			// PROXY (std::vector<bool>::reference), not a bool, and libc++ offers several
-			// equally good conversions from it — wxVariant(bool) / (int) / (wxAny) — so the
+			// equally good conversions from it — ibVariant(bool) / (int) / (wxAny) — so the
 			// call is ambiguous there while it compiles on MSVC and libstdc++.
-			variant = wxVariant(static_cast<bool>(m_selected[idx]));
+			variant = ibVariant(static_cast<bool>(m_selected[idx]));
 		else if (HasMergeCandidateDescendant(idx))
-			variant = wxVariant(IsAllDescendantsSelected(idx));
+			variant = ibVariant(IsAllDescendantsSelected(idx));
 		else
-			variant = wxVariant(false);
+			variant = ibVariant(false);
 		break;
 	}
 	case kColName: {
@@ -276,45 +276,45 @@ void ibDataViewMetaDiffModel::GetValue(wxVariant& variant,
 			bitmap = wxBitmapBundle(
 				ibBackendPicture::GetPicture(iconClsid));
 		}
-		variant << ibDataViewIconText(name, bitmap);
+		variant = new ibDataViewIconText(name, bitmap);
 		break;
 	}
 	case kColStatus: {
-		variant = wxVariant(StatusLabel(rec.m_status));
+		variant = ibVariant(StatusLabel(rec.m_status));
 		break;
 	}
 	case kColLeft: {
 		if (rec.IsProperty())
-			variant = wxVariant(rec.m_leftValue);
+			variant = ibVariant(rec.m_leftValue);
 		else if (rec.IsGroup())
-			variant = wxVariant(wxString());
+			variant = ibVariant(wxString());
 		else if (rec.m_left != nullptr)
-			variant = wxVariant(SideSummary(rec.m_left));
+			variant = ibVariant(SideSummary(rec.m_left));
 		else if (!rec.m_leftValue.IsEmpty() || rec.m_leftId != 0)
-			variant = wxVariant(rec.m_leftValue.IsEmpty() ? _("(unnamed)") : rec.m_leftValue);
+			variant = ibVariant(rec.m_leftValue.IsEmpty() ? _("(unnamed)") : rec.m_leftValue);
 		else
-			variant = wxVariant(_("Missing"));
+			variant = ibVariant(_("Missing"));
 		break;
 	}
 	case kColRight: {
 		if (rec.IsProperty())
-			variant = wxVariant(rec.m_rightValue);
+			variant = ibVariant(rec.m_rightValue);
 		else if (rec.IsGroup())
-			variant = wxVariant(wxString());
+			variant = ibVariant(wxString());
 		else if (rec.m_right != nullptr)
-			variant = wxVariant(SideSummary(rec.m_right));
+			variant = ibVariant(SideSummary(rec.m_right));
 		else if (!rec.m_rightValue.IsEmpty() || rec.m_rightId != 0)
-			variant = wxVariant(rec.m_rightValue.IsEmpty() ? _("(unnamed)") : rec.m_rightValue);
+			variant = ibVariant(rec.m_rightValue.IsEmpty() ? _("(unnamed)") : rec.m_rightValue);
 		else
-			variant = wxVariant(_("Missing"));
+			variant = ibVariant(_("Missing"));
 		break;
 	}
 	default:
-		variant.MakeNull();
+		variant = ibValue();
 	}
 }
 
-bool ibDataViewMetaDiffModel::SetValue(const wxVariant& variant,
+bool ibDataViewMetaDiffModel::SetValue(const ibVariant& variant,
 	const ibDataViewItem& item, unsigned int col)
 {
 	if (col != kColSelect)
@@ -324,7 +324,7 @@ bool ibDataViewMetaDiffModel::SetValue(const wxVariant& variant,
 	if (idx < 0 || idx >= static_cast<int>(m_records.size()))
 		return false;
 
-	const bool wanted = variant.GetBool();
+	const bool wanted = variant.GetBoolean();
 
 	if (m_records[idx].IsMergeCandidate()) {
 		m_selected[idx] = wanted;

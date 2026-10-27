@@ -468,14 +468,14 @@ ibValueModel::Features ibValueDynamicList::GetFeatures() const
 
 // --- marshalling (value out/in of the tree node) ----------------------------
 
-void ibValueDynamicList::GetValueByRow(wxVariant& variant, const ibDataViewItem& item, unsigned col) const
+void ibValueDynamicList::GetValueByRow(ibVariant& variant, const ibDataViewItem& item, unsigned col) const
 {
 	ibValueTreeNode* node = GetViewData<ibValueTreeNode>(item);
 	if (node != nullptr)
 		node->GetValue(col, variant);
 }
 
-bool ibValueDynamicList::SetValueByRow(const wxVariant& variant, const ibDataViewItem& item, unsigned col)
+bool ibValueDynamicList::SetValueByRow(const ibVariant& variant, const ibDataViewItem& item, unsigned col)
 {
 	ibValueTreeNode* node = GetViewData<ibValueTreeNode>(item);
 	return node != nullptr && node->SetValue(col, variant);
@@ -771,7 +771,7 @@ bool ibValueDynamicList::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue
 
 // The form edits the list's OWN properties; when one changes (source / settings) the
 // list re-applies it. The "hook" is a virtual on the property-object, not a function ptr.
-void ibValueDynamicList::OnPropertyChanged(ibProperty* property, const ibPropertyValue& /*oldValue*/, const ibPropertyValue& /*newValue*/)
+void ibValueDynamicList::OnPropertyChanged(ibProperty* property, const ibVariant& /*oldValue*/, const ibVariant& /*newValue*/)
 {
 	// (The source and the settings are rebuilt in OnChildChanged — the change of a child is what
 	//  starts the update, and it travels on up to the holder from there.)

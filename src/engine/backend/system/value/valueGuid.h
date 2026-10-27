@@ -26,12 +26,12 @@ class BACKEND_API ibValueGuid : public ibValue {
 	}
 
 	//operator '=='
-	virtual bool CompareValueEQ(const ibValue &cParam) const {
+	virtual bool CompareValueEQ(const ibVariant &cParam) const {
 		return m_guid == ibGuid(cParam.GetString());
 	}
 
 	//operator '!='
-	virtual bool CompareValueNE(const ibValue &cParam) const {
+	virtual bool CompareValueNE(const ibVariant &cParam) const {
 		return m_guid != ibGuid(cParam.GetString());
 	}
 

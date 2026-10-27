@@ -1,6 +1,6 @@
 #include "variantGen.h"
 
-ibString ibPropertyValueGeneration::GetString() const
+ibString ibVariantGeneration::GetString() const
 {
 	const ibMetaData* metaData = m_ownerProperty->GetMetaData();
 	if (metaData == nullptr) return ibEmptyString;
@@ -23,7 +23,7 @@ ibString ibPropertyValueGeneration::GetString() const
 
 #include "backend/system/value/valueArray.h"
 
-ibValue ibPropertyValueGeneration::GetDataValue() const
+ibValue ibVariantGeneration::GetDataValue() const
 {
 	ibValueArray* valueArr = new ibValueArray();
 	const ibMetaData* metaData = m_ownerProperty->GetMetaData();

@@ -613,7 +613,7 @@ ibValue ibCompileCode::ExpectConstant()
 
 		// change sign for minus
 		if (iNumRequire == -1) {
-			lex.m_valData = ibLiteral(-lex.m_valData.GetNumber());
+			lex.m_valData = ibVariant(-lex.m_valData.GetNumber());
 		}
 	}
 

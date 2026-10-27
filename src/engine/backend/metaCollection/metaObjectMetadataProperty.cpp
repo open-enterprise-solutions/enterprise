@@ -1,7 +1,7 @@
 #include "metaObjectMetadata.h"
 #include "backend/compiler/compileCode.h"
 
-void ibValueMetaObjectConfiguration::OnPropertyChanged(ibProperty* property, const ibPropertyValue& oldValue, const ibPropertyValue& newValue)
+void ibValueMetaObjectConfiguration::OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue)
 {
 	if (m_propertyDefLanguage == property)
 		ibBackendLocalization::SetUserLanguage(GetLangCode());

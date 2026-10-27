@@ -61,7 +61,7 @@ bool ibValueModelTableBox::IsForeignColumn(const ibValueModelTableBoxColumn* col
 }
 
 bool ibValueModelTableBox::ResolveCellValue(const ibDataViewItem& item,
-	const ibValueModelTableBoxColumn* column, wxVariant& out) const
+	const ibValueModelTableBoxColumn* column, ibVariant& out) const
 {
 	// FOREIGN-root column (Mode 2): pulls from a form source ABOVE this tablebox (the header object),
 	// not from a row of the bound table. Resolve it ONCE through the form — the value is the same for
@@ -71,7 +71,7 @@ bool ibValueModelTableBox::ResolveCellValue(const ibDataViewItem& item,
 		ibValue current;
 		if (m_formOwner == nullptr || !m_formOwner->GetValueByAttributePath(column->GetSourceDesc(), current))
 			return false;
-		ibValueModel::ValueToVariant(out, current);
+		out = current;
 		return true;
 	}
 
@@ -88,7 +88,7 @@ bool ibValueModelTableBox::ResolveCellValue(const ibDataViewItem& item,
 	if (!m_tableModel->GetValueByPath(item, colPath, prefix, current))
 		return false;
 
-	ibValueModel::ValueToVariant(out, current);
+	out = current;
 	return true;
 }
 

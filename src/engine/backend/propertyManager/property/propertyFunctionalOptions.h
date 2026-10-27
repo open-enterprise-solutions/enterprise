@@ -16,7 +16,7 @@
 // Edited by the same dialog every metaobject binding uses (advpropChartBinding): the options of the
 // configuration, any set of them — or ONE, for what an option itself requires.
 class BACKEND_API ibPropertyFunctionalOptions : public ibProperty {
-	static ibPropertyValue CreateVariantData(ibPropertyObject* property, const ibMetaDescription& metaDesc = ibMetaDescription());
+	static ibVariant CreateVariantData(ibPropertyObject* property, const ibMetaDescription& metaDesc = ibMetaDescription());
 public:
 
 	ibMetaDescription& GetValueAsMetaDesc() const;
@@ -44,7 +44,7 @@ public:
 protected:
 
 	// The family rule — see propertyRecord.h.
-	virtual void DoSetValue(const ibPropertyValue& val) override;
+	virtual void DoSetValue(const ibVariant& val) override;
 
 public:
 

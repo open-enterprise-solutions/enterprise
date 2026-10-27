@@ -142,7 +142,7 @@ void ibQuerySelectionLinkModel::RemoveLink(unsigned int row)
 		m_onChanged();
 }
 
-void ibQuerySelectionLinkModel::GetValueByRow(wxVariant& variant, unsigned row, unsigned col) const
+void ibQuerySelectionLinkModel::GetValueByRow(ibVariant& variant, unsigned row, unsigned col) const
 {
 	const ibQueryPackageLink* link = LinkAt(row);
 	if (link == nullptr)
@@ -166,7 +166,7 @@ void ibQuerySelectionLinkModel::GetValueByRow(wxVariant& variant, unsigned row, 
 	}
 }
 
-bool ibQuerySelectionLinkModel::SetValueByRow(const wxVariant& variant, unsigned row, unsigned col)
+bool ibQuerySelectionLinkModel::SetValueByRow(const ibVariant& variant, unsigned row, unsigned col)
 {
 	ibQueryPackageLink* link = LinkAt(row);
 	if (link == nullptr)
@@ -181,8 +181,8 @@ bool ibQuerySelectionLinkModel::SetValueByRow(const wxVariant& variant, unsigned
 	// that these two results are related.
 	case kLinkColLeftTable:  link->m_left  = variant.GetString(); break;
 	case kLinkColRightTable: link->m_right = variant.GetString(); break;
-	case kLinkColAllLeft:    link->m_kind = ibJoinKindOf(variant.GetBool(), ibJoinAllFromRight(link->m_kind)); break;
-	case kLinkColAllRight:   link->m_kind = ibJoinKindOf(ibJoinAllFromLeft(link->m_kind), variant.GetBool());  break;
+	case kLinkColAllLeft:    link->m_kind = ibJoinKindOf(variant.GetBoolean(), ibJoinAllFromRight(link->m_kind)); break;
+	case kLinkColAllRight:   link->m_kind = ibJoinKindOf(ibJoinAllFromLeft(link->m_kind), variant.GetBoolean());  break;
 	case kLinkColCondition: {
 		// TYPED WHERE IT STANDS, and read by the ENGINE — the same door the Links tab's condition
 		// goes through. Emptying the cell UNSETS the condition and leaves the row: a link the author

@@ -82,9 +82,9 @@ public:
 
 	// ---- ibDataViewModel overrides ----
 
-	void GetValue(wxVariant& variant, const ibDataViewItem& item,
+	void GetValue(ibVariant& variant, const ibDataViewItem& item,
 	              unsigned int col) const override;
-	bool SetValue(const wxVariant&, const ibDataViewItem&,
+	bool SetValue(const ibVariant&, const ibDataViewItem&,
 	              unsigned int) override { return false; }
 	ibDataViewItem GetParent(const ibDataViewItem&) const override {
 		return ibDataViewItem();

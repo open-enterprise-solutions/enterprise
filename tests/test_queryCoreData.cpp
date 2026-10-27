@@ -1,9 +1,9 @@
 // =============================================================================
 // What the query's parser hands back is DATA the engine reads at its own door: a constant as the text writes one
-// (ibLiteral, core/query/queryAST.h) and a refusal shaped like the translator's (ibQueryRefusal,
+// (ibVariant, core/query/queryAST.h) and a refusal shaped like the translator's (ibQueryRefusal,
 // core/query/queryRefusal.h).
 //
-// Pinned here: a constant the text wrote is the core's ibLiteral, Boolean and NULL among them, and the engine
+// Pinned here: a constant the text wrote is the core's ibVariant, Boolean and NULL among them, and the engine
 // reads it back as its own value; the primitives' names are one table, the one the engine registers by; a text that
 // does not read is a refusal with its place, and the engine's door raises it as ibBackendQuerySyntaxException with
 // the same place.
@@ -14,7 +14,7 @@
 #include "core/query/queryParser.h"
 #include "backend/query/queryException.h"
 #include "backend/compiler/value.h"
-#include "core/compiler/literal.h"
+#include "core/variant.h"
 #include "core/query/queryRefusal.h"
 #include "core/description/typeDescription.h"
 

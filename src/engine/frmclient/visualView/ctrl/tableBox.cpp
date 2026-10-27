@@ -29,20 +29,18 @@ public:
 	explicit ibViewCellRenderer(const ibValueModelTableBoxColumn& column)
 		: ibDataViewCustomRenderer(GetDefaultType(), wxDATAVIEW_CELL_EDITABLE), m_column(column) {}
 
-	virtual bool IsCompatibleVariantType(const wxString& /*variantType*/) const override { return true; }
-
-	virtual bool SetValue(const wxVariant& value) override
+	virtual bool SetValue(const ibVariant& value) override
 	{
 		m_flag.reset();
 		m_text.clear();
-		if (value.GetType() == wxT("bool"))
-			m_flag = value.GetBool();
-		else if (!value.IsNull())
+		if (value.GetType() == ibValueTypes::TYPE_BOOLEAN)
+			m_flag = value.GetBoolean();
+		else if (value.GetType() != ibValueTypes::TYPE_EMPTY)
 			m_text = value.GetString();
 		return true;
 	}
 
-	virtual bool GetValue(wxVariant& /*value*/) const override { return true; }
+	virtual bool GetValue(ibVariant& /*value*/) const override { return true; }
 
 	virtual bool Render(wxRect rect, wxDC* dc, int state) override
 	{
@@ -69,12 +67,12 @@ public:
 	virtual bool HasEditorCtrl() const override { return true; }
 
 	// The desktop's CreateEditorCtrl: the field's editor in the cell, as its column says, the table's look on it.
-	virtual wxWindow* CreateEditorCtrl(wxWindow* parent, wxRect labelRect, const wxVariant& value) override
+	virtual wxWindow* CreateEditorCtrl(wxWindow* parent, wxRect labelRect, const ibVariant& value) override
 	{
 		ibControlTextEditor* const textEditor = new ibControlTextEditor;
 		textEditor->SetDVCMode(true);
 		textEditor->Show(false);   // hidden while it is made: no flicker
-		if (!textEditor->Create(parent, wxID_ANY, value.IsNull() ? wxString() : value.GetString(),
+		if (!textEditor->Create(parent, wxID_ANY, value.GetType() == ibValueTypes::TYPE_EMPTY ? wxString() : value.GetString().ToWxString(),
 			labelRect.GetPosition(), labelRect.GetSize()))
 			return nullptr;
 
@@ -99,7 +97,7 @@ public:
 	}
 
 	// The text in the editor it made.
-	virtual bool GetValueFromEditorCtrl(wxWindow* editor, wxVariant& value) override
+	virtual bool GetValueFromEditorCtrl(wxWindow* editor, ibVariant& value) override
 	{
 		if (editor == nullptr || editor != m_textEditor)
 			return false;

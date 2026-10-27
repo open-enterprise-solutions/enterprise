@@ -31,7 +31,7 @@ ibValue ibValueSessionParameter::GetValue(bool getThis) const
 	return m_metaObject->AdjustValue(session->GetSessionParameter(m_metaObject->GetName()));
 }
 
-void ibValueSessionParameter::SetValue(const ibValue& value)
+void ibValueSessionParameter::SetValue(const ibVariant& value)
 {
 	if (!m_metaObject)
 		return;
@@ -46,7 +46,7 @@ void ibValueSessionParameter::SetValue(const ibValue& value)
 	// here, because the declaration already carries them.
 	//
 	// The session refuses the write outside its own module, by raising.
-	session->SetSessionParameter(m_metaObject->GetName(), m_metaObject->AdjustValue(value));
+	session->SetSessionParameter(m_metaObject->GetName(), m_metaObject->AdjustValue(ibValue(value)));
 }
 
 //***********************************************************************

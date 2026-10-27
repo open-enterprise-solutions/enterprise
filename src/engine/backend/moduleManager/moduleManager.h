@@ -100,7 +100,7 @@ public:
 		}
 
 		//operator '=='
-		virtual bool CompareValueEQ(const ibValue& cParam) const override
+		virtual bool CompareValueEQ(const ibVariant& cParam) const override
 		{
 			ibValueModuleUnit* compareModule = dynamic_cast<ibValueModuleUnit*>(cParam.GetRef());
 			if (compareModule) {
@@ -111,7 +111,7 @@ public:
 		}
 
 		//operator '!='
-		virtual bool CompareValueNE(const ibValue& cParam) const override
+		virtual bool CompareValueNE(const ibVariant& cParam) const override
 		{
 			ibValueModuleUnit* compareModule = dynamic_cast<ibValueModuleUnit*>(cParam.GetRef());
 			if (compareModule) {
@@ -141,7 +141,7 @@ public:
 		virtual bool IsEmpty() const override { return false; }
 
 		//operator '=='
-		virtual bool CompareValueEQ(const ibValue& cParam) const override
+		virtual bool CompareValueEQ(const ibVariant& cParam) const override
 		{
 			ibValueMetadataUnit* compareMetadata = dynamic_cast<ibValueMetadataUnit*>(cParam.GetRef());
 			if (compareMetadata) {
@@ -152,7 +152,7 @@ public:
 		}
 
 		//operator '!='
-		virtual bool CompareValueNE(const ibValue& cParam) const override {
+		virtual bool CompareValueNE(const ibVariant& cParam) const override {
 			ibValueMetadataUnit* compareMetadata = dynamic_cast<ibValueMetadataUnit*>(cParam.GetRef());
 			if (compareMetadata) {
 				return m_metaData != compareMetadata->GetMetaData();
@@ -197,7 +197,7 @@ public:
 		virtual bool IsEmpty() const override { return false; }
 
 		//operator '=='
-		virtual bool CompareValueEQ(const ibValue& cParam) const override
+		virtual bool CompareValueEQ(const ibVariant& cParam) const override
 		{
 			ibValueDataUnit* compareData = dynamic_cast<ibValueDataUnit*>(cParam.GetRef());
 			if (compareData) {
@@ -207,7 +207,7 @@ public:
 		}
 
 		//operator '!='
-		virtual bool CompareValueNE(const ibValue& cParam) const override {
+		virtual bool CompareValueNE(const ibVariant& cParam) const override {
 			ibValueDataUnit* compareData = dynamic_cast<ibValueDataUnit*>(cParam.GetRef());
 			if (compareData) {
 				return m_metaData != compareData->GetMetaData();

@@ -6,13 +6,12 @@
 // and whoever listens to it (a grid, a window across the wire). The engine's and the thin client's are this
 // one class; what each side adds is a listener of its own and the value it puts into a parameter.
 //
-// ⚠ A PARAMETER IS A VALUE OF EITHER SIDE (ibAnyValuePtr<ibAnyValue>): the side puts in its own ibValue
-// (ibValue::ToAnyValue) and reads back its own (ibValue::FromAnyValue). The sheet asks of it only what
-// every value answers — what it reads as.
+// ⚠ A PARAMETER IS A VARIANT: the engine puts in its ibValue as it is (one more holder of an object) and reads
+// back ibValue(variant). The sheet asks of it only what every value answers — what it reads as.
 ////////////////////////////////////////////////////////////////////////////
 
 #include "core/core.h"
-#include "core/anyValue.h"
+#include "core/variant.h"
 #include "core/guid.h"
 #include "core/stringUtils.h"   // ibStringCaseFoldLess — the parameters are matched without case
 #include "core/description/spreadsheetDescription.h"
@@ -240,8 +239,8 @@ public:
 
 	// ------ cell parameter accessors
 	//
-	bool GetParameter(const ibString& strParameter, ibAnyValuePtr<ibAnyValue>& valueParam) const;
-	void SetParameter(const ibString& strParameter, const ibAnyValuePtr<ibAnyValue>& valueParam = ibAnyValuePtr<ibAnyValue>());
+	bool GetParameter(const ibString& strParameter, ibVariant& valueParam) const;
+	void SetParameter(const ibString& strParameter, const ibVariant& valueParam = ibVariant());
 
 	// ⭐⭐ THE TEXT A CELL SHOWS — the one door the grid, the printout, the script and the landing of an
 	// area (PutArea / JoinArea) all go through: a caption or a template in the language asked for, a
@@ -252,7 +251,7 @@ public:
 		const ibString& strLangCode = ibString()) const;
 
 	//special value return
-	ibAnyValuePtr<ibAnyValue> GetParameter(const ibString& strParameter) const { ibAnyValuePtr<ibAnyValue> valueParam; GetParameter(strParameter, valueParam); return valueParam; }
+	ibVariant GetParameter(const ibString& strParameter) const { ibVariant valueParam; GetParameter(strParameter, valueParam); return valueParam; }
 
 #pragma endregion
 
@@ -315,7 +314,7 @@ private:
 	std::vector<int> m_colGroupStack;
 
 	//param value
-	std::map<ibString, ibAnyValuePtr<ibAnyValue>, ibStringCaseFoldLess> m_paramVector;   // matched as GetParameter matches them
+	std::map<ibString, ibVariant, ibStringCaseFoldLess> m_paramVector;   // matched as GetParameter matches them
 
 	//grid notifier
 	std::vector<std::shared_ptr<ibSpreadsheetNotifier>> m_spreadsheetNotifiers;

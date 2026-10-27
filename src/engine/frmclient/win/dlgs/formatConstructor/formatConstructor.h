@@ -6,7 +6,7 @@
 ////////////////////////////////////////////////////////////////////////////
 //
 // The old desktop's, whole: the string is core's (core/formatString.h), and its
-// sample is read off the client's value (ibAnyValue) as the engine's reads it off its own.
+// sample is read off the client's value (ibVariant) as the engine's reads it off its own.
 //
 // A tab per kind of value the string formats — numbers, dates, booleans — and a row per code:
 // a box that says whether the code is written at all, and the control for its value. The rows are

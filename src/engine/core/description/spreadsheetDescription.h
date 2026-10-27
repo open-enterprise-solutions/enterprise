@@ -188,7 +188,7 @@ struct ibSpreadsheetCellDescription {
 	// This compared fourteen things and not m_value, m_fitMode or m_isReadOnly — so two sheets
 	// differing only in what was WRITTEN in them compared equal. The one thing a person looks at
 	// was the one thing equality ignored, and every caller built on top inherited that: the
-	// description's own operator== is this one in a loop, and ibPropertyValueSpreadsheet::Eq is how
+	// description's own operator== is this one in a loop, and ibVariantSpreadsheet::Eq is how
 	// wxVariant answers "did this change" about a template.
 	//
 	// It was found by writing a test for the round trip and discovering the assertion could not

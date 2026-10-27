@@ -85,10 +85,10 @@ factories, no checks: a schema stores ids and structure.
 |---|---|
 | `coreApi.h` | what every header of the core stands on, with no include of its own: `IB_EXPORT` / `IB_IMPORT` (every module's API macro is spelled with them), `CORE_API` / `CORE_EXPORTS`, `IB_FORCEINLINE` / `IB_NOINLINE`, the platform — `__IBMSW__` / `__IBOSX__` / `__IBGTK__` — and the string's character and literal, `ibChar` / `ibT("…")` |
 | `core.h` | `coreApi.h`, and id typedefs (`ibRoleID`, `ibMetaID`, `ibSourceId`, `ibFormID`, `ibActionID`, `ibPictureID`, `ibVersionID`), `ibValueTypes`, `ibDateFractions`, `ibCtorObjectType`, the primitives' class ids (`g_valueUndefinedCLSID`, `g_valueBooleanCLSID` … `g_valueNullCLSID`) and `GetIDByVT`, `COMPONENT_TYPE_*`, the packed value node's field names `kValueFieldClsid` "t" / `kValueFieldData` "v" |
-| `anyValue` | `ibAnyValue` — the INTERFACE every value answers (`GetType`, `IsEmpty`, `GetBoolean`, `GetNumber`, `GetDate`, `GetString`). The engine's `ibValue` and the client's derive from it and hold the value each its own way; what only asks these takes either |
+| `variant`, `variant_ptr.h` | `ibVariant` — THE value of the system: a flag, a number, a date, a text, or a counted reference to an object derived from it; its lifecycle, node serialization, the compare family (`CompareValueEQ` …), `CloneValue`. No base class, no factory. A literal, a property's value, a cell, a sheet parameter are each one; the engine's `ibValue` (+ runtime, factory) and the thin client's (+ a small factory) derive from it. `ibVariantPtr<T>` — a counted, typed holder |
 | `clsid.h`, `fstring`, `fnumber`, `fdatetime`, `fboolean`, `guid`, `stringUtils.h` | `ibClassID`, `ibString` (+ pool, `ibEmptyString`), `ibNumber`, `ibDateTime`, `ibBoolean`, `ibGuid`. The core's text is `ibString` throughout; `wxString` meets it only in `fstring.h`, the conversion both ways |
-| `compiler/` | the script language's words and its text: `codeDef.h` (opcodes, keywords), `ibTranslateCode` (the lexer — `s_listKeyWord`), `ibLiteral` (a value a text writes: the lexer's constant), `ibParseCode` (what a module text declares, read without compiling it — the procedures window, autocomplete, the module outline), `ibFoldCode` (where a module's text folds — both code editors'), `ibLinqBlock` (LINQ's block syntax as parts). The compiler and the interpreter are the backend's |
-| `formatString` | `ibFormatString` — the `Format` string as a value: `Parse` / `Render`, `Apply(const ibAnyValue&)`, `FromTypeDesc` (the format a type description gives, over either side's description) |
+| `compiler/` | the script language's words and its text: `codeDef.h` (opcodes, keywords), `ibTranslateCode` (the lexer — `s_listKeyWord`; its constant is an `ibVariant`), `ibParseCode` (what a module text declares, read without compiling it — the procedures window, autocomplete, the module outline), `ibFoldCode` (where a module's text folds — both code editors'), `ibLinqBlock` (LINQ's block syntax as parts). The compiler and the interpreter are the backend's |
+| `formatString` | `ibFormatString` — the `Format` string as a value: `Parse` / `Render`, `Apply(const ibVariant&)`, `FromTypeDesc` (the format a type description gives, over either side's description) |
 | `memory/` | `ibMemoryBuffer` (bytes: shared until written, the string's shape, no wx), `ibMemoryPool` (the per-thread block pool of strings and buffers), `ibWriterMemory` / `ibReaderMemory` (chunked byte streams over a buffer), lz block compression. A read, seek or advance past the end of a block, or a zero-terminated string with no terminator inside it, is refused (`ibCoreException`) in every build |
 | `serialize/` | `ibDataNode` / `ibDataValue`, binary provider, `ibJsonProvider`, JSON text. A type is named only by the injected resolver (`SetTypeResolver`). The JSON reader refuses nesting deeper than 256 objects and arrays (`kMaxNesting`, the root counted) |
 | `exception` | `ibCoreException : std::exception` — the base of every refusal (see [Exception taxonomy](#exception-taxonomy)) |
@@ -410,7 +410,7 @@ Per-driver `ClassifyDatabaseError(int nativeCode)` on each `ibDatabaseErrorRepor
 | `engineFingerprint.cmake` | — | Build-time script (run by CMake and by `backend.vcxproj`): a SHA-256 of every file under `compiler/`, `system/` and `../core/compiler/` (the translator), written to the generated `engineFingerprintBuild.h` as `kEngineFingerprint` — only when it changes |
 | `procUnit.h/cpp` | `ibProcUnit` | Interpreter: executes `ibByteCode` against a variable stack |
 | `procContext.h/cpp` | `ibRunContext` | Execution context: local variable frame, call stack |
-| `value.h/cpp` | `ibValue` | Universal value type — tag enum `ibValueTypes` in `core/core.h`: `TYPE_EMPTY` (=0, the "undefined" value), `TYPE_BOOLEAN`, `TYPE_NUMBER` (`ibNumber`), `TYPE_DATE`, `TYPE_STRING`, `TYPE_NULL`, `TYPE_REFFER` / `TYPE_CONST_REFFER`, object kinds `TYPE_VALUE` / `TYPE_ENUM` / `TYPE_OLE` / `TYPE_FUNCTION` / `TYPE_ITERATOR` |
+| `value.h/cpp` | `ibValue` | The runtime value: `ibVariant` (core) + members, iterators, script dispatch, the class factory; `CloneValue` packs and creates through the factory — tag enum `ibValueTypes` in `core/core.h`: `TYPE_EMPTY` (=0, the "undefined" value), `TYPE_BOOLEAN`, `TYPE_NUMBER` (`ibNumber`), `TYPE_DATE`, `TYPE_STRING`, `TYPE_NULL`, `TYPE_REFFER` / `TYPE_CONST_REFFER`, object kinds `TYPE_VALUE` / `TYPE_ENUM` / `TYPE_OLE` / `TYPE_FUNCTION` / `TYPE_ITERATOR` |
 | `core/compiler/codeDef.h` | enums | Opcode (`OPER_*`) and keyword (`KEY_*`) definitions |
 | `compileState.h` | `ibCompileState` | The code style a session's modules compile in (CES / VES) — the session's, `thread_local` for a thread with none |
 
@@ -528,7 +528,7 @@ Source text (wxString)
         ▼
  ibTranslateCode::Load() → Translate()
    Lexer: fills m_listLexem (vector<ibLexem>)
-   Each ibLexem: { type, keyword/delimiter number, string data, ibValue, line, position }
+   Each ibLexem: { type, keyword/delimiter number, string data, ibVariant, line, position }
         │
         ▼
  ibCompileCode::Compile()       (ibCompileCode : public ibTranslateCode)

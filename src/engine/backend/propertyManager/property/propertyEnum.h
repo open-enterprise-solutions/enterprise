@@ -8,20 +8,20 @@ class BACKEND_API ibPropertyEnumBase : public ibProperty {
 public:
 
 	long GetValueAsInteger() const { return m_propValue.GetNumber().ToInt(); }
-	void SetValue(const long& i) { m_propValue = ibPropertyValue(ibNumber(i)); }
+	void SetValue(const long& i) { m_propValue = ibVariant(ibNumber(i)); }
 
 	ibPropertyEnumBase(ibPropertyCategory* cat, const ibString& name,
-		const ibPropertyValue& value) : ibProperty(cat, name, value)
+		const ibVariant& value) : ibProperty(cat, name, value)
 	{
 	}
 
 	ibPropertyEnumBase(ibPropertyCategory* cat, const ibString& name, const ibString& label,
-		const ibPropertyValue& value) : ibProperty(cat, name, label, value)
+		const ibVariant& value) : ibProperty(cat, name, label, value)
 	{
 	}
 
 	ibPropertyEnumBase(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString,
-		const ibPropertyValue& value) : ibProperty(cat, name, label, helpString, value)
+		const ibVariant& value) : ibProperty(cat, name, label, helpString, value)
 	{
 	}
 

@@ -66,12 +66,8 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="anyValue.cpp" />
     <ClCompile Include="build.cpp" />
     <ClCompile Include="compiler\blockSyntaxLINQ.cpp">
-      <Filter>compiler</Filter>
-    </ClCompile>
-    <ClCompile Include="compiler\literal.cpp">
       <Filter>compiler</Filter>
     </ClCompile>
     <ClCompile Include="compiler\scriptFoldCode.cpp">
@@ -208,6 +204,7 @@
     <ClCompile Include="startProcess.cpp" />
     <ClCompile Include="stringTokenizer.cpp" />
     <ClCompile Include="typeName.cpp" />
+    <ClCompile Include="variant.cpp" />
     <ClCompile Include="query\queryAggregates.cpp">
       <Filter>query</Filter>
     </ClCompile>
@@ -276,16 +273,12 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="anyValue.h" />
     <ClInclude Include="build.h" />
     <ClInclude Include="clsid.h" />
     <ClInclude Include="compiler\blockSyntaxLINQ.h">
       <Filter>compiler</Filter>
     </ClInclude>
     <ClInclude Include="compiler\codeDef.h">
-      <Filter>compiler</Filter>
-    </ClInclude>
-    <ClInclude Include="compiler\literal.h">
       <Filter>compiler</Filter>
     </ClInclude>
     <ClInclude Include="compiler\scriptFoldCode.h">
@@ -443,6 +436,8 @@
     <ClInclude Include="selectorDataType.h" />
     <ClInclude Include="startProcess.h" />
     <ClInclude Include="typeName.h" />
+    <ClInclude Include="variant.h" />
+    <ClInclude Include="variant_ptr.h" />
     <ClInclude Include="query\queryAggregates.h">
       <Filter>query</Filter>
     </ClInclude>

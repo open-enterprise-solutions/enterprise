@@ -1,6 +1,6 @@
 #include "variantModule.h"
 
-ibString ibPropertyValueModule::GetString() const
+ibString ibVariantModule::GetString() const
 {
 	return _("Module");
 }

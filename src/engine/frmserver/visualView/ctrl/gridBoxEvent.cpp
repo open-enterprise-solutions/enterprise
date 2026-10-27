@@ -107,9 +107,9 @@ void ibValueGridBox::OnCellLeftClick(int row, int col)
 	// and that value is shown. The document used to have a verb for this, which was the same two
 	// lines with a door in front of them — and the door belonged to the value, not to the sheet.
 	case idOpenValue: {
-		ibAnyValuePtr<ibAnyValue> held;
+		ibVariant held;
 		if (document->GetParameter(detailsParameter, held)) {
-			ibValue bound = ibValue::FromAnyValue(held);
+			ibValue bound = ibValue(held);
 			bound.ShowValue();
 		}
 		break;

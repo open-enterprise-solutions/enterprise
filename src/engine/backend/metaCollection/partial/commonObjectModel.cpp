@@ -9,7 +9,7 @@
 //*                                  Model                                          *
 //***********************************************************************************
 
-void ibValueRecordSetObject::GetValueByRow(wxVariant& variant,
+void ibValueRecordSetObject::GetValueByRow(ibVariant& variant,
 	const ibDataViewItem& row, unsigned int col) const
 {
 	ibComposerNode* node = GetViewData<ibComposerNode>(row);
@@ -20,7 +20,7 @@ void ibValueRecordSetObject::GetValueByRow(wxVariant& variant,
 
 #include "backend/metaData.h"
 
-bool ibValueRecordSetObject::SetValueByRow(const wxVariant& variant,
+bool ibValueRecordSetObject::SetValueByRow(const ibVariant& variant,
 	const ibDataViewItem& row, unsigned int col)
 {
 	const ibString &strData = variant.GetString();

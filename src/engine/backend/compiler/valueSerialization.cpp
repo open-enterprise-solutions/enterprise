@@ -58,7 +58,7 @@ const ibChar* const kFieldData  = kValueFieldData;
 // to write a refusal, because not being transferable already is one.
 //////////////////////////////////////////////////////////////////////
 
-ibValue ibValue::CloneValue() const
+ibVariant ibValue::CloneValue() const
 {
 	switch (m_typeClass) {
 	case ibValueTypes::TYPE_EMPTY:
@@ -121,7 +121,7 @@ bool ibValue::DoSerialize(ibDataNode& node) const
 	// A reference wrapper is an ALIAS — it hops to what it wraps, exactly as
 	// IsTransferable does, so the wrapper never appears in the packed form.
 	if (IsReference() && m_pRef != nullptr)
-		return m_pRef->DoSerialize(node);
+		return GetRef()->DoSerialize(node);
 
 	switch (m_typeClass) {
 	case ibValueTypes::TYPE_EMPTY:
@@ -156,7 +156,7 @@ bool ibValue::DoSerialize(ibDataNode& node) const
 bool ibValue::DoDeserialize(const ibDataNode& node)
 {
 	if (m_typeClass == ibValueTypes::TYPE_REFFER && m_pRef != nullptr)
-		return m_pRef->DoDeserialize(node);
+		return GetRef()->DoDeserialize(node);
 
 	switch (m_typeClass) {
 	case ibValueTypes::TYPE_EMPTY:

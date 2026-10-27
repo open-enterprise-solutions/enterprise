@@ -32,7 +32,7 @@ public:
 
 private:
 
-	static ibPropertyValue CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc = ibMetaDescription());
+	static ibVariant CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc = ibMetaDescription());
 	Level m_level = Level::Account;
 	// What the owner handed over: "my chart of accounts, or null while I stand on none".
 	std::function<const ibValueMetaObjectChartOfAccounts* ()> m_chartOfAccounts;
@@ -61,7 +61,7 @@ protected:
 
 	// The family rule — a relationship arrives in whichever wrapper the caller was handed. See
 	// propertyRecord.h.
-	virtual void DoSetValue(const ibPropertyValue& val) override;
+	virtual void DoSetValue(const ibVariant& val) override;
 
 public:
 

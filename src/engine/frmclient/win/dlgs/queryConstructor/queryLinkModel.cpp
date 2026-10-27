@@ -214,7 +214,7 @@ wxString ibQueryLinkModel::RightName(unsigned int row) const
 	return index < m_tableNames.size() ? m_tableNames[index] : wxString();
 }
 
-void ibQueryLinkModel::GetValueByRow(wxVariant& variant, unsigned row, unsigned col) const
+void ibQueryLinkModel::GetValueByRow(ibVariant& variant, unsigned row, unsigned col) const
 {
 	const ibQueryAstJoin* join = JoinAt(row);
 	if (join == nullptr)
@@ -251,7 +251,7 @@ void ibQueryLinkModel::GetValueByRow(wxVariant& variant, unsigned row, unsigned 
 	}
 }
 
-bool ibQueryLinkModel::SetValueByRow(const wxVariant& variant, unsigned row, unsigned col)
+bool ibQueryLinkModel::SetValueByRow(const ibVariant& variant, unsigned row, unsigned col)
 {
 	ibQueryAstJoin* join = JoinAt(row);
 	if (join == nullptr)
@@ -317,10 +317,10 @@ bool ibQueryLinkModel::SetValueByRow(const wxVariant& variant, unsigned row, uns
 		break;
 	}
 	case kLinkColAllLeft:
-		join->m_kind = KindOf(variant.GetBool(), AllFromRight(join->m_kind));
+		join->m_kind = KindOf(variant.GetBoolean(), AllFromRight(join->m_kind));
 		break;
 	case kLinkColAllRight:
-		join->m_kind = KindOf(AllFromLeft(join->m_kind), variant.GetBool());
+		join->m_kind = KindOf(AllFromLeft(join->m_kind), variant.GetBoolean());
 		break;
 	case kLinkColCondition: {
 		// TYPED WHERE IT STANDS, and read by the ENGINE. The expression editor is behind the "..."
@@ -354,7 +354,7 @@ bool ibQueryLinkModel::SetValueByRow(const wxVariant& variant, unsigned row, uns
 		// Clearing it on a link that is not one equality between two columns is refused: obeying could
 		// only mean rewriting the author's `a.x = b.y AND a.z = b.w` into something the list can hold,
 		// which is not an edit anybody asked for.
-		const bool wanted = variant.GetBool();
+		const bool wanted = variant.GetBoolean();
 		if (!wanted && !IsSimple(*join)) {
 			if (m_onError)
 				m_onError(_("this link is not a single field-to-field equality: it can only be written by hand"));

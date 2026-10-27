@@ -47,8 +47,8 @@ public:
 	// The branch a row stands for: null for row 0 (that is the select itself).
 	ibQuerySelect* BranchAt(unsigned int row) const;
 
-	void GetValueByRow(wxVariant& variant, unsigned row, unsigned col) const override;
-	bool SetValueByRow(const wxVariant& variant, unsigned row, unsigned col) override;
+	void GetValueByRow(ibVariant& variant, unsigned row, unsigned col) const override;
+	bool SetValueByRow(const ibVariant& variant, unsigned row, unsigned col) override;
 
 	bool IsEnabledByRow(unsigned row, unsigned col) const override;
 
@@ -70,9 +70,9 @@ public:
 	const std::vector<wxString>& FieldNames() const { return m_names; }
 	unsigned int BranchCount() const { return m_branchCount; }
 
-	void GetValueByRow(wxVariant& variant, unsigned row, unsigned col) const override;
+	void GetValueByRow(ibVariant& variant, unsigned row, unsigned col) const override;
 	// The field NAME is the alias — writing it names the field of the RESULT.
-	bool SetValueByRow(const wxVariant& variant, unsigned row, unsigned col) override;
+	bool SetValueByRow(const ibVariant& variant, unsigned row, unsigned col) override;
 
 	// THE PICTURE FOR A ROW, answered by the host (which can reach the model that reaches the
 	// column). The union's rows are output FIELDS; drawing them without the picture every other

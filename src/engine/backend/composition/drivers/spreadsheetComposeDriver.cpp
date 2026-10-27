@@ -845,7 +845,7 @@ void ibSpreadsheetComposeDriver::PrintRow(const ibCompositionLine& line, const s
 		// row's chain, which is what the click reads back.
 		if (!value.IsEmpty()) {
 			const ibString name = ibString::Format(ibT("Cell_%d"), col);
-			row->SetParameter(name, (packed[i].IsEmpty() ? PackDetails(i, value, chain) : packed[i]).ToAnyValue());
+			row->SetParameter(name, (packed[i].IsEmpty() ? PackDetails(i, value, chain) : packed[i]));
 			row->SetCellDetailsParameter(0, col, name);
 		}
 
@@ -948,7 +948,7 @@ void ibSpreadsheetComposeDriver::WriteTotalLine(int level, const std::vector<ibV
 		// context to break down by, which is the truth about that line.
 		if (!value.IsEmpty()) {
 			const ibString name = ibString::Format(ibT("Cell_%d"), col);
-			row->SetParameter(name, PackDetails(i, value, ibValue()).ToAnyValue());
+			row->SetParameter(name, PackDetails(i, value, ibValue()));
 			row->SetCellDetailsParameter(0, col, name);
 		}
 		if (value.GetType() == ibValueTypes::TYPE_NUMBER)
@@ -1659,7 +1659,7 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 				cellLink[f] = linkName(static_cast<int>(f));
 				rowChain = PackDetails(f < headingAt.size() ? headingAt[f] : m_schema.size(),
 					source.m_heading[f], rowChain);
-				m_document->SetParameter(cellLink[f], rowChain.ToAnyValue());
+				m_document->SetParameter(cellLink[f], rowChain);
 			}
 		}
 		KeepChain(source.m_level, rowChain);
@@ -1691,7 +1691,7 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 					cellLink[c] = linkName(col);
 					m_document->SetParameter(cellLink[c], PackDetails(
 						m < m_measureAt.size() ? m_measureAt[m] : m_schema.size(),
-						figures[m], rowChain, colChain).ToAnyValue());
+						figures[m], rowChain, colChain));
 				}
 				if (c < m_widest.size())
 					m_widest[c] = std::max(m_widest[c], cellText[c].length());
@@ -1797,7 +1797,7 @@ void ibSpreadsheetComposeDriver::WriteCrossTable()
 					const ibString name = ibString::Format(ibT("Cell_%d"), col);
 					totals->SetParameter(name, PackDetails(
 						m < m_measureAt.size() ? m_measureAt[m] : m_schema.size(),
-						figures[m], colChain).ToAnyValue());
+						figures[m], colChain));
 					totals->SetCellDetailsParameter(0, col, name);
 				}
 				if (static_cast<size_t>(col) < m_widest.size())

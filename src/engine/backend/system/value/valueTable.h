@@ -137,7 +137,7 @@ public:
 
 			// --- Property events (fired by the inspector on an edit) — grouped last, per convention. Nothing
 			// to sync (the property variants ARE the storage); see the .cpp. ------------------------------------
-			virtual void OnPropertyChanged(ibProperty* property, const ibPropertyValue& oldValue, const ibPropertyValue& newValue) override;
+			virtual void OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue) override;
 
 			// --- Serialization — through the UNIFIED property mechanism (each property's GetNodeValue /
 			// ReadNodeValue, exactly like ibFormAttribute), plus the non-property id / width. The value-table
@@ -426,6 +426,9 @@ public:
 	//check is empty (single final overrider for BOTH ibValueModel::IsEmpty and ibSourceDataObject::IsEmpty)
 	virtual bool IsEmpty() const override { return GetRowCount() == 0; }
 
+	// A COPY OF ITS OWN, stated rather than packed — the same columns and the same rows, nothing shared.
+	virtual ibVariant CloneValue() const override;
+
 	// A table-of-values is fully composer-driven (filter / sort / group live on the RAM composer), so it exposes
 	// the whole List-settings affordance — including GROUP, which folds the flat value-table into a tree "with one easy move".
 	virtual Features GetFeatures() const override {
@@ -443,9 +446,9 @@ public:
 	virtual bool CallAsFunc(const long lMethodNum, ibValue& pvarRetValue, ibValue** paParams, const long lSizeArray);       // method call
 
 	// implementation of base class virtuals to define model
-	virtual void GetValueByRow(wxVariant& variant,
+	virtual void GetValueByRow(ibVariant& variant,
 		const ibDataViewItem& row, unsigned int col) const override;
-	virtual bool SetValueByRow(const wxVariant& variant,
+	virtual bool SetValueByRow(const ibVariant& variant,
 		const ibDataViewItem& row, unsigned int col) override;
 
 	// FETCH: the value-table no longer overrides Get*Fetch. The thin wrappers existed ONLY to bypass the (now
@@ -466,11 +469,6 @@ public:
 	// (MoveRow / SortRows are NOT here — they live on ibValueModelStorage: ordering rows is something every
 	//  table that owns its rows can do, and the script's Sort() reaches the very same one.)
 
-	// A fresh table object built from the live one — `Clone` in the ordinary C++ sense, the same
-	// sense a database layer or a drag item uses it in. It no longer collides with anything: the
-	// root's packed-form copy is `ibValue::CloneValue`, which is a different operation and now
-	// carries a different name (see value.h). The same columns and the same rows, nothing shared.
-	ibValuePtr<ibValueModelTable> Clone() const;
 	unsigned int Count() { return GetRowCount(); }
 	void Clear();
 
@@ -508,7 +506,7 @@ public:
 	virtual ibString GetClassName() const override { return ibValue::GetClassName(); }
 	virtual ibString GetObjectTypeName() const override { return GetClassName(); }
 	virtual bool IsEditable() const override { return true; }
-	virtual void OnPropertyChanged(ibProperty* property, const ibPropertyValue& oldValue, const ibPropertyValue& newValue) override;
+	virtual void OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue) override;
 	virtual void OnChildChanged() override;
 
 	// The columns changed — added, removed, or one of them edited: the rows' names and the empty row a new row copies

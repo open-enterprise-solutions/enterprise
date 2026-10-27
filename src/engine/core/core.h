@@ -13,7 +13,7 @@
 // The UNDEFINED value type's clsid — the canonical "no concrete type"; base-level so low-level code can name it.
 constexpr ibClassID g_valueUndefinedCLSID = primitive_to_clsid("VL_UNDF");
 
-// …and the primitives' — what every value is (anyValue.h), named the same by the engine and the client.
+// …and the primitives' — what every value is (variant.h), named the same by the engine and the client.
 constexpr ibClassID g_valueBooleanCLSID = primitive_to_clsid("VL_BOOL");
 constexpr ibClassID g_valueNumberCLSID = primitive_to_clsid("VL_NUMB");
 constexpr ibClassID g_valueDateCLSID = primitive_to_clsid("VL_DATE");

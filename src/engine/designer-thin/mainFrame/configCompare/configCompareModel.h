@@ -85,10 +85,10 @@ public:
 
 	// --- ibDataViewModel overrides ---
 
-	virtual void GetValue(wxVariant& variant,
+	virtual void GetValue(ibVariant& variant,
 		const ibDataViewItem& item, unsigned int col) const override;
 
-	virtual bool SetValue(const wxVariant& variant,
+	virtual bool SetValue(const ibVariant& variant,
 		const ibDataViewItem& item, unsigned int col) override;
 
 	virtual bool HasValue(const ibDataViewItem& item,

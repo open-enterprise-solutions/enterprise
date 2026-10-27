@@ -2,12 +2,12 @@
 #define __COMPOSITION_VARIANT_H__
 
 #include "backend/backend_core.h"
-#include "backend/propertyManager/propertyValue.h"
+#include "core/variant.h"
 #include "core/description/compositionDescription.h"
 
 class BACKEND_API ibPropertyObject;
 
-// The cell that holds a COMPOSITION DESCRIPTION — the Type side's shape (ibPropertyValueAttribute),
+// The cell that holds a COMPOSITION DESCRIPTION — the Type side's shape (ibVariantAttribute),
 // and nothing more than that: a description, and the owner it belongs to.
 //
 // ⭐⭐ NO LIVE COMPOSITION LIVES HERE. A cell stores what a property STORES, and what a property
@@ -15,7 +15,7 @@ class BACKEND_API ibPropertyObject;
 // table id. Whoever needs a running composition builds one from this and keeps it where it belongs;
 // a live object in the cell would be a second state beside the stored one, which is exactly what
 // holding the description by reference is meant to prevent.
-class BACKEND_API ibPropertyValueComposition : public ibPropertyValue {
+class BACKEND_API ibVariantComposition : public ibVariant {
 public:
 
 	/////////////////////////////////////////////////////////////////////////////////////////
@@ -33,18 +33,18 @@ public:
 
 	/////////////////////////////////////////////////////////////////////////////////////////
 
-	explicit ibPropertyValueComposition(const ibPropertyObject* prop,
+	explicit ibVariantComposition(const ibPropertyObject* prop,
 	                                  const ibCompositionDescription& desc = ibCompositionDescription())
-		: ibPropertyValue(ibValueTypes::TYPE_VALUE), m_ownerProperty(prop), m_description(desc) {}
-	ibPropertyValueComposition(const ibPropertyValueComposition& src)
-		: ibPropertyValue(ibValueTypes::TYPE_VALUE), m_ownerProperty(src.m_ownerProperty), m_description(src.m_description) {}
+		: ibVariant(ibValueTypes::TYPE_VALUE), m_ownerProperty(prop), m_description(desc) {}
+	ibVariantComposition(const ibVariantComposition& src)
+		: ibVariant(ibValueTypes::TYPE_VALUE), m_ownerProperty(src.m_ownerProperty), m_description(src.m_description) {}
 
-	virtual ibPropertyValueComposition* Clone() const { return new ibPropertyValueComposition(*this); }
+	virtual ibVariant CloneValue() const override { return ibVariant(new ibVariantComposition(*this)); }
 
 	// EQUAL WHEN THEY DESCRIBE THE SAME THING — the family's own comparison (a type compares its
 	// clsid list, a source its id path). What a property is worth is what it stores.
-	virtual bool CompareValueEQ(const ibPropertyValue& data) const override {
-		const ibPropertyValueComposition* src = dynamic_cast<const ibPropertyValueComposition*>(data.GetRef());
+	virtual bool CompareValueEQ(const ibVariant& data) const override {
+		const ibVariantComposition* src = dynamic_cast<const ibVariantComposition*>(data.GetRef());
 		return src != nullptr && src->m_description == m_description;
 	}
 

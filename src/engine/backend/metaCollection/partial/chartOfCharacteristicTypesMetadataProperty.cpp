@@ -7,12 +7,12 @@ void ibValueMetaObjectChartOfCharacteristicTypes::OnPropertyCreated(ibProperty* 
 	ibValueMetaObjectRecordDataMutableRef::OnPropertyCreated(property);
 }
 
-bool ibValueMetaObjectChartOfCharacteristicTypes::OnPropertyChanging(ibProperty* property, const ibPropertyValue& newValue)
+bool ibValueMetaObjectChartOfCharacteristicTypes::OnPropertyChanging(ibProperty* property, const ibVariant& newValue)
 {
 	return ibValueMetaObjectRecordDataMutableRef::OnPropertyChanging(property, newValue);
 }
 
-void ibValueMetaObjectChartOfCharacteristicTypes::OnPropertyChanged(ibProperty* property, const ibPropertyValue& oldValue, const ibPropertyValue& newValue)
+void ibValueMetaObjectChartOfCharacteristicTypes::OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue)
 {
 	ibValueMetaObjectRecordDataMutableRef::OnPropertyChanged(property, oldValue, newValue);
 }

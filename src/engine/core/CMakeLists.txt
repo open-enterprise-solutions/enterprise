@@ -64,7 +64,7 @@ if(WIN32)
     target_compile_definitions(core PRIVATE CORE_EXPORTS)
 endif()
 
-# wx::base PUBLIC: the core's headers hand wx types across - ibString's boundary (fstring.h), the tabular model's wxVariant.
+# wx::base PUBLIC: the core's headers hand wx types across - ibString's boundary (fstring.h), the tabular model's wxRefCounter.
 target_link_libraries(core
     PUBLIC
         wx::base

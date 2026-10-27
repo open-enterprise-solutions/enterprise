@@ -74,10 +74,10 @@ public:
 	// A cell — the model's column is the column's id (ibValueModelTableBoxColumn builds it so): a boolean as itself, anything else
 	// as the text the server wrote it in; a number stands right by its look. It has a value where the server wrote one: a
 	// folder's only in the first column.
-	virtual void GetValue(wxVariant& variant, const ibDataViewItem& item, unsigned int col) const override;
+	virtual void GetValue(ibVariant& variant, const ibDataViewItem& item, unsigned int col) const override;
 	virtual bool HasValue(const ibDataViewItem& item, unsigned col) const override;
 	virtual bool GetAttr(const ibDataViewItem& item, unsigned int col, ibDataViewItemAttr& attr) const override;
-	virtual bool SetValue(const wxVariant& variant, const ibDataViewItem& item, unsigned int col) override;
+	virtual bool SetValue(const ibVariant& variant, const ibDataViewItem& item, unsigned int col) override;
 	virtual ibDataViewItem GetParent(const ibDataViewItem& item) const override;
 
 	virtual unsigned int GetFirstFetch(const ibDataViewItem& parent, const ibDataViewItem& anchor, int count,

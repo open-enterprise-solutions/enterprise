@@ -63,8 +63,8 @@ public:
 	ibQueryPackageLink* LinkAt(unsigned int row) const;
 
 	// ---- ibDataViewListModel ----
-	void GetValueByRow(wxVariant& variant, unsigned row, unsigned col) const override;
-	bool SetValueByRow(const wxVariant& variant, unsigned row, unsigned col) override;
+	void GetValueByRow(ibVariant& variant, unsigned row, unsigned col) const override;
+	bool SetValueByRow(const ibVariant& variant, unsigned row, unsigned col) override;
 
 private:
 	ibQueryPackage*       m_package = nullptr;   // borrowed

@@ -9,7 +9,7 @@
 //* DOES when its properties are edited is one aspect and lives in one file.                    *
 //*********************************************************************************************
 
-void ibFormAttributeValue::OnPropertyChanged(ibProperty* property, const ibPropertyValue& oldValue, const ibPropertyValue& newValue)
+void ibFormAttributeValue::OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue)
 {
 	// ⭐⭐ THE CHILD CALLS THIS ITSELF NOW — nothing is pushed down to it from here (Max, 2026-08-24).
 	// A property belongs to the object that created it, that object reacts to its own change, and

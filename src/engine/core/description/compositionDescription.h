@@ -196,7 +196,7 @@ struct ibFilterNodeDescription {
 };
 
 // ⭐ EVERY PART COMPARES ITSELF, and the whole compares by comparing its parts. A property asks
-// "changed or the same" of the description (ibPropertyValueComposition::Eq), and that question can
+// "changed or the same" of the description (ibVariantComposition::Eq), and that question can
 // only be answered where each part knows what it is made of.
 struct ibFilterDescription {
 	// The ROOT is not a node: every filter has one, it can never be removed, and giving it an index

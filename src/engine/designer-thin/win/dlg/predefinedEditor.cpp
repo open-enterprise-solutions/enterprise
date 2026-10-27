@@ -10,7 +10,7 @@ enum
 	model_description
 };
 
-void ibDialogPredefinedEditor::ibDataViewPredefinedTreeStore::GetValue(wxVariant& variant,
+void ibDialogPredefinedEditor::ibDataViewPredefinedTreeStore::GetValue(ibVariant& variant,
 	const ibDataViewItem& item, unsigned int col) const
 {
 	if (item.GetID() == (void*)1)

@@ -3,7 +3,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "core/formatString.h"
-#include "core/anyValue.h"   // ibAnyValue — what Apply asks of a value
+#include "core/variant.h"   // ibVariant — what Apply asks of a value
 
 #include <algorithm>   // std::max / std::min — the spelling of a date letter
 #include <cwchar>      // std::wcstol — a code's number read
@@ -355,14 +355,14 @@ ibString ibFormatString::Render() const
 	return text;
 }
 
-ibString ibFormatString::Apply(const ibAnyValue& value) const
+ibString ibFormatString::Apply(const ibVariant& value) const
 {
 	ibString result;
 	Apply(value, result);
 	return result;
 }
 
-bool ibFormatString::Apply(const ibAnyValue& value, ibString& result) const
+bool ibFormatString::Apply(const ibVariant& value, ibString& result) const
 {
 	switch (value.GetType()) {
 	case ibValueTypes::TYPE_BOOLEAN: {

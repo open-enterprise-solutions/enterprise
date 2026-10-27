@@ -259,39 +259,32 @@ void ibValueModelTableBoxColumn::UpdateCell(const ibDataViewItem& item, ibDataNo
 	// or a header column is resolved by the table — first hop via the dumb model, deeper hops walk the
 	// reference; a plain column is the model's own. Whether the cell has one at all (a container's non-first
 	// columns) the fetch has asked already.
-	wxVariant value;
+	ibVariant value;
 	if (!owner->ResolveCellValue(item, this, value))
 		model->GetValue(value, item, modelColumn);
 
-	if (value.IsNull()) {
+	if (value.GetType() == ibValueTypes::TYPE_EMPTY) {
 		cell.SetValue(ibProtocol::ibForm::ibTable::Text, ibString());
 		return;
 	}
 
-	// A variant no table model made is shown as it is.
-	if (value.GetType() != ibT("value")) {
-		cell.SetValue(ibProtocol::ibForm::ibTable::Text, ibString(value.MakeString()));
-		return;
-	}
-
 	// Everything below is asked of the value itself, through the format of the column.
-	const ibValue& cellValue = static_cast<const ibVariantDataValue*>(value.GetData())->GetValue();
 	ibString text;
 	if (format != nullptr)
-		format->Apply(cellValue, text);
+		format->Apply(value, text);
 	else
-		text = cellValue.GetString();
+		text = value.GetString();
 	cell.SetValue(ibProtocol::ibForm::ibTable::Text, text);
 	// …and, in a cell the client may edit, the value with its type (ibValue::Serialize) — the field's way. A list's
 	// cells, never edited, carry their text alone and stay as light as they were.
-	if (!readOnly && model->EditableLine(item, modelColumn) && cellValue.IsTransferable())
-		cellValue.Serialize(cell.Child(ibProtocol::ibForm::ibTable::Value));
+	if (!readOnly && model->EditableLine(item, modelColumn) && value.IsTransferable())
+		value.Serialize(cell.Child(ibProtocol::ibForm::ibTable::Value));
 
 	// A boolean is drawn as a tick, and whether it has one is the value's, not its text's; a number stands
 	// to the right.
-	if (cellValue.GetType() == ibValueTypes::TYPE_BOOLEAN)
-		cell.SetValue(ibProtocol::ibForm::ibTable::Checked, cellValue.GetBoolean());
-	else if (cellValue.GetType() == ibValueTypes::TYPE_NUMBER)
+	if (value.GetType() == ibValueTypes::TYPE_BOOLEAN)
+		cell.SetValue(ibProtocol::ibForm::ibTable::Checked, value.GetBoolean());
+	else if (value.GetType() == ibValueTypes::TYPE_NUMBER)
 		cell.SetValue(ibProtocol::ibForm::ibTable::Number, true);
 }
 

@@ -1068,7 +1068,7 @@ void ibMcpSayProperties(const ibPropertyObject* object, ibDataNode& node,
 
 		if (mode != ibPropertyChoiceMode::None) {
 
-			const ibPropertyValue held = property->GetValue();
+			const ibVariant held = property->GetValue();
 
 			// ⭐⭐ THE WHOLE ENTRY, NOT ONLY ITS LABEL. A label is a reading — translated, and with
 			// two vocabularies for one value. The ID is what the property stores, so a caller that
@@ -1113,7 +1113,7 @@ void ibMcpSayProperties(const ibPropertyObject* object, ibDataNode& node,
 				// ⚠ ASKED OF EVERY CHOICE, INLINED OR NOT: the current value is not more likely to
 				// be among the first eight, and answering "nothing is set" because the match sat
 				// ninth would be a wrong answer rather than a short one.
-				const ibPropertyValue& carried = choices.GetValue(choice);
+				const ibVariant& carried = choices.GetValue(choice);
 
 				if (held == carried)
 					current = choices.GetLabel(choice);
@@ -1574,7 +1574,7 @@ void ibMcpReportComplaints(ibDataNode& result, ibValueMetaObject* object)
 //
 // What stays here is the translation of "no object" into words a caller can read — the gate answers
 // with a sentence when asked, and this hands it the one thing it cannot know: nothing.
-bool ibMcpApplyByHand(ibProperty* property, const ibPropertyValue& newValue, ibString& refusal)
+bool ibMcpApplyByHand(ibProperty* property, const ibVariant& newValue, ibString& refusal)
 {
 	return ibPropertyGate::SetValue(property->GetPropertyObject(), property, newValue, &refusal);
 }
@@ -1707,7 +1707,7 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 
 		// ⚠ EVERY CELL FIRST, THEN ONE WRITE. Applying them one at a time would announce a change
 		// per language and leave a watcher redrawing a caption that is half translated.
-		if (!ibMcpApplyByHand(property, ibPropertyValue(new ibPropertyValueTranslate(edited)), refusal))
+		if (!ibMcpApplyByHand(property, ibVariant(new ibVariantTranslate(edited)), refusal))
 			return false;
 
 		result.SetValue(ibT("property"), name);
@@ -1773,7 +1773,7 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 		ibTranslateString edited = caption->GetValueAsTranslate();
 		edited.SetTranslate(code, ibMcpValueArgument().Text(params));
 
-		if (!ibMcpApplyByHand(property, ibPropertyValue(new ibPropertyValueTranslate(edited)), refusal))
+		if (!ibMcpApplyByHand(property, ibVariant(new ibVariantTranslate(edited)), refusal))
 			return false;
 
 		// SAID AS THE CELLS, like every other answer about a caption — and it is worth more here
@@ -1876,8 +1876,8 @@ bool ibMcpSetProperty(ibProperty* property, const ibDataNode& params,
 					set.AppendMetaType(chosen);
 			}
 
-			ibPropertyValue placing = choices.GetValue(0);
-			ibPropertyValueMetaDesc* carried = property->find_cell_variant<ibPropertyValueMetaDesc>(placing);
+			ibVariant placing = choices.GetValue(0);
+			ibVariantMetaDesc* carried = property->find_cell_variant<ibVariantMetaDesc>(placing);
 			if (carried == nullptr) {
 				refusal = ibString::Format(ibMcpText("'%s' holds several values, but not as a set of "
 					"configuration objects; send one at a time."), name);

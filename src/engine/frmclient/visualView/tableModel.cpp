@@ -109,12 +109,12 @@ bool ibViewTableModel::IsCellEditable(const ibDataViewItem& item, long long colu
 	return cell != nullptr && cell->editable;
 }
 
-void ibViewTableModel::GetValue(wxVariant& variant, const ibDataViewItem& item, unsigned int col) const
+void ibViewTableModel::GetValue(ibVariant& variant, const ibDataViewItem& item, unsigned int col) const
 {
 	const ibViewTableRow* const row = RowOf(item);
 	const ibViewCell* const cell = row != nullptr ? row->FindCell(col) : nullptr;
 	if (cell != nullptr)
-		variant = cell->checked.has_value() ? wxVariant(*cell->checked) : wxVariant(cell->text);
+		variant = cell->checked.has_value() ? ibVariant(*cell->checked) : ibVariant(cell->text);
 }
 
 bool ibViewTableModel::HasValue(const ibDataViewItem& item, unsigned col) const
@@ -140,7 +140,7 @@ bool ibViewTableModel::GetAttr(const ibDataViewItem& item, unsigned int col, ibD
 	return true;
 }
 
-bool ibViewTableModel::SetValue(const wxVariant& /*variant*/, const ibDataViewItem& /*item*/, unsigned int /*col*/)
+bool ibViewTableModel::SetValue(const ibVariant& /*variant*/, const ibDataViewItem& /*item*/, unsigned int /*col*/)
 {
 	// A cell is written by the server — a Change sent, the rows read again.
 	return false;

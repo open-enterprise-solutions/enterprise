@@ -350,14 +350,6 @@ int ibDataViewVirtualListModel::Compare(const ibDataViewItem& item1,
 
 #endif  // __WXOSX__
 
-//-----------------------------------------------------------------------------
-// ibDataViewIconText
-//-----------------------------------------------------------------------------
-
-wxIMPLEMENT_DYNAMIC_CLASS(ibDataViewIconText, wxObject);
-
-IMPLEMENT_VARIANT_OBJECT(ibDataViewIconText)
-
 // ---------------------------------------------------------
 // ibDataViewRendererBase
 // ---------------------------------------------------------
@@ -400,7 +392,7 @@ bool ibDataViewRendererBase::StartEditing(const ibDataViewItem& item, wxRect lab
 	m_item = item;
 
 	unsigned int col = GetOwner()->GetModelColumn();
-	const wxVariant& value = CheckedGetValue(dv_ctrl->GetModel(), item, col);
+	const ibVariant& value = CheckedGetValue(dv_ctrl->GetModel(), item, col);
 
 	wxWindow* parent = (wxWindow*)dv_ctrl->CellToDataViewWindow(item, column);
 	const wxSize parentSize = parent ? parent->GetClientSize() : wxSize(-1, -1);
@@ -472,7 +464,7 @@ bool ibDataViewRendererBase::FinishEditing()
 
 	bool gotValue = false;
 
-	wxVariant value;
+	ibVariant value;
 	if (GetValueFromEditorCtrl(m_editorCtrl, value))
 	{
 		// This is the normal case and we will use this value below (if it
@@ -490,7 +482,7 @@ bool ibDataViewRendererBase::FinishEditing()
 }
 
 bool
-ibDataViewRendererBase::DoHandleEditingDone(wxVariant* value)
+ibDataViewRendererBase::DoHandleEditingDone(ibVariant* value)
 {
 	if (value)
 	{
@@ -527,36 +519,17 @@ ibDataViewRendererBase::DoHandleEditingDone(wxVariant* value)
 	return accepted;
 }
 
-wxVariant
+ibVariant
 ibDataViewRendererBase::CheckedGetValue(const ibDataViewModel* model,
 	const ibDataViewItem& item,
 	unsigned column) const
 {
-	wxVariant value;
+	ibVariant value;
 	// Avoid calling GetValue() if the model isn't supposed to have any values
 	// in this cell (e.g. a non-first column of a container item), this could
 	// be unexpected.
 	if (model->HasValue(item, column))
 		model->GetValue(value, item, column);
-
-	// We always allow the cell to be null, regardless of the renderer type.
-	if (!value.IsNull())
-	{
-		if (!IsCompatibleVariantType(value.GetType()))
-		{
-			// If you're seeing this message, this indicates that either your
-			// renderer is using the wrong type, or your model returns values
-			// of the wrong type.
-			wxLogDebug("Wrong type returned from the model for column %u: "
-				"%s required but actual type is %s",
-				column,
-				GetVariantType(),
-				value.GetType());
-
-			// Don't return data of mismatching type, this could be unexpected.
-			value.MakeNull();
-		}
-	}
 
 	return value;
 }
@@ -572,9 +545,9 @@ ibDataViewRendererBase::PrepareForItem(const ibDataViewModel* model,
 	{
 
 		// Now check if we have a value and remember it if we do.
-		wxVariant value = CheckedGetValue(model, item, column);
+		ibVariant value = CheckedGetValue(model, item, column);
 
-		if (!value.IsNull())
+		if (value.GetType() != ibValueTypes::TYPE_EMPTY)
 		{
 			if (m_valueAdjuster)
 			{
@@ -595,7 +568,7 @@ ibDataViewRendererBase::PrepareForItem(const ibDataViewModel* model,
 		// empty cells.
 		SetEnabled(model->IsEnabled(item, column));
 
-		return !value.IsNull();
+		return value.GetType() != ibValueTypes::TYPE_EMPTY;
 	}
 		wxCATCH_ALL
 		(
@@ -1795,9 +1768,9 @@ ibDataViewSpinRenderer::ibDataViewSpinRenderer(int min, int max, ibDataViewCellM
 	m_max = max;
 }
 
-wxWindow* ibDataViewSpinRenderer::CreateEditorCtrl(wxWindow* parent, wxRect labelRect, const wxVariant& value)
+wxWindow* ibDataViewSpinRenderer::CreateEditorCtrl(wxWindow* parent, wxRect labelRect, const ibVariant& value)
 {
-	long l = value;
+	long l = value.GetInteger();
 	wxString str;
 	str.Printf(wxT("%d"), (int)l);
 	wxSpinCtrl* sc = new wxSpinCtrl(parent, wxID_ANY, str,
@@ -1811,7 +1784,7 @@ wxWindow* ibDataViewSpinRenderer::CreateEditorCtrl(wxWindow* parent, wxRect labe
 	return sc;
 }
 
-bool ibDataViewSpinRenderer::GetValueFromEditorCtrl(wxWindow* editor, wxVariant& value)
+bool ibDataViewSpinRenderer::GetValueFromEditorCtrl(wxWindow* editor, ibVariant& value)
 {
 	wxSpinCtrl* sc = (wxSpinCtrl*)editor;
 	long l = sc->GetValue();
@@ -1840,13 +1813,13 @@ wxSize ibDataViewSpinRenderer::GetSize() const
 	return sz;
 }
 
-bool ibDataViewSpinRenderer::SetValue(const wxVariant& value)
+bool ibDataViewSpinRenderer::SetValue(const ibVariant& value)
 {
-	m_data = value.GetLong();
+	m_data = value.GetInteger();
 	return true;
 }
 
-bool ibDataViewSpinRenderer::GetValue(wxVariant& value) const
+bool ibDataViewSpinRenderer::GetValue(ibVariant& value) const
 {
 	value = m_data;
 	return true;
@@ -1871,7 +1844,7 @@ ibDataViewChoiceRenderer::ibDataViewChoiceRenderer(const wxArrayString& choices,
 	m_choices = choices;
 }
 
-wxWindow* ibDataViewChoiceRenderer::CreateEditorCtrl(wxWindow* parent, wxRect labelRect, const wxVariant& value)
+wxWindow* ibDataViewChoiceRenderer::CreateEditorCtrl(wxWindow* parent, wxRect labelRect, const ibVariant& value)
 {
 	wxChoice* c = new wxChoice
 	(
@@ -1886,11 +1859,10 @@ wxWindow* ibDataViewChoiceRenderer::CreateEditorCtrl(wxWindow* parent, wxRect la
 	return c;
 }
 
-bool ibDataViewChoiceRenderer::GetValueFromEditorCtrl(wxWindow* editor, wxVariant& value)
+bool ibDataViewChoiceRenderer::GetValueFromEditorCtrl(wxWindow* editor, ibVariant& value)
 {
 	wxChoice* c = (wxChoice*)editor;
-	wxString s = c->GetStringSelection();
-	value = s;
+	value = c->GetStringSelection();
 	return true;
 }
 
@@ -1916,13 +1888,13 @@ wxSize ibDataViewChoiceRenderer::GetSize() const
 	return sz;
 }
 
-bool ibDataViewChoiceRenderer::SetValue(const wxVariant& value)
+bool ibDataViewChoiceRenderer::SetValue(const ibVariant& value)
 {
 	m_data = value.GetString();
 	return true;
 }
 
-bool ibDataViewChoiceRenderer::GetValue(wxVariant& value) const
+bool ibDataViewChoiceRenderer::GetValue(ibVariant& value) const
 {
 	value = m_data;
 	return true;
@@ -1946,17 +1918,17 @@ ibDataViewChoiceByIndexRenderer::ibDataViewChoiceByIndexRenderer(const wxArraySt
 	m_variantType = wxS("long");
 }
 
-wxWindow* ibDataViewChoiceByIndexRenderer::CreateEditorCtrl(wxWindow* parent, wxRect labelRect, const wxVariant& value)
+wxWindow* ibDataViewChoiceByIndexRenderer::CreateEditorCtrl(wxWindow* parent, wxRect labelRect, const ibVariant& value)
 {
-	wxVariant string_value = value.GetLong() != wxNOT_FOUND ? GetChoice(value.GetLong())
+	const ibVariant string_value = value.GetInteger() != wxNOT_FOUND ? GetChoice(value.GetInteger())
 		: wxString();
 
 	return ibDataViewChoiceRenderer::CreateEditorCtrl(parent, labelRect, string_value);
 }
 
-bool ibDataViewChoiceByIndexRenderer::GetValueFromEditorCtrl(wxWindow* editor, wxVariant& value)
+bool ibDataViewChoiceByIndexRenderer::GetValueFromEditorCtrl(wxWindow* editor, ibVariant& value)
 {
-	wxVariant string_value;
+	ibVariant string_value;
 	if (!ibDataViewChoiceRenderer::GetValueFromEditorCtrl(editor, string_value))
 		return false;
 
@@ -1964,16 +1936,16 @@ bool ibDataViewChoiceByIndexRenderer::GetValueFromEditorCtrl(wxWindow* editor, w
 	return true;
 }
 
-bool ibDataViewChoiceByIndexRenderer::SetValue(const wxVariant& value)
+bool ibDataViewChoiceByIndexRenderer::SetValue(const ibVariant& value)
 {
-	wxVariant string_value = value.GetLong() != wxNOT_FOUND ? GetChoice(value.GetLong())
+	const ibVariant string_value = value.GetInteger() != wxNOT_FOUND ? GetChoice(value.GetInteger())
 		: wxString();
 	return ibDataViewChoiceRenderer::SetValue(string_value);
 }
 
-bool ibDataViewChoiceByIndexRenderer::GetValue(wxVariant& value) const
+bool ibDataViewChoiceByIndexRenderer::GetValue(ibVariant& value) const
 {
-	wxVariant string_value;
+	ibVariant string_value;
 	if (!ibDataViewChoiceRenderer::GetValue(string_value))
 		return false;
 
@@ -1984,9 +1956,9 @@ bool ibDataViewChoiceByIndexRenderer::GetValue(wxVariant& value) const
 #if wxUSE_ACCESSIBILITY
 wxString ibDataViewChoiceByIndexRenderer::GetAccessibleDescription() const
 {
-	wxVariant strVal;
+	ibVariant strVal;
 	if (ibDataViewChoiceRenderer::GetValue(strVal))
-		return strVal;
+		return strVal.GetString();
 
 	return wxString::Format(wxS("%li"), (long)GetChoices().Index(strVal.GetString()));
 }
@@ -2005,34 +1977,34 @@ ibDataViewDateRenderer::ibDataViewDateRenderer(const wxString& varianttype,
 }
 
 wxWindow*
-ibDataViewDateRenderer::CreateEditorCtrl(wxWindow* parent, wxRect labelRect, const wxVariant& value)
+ibDataViewDateRenderer::CreateEditorCtrl(wxWindow* parent, wxRect labelRect, const ibVariant& value)
 {
 	return new wxDatePickerCtrl
 	(
 		parent,
 		wxID_ANY,
-		value.GetDateTime(),
+		value.GetDate().ToWxDateTime(),
 		labelRect.GetTopLeft(),
 		labelRect.GetSize()
 	);
 }
 
-bool ibDataViewDateRenderer::GetValueFromEditorCtrl(wxWindow* editor, wxVariant& value)
+bool ibDataViewDateRenderer::GetValueFromEditorCtrl(wxWindow* editor, ibVariant& value)
 {
 	wxDatePickerCtrl* ctrl = static_cast<wxDatePickerCtrl*>(editor);
-	value = ctrl->GetValue();
+	value = ibDateTime::OfWxDateTime(ctrl->GetValue());
 	return true;
 }
 
-bool ibDataViewDateRenderer::SetValue(const wxVariant& value)
+bool ibDataViewDateRenderer::SetValue(const ibVariant& value)
 {
-	m_date = value.GetDateTime();
+	m_date = value.GetDate().ToWxDateTime();
 	return true;
 }
 
-bool ibDataViewDateRenderer::GetValue(wxVariant& value) const
+bool ibDataViewDateRenderer::GetValue(ibVariant& value) const
 {
-	value = m_date;
+	value = ibDateTime::OfWxDateTime(m_date);
 	return true;
 }
 
@@ -2066,10 +2038,6 @@ wxSize ibDataViewDateRenderer::GetSize() const
 // ibDataViewCheckIconTextRenderer implementation
 // ----------------------------------------------------------------------------
 
-IMPLEMENT_VARIANT_OBJECT(ibDataViewCheckIconText)
-
-wxIMPLEMENT_CLASS(ibDataViewCheckIconText, ibDataViewIconText);
-
 wxIMPLEMENT_CLASS(ibDataViewCheckIconTextRenderer, ibDataViewRenderer);
 
 ibDataViewCheckIconTextRenderer::ibDataViewCheckIconTextRenderer
@@ -2087,15 +2055,16 @@ void ibDataViewCheckIconTextRenderer::Allow3rdStateForUser(bool allow)
 	m_allow3rdStateForUser = allow;
 }
 
-bool ibDataViewCheckIconTextRenderer::SetValue(const wxVariant& value)
+bool ibDataViewCheckIconTextRenderer::SetValue(const ibVariant& value)
 {
-	m_value << value;
+	const ibDataViewCheckIconText* const checkIconText = value.ConvertToType<ibDataViewCheckIconText>();
+	m_value = checkIconText != nullptr ? *checkIconText : ibDataViewCheckIconText(value.GetString());
 	return true;
 }
 
-bool ibDataViewCheckIconTextRenderer::GetValue(wxVariant& value) const
+bool ibDataViewCheckIconTextRenderer::GetValue(ibVariant& value) const
 {
-	value << m_value;
+	value = new ibDataViewCheckIconText(m_value);
 	return true;
 }
 
@@ -2253,10 +2222,7 @@ ibDataViewCheckIconTextRenderer::ActivateCell(const wxRect& WXUNUSED(cell),
 
 	m_value.SetCheckedState(checkedState);
 
-	wxVariant value;
-	value << m_value;
-
-	model->ChangeValue(value, item, col);
+	model->ChangeValue(ibVariant(new ibDataViewCheckIconText(m_value)), item, col);
 	return true;
 }
 
@@ -2303,7 +2269,7 @@ unsigned int ibDataViewListStore::GetItemCount() const
 	return m_data.size();
 }
 
-void ibDataViewListStore::AppendItem(const wxVector<wxVariant>& values, wxUIntPtr data)
+void ibDataViewListStore::AppendItem(const wxVector<ibVariant>& values, wxUIntPtr data)
 {
 	wxCHECK_RET(m_data.empty() || values.size() == m_data[0]->m_values.size(),
 		"wrong number of values");
@@ -2315,7 +2281,7 @@ void ibDataViewListStore::AppendItem(const wxVector<wxVariant>& values, wxUIntPt
 	RowAppended();
 }
 
-void ibDataViewListStore::PrependItem(const wxVector<wxVariant>& values, wxUIntPtr data)
+void ibDataViewListStore::PrependItem(const wxVector<ibVariant>& values, wxUIntPtr data)
 {
 	wxCHECK_RET(m_data.empty() || values.size() == m_data[0]->m_values.size(),
 		"wrong number of values");
@@ -2327,7 +2293,7 @@ void ibDataViewListStore::PrependItem(const wxVector<wxVariant>& values, wxUIntP
 	RowPrepended();
 }
 
-void ibDataViewListStore::InsertItem(unsigned int row, const wxVector<wxVariant>& values,
+void ibDataViewListStore::InsertItem(unsigned int row, const wxVector<ibVariant>& values,
 	wxUIntPtr data)
 {
 	wxCHECK_RET(m_data.empty() || values.size() == m_data[0]->m_values.size(),
@@ -2384,13 +2350,13 @@ wxUIntPtr ibDataViewListStore::GetItemData(const ibDataViewItem& item) const
 	return line->GetData();
 }
 
-void ibDataViewListStore::GetValueByRow(wxVariant& value, unsigned int row, unsigned int col) const
+void ibDataViewListStore::GetValueByRow(ibVariant& value, unsigned int row, unsigned int col) const
 {
 	ibDataViewListStoreLine* line = m_data[row];
 	value = line->m_values[col];
 }
 
-bool ibDataViewListStore::SetValueByRow(const wxVariant& value, unsigned int row, unsigned int col)
+bool ibDataViewListStore::SetValueByRow(const ibVariant& value, unsigned int row, unsigned int col)
 {
 	ibDataViewListStoreLine* line = m_data[row];
 	line->m_values[col] = value;
@@ -2830,7 +2796,7 @@ void ibDataViewTreeStore::DeleteAllItems()
 }
 
 void
-ibDataViewTreeStore::GetValue(wxVariant& variant,
+ibDataViewTreeStore::GetValue(ibVariant& variant,
 	const ibDataViewItem& item,
 	unsigned int WXUNUSED(col)) const
 {
@@ -2850,13 +2816,11 @@ ibDataViewTreeStore::GetValue(wxVariant& variant,
 	if (!bb.IsOk())
 		bb = node->GetBitmapBundle();
 
-	ibDataViewIconText data(node->GetText(), bb);
-
-	variant << data;
+	variant = new ibDataViewIconText(node->GetText(), bb);
 }
 
 bool
-ibDataViewTreeStore::SetValue(const wxVariant& variant,
+ibDataViewTreeStore::SetValue(const ibVariant& variant,
 	const ibDataViewItem& item,
 	unsigned int WXUNUSED(col))
 {
@@ -2865,12 +2829,11 @@ ibDataViewTreeStore::SetValue(const wxVariant& variant,
 	ibDataViewTreeStoreNode* node = FindNode(item);
 	if (!node) return false;
 
-	ibDataViewIconText data;
+	const ibDataViewIconText* const data = variant.ConvertToType<ibDataViewIconText>();
+	if (data == nullptr) return false;
 
-	data << variant;
-
-	node->SetText(data.GetText());
-	node->SetIcon(data.GetIcon());
+	node->SetText(data->GetText());
+	node->SetIcon(data->GetIcon());
 
 	return true;
 }

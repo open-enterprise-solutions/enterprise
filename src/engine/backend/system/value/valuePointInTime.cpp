@@ -53,7 +53,7 @@ ibString ibValuePointInTime::GetString() const
 //
 // Compared against a plain DATE the date alone decides, because a date IS a moment whose reference
 // is not set. One order, not two.
-int ibValuePointInTime::CompareValueLS(const ibValue& cParam) const
+int ibValuePointInTime::CompareValueLS(const ibVariant& cParam) const
 {
 	ibDateTime otherDate;
 	ibValuePointInTime* other = nullptr;
@@ -78,7 +78,7 @@ int ibValuePointInTime::CompareValueLS(const ibValue& cParam) const
 	return m_reference.CompareValueLS(otherRef);  // references order by metaID, then by guid
 }
 
-bool ibValuePointInTime::CompareValueEQ(const ibValue& cParam) const
+bool ibValuePointInTime::CompareValueEQ(const ibVariant& cParam) const
 {
 	ibValuePointInTime* other = nullptr;
 	if (!cParam.ConvertToValue(other) || other == nullptr)
@@ -86,7 +86,7 @@ bool ibValuePointInTime::CompareValueEQ(const ibValue& cParam) const
 	return CompareValueLS(cParam) == 0;
 }
 
-bool ibValuePointInTime::CompareValueNE(const ibValue& cParam) const
+bool ibValuePointInTime::CompareValueNE(const ibVariant& cParam) const
 {
 	return !CompareValueEQ(cParam);
 }

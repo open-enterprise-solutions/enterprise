@@ -87,20 +87,43 @@ public:
 
 	ibValueEnumerationVariant(const ibClassID& enumClass, const valT& v, const ibString& word,
 		std::shared_ptr<const ibMembers> members)
-		: ibValue(enumClass, static_cast<long>(v), word), m_members(std::move(members)) {}
+		: ibValue(ibValueTypes::TYPE_ENUM), m_classType(enumClass), m_member(v), m_word(word), m_members(std::move(members)) {}
 
-	virtual bool FindValue(const ibString& findData, std::vector<ibValue>& foundedObjects) const override {
+	virtual ibClassID GetClassType() const override { return m_classType; }
+	virtual ibString GetString() const override { return m_word; }
+	virtual ibNumber GetNumber() const override { return ibNumber(static_cast<long>(m_member)); }
+	// The negative range is "no member" — the engine's.
+	virtual bool IsEmpty() const override { return static_cast<long>(m_member) < 0; }
+
+	// The same member of the same enumeration.
+	virtual bool CompareValueEQ(const ibVariant& value) const override {
+		return value.GetType() == ibValueTypes::TYPE_ENUM && value.GetClassType() == m_classType
+			&& value.GetInteger() == static_cast<long>(m_member);
+	}
+
+	virtual bool FindValue(const ibString& findData, std::vector<ibVariant>& foundedObjects) const override {
 		if (m_members == nullptr)
 			return false;
 		for (const auto& [member, word] : *m_members) {
 			if (findData.IsEmpty() || word.Lower().StartsWith(findData.Lower()))
-				foundedObjects.push_back(ibValue(new ibValueEnumerationVariant(GetClassType(), member, word, m_members)));
+				foundedObjects.push_back(ibVariant(new ibValueEnumerationVariant(GetClassType(), member, word, m_members)));
 		}
+		return true;
+	}
+
+protected:
+
+	// Written as its enumeration's class (Serialize) and the member, by its number.
+	virtual bool DoSerialize(ibDataNode& node) const override {
+		node.SetValue(kValueFieldData, static_cast<std::int32_t>(m_member));
 		return true;
 	}
 
 private:
 
+	ibClassID                        m_classType;
+	valT                             m_member;
+	ibString                         m_word;
 	std::shared_ptr<const ibMembers> m_members;
 };
 

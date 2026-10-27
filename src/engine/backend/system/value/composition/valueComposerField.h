@@ -147,8 +147,8 @@ public:
 	// TWO FIELDS ARE THE SAME FIELD when they point at the same place. The path
 	// is that answer: the leaf id is only meaningful against one source, and the
 	// presentation is a label.
-	virtual bool CompareValueEQ(const ibValue& cParam) const override;
-	virtual bool CompareValueNE(const ibValue& cParam) const override;
+	virtual bool CompareValueEQ(const ibVariant& cParam) const override;
+	virtual bool CompareValueNE(const ibVariant& cParam) const override;
 
 	const ibString& GetPath() const { return m_path; }
 	void SetPath(const ibString& path) { m_path = path; }

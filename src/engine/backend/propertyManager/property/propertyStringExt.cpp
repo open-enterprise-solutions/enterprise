@@ -5,16 +5,16 @@
 
 ////////////////////////////////////////////////////////////////////////
 
-ibPropertyValue ibPropertyTString::CreateVariantData(const ibTranslateString& translate)
+ibVariant ibPropertyTString::CreateVariantData(const ibTranslateString& translate)
 {
-	return ibPropertyValue(new ibPropertyValueTranslate(translate));
+	return ibVariant(new ibVariantTranslate(translate));
 }
 
 ////////////////////////////////////////////////////////////////////////
 
 ibTranslateString& ibPropertyTString::GetValueAsTranslate() const
 {
-	return get_cell_variant<ibPropertyValueTranslate>()->GetTranslate();
+	return get_cell_variant<ibVariantTranslate>()->GetTranslate();
 }
 
 void ibPropertyTString::SetValue(const ibTranslateString& translate)

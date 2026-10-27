@@ -63,8 +63,8 @@ public:
 	virtual ibString GetString() const override;
 
 	// Two fields are the same field when their paths are — case-insensitively, as the engine's.
-	virtual bool CompareValueEQ(const ibValue& cParam) const override;
-	virtual bool CompareValueNE(const ibValue& cParam) const override;
+	virtual bool CompareValueEQ(const ibVariant& cParam) const override;
+	virtual bool CompareValueNE(const ibVariant& cParam) const override;
 
 	const ibString& GetPath() const { return m_path; }
 	void SetPath(const ibString& path) { m_path = path; }

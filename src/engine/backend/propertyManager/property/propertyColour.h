@@ -6,7 +6,7 @@
 
 // Base property for "colour" — kept as the colour's text (`r,g,b`, ibColour's), as a font is kept as its own.
 class BACKEND_API ibPropertyColour : public ibProperty {
-	static ibPropertyValue CreateVariantData(const ibColour& val) { return ibPropertyValue(ibString(val.ToString())); }
+	static ibVariant CreateVariantData(const ibColour& val) { return ibVariant(ibString(val.ToString())); }
 public:
 
 	ibColour GetValueAsColour() const {

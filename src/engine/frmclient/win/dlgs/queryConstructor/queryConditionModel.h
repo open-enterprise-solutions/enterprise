@@ -79,8 +79,8 @@ public:
 	void SetOnError(std::function<void(const wxString&)> onError) { m_onError = std::move(onError); }
 
 	// ---- ibDataViewListModel ----
-	void GetValueByRow(wxVariant& variant, unsigned row, unsigned col) const override;
-	bool SetValueByRow(const wxVariant& variant, unsigned row, unsigned col) override;
+	void GetValueByRow(ibVariant& variant, unsigned row, unsigned col) const override;
+	bool SetValueByRow(const ibVariant& variant, unsigned row, unsigned col) override;
 
 private:
 	ibQuerySelect*        m_select = nullptr;   // borrowed

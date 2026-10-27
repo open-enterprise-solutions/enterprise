@@ -28,14 +28,6 @@ protected:
 		eTabularSection,
 	};
 
-	class ibVariantDataValueNumberLine :
-		public ibVariantDataValueImpl<ibValue> {
-	public:
-		ibVariantDataValueNumberLine(const long& cValue)
-			: ibVariantDataValueImpl(static_cast<signed int>(cValue))
-		{
-		}
-	};
 
 public:
 
@@ -204,9 +196,9 @@ public:
 
 	virtual ~ibValueTabularSectionDataObjectBase() {}
 
-	virtual void GetValueByRow(wxVariant& variant,
+	virtual void GetValueByRow(ibVariant& variant,
 		const ibDataViewItem& row, unsigned int col) const override;
-	virtual bool SetValueByRow(const wxVariant& variant,
+	virtual bool SetValueByRow(const ibVariant& variant,
 		const ibDataViewItem& row, unsigned int col) override;
 
 	// ⭐⭐ THE NUMBER A PERSON READS — the row's place in WHAT IS SHOWN, 1-based; 0 when the row is not shown

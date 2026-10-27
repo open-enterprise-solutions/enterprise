@@ -291,9 +291,9 @@ bool ibMetaTreeBase::AskFormKind(ibValueMetaObject* object)
 	// it was made with.
 	ibProperty* const kind = form->GetProperty(ibProtocol::ibSchema::ibMetaData::FormType);
 	if (kind != nullptr && chosen != defaultFormType) {
-		const ibPropertyValue before = kind->GetValue();
-		if (form->OnPropertyChanging(kind, ibPropertyValue((long)chosen))) {
-			kind->SetValue(ibPropertyValue((long)chosen));
+		const ibVariant before = kind->GetValue();
+		if (form->OnPropertyChanging(kind, ibVariant((long)chosen))) {
+			kind->SetValue(ibVariant((long)chosen));
 			form->OnPropertyChanged(kind, before, kind->GetValue());
 		}
 	}

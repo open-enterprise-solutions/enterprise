@@ -1,6 +1,6 @@
 #include "variantNumber.h"
 
-ibString ibPropertyValueNumber::GetString() const
+ibString ibVariantNumber::GetString() const
 {
 	return m_number.ToString();
 }

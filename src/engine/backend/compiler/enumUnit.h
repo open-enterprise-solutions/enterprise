@@ -121,7 +121,7 @@ protected:
 		}
 
 		//operator '=='
-		virtual bool CompareValueEQ(const ibValue& cParam) const override {
+		virtual bool CompareValueEQ(const ibVariant& cParam) const override {
 			ibValueEnumerationVariant<valType>* compareEnumeration = dynamic_cast<ibValueEnumerationVariant<valType> *>(cParam.GetRef());
 			if (compareEnumeration) return m_value == compareEnumeration->m_value;
 			ibValueEnumeration<valType>* compareEnumerationOwner = dynamic_cast<ibValueEnumeration<valType> *>(cParam.GetRef());
@@ -130,7 +130,7 @@ protected:
 		}
 
 		//operator '!='
-		virtual bool CompareValueNE(const ibValue& cParam) const override {
+		virtual bool CompareValueNE(const ibVariant& cParam) const override {
 			ibValueEnumerationVariant<valType>* compareEnumeration = dynamic_cast<ibValueEnumerationVariant<valType> *>(cParam.GetRef());
 			if (compareEnumeration) return m_value != compareEnumeration->m_value;
 			ibValueEnumeration<valType>* compareEnumerationOwner = dynamic_cast<ibValueEnumeration<valType> *>(cParam.GetRef());
@@ -155,7 +155,7 @@ protected:
 		//
 		// A comparand that is not an enumeration of this kind is left to the base: what orders a mixed
 		// column is its kind ranking, and this override has nothing truer to say about it.
-		virtual int CompareValueLS(const ibValue& cParam) const override {
+		virtual int CompareValueLS(const ibVariant& cParam) const override {
 			ibValueEnumerationVariant<valType>* compareEnumeration = dynamic_cast<ibValueEnumerationVariant<valType> *>(cParam.GetRef());
 			if (compareEnumeration)
 				return m_value < compareEnumeration->m_value ? -1 : (compareEnumeration->m_value < m_value ? 1 : 0);
@@ -407,7 +407,7 @@ public:
 	}
 
 	//operator '=='
-	virtual bool CompareValueEQ(const ibValue& cParam) const override {
+	virtual bool CompareValueEQ(const ibVariant& cParam) const override {
 		if (m_value != nullptr) {
 			return m_value->CompareValueEQ(cParam);
 		}
@@ -415,7 +415,7 @@ public:
 	}
 
 	//operator '!='
-	virtual bool CompareValueNE(const ibValue& cParam) const override {
+	virtual bool CompareValueNE(const ibVariant& cParam) const override {
 		if (m_value != nullptr) {
 			return m_value->CompareValueNE(cParam);
 		}

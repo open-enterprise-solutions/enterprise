@@ -74,7 +74,7 @@ public:
 	};
 
 	ibValueSpreadsheetDetails() {}
-	ibValueSpreadsheetDetails(const ibString& path, ibQueryLowering::ibColumnRole role, const ibValue& value)
+	ibValueSpreadsheetDetails(const ibString& path, ibQueryLowering::ibColumnRole role, const ibVariant& value)
 		: m_path(path), m_role(role), m_value(value) {
 		m_parents.reserve(2);   // a table's cell links to its row AND its column — room for both at once
 	}
@@ -106,14 +106,14 @@ public:
 	// ⭐ IF IT IS ONE, HERE IT IS. The probe every reader starts with — never ConvertToType, which
 	// with _USE_CONTROL_VALUECAST RAISES on a value that is merely something else, and most
 	// parameters of a sheet are.
-	static ibValueSpreadsheetDetails* From(const ibValue& value) {
+	static ibValueSpreadsheetDetails* From(const ibVariant& value) {
 		ibValueSpreadsheetDetails* details = nullptr;
 		return value.ConvertToValue(details) ? details : nullptr;
 	}
 
 	// …and the value BEHIND whatever this is — the wrapped one for a wrapper, the value itself
 	// otherwise. So a comparison between a wrapped and a plain value compares the two values.
-	static const ibValue& Unwrap(const ibValue& value);
+	static const ibVariant& Unwrap(const ibVariant& value);
 
 	//////////////////////////////////////////////////////////////////////////
 	// OUTSIDE, IT IS THE VALUE IT WRAPS — see the header note.
@@ -140,12 +140,12 @@ public:
 	// honest answer: a report of pure numbers has nothing to open.
 	ibValue* FindOpenable();
 
-	virtual int  CompareValueLS(const ibValue& cParam) const override { return m_value.CompareValueLS(Unwrap(cParam)); }
-	virtual int  CompareValueGT(const ibValue& cParam) const override { return m_value.CompareValueGT(Unwrap(cParam)); }
-	virtual bool CompareValueGE(const ibValue& cParam) const override { return m_value.CompareValueGE(Unwrap(cParam)); }
-	virtual bool CompareValueLE(const ibValue& cParam) const override { return m_value.CompareValueLE(Unwrap(cParam)); }
-	virtual bool CompareValueEQ(const ibValue& cParam) const override { return m_value.CompareValueEQ(Unwrap(cParam)); }
-	virtual bool CompareValueNE(const ibValue& cParam) const override { return m_value.CompareValueNE(Unwrap(cParam)); }
+	virtual int  CompareValueLS(const ibVariant& cParam) const override { return m_value.CompareValueLS(Unwrap(cParam)); }
+	virtual int  CompareValueGT(const ibVariant& cParam) const override { return m_value.CompareValueGT(Unwrap(cParam)); }
+	virtual bool CompareValueGE(const ibVariant& cParam) const override { return m_value.CompareValueGE(Unwrap(cParam)); }
+	virtual bool CompareValueLE(const ibVariant& cParam) const override { return m_value.CompareValueLE(Unwrap(cParam)); }
+	virtual bool CompareValueEQ(const ibVariant& cParam) const override { return m_value.CompareValueEQ(Unwrap(cParam)); }
+	virtual bool CompareValueNE(const ibVariant& cParam) const override { return m_value.CompareValueNE(Unwrap(cParam)); }
 
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal) override;
 

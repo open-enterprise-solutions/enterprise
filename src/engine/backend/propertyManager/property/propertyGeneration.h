@@ -6,7 +6,7 @@
 
 //base property for "generation"
 class BACKEND_API ibPropertyGeneration : public ibProperty {
-	static ibPropertyValue CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc = ibMetaDescription());
+	static ibVariant CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc = ibMetaDescription());
 public:
 
 	ibMetaDescription& GetValueAsMetaDesc() const;
@@ -37,9 +37,9 @@ public:
 	virtual bool GetDataValue(ibValue& pvarPropVal) const;
 
 	// The same acceptance ibPropertyRecord makes, and for the same reason: CreateValueList wraps
-	// every candidate as ibPropertyValueOwner whatever family asked for the list, so a property that
+	// every candidate as ibVariantOwner whatever family asked for the list, so a property that
 	// stores the neighbour's wrapper raises on every later read. See propertyRecord.h.
-	virtual void DoSetValue(const ibPropertyValue& val) override;
+	virtual void DoSetValue(const ibVariant& val) override;
 
 	//load & save object in control 
 

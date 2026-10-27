@@ -158,8 +158,8 @@ public:
 	ibFilterPath GetTargetPath(const ibDataViewItem& item) const;
 
 	// ---- ibDataViewModel ----
-	void GetValue(wxVariant& variant, const ibDataViewItem& item, unsigned int col) const override;
-	bool SetValue(const wxVariant& variant, const ibDataViewItem& item, unsigned int col) override;
+	void GetValue(ibVariant& variant, const ibDataViewItem& item, unsigned int col) const override;
+	bool SetValue(const ibVariant& variant, const ibDataViewItem& item, unsigned int col) override;
 	ibDataViewItem GetParent(const ibDataViewItem& item) const override;
 	bool IsContainer(const ibDataViewItem& item) const override;
 

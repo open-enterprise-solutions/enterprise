@@ -8,7 +8,7 @@
 // a hole in it (Max saw the blank cell, 2026-09-16). An id is unique across the tree, so the depth
 // costs the answer nothing; it only decides whether there is one. The writing side searches the same
 // way (ibBackendMetaDescriptionMemory::WriteNode), or a binding that was written is unreadable.
-ibString ibPropertyValueOwner::GetString() const
+ibString ibVariantOwner::GetString() const
 {
     const ibMetaData* metaData = m_ownerProperty->GetMetaData();
     if (metaData == nullptr)
@@ -32,7 +32,7 @@ ibString ibPropertyValueOwner::GetString() const
 
 #include "backend/system/value/valueArray.h"
 
-ibValue ibPropertyValueOwner::GetDataValue() const
+ibValue ibVariantOwner::GetDataValue() const
 {
     ibValueArray* valueArr = new ibValueArray();
     const ibMetaData* metaData = m_ownerProperty->GetMetaData();

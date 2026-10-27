@@ -4,7 +4,7 @@
 
 #include "formatConstructor.h"
 
-#include "frmclient/backend/compiler/value.h"   // the sample's value: the client's, an ibAnyValue as the engine's is
+#include "frmclient/backend/compiler/value.h"   // the sample's value: the client's, an ibVariant as the engine's is
 
 #include <wx/datetime.h>
 #include <wx/msgdlg.h>

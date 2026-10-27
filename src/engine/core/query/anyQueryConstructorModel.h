@@ -10,7 +10,7 @@
 // model (backend/query/queryConstructorModel.h) through the descriptors its factory holds, the client's
 // (frmclient/backend/query/queryConstructorModel.h) by asking the tab the window was opened from. Everything the windows
 // DERIVE from those answers — a temporary table's fields, a nested query's, the walk of a path, the type a CAST says —
-// is a walk over the query, and it is written here once: the way ibAnyValue is what both sides' values are.
+// is a walk over the query, and it is written here once: the way ibVariant is what both sides' values are.
 //
 // See docs/private/query-constructor.md §4 / §5a / §5b.
 //

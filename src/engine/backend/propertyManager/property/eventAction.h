@@ -25,7 +25,7 @@ public:
 
 private:
 
-	static ibPropertyValue CreateVariantData(const ibPropertyObject* property, const ibStandardCommandDescription& act);
+	static ibVariant CreateVariantData(const ibPropertyObject* property, const ibStandardCommandDescription& act);
 
 	class BACKEND_API ibEventOptionList {
 

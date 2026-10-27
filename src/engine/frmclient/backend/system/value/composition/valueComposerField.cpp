@@ -21,12 +21,12 @@ ibString ibValueCompositionField::GetString() const {
 	return m_presentation.IsEmpty() ? m_path : ibLocalization::GetTranslateGetRawLocText(ibBackendLocalization::GetUserLanguage(), m_presentation);
 }
 
-bool ibValueCompositionField::CompareValueEQ(const ibValue& cParam) const {
+bool ibValueCompositionField::CompareValueEQ(const ibVariant& cParam) const {
 	ibValueCompositionField* rhs = nullptr;
 	return cParam.ConvertToValue(rhs) && m_path.IsSameAs(rhs->m_path, false);
 }
 
-bool ibValueCompositionField::CompareValueNE(const ibValue& cParam) const {
+bool ibValueCompositionField::CompareValueNE(const ibVariant& cParam) const {
 	return !CompareValueEQ(cParam);
 }
 

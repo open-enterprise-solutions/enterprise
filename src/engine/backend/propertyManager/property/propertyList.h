@@ -232,21 +232,21 @@ public:
 
 	template <typename optClass>
 	ibPropertyList(ibPropertyCategory* cat, const ibString& name,
-		bool (optClass::* funcHandler)(ibPropertyList* prop), const long& value = wxNOT_FOUND) : ibProperty(cat, name, ibPropertyValue(ibNumber(value)))
+		bool (optClass::* funcHandler)(ibPropertyList* prop), const long& value = wxNOT_FOUND) : ibProperty(cat, name, ibVariant(ibNumber(value)))
 	{
 		m_functor = std::make_unique<ibPropertyValueFunctor<optClass>>(funcHandler, (optClass*)cat->GetPropertyObject());
 	}
 
 	template <typename optClass>
 	ibPropertyList(ibPropertyCategory* cat, const ibString& name, const ibString& label,
-		bool (optClass::* funcHandler)(ibPropertyList* prop), const long& value = wxNOT_FOUND) : ibProperty(cat, name, label, ibPropertyValue(ibNumber(value)))
+		bool (optClass::* funcHandler)(ibPropertyList* prop), const long& value = wxNOT_FOUND) : ibProperty(cat, name, label, ibVariant(ibNumber(value)))
 	{
 		m_functor = std::make_unique<ibPropertyValueFunctor<optClass>>(funcHandler, (optClass*)cat->GetPropertyObject());
 	}
 
 	template <typename optClass>
 	ibPropertyList(ibPropertyCategory* cat, const ibString& name, const ibString& label, const ibString& helpString,
-		bool (optClass::* funcHandler)(ibPropertyList* prop), const long& value = wxNOT_FOUND) : ibProperty(cat, name, label, helpString, ibPropertyValue(ibNumber(value)))
+		bool (optClass::* funcHandler)(ibPropertyList* prop), const long& value = wxNOT_FOUND) : ibProperty(cat, name, label, helpString, ibVariant(ibNumber(value)))
 	{
 		m_functor = std::make_unique<ibPropertyValueFunctor<optClass>>(funcHandler, (optClass*)cat->GetPropertyObject());
 	}
@@ -272,7 +272,7 @@ protected:
 
 	// A value set — what is offered may have changed with it (the designer has been editing the owner): the next
 	// read fills the list afresh.
-	virtual void DoSetValue(const ibPropertyValue& val) {
+	virtual void DoSetValue(const ibVariant& val) {
 		ibProperty::DoSetValue(val);
 		m_listFilled.store(false, std::memory_order_release);
 	}

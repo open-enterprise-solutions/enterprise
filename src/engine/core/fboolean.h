@@ -4,7 +4,7 @@
 // =============================================================================
 // ibBoolean (fboolean.h) — the engine's flag: ONE BYTE, and the ONE place it is
 // spelled. A value keeps it in its union beside ibNumber, ibDateTime and ibString
-// (backend/compiler/value.h); the translator's constant (ibLiteral) and its
+// (backend/compiler/value.h); the translator's constant (ibVariant) and its
 // keywords write it with the same words, so `True` cannot read one way in a
 // script and another in a text, on the server and on the client.
 //

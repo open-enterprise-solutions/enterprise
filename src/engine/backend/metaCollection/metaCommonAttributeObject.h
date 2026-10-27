@@ -76,7 +76,7 @@ class BACKEND_API ibValueMetaObjectCommonAttribute : public ibValueMetaObjectAtt
 
 	// A change here — the type above all — has to reach every object that carries a copy.
 	virtual void OnPropertyChanged(class ibProperty* property,
-		const ibPropertyValue& oldValue, const ibPropertyValue& newValue) override;
+		const ibVariant& oldValue, const ibVariant& newValue) override;
 	virtual bool OnRenameMetaObject(const ibString& sNewName) override;
 	virtual bool OnDeleteMetaObject() override;
 };

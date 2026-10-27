@@ -5,14 +5,14 @@
 
 ////////////////////////////////////////////////////////////////
 
-ibPropertyValue ibPropertyOwner::CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc)
+ibVariant ibPropertyOwner::CreateVariantData(ibPropertyObject* property, const ibMetaDescription& typeDesc)
 {
 	// No cast: the variant needs the owner only to reach GetMetaData, which ibPropertyObject answers.
-	return ibPropertyValue(new ibPropertyValueOwner(property, typeDesc));
+	return ibVariant(new ibVariantOwner(property, typeDesc));
 }
 
 ibMetaDescription& ibPropertyOwner::GetValueAsMetaDesc() const {
-	return get_cell_variant<ibPropertyValueMetaDesc>()->GetMetaDesc();
+	return get_cell_variant<ibVariantMetaDesc>()->GetMetaDesc();
 }
 
 void ibPropertyOwner::SetValue(const ibMetaDescription& val)
@@ -21,11 +21,11 @@ void ibPropertyOwner::SetValue(const ibMetaDescription& val)
 }
 
 // The family rule - see propertyRecord.cpp. It costs nothing here today, because CreateValueList
-// happens to build ibPropertyValueOwner and this is the property that holds one; keeping the rule in
+// happens to build ibVariantOwner and this is the property that holds one; keeping the rule in
 // all five is what stops that coincidence from being load-bearing.
-void ibPropertyOwner::DoSetValue(const ibPropertyValue& val)
+void ibPropertyOwner::DoSetValue(const ibVariant& val)
 {
-	if (const ibPropertyValueMetaDesc* carried = find_cell_variant<ibPropertyValueMetaDesc>(val)) {
+	if (const ibVariantMetaDesc* carried = find_cell_variant<ibVariantMetaDesc>(val)) {
 		SetValue(carried->GetMetaDesc());
 		return;
 	}
@@ -47,7 +47,7 @@ bool ibPropertyOwner::SetDataValue(const ibValue& varPropVal)
 
 bool ibPropertyOwner::GetDataValue(ibValue& pvarPropVal) const
 {
-	const ibPropertyValueOwner* owner = get_cell_variant<ibPropertyValueOwner>();
+	const ibVariantOwner* owner = get_cell_variant<ibVariantOwner>();
 	wxASSERT(owner);
 	pvarPropVal = owner->GetDataValue();
 	return true;

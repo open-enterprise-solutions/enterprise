@@ -5,7 +5,7 @@
 
 //base property for "form"
 class BACKEND_API ibPropertyForm : public ibProperty {
-	static ibPropertyValue CreateVariantData();
+	static ibVariant CreateVariantData();
 public:
 
 	ibString GetValueAsString() const;

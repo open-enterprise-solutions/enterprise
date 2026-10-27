@@ -18,7 +18,7 @@ struct ibCalcScheduleLink {
 };
 
 // ⭐ THE SCHEDULE OF A CALCULATION REGISTER, AS A DESCRIPTION — the same shape as ibTypeDescription and
-// ibSourceDescription: a structure, a variant that holds it (ibPropertyValueCalcSchedule), a property that hands it
+// ibSourceDescription: a structure, a variant that holds it (ibVariantCalcSchedule), a property that hands it
 // out by reference (ibPropertyCalcSchedule::GetValueAsScheduleDesc), and a Memory class that saves it.
 //
 // WHICH information register holds the schedule, WHICH of its numeric resources is the value (hours, days),

@@ -1,16 +1,16 @@
 #ifndef __COMMAND_SOURCE_DATA_VARIANT_H__
 #define __COMMAND_SOURCE_DATA_VARIANT_H__
 
-#include "backend/propertyManager/propertyValue.h"
+#include "core/variant.h"
 #include "backend/propertyManager/property/variant/variantType.h"
 #include "core/description/commandDescription.h"
 #include "backend/backend_command.h"   // ibBackendCommandReceiver — the factory the variant WALKS to validate the binding
 
-// The variant behind a command-source property — the command-door twin of ibPropertyValueSource. Where the
+// The variant behind a command-source property — the command-door twin of ibVariantSource. Where the
 // source variant holds an ibSourceDescription (the address of a VALUE inside a data source), this holds an
 // ibCommandDescription (the address of a COMMAND: a hop path own / main / table / general). It is the ONLY
 // stored state — serialised by the property and fed to the button, exactly like the source variant's path.
-class BACKEND_API ibPropertyValueCommandSource : public ibPropertyValue {
+class BACKEND_API ibVariantCommandSource : public ibVariant {
 public:
 
 	bool IsEmptyCommand() const { return !m_commandDesc.IsOk(); }
@@ -19,7 +19,7 @@ public:
 	const ibBackendCommandReceiver* GetOwner() const { return m_owner; }
 
 	// The binding address — a command-hop path (own object / main attribute / table / general command). The
-	// variant's only stored state; the property serialises THIS (mirrors ibPropertyValueSource::GetSourceDesc).
+	// variant's only stored state; the property serialises THIS (mirrors ibVariantSource::GetSourceDesc).
 	ibCommandDescription& GetCommandDesc() { return m_commandDesc; }
 	const ibCommandDescription& GetCommandDesc() const { return m_commandDesc; }
 	void SetCommandDesc(const ibCommandDescription& desc) { m_commandDesc = desc; }
@@ -28,20 +28,20 @@ public:
 	const ibString& GetDisplay() const { return m_display; }
 	void SetDisplay(const ibString& display) { m_display = display; }
 
-	ibPropertyValueCommandSource() : ibPropertyValue(ibValueTypes::TYPE_VALUE) {}
-	ibPropertyValueCommandSource(const ibBackendCommandReceiver* owner, const ibCommandDescription& desc, const ibString& display = ibEmptyString)
-		: ibPropertyValue(ibValueTypes::TYPE_VALUE), m_owner(owner), m_commandDesc(desc), m_display(display) {}
-	ibPropertyValueCommandSource(const ibPropertyValueCommandSource& src)
-		: ibPropertyValue(ibValueTypes::TYPE_VALUE), m_owner(src.m_owner), m_commandDesc(src.m_commandDesc), m_display(src.m_display) {}
+	ibVariantCommandSource() : ibVariant(ibValueTypes::TYPE_VALUE) {}
+	ibVariantCommandSource(const ibBackendCommandReceiver* owner, const ibCommandDescription& desc, const ibString& display = ibEmptyString)
+		: ibVariant(ibValueTypes::TYPE_VALUE), m_owner(owner), m_commandDesc(desc), m_display(display) {}
+	ibVariantCommandSource(const ibVariantCommandSource& src)
+		: ibVariant(ibValueTypes::TYPE_VALUE), m_owner(src.m_owner), m_commandDesc(src.m_commandDesc), m_display(src.m_display) {}
 
-	virtual ibPropertyValueCommandSource* Clone() const { return new ibPropertyValueCommandSource(*this); }
+	virtual ibVariant CloneValue() const override { return ibVariant(new ibVariantCommandSource(*this)); }
 
-	virtual bool CompareValueEQ(const ibPropertyValue& data) const override {
-		const ibPropertyValueCommandSource* cmdData = dynamic_cast<const ibPropertyValueCommandSource*>(data.GetRef());
+	virtual bool CompareValueEQ(const ibVariant& data) const override {
+		const ibVariantCommandSource* cmdData = dynamic_cast<const ibVariantCommandSource*>(data.GetRef());
 		return cmdData != nullptr && m_commandDesc == cmdData->m_commandDesc;   // full identity (path AND form name)
 	}
 
-	// The string the cell shows — SERVER-SIDE and live, exactly like ibPropertyValueSource::GetString asks its source
+	// The string the cell shows — SERVER-SIDE and live, exactly like ibVariantSource::GetString asks its source
 	// factory. The owner (a button / a bar item) is cast to ibBackendCommandReceiver; WalkCommand WALKS the bound hops
 	// and returns valid / invalid. Can't walk to the end (a hop gone) -> "<not found>", the guarantee the path broke;
 	// this runs at RUNTIME too, so a deleted command reads "<not found>" everywhere, not just in the designer cell.

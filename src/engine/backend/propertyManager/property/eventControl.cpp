@@ -31,7 +31,7 @@ ibEventDispatcher* ibEventControl::GetDispatcher() const
 }
 
 // A value (name) edit drops the cached dispatcher value so GetDispatcher rebuilds the named one from the new name.
-void ibEventControl::DoSetValue(const ibPropertyValue& val)
+void ibEventControl::DoSetValue(const ibVariant& val)
 {
 	m_propValue = val;
 	m_dispatcherValue = ibValue();
@@ -50,7 +50,7 @@ bool ibEventControl::SetDataValue(const ibValue& varPropVal)
 	// CLASSIC named event -> store the name; the named dispatcher (an ibValueEvent) rebuilds from it lazily.
 	ibValueEvent* event = varPropVal.ConvertToType<ibValueEvent>();
 	if (event == nullptr) return false;
-	m_propValue = ibPropertyValue(event->GetString());
+	m_propValue = ibVariant(event->GetString());
 	m_dispatcherValue = ibValue();   // invalidate so GetDispatcher rebuilds the named dispatcher from the new name
 	return true;
 }
@@ -74,7 +74,7 @@ bool ibEventControl::ReadNodeValue(const ibDataValue& value)
 {
 	const auto node = value.AsChild();
 	if (node)
-		m_propValue = ibPropertyValue(node->GetValue<ibString>(ibT("Value")));
+		m_propValue = ibVariant(node->GetValue<ibString>(ibT("Value")));
 	return true;
 }
 

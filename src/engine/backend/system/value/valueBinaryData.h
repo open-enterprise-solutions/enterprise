@@ -66,10 +66,10 @@ public:
 	}
 
 	//operator '=='
-	virtual bool CompareValueEQ(const ibValue& cParam) const;
+	virtual bool CompareValueEQ(const ibVariant& cParam) const;
 
 	//operator '!='
-	virtual bool CompareValueNE(const ibValue& cParam) const;
+	virtual bool CompareValueNE(const ibVariant& cParam) const;
 
 private:
 	ibMemoryBuffer m_data;

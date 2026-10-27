@@ -67,7 +67,7 @@ bool ibValueCompositionField::SetPropVal(const long lPropNum, const ibValue& var
 	return false;
 }
 
-bool ibValueCompositionField::CompareValueEQ(const ibValue& cParam) const {
+bool ibValueCompositionField::CompareValueEQ(const ibVariant& cParam) const {
 	// A field is never equal to a string that happens to spell the same path: a
 	// filter holding `"Amount"` as text is a different (and wrong) thing from one
 	// holding the field, and saying so is what makes that visible. Comparing
@@ -77,7 +77,7 @@ bool ibValueCompositionField::CompareValueEQ(const ibValue& cParam) const {
 	return cParam.ConvertToValue(rhs) && m_path.IsSameAs(rhs->m_path, false);
 }
 
-bool ibValueCompositionField::CompareValueNE(const ibValue& cParam) const {
+bool ibValueCompositionField::CompareValueNE(const ibVariant& cParam) const {
 	return !CompareValueEQ(cParam);
 }
 

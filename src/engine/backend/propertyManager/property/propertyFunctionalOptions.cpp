@@ -4,13 +4,13 @@
 #include "backend/metaCollection/metaObject.h"   // g_metaFunctionalOptionCLSID — the candidates' kind
 #include "backend/functionalOption/functionalOptionGate.h"   // IsAvailable — the rule a member is available by
 
-ibPropertyValue ibPropertyFunctionalOptions::CreateVariantData(ibPropertyObject* property, const ibMetaDescription& metaDesc)
+ibVariant ibPropertyFunctionalOptions::CreateVariantData(ibPropertyObject* property, const ibMetaDescription& metaDesc)
 {
-	return ibPropertyValue(new ibPropertyValueOwner(property, metaDesc));
+	return ibVariant(new ibVariantOwner(property, metaDesc));
 }
 
 ibMetaDescription& ibPropertyFunctionalOptions::GetValueAsMetaDesc() const {
-	return get_cell_variant<ibPropertyValueMetaDesc>()->GetMetaDesc();
+	return get_cell_variant<ibVariantMetaDesc>()->GetMetaDesc();
 }
 
 void ibPropertyFunctionalOptions::SetValue(const ibMetaDescription& val)
@@ -19,9 +19,9 @@ void ibPropertyFunctionalOptions::SetValue(const ibMetaDescription& val)
 }
 
 // The family rule — see propertyRecord.cpp.
-void ibPropertyFunctionalOptions::DoSetValue(const ibPropertyValue& val)
+void ibPropertyFunctionalOptions::DoSetValue(const ibVariant& val)
 {
-	if (const ibPropertyValueMetaDesc* carried = find_cell_variant<ibPropertyValueMetaDesc>(val)) {
+	if (const ibVariantMetaDesc* carried = find_cell_variant<ibVariantMetaDesc>(val)) {
 		SetValue(carried->GetMetaDesc());
 		return;
 	}
@@ -50,7 +50,7 @@ bool ibPropertyFunctionalOptions::SetDataValue(const ibValue& varPropVal) { retu
 
 bool ibPropertyFunctionalOptions::GetDataValue(ibValue& pvarPropVal) const
 {
-	const ibPropertyValueOwner* owner = get_cell_variant<ibPropertyValueOwner>();
+	const ibVariantOwner* owner = get_cell_variant<ibVariantOwner>();
 	wxASSERT(owner);
 	pvarPropVal = owner->GetDataValue();
 	return true;

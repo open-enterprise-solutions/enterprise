@@ -193,12 +193,12 @@ public:
 	virtual bool IsEmpty() const { return false; }
 
 	virtual bool SetPropVal(const long lPropNum, const ibValue& varPropVal) {
-		m_spreadsheetDoc->SetParameter(m_members.GetPropName(lPropNum), varPropVal.ToAnyValue());
+		m_spreadsheetDoc->SetParameter(m_members.GetPropName(lPropNum), varPropVal);
 		return true;
 	}
 
 	virtual bool GetPropVal(const long lPropNum, ibValue& pvarPropVal) {
-		pvarPropVal = ibValue::FromAnyValue(m_spreadsheetDoc->GetParameter(m_members.GetPropName(lPropNum)));   // see Get below
+		pvarPropVal = ibValue(m_spreadsheetDoc->GetParameter(m_members.GetPropName(lPropNum)));   // see Get below
 		return true;
 	}
 
@@ -214,7 +214,7 @@ public:
 			// found it on a miss, and the slot is the caller's: a script asking for a missing parameter
 			// got whatever the PREVIOUS call had answered — a figure in a column that has none (found
 			// 2026-09-12, reading a composed payroll sheet back).
-			pvarRetValue = ibValue::FromAnyValue(m_spreadsheetDoc->GetParameter(paParams[0]->GetString()));
+			pvarRetValue = ibValue(m_spreadsheetDoc->GetParameter(paParams[0]->GetString()));
 			return true;
 		}
 
@@ -239,14 +239,14 @@ public:
 						continue;
 					ibValue pvarRetValue;
 					paParams[0]->GetPropVal(lPropNum, pvarRetValue);
-					m_spreadsheetDoc->SetParameter(strPropName, pvarRetValue.ToAnyValue());
+					m_spreadsheetDoc->SetParameter(strPropName, pvarRetValue);
 				}
 				return true;
 			}
 			return false;
 		}
 		case enSet:
-			m_spreadsheetDoc->SetParameter(paParams[0]->GetString(), paParams[1]->ToAnyValue());
+			m_spreadsheetDoc->SetParameter(paParams[0]->GetString(), *paParams[1]);
 			return true;
 		}
 

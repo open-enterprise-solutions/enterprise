@@ -1,6 +1,6 @@
 #include "variantRecord.h"
 
-ibString ibPropertyValueRecord::GetString() const
+ibString ibVariantRecord::GetString() const
 {
 	const ibMetaData* metaData = m_ownerProperty->GetMetaData();
 	if (metaData == nullptr) return ibEmptyString;
@@ -23,7 +23,7 @@ ibString ibPropertyValueRecord::GetString() const
 
 #include "backend/system/value/valueArray.h"
 
-ibValue ibPropertyValueRecord::GetDataValue() const
+ibValue ibVariantRecord::GetDataValue() const
 {
 	ibValueArray* valueArr = new ibValueArray();
 	const ibMetaData* metaData = m_ownerProperty->GetMetaData();

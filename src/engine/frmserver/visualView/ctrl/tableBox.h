@@ -99,7 +99,7 @@ class ibValueModelTableBox : public ibValueWindowComposite,
 	// Single point: resolve a dot-path column's value for ONE row (asked per shown cell by the column's
 	// UpdateCell). First hop via the DUMB model (GetValueByMetaID), deeper hops walk the reference.
 	// Returns false for a plain column (model resolves it).
-	bool ResolveCellValue(const ibDataViewItem& item, const class ibValueModelTableBoxColumn* column, wxVariant& out) const;
+	bool ResolveCellValue(const ibDataViewItem& item, const class ibValueModelTableBoxColumn* column, ibVariant& out) const;
 
 	// A dot-path column — its binding reaches PAST the tablebox prefix + one row column. Such a
 	// column is resolved through the dot: read-only, so its cells take no editing (the column's ReadOnly).
@@ -284,8 +284,8 @@ public:
 	* Property events
 	*/
 	virtual void OnPropertyCreated(ibProperty* property);
-	virtual bool OnPropertyChanging(ibProperty* property, const ibPropertyValue& newValue);
-	virtual void OnPropertyChanged(ibProperty* property, const ibPropertyValue& oldValue, const ibPropertyValue& newValue);
+	virtual bool OnPropertyChanging(ibProperty* property, const ibVariant& newValue);
+	virtual void OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue);
 
 	//load & save object in control
 	virtual bool ReadData(const ibDataNode& node);
@@ -782,7 +782,7 @@ public:
 	*/
 	virtual void OnPropertyCreated(ibProperty* property);
 	virtual void OnPropertyRefresh() override;
-	virtual bool OnPropertyChanging(ibProperty* property, const ibPropertyValue& newValue);
+	virtual bool OnPropertyChanging(ibProperty* property, const ibVariant& newValue);
 
 	//load & save object in control
 	virtual bool ReadData(const ibDataNode& node);

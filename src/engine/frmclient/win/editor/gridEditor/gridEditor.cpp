@@ -329,11 +329,9 @@ void ibGridEditor::OnMouseLeftDown(ibGridEvent& event)
 	if (m_spreadsheetObject != nullptr && !IsEditable()) {
 		ibString bound;
 		m_spreadsheetObject->GetCellDetailsParameter(event.GetRow(), event.GetCol(), bound);
-		ibAnyValuePtr<ibAnyValue> held;
-		if (!bound.IsEmpty() && m_spreadsheetObject->GetParameter(bound, held)) {
-			ibValue boundValue = ibValue::FromAnyValue(held);
-			boundValue.ShowValue();
-		}
+		ibVariant held;
+		if (!bound.IsEmpty() && m_spreadsheetObject->GetParameter(bound, held))
+			ibValue(held).ShowValue();
 	}
 
 	event.Skip();

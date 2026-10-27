@@ -155,7 +155,7 @@ void ibValueContainer::IndexNewEntry(const bool wasIndexed)
 // holding the same pairs hold the same data. If the two are ever required to
 // compare unequal, that is a rule about the TYPES and belongs in an override on
 // ibValueStructure, not in a cheaper-looking cast here.
-const ibValueContainer* ibValueContainer::AsContainer(const ibValue& cParam) const
+const ibValueContainer* ibValueContainer::AsContainer(const ibVariant& cParam) const
 {
 	return dynamic_cast<const ibValueContainer*>(cParam.GetRef());
 }
@@ -163,7 +163,7 @@ const ibValueContainer* ibValueContainer::AsContainer(const ibValue& cParam) con
 // An entry orders as a PAIR: key first, value only as the tiebreak (its hash is the
 // key's, so it says nothing more). Same element walk as the array — the vector's own
 // comparison, handed the comparator for what it holds.
-int ibValueContainer::CompareValueLS(const ibValue& cParam) const
+int ibValueContainer::CompareValueLS(const ibVariant& cParam) const
 {
 	const ibValueContainer* rhs = AsContainer(cParam);
 	if (rhs == nullptr)
@@ -198,7 +198,7 @@ size_t ibValueContainer::GetValueHash() const
 
 // Equality asks the entries for EQUALITY — the type-strict rule — rather than
 // for order-equal, exactly as the array does.
-bool ibValueContainer::CompareValueEQ(const ibValue& cParam) const
+bool ibValueContainer::CompareValueEQ(const ibVariant& cParam) const
 {
 	const ibValueContainer* rhs = AsContainer(cParam);
 	if (rhs == nullptr)

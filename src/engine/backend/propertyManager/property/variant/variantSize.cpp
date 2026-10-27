@@ -1,6 +1,6 @@
 #include "variantSize.h"
 
-ibString ibPropertyValueSize::GetString() const
+ibString ibVariantSize::GetString() const
 {
 	return m_size.ToString();
 }

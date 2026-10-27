@@ -3,21 +3,24 @@
 
 #include "variantModule.h"
 
-class BACKEND_API ibPropertyValueForm : public ibPropertyValueModule {
+class BACKEND_API ibVariantForm : public ibVariantModule {
 public:
 
 	//set form code 
 	void SetFormData(const ibMemoryBuffer& formData) { m_formData = formData; }
 	ibMemoryBuffer& GetFormData() { return m_formData; }
 
-	ibPropertyValueForm(
+	ibVariantForm(
 		const ibMemoryBuffer& memory = ibMemoryBuffer(),
 		const ibString& moduleData = ibEmptyString
-	) : ibPropertyValueModule(moduleData), m_formData(memory) {
+	) : ibVariantModule(moduleData), m_formData(memory) {
 	}
+	ibVariantForm(const ibVariantForm& src) : ibVariantModule(src), m_formData(src.m_formData) {}
 
-	virtual bool CompareValueEQ(const ibPropertyValue& data) const override {
-		const ibPropertyValueForm* srcData = dynamic_cast<const ibPropertyValueForm*>(data.GetRef());
+	virtual ibVariant CloneValue() const override { return ibVariant(new ibVariantForm(*this)); }
+
+	virtual bool CompareValueEQ(const ibVariant& data) const override {
+		const ibVariantForm* srcData = dynamic_cast<const ibVariantForm*>(data.GetRef());
 		if (srcData != nullptr) {
 			return m_moduleData == srcData->m_moduleData &&
 				std::memcmp(m_formData.GetData(), srcData->m_formData.GetData(), m_formData.GetDataLen()) == 0 && 

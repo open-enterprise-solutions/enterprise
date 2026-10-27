@@ -16,7 +16,7 @@ void ibValueSpreadsheetDetails::LinkTo(const ibValue& parent)
 	m_parents.push_back(parent);
 }
 
-const ibValue& ibValueSpreadsheetDetails::Unwrap(const ibValue& value)
+const ibVariant& ibValueSpreadsheetDetails::Unwrap(const ibVariant& value)
 {
 	const ibValueSpreadsheetDetails* details = From(value);
 	return details != nullptr ? details->m_value : value;

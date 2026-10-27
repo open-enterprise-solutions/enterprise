@@ -1,6 +1,6 @@
 #include "calculationRegister.h"
 
-void ibValueMetaObjectCalculationRegister::OnPropertyChanged(ibProperty* property, const ibPropertyValue& oldValue, const ibPropertyValue& newValue)
+void ibValueMetaObjectCalculationRegister::OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue)
 {
 	// ALWAYS subordinate to a recorder — the recorder-family attributes are always active.
 	(*m_propertyAttributeLineActive)->ClearFlag(metaDisableFlag);

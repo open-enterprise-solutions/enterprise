@@ -45,7 +45,7 @@ ibString Join(const std::vector<ibString>& parts, const ibString& separator)
 // through the value's own string form — which is the honest answer for a type
 // the query language has no literal syntax for, and the parser will then refuse
 // it rather than silently accept something else.
-ibString RenderLiteral(const ibLiteral& value)
+ibString RenderLiteral(const ibVariant& value)
 {
 	switch (value.GetType())
 	{

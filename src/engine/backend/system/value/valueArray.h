@@ -236,14 +236,14 @@ public:
 	// as "Array", so any two arrays compare EQUAL. That is not a slow key, it is a
 	// wrong one: a join or group keyed on an array puts every row in one bucket,
 	// silently. A COMPOUND key is an array, so it is the shape that breaks first.
-	virtual int  CompareValueLS(const ibValue& cParam) const override;
-	virtual bool CompareValueEQ(const ibValue& cParam) const override;
+	virtual int  CompareValueLS(const ibVariant& cParam) const override;
+	virtual bool CompareValueEQ(const ibVariant& cParam) const override;
 	// Hashes by the same elements the order walks — see ibValue::GetValueHash.
 	virtual size_t GetValueHash() const override;
 private:
 	// The other side as an array, or nullptr. The cast is the MEASURED choice for
 	// this path — see the note in valueArray.cpp before making it look cheaper.
-	const ibValueArray* AsArray(const ibValue& cParam) const;
+	const ibValueArray* AsArray(const ibVariant& cParam) const;
 public:
 
 	//Working with iterators

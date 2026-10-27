@@ -11,7 +11,7 @@
 class BACKEND_API ibPropertyCommandSource : public ibProperty {
 	// The owning property object (a button / a bar item) becomes the variant's factory — cast to ibBackendCommandReceiver,
 	// its WalkCommand validates the binding. Mirrors ibPropertySource::CreateVariantData taking the property.
-	static ibPropertyValue CreateVariantData(const ibPropertyObject* property, const ibCommandDescription& desc, const ibString& display = ibEmptyString);
+	static ibVariant CreateVariantData(const ibPropertyObject* property, const ibCommandDescription& desc, const ibString& display = ibEmptyString);
 public:
 
 #pragma region _value_

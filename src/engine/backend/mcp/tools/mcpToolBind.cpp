@@ -73,7 +73,7 @@ struct Binding {
 // register are wired with.
 //
 // Now the question goes to the VARIANT, which is what actually holds the relationship, and every one
-// of them is an ibPropertyValueMetaDesc. A property joins the family by holding such a value — there is
+// of them is an ibVariantMetaDesc. A property joins the family by holding such a value — there is
 // no list here, and nothing to add when a sixth appears.
 Binding AsBinding(ibProperty* property)
 {
@@ -81,7 +81,7 @@ Binding AsBinding(ibProperty* property)
 
 	// `find_`, not `get_`: BindingNamed walks every property of the object asking "are you a
 	// binding", and most answer no. The raising form is for a shape that is already known.
-	if (ibPropertyValueMetaDesc* held = property->find_cell_variant<ibPropertyValueMetaDesc>()) {
+	if (ibVariantMetaDesc* held = property->find_cell_variant<ibVariantMetaDesc>()) {
 		found.property = property;
 		found.held = &held->GetMetaDesc();
 	}
@@ -332,9 +332,9 @@ public:
 			// alive until this call ends. The one thing that must never be touched is the variant the
 			// PROPERTY holds: editing that is editing the old value and the new one at once, which is
 			// how the second end of the binding stopped being made.
-			ibPropertyValue placing = choices.GetValue(index);
+			ibVariant placing = choices.GetValue(index);
 
-			ibPropertyValueMetaDesc* carried = binding.property->find_cell_variant<ibPropertyValueMetaDesc>(placing);
+			ibVariantMetaDesc* carried = binding.property->find_cell_variant<ibVariantMetaDesc>(placing);
 			if (carried == nullptr) {
 				refusal = ibString::Format(
 					ibMcpText("'%s' offered a value this tool cannot read."), binding.property->GetName());

@@ -670,8 +670,8 @@ public:
 	*/
 	virtual void OnPropertyCreated(ibProperty* property) override;
 	virtual void OnPropertySelected(ibProperty* property) override;
-	virtual bool OnPropertyChanging(ibProperty* property, const ibPropertyValue& newValue) override;
-	virtual void OnPropertyChanged(ibProperty* property, const ibPropertyValue& oldValue, const ibPropertyValue& newValue) override;
+	virtual bool OnPropertyChanging(ibProperty* property, const ibVariant& newValue) override;
+	virtual void OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue) override;
 
 	// THE DOOR FOR THE ORDER OF THE CHILDREN — `pos` is where `obj` ends up. Refused on a read-only
 	// configuration; a move that happened marks the configuration modified and is announced as `Moved`.

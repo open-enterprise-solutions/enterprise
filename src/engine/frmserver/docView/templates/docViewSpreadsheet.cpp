@@ -46,9 +46,9 @@ bool ibSheetView::OnClientEvent(ibProtocol::ibEvent::ibKind event, const ibDataN
 			return true;
 		ibString bound;
 		spreadsheet.GetCellDetailsParameter(row, col, bound);
-		ibAnyValuePtr<ibAnyValue> held;
+		ibVariant held;
 		if (!bound.IsEmpty() && spreadsheet.GetParameter(bound, held)) {
-			ibValue boundValue = ibValue::FromAnyValue(held);
+			ibValue boundValue = ibValue(held);
 			boundValue.ShowValue();
 		}
 		return true;

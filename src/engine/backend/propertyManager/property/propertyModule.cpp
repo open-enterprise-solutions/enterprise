@@ -7,21 +7,21 @@
 
 ////////////////////////////////////////////////////////////////////////
 
-ibPropertyValue ibPropertyModule::CreateVariantData()
+ibVariant ibPropertyModule::CreateVariantData()
 {
-	return ibPropertyValue(new ibPropertyValueModule());
+	return ibVariant(new ibVariantModule());
 }
 
 ////////////////////////////////////////////////////////////////////////
 
 ibString ibPropertyModule::GetValueAsString() const
 {
-	return get_cell_variant<ibPropertyValueModule>()->GetModuleText();
+	return get_cell_variant<ibVariantModule>()->GetModuleText();
 }
 
 void ibPropertyModule::SetValue(const ibString& val)
 {
-	get_cell_variant<ibPropertyValueModule>()->SetModuleText(val);
+	get_cell_variant<ibVariantModule>()->SetModuleText(val);
 }
 
 ////////////////////////////////////////////////////////////////////////

@@ -122,7 +122,7 @@ const ibValueMetaObjectAttributeBase* ibChoiceLinkResolver::FieldOf(const ibChoi
 	//
 	// The leaf of a one-hop path IS its head, and it stands among the HOLDER's own fields — which is
 	// the SAME question a link's path asks, so it is the same lookup and not a second spelling of it.
-	// The tree already answers this pair both ways in one breath: ibPropertyValueSource::
+	// The tree already answers this pair both ways in one breath: ibVariantSource::
 	// RefreshTypeFromSource takes the walked leaf's type, or the head's when there is no leaf.
 	return FieldOfPath(holder, bound->GetSourceDesc());
 }

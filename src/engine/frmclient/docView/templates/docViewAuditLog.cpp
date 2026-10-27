@@ -180,7 +180,7 @@ unsigned int ibAuditLogModel::GetPrevFetch(
 	return static_cast<unsigned int>(anchorIdx - startIdx);
 }
 
-void ibAuditLogModel::GetValue(wxVariant& val,
+void ibAuditLogModel::GetValue(ibVariant& val,
                                 const ibDataViewItem& item,
                                 unsigned int col) const
 {

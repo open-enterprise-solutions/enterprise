@@ -5,15 +5,15 @@
 
 ////////////////////////////////////////////////////////////////////////
 
-ibPropertyValue ibPropertyDataComposition::CreateVariantData(ibPropertyObject* property, const ibCompositionDescription& desc)
+ibVariant ibPropertyDataComposition::CreateVariantData(ibPropertyObject* property, const ibCompositionDescription& desc)
 {
-	return ibPropertyValue(new ibPropertyValueComposition(property, desc));
+	return ibVariant(new ibVariantComposition(property, desc));
 }
 
 ////////////////////////////////////////////////////////////////////////
 
 ibCompositionDescription& ibPropertyDataComposition::GetValueAsCompositionDesc() const {
-	return get_cell_variant<ibPropertyValueComposition>()->GetCompositionDesc();
+	return get_cell_variant<ibVariantComposition>()->GetCompositionDesc();
 }
 
 void ibPropertyDataComposition::SetValue(const ibCompositionDescription& val) {

@@ -534,7 +534,7 @@ m_reference_impl(nullptr), m_foundedRef(false)
 // ⚠ THE INVARIANT THE WHOLE FUNCTION IS WRITTEN TO: `LS == 0` exactly when the two are THE SAME
 // reference. `ibValueEqual` is literally `CompareValueLS(b) == 0` (value.h), so every hash container in
 // the house — a grouping, a join, a fold's children — takes its notion of "same" from here.
-int ibValueReferenceDataObject::CompareValueLS(const ibValue& cParam) const
+int ibValueReferenceDataObject::CompareValueLS(const ibVariant& cParam) const
 {
 	// ⭐ THE VERY SAME OBJECT IS THE SAME REFERENCE — asked before anything else, because it is the
 	// commonest comparison there is: the rows of one department all hold ONE reference object (one per
@@ -791,7 +791,7 @@ bool ibValueReferenceDataObject::CoerceHopType(const ibSourceHop& hop, ibValue& 
 // ⭐ AN "ANY" IS SEEN AS ITS FACADE — `CatalogRef` as every catalog's reference, `AnyRef` as every reference —
 // the way a characteristic is seen as its chart's types: a filter, a field tree, a picker offers what can be
 // CHOSEN, and nothing is ever "a CatalogRef". Read off its bits (clsid_admits), so a catalog added later is in
-// it. A field declared with one stores the same members (ibPropertyValueAttribute::DoRefreshTypeDesc); this
+// it. A field declared with one stores the same members (ibVariantAttribute::DoRefreshTypeDesc); this
 // answers for a type handed in on its own.
 std::vector<ibMetaID> ibValueReferenceDataObject::ConvertToMetaIds(const std::vector<ibClassID>& clsids, const ibMetaData* metaData)
 {

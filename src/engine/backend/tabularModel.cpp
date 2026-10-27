@@ -62,12 +62,12 @@ ibValueModel::ibComposerNode::ibComposerNode(const std::map<ibMetaID, ibValue>& 
 // LIVE storage rows THROUGH this (m_valueTable set → the storage IS updated + the model refreshes); a DB-list
 // COPY node (m_valueTable null, self-contained) just mirrors into the copy for the inline editor (the grid is
 // read-only — a real edit goes through the object form). No write-back source / backing index any more.
-bool ibValueModel::ibComposerNode::SetValue(const ibMetaID& id, const ibValue& variant, bool notify)
+bool ibValueModel::ibComposerNode::SetValue(unsigned int col, const ibValue& variant, bool notify)
 {
-	auto iterator = m_nodeValues.find(id);
+	auto iterator = m_nodeValues.find(col);
 	if (iterator == m_nodeValues.end())
 		return false;
-	ibValue& cValue = m_nodeValues.at(id);
+	ibValue& cValue = m_nodeValues.at(col);
 
 	// 🛑 THE VALUE FIRST, THE NEWS AFTER IT. The notification went out while the cell still held the OLD
 	// value, and whatever reacts to it — the view recomputing the row, a handler reading the cell — read
@@ -77,7 +77,7 @@ bool ibValueModel::ibComposerNode::SetValue(const ibMetaID& id, const ibValue& v
 	const bool changed = cValue != variant;
 	cValue = variant;
 	if (notify && m_valueTable != nullptr && changed)
-		m_valueTable->RowValueChanged(this, id);
+		m_valueTable->RowValueChanged(this, col);
 	return true;
 }
 
@@ -488,7 +488,7 @@ bool ibValueModel::GetAttrByRow(const ibDataViewItem& row, unsigned int col, ibD
 	return !attr.IsDefault();
 }
 
-void ibValueModel::GetValue(wxVariant& variant, const ibDataViewItem& item, unsigned int col) const
+void ibValueModel::GetValue(ibVariant& variant, const ibDataViewItem& item, unsigned int col) const
 {
 	GetValueByRow(variant, item, col);
 	if (!HasAttrByRow(item))
@@ -502,7 +502,7 @@ void ibValueModel::GetValue(wxVariant& variant, const ibDataViewItem& item, unsi
 		node->GetValue(static_cast<ibMetaID>(col), value);
 	ibString text;
 	if (drawn.TextOf(value, text))
-		variant = new ibVariantDataValueModel(ibValue(text));
+		variant = ibValue(text);
 }
 
 // RAM-backed models have NO source primary key (RunComposerPage stamps an EMPTY row-key for them) → restore by

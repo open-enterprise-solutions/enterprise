@@ -286,11 +286,6 @@ ibValueTypes ibValue::GetVTByID(const ibClassID& clsid)
 	return ibValueTypes::TYPE_EMPTY;
 }
 
-ibClassID ibValue::GetIDByVT(const ibValueTypes& valueType)
-{
-	return ::GetIDByVT(valueType);   // the core's table (core/core.h)
-}
-
 ibCtorAbstractType* ibValue::GetAvailableCtor(const ibString& className)
 {
 	// ⭐ AN EMPTY NAME IS NOT A LOOKUP. Nothing is registered under one, so asking is meaningless —

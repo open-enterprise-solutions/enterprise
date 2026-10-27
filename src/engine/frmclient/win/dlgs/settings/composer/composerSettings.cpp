@@ -143,7 +143,7 @@ public:
 		Reset(list != nullptr ? (unsigned int)list->size() : 0u);
 	}
 
-	void GetValueByRow(wxVariant& variant, unsigned row, unsigned col) const override {
+	void GetValueByRow(ibVariant& variant, unsigned row, unsigned col) const override {
 		const std::vector<ibResourceDescription>* list = List();
 		if (list == nullptr || row >= list->size())
 			return;   // BOUNDS FIRST — a queued paint can outlive the line it was queued for
@@ -173,7 +173,7 @@ public:
 	// calls the cell offered — `SUM(Amount)` — or anything a person wrote in the editor behind "...".
 	// Both land here as text, and the split is the same one the store already speaks: a FUNC and its
 	// argument, or an empty func meaning "the text is the expression".
-	bool SetValueByRow(const wxVariant& variant, unsigned row, unsigned col) override {
+	bool SetValueByRow(const ibVariant& variant, unsigned row, unsigned col) override {
 		std::vector<ibResourceDescription>* list = List();
 		if (list == nullptr || row >= list->size())
 			return false;
@@ -378,7 +378,7 @@ public:
 		return ibRoleForPath(*selects, field->m_name, field->m_balanceRole);
 	}
 
-	void GetValueByRow(wxVariant& variant, unsigned row, unsigned col) const override {
+	void GetValueByRow(ibVariant& variant, unsigned row, unsigned col) const override {
 		const std::vector<ibQueryConstructorField>* fields = m_fields ? m_fields() : nullptr;
 		const std::vector<ibSelectDescription>* selects = m_selects ? m_selects() : nullptr;
 		if (fields == nullptr || selects == nullptr || row >= fields->size())
@@ -443,7 +443,7 @@ public:
 		return entry;
 	}
 
-	bool SetValueByRow(const wxVariant& variant, unsigned row, unsigned col) override {
+	bool SetValueByRow(const ibVariant& variant, unsigned row, unsigned col) override {
 		if (col == kColRole)
 			return SetRole(row, variant.GetString());
 		if (col == kColAppearance) {
@@ -465,7 +465,7 @@ public:
 
 		wxString text = variant.GetString();
 		text.Trim(true).Trim(false);
-		if (col == kColOwnTitle ? variant.GetBool() == OwnTitle(row) : !OwnTitle(row) && text == ShownTitle(row))
+		if (col == kColOwnTitle ? variant.GetBoolean() == OwnTitle(row) : !OwnTitle(row) && text == ShownTitle(row))
 			return false;   // nothing changed — and a click through a generated title is not an edit of it
 
 		ibFieldDescription* said = EntryToWrite(row);
@@ -475,7 +475,7 @@ public:
 		if (col == kColOwnTitle) {
 			// TICKED, THE TITLE STARTS FROM WHAT WAS SHOWN — the generated one becomes the person's to edit, not an
 			// empty cell to retype it into. Unticked, the field follows its source and its name again.
-			said->SayTitle(variant.GetBool()
+			said->SayTitle(variant.GetBoolean()
 				? said->TitleInForce(FieldAt(row) != nullptr ? FieldAt(row)->m_caption : ibString())
 				: ibString());
 		}
@@ -531,7 +531,7 @@ public:
 
 private:
 	wxString ShownTitle(unsigned row) const {
-		wxVariant shown;
+		ibVariant shown;
 		GetValueByRow(shown, row, kColTitle);
 		return shown.GetString();
 	}
@@ -603,7 +603,7 @@ public:
 		Reset((unsigned int)m_rows.size());
 	}
 
-	void GetValueByRow(wxVariant& variant, unsigned row, unsigned col) const override {
+	void GetValueByRow(ibVariant& variant, unsigned row, unsigned col) const override {
 		const std::vector<ibParameterDescription>* list = List();
 		const size_t at = IndexAt(row);
 		if (list == nullptr || at >= list->size())
@@ -640,7 +640,7 @@ public:
 		}
 	}
 
-	bool SetValueByRow(const wxVariant& variant, unsigned row, unsigned col) override {
+	bool SetValueByRow(const ibVariant& variant, unsigned row, unsigned col) override {
 		std::vector<ibParameterDescription>* list = List();
 		const size_t at = IndexAt(row);
 		if (list == nullptr || at >= list->size())
@@ -653,7 +653,7 @@ public:
 		// was a text one once, and this line is what is left of that.
 		case kColValue:      return false;
 		case kColExpression: parameter.m_expression   = variant.GetString();          return true;
-		case kColUser:       parameter.m_userSettable = variant.GetBool();            return true;
+		case kColUser:       parameter.m_userSettable = variant.GetBoolean();            return true;
 		default: return false;
 		}
 	}
@@ -705,7 +705,7 @@ public:
 		Reset(list != nullptr ? (unsigned int)list->size() : 0u);
 	}
 
-	void GetValueByRow(wxVariant& variant, unsigned row, unsigned col) const override {
+	void GetValueByRow(ibVariant& variant, unsigned row, unsigned col) const override {
 		const std::vector<ibVariantDescription>* list = List();
 		if (list == nullptr || col != kColName || row >= list->size())
 			return;   // BOUNDS FIRST — a queued paint can outlive the variant it was queued for
@@ -721,7 +721,7 @@ public:
 		attr.SetColour(typeConv::WxColourToColour(wxSystemSettings::GetColour(wxSYS_COLOUR_GRAYTEXT)));
 		return true;
 	}
-	bool SetValueByRow(const wxVariant& variant, unsigned row, unsigned col) override {
+	bool SetValueByRow(const ibVariant& variant, unsigned row, unsigned col) override {
 		std::vector<ibVariantDescription>* list = List();
 		if (list == nullptr || col != kColName || row >= list->size())
 			return false;
@@ -894,7 +894,7 @@ public:
 	}
 
 	// ---- ibDataViewModel ----
-	void GetValue(wxVariant& variant, const ibDataViewItem& item, unsigned int col) const override {
+	void GetValue(ibVariant& variant, const ibDataViewItem& item, unsigned int col) const override {
 		const ibStructureNode* node = static_cast<const ibStructureNode*>(item.GetID());
 		if (node == nullptr)
 			return;
@@ -973,7 +973,7 @@ public:
 	// WRITTEN BY THE CELL, not through here: both columns are VALUES, and the cell hands the
 	// chosen value straight to the ladder (a field through the picker, a kind through the quick
 	// choice). Text arriving here would only be a string that looks like one of them.
-	bool SetValue(const wxVariant&, const ibDataViewItem&, unsigned int) override { return false; }
+	bool SetValue(const ibVariant&, const ibDataViewItem&, unsigned int) override { return false; }
 
 	ibDataViewItem GetParent(const ibDataViewItem& item) const override {
 		const ibStructureNode* node = static_cast<const ibStructureNode*>(item.GetID());
@@ -1170,8 +1170,8 @@ public:
 	int RowAt(const ibDataViewItem& item) const;
 	ibDataViewItem ItemForRow(size_t row) const;
 
-	void GetValue(wxVariant& variant, const ibDataViewItem& item, unsigned int col) const override;
-	bool SetValue(const wxVariant&, const ibDataViewItem&, unsigned int) override { return false; }
+	void GetValue(ibVariant& variant, const ibDataViewItem& item, unsigned int col) const override;
+	bool SetValue(const ibVariant&, const ibDataViewItem&, unsigned int) override { return false; }
 	ibDataViewItem GetParent(const ibDataViewItem&) const override { return ibDataViewItem(); }
 	bool IsContainer(const ibDataViewItem& item) const override { return !item.IsOk(); }
 	unsigned int GetFirstFetch(const ibDataViewItem& parent, const ibDataViewItem&,
@@ -1214,7 +1214,7 @@ ibDataViewItem ibSelectedListModel::ItemForRow(size_t row) const
 	return row < Count() ? ibDataViewItem(RowFor(row)) : ibDataViewItem();
 }
 
-void ibSelectedListModel::GetValue(wxVariant& variant, const ibDataViewItem& item, unsigned int col) const
+void ibSelectedListModel::GetValue(ibVariant& variant, const ibDataViewItem& item, unsigned int col) const
 {
 	const std::vector<ibSelectedFieldDescription>* list = List();
 	const int row = RowAt(item);
@@ -1282,7 +1282,7 @@ public:
 		return row != nullptr ? (int)row->GetRow() : wxNOT_FOUND;
 	}
 
-	void GetValue(wxVariant& variant, const ibDataViewItem& item, unsigned int col) const override {
+	void GetValue(ibVariant& variant, const ibDataViewItem& item, unsigned int col) const override {
 		const ibLevelDescription* level = Level();
 		const int row = RowAt(item);
 		if (level == nullptr || row == wxNOT_FOUND || (size_t)row >= level->m_settings.m_group.m_lines.size())
@@ -1295,7 +1295,7 @@ public:
 
 	// Written through the CELLS, which hand over values (a field through the picker, a kind through
 	// the runtime's quick choice) — text arriving here would be a string that looks like one.
-	bool SetValue(const wxVariant&, const ibDataViewItem&, unsigned int) override { return false; }
+	bool SetValue(const ibVariant&, const ibDataViewItem&, unsigned int) override { return false; }
 
 	ibDataViewItem GetParent(const ibDataViewItem&) const override { return ibDataViewItem(); }
 	bool IsContainer(const ibDataViewItem& item) const override { return !item.IsOk(); }
@@ -3330,7 +3330,7 @@ bool ibComposerSettingsPanel::EditFieldRole(wxString& text)
 	if (entry == nullptr)
 		return false;
 	entry->SayRole(said ? role : fromSource, fromSource, said ? rank : 0);
-	wxVariant shown;
+	ibVariant shown;
 	m_fieldModel->GetValueByRow(shown, row, ibFieldModel::kColRole);   // the word, and the number beside it
 	text = shown.GetString();
 	OnFieldDescribed();

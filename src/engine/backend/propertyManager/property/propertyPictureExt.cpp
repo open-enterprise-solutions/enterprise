@@ -4,26 +4,26 @@
 
 ////////////////////////////////////////////////////////////////////////
 
-ibPropertyValue ibPropertyExternalPicture::CreateVariantData(const ibExternalPictureDescription& id)
+ibVariant ibPropertyExternalPicture::CreateVariantData(const ibExternalPictureDescription& id)
 {
-	return ibPropertyValue(new ibPropertyValueExternalPicture(id));
+	return ibVariant(new ibVariantExternalPicture(id));
 }
 
 ////////////////////////////////////////////////////////////////////////
 
 ibPicture ibPropertyExternalPicture::GetValueAsPicture() const
 {
-	return get_cell_variant<ibPropertyValueExternalPicture>()->GetPicture();
+	return get_cell_variant<ibVariantExternalPicture>()->GetPicture();
 }
 
 const ibExternalPictureDescription& ibPropertyExternalPicture::GetValueAsPictureDesc() const
 {
-	return get_cell_variant<ibPropertyValueExternalPicture>()->GetExternalPictureDesc();
+	return get_cell_variant<ibVariantExternalPicture>()->GetExternalPictureDesc();
 }
 
 ibGuid ibPropertyExternalPicture::GetValueAsVersion() const
 {
-	return get_cell_variant<ibPropertyValueExternalPicture>()->GetPictureVersion();
+	return get_cell_variant<ibVariantExternalPicture>()->GetPictureVersion();
 }
 
 void ibPropertyExternalPicture::SetValue(const ibExternalPictureDescription& val)
@@ -34,7 +34,7 @@ void ibPropertyExternalPicture::SetValue(const ibExternalPictureDescription& val
 ////////////////////////////////////////////////////////////////////////
 
 bool ibPropertyExternalPicture::IsEmptyProperty() const {
-	return get_cell_variant<ibPropertyValueExternalPicture>()->IsEmptyPicture();
+	return get_cell_variant<ibVariantExternalPicture>()->IsEmptyPicture();
 }
 
 #include "backend/system/value/valuePicture.h"

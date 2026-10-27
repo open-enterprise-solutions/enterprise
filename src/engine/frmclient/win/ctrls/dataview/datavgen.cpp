@@ -1133,20 +1133,20 @@ ibDataViewCustomRenderer::ibDataViewCustomRenderer(const wxString& varianttype,
 #if wxUSE_ACCESSIBILITY
 wxString ibDataViewCustomRenderer::GetAccessibleDescription() const
 {
-	wxVariant val;
+	ibVariant val;
 	GetValue(val);
 
 	wxString strVal;
-	if (val.IsType(wxS("bool")))
+	if (val.GetType() == ibValueTypes::TYPE_BOOLEAN)
 	{
 		/* TRANSLATORS: Name of Boolean true value */
-		strVal = val.GetBool() ? _("true")
+		strVal = val.GetBoolean() ? _("true")
 			/* TRANSLATORS: Name of Boolean false value */
 			: _("false");
 	}
 	else
 	{
-		strVal = val.MakeString();
+		strVal = val.GetString();
 	}
 
 	return strVal;
@@ -1196,7 +1196,7 @@ void ibDataViewTextRenderer::EnableMarkup(bool enable)
 }
 #endif // wxUSE_MARKUP
 
-bool ibDataViewTextRenderer::SetValue(const wxVariant& value)
+bool ibDataViewTextRenderer::SetValue(const ibVariant& value)
 {
 	m_text = value.GetString();
 
@@ -1208,7 +1208,7 @@ bool ibDataViewTextRenderer::SetValue(const wxVariant& value)
 	return true;
 }
 
-bool ibDataViewTextRenderer::GetValue(wxVariant& WXUNUSED(value)) const
+bool ibDataViewTextRenderer::GetValue(ibVariant& WXUNUSED(value)) const
 {
 	return false;
 }
@@ -1230,12 +1230,12 @@ bool ibDataViewTextRenderer::HasEditorCtrl() const
 }
 
 wxWindow* ibDataViewTextRenderer::CreateEditorCtrl(wxWindow* parent,
-	wxRect labelRect, const wxVariant& value)
+	wxRect labelRect, const ibVariant& value)
 {
-	return CreateEditorTextCtrl(parent, labelRect, value);
+	return CreateEditorTextCtrl(parent, labelRect, value.GetString());
 }
 
-bool ibDataViewTextRenderer::GetValueFromEditorCtrl(wxWindow* editor, wxVariant& value)
+bool ibDataViewTextRenderer::GetValueFromEditorCtrl(wxWindow* editor, ibVariant& value)
 {
 	wxTextCtrl* text = (wxTextCtrl*)editor;
 	value = text->GetValue();
@@ -1294,44 +1294,17 @@ ibDataViewBitmapRenderer::ibDataViewBitmapRenderer(const wxString& varianttype,
 {
 }
 
-bool ibDataViewBitmapRenderer::SetValue(const wxVariant& value)
+bool ibDataViewBitmapRenderer::SetValue(const ibVariant& value)
 {
-	if (value.GetType() == wxT("wxBitmapBundle"))
-	{
-		m_bitmapBundle << value;
-	}
-	else if (value.GetType() == wxT("wxBitmap"))
-	{
-		wxBitmap bitmap;
-		bitmap << value;
-		m_bitmapBundle = wxBitmapBundle(bitmap);
-	}
-	else if (value.GetType() == wxT("wxIcon"))
-	{
-		wxIcon icon;
-		icon << value;
-		m_bitmapBundle = wxBitmapBundle(icon);
-	}
-	else
-	{
-		m_bitmapBundle.Clear();
-	}
-
+	// A picture in a cell is the picture of an icon text — its text is not shown here.
+	const ibDataViewIconText* const iconText = value.ConvertToType<ibDataViewIconText>();
+	m_bitmapBundle = iconText != nullptr ? iconText->GetBitmapBundle() : wxBitmapBundle();
 	return true;
 }
 
-bool ibDataViewBitmapRenderer::GetValue(wxVariant& WXUNUSED(value)) const
+bool ibDataViewBitmapRenderer::GetValue(ibVariant& WXUNUSED(value)) const
 {
 	return false;
-}
-
-bool
-ibDataViewBitmapRenderer::IsCompatibleVariantType(const wxString& variantType) const
-{
-	// We can accept values of any types checked by SetValue().
-	return variantType == wxS("wxBitmapBundle")
-		|| variantType == wxS("wxBitmap")
-		|| variantType == wxS("wxIcon");
 }
 
 #if wxUSE_ACCESSIBILITY
@@ -1376,14 +1349,14 @@ ibDataViewToggleRenderer::ibDataViewToggleRenderer(const wxString& varianttype,
 	m_radio = false;
 }
 
-bool ibDataViewToggleRenderer::SetValue(const wxVariant& value)
+bool ibDataViewToggleRenderer::SetValue(const ibVariant& value)
 {
-	m_toggle = value.GetBool();
+	m_toggle = value.GetBoolean();
 
 	return true;
 }
 
-bool ibDataViewToggleRenderer::GetValue(wxVariant& WXUNUSED(value)) const
+bool ibDataViewToggleRenderer::GetValue(ibVariant& WXUNUSED(value)) const
 {
 	return false;
 }
@@ -1469,9 +1442,9 @@ ibDataViewProgressRenderer::ibDataViewProgressRenderer(const wxString& label,
 	m_value = 0;
 }
 
-bool ibDataViewProgressRenderer::SetValue(const wxVariant& value)
+bool ibDataViewProgressRenderer::SetValue(const ibVariant& value)
 {
-	m_value = (long)value;
+	m_value = value.GetInteger();
 
 	if (m_value < 0) m_value = 0;
 	if (m_value > 100) m_value = 100;
@@ -1479,7 +1452,7 @@ bool ibDataViewProgressRenderer::SetValue(const wxVariant& value)
 	return true;
 }
 
-bool ibDataViewProgressRenderer::GetValue(wxVariant& value) const
+bool ibDataViewProgressRenderer::GetValue(ibVariant& value) const
 {
 	value = (long)m_value;
 	return true;
@@ -1539,13 +1512,14 @@ ibDataViewIconTextRenderer::ibDataViewIconTextRenderer(
 	SetAlignment(align);
 }
 
-bool ibDataViewIconTextRenderer::SetValue(const wxVariant& value)
+bool ibDataViewIconTextRenderer::SetValue(const ibVariant& value)
 {
-	m_value << value;
+	const ibDataViewIconText* const iconText = value.ConvertToType<ibDataViewIconText>();
+	m_value = iconText != nullptr ? *iconText : ibDataViewIconText(value.GetString());
 	return true;
 }
 
-bool ibDataViewIconTextRenderer::GetValue(wxVariant& WXUNUSED(value)) const
+bool ibDataViewIconTextRenderer::GetValue(ibVariant& WXUNUSED(value)) const
 {
 	return false;
 }
@@ -1591,15 +1565,14 @@ wxSize ibDataViewIconTextRenderer::GetSize() const
 	return dvc->FromDIP(wxSize(80, 20));
 }
 
-wxWindow* ibDataViewIconTextRenderer::CreateEditorCtrl(wxWindow* parent, wxRect labelRect, const wxVariant& value)
+wxWindow* ibDataViewIconTextRenderer::CreateEditorCtrl(wxWindow* parent, wxRect labelRect, const ibVariant& value)
 {
-	ibDataViewIconText iconText;
-	iconText << value;
+	const ibDataViewIconText* const iconText = value.ConvertToType<ibDataViewIconText>();
 
-	wxString text = iconText.GetText();
+	wxString text = iconText != nullptr ? iconText->GetText() : wxString(value.GetString());
 
 	// adjust the label rect to take the width of the icon into account
-	const wxBitmapBundle& bb = iconText.GetBitmapBundle();
+	const wxBitmapBundle bb = iconText != nullptr ? iconText->GetBitmapBundle() : wxBitmapBundle();
 	if (bb.IsOk())
 	{
 		wxWindow* const dvc = GetView();
@@ -1612,22 +1585,19 @@ wxWindow* ibDataViewIconTextRenderer::CreateEditorCtrl(wxWindow* parent, wxRect 
 	return CreateEditorTextCtrl(parent, labelRect, text);
 }
 
-bool ibDataViewIconTextRenderer::GetValueFromEditorCtrl(wxWindow* editor, wxVariant& value)
+bool ibDataViewIconTextRenderer::GetValueFromEditorCtrl(wxWindow* editor, ibVariant& value)
 {
 	wxTextCtrl* text = (wxTextCtrl*)editor;
 
 	// The icon can't be edited so get its old value and reuse it.
-	wxVariant valueOld;
+	ibVariant valueOld;
 	ibDataViewColumn* const col = GetOwner();
 	GetView()->GetModel()->GetValue(valueOld, m_item, col->GetModelColumn());
 
-	ibDataViewIconText iconText;
-	iconText << valueOld;
+	const ibDataViewIconText* const iconOld = valueOld.ConvertToType<ibDataViewIconText>();
 
 	// But replace the text with the value entered by user.
-	iconText.SetText(text->GetValue());
-
-	value << iconText;
+	value = new ibDataViewIconText(text->GetValue(), iconOld != nullptr ? iconOld->GetBitmapBundle() : wxBitmapBundle());
 	return true;
 }
 
@@ -8711,9 +8681,9 @@ wxAccStatus ibDataViewCtrlAccessible::GetName(int childId, wxString* name)
 			if (dvCol->IsHidden())
 				continue; // skip it
 
-			wxVariant value;
+			ibVariant value;
 			model->GetValue(value, item, dvCol->GetModelColumn());
-			if (value.IsNull() || value.IsType(wxS("bool")))
+			if (value.GetType() == ibValueTypes::TYPE_EMPTY || value.GetType() == ibValueTypes::TYPE_BOOLEAN)
 				continue; // Skip non-textual items
 
 			ibDataViewRenderer* r = dvCol->GetRenderer();
@@ -8871,7 +8841,7 @@ wxAccStatus ibDataViewCtrlAccessible::GetDescription(int childId, wxString* desc
 			if (dvCol->IsHidden())
 				continue; // skip it
 
-			wxVariant value;
+			ibVariant value;
 			model->GetValue(value, item, dvCol->GetModelColumn());
 
 			ibDataViewRenderer* r = dvCol->GetRenderer();
@@ -8880,7 +8850,7 @@ wxAccStatus ibDataViewCtrlAccessible::GetDescription(int childId, wxString* desc
 
 			wxString valStr = r->GetAccessibleDescription();
 			// Skip first textual item
-			if (!firstTextSkipped && !value.IsNull() && !value.IsType(wxS("bool")) && !valStr.empty())
+			if (!firstTextSkipped && value.GetType() != ibValueTypes::TYPE_EMPTY && value.GetType() != ibValueTypes::TYPE_BOOLEAN && !valStr.empty())
 			{
 				firstTextSkipped = true;
 				continue;

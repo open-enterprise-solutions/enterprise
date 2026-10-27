@@ -108,7 +108,7 @@ bool ibQueryConditionModel::IsSimple(const ibQueryAstExprPtr& condition)
 	}
 }
 
-void ibQueryConditionModel::GetValueByRow(wxVariant& variant, unsigned row, unsigned col) const
+void ibQueryConditionModel::GetValueByRow(ibVariant& variant, unsigned row, unsigned col) const
 {
 	const ibQueryAstExprPtr condition = RowAt(row);
 	if (!condition)
@@ -129,7 +129,7 @@ void ibQueryConditionModel::GetValueByRow(wxVariant& variant, unsigned row, unsi
 	}
 }
 
-bool ibQueryConditionModel::SetValueByRow(const wxVariant& variant, unsigned row, unsigned col)
+bool ibQueryConditionModel::SetValueByRow(const ibVariant& variant, unsigned row, unsigned col)
 {
 	// ⭐ "ARBITRARY" SWITCHES THE EDITOR, not the condition. Ticked, the cell beside it is free text
 	// with the "..." into the expression editor; cleared, it is a drop-down of the conditions the
@@ -141,7 +141,7 @@ bool ibQueryConditionModel::SetValueByRow(const wxVariant& variant, unsigned row
 	// shape it does not have. The observation is the answer there, and the box says so by going
 	// straight back on.
 	if (col == kConditionColArbitrary) {
-		const bool wanted = variant.GetBool();
+		const bool wanted = variant.GetBoolean();
 		if (!wanted && !IsSimple(RowAt(row))) {
 			if (m_onError)
 				m_onError(_("this condition is not a field, a comparison and a value: it can only be written by hand"));

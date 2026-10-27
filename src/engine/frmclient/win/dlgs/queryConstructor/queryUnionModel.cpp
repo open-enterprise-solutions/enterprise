@@ -31,7 +31,7 @@ ibQuerySelect* ibQueryUnionModel::BranchAt(unsigned int row) const
 	return m_select->m_unions[row - 1].get();
 }
 
-void ibQueryUnionModel::GetValueByRow(wxVariant& variant, unsigned row, unsigned col) const
+void ibQueryUnionModel::GetValueByRow(ibVariant& variant, unsigned row, unsigned col) const
 {
 	if (m_select == nullptr)
 		return;
@@ -56,7 +56,7 @@ void ibQueryUnionModel::GetValueByRow(wxVariant& variant, unsigned row, unsigned
 	}
 }
 
-bool ibQueryUnionModel::SetValueByRow(const wxVariant& variant, unsigned row, unsigned col)
+bool ibQueryUnionModel::SetValueByRow(const ibVariant& variant, unsigned row, unsigned col)
 {
 	if (col != kUnionColKeepDuplicates)
 		return false;
@@ -64,7 +64,7 @@ bool ibQueryUnionModel::SetValueByRow(const wxVariant& variant, unsigned row, un
 	if (branch == nullptr)
 		return false;
 
-	branch->m_unionAll = !variant.GetBool();   // the box says "no duplicates"; the AST stores "all"
+	branch->m_unionAll = !variant.GetBoolean();   // the box says "no duplicates"; the AST stores "all"
 	if (m_onChanged)
 		m_onChanged();
 	return true;
@@ -212,7 +212,7 @@ wxString ibQueryUnionFieldModel::ColumnOf(const ibQuerySelect& branch, const wxS
 	return wxEmptyString;
 }
 
-void ibQueryUnionFieldModel::GetValueByRow(wxVariant& variant, unsigned row, unsigned col) const
+void ibQueryUnionFieldModel::GetValueByRow(ibVariant& variant, unsigned row, unsigned col) const
 {
 	if (m_select == nullptr || row >= m_names.size())
 		return;
@@ -234,7 +234,7 @@ void ibQueryUnionFieldModel::GetValueByRow(wxVariant& variant, unsigned row, uns
 		// replaced, where a text renderer was handed an icon-text and drew nothing. A value's shape
 		// has to match the renderer unconditionally, not "when there is a picture": the rows without
 		// one (a hidden system field, a free expression) are exactly the rows that then vanish.
-		variant << ibDataViewIconText(text, m_iconReader ? m_iconReader(row) : wxNullIcon);
+		variant = new ibDataViewIconText(text, m_iconReader ? m_iconReader(row) : wxNullIcon);
 		return;
 	}
 
@@ -323,7 +323,7 @@ static void UnlineFieldElsewhere(ibQuerySelect* target, const wxString& field, s
 
 		ibQueryProjection none;
 		none.m_expr = ibQueryAstExpr::Make(ibQueryAstExprKind::Literal);
-		none.m_expr->m_literal = ibLiteral(ibValueTypes::TYPE_NULL);
+		none.m_expr->m_literal = ibVariant(ibValueTypes::TYPE_NULL);
 		none.m_alias = ibQueryOutputName(target->m_projections[i]);
 		target->m_projections[i] = none;
 		return;   // it stood on one row; it stands on one row
@@ -385,7 +385,7 @@ bool ibQueryUnionFieldModel::SetBranchColumn(unsigned int row, unsigned int bran
 
 			ibQueryProjection none;
 			none.m_expr = ibQueryAstExpr::Make(ibQueryAstExprKind::Literal);
-			none.m_expr->m_literal = ibLiteral(ibValueTypes::TYPE_NULL);
+			none.m_expr->m_literal = ibVariant(ibValueTypes::TYPE_NULL);
 			none.m_alias = keptName;
 			target->m_projections[row] = none;
 
@@ -453,7 +453,7 @@ bool ibQueryUnionFieldModel::SetBranchColumn(unsigned int row, unsigned int bran
 		if (branch != 0 && m_select != nullptr) {
 			ibQueryProjection none;
 			none.m_expr = ibQueryAstExpr::Make(ibQueryAstExprKind::Literal);
-			none.m_expr->m_literal = ibLiteral(ibValueTypes::TYPE_NULL);
+			none.m_expr->m_literal = ibVariant(ibValueTypes::TYPE_NULL);
 			none.m_alias = fresh;
 			m_select->m_selectAll = false;
 			m_select->m_projections.push_back(none);
@@ -489,7 +489,7 @@ bool ibQueryUnionFieldModel::SetBranchColumn(unsigned int row, unsigned int bran
 	return true;
 }
 
-bool ibQueryUnionFieldModel::SetValueByRow(const wxVariant& variant, unsigned row, unsigned col)
+bool ibQueryUnionFieldModel::SetValueByRow(const ibVariant& variant, unsigned row, unsigned col)
 {
 	// A BRANCH COLUMN — column N + 1 is branch N.
 	if (col > kUnionColName)
@@ -505,16 +505,9 @@ bool ibQueryUnionFieldModel::SetValueByRow(const wxVariant& variant, unsigned ro
 	// silently to nothing at all.
 	//
 	// A cell that is drawn one way and read another is the same bug this window has had three times
-	// now (the condition list, the alias icon, this). ASK THE VARIANT WHAT IT IS.
-	wxString name;
-	if (variant.GetType() == ibDataViewIconTextRenderer::GetDefaultType()) {
-		ibDataViewIconText iconText;
-		iconText << variant;
-		name = iconText.GetText();
-	}
-	else {
-		name = variant.GetString();
-	}
+	// now (the condition list, the alias icon, this). ASK THE VALUE WHAT IT IS.
+	const ibDataViewIconText* const iconText = variant.ConvertToType<ibDataViewIconText>();
+	wxString name = iconText != nullptr ? iconText->GetText() : wxString(variant.GetString());
 	name.Trim(true).Trim(false);
 	if (name.IsSameAs(m_names[row], false))
 		return false;   // not a change

@@ -5,7 +5,7 @@
 
 #include "queryRewrite.h"
 #include "queryRender.h"   // ibQueryOutputName - the one answer to "what is this column called"
-#include "core/compiler/literal.h"   // ibLiteral — a constant the rewrite writes itself
+#include "core/variant.h"   // ibVariant — a constant the rewrite writes itself
 #include "core/diagnostics/journal.h"   // ibJournalInfo — the rewrite says what it did
 
 #include <wx/translation.h>   // _() — the refusals' words
@@ -248,7 +248,7 @@ ibQueryAstExprPtr NormalizeNeg(const ibQueryAstExprPtr& e)
 		cmp->m_cmp = ibQueryCompareOp::Eq;
 		cmp->m_lhs = inner;
 		cmp->m_rhs = ibQueryAstExpr::Make(ibQueryAstExprKind::Literal);
-		cmp->m_rhs->m_literal = ibLiteral(false);
+		cmp->m_rhs->m_literal = ibVariant(false);
 		cmp->m_line = e->m_line; cmp->m_col = e->m_col;
 		cmp->m_rhs->m_line = e->m_line; cmp->m_rhs->m_col = e->m_col;
 		return cmp;

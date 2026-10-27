@@ -7,12 +7,12 @@ void ibValueMetaObjectCatalog::OnPropertyCreated(ibProperty* property)
 	ibValueMetaObjectRecordDataMutableRef::OnPropertyCreated(property);
 }
 
-bool ibValueMetaObjectCatalog::OnPropertyChanging(ibProperty* property, const ibPropertyValue& newValue)
+bool ibValueMetaObjectCatalog::OnPropertyChanging(ibProperty* property, const ibVariant& newValue)
 {
 	return ibValueMetaObjectRecordDataMutableRef::OnPropertyChanging(property, newValue);
 }
 
-void ibValueMetaObjectCatalog::OnPropertyChanged(ibProperty* property, const ibPropertyValue& oldValue, const ibPropertyValue& newValue)
+void ibValueMetaObjectCatalog::OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue)
 {
 	if (m_propertyOwner == property) {
 		const ibMetaDescription& metaDesc = m_propertyOwner->GetValueAsMetaDesc(); ibTypeDescription typeDesc;

@@ -510,7 +510,7 @@ void ibSpreadsheetObject::SetCellValue(int row, int col, const ibString& s)
 	m_spreadsheetDesc.SetCellValue(row, col, s);
 }
 
-bool ibSpreadsheetObject::GetParameter(const ibString& strParameter, ibAnyValuePtr<ibAnyValue>& valueParam) const
+bool ibSpreadsheetObject::GetParameter(const ibString& strParameter, ibVariant& valueParam) const
 {
 	// FOUND, NOT WALKED — the map folds case in its comparator (ibStringCaseFoldLess), the rule this lookup always
 	// had. It ran IsSameAs over every name instead: 90 reads from script on a composed sheet of 400
@@ -524,7 +524,7 @@ bool ibSpreadsheetObject::GetParameter(const ibString& strParameter, ibAnyValueP
 	return true;
 }
 
-void ibSpreadsheetObject::SetParameter(const ibString& strParameter, const ibAnyValuePtr<ibAnyValue>& valueParam)
+void ibSpreadsheetObject::SetParameter(const ibString& strParameter, const ibVariant& valueParam)
 {
 	// ⚠ HINTED AT THE END — a writer that names its parameters in increasing order (a composed table
 	// numbers every cell's link, row by row) lands each one there at once, where an unhinted insert walked
@@ -544,9 +544,9 @@ ibString ibSpreadsheetObject::ComputeStringValueFromParameters(const ibString& s
 	const ibString& strLangCode = strAskedLangCode.IsEmpty() ? m_docLangCode : strAskedLangCode;
 
 	if (type == ibSpreadsheetFillType::ibSpreadsheetFillType_StrParameter) {
-		ibAnyValuePtr<ibAnyValue> cVal;//scratch for one call — see the template below
-		if (!strValue.IsEmpty() && GetParameter(strValue, cVal) && cVal)
-			return ibLocalization::GetTranslateGetRawLocText(strLangCode, cVal->GetString());
+		ibVariant cVal;//scratch for one call — see the template below
+		if (!strValue.IsEmpty() && GetParameter(strValue, cVal))
+			return ibLocalization::GetTranslateGetRawLocText(strLangCode, cVal.GetString());
 		return ibString();
 	}
 
@@ -577,9 +577,9 @@ ibString ibSpreadsheetObject::ComputeStringValueFromParameters(const ibString& s
 						// makes concurrent renders race on its value's refcount, and even
 						// one thread clobbers it if GetParameter re-enters. Constructing
 						// one is cheap; the static was not a win.
-						ibAnyValuePtr<ibAnyValue> cVal;
-						const ibString replacement = (GetParameter(token, cVal) && cVal)
-							? ibLocalization::GetTranslateGetRawLocText(strLangCode, cVal->GetString())
+						ibVariant cVal;
+						const ibString replacement = GetParameter(token, cVal)
+							? ibLocalization::GetTranslateGetRawLocText(strLangCode, cVal.GetString())
 							: ibString();
 						strTemplateValue.replace(start_pos, end_pos - start_pos + 1, replacement);
 

@@ -258,14 +258,14 @@ ibQueryAstExprPtr NodeOf(const CodeCur& c, const ibByteUnit& code, int depth)
 // A POOL CONSTANT AS THE TEXT WROTE IT — the compiler puts nothing in the pool but a lexem's value
 // (FindConst) and a member's spelling (GetConstString), and the cache reads back only those
 // (byteCodeAOT.cpp, ReadConstValue), so each is a primitive — a literal.
-ibLiteral LiteralOf(const ibValue& constant)
+ibVariant LiteralOf(const ibValue& constant)
 {
 	switch (constant.GetType()) {
-	case ibValueTypes::TYPE_BOOLEAN: return ibLiteral(constant.GetBoolean());
-	case ibValueTypes::TYPE_NUMBER:  return ibLiteral(constant.GetNumber());
-	case ibValueTypes::TYPE_DATE:    return ibLiteral(constant.GetDate());
-	case ibValueTypes::TYPE_STRING:  return ibLiteral(ibString(constant.GetString()));
-	default:                         return ibLiteral(constant.GetType());   // Undefined, Null
+	case ibValueTypes::TYPE_BOOLEAN: return ibVariant(constant.GetBoolean());
+	case ibValueTypes::TYPE_NUMBER:  return ibVariant(constant.GetNumber());
+	case ibValueTypes::TYPE_DATE:    return ibVariant(constant.GetDate());
+	case ibValueTypes::TYPE_STRING:  return ibVariant(ibString(constant.GetString()));
+	default:                         return ibVariant(constant.GetType());   // Undefined, Null
 	}
 }
 

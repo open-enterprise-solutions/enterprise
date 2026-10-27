@@ -62,7 +62,7 @@ m_tableColumnCollection(new ibValueModelTableColumnCollection(this))
 // had asked). The columns are declared again - name, type, caption, width, index - and each row's
 // cells are carried across by the column they stand in; the values themselves are copied as values, so a
 // reference in a cell is the same reference in both.
-ibValuePtr<ibValueModelTable> ibValueModelTable::Clone() const
+ibVariant ibValueModelTable::CloneValue() const
 {
 	ibValuePtr<ibValueModelTable> copy(new ibValueModelTable());
 
@@ -170,7 +170,7 @@ bool ibValueModelTable::CallAsFunc(const long lMethodNum, ibValue& pvarRetValue,
 		pvarRetValue = GetRowAt(AppendRow());
 		return true;
 	case enClone:
-		pvarRetValue = Clone();
+		pvarRetValue = ibValue(CloneValue());
 		return true;
 	case enFind:
 	{
@@ -332,7 +332,7 @@ const ibSourceDataObject::ibSourceExplorer* ibValueModelTable::GetSourceExplorer
 
 // The value-table exposes no editable ibProperty of its own (its config IS its columns, edited through the
 // tablebox) — nothing to recompute when a property changes.
-void ibValueModelTable::OnPropertyChanged(ibProperty* /*property*/, const ibPropertyValue& /*oldValue*/, const ibPropertyValue& /*newValue*/)
+void ibValueModelTable::OnPropertyChanged(ibProperty* /*property*/, const ibVariant& /*oldValue*/, const ibVariant& /*newValue*/)
 {
 }
 
@@ -520,7 +520,7 @@ const ibMetaData* ibValueModelTable::ibValueModelTableColumnCollection::ibValueM
 	return ibApplicationInstance::GetActiveMetaData();
 }
 
-void ibValueModelTable::ibValueModelTableColumnCollection::ibValueModelTableColumnInfo::OnPropertyChanged(ibProperty* /*property*/, const ibPropertyValue& /*oldValue*/, const ibPropertyValue& /*newValue*/)
+void ibValueModelTable::ibValueModelTableColumnCollection::ibValueModelTableColumnInfo::OnPropertyChanged(ibProperty* /*property*/, const ibVariant& /*oldValue*/, const ibVariant& /*newValue*/)
 {
 	// Nothing to sync: the property variants ARE the storage, so an inspector edit is already the live value
 	// every reader (GetColumnType / GetTypeDesc / GetSynonym / the source explorer) returns. A TYPE change is

@@ -183,7 +183,7 @@ ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxStrin
 		if (row == wxNOT_FOUND || target < 0 || target >= list->GetItemCount())
 			return;
 		for (unsigned int col = 0; col < (unsigned int)list->GetStore()->m_cols.size(); ++col) {
-			wxVariant here, there;
+			ibVariant here, there;
 			list->GetValue(here, row, col);
 			list->GetValue(there, target, col);
 			list->SetValue(there, row, col);
@@ -247,9 +247,9 @@ ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxStrin
 		m_fields->AppendTextColumn(_("Expression"), wxDATAVIEW_CELL_EDITABLE, FromDIP(190));
 		wxToolBar* fieldBar = MakeBar(page);
 		AddTool(fieldBar, _("Add an expression"), wxART_ADD_EXPRESSION, [this] {
-			wxVector<wxVariant> values;
-			values.push_back(wxVariant(wxString::Format(wxT("Column%d"), m_fields->GetItemCount() + 1)));
-			values.push_back(wxVariant(wxString()));
+			wxVector<ibVariant> values;
+			values.push_back(ibVariant(wxString::Format(wxT("Column%d"), m_fields->GetItemCount() + 1)));
+			values.push_back(ibVariant(wxString()));
 			m_fields->AppendItem(values);
 			m_fields->SelectRow(m_fields->GetItemCount() - 1);
 		});
@@ -289,9 +289,9 @@ ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxStrin
 		m_conditions->AppendToggleColumn(_("On groups"), wxDATAVIEW_CELL_ACTIVATABLE, FromDIP(80));
 		wxToolBar* bar = MakeBar(page);
 		AddTool(bar, _("Add a condition"), wxART_ADD_CONDITION, [this] {
-			wxVector<wxVariant> values;
-			values.push_back(wxVariant(wxString()));
-			values.push_back(wxVariant(false));
+			wxVector<ibVariant> values;
+			values.push_back(ibVariant(wxString()));
+			values.push_back(ibVariant(false));
 			m_conditions->AppendItem(values);
 			m_conditions->SelectRow(m_conditions->GetItemCount() - 1);
 		});
@@ -353,10 +353,10 @@ ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxStrin
 			};
 			for (int n = 1; taken(name); ++n)
 				name = wxString::Format(wxT("Count%d"), n);
-			wxVector<wxVariant> values;
-			values.push_back(wxVariant(name));
-			values.push_back(wxVariant(ibLinqTotalName(ibLinqTotal::Count).ToWxString()));
-			values.push_back(wxVariant(wxString()));
+			wxVector<ibVariant> values;
+			values.push_back(ibVariant(name));
+			values.push_back(ibVariant(ibLinqTotalName(ibLinqTotal::Count).ToWxString()));
+			values.push_back(ibVariant(wxString()));
 			m_totals->AppendItem(values);
 			ShowResult();
 		});
@@ -407,9 +407,9 @@ ibDialogLinqConstructor::ibDialogLinqConstructor(wxWindow* parent, const wxStrin
 		wxToolBar* bar = MakeBar(page);
 		// An order written by hand - a total's column name, when the query groups.
 		AddTool(bar, _("Add an expression"), wxART_ADD_EXPRESSION, [this] {
-			wxVector<wxVariant> values;
-			values.push_back(wxVariant(wxString()));
-			values.push_back(wxVariant(false));
+			wxVector<ibVariant> values;
+			values.push_back(ibVariant(wxString()));
+			values.push_back(ibVariant(false));
 			m_order->AppendItem(values);
 			m_order->SelectRow(m_order->GetItemCount() - 1);
 		});
@@ -932,9 +932,9 @@ void ibDialogLinqConstructor::AddSelectedAsField()
 		for (int n = 1; taken(name); ++n)
 			name = field + wxString::Format(wxT("%d"), n);
 
-		wxVector<wxVariant> values;
-		values.push_back(wxVariant(name));
-		values.push_back(wxVariant(expression));
+		wxVector<ibVariant> values;
+		values.push_back(ibVariant(name));
+		values.push_back(ibVariant(expression));
 		m_fields->AppendItem(values);
 	};
 
@@ -984,9 +984,9 @@ void ibDialogLinqConstructor::AddSelectedToCondition()
 		m_conditions->SetTextValue(was + (was.IsEmpty() || was.EndsWith(wxT(" ")) ? wxString() : wxString(wxT(" "))) + piece, row, 0);
 	}
 	else {
-		wxVector<wxVariant> values;
-		values.push_back(wxVariant(piece));
-		values.push_back(wxVariant(false));
+		wxVector<ibVariant> values;
+		values.push_back(ibVariant(piece));
+		values.push_back(ibVariant(false));
 		m_conditions->AppendItem(values);
 		m_conditions->SelectRow(m_conditions->GetItemCount() - 1);
 	}
@@ -1051,9 +1051,9 @@ void ibDialogLinqConstructor::AddSelectedAsGroupKey()
 			m_fields->DeleteItem(at);
 		}
 
-	wxVector<wxVariant> values;
-	values.push_back(wxVariant(name));
-	values.push_back(wxVariant(expression));
+	wxVector<ibVariant> values;
+	values.push_back(ibVariant(name));
+	values.push_back(ibVariant(expression));
 	m_groupKeys->AppendItem(values);
 	m_groupKeys->SelectRow(m_groupKeys->GetItemCount() - 1);
 	NameTheGroup();
@@ -1073,10 +1073,10 @@ void ibDialogLinqConstructor::AddSelectedAsTotal()
 			m_fields->DeleteItem(at);
 		}
 
-	wxVector<wxVariant> values;
-	values.push_back(wxVariant(name));
-	values.push_back(wxVariant(ibLinqTotalName(ibLinqTotal::Sum).ToWxString()));
-	values.push_back(wxVariant(expression));
+	wxVector<ibVariant> values;
+	values.push_back(ibVariant(name));
+	values.push_back(ibVariant(ibLinqTotalName(ibLinqTotal::Sum).ToWxString()));
+	values.push_back(ibVariant(expression));
 	m_totals->AppendItem(values);
 	m_totals->SelectRow(m_totals->GetItemCount() - 1);
 	ShowResult();
@@ -1090,9 +1090,9 @@ void ibDialogLinqConstructor::AddSelectedToOrder()
 		wxBell();
 		return;
 	}
-	wxVector<wxVariant> values;
-	values.push_back(wxVariant(QualifiedField(node->m_expression, node->m_field)));
-	values.push_back(wxVariant(false));
+	wxVector<ibVariant> values;
+	values.push_back(ibVariant(QualifiedField(node->m_expression, node->m_field)));
+	values.push_back(ibVariant(false));
 	m_order->AppendItem(values);
 	ShowResult();
 }
@@ -1137,13 +1137,13 @@ void ibDialogLinqConstructor::AddSource(const wxString& expression, bool join)
 	const wxString alias = NewAlias(expression);
 	const wxString first = m_sources->GetItemCount() > 0 ? m_sources->GetTextValue(0, 0) : wxString();
 
-	wxVector<wxVariant> values;
-	values.push_back(wxVariant(alias));
-	values.push_back(wxVariant(expression));
-	values.push_back(wxVariant(join));
+	wxVector<ibVariant> values;
+	values.push_back(ibVariant(alias));
+	values.push_back(ibVariant(expression));
+	values.push_back(ibVariant(join));
 	// The keys start as the two aliases and a dot - the place to write them, not a guess at them.
-	values.push_back(wxVariant(join ? first + wxT(".") : wxString()));
-	values.push_back(wxVariant(join ? alias + wxT(".") : wxString()));
+	values.push_back(ibVariant(join ? first + wxT(".") : wxString()));
+	values.push_back(ibVariant(join ? alias + wxT(".") : wxString()));
 	m_sources->AppendItem(values);
 	ShowResult();
 }
@@ -1151,44 +1151,44 @@ void ibDialogLinqConstructor::AddSource(const wxString& expression, bool join)
 void ibDialogLinqConstructor::Open(const ibLinqBlock& block)
 {
 	for (const ibLinqBlockSource& source : block.m_sources) {
-		wxVector<wxVariant> values;
-		values.push_back(wxVariant(source.m_alias.ToWxString()));
-		values.push_back(wxVariant(source.m_expression.ToWxString()));
-		values.push_back(wxVariant(source.m_join));
-		values.push_back(wxVariant(source.m_leftKey.ToWxString()));
-		values.push_back(wxVariant(source.m_rightKey.ToWxString()));
+		wxVector<ibVariant> values;
+		values.push_back(ibVariant(source.m_alias.ToWxString()));
+		values.push_back(ibVariant(source.m_expression.ToWxString()));
+		values.push_back(ibVariant(source.m_join));
+		values.push_back(ibVariant(source.m_leftKey.ToWxString()));
+		values.push_back(ibVariant(source.m_rightKey.ToWxString()));
 		m_sources->AppendItem(values);
 	}
 	for (const ibLinqBlockField& field : block.m_fields) {
-		wxVector<wxVariant> values;
-		values.push_back(wxVariant(field.m_name.ToWxString()));
-		values.push_back(wxVariant(field.m_expression.ToWxString()));
+		wxVector<ibVariant> values;
+		values.push_back(ibVariant(field.m_name.ToWxString()));
+		values.push_back(ibVariant(field.m_expression.ToWxString()));
 		m_fields->AppendItem(values);
 	}
 	for (const bool onGroups : { false, true })
 		for (const wxString& condition : onGroups ? block.m_groupConditions : block.m_conditions) {
-			wxVector<wxVariant> values;
-			values.push_back(wxVariant(condition));
-			values.push_back(wxVariant(onGroups));
+			wxVector<ibVariant> values;
+			values.push_back(ibVariant(condition));
+			values.push_back(ibVariant(onGroups));
 			m_conditions->AppendItem(values);
 		}
 	for (const ibLinqBlockOrder& order : block.m_order) {
-		wxVector<wxVariant> values;
-		values.push_back(wxVariant(order.m_expression.ToWxString()));
-		values.push_back(wxVariant(order.m_descending));
+		wxVector<ibVariant> values;
+		values.push_back(ibVariant(order.m_expression.ToWxString()));
+		values.push_back(ibVariant(order.m_descending));
 		m_order->AppendItem(values);
 	}
 	for (const ibLinqBlockField& key : block.m_groupKeys) {
-		wxVector<wxVariant> values;
-		values.push_back(wxVariant(key.m_name.ToWxString()));
-		values.push_back(wxVariant(key.m_expression.ToWxString()));
+		wxVector<ibVariant> values;
+		values.push_back(ibVariant(key.m_name.ToWxString()));
+		values.push_back(ibVariant(key.m_expression.ToWxString()));
 		m_groupKeys->AppendItem(values);
 	}
 	for (const ibLinqBlockTotal& total : block.m_totals) {
-		wxVector<wxVariant> values;
-		values.push_back(wxVariant(total.m_name.ToWxString()));
-		values.push_back(wxVariant(ibLinqTotalName(total.m_function).ToWxString()));
-		values.push_back(wxVariant(total.m_expression.ToWxString()));
+		wxVector<ibVariant> values;
+		values.push_back(ibVariant(total.m_name.ToWxString()));
+		values.push_back(ibVariant(ibLinqTotalName(total.m_function).ToWxString()));
+		values.push_back(ibVariant(total.m_expression.ToWxString()));
 		m_totals->AppendItem(values);
 	}
 	m_groupInto->ChangeValue(block.m_groupInto);

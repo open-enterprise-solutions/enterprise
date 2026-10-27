@@ -5,7 +5,7 @@
 // Pure and static, with no manager behind them: a rule can be asked about any moment,
 // which is what lets a row evaluate its own schedule without a second scheduler.
 #include "core/job/jobSchedule.h"
-#include "core/compiler/literal.h"   // ibLiteral — a bound as a value, printed through the engine's format
+#include "core/variant.h"   // ibVariant — a bound as a value, printed through the engine's format
 #include "core/formatString.h"     // ibFormatString — the date format a script's Format uses
 
 #include <wx/datetime.h>      // the weekday and month NAMES Describe prints
@@ -251,9 +251,9 @@ ibString ibJobScheduleRules::Describe(const ibJobScheduleDescription& self)
 	if (self.m_months != 0)
 		out += ibT(", ") + FormatMonths(self.m_months);
 	if (!self.m_activeFrom.IsEmpty())
-		out += ibString::Format(_(", from %s"), asDay.Apply(ibLiteral(self.m_activeFrom)));
+		out += ibString::Format(_(", from %s"), asDay.Apply(ibVariant(self.m_activeFrom)));
 	if (!self.m_activeTo.IsEmpty())
-		out += ibString::Format(_(", until %s"), asDay.Apply(ibLiteral(self.m_activeTo)));
+		out += ibString::Format(_(", until %s"), asDay.Apply(ibVariant(self.m_activeTo)));
 
 	return out;
 }

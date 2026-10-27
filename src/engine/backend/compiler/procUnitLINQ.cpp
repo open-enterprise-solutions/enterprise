@@ -2059,7 +2059,7 @@ void ibValue::DispatchLinqMethod(ibLinqMethod method, ibValue& ret,
                                   ibValue** args, long n)
 {
 	if (IsReference() && m_pRef != nullptr && m_pRef != this) {
-		m_pRef->DispatchLinqMethod(method, ret, args, n);
+		GetRef()->DispatchLinqMethod(method, ret, args, n);
 		return;
 	}
 	ibValueLinqDispatchImpl(this, method, ret, args, n);

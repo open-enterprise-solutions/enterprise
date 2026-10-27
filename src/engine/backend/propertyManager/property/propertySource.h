@@ -12,12 +12,12 @@ struct ibSourceHop;   // {id, expected type} — GetValueAsPath returns the hop 
 
 //base property for "source"
 class BACKEND_API ibPropertySource : public ibProperty {
-	static ibPropertyValue CreateVariantData(const ibPropertyObject* property, const ibValueTypes& type);
-	static ibPropertyValue CreateVariantData(const ibPropertyObject* property, const ibClassID& id);
-	static ibPropertyValue CreateVariantData(const ibPropertyObject* property, const ibTypeDescription& typeDesc);
-	static ibPropertyValue CreateVariantData(const ibPropertyObject* property, const ibMetaID& id);
-	static ibPropertyValue CreateVariantData(const ibPropertyObject* property, const ibGuid& id, bool fillTypeDesc = true);
-	static ibPropertyValue CreateVariantData(const ibPropertyObject* property, const ibSourceDescription& desc);
+	static ibVariant CreateVariantData(const ibPropertyObject* property, const ibValueTypes& type);
+	static ibVariant CreateVariantData(const ibPropertyObject* property, const ibClassID& id);
+	static ibVariant CreateVariantData(const ibPropertyObject* property, const ibTypeDescription& typeDesc);
+	static ibVariant CreateVariantData(const ibPropertyObject* property, const ibMetaID& id);
+	static ibVariant CreateVariantData(const ibPropertyObject* property, const ibGuid& id, bool fillTypeDesc = true);
+	static ibVariant CreateVariantData(const ibPropertyObject* property, const ibSourceDescription& desc);
 public:
 
 #pragma region _value_

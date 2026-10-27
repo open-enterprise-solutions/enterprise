@@ -3,7 +3,6 @@
 #include <map>
 #include <memory>
 
-#include "core/serialize/dataBuilder.h"   // ibDataNode — a value written, and read back
 #include "frmclient/backend/system/value/composition/valueComposerField.h"   // a field of a composition, read back as one
 #include "frmclient/backend/system/value/valueColour.h"   // …an appearance's colour
 #include "frmclient/backend/system/value/valueFont.h"     // …and its font
@@ -11,152 +10,26 @@
 #include "frmclient/win/picture.h"
 #include "protocol/protocol.h"
 
-ibValue::ibValue(ibValue* pParam)
-	: ibLiteral(pParam != nullptr ? ibValueTypes::TYPE_REFFER : ibValueTypes::TYPE_EMPTY), m_pRef(pParam)
+bool ibValueSerializable::CompareValueEQ(const ibVariant& value) const
 {
-	if (m_pRef != nullptr)
-		m_pRef->IncrRef();
-}
-
-void ibValue::Assign(const ibValue& rhs)
-{
-	ibLiteral::operator=(rhs);   // the primitive, without the count
-	m_classType = rhs.m_classType;
-	m_stored = rhs.m_stored;
-	m_pRef = rhs.m_pRef;
-	if (IsReference() && m_pRef != nullptr)
-		m_pRef->IncrRef();
-}
-
-void ibValue::Release()
-{
-	if (IsReference() && m_pRef != nullptr) {
-		ibValue* const held = m_pRef;
-		m_pRef = nullptr;
-		held->DecrRef();
-	}
-}
-
-bool ibValue::FindValue(const ibString& findData, std::vector<ibValue>& foundedObjects) const
-{
-	if (m_pRef != nullptr && IsReference())
-		return m_pRef->FindValue(findData, foundedObjects);
-
-	// A FLAG IS ONE OF TWO — the engine's quick choice of a boolean.
-	if (m_typeClass == ibValueTypes::TYPE_BOOLEAN) {
-		for (const bool flag : { true, false }) {
-			const ibValue one(flag);
-			if (findData.IsEmpty() || ibString(one.GetString()).Lower().StartsWith(findData.Lower()))
-				foundedObjects.push_back(one);
-		}
+	const ibValueSerializable* const other = value.ConvertToType<ibValueSerializable>();
+	if (other == this)
 		return true;
-	}
-	return false;
-}
-
-ibValue* ibValue::GetRef() const
-{
-	if (m_pRef != nullptr && IsReference())
-		return m_pRef->GetRef();
-	return const_cast<ibValue*>(this);
-}
-
-ibClassID ibValue::GetClassType() const
-{
-	if (m_pRef != nullptr && IsReference())
-		return m_pRef->GetClassType();
-	return m_classType != 0 ? m_classType : GetIDByVT(m_typeClass);
-}
-
-ibString ibValue::GetString() const
-{
-	if (m_pRef != nullptr && IsReference())
-		return m_pRef->GetString();
-	return ibLiteral::GetString();
-}
-
-bool ibValue::IsEmpty() const
-{
-	if (m_pRef != nullptr && IsReference())
-		return m_pRef->IsEmpty();
-
-	// The engine's: Undefined and Null are empty, and so is a primitive's empty value; a value of the server's type is
-	// empty when the server wrote it so — it is not asked here, where nothing reads a base.
-	switch (m_typeClass) {
-	case ibValueTypes::TYPE_EMPTY:
-	case ibValueTypes::TYPE_NULL:
-	case ibValueTypes::TYPE_BOOLEAN:
-	case ibValueTypes::TYPE_NUMBER:
-	case ibValueTypes::TYPE_DATE:
-	case ibValueTypes::TYPE_STRING:  return ibLiteral::IsEmpty();   // a primitive — the base's
-	case ibValueTypes::TYPE_ENUM:    return m_number < 0;   // the negative range is "no member" — the engine's
-	default:                         return m_stored == nullptr;
-	}
-}
-
-bool ibValue::CompareValueEQ(const ibValue& rhs) const
-{
-	// An object held is compared as the object — its own comparison, or the same object.
-	if (IsReference() || rhs.IsReference()) {
-		const ibValue* const left = GetRef();
-		const ibValue* const right = rhs.GetRef();
-		if (left == right)
-			return true;
-		if (left != this)
-			return left->CompareValueEQ(*right);
-		return CompareValueEQ(*right);
-	}
-
-	if (m_typeClass != rhs.m_typeClass || GetClassType() != rhs.GetClassType())
+	if (other == nullptr || other->m_classType != m_classType)
 		return false;
-
-	switch (m_typeClass) {
-	case ibValueTypes::TYPE_EMPTY:
-	case ibValueTypes::TYPE_NULL:    return true;
-	case ibValueTypes::TYPE_BOOLEAN: return m_number == rhs.m_number;
-	case ibValueTypes::TYPE_NUMBER:  return m_numeric == rhs.m_numeric;
-	case ibValueTypes::TYPE_DATE:    return m_date == rhs.m_date;
-	case ibValueTypes::TYPE_STRING:  return m_text == rhs.m_text;
-	case ibValueTypes::TYPE_ENUM:    return m_number == rhs.m_number;
-	default:
-		break;
-	}
-
-	// Two values of the server's are the same when the server wrote them the same: their payloads, compared as text.
-	if (m_stored == rhs.m_stored)
-		return true;
-	if (m_stored == nullptr || rhs.m_stored == nullptr)
-		return false;
-	const auto left = m_stored->FindField(kValueFieldData);
-	const auto right = rhs.m_stored->FindField(kValueFieldData);
+	const auto left = m_node.FindField(kValueFieldData);
+	const auto right = other->m_node.FindField(kValueFieldData);
 	return (left ? left->AsString() : ibString()) == (right ? right->AsString() : ibString());
 }
 
-bool ibValue::Serialize(ibDataNode& node) const
+// An object of the client's own, of its class, read out of the node it wrote itself into.
+template <class T>
+static ibValue ReadObject(const ibDataNode& node)
 {
-	if (m_pRef != nullptr && IsReference())
-		return m_pRef->Serialize(node);
-	if (m_stored != nullptr) {
-		node = *m_stored;   // the server's, given back as it came
-		return true;
-	}
-
-	node.SetValue(kValueFieldClsid, ibString::Format(ibT("%llu"), (unsigned long long)GetClassType()));
-	return DoSerialize(node);
-}
-
-bool ibValue::DoSerialize(ibDataNode& node) const
-{
-	switch (m_typeClass) {
-	case ibValueTypes::TYPE_EMPTY:
-	case ibValueTypes::TYPE_NULL:    return true;
-	case ibValueTypes::TYPE_BOOLEAN: node.SetValue(kValueFieldData, m_number != 0); return true;
-	case ibValueTypes::TYPE_NUMBER:  node.SetValue(kValueFieldData, m_numeric); return true;
-	case ibValueTypes::TYPE_DATE:    node.SetValue(kValueFieldData, m_date); return true;
-	case ibValueTypes::TYPE_STRING:  node.SetValue(kValueFieldData, m_text); return true;
-	case ibValueTypes::TYPE_ENUM:    node.SetValue(kValueFieldData, (std::int32_t)m_number); return true;   // the member, by its number
-	default:                         return false;
-	}
+	T* const made = new T();
+	ibValue held(made);
+	made->Deserialize(node);
+	return held;
 }
 
 ibValue ibValue::FromNode(const ibDataNode& node)
@@ -164,62 +37,23 @@ ibValue ibValue::FromNode(const ibDataNode& node)
 	unsigned long long parsed = 0;
 	const ibClassID clsid = node.GetValue<ibString>(kValueFieldClsid).ToULongLong(&parsed) && parsed != 0
 		? static_cast<ibClassID>(parsed) : g_valueUndefinedCLSID;
-	const auto data = node.FindField(kValueFieldData);
 
-	switch (GetVTByID(clsid)) {
-	case ibValueTypes::TYPE_EMPTY:   return ibValue();
-	case ibValueTypes::TYPE_NULL: {
-		ibValue made;
-		made.m_typeClass = ibValueTypes::TYPE_NULL;
-		return made;
-	}
-	case ibValueTypes::TYPE_BOOLEAN: return ibValue(data && data->AsBool());
-	case ibValueTypes::TYPE_NUMBER:
-		// JSON carries a number as one, and the engine's reader reads it so; text is taken as the number it spells.
-		if (data && data->Kind() == ibDataKind::String)
-			return ibValue(ibNumber(data->AsString()));
-		return ibValue(data ? data->AsNumber() : ibNumber());
-	case ibValueTypes::TYPE_DATE: {
-		// …and a date as text: it says it is a Date, so the text is read as one (the engine's DoDeserialize).
-		if (data && data->Kind() == ibDataKind::String) {
-			ibDateTime date;
-			date.FromString(data->AsString());
-			return ibValue(date);
-		}
-		return ibValue(data ? data->AsDate() : ibDateTime());
-	}
-	case ibValueTypes::TYPE_STRING:  return ibValue(data ? data->AsString() : ibString());
-	default:
-		break;
-	}
+	// A PRIMITIVE — the variant's own reading of it.
+	if (GetVTByID(clsid) != ibValueTypes::TYPE_VALUE)
+		return ibValue(ibVariant::FromNode(node));
 
 	// A FIELD OF A COMPOSITION — the client's own object (a condition's other side may be one): made and read, as the
-	// engine's registry makes it.
-	if (clsid == g_compositionFieldCLSID) {
-		ibValueCompositionField* const field = new ibValueCompositionField();
-		static_cast<ibValue*>(field)->DoDeserialize(node);
-		return ibValue(field);
-	}
-	// …and an appearance's colour and font, the same way.
-	if (clsid == ibValueColour().GetClassType()) {
-		ibValueColour* const colour = new ibValueColour();
-		static_cast<ibValue*>(colour)->DoDeserialize(node);
-		return ibValue(colour);
-	}
-	if (clsid == ibValueFont().GetClassType()) {
-		ibValueFont* const font = new ibValueFont();
-		static_cast<ibValue*>(font)->DoDeserialize(node);
-		return ibValue(font);
-	}
+	// engine's registry makes it. …and an appearance's colour and font, the same way.
+	if (clsid == g_compositionFieldCLSID)
+		return ReadObject<ibValueCompositionField>(node);
+	if (clsid == ibValueColour().GetClassType())
+		return ReadObject<ibValueColour>(node);
+	if (clsid == ibValueFont().GetClassType())
+		return ReadObject<ibValueFont>(node);
 
-	// A type of the server's — kept as it was written, to be given back; it reads as the server said it reads, when it
-	// said so (Presentation: the server's GetString — a reference's name is the configuration's).
-	ibValue made;
-	made.m_typeClass = ibValueTypes::TYPE_VALUE;
-	made.m_classType = clsid;
-	made.m_text = node.GetValue<ibString>(ibProtocol::ibRequest::ibListSettings::Presentation);
-	made.m_stored = std::make_shared<const ibDataNode>(node);
-	return made;
+	// A type of the server's — kept as it was written, to be given back.
+	return ibValue(new ibValueSerializable(clsid, node,
+		node.GetValue<ibString>(ibProtocol::ibRequest::ibListSettings::Presentation)));
 }
 
 namespace {
@@ -243,30 +77,6 @@ void ibValue::RegisterCtor(const ibClassID& clsid, const ibString& className, co
 	// A type the server drew no picture of wears a value's own (value_res.cpp): a list of types puts up a picture for
 	// each, and an empty one is refused.
 	NamedTypes()[clsid] = std::make_unique<ibCtorAbstractType>(className, classIcon.IsOk() ? classIcon : GetIconGroup());
-}
-
-ibClassID ibValue::GetIDByVT(const ibValueTypes& valueType)
-{
-	return ::GetIDByVT(valueType);   // the core's table (core/core.h)
-}
-
-ibValueTypes ibValue::GetVTByID(const ibClassID& clsid)
-{
-	if (clsid == g_valueUndefinedCLSID)
-		return ibValueTypes::TYPE_EMPTY;
-	else if (clsid == g_valueBooleanCLSID)
-		return ibValueTypes::TYPE_BOOLEAN;
-	else if (clsid == g_valueNumberCLSID)
-		return ibValueTypes::TYPE_NUMBER;
-	else if (clsid == g_valueDateCLSID)
-		return ibValueTypes::TYPE_DATE;
-	else if (clsid == g_valueStringCLSID)
-		return ibValueTypes::TYPE_STRING;
-	else if (clsid == g_valueNullCLSID)
-		return ibValueTypes::TYPE_NULL;
-
-	// Not a primitive — the server's own: a reference, an enum member.
-	return ibValueTypes::TYPE_VALUE;
 }
 
 std::vector<ibCtorAbstractType*> ibValue::GetListCtorsByType(ibCtorObjectType objectType)

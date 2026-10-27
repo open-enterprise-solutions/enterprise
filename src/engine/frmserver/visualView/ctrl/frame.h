@@ -369,13 +369,13 @@ public:
 	/**
 	* Property events
 	*/
-	virtual bool OnPropertyChanging(ibProperty* property, const ibPropertyValue& newValue);
-	virtual void OnPropertyChanged(ibProperty* property, const ibPropertyValue& oldValue, const ibPropertyValue& newValue);
+	virtual bool OnPropertyChanging(ibProperty* property, const ibVariant& newValue);
+	virtual void OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue);
 
 	// `override` on purpose: this was declared with `const wxString&`, overrode nothing, and ran for
-	// nobody — the inspector calls through ibPropertyObject, whose signature takes an ibPropertyValue.
-	virtual bool OnEventChanging(ibEvent* event, const ibPropertyValue& newValue) override;
-	virtual void OnEventChanged(ibEvent* event, const ibPropertyValue& oldValue, const ibPropertyValue& newValue);
+	// nobody — the inspector calls through ibPropertyObject, whose signature takes an ibVariant.
+	virtual bool OnEventChanging(ibEvent* event, const ibVariant& newValue) override;
+	virtual void OnEventChanged(ibEvent* event, const ibVariant& oldValue, const ibVariant& newValue);
 
 	/**
 	* Devuelve la posicion del hijo o GetChildCount() en caso de no encontrarlo

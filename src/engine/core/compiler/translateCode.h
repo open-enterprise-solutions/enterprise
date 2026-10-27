@@ -11,7 +11,7 @@
 #include <wctype.h>
 
 #include "core/compiler/codeDef.h"
-#include "core/compiler/literal.h"   // a constant as the text writes it — a lexer reads values, never references
+#include "core/variant.h"   // a constant as the text writes it — a lexer reads values, never references
 // The lexer's name tables — keywords and #Define alike — are matched case-insensitively and consulted for
 // EVERY identifier the lexer meets, so the folding belongs in their comparator (ibCaseFoldLess): the
 // alternative is upper-casing the query into a throw-away wxString once per token, per table.
@@ -61,7 +61,7 @@ struct CORE_API ibLexem {
 	//lexem content:
 	short m_numData;			// keyword number (KEYWORD) or delimiter symbol (DELIMITER)
 	ibString m_strData;			// or identifier name (variable, function, etc.)
-	ibLiteral m_valData;		// value, if it is a constant or real identifier name
+	ibVariant m_valData;		// value, if it is a constant or real identifier name
 
 	// Per-lexem source attribution lives on the owning ibTranslateCode —
 	// every lexem of one module shares the same module name / doc-path /

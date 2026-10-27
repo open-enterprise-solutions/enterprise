@@ -62,7 +62,7 @@ public:
 	static bool IsRow(unsigned row) { return row < ibAppearanceParameters().size(); }
 	static ibAppearanceParameter ParameterAt(unsigned row) { return ibAppearanceParameters()[row]; }
 
-	void GetValueByRow(wxVariant& variant, unsigned row, unsigned col) const override {
+	void GetValueByRow(ibVariant& variant, unsigned row, unsigned col) const override {
 		if (!IsRow(row))
 			return;
 		const ibAppearanceParameter parameter = ParameterAt(row);
@@ -75,17 +75,17 @@ public:
 			variant = ibTranslateString(KeptText(*m_appearance, parameter)).GetString();
 	}
 
-	bool SetValueByRow(const wxVariant& variant, unsigned row, unsigned col) override {
+	bool SetValueByRow(const ibVariant& variant, unsigned row, unsigned col) override {
 		if (!IsRow(row) || m_readOnly)
 			return false;
 		const ibAppearanceParameter parameter = ParameterAt(row);
 		const ibString kept = KeptText(*m_appearance, parameter);
 		if (col == kColUse) {
-			if (variant.GetBool() == IsTicked(*m_appearance, parameter))
+			if (variant.GetBoolean() == IsTicked(*m_appearance, parameter))
 				return false;
 			// THE TICK KEEPS THE VALUE AS IT IS — a colour stays a colour; only the word "in force" changes.
 			const ibAppearanceValueDescription* said = m_appearance->Find(parameter);
-			m_appearance->Say(parameter, variant.GetBool(),
+			m_appearance->Say(parameter, variant.GetBoolean(),
 				said != nullptr ? said->m_value : ibDataNode());
 			return true;
 		}

@@ -88,15 +88,6 @@ public:
 };
 #pragma endregion 
 
-class ibVariantDataValue :
-	public wxVariantData {
-public:
-	// THE VALUE THE CELL HOLDS — for the reader that shows it: a table box's renderer writes it through its
-	// column's format and draws a boolean as a tick.
-	virtual const ibValue& GetValue() const = 0;
-protected:
-	ibVariantDataValue() : wxVariantData() {}
-};
 
 //Common entity for tables, list, table trees
 class BACKEND_API ibValueModel : public ibValueDynamicMembers,
@@ -116,59 +107,6 @@ class BACKEND_API ibValueModel : public ibValueDynamicMembers,
 	// tabular section. Those say so themselves (see commonObject.h,
 	// tabularSection.h), and the distinction is ownership, not mutability.
 
-	template <typename T>
-	class ibVariantDataValueImpl :
-		public ibVariantDataValue {
-
-	public:
-
-		// 🛑 THE SAME MISSED HANDOVER AS AppendTableValue, one class up. `T` is the CLASS's parameter,
-		// so `T&&` is NOT a forwarding reference — it is a plain rvalue reference, and only a
-		// TEMPORARY can bind to it. `m_cValue(cValue)` then COPIED that temporary, because a named
-		// rvalue reference is an lvalue inside the function: `ValueToVariant` builds `ibValue(value)`
-		// expressly to hand it over, and the handover was a second copy.
-		//
-		// ⭐ `std::forward<T>` rather than `std::move`, because the class has TWO instantiations that
-		// mean different things: `<ibValue>` owns its value and wants the move, `<const ibValue&>`
-		// (the read-only view below) has a REFERENCE member and must keep binding one. forward is
-		// right for both; move would be meaningless for the second.
-		ibVariantDataValueImpl(T&& cValue)
-			:
-			m_cValue(std::forward<T>(cValue))
-		{
-		}
-
-		virtual const ibValue& GetValue() const override { return m_cValue; }
-
-		virtual bool Eq(wxVariantData& data) const {
-			ibVariantDataValueImpl* srcData = dynamic_cast<ibVariantDataValueImpl*>(&data);
-			if (srcData != nullptr)
-				return m_cValue == srcData->m_cValue;
-			return false;
-		}
-
-#if wxUSE_STD_IOSTREAM
-		virtual bool Write(wxSTD ostream& str) const {
-			str << m_cValue.GetString().ToWxString();
-			return true;
-		}
-#endif
-		virtual bool Write(wxString& str) const {
-			str = m_cValue.GetString();
-			return true;
-		}
-
-		// ONE NAME, whatever the value holds — the one a reader checks before it casts the data to this class.
-		// A name per value type ("bool", "string") is wxWidgets' own, and a reader that trusts it casts to wx's
-		// data class (wxVariant::GetBool does).
-		virtual wxString GetType() const {
-			return ibT("value");
-		}
-
-	private:
-
-		T m_cValue;
-	};
 
 
 #pragma region _data_model_h_
@@ -181,10 +119,10 @@ class BACKEND_API ibValueModel : public ibValueDynamicMembers,
 
 		virtual ibValueModel* GetOwnerValueModel() const { return m_ownerModel; }
 
-		// get value into a wxVariant
-		virtual void GetValue(wxVariant& variant,
-			const ibDataViewItem& item, unsigned int col) const {
-			return m_ownerModel->GetValue(variant, item, col);
+		// get value into the engine's ibValue
+		virtual void GetValue(ibVariant& value,
+			const ibDataViewItem& item, unsigned int col) const override {
+			return m_ownerModel->GetValue(value, item, col);
 		}
 
 		// return true if the given item has a value to display in the given
@@ -198,10 +136,10 @@ class BACKEND_API ibValueModel : public ibValueDynamicMembers,
 		// model to update the control, ChangeValue() does it on its own while
 		// SetValue() does not -- so while you will override SetValue(), you should
 		// be usually calling ChangeValue()
-		virtual bool SetValue(const wxVariant& variant,
+		virtual bool SetValue(const ibVariant& value,
 			const ibDataViewItem& item,
-			unsigned int col) {
-			return m_ownerModel->SetValue(variant, item, col);
+			unsigned int col) override {
+			return m_ownerModel->SetValue(value, item, col);
 		}
 
 		// Get text attribute, return false of default attributes should be used
@@ -331,27 +269,9 @@ class BACKEND_API ibValueModel : public ibValueDynamicMembers,
 
 #pragma endregion
 
-	class ibVariantDataValueModel :
-		public ibVariantDataValueImpl<const ibValue&> {
-	public:
-		ibVariantDataValueModel(const ibValue& v) :
-			ibVariantDataValueImpl(v)
-		{
-		}
-	};
 
 public:
 
-	// Wrap an ibValue into a dataview wxVariant for a FRONT-side resolver (a dot-path column's
-	// CheckedGetValue). Public so the front produces a cell value without reaching the protected
-	// nested types; the model itself stays a plain id→value source.
-	//
-	// Holds a COPY, NOT a reference. A row node uses ibVariantDataValueModel (a const-ref variant)
-	// because its value lives IN the node and outlives the variant. The resolver instead passes a
-	// TEMPORARY (the per-row resolved value) that dies when its scope ends — a ref variant would
-	// dangle and crash in GetType() on the next render (AV on 0xcccccccc). The owning instantiation
-	// keeps the value alive for the variant's lifetime.
-	static void ValueToVariant(wxVariant& variant, const ibValue& value) { variant = new ibVariantDataValueImpl<ibValue>(ibValue(value)); }
 
 	class BACKEND_API ibValueModelColumnCollection : public ibValueDynamicMembers {
 	public:
@@ -553,7 +473,7 @@ public:
 		}
 
 		//operator '=='
-		virtual bool CompareValueEQ(const ibValue& cParam) const override {
+		virtual bool CompareValueEQ(const ibVariant& cParam) const override {
 			ibValueModelReturnLine* tableReturnLine = nullptr;
 			if (cParam.ConvertToValue(tableReturnLine)) {
 				if (GetOwnerModel() == tableReturnLine->GetOwnerModel()
@@ -565,7 +485,7 @@ public:
 		}
 
 		//operator '!='
-		virtual bool CompareValueNE(const ibValue& cParam) const override {
+		virtual bool CompareValueNE(const ibVariant& cParam) const override {
 			ibValueModelReturnLine* tableReturnLine = nullptr;
 			if (cParam.ConvertToValue(tableReturnLine)) {
 				if (GetOwnerModel() != tableReturnLine->GetOwnerModel()
@@ -1154,9 +1074,9 @@ public:
 		// (the grid is read-only — a real edit goes via the object form). Out-of-line (non-trivial).
 		// ⚠ EXPORTED BY ITSELF: a class nested in a BACKEND_API class is not exported with it on MSVC, and this one
 		// is defined out of line (tabularModel.cpp) — a caller outside the backend (test_tabularEnumPersist) did not link.
-		BACKEND_API virtual bool SetValue(const ibMetaID& id, const ibValue& variant, bool notify = false);
+		BACKEND_API virtual bool SetValue(unsigned int col, const ibValue& variant, bool notify = false);
 
-		bool SetValue(unsigned int col, const wxVariant& variant, bool notify = false) {
+		bool SetValue(unsigned int col, const ibVariant& variant, bool notify = false) {
 			try {
 				ibValue& cValue = m_nodeValues.at(col);
 				std::vector<ibValue> listValue;
@@ -1181,14 +1101,6 @@ public:
 			return false;
 		}
 
-		bool IsEmptyValue(const ibMetaID& col) const {
-			auto iterator = m_nodeValues.find(col);
-			if (iterator == m_nodeValues.end())
-				return true;
-			const ibValue& cValue = m_nodeValues.at(col);
-			return cValue.IsEmpty();
-		}
-
 		bool IsEmptyValue(unsigned int col) const {
 			auto iterator = m_nodeValues.find(col);
 			if (iterator == m_nodeValues.end())
@@ -1197,18 +1109,8 @@ public:
 			return cValue.IsEmpty();
 		}
 
-		bool HasColumnValue(const ibMetaID& id) const {
-			return m_nodeValues.find(id) != m_nodeValues.end();
-		}
-
 		bool HasColumnValue(unsigned int col) const {
 			return m_nodeValues.find(col) != m_nodeValues.end();
-		}
-
-		void EraseValue(const ibMetaID& id) {
-			auto iterator = m_nodeValues.find(id);
-			if (iterator != m_nodeValues.end())
-				m_nodeValues.erase(id);
 		}
 
 		void EraseValue(unsigned int col) {
@@ -1221,26 +1123,15 @@ public:
 
 		////////////////////////////////////////////////////////////////////////
 
-		const ibValue& GetTableValue(const ibMetaID& id) const {
-			return m_nodeValues.at(id);
+		const ibValue& GetTableValue(unsigned int col) const {
+			return m_nodeValues.at(col);
 		}
 
 		////////////////////////////////////////////////////////////////////////
 
-		bool GetValue(const ibMetaID& id, ibValue& variant) const {
+		bool GetValue(unsigned int col, ibVariant& variant) const {
 			try {
-				variant = GetTableValue(id);
-				return true;
-			}
-			catch (std::out_of_range&) {
-				return false;
-			}
-		}
-
-		bool GetValue(unsigned int col, wxVariant& variant) const {
-
-			try {
-				variant = new ibVariantDataValueModel(GetTableValue(col));
+				variant = GetTableValue(col);
 				return true;
 			}
 			catch (std::out_of_range&) {
@@ -1448,10 +1339,10 @@ public:
 
 		// derived classes should override these methods instead of
 	// {Get,Set}Value() and GetAttr() inherited from the base class
-	virtual void GetValueByRow(wxVariant& variant,
+	virtual void GetValueByRow(ibVariant& variant,
 		const ibDataViewItem& row, unsigned int col) const = 0;
 
-	virtual bool SetValueByRow(const wxVariant& variant,
+	virtual bool SetValueByRow(const ibVariant& variant,
 		const ibDataViewItem& row, unsigned int col) = 0;
 
 	// ⭐ A ROW'S CONDITIONAL APPEARANCE, handed to the grid as the attribute it draws with — converted, value for value,
@@ -1480,10 +1371,10 @@ public:
 	// — these concrete versions took their place), so no `override`.
 	// …and what the cell SAYS under its conditional appearance — its text (GetCompositionAttrByRow), laid over
 	// what GetValueByRow read. Only what it shows: the row is untouched.
-	virtual void GetValue(wxVariant& variant,
+	virtual void GetValue(ibVariant& variant,
 		const ibDataViewItem& item, unsigned int col) const;
 
-	virtual bool SetValue(const wxVariant& variant,
+	virtual bool SetValue(const ibVariant& variant,
 		const ibDataViewItem& item, unsigned int col) {
 		return SetValueByRow(variant, item, col);
 	}

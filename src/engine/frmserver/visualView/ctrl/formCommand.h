@@ -51,7 +51,7 @@ public:
 	virtual bool IsEditable() const override;   // → owner form (a view-only form's commands aren't editable)
 	// Reject a duplicate Name — unique among the OWNER FORM's commands (the command-side twin of a bar item's Name
 	// guard). The inspector edits m_propertyName directly, bypassing RenameFormCommand, so the check lives here.
-	virtual bool OnPropertyChanging(ibProperty* property, const ibPropertyValue& newValue) override;
+	virtual bool OnPropertyChanging(ibProperty* property, const ibVariant& newValue) override;
 
 	// The command's own look / behaviour (a projection reads these; its own Title/Picture win on top). The Action
 	// is the event whose VALUE names the form-runtime handler the command runs:

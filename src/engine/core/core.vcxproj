@@ -157,10 +157,8 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="anyValue.cpp" />
     <ClCompile Include="build.cpp" />
     <ClCompile Include="compiler\blockSyntaxLINQ.cpp" />
-    <ClCompile Include="compiler\literal.cpp" />
     <ClCompile Include="compiler\scriptFoldCode.cpp" />
     <ClCompile Include="compiler\scriptParseCode.cpp" />
     <ClCompile Include="compiler\translateCode.cpp" />
@@ -251,16 +249,15 @@
     <ClCompile Include="syntaxHelper\helpService.cpp" />
     <ClCompile Include="tabular\tabularModelView.cpp" />
     <ClCompile Include="typeName.cpp" />
+    <ClCompile Include="variant.cpp" />
     <ClCompile Include="utils\base64.cpp" />
     <ClCompile Include="utils\md5.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="anyValue.h" />
     <ClInclude Include="build.h" />
     <ClInclude Include="clsid.h" />
     <ClInclude Include="compiler\blockSyntaxLINQ.h" />
     <ClInclude Include="compiler\codeDef.h" />
-    <ClInclude Include="compiler\literal.h" />
     <ClInclude Include="compiler\scriptFoldCode.h" />
     <ClInclude Include="compiler\scriptParseCode.h" />
     <ClInclude Include="compiler\translateCode.h" />
@@ -360,6 +357,8 @@
     <ClInclude Include="syntaxHelper\helpService.h" />
     <ClInclude Include="tabular\tabularModelView.h" />
     <ClInclude Include="typeName.h" />
+    <ClInclude Include="variant.h" />
+    <ClInclude Include="variant_ptr.h" />
     <ClInclude Include="utils\base64.h" />
     <ClInclude Include="utils\md5.hpp" />
   </ItemGroup>

@@ -167,7 +167,7 @@ ibString ibValueBinaryData::GetString() const
 // the same content, and comparing base64 would answer the same question after paying for two
 // encodings. A non-binary operand is compared through its text, which is the only form both sides
 // share.
-bool ibValueBinaryData::CompareValueEQ(const ibValue& cParam) const
+bool ibValueBinaryData::CompareValueEQ(const ibVariant& cParam) const
 {
 	if (const ibValueBinaryData* other = dynamic_cast<const ibValueBinaryData*>(cParam.GetRef())) {
 		const size_t length = m_data.GetDataLen();
@@ -178,7 +178,7 @@ bool ibValueBinaryData::CompareValueEQ(const ibValue& cParam) const
 	return GetString() == cParam.GetString();
 }
 
-bool ibValueBinaryData::CompareValueNE(const ibValue& cParam) const
+bool ibValueBinaryData::CompareValueNE(const ibVariant& cParam) const
 {
 	return !CompareValueEQ(cParam);
 }

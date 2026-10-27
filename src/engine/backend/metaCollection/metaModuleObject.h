@@ -23,7 +23,7 @@ public:
 		: ibProperty(cat,
 			std::get<0>(std::forward_as_tuple(args...)),
 			std::get<1>(std::forward_as_tuple(args...)),
-			ibPropertyValue()), m_metaObject(nullptr)
+			ibVariant()), m_metaObject(nullptr)
 	{
 		ibValueMetaObject* parent =
 			static_cast<ibValueMetaObject*>(m_owner);
@@ -33,7 +33,7 @@ public:
 	}
 
 	ibPropertyInnerModule(ibPropertyCategory* cat, T* metaObject)
-		: ibProperty(cat, metaObject->GetName(), metaObject->GetSynonym(), metaObject->GetComment(), ibPropertyValue()), m_metaObject(metaObject)
+		: ibProperty(cat, metaObject->GetName(), metaObject->GetSynonym(), metaObject->GetComment(), ibVariant()), m_metaObject(metaObject)
 	{
 	}
 
@@ -274,8 +274,8 @@ public:
 	/**
 	* Property events
 	*/
-	virtual bool OnPropertyChanging(ibProperty* property, const ibPropertyValue& newValue);
-	virtual void OnPropertyChanged(ibProperty* property, const ibPropertyValue& oldValue, const ibPropertyValue& newValue);
+	virtual bool OnPropertyChanging(ibProperty* property, const ibVariant& newValue);
+	virtual void OnPropertyChanged(ibProperty* property, const ibVariant& oldValue, const ibVariant& newValue);
 
 protected:
 

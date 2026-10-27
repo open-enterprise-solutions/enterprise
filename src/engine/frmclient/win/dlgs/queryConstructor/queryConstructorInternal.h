@@ -186,7 +186,7 @@ public:
 	explicit ibRowChoiceRenderer(Choices choices, ibDataViewCellMode mode = wxDATAVIEW_CELL_EDITABLE)
 		: ibDataViewChoiceRenderer(wxArrayString(), mode), m_choices(std::move(choices)) {}
 
-	wxWindow* CreateEditorCtrl(wxWindow* parent, wxRect rect, const wxVariant& value) override
+	wxWindow* CreateEditorCtrl(wxWindow* parent, wxRect rect, const ibVariant& value) override
 	{
 		wxArrayString words = m_choices ? m_choices() : wxArrayString();
 
@@ -208,7 +208,7 @@ public:
 		return editor;
 	}
 
-	bool GetValueFromEditorCtrl(wxWindow* editor, wxVariant& value) override
+	bool GetValueFromEditorCtrl(wxWindow* editor, ibVariant& value) override
 	{
 		wxChoice* choice = dynamic_cast<wxChoice*>(editor);
 		if (choice == nullptr)
@@ -223,7 +223,7 @@ public:
 	// columns came up blank over perfectly good aggregates.
 	wxSize GetSize() const override
 	{
-		wxVariant value;
+		ibVariant value;
 		GetValue(value);
 		const wxString text = value.GetString();
 		wxSize size = text.IsEmpty() ? GetTextExtent(wxT("Wg")) : GetTextExtent(text);
@@ -271,7 +271,7 @@ public:
 	// A CLICK HERE IS FOR THE EDITOR — the button is the whole point of the cell.
 	bool EditOnSingleClick() const override { return true; }
 
-	wxWindow* CreateEditorCtrl(wxWindow* parent, wxRect rect, const wxVariant& value) override
+	wxWindow* CreateEditorCtrl(wxWindow* parent, wxRect rect, const ibVariant& value) override
 	{
 		wxPanel* host = new wxPanel(parent, wxID_ANY, rect.GetTopLeft(), rect.GetSize());
 		wxBoxSizer* row = new wxBoxSizer(wxHORIZONTAL);
@@ -321,7 +321,7 @@ public:
 		return host;
 	}
 
-	bool GetValueFromEditorCtrl(wxWindow* editor, wxVariant& value) override
+	bool GetValueFromEditorCtrl(wxWindow* editor, ibVariant& value) override
 	{
 		if (editor == nullptr)
 			return false;
@@ -340,8 +340,8 @@ public:
 	}
 
 	bool Render(wxRect rect, wxDC* dc, int state) override { RenderText(m_text, 0, rect, dc, state); return true; }
-	bool SetValue(const wxVariant& value) override { m_text = value.GetString(); return true; }
-	bool GetValue(wxVariant& value) const override { value = m_text; return true; }
+	bool SetValue(const ibVariant& value) override { m_text = value.GetString(); return true; }
+	bool GetValue(ibVariant& value) const override { value = m_text; return true; }
 
 	wxSize GetSize() const override
 	{

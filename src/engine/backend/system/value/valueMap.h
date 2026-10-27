@@ -226,14 +226,14 @@ public:
 	// structures) came out EQUAL. A structure is the natural composite key of a
 	// group-by, and it was collapsing every row into one group. Entry order is
 	// insertion order, which the store already keeps deterministic.
-	virtual int  CompareValueLS(const ibValue& cParam) const override;
-	virtual bool CompareValueEQ(const ibValue& cParam) const override;
+	virtual int  CompareValueLS(const ibVariant& cParam) const override;
+	virtual bool CompareValueEQ(const ibVariant& cParam) const override;
 	// Hashes by the same entries the order walks — see ibValue::GetValueHash.
 	virtual size_t GetValueHash() const override;
 private:
 	// The other side as a container, or nullptr. Cast choice is measured — see
 	// the note in valueArray.cpp.
-	const ibValueContainer* AsContainer(const ibValue& cParam) const;
+	const ibValueContainer* AsContainer(const ibVariant& cParam) const;
 public:
 
 	// iterator support:

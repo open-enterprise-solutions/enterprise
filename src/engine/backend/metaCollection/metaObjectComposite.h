@@ -16,7 +16,7 @@ public:
 		: ibProperty(cat,
 			std::get<0>(std::forward_as_tuple(args...)),
 			std::get<1>(std::forward_as_tuple(args...)),
-			ibPropertyValue()), m_metaObject(nullptr)
+			ibVariant()), m_metaObject(nullptr)
 	{
 		ibValueMetaObject* parent =
 			static_cast<ibValueMetaObject*>(m_owner);
@@ -27,7 +27,7 @@ public:
 
 	// The help is the held attribute's comment — what it says about itself is what the property shows.
 	ibPropertyContainer(ibPropertyCategory* cat, T* metaObject)
-		: ibProperty(cat, metaObject->GetName(), metaObject->GetSynonym(), metaObject->GetComment(), ibPropertyValue()), m_metaObject(metaObject)
+		: ibProperty(cat, metaObject->GetName(), metaObject->GetSynonym(), metaObject->GetComment(), ibVariant()), m_metaObject(metaObject)
 	{
 	}
 

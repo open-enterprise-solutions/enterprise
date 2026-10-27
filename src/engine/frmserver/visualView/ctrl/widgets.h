@@ -288,7 +288,7 @@ class ibValueTextCtrl : public ibValueWindow,
 	virtual void OnPropertyCreated(ibProperty* property);
 	virtual void OnPropertyRefresh() override;
 
-	virtual bool OnPropertyChanging(ibProperty* property, const ibPropertyValue& newValue);
+	virtual bool OnPropertyChanging(ibProperty* property, const ibVariant& newValue);
 
 	//load & save object in control
 	virtual bool ReadData(const ibDataNode& node);
@@ -451,7 +451,7 @@ class ibValueCheckbox : public ibValueWindow,
 	* Property events
 	*/
 	virtual void OnPropertyCreated(ibProperty* property);
-	virtual bool OnPropertyChanging(ibProperty* property, const ibPropertyValue& newValue);
+	virtual bool OnPropertyChanging(ibProperty* property, const ibVariant& newValue);
 
 
 	//load & save object in control

@@ -506,7 +506,7 @@ BACKEND_API void ibMcpSayChoiceParameters(const class ibPropertyObject* field,
 // owner. Exported because it stopped being one tool's private business: every verb that places a
 // value now goes through it (a choice, a type description, a caption's language cell, a register
 // record), and a second copy of a four-step sequence is four chances to drop a step.
-BACKEND_API bool ibMcpApplyByHand(class ibProperty* property, const class ibPropertyValue& newValue, ibString& refusal);
+BACKEND_API bool ibMcpApplyByHand(class ibProperty* property, const class ibVariant& newValue, ibString& refusal);
 
 // ⭐ THE PATTERN CORPUS, FOR SURFACES THAT ARE NOT TOOLS. `prompts` is served by the server and is
 // the one place the platform can put words in front of a PERSON without a model relaying them — so
