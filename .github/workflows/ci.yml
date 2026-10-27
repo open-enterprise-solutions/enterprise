@@ -665,9 +665,14 @@ jobs:
   # every value that crosses a park, or dies inside the sanitizer.
   #
   # The suites are the ones that park, share a session, pool a connection,
-  # take a lock, or run the job manager — not the whole backend. A race in
-  # our code fails the job. Suppressions are third-party only, each with a
-  # reason, in .github/tsan-suppressions.txt.
+  # take a lock, or run the job manager, and every suite that starts threads of
+  # its own: the listeners and client connections, the debugger's queue, a
+  # session's failover, the logger, HTTP and TLS, SQLite's lock race, the
+  # model's fetch, several bases in one process, a string shared across
+  # threads — not the whole backend. A race in our code fails the job, and so
+  # does a lock-order inversion (TSan's deadlock detector; both stacks are
+  # printed). Suppressions are third-party only, each with a reason, in
+  # .github/tsan-suppressions.txt.
   #
   # GCC 13, not the ubuntu-22.04 default. GCC 11's libtsan reports a double
   # lock of an already-destroyed mutex when a fiber locks a mutex that lives
@@ -729,12 +734,20 @@ jobs:
       # The step has its own bound, so a hang costs this step, not the job's 120 minutes.
       - name: Run
         working-directory: build/linux-debug
-        timeout-minutes: 30
+        timeout-minutes: 45
         env:
-          TSAN_OPTIONS: halt_on_error=1:suppressions=${{ github.workspace }}/.github/tsan-suppressions.txt
-        run: >
-          ./bin/Debug/oes_tests
-          --gtest_filter=WorkerPool*:Fiber*:SessionHolder.*:SessionDbLayer.*:ConnectionPool.*:SocketLockFix.*:JobManager.*:JobSchedule.*
+          TSAN_OPTIONS: halt_on_error=1:second_deadlock_stack=1:suppressions=${{ github.workspace }}/.github/tsan-suppressions.txt
+        run: |
+          suites=(
+            'WorkerPool*' 'Fiber*' 'SessionHolder.*' 'SessionDbLayer.*' 'ConnectionPool.*' 'SocketLockFix.*'
+            'JobManager.*' 'JobSchedule.*'
+            'Listener.*' 'ClientListener.*' 'ClientConnections.*'
+            'DebugCommandQueue.*' 'DebugServerFix.*'
+            'SessionFailover*' 'SubscribedEventsClient.*'
+            'Logger*' 'HttpClient.*' 'HttpValues.*' 'HttpSecure*'
+            'SqliteLockRace.*' 'ModelFetchDoor.*' 'MultiBaseFix.*' 'OneBaseFix.*' 'IbString.SharedAcrossThreads'
+          )
+          ./bin/Debug/oes_tests --gtest_filter="$(IFS=:; echo "${suites[*]}")"
 
       - name: Journal on failure
         if: failure()
