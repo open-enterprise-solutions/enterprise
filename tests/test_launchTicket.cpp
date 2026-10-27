@@ -82,7 +82,7 @@ TEST(LaunchSecrets, AChildReadsThePasswordTwiceAndTheCommandLineDoesNotCarryIt)
 
 	auto once = [&](const ibString& out) {
 		ASSERT_EQ(setenv("OES_LAUNCH_CHILD", "1", 1), 0);
-		ASSERT_EQ(setenv("OES_LAUNCH_OUT", out.utf8_str(), 1), 0);
+		ASSERT_EQ(setenv("OES_LAUNCH_OUT", out.ToUtf8().c_str(), 1), 0);
 		const long pid = ibStartProcess(cmd, secrets);
 		unsetenv("OES_LAUNCH_CHILD");
 		unsetenv("OES_LAUNCH_OUT");

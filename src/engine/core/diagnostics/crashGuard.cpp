@@ -427,8 +427,8 @@ void PlatformNativeMessage(const ibString& caption, const ibString& message)
 #else
 	// stderr — async-signal-safe enough, no GUI to drive in console mode.
 	std::fprintf(stderr, "[%s] %s\n",
-		(const char*)caption.ToUTF8(),
-		(const char*)message.ToUTF8());
+		caption.ToUTF8().c_str(),
+		message.ToUTF8().c_str());
 	std::fflush(stderr);
 #endif
 }

@@ -110,7 +110,7 @@ bool ibProtocolConnectionServer::Open(const ibString& address, const ibString& t
 	int port = 0;
 	bool secure = false;
 	if (!ParseAddress(address, host, port, base, secure)) {
-		error = ibString::Format(_("'%s' is not the address of a base: oes://server[:port]/<base> or oess://…"), address);
+		error = ibString::Format(_("'%s' is not the address of a base: oes://server[:port]/<base> or oess://..."), address);
 		return false;
 	}
 

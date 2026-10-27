@@ -191,7 +191,7 @@ ibFirebirdLease::AcquireResult ibFirebirdLease::TryAcquireExclusive() {
 #else
 	// POSIX path — fcntl F_SETLK on the byte-range. On Linux this
 	// honours NFS locks via lockd; samba-mounted CIFS works too.
-	m_fd = open(m_leasePath.mb_str(), O_RDWR | O_CREAT, 0644);
+	m_fd = open(m_leasePath.ToUtf8().c_str(), O_RDWR | O_CREAT, 0644);
 	if (m_fd < 0) {
 		ibJournalWarning(ibT("db.firebird"),ibT("ibFirebirdLease: open(%s) failed: %d"),
 		             m_leasePath, errno);
@@ -341,7 +341,7 @@ ibFirebirdLease::State ibFirebirdLease::ReadCurrentState() {
 	CloseHandle(h);
 	if (!ok) return s;
 #else
-	int fd = open(m_leasePath.mb_str(), O_RDONLY);
+	int fd = open(m_leasePath.ToUtf8().c_str(), O_RDONLY);
 	if (fd < 0) return s;
 	LeaseFileV1 f{};
 	const bool ok = ReadLeaseFile(fd, f);
