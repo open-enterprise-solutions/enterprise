@@ -20,7 +20,7 @@ class ibCtorAbstractType;
 // THE VARIANT'S (core/variant.h) — a primitive, or an object held by its count. What this class adds is the client's
 // small factory: what it makes of a node the server wrote (a primitive, an object of its own, or the server's value kept
 // as it came), the types the server named, and an enumeration's member.
-class ibValue : public ibVariant {
+class FRMCLIENT_API ibValue : public ibVariant {
 public:
 
 	ibValue() = default;
