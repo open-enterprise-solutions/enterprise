@@ -38,8 +38,7 @@ ibString Read(const char* bytes)
 
 std::string Write(const ibString& text)
 {
-    const wxCharBuffer bytes = ibDatabaseStringConverter::ConvertToUnicodeStream(text);
-    return std::string(bytes.data(), bytes.length());
+    return ibDatabaseStringConverter::ConvertToUnicodeStream(text);
 }
 
 } // namespace
