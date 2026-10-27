@@ -20,6 +20,8 @@ THE SOFTWARE.
 
 #include "guid.h"
 
+#include <cstring>   // std::memcmp — MSVC's headers bring it along, GCC's do not
+
 #ifdef GUID_LIBUUID
 // libuuid — the header is <uuid/uuid.h> (package uuid-dev / libuuid-devel). It was written
 // as <guid/guid.h>, a path that exists nowhere; nothing caught it because this branch is
