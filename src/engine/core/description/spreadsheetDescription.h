@@ -80,6 +80,18 @@ inline ibFont ibDefaultSpreadsheetFont() {
 	return font;
 }
 
+// ⭐ THE SHEET'S ORDINARY COLOURS — the platform's, not the system's. A cell nobody coloured is drawn in these, and the
+// editor writes what it draws into the cell it touches: taken from the system (wxSYS_COLOUR_WINDOW / WINDOWTEXT), a
+// template edited under a dark macOS appearance was saved with (23,23,23) on White, and the system's theme became
+// part of the configuration (thin designer, 2026-10-27). The same two colours on every client and every theme.
+inline ibColour ibDefaultSpreadsheetBackgroundColour() {
+	return ibColour(255, 255, 255);
+}
+
+inline ibColour ibDefaultSpreadsheetTextColour() {
+	return ibColour(0, 0, 0);
+}
+
 ///////////////////////////////////////
 
 struct ibSpreadsheetBorderDescription {

@@ -127,6 +127,8 @@ ibGridEditor::ibGridEditor(ibMetaDocument* document,
 
 	ibGrid::SetLabelFont(typeConv::FontToWxFont(ibDefaultSpreadsheetFont()));
 	ibGrid::SetDefaultCellFont(typeConv::FontToWxFont(ibDefaultSpreadsheetFont()));
+	ibGrid::SetDefaultCellBackgroundColour(typeConv::ColourToWxColour(ibDefaultSpreadsheetBackgroundColour()));
+	ibGrid::SetDefaultCellTextColour(typeConv::ColourToWxColour(ibDefaultSpreadsheetTextColour()));
 
 	ibGrid::SetDefaultEditor(new ibGridEditorCellTextEditor);
 
