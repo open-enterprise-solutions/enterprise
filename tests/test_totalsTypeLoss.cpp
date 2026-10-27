@@ -194,7 +194,7 @@ RegisterShape Declare(ibMetaDataConfigurationFile& cfg)
 	shape.reg->SetName(wxT("Stock"));
 	shape.dimension->SetName(wxT("Item"));
 	shape.resource->SetName(wxT("Qty"));
-	if (ibPropertyBoolean* split = dynamic_cast<ibPropertyBoolean*>(shape.reg->GetProperty(wxT("SplitTotals"))))
+	if (ibPropertyBoolean* split = dynamic_cast<ibPropertyBoolean*>(shape.reg->GetProperty(ibT("SplitTotals"))))
 		split->SetValue(false);
 
 	shape.refA = reference_to_clsid(shape.catalogA->GetMetaID(), clsid_metaclass(shape.catalogA->GetClassType()));

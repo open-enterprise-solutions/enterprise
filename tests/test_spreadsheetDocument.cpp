@@ -132,7 +132,7 @@ TEST(SpreadsheetDocument, Clear_EmptiesTheDocument)
 TEST(SpreadsheetDocument, Parameter_RoundTrips)
 {
 	auto doc = MakeDocument();
-	doc->SetParameter(wxT("Partner"), ibValue(wxT("Alpha")));
+	doc->SetParameter(wxT("Partner"), ibValue(ibT("Alpha")));
 
 	ibVariant held;
 	EXPECT_TRUE(doc->GetParameter(wxT("Partner"), held));
@@ -154,7 +154,7 @@ TEST(SpreadsheetDocument, MissingParameter_AnswersFalse)
 TEST(SpreadsheetDocument, Parameter_IsFoundWithoutCase)
 {
 	auto doc = MakeDocument();
-	doc->SetParameter(wxT("Partner"), ibValue(wxT("Alpha")));
+	doc->SetParameter(wxT("Partner"), ibValue(ibT("Alpha")));
 
 	ibVariant held;
 	EXPECT_TRUE(doc->GetParameter(wxT("PARTNER"), held));
@@ -168,8 +168,8 @@ TEST(SpreadsheetDocument, Parameter_IsFoundWithoutCase)
 TEST(SpreadsheetDocument, Parameter_SameNameInAnotherCase_IsTheSameParameter)
 {
 	auto doc = MakeDocument();
-	doc->SetParameter(wxT("Partner"), ibValue(wxT("Alpha")));
-	doc->SetParameter(wxT("PARTNER"), ibValue(wxT("Beta")));
+	doc->SetParameter(wxT("Partner"), ibValue(ibT("Alpha")));
+	doc->SetParameter(wxT("PARTNER"), ibValue(ibT("Beta")));
 
 	ibVariant held;
 	EXPECT_TRUE(doc->GetParameter(wxT("Partner"), held));
@@ -182,9 +182,9 @@ TEST(SpreadsheetDocument, Parameter_SameNameInAnotherCase_IsTheSameParameter)
 TEST(SpreadsheetDocument, Parameter_WrittenOutOfOrder_AllFound)
 {
 	auto doc = MakeDocument();
-	doc->SetParameter(wxT("Link_00000002_0001"), ibValue(wxT("second")));
-	doc->SetParameter(wxT("Link_00000001_0001"), ibValue(wxT("first")));
-	doc->SetParameter(wxT("Link_00000003_0001"), ibValue(wxT("third")));
+	doc->SetParameter(wxT("Link_00000002_0001"), ibValue(ibT("second")));
+	doc->SetParameter(wxT("Link_00000001_0001"), ibValue(ibT("first")));
+	doc->SetParameter(wxT("Link_00000003_0001"), ibValue(ibT("third")));
 
 	EXPECT_EQ(wxT("first"),  ibValue(doc->GetParameter(wxT("Link_00000001_0001"))).GetString());
 	EXPECT_EQ(wxT("second"), ibValue(doc->GetParameter(wxT("Link_00000002_0001"))).GetString());
@@ -195,7 +195,7 @@ TEST(SpreadsheetDocument, Parameter_WrittenOutOfOrder_AllFound)
 TEST(SpreadsheetDocument, FillTypeParameter_ResolvesWholeText)
 {
 	auto doc = MakeDocument();
-	doc->SetParameter(wxT("Total"), ibValue(wxT("42")));
+	doc->SetParameter(wxT("Total"), ibValue(ibT("42")));
 
 	EXPECT_EQ(wxT("42"), doc->ComputeStringValueFromParameters(
 		wxT("Total"), ibSpreadsheetFillType::ibSpreadsheetFillType_StrParameter));
@@ -209,8 +209,8 @@ TEST(SpreadsheetDocument, FillTypeParameter_ResolvesWholeText)
 TEST(SpreadsheetDocument, FillTypeTemplate_ReplacesBracketedTokens)
 {
 	auto doc = MakeDocument();
-	doc->SetParameter(wxT("Name"), ibValue(wxT("Alpha")));
-	doc->SetParameter(wxT("Sum"), ibValue(wxT("10")));
+	doc->SetParameter(wxT("Name"), ibValue(ibT("Alpha")));
+	doc->SetParameter(wxT("Sum"), ibValue(ibT("10")));
 
 	// A template typed plainly is its own text — it used to translate to NOTHING, and
 	// the cell came out blank.
@@ -231,8 +231,8 @@ TEST(SpreadsheetDocument, FillTypeTemplate_ReplacesBracketedTokens)
 TEST(SpreadsheetDocument, FillTypeTemplate_AMuchShorterFirstValue_StillLetsTheSecondHoleSubstitute)
 {
 	auto doc = MakeDocument();
-	doc->SetParameter(wxT("OrganizationDescription"), ibValue(wxT("Alpha LLC")));
-	doc->SetParameter(wxT("OrganizationINN"), ibValue(wxT("7809876543")));
+	doc->SetParameter(wxT("OrganizationDescription"), ibValue(ibT("Alpha LLC")));
+	doc->SetParameter(wxT("OrganizationINN"), ibValue(ibT("7809876543")));
 
 	EXPECT_EQ(wxT("Supplier: Alpha LLC, Tax ID 7809876543"), doc->ComputeStringValueFromParameters(
 		wxT("Supplier: [OrganizationDescription], Tax ID [OrganizationINN]"),
@@ -264,7 +264,7 @@ TEST(SpreadsheetDocument, FillTypeParameter_AValueInEveryLanguageIsReadInOne)
 {
 	auto doc = MakeDocument();
 	doc->SetLangCode(wxT("uk"));
-	doc->SetParameter(wxT("Title"), ibValue(wxT("en = 'Total'; uk = 'Razom';")));
+	doc->SetParameter(wxT("Title"), ibValue(ibT("en = 'Total'; uk = 'Razom';")));
 
 	EXPECT_EQ(wxT("Razom"), doc->ComputeStringValueFromParameters(
 		wxT("Title"), ibSpreadsheetFillType::ibSpreadsheetFillType_StrParameter));
@@ -277,7 +277,7 @@ TEST(SpreadsheetDocument, FillTypeParameter_AValueInEveryLanguageIsReadInOne)
 TEST(SpreadsheetDocument, FillTypeParameter_KeepsAnApostrophe)
 {
 	auto doc = MakeDocument();
-	doc->SetParameter(wxT("Name"), ibValue(wxT("O'Brien")));
+	doc->SetParameter(wxT("Name"), ibValue(ibT("O'Brien")));
 
 	EXPECT_EQ(wxT("O'Brien"), doc->ComputeStringValueFromParameters(
 		wxT("Name"), ibSpreadsheetFillType::ibSpreadsheetFillType_StrParameter));
@@ -313,7 +313,7 @@ TEST(SpreadsheetDocument, FillTypeTemplate_UnknownTokenRendersEmpty)
 TEST(SpreadsheetDocument, FillTypeText_IsLeftAlone)
 {
 	auto doc = MakeDocument();
-	doc->SetParameter(wxT("Name"), ibValue(wxT("Alpha")));
+	doc->SetParameter(wxT("Name"), ibValue(ibT("Alpha")));
 	EXPECT_EQ(wxT("[Name]"), doc->ComputeStringValueFromParameters(
 		wxT("[Name]"), ibSpreadsheetFillType::ibSpreadsheetFillType_StrText));
 }
@@ -581,7 +581,7 @@ TEST(SpreadsheetDocument, PutArea_ResolvesTemplateCellsFromTheAreaParameters)
 	auto area = MakeDocument();
 	area->SetCellValue(0, 0, wxT("[Name]"));
 	area->SetCellFillType(0, 0, ibSpreadsheetFillType::ibSpreadsheetFillType_StrTemplate);
-	area->SetParameter(wxT("Name"), ibValue(wxT("Alpha")));
+	area->SetParameter(wxT("Name"), ibValue(ibT("Alpha")));
 
 	doc->PutArea(area);
 
@@ -620,12 +620,12 @@ TEST(SpreadsheetDocument, PutAreaTwice_KeepsBothDrillDowns)
 	auto area = MakeDocument();
 	area->SetCellValue(0, 0, wxT("row"));
 	area->SetCellDetailsParameter(0, 0, wxT("Ref"));
-	area->SetParameter(wxT("Ref"), ibValue(wxT("first")));
+	area->SetParameter(wxT("Ref"), ibValue(ibT("first")));
 
 	doc->PutArea(area);
 	const int secondRow = doc->GetNumberRows();
 
-	area->SetParameter(wxT("Ref"), ibValue(wxT("second")));
+	area->SetParameter(wxT("Ref"), ibValue(ibT("second")));
 	doc->PutArea(area);
 
 	ibString firstName, secondName;

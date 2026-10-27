@@ -42,7 +42,7 @@ namespace {
 // The property both a copy and a paste travel through, reached BY NAME — the way
 // PasteProperty reaches it (a paste is a merge by name).
 ibProperty* ModuleProperty(ibValueMetaObject* object) {
-	return object != nullptr ? object->GetProperty(wxT("ObjectModule")) : nullptr;
+	return object != nullptr ? object->GetProperty(ibT("ObjectModule")) : nullptr;
 }
 
 // The module metaobject itself, reached as the CHILD it is (a predefined child,
@@ -189,8 +189,8 @@ TEST(PropertyInnerModule, PasteNodeValue_APlainProperty_CarriesOnlyItsValue)
 	// The owner's own metaID is not touched by pasting one of its properties.
 	const ibMetaID targetOwnId = f.target->GetMetaID();
 
-	ibProperty* fromComment = f.source->GetProperty(wxT("Comment"));
-	ibProperty* toComment = f.target->GetProperty(wxT("Comment"));
+	ibProperty* fromComment = f.source->GetProperty(ibT("Comment"));
+	ibProperty* toComment = f.target->GetProperty(ibT("Comment"));
 	ASSERT_NE(nullptr, fromComment);
 	ASSERT_NE(nullptr, toComment);
 

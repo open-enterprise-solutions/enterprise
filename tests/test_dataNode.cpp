@@ -101,13 +101,13 @@ TEST(DataNode, BinaryProvider_RoundTrip_StructurePreserved) {
 	EXPECT_EQ(0, memcmp(rd.GetData(), "child-B", rd.GetDataLen()));
 
 	// named fields survive the binary provider round-trip
-	auto fName = t2.FindField(wxT("name"));
+	auto fName = t2.FindField(ibT("name"));
 	ASSERT_TRUE(fName);
 	EXPECT_EQ(fName->AsString(), wxT("RootName"));
-	auto fId = t2.FindField(wxT("id"));
+	auto fId = t2.FindField(ibT("id"));
 	ASSERT_TRUE(fId);
 	EXPECT_EQ(fId->AsInt(), (std::int64_t)99);
-	auto fFlag = t2.FindField(wxT("flag"));
+	auto fFlag = t2.FindField(ibT("flag"));
 	ASSERT_TRUE(fFlag);
 	EXPECT_TRUE(fFlag->AsBool());
 }
@@ -130,8 +130,8 @@ TEST(DataNode, ANewNodeKeepsTheIdentityItIsGiven) {
 	EXPECT_EQ(clsid, (ibClassID)1001);
 	EXPECT_EQ(metaId, (ibMetaID)1);
 	ASSERT_EQ(read.Children().size(), (size_t)1);
-	ASSERT_TRUE(read.Has(wxT("name")));
-	EXPECT_EQ(read.FindField(wxT("name"))->AsString(), wxT("RootName"));
+	ASSERT_TRUE(read.Has(ibT("name")));
+	EXPECT_EQ(read.FindField(ibT("name"))->AsString(), wxT("RootName"));
 }
 
 // Typed values: SetValue<T> writes, GetValue<T> reads back (round-trip).
@@ -141,9 +141,9 @@ TEST(DataNode, NamedFields_TypedValues_RoundTrip) {
 	n.SetValue(wxT("flag"), true);
 	n.SetValue(wxT("num"), (std::int32_t)-42);
 
-	EXPECT_EQ(n.GetValue<ibString>(wxT("name")), wxT("Catalog1"));
-	EXPECT_TRUE(n.GetValue<bool>(wxT("flag")));
-	EXPECT_EQ(n.GetValue<std::int32_t>(wxT("num")), -42);
+	EXPECT_EQ(n.GetValue<ibString>(ibT("name")), wxT("Catalog1"));
+	EXPECT_TRUE(n.GetValue<bool>(ibT("flag")));
+	EXPECT_EQ(n.GetValue<std::int32_t>(ibT("num")), -42);
 }
 
 // ⭐ A DATE IS STORED AS ITSELF (format 3): an ibDateTime's count, read back as the same date, the empty
@@ -155,17 +155,17 @@ TEST(DataNode, ADateIsStoredAsItself) {
 
 	ibClassID clsid = 0; ibMetaID metaId = 0;
 	const ibDataNode read = ReadFull(WriteFull(written), clsid, metaId);
-	ASSERT_TRUE(read.Has(wxT("is_empty")));
-	EXPECT_TRUE(read.FindField(wxT("is_empty"))->AsDate().IsEmpty());
-	EXPECT_EQ(ibDateTime(2026, 3, 29, 2, 30), read.FindField(wxT("a_date"))->AsDate());
+	ASSERT_TRUE(read.Has(ibT("is_empty")));
+	EXPECT_TRUE(read.FindField(ibT("is_empty"))->AsDate().IsEmpty());
+	EXPECT_EQ(ibDateTime(2026, 3, 29, 2, 30), read.FindField(ibT("a_date"))->AsDate());
 
-	EXPECT_EQ(ibDateTime(2026, 3, 29, 2, 30), read.GetValue<ibDateTime>(wxT("a_date")));
-	EXPECT_TRUE(read.GetValue<ibDateTime>(wxT("is_empty")).IsEmpty());
+	EXPECT_EQ(ibDateTime(2026, 3, 29, 2, 30), read.GetValue<ibDateTime>(ibT("a_date")));
+	EXPECT_TRUE(read.GetValue<ibDateTime>(ibT("is_empty")).IsEmpty());
 	ibDataNode again;
 	again.SetValue(wxT("d"), ibDateTime(2025, 1, 15, 10, 30));
 	again.SetValue(wxT("none"), ibDateTime());
-	EXPECT_EQ(ibDateTime(2025, 1, 15, 10, 30), again.FindField(wxT("d"))->AsDate());
-	EXPECT_TRUE(again.FindField(wxT("none"))->AsDate().IsEmpty());
+	EXPECT_EQ(ibDateTime(2025, 1, 15, 10, 30), again.FindField(ibT("d"))->AsDate());
+	EXPECT_TRUE(again.FindField(ibT("none"))->AsDate().IsEmpty());
 }
 
 // Optimistic cursor: out-of-order access still resolves; absent name defaults.
@@ -175,10 +175,10 @@ TEST(DataNode, NamedFields_OptimisticCursor_ReorderedAndMissing) {
 	n.SetValue(wxT("b"), ibString(wxT("B")));
 	n.SetValue(wxT("c"), ibString(wxT("C")));
 
-	EXPECT_EQ(n.GetValue<ibString>(wxT("c")), wxT("C"));
-	EXPECT_EQ(n.GetValue<ibString>(wxT("a")), wxT("A"));
-	EXPECT_EQ(n.GetValue<ibString>(wxT("b")), wxT("B"));
+	EXPECT_EQ(n.GetValue<ibString>(ibT("c")), wxT("C"));
+	EXPECT_EQ(n.GetValue<ibString>(ibT("a")), wxT("A"));
+	EXPECT_EQ(n.GetValue<ibString>(ibT("b")), wxT("B"));
 	// absent name -> default-constructed (empty)
-	EXPECT_TRUE(n.GetValue<ibString>(wxT("zzz")).IsEmpty());
+	EXPECT_TRUE(n.GetValue<ibString>(ibT("zzz")).IsEmpty());
 }
 

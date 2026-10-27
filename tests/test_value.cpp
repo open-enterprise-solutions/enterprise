@@ -48,7 +48,7 @@ TEST(ValueTest, TheCountSitsInThePaddingBeforeTheUnion) {
 // ===========================================================================
 
 TEST(ValueUnion, ACopyOfAStringSharesItsText) {
-    const ibValue original(wxT("a text longer than the short-string buffer"));
+    const ibValue original(ibT("a text longer than the short-string buffer"));
     const ibValue copy(original);
     EXPECT_EQ(original.GetString().wc_str(), copy.GetString().wc_str());   // the same characters
 }
@@ -67,7 +67,7 @@ TEST(ValueUnion, EveryKindStartsFromAnEmptyWord) {
 
 TEST(ValueUnion, KindChangesOnTheLetRoad) {
     const ibValue number(ibNumber(ibString(wxT("765.3456754567765443343"))));
-    const ibValue text(wxT("text"));
+    const ibValue text(ibT("text"));
     const ibValue flag(true);
     ibValue slot;
     for (const ibValue* source : { &number, &text, &flag, &number, &flag, &text }) {
@@ -158,7 +158,7 @@ TEST(ValueTest, EmptyString) {
 // Every test above hands ibValue a wxString, which is exactly why none of them
 // caught this: a raw `const char*` / `const wchar_t*` has a STANDARD conversion
 // to bool, which outranks the user-defined one to wxString. With the string
-// ctors declared `char*` (non-const), `ibValue v = wxEmptyString` — and
+// ctors declared `char*` (non-const), `ibValue v = ibEmptyString` — and
 // wxEmptyString IS a `const wxChar*` — silently produced Boolean TRUE, and
 // GetString() then answered "True" instead of "". That reached a user as a
 // document numbered "True0000001" (2026-08-03).
@@ -168,17 +168,22 @@ TEST(ValueTest, EmptyString) {
 // ---------------------------------------------------------------------------
 
 TEST(ValueTest, EmptyStringPointerIsStringNotBoolean) {
-    ibValue v = wxEmptyString;
+    ibValue v = ibT("");
     EXPECT_EQ(v.GetType(), ibValueTypes::TYPE_STRING);
     EXPECT_TRUE(v.GetString().IsEmpty());
-    EXPECT_NE(v.GetString(), wxT("True"));
+    EXPECT_NE(v.GetString(), ibT("True"));
 }
 
-TEST(ValueTest, WideLiteralIsStringNotBoolean) {
-    ibValue v = wxT("text");
+TEST(ValueTest, OwnLiteralIsStringNotBoolean) {
+    ibValue v = ibT("text");
     EXPECT_EQ(v.GetType(), ibValueTypes::TYPE_STRING);
-    EXPECT_EQ(v.GetString(), wxT("text"));
+    EXPECT_EQ(v.GetString(), ibT("text"));
 }
+
+// A WIDE literal is no longer a string to a value at all - since the text is char16_t, `wchar_t*` is just
+// another pointer, and the deleted constructor refuses it at compile time rather than letting it turn TRUE.
+static_assert(!std::is_constructible<ibValue, const wchar_t*>::value,
+    "a wide literal must not become a value - write it as ibT(\"...\")");
 
 TEST(ValueTest, NarrowLiteralIsStringNotBoolean) {
     ibValue v = "narrow";
@@ -277,7 +282,7 @@ TEST(ValueTest, ADateHoldsItsPartsWhateverTheMachineClockDoes) {
     ibValue read;
     EXPECT_TRUE(read.SetDate(gap.GetString()));
     EXPECT_EQ(gap.GetDate(), read.GetDate());
-    EXPECT_EQ(gap.GetDate(), ibValue(wxT("29.03.2026 02:30:00")).GetDate());   // the string branch of GetDate
+    EXPECT_EQ(gap.GetDate(), ibValue(ibT("29.03.2026 02:30:00")).GetDate());   // the string branch of GetDate
 
     // Two readings compare by the calendar, and a date hashes as its reading.
     EXPECT_TRUE(ibValue(2026, 3, 29, 2, 30, 0).CompareValueLS(ibValue(2026, 3, 29, 3, 30, 0)) < 0);
@@ -302,8 +307,8 @@ TEST(ValueTest, ATextBecomesADateByItsDigits) {
     EXPECT_FALSE(v.SetDate(wxT("20260231")));
     EXPECT_FALSE(v.SetDate(wxT("not a date at all")));
     // The same text through the string branch of GetDate - one reading, not two.
-    EXPECT_EQ(ibDateTime(2026, 3, 15), ibValue(wxT("20260315")).GetDate());
-    EXPECT_TRUE(ibValue(wxT("31.04.2026")).GetDate().IsEmpty());
+    EXPECT_EQ(ibDateTime(2026, 3, 15), ibValue(ibT("20260315")).GetDate());
+    EXPECT_TRUE(ibValue(ibT("31.04.2026")).GetDate().IsEmpty());
     // Parts that are no date are the empty date, not a rolled-over one.
     EXPECT_TRUE(ibValue(2026, 2, 30).IsEmpty());
     EXPECT_TRUE(ibValue(2026, 13, 1).IsEmpty());

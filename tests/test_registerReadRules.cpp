@@ -911,7 +911,7 @@ TEST(VirtualTableCondition, TheWholeTreeIsFoundAgainOnTheSurfaceItReads) {
 	view.Add(&viewItem);
 
 	const ibQueryPredicatePtr written = ibQueryPredicate::Compose(ibQueryPredicateKind::Or,
-		ibQueryPredicate::Not(Equal(&warehouse, ibValue(wxT("Main")))),
+		ibQueryPredicate::Not(Equal(&warehouse, ibValue(ibT("Main")))),
 		ibQueryPredicate::Null(&item, /*negated*/ false));
 
 	const ibQueryPredicatePtr onView = ibRegConditionOn(&view, written, kDimensionsOnly);
@@ -933,7 +933,7 @@ TEST(VirtualTableCondition, AWalkThroughAReferenceStaysAWalkAndIsAskedAsExists) 
 	view.Add(&viewWarehouse);
 
 	const ibQueryPredicatePtr onView = ibRegConditionOn(&view,
-		Equal(&code, ibValue(wxT("01")), { &warehouse, &code }), kDimensionsOnly);
+		Equal(&code, ibValue(ibT("01")), { &warehouse, &code }), kDimensionsOnly);
 	ASSERT_TRUE(onView);
 	ASSERT_EQ(2u, onView->m_leaf.m_path.size());
 	EXPECT_EQ(&viewWarehouse, onView->m_leaf.m_path.front());   // the head is the surface's own column
@@ -955,11 +955,11 @@ TEST(VirtualTableCondition, WhatAConditionNamesDecidesWhereItMayStand) {
 	ConditionColumn warehouse(wxT("Warehouse"), kWarehouseId), item(wxT("Item"), kItemId), quantity(wxT("Quantity"), kQuantityId);
 
 	const ibQueryPredicatePtr keysOnly = ibQueryPredicate::Compose(ibQueryPredicateKind::And,
-		Equal(&warehouse, ibValue(wxT("Main"))), ibQueryPredicate::Not(Equal(&item, ibValue(wxT("Tea")))));
+		Equal(&warehouse, ibValue(ibT("Main"))), ibQueryPredicate::Not(Equal(&item, ibValue(ibT("Tea")))));
 	EXPECT_TRUE(ibRegConditionOnlyNames(keysOnly, kDimensionsOnly));
 
 	const ibQueryPredicatePtr withAFigure = ibQueryPredicate::Compose(ibQueryPredicateKind::Or,
-		Equal(&warehouse, ibValue(wxT("Main"))), Equal(&quantity, ibValue(0)));
+		Equal(&warehouse, ibValue(ibT("Main"))), Equal(&quantity, ibValue(0)));
 	EXPECT_FALSE(ibRegConditionOnlyNames(withAFigure, kDimensionsOnly));
 }
 

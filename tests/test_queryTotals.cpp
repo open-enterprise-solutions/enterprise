@@ -969,7 +969,7 @@ TEST(QueryTotals, WithoutSplitTheTreeHasNoForks)
 	detail.AddColumn(REGION, wxT("region"), ibTypeDescription());
 	detail.AddColumn(AMOUNT, wxT("amount"), ibTypeDescription());
 	const long row = detail.AppendRow();
-	detail.SetCell(row, REGION, ibValue(wxT("North")));
+	detail.SetCell(row, REGION, ibValue(ibT("North")));
 	detail.SetCell(row, AMOUNT, ibValue(ibNumber(7L)));
 
 	TestCol region(wxT("region"), REGION), amount(wxT("amount"), AMOUNT);

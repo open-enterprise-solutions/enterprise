@@ -149,11 +149,16 @@ jobs:
       # neither built nor excluded fails the whole run without ever executing —
       # which is what the dialect target did the day it was added, on all three
       # general jobs at once.
+      #
+      # `-k 0` keeps compiling past a failed file, so one red run lists EVERY file
+      # that does not compile. Stopping at the first one turned a change that
+      # touched a hundred tests into a hundred runs (2026-10-28, char16_t).
       - name: Build the test targets
         run: >
           cmake --build --preset linux-debug
           --target oes_tests oes_string_tests oes_query_totals_test
           oes_query_parity_test oes_query_join_parity_test
+          -- -k 0
           oes_temp_db_sqlite_test oes_job_tenancy_test oes_multi_base_test
           oes_protocol_test
 

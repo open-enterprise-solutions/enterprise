@@ -273,7 +273,7 @@ TEST(QueryTempStore, AFreshStoreHoldsNothing)
 {
 	ibQueryTempTableStore store;
 	EXPECT_TRUE(store.Empty());
-	EXPECT_FALSE(store.Has(wxT("Sales")));
+	EXPECT_FALSE(store.Has(ibT("Sales")));
 	EXPECT_TRUE(store.Sources().empty());
 }
 
@@ -282,7 +282,7 @@ TEST(QueryTempStore, WhatIsPutInCanBeFoundByName)
 	ibQueryTempTableStore store;
 	store.Put(wxT("Sales"), OneRow(wxT("Ref"), ibValue(1)));
 
-	EXPECT_TRUE(store.Has(wxT("Sales")));
+	EXPECT_TRUE(store.Has(ibT("Sales")));
 	ASSERT_EQ(1u, store.Sources().size());
 	EXPECT_NE(nullptr, store.Sources().at(wxT("Sales")));
 }
@@ -295,7 +295,7 @@ TEST(QueryTempStore, ADroppedTableIsGoneFromBothTheNameAndTheRows)
 	store.Put(wxT("Sales"), OneRow(wxT("Ref"), ibValue(1)));
 
 	EXPECT_TRUE(store.Drop(wxT("Sales")));
-	EXPECT_FALSE(store.Has(wxT("Sales")));
+	EXPECT_FALSE(store.Has(ibT("Sales")));
 	EXPECT_TRUE(store.Empty());
 }
 
@@ -318,8 +318,8 @@ TEST(QueryTempStore, CloseReleasesEverythingAtOnce)
 
 	store.Close();
 	EXPECT_TRUE(store.Empty());
-	EXPECT_FALSE(store.Has(wxT("Sales")));
-	EXPECT_FALSE(store.Has(wxT("Orders")));
+	EXPECT_FALSE(store.Has(ibT("Sales")));
+	EXPECT_FALSE(store.Has(ibT("Orders")));
 }
 
 TEST(QueryTempStore, AStoredTableKeepsItsColumnsAndRows)

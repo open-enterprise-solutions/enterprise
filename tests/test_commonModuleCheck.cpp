@@ -130,39 +130,39 @@ TEST_F(CommonModuleCheck, ConfigCheckReportsABrokenModuleAndOneThatWasNeverCompi
 
 	std::optional<ibDataValue> brokenProblem;
 	std::optional<ibDataValue> neverProblem;
-	auto problems = result.FindField(wxT("problems"));
+	auto problems = result.FindField(ibT("problems"));
 	ASSERT_TRUE(problems);
 	ASSERT_EQ(problems->Kind(), ibDataKind::Array);
 	for (const ibDataValue& one : problems->AsArray()) {
 		if (one.Kind() != ibDataKind::Child || !one.AsChild())
 			continue;
-		const ibString text = one.AsChild()->GetValue<ibString>(wxT("name"))
-			+ one.AsChild()->GetValue<ibString>(wxT("says"));
-		auto diagnostics = one.AsChild()->FindField(wxT("diagnostics"));
+		const ibString text = one.AsChild()->GetValue<ibString>(ibT("name"))
+			+ one.AsChild()->GetValue<ibString>(ibT("says"));
+		auto diagnostics = one.AsChild()->FindField(ibT("diagnostics"));
 		if (diagnostics && diagnostics->Kind() == ibDataKind::Array) {
 			for (const ibDataValue& line : diagnostics->AsArray()) {
 				if (line.Kind() == ibDataKind::Child && line.AsChild()
-					&& line.AsChild()->GetValue<ibString>(wxT("message")).Contains(wxT("Nope")))
+					&& line.AsChild()->GetValue<ibString>(ibT("message")).Contains(wxT("Nope")))
 					brokenProblem = one;
 			}
 		}
-		if (one.AsChild()->GetValue<ibString>(wxT("name")) == never->GetName()
+		if (one.AsChild()->GetValue<ibString>(ibT("name")) == never->GetName()
 			|| text.Contains(never->GetName()))
 			neverProblem = one;
-		EXPECT_FALSE(text.Contains(clean->GetName()) && one.AsChild()->Has(wxT("diagnostics"))
-			&& one.AsChild()->GetValue<ibString>(wxT("says")).Contains(wxT("does not compile")));
+		EXPECT_FALSE(text.Contains(clean->GetName()) && one.AsChild()->Has(ibT("diagnostics"))
+			&& one.AsChild()->GetValue<ibString>(ibT("says")).Contains(wxT("does not compile")));
 	}
 
 	ASSERT_TRUE(brokenProblem);
-	auto diagnostics = brokenProblem->AsChild()->FindField(wxT("diagnostics"));
+	auto diagnostics = brokenProblem->AsChild()->FindField(ibT("diagnostics"));
 	ASSERT_TRUE(diagnostics);
 	EXPECT_EQ(diagnostics->Kind(), ibDataKind::Array);
 	EXPECT_FALSE(diagnostics->AsArray().empty());
-	EXPECT_TRUE(brokenProblem->AsChild()->GetValue<bool>(wxT("checked")));
+	EXPECT_TRUE(brokenProblem->AsChild()->GetValue<bool>(ibT("checked")));
 
 	ASSERT_TRUE(neverProblem);
-	EXPECT_FALSE(neverProblem->AsChild()->GetValue<bool>(wxT("checked")));
-	auto empty = neverProblem->AsChild()->FindField(wxT("diagnostics"));
+	EXPECT_FALSE(neverProblem->AsChild()->GetValue<bool>(ibT("checked")));
+	auto empty = neverProblem->AsChild()->FindField(ibT("diagnostics"));
 	ASSERT_TRUE(empty);
 	EXPECT_TRUE(empty->Kind() == ibDataKind::Array && empty->AsArray().empty());
 }

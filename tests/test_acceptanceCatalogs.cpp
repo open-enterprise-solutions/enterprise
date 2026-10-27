@@ -136,7 +136,7 @@ struct AcceptanceCatalogs : ::testing::Test {
 		// resolve pass reads it and types the Owner column from the reference constructor,
 		// which the register pass has just published. That constructor's class is what a
 		// stored reference carries, so a later Owner = comparison can match the row.
-		auto* listOwner = dynamic_cast<ibPropertyOwner*>(contracts->GetProperty(wxT("ListOwner")));
+		auto* listOwner = dynamic_cast<ibPropertyOwner*>(contracts->GetProperty(ibT("ListOwner")));
 		ASSERT_NE(listOwner, nullptr);
 		listOwner->SetValue(ibMetaDescription(parties->GetMetaID()));
 

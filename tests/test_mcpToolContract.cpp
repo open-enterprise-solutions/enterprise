@@ -171,7 +171,7 @@ std::set<ibString> DeclaredArguments(const ibDataNode& schema)
 {
 	std::set<ibString> names;
 
-	if (auto properties = schema.FindChild(wxT("properties"))) {
+	if (auto properties = schema.FindChild(ibT("properties"))) {
 		for (const auto& entry : properties->Fields())
 			names.insert(entry.first);
 	}
@@ -184,7 +184,7 @@ std::vector<ibString> RequiredArguments(const ibDataNode& schema)
 {
 	std::vector<ibString> names;
 
-	if (auto required = schema.FindField(wxT("required"))) {
+	if (auto required = schema.FindField(ibT("required"))) {
 		if (required->Kind() == ibDataKind::Array) {
 			for (const ibDataValue& item : required->AsArray()) {
 				if (item.Kind() == ibDataKind::String)
@@ -346,7 +346,7 @@ TEST(McpToolContract, EveryTool_PublishesAnObjectSchema)
 
 		const ibDataNode schema = SchemaOf(tool);
 
-		auto type = schema.FindField(wxT("type"));
+		auto type = schema.FindField(ibT("type"));
 		ASSERT_TRUE(type) << tool->GetName().ToStdString() << " publishes no schema type";
 		ASSERT_EQ(type->Kind(), ibDataKind::String);
 		EXPECT_EQ(type->AsString(), wxT("object"))
@@ -373,23 +373,23 @@ TEST(McpToolContract, TheEnvelope_TakesItsArgumentsAsAnObject)
 	ASSERT_NE(envelope, nullptr) << "the envelope every deferred tool is called through is missing";
 
 	const ibDataNode schema = SchemaOf(envelope);
-	auto properties = schema.FindChild(wxT("properties"));
+	auto properties = schema.FindChild(ibT("properties"));
 	ASSERT_TRUE(properties);
 
-	auto arguments = properties->FindChild(wxT("arguments"));
+	auto arguments = properties->FindChild(ibT("arguments"));
 	ASSERT_TRUE(arguments) << "mcp_call declares no `arguments`";
 
-	auto type = arguments->FindField(wxT("type"));
+	auto type = arguments->FindField(ibT("type"));
 	ASSERT_TRUE(type);
 	EXPECT_EQ(type->AsString(), wxT("object"))
 		<< "mcp_call's `arguments` is read with FindChild and must be declared an object";
 
 	// And the name beside it is a plain name, not a structure — the other half of the pair, so a
 	// fix to one cannot silently take the other with it.
-	auto target = properties->FindChild(wxT("tool"));
+	auto target = properties->FindChild(ibT("tool"));
 	ASSERT_TRUE(target) << "mcp_call declares no `tool`";
 
-	auto targetType = target->FindField(wxT("type"));
+	auto targetType = target->FindField(ibT("type"));
 	ASSERT_TRUE(targetType);
 	EXPECT_EQ(targetType->AsString(), wxT("string"));
 }
@@ -449,7 +449,7 @@ TEST(McpToolContract, EveryDeclaredArgument_SaysWhatItIsAndWhatItMeans)
 	for (const ibMcpTool* tool : ibMcpTools()) {
 
 		const ibDataNode schema = SchemaOf(tool);
-		auto properties = schema.FindChild(wxT("properties"));
+		auto properties = schema.FindChild(ibT("properties"));
 		if (!properties)
 			continue;   // a verb that takes no arguments — an ordinary shape
 
@@ -475,7 +475,7 @@ TEST(McpToolContract, EveryDeclaredArgument_SaysWhatItIsAndWhatItMeans)
 			const bool takesAnyValue = KindOfArgument(tool, entry.first) ==
 				ibMcpTool::ibMcpArgument::Kind::Any;
 
-			auto type = argument->FindField(wxT("type"));
+			auto type = argument->FindField(ibT("type"));
 			if (!takesAnyValue) {
 				EXPECT_TRUE(type)
 					<< tool->GetName().ToStdString() << " / " << entry.first.ToStdString()
@@ -491,7 +491,7 @@ TEST(McpToolContract, EveryDeclaredArgument_SaysWhatItIsAndWhatItMeans)
 			// nothing about whether a number is a NodeId, a row or a length —
 			// which is exactly how three arguments were guessed wrong in one
 			// session.
-			auto description = argument->FindField(wxT("description"));
+			auto description = argument->FindField(ibT("description"));
 			ASSERT_TRUE(description)
 				<< tool->GetName().ToStdString() << " / " << entry.first.ToStdString()
 				<< " is undescribed";
@@ -828,7 +828,7 @@ TEST(McpClipboard, ASlot_KeepsWhatWasPutInItUntilItIsReplaced)
 	EXPECT_EQ(again.m_kind, ibMcpClipboardKind::Metadata);
 	EXPECT_EQ(again.m_name, wxT("GoodsReceipt"));
 	EXPECT_EQ(again.m_what, wxT("Document"));
-	EXPECT_EQ(again.m_payload.GetValue<ibString>(wxT("marker")), wxT("first"));
+	EXPECT_EQ(again.m_payload.GetValue<ibString>(ibT("marker")), wxT("first"));
 }
 
 TEST(McpClipboard, EveryKind_NamesItselfForARefusal)

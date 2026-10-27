@@ -29,7 +29,7 @@ ibValueMetaObjectDocument* MakeDocument(ibMetaDataConfigurationFile& cfg)
 
 void SetPeriod(ibValueMetaObjectDocument* doc, ibNumberPeriodicity period)
 {
-	ibProperty* prop = doc->GetProperty(wxT("NumberPeriodicity"));
+	ibProperty* prop = doc->GetProperty(ibT("NumberPeriodicity"));
 	ASSERT_NE(prop, nullptr);
 	ASSERT_TRUE(prop->SetDataValue(
 		ibValue::CreateEnumObject<ibValueEnumNumberPeriodicity>(period)));

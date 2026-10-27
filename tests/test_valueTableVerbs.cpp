@@ -471,7 +471,7 @@ TEST_F(ValueTableVerbs, AStringColumn_NarrowsANumberToText)
 TEST(TypeDescriptionList, ACommaSeparatedStringNamesEachType)
 {
     ibValueTypeDescription described;
-    ibValue names(wxT("Number, String"));
+    ibValue names(ibT("Number, String"));
     ibValue* args[] = { &names };
     ASSERT_TRUE(described.Init(args, 1));
     EXPECT_EQ(described.GetTypeDesc().GetClsidCount(), 2u);
@@ -483,7 +483,7 @@ TEST(TypeDescriptionList, ACommaSeparatedStringNamesEachType)
 TEST(TypeDescriptionList, ASingleNameStillTakesItsQualifier)
 {
     ibValueTypeDescription described;
-    ibValue name(wxT("Number"));
+    ibValue name(ibT("Number"));
     ibValueQualifierNumber qualifier(15, 2);
     ibValue* args[] = { &name, &qualifier };
     ASSERT_TRUE(described.Init(args, 2));
@@ -496,13 +496,13 @@ TEST(TypeDescriptionList, ASingleNameStillTakesItsQualifier)
 TEST(TypeDescriptionList, AnUnknownNameDoesNotInitialise)
 {
     ibValueTypeDescription described;
-    ibValue name(wxT("Number, NotAType"));
+    ibValue name(ibT("Number, NotAType"));
     ibValue* args[] = { &name };
     EXPECT_FALSE(described.Init(args, 1));
     EXPECT_EQ(described.GetTypeDesc().GetClsidCount(), 0u);
 
     ibValueTypeDescription alone;
-    ibValue unknown(wxT("NotAType"));
+    ibValue unknown(ibT("NotAType"));
     ibValue* one[] = { &unknown };
     EXPECT_FALSE(alone.Init(one, 1));
 }
@@ -571,9 +571,9 @@ TEST_F(ValueTableVerbs, GroupBy_AsTheScriptCompilesIt_IsTheTablesOwn)
 TEST_F(ValueTableVerbs, FillValues_FillsOnlyTheListedColumns)
 {
     Column(wxT("A")); Column(wxT("B")); Column(wxT("C"));
-    AddRow({ ibValue(wxT("a1")), ibValue(wxT("b1")), ibValue(wxT("c1")) });
-    AddRow({ ibValue(wxT("a2")), ibValue(wxT("b2")), ibValue(wxT("c2")) });
-    Call(wxT("FillValues"), { ibValue(wxT("x")), ibValue(wxT(" A , C")) });
+    AddRow({ ibValue(ibT("a1")), ibValue(ibT("b1")), ibValue(ibT("c1")) });
+    AddRow({ ibValue(ibT("a2")), ibValue(ibT("b2")), ibValue(ibT("c2")) });
+    Call(wxT("FillValues"), { ibValue(ibT("x")), ibValue(ibT(" A , C")) });
     EXPECT_EQ(ColumnInOrder(wxT("A")), (std::vector<ibString>{ wxT("x"), wxT("x") }));
     EXPECT_EQ(ColumnInOrder(wxT("B")), (std::vector<ibString>{ wxT("b1"), wxT("b2") }));
     EXPECT_EQ(ColumnInOrder(wxT("C")), (std::vector<ibString>{ wxT("x"), wxT("x") }));
@@ -582,8 +582,8 @@ TEST_F(ValueTableVerbs, FillValues_FillsOnlyTheListedColumns)
 TEST_F(ValueTableVerbs, FillValues_WithoutColumns_FillsEveryColumn)
 {
     Column(wxT("A")); Column(wxT("B"));
-    AddRow({ ibValue(wxT("a1")), ibValue(wxT("b1")) });
-    Call(wxT("FillValues"), { ibValue(wxT("y")) });
+    AddRow({ ibValue(ibT("a1")), ibValue(ibT("b1")) });
+    Call(wxT("FillValues"), { ibValue(ibT("y")) });
     EXPECT_EQ(ColumnInOrder(wxT("A")), (std::vector<ibString>{ wxT("y") }));
     EXPECT_EQ(ColumnInOrder(wxT("B")), (std::vector<ibString>{ wxT("y") }));
 }
@@ -591,7 +591,7 @@ TEST_F(ValueTableVerbs, FillValues_WithoutColumns_FillsEveryColumn)
 TEST_F(ValueTableVerbs, FillValues_UnknownColumn_RaisesAndWritesNothing)
 {
     Column(wxT("A"));
-    AddRow({ ibValue(wxT("a1")) });
-    EXPECT_ANY_THROW(Call(wxT("FillValues"), { ibValue(wxT("z")), ibValue(wxT("A, Missing")) }));
+    AddRow({ ibValue(ibT("a1")) });
+    EXPECT_ANY_THROW(Call(wxT("FillValues"), { ibValue(ibT("z")), ibValue(ibT("A, Missing")) }));
     EXPECT_EQ(ColumnInOrder(wxT("A")), (std::vector<ibString>{ wxT("a1") }));
 }

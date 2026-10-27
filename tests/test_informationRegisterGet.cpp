@@ -106,7 +106,7 @@ struct InformationRegisterGet : ::testing::Test {
 			cfg->CreateMetaObject(g_metaInformationRegisterCLSID, root, false));
 		ASSERT_NE(reg, nullptr);
 		reg->SetName(wxT("Settings"));
-		reg->GetProperty(wxT("Periodicity"))->SetValue(ibVariant(static_cast<long>(periodicity)));
+		reg->GetProperty(ibT("Periodicity"))->SetValue(ibVariant(static_cast<long>(periodicity)));
 		ASSERT_EQ(reg->GetPeriodicity(), periodicity);
 		key = dynamic_cast<ibValueMetaObjectDimension*>(cfg->CreateMetaObject(g_metaDimensionCLSID, reg, false));
 		resource = dynamic_cast<ibValueMetaObjectResource*>(cfg->CreateMetaObject(g_metaResourceCLSID, reg, false));
@@ -158,7 +158,7 @@ struct InformationRegisterGet : ::testing::Test {
 
 	ibValue KeyFilter(const ibString& keyValue) const {
 		ibValuePtr<ibValueStructure> filter(new ibValueStructure());
-		filter->Insert(ibValue(wxT("Key")), ibValue(keyValue));
+		filter->Insert(ibValue(ibT("Key")), ibValue(keyValue));
 		return ibValue(filter);
 	}
 

@@ -2181,8 +2181,8 @@ TEST(PageSignature, TheParametersAreComparedAsValuesNotAsTheirText)
 	const ibValue day(ibDateTime(2026, 3, 29));
 	EXPECT_EQ(sign({ wxT("d") }, { day }), sign({ wxT("d") }, { ibValue(ibDateTime(2026, 3, 29)) }));
 	EXPECT_NE(sign({ wxT("d") }, { day }), sign({ wxT("d") }, { ibValue(ibDateTime(2026, 3, 29).AddMilliseconds(1)) }));
-	EXPECT_NE(sign({ wxT("a") }, { ibValue(wxT("x;b=S1")) }),
-	          sign({ wxT("a"), wxT("b") }, { ibValue(wxT("x")), ibValue(wxT("1")) })) << "a string cannot stand for a second parameter";
-	EXPECT_NE(sign({ wxT("n") }, { ibValue(1) }), sign({ wxT("n") }, { ibValue(wxT("1")) })) << "a number is not its text";
+	EXPECT_NE(sign({ wxT("a") }, { ibValue(ibT("x;b=S1")) }),
+	          sign({ wxT("a"), wxT("b") }, { ibValue(ibT("x")), ibValue(ibT("1")) })) << "a string cannot stand for a second parameter";
+	EXPECT_NE(sign({ wxT("n") }, { ibValue(1) }), sign({ wxT("n") }, { ibValue(ibT("1")) })) << "a number is not its text";
 	EXPECT_EQ(sign({ wxT("n") }, { ibValue(1) }), sign({ wxT("n") }, { ibValue(ibNumber(wxT("1.0"))) })) << "1 and 1.0 are one number";
 }

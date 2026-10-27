@@ -24,7 +24,7 @@ ibDataValue CrossTheWire(const ibDataValue& value)
 	ibReaderMemory reader(bytes);
 	ibDataNode read;
 	ibJsonProvider().Read(reader, read);
-	return read.GetProperty(wxT("Value"));
+	return read.GetProperty(ibT("Value"));
 }
 
 } // namespace

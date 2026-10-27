@@ -969,11 +969,11 @@ TEST(RuntimeTest, AnOmittedArgumentTakesTheDeclaredDefault) {
 	EXPECT_EQ(same.GetString(), wxT("same"));
 
 	ibValue ret;
-	ibValue text(wxT("X"));
+	ibValue text(ibT("X"));
 	ASSERT_TRUE(pu.CallAsFunc(wxT("Piece"), ret, text));
 	EXPECT_EQ(ret.GetString(), wxT("X,X"));
 
-	ibValue dash(wxT("-"));
+	ibValue dash(ibT("-"));
 	ASSERT_TRUE(pu.CallAsFunc(wxT("Piece"), ret, text, dash));
 	EXPECT_EQ(ret.GetString(), wxT("X-X"));
 
@@ -988,11 +988,11 @@ TEST(RuntimeTest, AnOmittedArgumentTakesTheDeclaredDefault) {
 	ASSERT_TRUE(pu.CallAsFunc(wxT("Offset"), ret, ten));
 	EXPECT_EQ(ret.GetInteger(), 12);
 
-	ibValue one(wxT("a"));
+	ibValue one(ibT("a"));
 	ASSERT_TRUE(pu.CallAsFunc(wxT("Both"), ret, one));
 	EXPECT_EQ(ret.GetString(), wxT("bc"));
 
-	ibValue ex(wxT("X"));
+	ibValue ex(ibT("X"));
 	ASSERT_TRUE(pu.CallAsFunc(wxT("Both"), ret, one, ex));
 	EXPECT_EQ(ret.GetString(), wxT("Xc"));
 
@@ -1005,7 +1005,7 @@ TEST(RuntimeTest, AnOmittedArgumentTakesTheDeclaredDefault) {
 	ASSERT_TRUE(pu.GetPropVal(wxT("kept"), kept));
 	EXPECT_EQ(kept.GetString(), wxT("rows"));
 
-	ibValue other(wxT("other"));
+	ibValue other(ibT("other"));
 	ASSERT_TRUE(pu.CallAsProc(wxT("Stamp"), other));
 	ASSERT_TRUE(pu.GetPropVal(wxT("kept"), kept));
 	EXPECT_EQ(kept.GetString(), wxT("other"));
@@ -3455,8 +3455,8 @@ TEST_F(FormRuntime, AFormScriptWritesThroughDataSource) {
 	form->BindContextVariable(wxT("ThisForm"), form);
 
 	ibValuePtr<ibValueStructure> object(new ibValueStructure());
-	object->Insert(ibValue(wxT("A")), ibValue(3));
-	object->Insert(ibValue(wxT("B")), ibValue(0));
+	object->Insert(ibValue(ibT("A")), ibValue(3));
+	object->Insert(ibValue(ibT("B")), ibValue(0));
 
 	ibValue held;
 	held = static_cast<ibValue*>(static_cast<ibValueStructure*>(object));
@@ -3465,7 +3465,7 @@ TEST_F(FormRuntime, AFormScriptWritesThroughDataSource) {
 	form->SetMainAttribute(attr);
 	attr->SetHeldValue(held);
 
-	ibValue stale(wxT("stale"));
+	ibValue stale(ibT("stale"));
 	stale.m_bReadOnly = true;
 	EXPECT_FALSE(form->ReadBound(wxT("DataSource"), stale));
 	EXPECT_EQ(stale.GetString(), wxT("stale"));

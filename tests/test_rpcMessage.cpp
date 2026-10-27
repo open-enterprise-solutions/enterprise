@@ -90,16 +90,16 @@ TEST(RpcMessage,ParseRequest_ArgumentsArriveWhereTheToolsLookForThem)
 		wxT("{\"name\":\"metadata_get\",\"arguments\":{\"id\":42,\"nested\":{\"a\":1}}}}"),
 		request, error)) << error.ToStdString();
 
-	EXPECT_EQ(request.m_params.GetValue<ibString>(wxT("name")), wxT("metadata_get"));
+	EXPECT_EQ(request.m_params.GetValue<ibString>(ibT("name")), wxT("metadata_get"));
 
-	auto arguments = request.m_params.FindChild(wxT("arguments"));
+	auto arguments = request.m_params.FindChild(ibT("arguments"));
 	ASSERT_TRUE(arguments);
 
-	auto id = arguments->FindField(wxT("id"));
+	auto id = arguments->FindField(ibT("id"));
 	ASSERT_TRUE(id) << "a scalar argument must land in the node's fields";
 	EXPECT_EQ(id->AsInt(), 42);
 
-	EXPECT_TRUE(arguments->FindChild(wxT("nested")))
+	EXPECT_TRUE(arguments->FindChild(ibT("nested")))
 		<< "an object argument must land in the node's properties";
 }
 

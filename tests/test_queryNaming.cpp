@@ -393,8 +393,8 @@ TEST(QueryComposerPrune, ASettingWhoseFieldIsGoneIsDropped)
 	// deleted — one question, asked again, instead of a cleanup per event.
 	ibDataDBComposer composer;
 	composer.FromSource(wxT("Catalog"), wxT("Products"));
-	composer.Filter(wxT("Code"), wxT("="), ibValue(wxT("A-1")));
-	composer.Filter(wxT("QueryOnlyField"), wxT("="), ibValue(wxT("x")));
+	composer.Filter(wxT("Code"), wxT("="), ibValue(ibT("A-1")));
+	composer.Filter(wxT("QueryOnlyField"), wxT("="), ibValue(ibT("x")));
 	composer.Sort(wxT("QueryOnlyField"));
 	composer.Sort(wxT("Code"));
 	composer.TotalBy(wxT("QueryOnlyField"));

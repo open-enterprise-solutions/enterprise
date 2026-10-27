@@ -47,7 +47,7 @@ struct PictureFixture {
 
 	// Through the door a person's edit goes through — the inspector's, the MCP server's.
 	static bool Set(ibValueMetaObjectPicture* picture, const ibExternalPictureDescription& image) {
-		ibProperty* const property = picture->GetProperty(wxT("Picture"));
+		ibProperty* const property = picture->GetProperty(ibT("Picture"));
 		return property != nullptr && ibPropertyGate::SetValue(picture, property, ibVariant(new ibVariantExternalPicture(image)));
 	}
 

@@ -1440,7 +1440,7 @@ TEST(RuntimeBench, DISABLED_IbValueCopyCost) {
     // Sources built once, outside the timing: this asks what a COPY costs, not
     // what making the original costs.
     const ibValue srcNumber((int)12345);
-    const ibValue srcString(wxT("a moderately ordinary string"));
+    const ibValue srcString(ibT("a moderately ordinary string"));
     ibValue srcObject(new ibValueArray());
 
     // 🛑 NOTHING IS CONSUMED INSIDE THE LOOP, and the first version of this row was

@@ -49,7 +49,7 @@ ibDataNode& Control(ibDataNode& parent, ibMetaID id, const ibString& caption)
 {
 	ibDataNode& control = parent.AddChild(0, id);
 	control.SetValue(wxT("Caption"), caption);
-	control.Child(wxT("State")).SetValue(wxT("Visible"), true);
+	control.Child(ibT("State")).SetValue(wxT("Visible"), true);
 	return control;
 }
 
@@ -76,17 +76,17 @@ TEST(ClientFrameApply, NodeEntryMergedNotReplaced)
 {
 	ibDataNode from;
 	Ballast(from);
-	ibDataNode& view = from.Child(wxT("View"));
+	ibDataNode& view = from.Child(ibT("View"));
 	view.SetValue(wxT("Key"), ibString(wxT("form-1")));
-	view.Child(wxT("State")).SetValue(wxT("Title"), ibString(wxT("Receipt")));
-	view.Child(wxT("State")).SetValue(wxT("Modified"), false);
+	view.Child(ibT("State")).SetValue(wxT("Title"), ibString(wxT("Receipt")));
+	view.Child(ibT("State")).SetValue(wxT("Modified"), false);
 
 	ibDataNode to;
 	Ballast(to);
-	ibDataNode& now = to.Child(wxT("View"));
+	ibDataNode& now = to.Child(ibT("View"));
 	now.SetValue(wxT("Key"), ibString(wxT("form-1")));
-	now.Child(wxT("State")).SetValue(wxT("Title"), ibString(wxT("Receipt")));
-	now.Child(wxT("State")).SetValue(wxT("Modified"), true);
+	now.Child(ibT("State")).SetValue(wxT("Title"), ibString(wxT("Receipt")));
+	now.Child(ibT("State")).SetValue(wxT("Modified"), true);
 
 	ExpectApplied(from, to);
 }
@@ -106,7 +106,7 @@ TEST(ClientFrameApply, ChildrenByIdChangedRemovedInsertedReordered)
 	Control(to, 1, wxT("Number"));
 	Control(to, 5, wxT("Comment"));
 	ibDataNode& changed = Control(to, 3, wxT("Supplier"));
-	changed.Child(wxT("State")).SetValue(wxT("ReadOnly"), true);
+	changed.Child(ibT("State")).SetValue(wxT("ReadOnly"), true);
 
 	ExpectApplied(from, to);
 }
@@ -131,13 +131,13 @@ TEST(ClientFrameApply, AnotherNodeUnderTheSameNameComesWhole)
 	// A tab's text view, patched from a sheet's — the view kept for another tab.
 	ibDataNode from;
 	Ballast(from);
-	ibDataNode& sheet = from.Child(wxT("View"));
+	ibDataNode& sheet = from.Child(ibT("View"));
 	sheet.SetClsid(303);
-	sheet.Child(wxT("State")).SetValue(wxT("RowCount"), 10);
+	sheet.Child(ibT("State")).SetValue(wxT("RowCount"), 10);
 
 	ibDataNode to;
 	Ballast(to);
-	to.Child(wxT("View")).SetValue(wxT("Text"), ibString(wxT("a text")));
+	to.Child(ibT("View")).SetValue(wxT("Text"), ibString(wxT("a text")));
 
 	ExpectApplied(from, to);
 }
@@ -146,13 +146,13 @@ TEST(ClientFrameApply, ChildrenWithoutIdsComeWhole)
 {
 	ibDataNode from;
 	Ballast(from);
-	ibDataNode& menu = from.Child(wxT("Menu"));
+	ibDataNode& menu = from.Child(ibT("Menu"));
 	menu.AddChild(0, 0).SetValue(wxT("Title"), ibString(wxT("File")));
 	menu.AddChild(0, 0).SetValue(wxT("Title"), ibString(wxT("Edit")));
 
 	ibDataNode to;
 	Ballast(to);
-	ibDataNode& now = to.Child(wxT("Menu"));
+	ibDataNode& now = to.Child(ibT("Menu"));
 	now.AddChild(0, 0).SetValue(wxT("Title"), ibString(wxT("File")));
 	now.AddChild(0, 0).SetValue(wxT("Title"), ibString(wxT("Edit")));
 	now.AddChild(0, 0).SetValue(wxT("Title"), ibString(wxT("Help")));
@@ -181,7 +181,7 @@ TEST(ClientFrameApply, SubscriptionComesAndGoes)
 	Ballast(listening);
 	const long long input = static_cast<int>(ibProtocol::ibEvent::ibKind::Input);
 	const long long row = static_cast<int>(ibProtocol::ibEvent::ibKind::Row);
-	Control(listening, 1, wxT("Number")).Child(wxT("State")).AddField(subscribed,
+	Control(listening, 1, wxT("Number")).Child(ibT("State")).AddField(subscribed,
 		ibDataValue::Array(std::vector<ibDataValue>{ ibDataValue::Int(input), ibDataValue::Int(row) }));
 
 	ExpectApplied(bare, listening);
@@ -299,10 +299,10 @@ TEST(ClientFrameApply, CloneOfAPartIsWalkedWhole)
 {
 	ibDataNode frame;
 	Ballast(frame);
-	ibDataNode& tree = frame.Child(wxT("Tree"));
+	ibDataNode& tree = frame.Child(ibT("Tree"));
 	tree.SetMetaId(1);
-	tree.Child(wxT("First")).SetValue(wxT("Picture"), ibString(wxT("1")));
-	tree.Child(wxT("Second")).SetValue(wxT("Picture"), ibString(wxT("2")));
+	tree.Child(ibT("First")).SetValue(wxT("Picture"), ibString(wxT("1")));
+	tree.Child(ibT("Second")).SetValue(wxT("Picture"), ibString(wxT("2")));
 	tree.AddChild(0, 2).SetValue(wxT("Picture"), ibString(wxT("3")));
 	tree.AddChild(0, 3).SetValue(wxT("Picture"), ibString(wxT("4")));
 

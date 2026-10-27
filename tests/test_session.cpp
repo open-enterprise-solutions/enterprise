@@ -142,7 +142,7 @@ TEST_F(SessionParameterRead, ReadIsTheDeclaredValueNotTheHolder) {
 
 	// SessionParameters["CurrentUser"] is the same door.
 	ibValue indexed;
-	ASSERT_TRUE(parameters->GetAt(ibValue(wxT("CurrentUser")), indexed));
+	ASSERT_TRUE(parameters->GetAt(ibValue(ibT("CurrentUser")), indexed));
 	EXPECT_EQ(nullptr, dynamic_cast<ibValueSessionParameter*>(indexed.GetRef()));
 	EXPECT_EQ(ibValueTypes::TYPE_STRING, indexed.GetType());
 
@@ -158,7 +158,7 @@ TEST_F(SessionParameterRead, ReadIsTheDeclaredValueNotTheHolder) {
 TEST_F(SessionParameterRead, AWriteOutsideTheSessionModuleIsRefused) {
 	ASSERT_EQ(session.get(), ibSession::Current());
 	try {
-		parameters->SetPropVal(index, ibValue(wxT("no")));
+		parameters->SetPropVal(index, ibValue(ibT("no")));
 		FAIL() << "a write outside the session module was accepted";
 	}
 	catch (const ibBackendException& err) {

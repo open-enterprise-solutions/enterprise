@@ -898,7 +898,7 @@ TEST(ValueSerialize, PrimitivesRoundTrip) {
 	const std::vector<ibValue> samples = {
 		ibValue(true),
 		ibValue(false),
-		ibValue(wxT("text with ;;; separators and |pipes|")),
+		ibValue(ibT("text with ;;; separators and |pipes|")),
 		ibValue(42),
 	};
 
@@ -917,7 +917,7 @@ TEST(ValueSerialize, SeparatorsInsideAStringDoNotBreakTheParse) {
 	// THE BUG THE LENGTH FIELD EXISTS TO PREVENT. The envelope declares L:<n>
 	// and the reader now honours it; splitting on ";;;" instead cut this value
 	// in half and called the remainder garbage.
-	const ibValue original(wxT("a;;;b;;;c"));
+	const ibValue original(ibT("a;;;b;;;c"));
 	const ibValue restored = RoundTrip(original);
 	EXPECT_EQ(wxT("a;;;b;;;c"), restored.GetString());
 }
@@ -931,7 +931,7 @@ TEST(ValueSerialize, ExactNumbersSurvive) {
 TEST(ValueSerialize, ArraysNestAndSurvive) {
 	ibValuePtr<ibValueArray> inner(new ibValueArray());
 	inner->Add(ibValue(1));
-	inner->Add(ibValue(wxT("two")));
+	inner->Add(ibValue(ibT("two")));
 
 	ibValuePtr<ibValueArray> outer(new ibValueArray());
 	outer->Add(ibValue(true));
@@ -954,8 +954,8 @@ TEST(ValueSerialize, ArraysNestAndSurvive) {
 
 TEST(ValueSerialize, StructuresComeBackAsStructures) {
 	ibValuePtr<ibValueStructure> structure(new ibValueStructure());
-	structure->Insert(ibValue(wxT("Name")), ibValue(wxT("Widget")));
-	structure->Insert(ibValue(wxT("Count")), ibValue(7));
+	structure->Insert(ibValue(ibT("Name")), ibValue(ibT("Widget")));
+	structure->Insert(ibValue(ibT("Count")), ibValue(7));
 
 	const ibValue original(structure);
 	const ibValue restored = RoundTrip(original);
@@ -1003,7 +1003,7 @@ TEST(ValueSerialize, NodePathIsTheMechanism) {
 	// provider. Pinning the node path directly means a change of text format
 	// cannot quietly break what it is a rendering of.
 	ibDataNode node(g_valueStringCLSID, 0);
-	const ibValue original(wxT("through the node"));
+	const ibValue original(ibT("through the node"));
 
 	ASSERT_TRUE(original.Serialize(node));
 
@@ -1020,7 +1020,7 @@ TEST(ValueSerialize, NodeCarriesTheTypeFirst) {
 	ASSERT_TRUE(ibValue(7).Serialize(node));
 
 	EXPECT_EQ(ibString::Format(wxT("%llu"), (unsigned long long)g_valueNumberCLSID),
-		node.GetValue<ibString>(wxT("t")));
+		node.GetValue<ibString>(ibT("t")));
 }
 
 TEST(ValueSerialize, UnknownTypeInANodeIsRefused) {
@@ -1087,7 +1087,7 @@ TEST(MetaDataSerialize, RoundTripsThroughTheDoor) {
 
 	const std::vector<ibValue> samples = {
 		ibValue(true),
-		ibValue(wxT("there and back")),
+		ibValue(ibT("there and back")),
 		ibValue(42),
 	};
 
@@ -1107,7 +1107,7 @@ TEST(MetaDataSerialize, ACompositeSurvivesTheTree) {
 	StandInMetaData metaData;
 
 	ibValuePtr<ibValueArray> source(new ibValueArray());
-	source->Add(ibValue(wxT("first")));
+	source->Add(ibValue(ibT("first")));
 	source->Add(ibValue(2));
 
 	ibDataNode node(source->GetClassType(), 0);
@@ -1132,7 +1132,7 @@ TEST(MetaDataSerialize, TheTreeIS_WhatTravels) {
 	// reading it back lands on the same value. A second pair of methods taking a
 	// buffer would be this choice made twice.
 	StandInMetaData metaData;
-	const ibValue original(wxT("out through a provider"));
+	const ibValue original(ibT("out through a provider"));
 
 	ibDataNode written(original.GetClassType(), 0);
 	metaData.Serialize(original, written);
@@ -1155,7 +1155,7 @@ TEST(MetaDataSerialize, WhatItDoesNotKnowGoesToTheValueFactory) {
 	// nothing, so every type on the way through is the factory's answer —
 	// reached inside IsRegisterCtor / CreateObject, not around them.
 	StandInMetaData metaData;
-	const ibValue original(wxT("through the factory"));
+	const ibValue original(ibT("through the factory"));
 
 	ibDataNode node(original.GetClassType(), 0);
 	metaData.Serialize(original, node);
@@ -1170,7 +1170,7 @@ TEST(MetaDataSerialize, ItsOwnRegistryIsAskedFirst) {
 	StandInMetaData metaData;
 	metaData.Claim(g_valueStringCLSID);
 
-	const ibValue original(wxT("through the configuration"));
+	const ibValue original(ibT("through the configuration"));
 	ibDataNode node(original.GetClassType(), 0);
 	metaData.Serialize(original, node);
 
@@ -1232,7 +1232,7 @@ public:
 	}
 	ibValue CreateObject(const ibClassID& clsid, ibValue** paParams = nullptr, const long lSizeArray = 0) const override {
 		if (clsid == m_own)
-			return ibValue(wxT("the catalog's empty reference"));
+			return ibValue(ibT("the catalog's empty reference"));
 		return StandInMetaData::CreateObject(clsid, paParams, lSizeArray);
 	}
 
@@ -1322,7 +1322,7 @@ TEST(CompositionField, IsNotAStringThatSpellsThePath) {
 	// A filter holding text where a field belongs is a different (and wrong)
 	// thing; saying so is what makes that visible instead of almost-working.
 	ibValuePtr<ibValueCompositionField> field(new ibValueCompositionField(wxT("Amount")));
-	EXPECT_FALSE(ibValue(field) == ibValue(wxT("Amount")));
+	EXPECT_FALSE(ibValue(field) == ibValue(ibT("Amount")));
 }
 
 TEST(CompositionField, SettingThePathDropsTheBinding) {
@@ -1333,7 +1333,7 @@ TEST(CompositionField, SettingThePathDropsTheBinding) {
 	field->SetTypeInfo(42, ibTypeDescription(g_valueNumberCLSID));
 	ASSERT_EQ(42, field->GetLeafId());
 
-	field->SetPropVal(ibValueCompositionField::enPath, ibValue(wxT("Supplier")));
+	field->SetPropVal(ibValueCompositionField::enPath, ibValue(ibT("Supplier")));
 	EXPECT_EQ(wxNOT_FOUND, field->GetLeafId());
 	EXPECT_EQ(0u, field->GetTypeDescription().GetClsidCount());
 }
@@ -1437,7 +1437,7 @@ TEST(FilterTreePersist, ANestedTreeSurvivesTheRoundTrip) {
 	first.m_left.m_presentation = wxT("Sum");
 
 	ibFilterNodeDescription& either = ibFilterDescription::AppendGroup(filter.m_nodes, ibFilterGroupKind_Or);
-	ibFilterDescription::Append(either.m_children, wxT("Region"), ibComparisonKind_Equal, ibStoreValue(ibValue(wxT("north"))));
+	ibFilterDescription::Append(either.m_children, wxT("Region"), ibComparisonKind_Equal, ibStoreValue(ibValue(ibT("north"))));
 	ibFilterNodeDescription& pair =
 		ibFilterDescription::Append(either.m_children, wxT("Price"), ibComparisonKind_Greater, ibDataNode());
 	pair.m_right.m_path = wxT("Cost");
@@ -1507,7 +1507,7 @@ TEST(FilterAst, AConditionBecomesACompareNode) {
 TEST(FilterAst, ADottedPathTravelsAsSegments) {
 	ibDataDBComposer composer;
 	ibFilterDescription filter;
-	filter.Append(wxT("Supplier.Region.Country"), ibComparisonKind_Equal, ibStoreValue(ibValue(wxT("PL"))));
+	filter.Append(wxT("Supplier.Region.Country"), ibComparisonKind_Equal, ibStoreValue(ibValue(ibT("PL"))));
 
 	const ibQueryAstExprPtr ast = composer.BuildFilterAst(filter);
 	ASSERT_TRUE(ast != nullptr && ast->m_lhs != nullptr);
@@ -1557,7 +1557,7 @@ TEST(FilterAst, ContainsIsALikeNotAComparison) {
 	// has no meaning for would push the problem one layer down.
 	ibDataDBComposer composer;
 	ibFilterDescription filter;
-	filter.Append(wxT("Name"), ibComparisonKind_Contains, ibStoreValue(ibValue(wxT("ab"))));
+	filter.Append(wxT("Name"), ibComparisonKind_Contains, ibStoreValue(ibValue(ibT("ab"))));
 
 	const ibQueryAstExprPtr ast = composer.BuildFilterAst(filter);
 	ASSERT_TRUE(ast != nullptr);
@@ -1571,14 +1571,14 @@ TEST(FilterAst, InAndInHierarchyAreOneNodeAndAWord) {
 	ibDataDBComposer composer;
 
 	ibFilterDescription plain;
-	plain.Append(wxT("Item"), ibComparisonKind_In, ibStoreValue(ibValue(wxT("x"))));
+	plain.Append(wxT("Item"), ibComparisonKind_In, ibStoreValue(ibValue(ibT("x"))));
 	const ibQueryAstExprPtr flat = composer.BuildFilterAst(plain);
 	ASSERT_TRUE(flat != nullptr);
 	EXPECT_EQ(ibQueryAstExprKind::In, flat->m_kind);
 	EXPECT_EQ(ibQueryDimUnfold::Elements, flat->m_unfold);
 
 	ibFilterDescription deep;
-	deep.Append(wxT("Item"), ibComparisonKind_InHierarchy, ibStoreValue(ibValue(wxT("x"))));
+	deep.Append(wxT("Item"), ibComparisonKind_InHierarchy, ibStoreValue(ibValue(ibT("x"))));
 	const ibQueryAstExprPtr tree = composer.BuildFilterAst(deep);
 	ASSERT_TRUE(tree != nullptr);
 	EXPECT_EQ(ibQueryAstExprKind::In, tree->m_kind) << "a second node kind for one question";
@@ -1605,8 +1605,8 @@ TEST(FilterAst, NestedGroupsRenderWithParentheses) {
 	filter.Append(wxT("Amount"), ibComparisonKind_Greater, ibStoreValue(ibValue(100)));
 
 	ibFilterNodeDescription& either = ibFilterDescription::AppendGroup(filter.m_nodes, ibFilterGroupKind_Or);
-	ibFilterDescription::Append(either.m_children, wxT("Region"), ibComparisonKind_Equal, ibStoreValue(ibValue(wxT("north"))));
-	ibFilterDescription::Append(either.m_children, wxT("Region"), ibComparisonKind_Equal, ibStoreValue(ibValue(wxT("south"))));
+	ibFilterDescription::Append(either.m_children, wxT("Region"), ibComparisonKind_Equal, ibStoreValue(ibValue(ibT("north"))));
+	ibFilterDescription::Append(either.m_children, wxT("Region"), ibComparisonKind_Equal, ibStoreValue(ibValue(ibT("south"))));
 
 	const ibQueryAstExprPtr ast = composer.BuildFilterAst(filter);
 	ASSERT_TRUE(ast != nullptr);
@@ -1639,7 +1639,7 @@ TEST(FilterAst, AValueRendersAsAParameter) {
 	// in somebody's locale.
 	ibDataDBComposer composer;
 	ibFilterDescription filter;
-	filter.Append(wxT("Name"), ibComparisonKind_Equal, ibStoreValue(ibValue(wxT("O'Brien"))));
+	filter.Append(wxT("Name"), ibComparisonKind_Equal, ibStoreValue(ibValue(ibT("O'Brien"))));
 
 	const ibQueryAstExprPtr ast = composer.BuildFilterAst(filter);
 	ASSERT_TRUE(ast != nullptr);
@@ -1689,7 +1689,7 @@ TEST(ListSettingsLines, AGroupingLineCarriesItsUnfoldKind) {
 
 TEST(ListSettingsLines, SettingsCarryAllThreeParts) {
 	ibSettingsDescription settings;
-	settings.m_filter.Append(wxT("Number"), ibComparisonKind_Equal, ibStoreValue(ibValue(wxT("00001"))));
+	settings.m_filter.Append(wxT("Number"), ibComparisonKind_Equal, ibStoreValue(ibValue(ibT("00001"))));
 	settings.m_sort.Append(wxT("Date"), false);
 	settings.m_group.Append(wxT("Warehouse"), ibQueryDimUnfold::Hierarchy);
 

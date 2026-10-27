@@ -112,14 +112,14 @@ TEST(ValueGuid, NilStringIsAnEmptyGuid)
 	ASSERT_TRUE(other.Init(params, 1));
 	EXPECT_TRUE(guid.CompareValueEQ(other));
 
-	ibValue realText(wxT("6fab82bc-d41d-4664-b0f6-bb61b0ed78d8"));
+	ibValue realText(ibT("6fab82bc-d41d-4664-b0f6-bb61b0ed78d8"));
 	ibValue* realParams[] = { &realText };
 	ibValueGuid real;
 	ASSERT_TRUE(real.Init(realParams, 1));
 	EXPECT_FALSE(real.IsEmpty());
 	EXPECT_FALSE(guid.CompareValueEQ(real));
 
-	ibValue junk(wxT("not-a-guid"));
+	ibValue junk(ibT("not-a-guid"));
 	ibValue* bad[] = { &junk };
 	ibValueGuid refused;
 	EXPECT_THROW(refused.Init(bad, 1), ibBackendException);

@@ -34,7 +34,7 @@ TEST(QueryL3Vocab, PredicateTree_Factories)
 
 	ibQueryCondition c;
 	c.m_col   = &code;
-	c.m_value = ibValue(wxT("A-01"));
+	c.m_value = ibValue(ibT("A-01"));
 	const ibQueryPredicatePtr leaf = ibQueryPredicate::Leaf(c);
 	ASSERT_EQ(leaf->m_kind, ibQueryPredicateKind::Leaf);
 	EXPECT_EQ(leaf->m_leaf.m_col, &code);

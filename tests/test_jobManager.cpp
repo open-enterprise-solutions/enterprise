@@ -190,7 +190,7 @@ TEST(JobManager, EmptyArgumentArrayTravels) {
 TEST(JobManager, PlainValuesTravel) {
     std::vector<ibValue> args;
     args.push_back(ibValue(42));
-    args.push_back(ibValue(wxT("text")));
+    args.push_back(ibValue(ibT("text")));
     args.push_back(ibValue(true));
     args.push_back(ibValue());            // undefined
     EXPECT_EQ(-1, ibJobManager::FindNonTransferable(args));
@@ -206,7 +206,7 @@ TEST(JobManager, IteratorRefusesToTravel) {
 TEST(JobManager, CheckPassesOnPlainValues) {
     std::vector<ibValue> args;
     args.push_back(ibValue(1));
-    args.push_back(ibValue(wxT("ok")));
+    args.push_back(ibValue(ibT("ok")));
     EXPECT_NO_THROW(ibJobManager::CheckTransferable(args));
 }
 
