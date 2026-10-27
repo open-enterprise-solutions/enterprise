@@ -82,6 +82,10 @@ void ibValueNotebook::OnPageChanged(wxAuiNotebookEvent& event)
 {
 	event.Skip();
 
+	// No page when the last one went: wx 3.3 says so with wxNOT_FOUND, and nothing is chosen.
+	if (event.GetSelection() == wxNOT_FOUND)
+		return;
+
 	wxWindow* const page = m_notebook->GetPage(event.GetSelection());
 	for (unsigned int i = 0; i < GetChildCount(); i++) {
 		ibValueFrame* const child = GetChild(i);

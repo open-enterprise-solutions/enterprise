@@ -4,9 +4,11 @@
 
 void ibValueNotebook::OnPageChanged(wxAuiNotebookEvent& event)
 {
+	// No page when the last one went: wx 3.3 says so with wxNOT_FOUND. The notebook is the one that sent the event —
+	// asked through the form instead, it is not there while the form closes and takes its pages down.
 	ibValueNotebookPage* activePage = nullptr;
-	if (event.GetOldSelection() != wxNOT_FOUND) {
-		wxAuiNotebook* notebook = dynamic_cast<wxAuiNotebook*>(GetWxObject());
+	if (event.GetOldSelection() != wxNOT_FOUND && event.GetSelection() != wxNOT_FOUND) {
+		wxAuiNotebook* notebook = dynamic_cast<wxAuiNotebook*>(event.GetEventObject());
 		wxASSERT(notebook);
 		wxWindow* page = notebook->GetPage(event.GetSelection());
 		wxASSERT(page);
